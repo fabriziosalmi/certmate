@@ -2063,8 +2063,23 @@ class StorageManager:
             
             successful = sum(1 for success in migration_results.values() if success)
             logger.info(f"Migration completed: {successful}/{len(domains)} certificates migrated successfully")
-            
+
         except Exception as e:
+            # Raised, not logged and swallowed. Everything above this line that
+            # can fail is per-certificate and is already recorded as False for
+            # that certificate; what reaches here is the enumeration of the
+            # source — an expired Vault token, a role without ListBucket, an
+            # unreachable endpoint — and returning the empty dict it had
+            # accumulated made the caller compute 0 of 0 and answer HTTP 200
+            # with success: true, "Migration completed: 0/0", and an audit
+            # record stamped status='success'. An operator migrating away from
+            # a backend before decommissioning it was told it had worked.
+            #
+            # "Enumerated nothing" and "could not enumerate" are different
+            # answers and must not share a return value. The route already has
+            # an arm for this: it answers with a failure status and writes a
+            # failure audit record.
             logger.error(f"Migration failed: {e}")
-        
+            raise
+
         return migration_results

@@ -234,6 +234,31 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             logger.error(f"Metrics error: {e}")
             return jsonify({'error': 'Internal Server Error'}), 500
 
+    def _current_issuance_status(managers):
+        """Whether certbot can run, re-checked when the last answer has aged.
+
+        The probe ran once per process and its answer was then frozen for the
+        life of that process, and both routes read that frozen dict. It was
+        wrong in both directions. A transient failure at boot — a filesystem
+        still settling, a fork refused under memory pressure — made the
+        instance permanently unready, and under an orchestrator that is a
+        restart loop rolling the same dice. And a certbot that broke AFTER boot
+        never turned readiness red, so the endpoint used to decide rotation
+        went on saying yes while nothing could be issued.
+
+        `probe` is TTL-throttled, so a readiness scrape every few seconds runs
+        certbot at most once per TTL. The refreshed answer is written back to
+        `managers['issuance_status']` so anything else reading that key sees
+        the same thing these two do.
+        """
+        from modules.core import issuance_readiness
+        shell_executor = managers.get('shell_executor')
+        if shell_executor is None:
+            return managers.get('issuance_status') or {}
+        status = issuance_readiness.probe(shell_executor)
+        managers['issuance_status'] = status
+        return status
+
     @app.route('/health')
     def health_check():
         """Health check endpoint — intentionally public for load balancers"""
@@ -258,10 +283,11 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             checks['scheduler'] = 'not_running'
             overall = 'degraded'
 
-        # certbot. The one dependency without which nothing works, probed
-        # once at startup because a broken certbot is invisible until the
-        # first renewal — hours later, on a certificate closer to expiry.
-        issuance = managers.get('issuance_status') or {}
+        # certbot. The one dependency without which nothing works, and a
+        # broken one is invisible until the first renewal — hours later, on a
+        # certificate closer to expiry. Re-checked rather than read from the
+        # startup snapshot: see _current_issuance_status.
+        issuance = _current_issuance_status(managers)
         issuance_state = issuance.get('state')
         if issuance_state:
             checks['certbot'] = issuance_state
@@ -337,7 +363,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         # every probe: the instance started, said ready, and failed at the
         # first renewal. Only a probe that RAN AND FAILED withholds readiness
         # — `skipped` and `unknown` are absence of evidence, not evidence.
-        issuance = managers.get('issuance_status') or {}
+        issuance = _current_issuance_status(managers)
         issuance_ok = issuance_readiness.is_ready(issuance)
 
         ready = scheduler_ok and issuance_ok
