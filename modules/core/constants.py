@@ -113,7 +113,15 @@ METADATA_SCHEMA_VERSION = 1
 # one-line migration, and the version is how they learn to make it. By the rule
 # above this is a retype, and a retype is a MAJOR; picking the comfortable
 # number instead would make the rule decorative.
-API_CONTRACT_VERSION = '2.0'
+#
+# 2.1 for the bounded issuance queue: the async create/renew/reissue endpoints
+# can now answer 429 with code ISSUANCE_QUEUE_FULL when too much issuance is
+# already outstanding, where they used to accept it. MINOR rather than MAJOR
+# because it is a new code on a status those endpoints could already return —
+# every /api/ path goes through the rate limiter, which answers 429 — so a
+# client that handles 429 at all needs no change, and one that does not was
+# already exposed. What is new is a condition, not a type or a shape.
+API_CONTRACT_VERSION = '2.1'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

@@ -650,10 +650,12 @@ the application — an unmatched path, a wrong method, a body over the size limi
 }
 ```
 
-Until the contract version below moved to 1.1, `code` on that second shape was
+Until the contract version moved to **2.0**, `code` on that second shape was
 the status *integer* while every application error used a string, so a client
 could not branch on the field without checking its type first. It is one type
-now. The version is on every response as `X-CertMate-API-Version`.
+now, and the number a caller may have been reading is in `status` on those same
+responses. The version is on every response as `X-CertMate-API-Version`; it is
+**2.1** since the async issuance endpoints gained `ISSUANCE_QUEUE_FULL`.
 
 ### Codes
 
@@ -684,6 +686,7 @@ and may be reworded.
 | `CERTIFICATE_CREATION_FAILED` / `CERTIFICATE_REISSUE_FAILED` / `CERTIFICATE_REISSUE_REJECTED` | 422 | Issuance was attempted and refused |
 | `RENEWAL_CONFIG_BROKEN` | 422 | certbot's renewal config for this lineage no longer resolves; reissue |
 | `DNS_ACCOUNT_NOT_CONFIGURED` | 422 | The DNS account this certificate uses is gone from settings |
+| `ISSUANCE_QUEUE_FULL` | 429 | Too much async issuance is already queued or running; the body carries the depth and the limit |
 | `ADOPTION_UNAVAILABLE` | 503 | Discovery/adoption is not available on this build |
 | `ASYNC_ISSUANCE_DISABLED` | 503 | Async issuance is switched off |
 | `CERTIFICATE_CREATION_ERROR` / `CERTIFICATE_RENEWAL_ERROR` / `CERTIFICATE_REISSUE_ERROR` / `CERTIFICATE_DOWNLOAD_ERROR` / `AUTO_RENEW_UPDATE_FAILED` | 500 | The operation failed unexpectedly; the server log has the cause |
