@@ -21,7 +21,7 @@ from typing import Optional, Dict, Any, List
 from urllib.request import (
     Request, build_opener, HTTPRedirectHandler, HTTPSHandler, HTTPHandler,
 )
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -332,6 +332,26 @@ def validate_webhook_config(cfg):
     return None
 
 
+# HTTP statuses worth trying again. Everything else in the 4xx range says the
+# request itself is wrong — a receiver that answers 404 will answer 404 to the
+# identical retry, three times, with 1s + 2s + 4s of sleep between them, on
+# every notification for as long as the webhook stays configured.
+#
+# 408 (Request Timeout), 425 (Too Early) and 429 (Too Many Requests) are the
+# exceptions: they describe this attempt, not this request. 5xx is the server's
+# problem and is exactly what backoff is for.
+RETRYABLE_4XX = (408, 425, 429)
+
+
+def _is_permanent_http_status(status) -> bool:
+    """Whether a receiver's status says a retry cannot change the answer."""
+    try:
+        status = int(status)
+    except (TypeError, ValueError):
+        return False
+    return 400 <= status < 500 and status not in RETRYABLE_4XX
+
+
 class Notifier:
     """Sends notifications via configured channels."""
 
@@ -512,6 +532,16 @@ class Notifier:
             result = self._send_webhook(cfg, event, title, message, details)
             if result.get('success'):
                 break
+            if result.get('config_error') or result.get('permanent'):
+                # Nothing about this attempt was transient: a URL that is not a
+                # URL, a channel missing its token, a receiver answering 404 or
+                # 401. The identical retry gets the identical answer, and the
+                # only thing the backoff adds is 7 seconds held on the caller's
+                # thread — for a renewal sweep, once per certificate.
+                logger.warning(
+                    "Webhook '%s' not retried: %s",
+                    cfg.get('name', 'webhook'), result.get('error'))
+                break
             if attempt < max_retries - 1:
                 delay = 2 ** attempt  # 1s, 2s, 4s
                 time.sleep(delay)
@@ -635,7 +665,8 @@ class Notifier:
                 token = (cfg.get('token') or '').strip()
                 chat_id = str(cfg.get('chat_id') or '').strip()
                 if not (token and chat_id):
-                    return {'error': 'Telegram channel requires token and chat_id'}
+                    return {'error': 'Telegram channel requires token and chat_id',
+                            'config_error': True}
                 url = f'https://api.telegram.org/bot{token}/sendMessage'
                 body = json.dumps({
                     'chat_id': chat_id,
@@ -654,7 +685,8 @@ class Notifier:
             elif wh_type == 'gotify':
                 token = (cfg.get('token') or '').strip()
                 if not (url and token):
-                    return {'error': 'Gotify channel requires url and token'}
+                    return {'error': 'Gotify channel requires url and token',
+                            'config_error': True}
                 url = url.rstrip('/') + '/message'
                 headers['X-Gotify-Key'] = token
                 try:
@@ -698,10 +730,11 @@ class Notifier:
                     headers['X-CertMate-Signature'] = f't={timestamp},v1={sig}'
 
             if not url:
-                return {'error': 'Webhook URL not configured'}
+                return {'error': 'Webhook URL not configured', 'config_error': True}
             # Only allow http/https schemes to prevent file:// or other attacks.
             if not url.startswith(('https://', 'http://')):
-                return {'error': 'Webhook URL must use http or https scheme'}
+                return {'error': 'Webhook URL must use http or https scheme',
+                        'config_error': True}
             # SSRF guard: refuse targets that resolve to internal/loopback/
             # metadata addresses unless an operator explicitly allows them.
             allow_internal = os.getenv(
@@ -712,7 +745,8 @@ class Notifier:
                                urlparse(url).hostname)
                 return {'error': 'Webhook target resolves to an internal/loopback address; '
                                  'refused (SSRF guard). Set CERTMATE_ALLOW_INTERNAL_WEBHOOKS=true '
-                                 'to permit internal targets.'}
+                                 'to permit internal targets.',
+                        'config_error': True}
 
             method = 'POST'
             timeout = WEBHOOK_DEFAULT_TIMEOUT
@@ -738,6 +772,15 @@ class Notifier:
                 logger.info(f"Webhook '{cfg.get('name', 'webhook')}' ({wh_type}) sent: HTTP {status}")
                 return {'success': True, 'status': status}
 
+        except HTTPError as e:
+            # A response, not a transport failure: the receiver answered and
+            # said no. Carry the status so the retry loop can tell "come back
+            # later" from "this request is wrong", and so the delivery log
+            # records which it was instead of a bare error string.
+            permanent = _is_permanent_http_status(e.code)
+            logger.error(f"Webhook '{cfg.get('name', 'webhook')}' rejected: HTTP {e.code}")
+            return {'error': f'HTTP {e.code}: {e.reason}', 'status': e.code,
+                    'permanent': permanent}
         except URLError as e:
             logger.error(f"Webhook failed: {e}")
             return {'error': str(e)}
