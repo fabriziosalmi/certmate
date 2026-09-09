@@ -21,10 +21,26 @@ A certificate present on disk and absent from settings is therefore visible
 everywhere except in the one component whose job is to renew it — and that
 component said nothing, which is why the report reads as a threshold bug.
 
-The sweep now names every such certificate and counts it in `unmanaged`. It
-does **not** adopt it: renewing a certificate the operator never registered
-would issue against a CA for a domain CertMate was not asked to manage, and a
-background sweep is not where that decision belongs.
+#789 made the sweep name every such certificate and count it in `unmanaged`,
+and stopped there: whether to renew them was a product decision about issuing
+certificates, recorded as #792 rather than taken in a bug fix.
+
+#792 took it. The sweep now asks `collect_domain_sources` — the one
+implementation of "which certificates exist" — and for a certificate on disk
+that no settings entry names it **renews the ones that can say how they were
+issued**, then writes them back into settings. "Can say how" is not a second
+copy of the renewal path's requirements: the guard calls the same resolver the
+renewal will call, so the two cannot disagree.
+
+Everything else is still reported and not renewed — no metadata, no DNS
+provider named in it, or a provider that is no longer configured on this
+instance. That is the previous behaviour, kept as the fallback rather than
+replaced.
+
+The re-registration is not tidiness. Without it the warning returns every night
+for the life of the certificate, and a warning that repeats forever is one an
+operator learns to scroll past — which is how #759 stayed invisible long enough
+to be reported as a threshold bug.
 """
 import json
 import logging
@@ -269,7 +285,10 @@ def test_an_unreadable_certificate_directory_does_not_fail_the_sweep(
     def _explode(_):
         raise OSError('permission denied')
 
-    monkeypatch.setattr('modules.core.certificates.iter_cert_domain_dirs',
+    # Patched where the read now happens: the sweep asks
+    # collect_domain_sources (#792), which owns the directory walk. Patching
+    # the old symbol would leave this test green while injecting nothing.
+    monkeypatch.setattr('modules.core.inventory_sources.iter_cert_domain_dirs',
                         _explode)
 
     with caplog.at_level(logging.WARNING, logger=LOGGER):
@@ -305,3 +324,181 @@ def test_the_completion_line_reports_the_count(instance, caplog):
                   if 'Renewal check complete' in record.getMessage()]
     assert completion, 'the sweep no longer logs a completion line'
     assert '1 unmanaged' in completion[0]
+
+
+# --- #792: the ones that can say how they were issued --------------------
+
+def _renewable(instance, config=None):
+    """Make the instance's DNS resolver answer the way a configured provider
+    does — a (config, account_id) pair rather than a MagicMock, which is what
+    the guard and the renewal both unpack."""
+    instance.dns_manager.get_dns_provider_account_config.return_value = (
+        config if config is not None else {'api_token': 'x'}, 'default')
+
+
+def _renewal_returns(instance, result):
+    calls = []
+
+    def _renew(domain):
+        calls.append(domain)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    instance.renew_certificate = _renew
+    return calls
+
+
+def test_a_disk_only_certificate_that_knows_its_provider_is_renewed(instance):
+    """THE change. On disk, absent from settings, metadata names a provider
+    that is configured: the sweep takes it on instead of only naming it."""
+    instance.put_on_disk('orphan.example.com')
+    instance.register()
+    _renewable(instance)
+    renewed = _renewal_returns(instance, {'success': True})
+
+    summary = instance.check_renewals()
+
+    assert renewed == ['orphan.example.com']
+    assert summary['renewed'] == 1
+    assert summary['unmanaged'] == 0
+    assert summary['checked'] == 1
+
+
+def test_a_renewed_disk_only_certificate_is_written_back_to_settings(instance):
+    """The convergence. Next sweep it is an ordinary registered certificate,
+    and the warning stops."""
+    instance.put_on_disk('orphan.example.com')
+    instance.register()
+    _renewable(instance)
+    _renewal_returns(instance, {'success': True})
+
+    summary = instance.check_renewals()
+
+    assert summary['reregistered'] == 1
+    entries = instance.settings_manager.load_settings()['domains']
+    entry = next(e for e in entries if e.get('domain') == 'orphan.example.com')
+    assert entry['auto_renew'] is True
+    assert entry['dns_provider'] == 'cloudflare'
+    assert entry['ca_provider'] == 'private_ca'
+
+
+def test_the_second_sweep_treats_it_as_an_ordinary_certificate(instance, caplog):
+    """The point of writing it back, as behaviour rather than as a field."""
+    instance.put_on_disk('orphan.example.com')
+    instance.register()
+    _renewable(instance)
+    _renewal_returns(instance, {'success': True})
+    instance.check_renewals()
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER):
+        second = instance.check_renewals()
+
+    assert second['unmanaged'] == 0
+    assert second['reregistered'] == 0
+    assert _reported(caplog) == set(), 'the warning came back for a certificate it took on'
+
+
+# --- the fallbacks, which are the old behaviour kept ---------------------
+
+def test_a_certificate_with_no_metadata_is_reported_not_renewed(instance, caplog):
+    """CONTROL. Nothing to go on: this is the case the decision deliberately
+    refuses, and it must stay refused."""
+    instance.put_on_disk('orphan.example.com')
+    (instance.cert_dir / 'orphan.example.com' / 'metadata.json').unlink()
+    instance.register()
+    _renewable(instance)
+    renewed = _renewal_returns(instance, {'success': True})
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER):
+        summary = instance.check_renewals()
+
+    assert renewed == []
+    assert summary['unmanaged'] == 1
+    assert summary['renewed'] == 0
+    assert _reported(caplog) == {'orphan.example.com'}
+
+
+def test_a_certificate_whose_provider_is_gone_is_reported_not_renewed(instance, caplog):
+    """CONTROL. The metadata names a provider this instance no longer has
+    credentials for — the renewal would fail, so the sweep does not start it,
+    and the message names the provider rather than saying no."""
+    instance.put_on_disk('orphan.example.com')
+    instance.register()
+    _renewable(instance, config={})          # resolver answers "not configured"
+    renewed = _renewal_returns(instance, {'success': True})
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER):
+        summary = instance.check_renewals()
+
+    assert renewed == []
+    assert summary['unmanaged'] == 1
+    message = '\n'.join(r.getMessage() for r in caplog.records)
+    assert 'cloudflare' in message
+
+
+def test_an_http01_certificate_needs_no_dns_credentials(instance):
+    """http-01 renews from the instance's own webroot, so a missing DNS
+    provider is not a reason to refuse it."""
+    instance.put_on_disk('orphan.example.com')
+    path = instance.cert_dir / 'orphan.example.com' / 'metadata.json'
+    path.write_text(json.dumps({'domain': 'orphan.example.com',
+                                'challenge_type': 'http-01'}))
+    instance.register()
+    instance.dns_manager.get_dns_provider_account_config.side_effect = AssertionError(
+        'http-01 must not need a DNS account')
+    renewed = _renewal_returns(instance, {'success': True})
+
+    summary = instance.check_renewals()
+
+    assert renewed == ['orphan.example.com']
+    assert summary['renewed'] == 1
+
+
+# --- the boundary: renewed is not the same as attempted ------------------
+
+def test_a_certbot_not_due_answer_does_not_re_register(instance):
+    """CONTROL. certbot said no, so nothing was renewed and nothing is written
+    back — the settings entry would claim a certificate this sweep manages
+    while the sweep has not managed anything yet."""
+    instance.put_on_disk('orphan.example.com')
+    instance.register()
+    _renewable(instance)
+    _renewal_returns(instance, {'renewed': False})
+
+    summary = instance.check_renewals()
+
+    assert summary['skipped_not_due'] == 1
+    assert summary['reregistered'] == 0
+    assert instance.settings_manager.load_settings()['domains'] == []
+
+
+def test_a_failed_renewal_does_not_re_register(instance):
+    """CONTROL, the other half: a renewal that raised leaves the bookkeeping
+    exactly as it was."""
+    instance.put_on_disk('orphan.example.com')
+    instance.register()
+    _renewable(instance)
+    _renewal_returns(instance, RuntimeError('certbot said no'))
+
+    summary = instance.check_renewals()
+
+    assert summary['failed'] == 1
+    assert summary['reregistered'] == 0
+    assert instance.settings_manager.load_settings()['domains'] == []
+
+
+def test_a_registered_certificate_still_goes_through_the_same_path(instance):
+    """CONTROL for the extraction: the registered path was refactored into the
+    shared unit, and it has to behave exactly as it did."""
+    instance.put_on_disk('registered.example.com')
+    instance.register({'domain': 'registered.example.com',
+                       'dns_provider': 'cloudflare'})
+    _renewable(instance)
+    renewed = _renewal_returns(instance, {'success': True})
+
+    summary = instance.check_renewals()
+
+    assert renewed == ['registered.example.com']
+    assert summary['checked'] == 1 and summary['renewed'] == 1
+    assert summary['unmanaged'] == 0 and summary['reregistered'] == 0

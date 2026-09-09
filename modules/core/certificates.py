@@ -31,8 +31,8 @@ from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
-                        DEFAULT_RENEWAL_THRESHOLD_DAYS,
-                        iter_cert_domain_dirs)
+                        DEFAULT_RENEWAL_THRESHOLD_DAYS)
+from .inventory_sources import collect_domain_sources
 from .structured_logging import LogContext, new_correlation_id
 from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
@@ -3470,7 +3470,7 @@ class CertificateManager:
             # sweep "did not consider" when it considered none would be noise.
             return {'checked': 0, 'renewed': 0, 'failed': 0,
                     'skipped_disabled': 0, 'skipped_invalid': 0,
-                    'skipped_not_due': 0, 'unmanaged': 0,
+                    'skipped_not_due': 0, 'unmanaged': 0, 'reregistered': 0,
                     'auto_renew_disabled': True}
 
         # Migrate settings format if needed
@@ -3481,7 +3481,7 @@ class CertificateManager:
 
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
                    'skipped_disabled': 0, 'skipped_invalid': 0,
-                   'skipped_not_due': 0, 'unmanaged': 0}
+                   'skipped_not_due': 0, 'unmanaged': 0, 'reregistered': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -3540,42 +3540,7 @@ class CertificateManager:
                     # the work it describes.
                     self._mark_sweep_progress(
                         summary['checked'], len(domains), started)
-                cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
-
-                if cert_info and cert_info.get('needs_renewal'):
-                    logger.info(f"Renewing certificate for {domain}")
-                    renew_started = time.time()
-                    try:
-                        res = self.renew_certificate(domain)
-                        # certbot can report "not yet due" (renewed=False) when
-                        # the configured threshold is wider than certbot's own
-                        # window. That is NOT a real renewal — don't count it,
-                        # audit it, or fire deploy hooks; it retries next run.
-                        if isinstance(res, dict) and res.get('renewed') is False:
-                            summary['skipped_not_due'] += 1
-                            logger.info(f"{domain} not yet due for renewal per certbot; will retry next run")
-                        else:
-                            summary['renewed'] += 1
-                            logger.info(f"Successfully renewed certificate for {domain}")
-                            self._record_renewal_metrics(
-                                domain, cert_info, True,
-                                time.time() - renew_started)
-                            self._audit_scheduled_renew(domain, 'success')
-                            # Fire deploy hooks for background renewals too (#329):
-                            # the manual path publishes this via the executor, the
-                            # scheduler must publish it itself.
-                            self._publish_renewed_event(domain)
-                    except Exception as e:
-                        summary['failed'] += 1
-                        logger.error(f"Failed to renew certificate for {domain}: {e}")
-                        self._record_renewal_metrics(
-                            domain, cert_info, False,
-                            time.time() - renew_started, error=e)
-                        self._audit_scheduled_renew(domain, 'failure', error=e)
-                        # Notify (#417): without this the operator's configured
-                        # email/Slack channels stay silent while the cert
-                        # marches to expiry.
-                        self._publish_failed_event(domain, e)
+                self._renew_if_due(domain, settings, summary)
 
             except Exception as e:
                 summary['failed'] += 1
@@ -3593,27 +3558,27 @@ class CertificateManager:
                 summary['skipped_invalid'],
                 'y' if summary['skipped_invalid'] == 1 else 'ies',
             )
-        # A certificate in CertMate's own store that no settings entry names is
-        # invisible to this loop, which iterates settings and nothing else. It
-        # is NOT invisible to the rest of the application: `digest.py` takes
-        # the union of settings and the certificate directories, and
-        # `get_certificate_info` reads the disk — so the dashboard shows it,
-        # the digest reports it expiring, and the sweep that is supposed to
-        # renew it never mentions it. That disagreement is what made #759 look
-        # like a threshold bug: the log had no line for the domain at all,
-        # because the sweep never reached it.
+        # A certificate in CertMate's own store that no settings entry names
+        # was invisible to the loop above, which iterates settings and nothing
+        # else. It was never invisible to the rest of the application: the
+        # listing, discovery and the digest all take the union of settings and
+        # the certificate directories, so the dashboard showed it, the digest
+        # reported it expiring, and the sweep that is supposed to renew it
+        # never mentioned it. That disagreement is what made #759 read as a
+        # threshold bug — the log had no line for the domain at all.
         #
-        # It is reported, not adopted. Renewing a certificate the operator
-        # never registered would issue against a CA for a domain CertMate was
-        # not asked to manage, and the sweep is not the place to make that
-        # decision. Saying so out loud is.
-        for orphan in self._certificates_absent_from_settings(considered):
-            summary['unmanaged'] += 1
-            logger.warning(
-                "Certificate %r exists on disk but no settings entry names it, "
-                "so this renewal sweep did not consider it and it will not "
-                "renew. Re-register it with the 'Add Domain' flow or "
-                "POST /api/settings.", orphan)
+        # #789 made the sweep report them. #792 decided what to do with them,
+        # and the answer is here: renew the ones that can say how they were
+        # issued, report the rest.
+        #
+        # The union comes from collect_domain_sources, the one implementation
+        # of "which certificates exist" (#670), so the sweep now answers that
+        # question the same way the other three components do. The loop above
+        # still walks settings directly, deliberately: it is what counts a
+        # malformed entry as skipped_invalid, and the union silently drops
+        # those — a typo must not become an absence.
+        for domain in self._unregistered_on_disk(settings, considered):
+            self._sweep_unregistered(domain, settings, summary)
 
         duration = time.time() - started
         summary['duration_seconds'] = round(duration, 2)
@@ -3623,29 +3588,190 @@ class CertificateManager:
         self._mark_sweep_finished(summary, duration)
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
-            "%d failed, %d disabled, %d invalid, %d not-due, %d unmanaged",
+            "%d failed, %d disabled, %d invalid, %d not-due, %d unmanaged, "
+            "%d re-registered",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
             summary['skipped_not_due'], summary['unmanaged'],
+            summary['reregistered'],
         )
         return summary
 
-    def _certificates_absent_from_settings(self, considered):
-        """Certificate directories no settings entry named, sorted.
+    def _renew_if_due(self, domain, settings, summary):
+        """Renew one certificate if it is due, and account for the outcome.
+
+        Extracted so the registered path and the disk-only path cannot drift:
+        they are the same work, and this codebase's own history is a list of
+        two copies of one operation growing apart (create/renew, #423, #666).
+        Everything a renewal owes the operator happens here — the counters, the
+        duration metric, the attributed audit record, and the events that reach
+        their notification channels — so a caller cannot get half of it.
+
+        Returns True when a certificate was actually renewed, which is the
+        signal the disk-only path needs before it writes anything back to
+        settings. `skipped_not_due` is not that: certbot said no.
+        """
+        cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
+        if not (cert_info and cert_info.get('needs_renewal')):
+            return False
+
+        logger.info(f"Renewing certificate for {domain}")
+        renew_started = time.time()
+        try:
+            res = self.renew_certificate(domain)
+            # certbot can report "not yet due" (renewed=False) when the
+            # configured threshold is wider than certbot's own window. That is
+            # NOT a real renewal — don't count it, audit it, or fire deploy
+            # hooks; it retries next run.
+            if isinstance(res, dict) and res.get('renewed') is False:
+                summary['skipped_not_due'] += 1
+                logger.info(f"{domain} not yet due for renewal per certbot; will retry next run")
+                return False
+            summary['renewed'] += 1
+            logger.info(f"Successfully renewed certificate for {domain}")
+            self._record_renewal_metrics(
+                domain, cert_info, True, time.time() - renew_started)
+            self._audit_scheduled_renew(domain, 'success')
+            # Fire deploy hooks for background renewals too (#329): the manual
+            # path publishes this via the executor, the scheduler must publish
+            # it itself.
+            self._publish_renewed_event(domain)
+            return True
+        except Exception as e:
+            summary['failed'] += 1
+            logger.error(f"Failed to renew certificate for {domain}: {e}")
+            self._record_renewal_metrics(
+                domain, cert_info, False, time.time() - renew_started, error=e)
+            self._audit_scheduled_renew(domain, 'failure', error=e)
+            # Notify (#417): without this the operator's configured email/Slack
+            # channels stay silent while the cert marches to expiry.
+            self._publish_failed_event(domain, e)
+            return False
+
+    def _sweep_unregistered(self, domain, settings, summary):
+        """A certificate on disk that no settings entry names (#792).
+
+        Renewed when it can say how it was issued and that answer still holds;
+        reported otherwise. The guard is not a second copy of the renewal
+        path's requirements — it asks the same resolver the renewal will ask,
+        so the two cannot disagree about what "renewable" means.
+
+        On success the domain is written back to settings. Without that the
+        warning below returns every night for the life of the certificate, and
+        a warning that repeats forever is one an operator learns to scroll
+        past — which is how #759 stayed invisible long enough to be reported
+        as something else. After this, the warning only ever names
+        certificates the sweep genuinely could not take on.
+        """
+        renewable, reason = self._unregistered_is_renewable(domain, settings)
+        if not renewable:
+            summary['unmanaged'] += 1
+            logger.warning(
+                "Certificate %r exists on disk but no settings entry names it, "
+                "and it cannot be renewed on its own: %s. Re-register it with "
+                "the 'Add Domain' flow or POST /api/settings.", domain, reason)
+            return
+
+        logger.info(
+            "Certificate %r exists on disk with no settings entry; its "
+            "metadata names how it was issued, so this sweep takes it on.",
+            domain)
+        summary['checked'] += 1
+        if self._renew_if_due(domain, settings, summary):
+            self._reregister_domain(domain, summary)
+
+    def _unregistered_is_renewable(self, domain, settings):
+        """Can a disk-only certificate be renewed from what it carries?
+
+        Returns ``(True, None)`` or ``(False, reason)`` — the reason goes in
+        front of an operator, so it names the missing thing rather than saying
+        no.
+        """
+        metadata = self._load_metadata(domain)
+        if not metadata:
+            return False, 'it has no readable metadata.json'
+
+        challenge_type = metadata.get('challenge_type', 'dns-01')
+        if challenge_type == 'http-01':
+            # No per-domain credential to check: the webroot is instance-level
+            # and the renewal needs nothing this instance does not already have.
+            return True, None
+
+        dns_provider = metadata.get('dns_provider')
+        if not dns_provider:
+            return False, 'its metadata.json does not name a DNS provider'
+
+        # The same call renew_certificate makes. Asking it here means the
+        # guard cannot drift from the requirement it is guarding.
+        try:
+            dns_config, _ = self.dns_manager.get_dns_provider_account_config(
+                dns_provider, metadata.get('account_id'), settings)
+        except Exception as e:                       # pragma: no cover - defensive
+            return False, f'its DNS provider {dns_provider!r} could not be resolved ({e})'
+        if not dns_config:
+            account = metadata.get('account_id') or 'default'
+            return False, (f'its DNS provider {dns_provider!r} (account '
+                           f'{account!r}) is not configured on this instance')
+        return True, None
+
+    def _reregister_domain(self, domain, summary):
+        """Put a renewed disk-only certificate back in settings.
+
+        Through the mutator form, on the fresh on-disk list, so a registration
+        or deletion that landed while the sweep was running is not lost — the
+        lesson `set_auto_renew` records. Never raises: the certificate has
+        already been renewed, and losing the bookkeeping again is a smaller
+        failure than reporting a successful renewal as a failed one.
+        """
+        def _add(stored):
+            self.settings_manager.migrate_domains_format(stored)
+            entries = stored.get('domains', [])
+            for entry in entries:
+                if isinstance(entry, dict) and entry.get('domain') == domain:
+                    return
+            metadata = self._load_metadata(domain) or {}
+            entry = {'domain': domain, 'auto_renew': True}
+            for key in ('dns_provider', 'account_id', 'ca_provider'):
+                if metadata.get(key):
+                    entry[key] = metadata[key]
+            stored['domains'] = entries + [entry]
+
+        try:
+            self.settings_manager.update(_add, reason='sweep_reregistered')
+        except Exception as e:
+            logger.error(
+                "Renewed %r but could not re-register it in settings (%s); it "
+                "will be taken on again next sweep", domain, e)
+            return
+        summary['reregistered'] = summary.get('reregistered', 0) + 1
+        self._audit_scheduled_renew(domain, 'success')
+        logger.warning(
+            "Certificate %r was renewed and re-registered in settings: it was "
+            "on disk with no entry naming it, and its metadata said how it had "
+            "been issued.", domain)
+
+    def _unregistered_on_disk(self, settings, considered):
+        """Certificates on disk that no settings entry names, sorted.
+
+        The union comes from `collect_domain_sources`, the one implementation
+        of "which certificates exist" (#670) — the same answer the listing, the
+        digest and discovery use, which is the point of #792.
 
         Read-only and failure-tolerant: an unreadable certificate directory
-        must not turn a completed renewal sweep into a failed one. Losing the
-        warning is bad; losing the sweep that renews everything else is worse.
+        must not turn a completed renewal sweep into a failed one. Losing this
+        reconciliation is bad; losing the sweep that renewed everything else,
+        after it has already done the work, is worse.
         """
         try:
-            on_disk = {path.name for path in iter_cert_domain_dirs(self.cert_dir)}
+            sources = collect_domain_sources(settings, self.cert_dir)
         except OSError as e:
             logger.warning(
                 "Could not enumerate certificate directories to check for "
                 "unmanaged certificates: %s", e)
             return []
-        return sorted(on_disk - set(considered))
+        return [source.domain for source in sources.values()
+                if source.only_on_disk and source.domain not in considered]
 
     # ------------------------------------------------------------------
     # Renewal sweep progress
