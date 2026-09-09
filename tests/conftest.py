@@ -72,6 +72,15 @@ def _isolate_runtime_dirs(tmp_path_factory):
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr("modules.core.factory.__file__", str(anchor),
                       raising=False)
+        # The four directories are now relocatable with CERTMATE_*_DIR, which
+        # takes precedence over the anchor above. Unset them for the whole
+        # session so a developer who has them exported — pointing at their own
+        # running instance — cannot have the suite write there, and so the
+        # per-test anchors in the twenty-odd files that set their own keep
+        # deciding.
+        for _var in ('CERTMATE_CERT_DIR', 'CERTMATE_DATA_DIR',
+                     'CERTMATE_BACKUP_DIR', 'CERTMATE_LOGS_DIR'):
+            patch.delenv(_var, raising=False)
         yield
 
 
