@@ -806,8 +806,26 @@ def create_acme_dns_config(api_url: str, username: str, password: str, subdomain
     return _create_config_file("acme-dns", content)
 
 def create_multi_provider_config(provider: str, config_data: Dict[str, Any]) -> Optional[Path]:
-    """
-    Creates a certbot DNS plugin configuration file from a provider and data.
+    """Write the certbot plugin credentials file for a multi-provider plugin.
+
+    Returns the path, or None when this provider does not use one of these
+    files or its account is not configured. **None never means "the file could
+    not be written"**, and that distinction is the whole point of the narrow
+    catch below.
+
+    Previously the body ended with `except (KeyError, Exception): return None`
+    and no log line at all. `_create_config_file` opens the file with O_EXCL and
+    can raise OSError — a read-only config directory, a full disk — and for the
+    twelve providers that come through here that OSError was swallowed and
+    turned into the same None that means "route53 authenticates through the
+    environment". The caller then built a certbot command with
+    `--authenticator dns-hetzner` and no `--dns-hetzner-credentials`, certbot
+    failed complaining about missing plugin credentials, and the real error
+    existed nowhere. cloudflare and route53 never had the problem: their
+    builders let the OSError propagate, which is what this now does.
+
+    The `(KeyError, Exception)` tuple showed the intent — catch the template
+    lookup — so that is what is caught.
     """
     if provider not in _MULTI_PROVIDER_PLUGIN_FILES:
         return None
@@ -822,10 +840,19 @@ def create_multi_provider_config(provider: str, config_data: Dict[str, Any]) -> 
         for ini_key, source in template.items():
             value = config_data.get(*source) if isinstance(source, tuple) else config_data[source]
             config_lines.append(f"{ini_key} = {value}")
-
-        return _create_config_file(provider, "\n".join(config_lines) + "\n")
-    except (KeyError, Exception):
+    except KeyError as e:
+        # A provider in _MULTI_PROVIDER_PLUGIN_FILES with no entry in the
+        # template map, or a template naming a credential field the validator
+        # above did not require. Both are bugs in this file rather than in the
+        # operator's configuration, so they are logged as such and the caller
+        # gets the same None it always did.
+        logger.error(
+            "No credentials template entry for DNS provider %r (%s); the "
+            "issuance will fail with certbot complaining about missing plugin "
+            "credentials", provider, e)
         return None
+
+    return _create_config_file(provider, "\n".join(config_lines) + "\n")
 
 
 # =============================================
