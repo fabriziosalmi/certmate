@@ -9,6 +9,11 @@ The fix registers two global error handlers (`HTTPException` and
 `Exception`) that force JSON for any request whose path starts with
 `/api/`, while leaving Flask's default rendering intact for the rest
 of the application.
+
+Both handlers answer in the envelope the rest of the API uses: a human-readable
+`error`, a machine-readable string `code`, the framework's `message`, and the
+numeric `status`. `code` used to hold the status integer here, which made it a
+different type from the same field on every application error.
 """
 import pytest
 
@@ -34,7 +39,13 @@ def _assert_json_error(resp, expected_status):
     body = resp.get_json()
     assert body is not None
     assert 'error' in body
-    assert body.get('code') == expected_status
+    # `code` is the symbol and `status` is the number. This assertion read
+    # `body['code'] == expected_status` while the handler put the status
+    # integer there — which was the whole defect, because every application
+    # error used a string symbol in the same field. The number did not
+    # disappear; it moved to where it says what it is.
+    assert body.get('status') == expected_status
+    assert isinstance(body.get('code'), str) and body['code'].isupper()
 
 
 def test_api_404_on_unknown_path_returns_json(app):

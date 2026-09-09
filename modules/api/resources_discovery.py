@@ -119,7 +119,8 @@ def create_discovery_resources(api, models, ctx: ApiContext) -> dict:
                 return scope_err
             cert_info = ctx.certificates.get_certificate_info(domain)
             if not cert_info or not cert_info.get('exists'):
-                return {'error': f'Certificate not found for domain: {domain}'}, 404
+                return {'error': f'Certificate not found for domain: {domain}',
+                        'code': 'CERTIFICATE_NOT_FOUND'}, 404
 
             domain_alias = cert_info.get('domain_alias')
             if not domain_alias:

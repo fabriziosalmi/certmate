@@ -1,5 +1,6 @@
 import atexit
 import os
+import re
 import secrets
 import sys
 import threading
@@ -1101,6 +1102,51 @@ def setup_api(container: AppContainer, app):
                   'does, unlike the release number above.'),
               doc='/docs/', prefix='/api')
 
+    # flask-restx answers its own aborts, and its answer was a third error
+    # shape: `{"message": ...}` with neither `error` nor `code`, and — with
+    # ERROR_404_HELP on, which is its default — a message that appends "you have
+    # requested this URI ... but did you mean" followed by matching rules from
+    # the route table. So one API replied in three shapes depending on which
+    # layer refused, and the restx one also narrated the route table to an
+    # unauthenticated caller.
+    # RESTX_ERROR_404_HELP, not ERROR_404_HELP: the latter is flask-restful's
+    # name, which flask-restx renamed. Setting the old one looks right, changes
+    # nothing, and is how the route-table narration survived being turned off.
+    app.config['RESTX_ERROR_404_HELP'] = False
+
+    from werkzeug.exceptions import HTTPException as _HTTPException
+
+    def _restx_error(error):
+        """One envelope, whichever layer refused."""
+        if isinstance(error, _HTTPException):
+            status = error.code or 500
+            return {
+                'error': error.name,
+                'message': error.description,
+                'code': error_code_for_status(status, error.name),
+                'status': status,
+            }, status
+        # Not an HTTPException: something escaped a resource. The description
+        # of an arbitrary exception is not for a client to read — the app-level
+        # handler makes the same choice, and for the same reason.
+        logger.exception("Unhandled exception in an API resource")
+        return {
+            'error': 'Internal Server Error',
+            'message': 'An unexpected error occurred. Check the server logs for details.',
+            'code': 'INTERNAL_SERVER_ERROR',
+            'status': 500,
+        }, 500
+
+    # Registered for HTTPException explicitly AND as the default. Not
+    # belt-and-braces: flask-restx consults its default handler only for
+    # exceptions that are NOT HTTPException — for those it builds
+    # `{"message": ...}` itself, ignoring the default (Api.handle_error). A
+    # handler registered against the type goes into the map it checks first,
+    # which is the only way to answer an abort() from a resource in the same
+    # shape as the rest of the API.
+    api.errorhandler(_HTTPException)(_restx_error)
+    api.errorhandler(_restx_error)
+
     api.authorizations = {
         'Bearer': {'type': 'apiKey', 'in': 'header', 'name': 'Authorization', 'description': 'Bearer token'}
     }
@@ -1249,6 +1295,29 @@ def setup_csrf_protection(app):
         return None
 
 
+def error_code_for_status(status, name=None):
+    """The symbolic `code` for an HTTP-level failure, e.g. 404 -> NOT_FOUND.
+
+    `code` is the machine-readable half of an error body and it is a string
+    everywhere the application produces one: CERTIFICATE_NOT_FOUND,
+    DOMAIN_OUT_OF_SCOPE, ACME_RATE_LIMITED. The two handlers below used to put
+    the HTTP status INTEGER in the same field, so one API answered with two
+    incompatible types under one name and a client could not branch on it
+    without type-checking first — while the SDK this repository publishes
+    already documented it as "CertMate's machine-readable error code (e.g.
+    DOMAIN_OUT_OF_SCOPE) when present".
+
+    Derived from Werkzeug's own name so a status this function has never seen
+    still produces a usable symbol rather than falling back to a number. The
+    HTTP status itself is not lost: it is the status line, and it stays in
+    `status` for the handlers that carry it.
+    """
+    text = (name or '').strip()
+    if not text:
+        return f'HTTP_{status}'
+    return re.sub(r'[^A-Z0-9]+', '_', text.upper()).strip('_') or f'HTTP_{status}'
+
+
 def setup_error_handlers(app):
     """Force JSON responses for unhandled errors on /api/* paths.
 
@@ -1267,7 +1336,8 @@ def setup_error_handlers(app):
             return jsonify({
                 'error': e.name,
                 'message': e.description,
-                'code': e.code,
+                'code': error_code_for_status(e.code, e.name),
+                'status': e.code,
             }), e.code
         return e
 
@@ -1283,7 +1353,8 @@ def setup_error_handlers(app):
         return jsonify({
             'error': 'Internal Server Error',
             'message': 'An unexpected error occurred. Check the server logs for details.',
-            'code': 500,
+            'code': 'INTERNAL_SERVER_ERROR',
+            'status': 500,
         }), 500
 
 

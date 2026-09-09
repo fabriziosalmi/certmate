@@ -150,11 +150,13 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             if err:
                 return {'error': err}, 400
             if not cert_dir or not cert_dir.exists():
-                return {'error': f'Certificate not found for domain: {domain}'}, 404
+                return {'error': f'Certificate not found for domain: {domain}',
+                        'code': 'CERTIFICATE_NOT_FOUND'}, 404
             try:
                 cert_info = ctx.certificates.get_certificate_info(domain)
                 if not cert_info:
-                    return {'error': f'Certificate not found for domain: {domain}'}, 404
+                    return {'error': f'Certificate not found for domain: {domain}',
+                            'code': 'CERTIFICATE_NOT_FOUND'}, 404
                 # Mirror CertificateList.get's per-domain auto_renew enrichment so
                 # the single-domain response shape matches the list response.
                 cert_info['auto_renew'] = auto_renew_for(
@@ -189,7 +191,8 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             if err:
                 return {'error': err}, 400
             if not cert_dir or not cert_dir.exists():
-                return {'error': f'Certificate not found for domain: {domain}'}, 404
+                return {'error': f'Certificate not found for domain: {domain}',
+                        'code': 'CERTIFICATE_NOT_FOUND'}, 404
 
             data = api.payload or {}
             new_dns_provider = data.get('dns_provider')
@@ -335,7 +338,8 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             try:
                 deleted = ctx.certificates.delete_certificate(domain)
                 if not deleted:
-                    return {'error': f'Certificate not found for domain: {domain}'}, 404
+                    return {'error': f'Certificate not found for domain: {domain}',
+                            'code': 'CERTIFICATE_NOT_FOUND'}, 404
 
                 # Best-effort: drop the domain from settings so the dashboard
                 # stops listing it. Do it as a read-modify-write under the lock
