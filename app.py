@@ -13,7 +13,7 @@ from modules.core.structured_logging import (
     DEFAULT_LOG_BACKUP_COUNT,
     DEFAULT_LOG_MAX_BYTES,
 )
-from modules.core.factory import create_app
+from modules.core.factory import create_app, stop_background_work
 
 # Configure structured JSON logging.
 # CERTMATE_LOG_FILE is opt-in (#431): the container logs to stdout, which is
@@ -85,26 +85,22 @@ if __name__ == '__main__':
         )
     except KeyboardInterrupt:
         print("\n🛑 Shutting down CertMate...")
-        if container.scheduler:
-            try:
-                container.scheduler.shutdown()
-                print("📅 Background scheduler stopped")
-            except Exception as e:
-                # Ctrl-C is already on its way out; a scheduler that will not
-                # stop cleanly must not turn that into a traceback. But it is
-                # worth one line, because "stopped" printing and "stopped"
-                # happening were previously indistinguishable (#671).
-                print(f"⚠️  Background scheduler did not stop cleanly: {e}")
-        # After the scheduler, not before: stopping it first means no new
-        # renewal can queue a deploy while the bus is draining.
-        event_bus = (container.managers or {}).get('events')
-        if event_bus is not None:
-            try:
-                undelivered = event_bus.stop()
-                print("📨 Event bus drained"
-                      if not undelivered
-                      else f"⚠️  {undelivered} queued dispatch(es) never ran — "
-                           f"see the log for which certificates they were for")
-            except Exception as e:
-                print(f"⚠️  Event bus did not stop cleanly: {e}")
+        # One ordered shutdown, shared with the atexit hook that covers
+        # gunicorn: scheduler, then issuance pool, then watchdog, then the
+        # event bus. Stopping the bus first would drain a queue the scheduler
+        # is still filling. Ctrl-C is already on its way out, so a component
+        # that will not stop cleanly is a line here, never a traceback (#671).
+        summary = stop_background_work(container)
+        if summary['scheduler'] == 'stopped':
+            print("📅 Background scheduler stopped")
+        elif summary['scheduler']:
+            print(f"⚠️  Background scheduler {summary['scheduler']}")
+        if summary['issuance']:
+            print(f"⚠️  {len(summary['issuance'])} issuance job(s) unfinished: "
+                  + ', '.join(f"{job['operation']} {job['domain']}"
+                              for job in summary['issuance']))
+        print("📨 Event bus drained"
+              if not summary['undelivered']
+              else f"⚠️  {summary['undelivered']} queued dispatch(es) never ran — "
+                   f"see the log for which certificates they were for")
         sys.exit(0)
