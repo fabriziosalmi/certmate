@@ -1,3 +1,169 @@
+## v2.31.0 (One error shape, five metrics nobody was writing, and a key that was parsed on every read)
+
+A minor release: nine changes, all of them from a twenty-category audit of
+v2.30.0 and the issue queue behind it. One is a breaking change for API
+clients, which is why it is first.
+
+### Breaking: `code` in an error body is always a string
+
+Measured against a running instance, three unauthenticated 404s produced three
+different bodies. `code` was a string symbol on the application's own errors
+(`CERTIFICATE_NOT_FOUND`, `DOMAIN_OUT_OF_SCOPE`), the HTTP status **integer** on
+failures raised by the framework, and absent from the most common 404 of all —
+including on two endpoints reporting the identical condition, one of which set
+a code and the other nothing. A client could not branch on the field without
+checking its type first, which is the same as not having the field.
+
+It is one type now, everywhere:
+
+```json
+{"error": "Certificate not found for domain: example.com", "code": "CERTIFICATE_NOT_FOUND"}
+```
+
+Failures from the HTTP layer carry `message` and `status` as well, and `status`
+is where the number went. **If you were reading `code` as an integer, read
+`status` instead** — that is the whole migration. `X-CertMate-API-Version` moved
+from `1.0` to **`2.0`** to say so, because the rule written beside that constant
+makes a retyped response field a major bump.
+
+`docs/api.md` now lists the 39 error codes the API emits. None of them had been
+documented, so branching on one meant reading the source.
+
+Two smaller things came with it: a 404 from a flask-restx resource no longer
+appends "you have requested this URI ... but did you mean" with matching routes
+from the route table, and seven certificate-not-found responses that carried no
+code now carry the one their sibling download endpoint already used.
+
+### A certificate read stopped re-validating its private key
+
+`private_key_state` answers whether a usable private key sits beside a
+certificate, and it answered by loading the key — which is where OpenSSL
+validates it. Measured on one machine: **51.6 ms** for RSA-2048, 275.5 ms for
+RSA-4096, 0.020 ms for EC P-256. End to end, reading one certificate's
+information took 58.7 ms with a real RSA key beside it and 0.19 ms without one.
+The default key shape is RSA-2048, so on the common installation almost all of
+that was re-answering a question whose two input files had not moved.
+
+It runs once per domain in the dashboard listing, in every Prometheus
+collection — serially, on the request thread — and in every renewal sweep. The
+answer is now remembered per `(sha256(privkey.pem), sha256(cert.pem))`: hashing
+both costs tens of microseconds, and unlike an mtime or a TTL it is exact, so a
+renewal, a re-key or a torn publish all change a digest and the comparison runs
+again. In the project's own benchmark, 120 RSA domains went from 5,631 ms to
+9 ms on a repeat listing.
+
+That benchmark could not see any of this before: its fixture generated EC keys,
+the one shape where loading a key is free. It measures both now.
+
+### Five metrics were exported and never written
+
+`certmate_certificate_requests_total`, the creation duration histogram,
+`certmate_acme_rate_limit_hits_total` and the cache hit/miss counters were
+declared, scraped and permanently empty — six recorder methods had no caller
+anywhere in the application. A missing metric is a gap somebody notices while
+building a dashboard; a dead one is a flat line and an alert that never fires,
+which reads as nothing going wrong.
+
+Certificate **creation** now records its outcome and duration on all three of
+its exits, where renewal already did. A refusal that is a CA rate limit is
+counted apart from an ACME error, because the two mean opposite things about
+what to do next: an error is worth retrying, a rate limit is what retrying
+causes. The same distinction gives the API an `ACME_RATE_LIMITED` code whose
+message says to wait. Cache hits and misses are counted at the lookup.
+
+`certmate_dns_provider_api_calls_total` was **removed** rather than left
+exported: CertMate does not talk to a DNS provider API in this process — certbot
+does, in its own subprocess, and the DNS-alias hook is a separate short-lived
+process whose counters never reach this registry.
+
+The four alerts `monitoring/prometheus-alerts.yml` had omitted with a note
+saying the metrics could never fire are back with them.
+
+### A shutdown says what it could not deliver
+
+The event bus had no stop, drain, close or join at all. Its workers are daemon
+threads on purpose — joining them would let a 300-second deploy hook hold
+shutdown open until the runtime killed it anyway — and the cost of that choice
+was invisible: a container stopped during or just after a renewal sweep
+discarded whatever was queued. That is typically the deploy hook for a
+certificate that had just been renewed, so the service went on serving the old
+certificate while the dashboard showed a success, and nothing recorded it.
+
+Queued work now gets a bounded deadline to start, and whatever is left is
+logged with its event and its domain, so the line found after a restart names
+the certificates to redeploy by hand. `CERTMATE_EVENT_DRAIN_SECONDS` sets the
+deadline (default 5, clamped 0-60).
+
+### Two answers that outlived the thing that invalidated them
+
+A **storage migration** that could not enumerate the source returned the empty
+result it had accumulated, which the API rendered as HTTP 200, `success: true`,
+"Migration completed: 0/0 certificates migrated", with an audit record stamped
+success. An operator moving off a backend before decommissioning it was told it
+had worked. Enumerated nothing and could not enumerate are different answers and
+no longer share a return value. A source that genuinely holds no certificates
+still succeeds; a per-certificate failure is still reported per certificate.
+
+The **certbot readiness probe** ran once per process and froze its answer for
+the life of that process. A transient failure at startup made the instance
+permanently unready, which under an orchestrator is a restart loop rolling the
+same dice; and a certbot that broke afterwards never turned `/health/ready` red.
+The answer now has a TTL (`CERTMATE_CERTBOT_PROBE_TTL`, default 300, clamped
+30-3600), a lock so a burst of scrapes runs certbot once between them, and both
+health endpoints ask for a current answer instead of reading the startup
+snapshot.
+
+### An expiry that could not be read is not an expired certificate
+
+Reported three times by the same person (#88, #92, #786). `null <= 0` is true in
+JavaScript, so a certificate whose validity CertMate could not parse rendered
+with a red Expired badge; v2.2.4 guarded the four sites the dashboard had then.
+The command palette, written after that fix, was not guarded — `days > 0 ? ... :
+'Expired'` is false for a missing value, so the same wrong answer arrived by the
+other door. Unknown is now its own state, and a test fails the build on either
+shape anywhere in the frontend.
+
+#786 stays open: that report is about the certificate list, whose guards hold,
+so the cause there is not yet known and closing it would repeat what happened
+to #92.
+
+### The image ships what it runs
+
+The runtime stage copies an allowlist rather than the build context, and the
+allowlist named directories — so `COPY scripts/` put all fourteen files in the
+image, of which the running process reads two. release.sh with the entire
+release procedure, the lockfile regenerator, five CI gates, the theme codemod
+and the walkthrough recorder no longer ship. The image test now asserts the
+contents of that directory in both directions.
+
+### Also
+
+- The per-module coverage floors watch `modules/core` as well as the HTTP
+  layer. `storage_backends.py` could have lost all 877 of its covered
+  statements and the project figure would have landed at 76.3%, above the 75%
+  floor, with a green build.
+- The README's Quick Start was telling operators to configure Route53, Azure,
+  Google Cloud DNS and PowerDNS through `.env`. None of those variables is read
+  anywhere; only `CLOUDFLARE_TOKEN` bootstraps an account from the environment.
+  The guard that caught the same fiction in `.env.template` now asks the README.
+- `CERTMATE_BACKUP_PASSPHRASE` is offered in `.env.example` and in the compose
+  file. It decides whether an automatic backup can restore the instance at all,
+  and it appeared in neither of the two files an operator edits.
+- The compose file's bind mounts carry the preparation `docs/docker.md`
+  documents.
+- `CONTRIBUTING.md`'s pre-push commands are character-for-character the ones CI
+  runs; two rows had drifted.
+
+### New environment variables
+
+- `CERTMATE_EVENT_DRAIN_SECONDS` (default 5, clamped 0-60) - how long a
+  shutdown waits for queued event dispatches to start before naming what is
+  left.
+- `CERTMATE_CERTBOT_PROBE_TTL` (default 300, clamped 30-3600) - how long the
+  certbot readiness answer stays good for.
+
+---
+
 ## v2.30.0 (Three reported bugs, credentials that can live elsewhere, and a build that is the same twice)
 
 A minor release, and a large one: 35 changes. Three of them come from bug
