@@ -115,6 +115,17 @@
     }
 
     function fetchCerts() {
+        // How a certificate's expiry reads in the palette. Three states, not
+        // two: a certificate whose validity could not be parsed is not an
+        // expired certificate, and telling an operator it is sends them to
+        // renew something that may be perfectly valid.
+        function describeExpiry(c) {
+            if (!c.exists) { return 'Not found'; }
+            var days = c.days_until_expiry;
+            if (days === null || days === undefined) { return 'Expiry unknown'; }
+            return days > 0 ? days + ' days left' : 'Expired';
+        }
+
         // Server certificates.
         fetch('/api/certificates', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : []; })
@@ -124,7 +135,11 @@
                         type: 'cert',
                         icon: 'fa-lock',
                         label: c.domain,
-                        desc: (c.exists ? (c.days_until_expiry > 0 ? c.days_until_expiry + ' days left' : 'Expired') : 'Not found'),
+                        // `null > 0` is false, so an unparseable expiry used to
+                        // read as 'Expired' here — the same defect the dashboard
+                        // was fixed for in v2.2.4, in a file written after it.
+                        // Unknown is its own state, as it is in the inventory.
+                        desc: describeExpiry(c),
                         domain: c.domain
                     };
                 }) : [];
