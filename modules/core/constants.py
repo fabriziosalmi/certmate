@@ -105,7 +105,15 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '1.0'
+# 2.0 because `code` was retyped: on failures raised by the HTTP layer it was
+# the status INTEGER while every application error used a string symbol, so one
+# API answered in two types under one field name and a client had to check the
+# type before it could branch. It is a string everywhere now, and the number a
+# caller may have been reading is in `status` on those same responses — a
+# one-line migration, and the version is how they learn to make it. By the rule
+# above this is a retype, and a retype is a MAJOR; picking the comfortable
+# number instead would make the rule decorative.
+API_CONTRACT_VERSION = '2.0'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

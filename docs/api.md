@@ -627,13 +627,68 @@ session has to be restarted.
 
 ### Error Response Format
 
+Every failure carries a human-readable `error` and a machine-readable `code`:
+
 ```json
 {
- "error": "Error message",
- "code": "ERROR_CODE",
- "status": 400
+ "error": "Certificate not found for domain: example.com",
+ "code": "CERTIFICATE_NOT_FOUND"
 }
 ```
+
+`code` is **always a string**. Failures raised by the HTTP layer rather than by
+the application — an unmatched path, a wrong method, a body over the size limit
+— carry two more fields, `message` (the framework's description) and `status`
+(the numeric status, which is also the status line):
+
+```json
+{
+ "error": "Not Found",
+ "message": "The requested URL was not found on the server.",
+ "code": "NOT_FOUND",
+ "status": 404
+}
+```
+
+Until the contract version below moved to 1.1, `code` on that second shape was
+the status *integer* while every application error used a string, so a client
+could not branch on the field without checking its type first. It is one type
+now. The version is on every response as `X-CertMate-API-Version`.
+
+### Codes
+
+Branch on these rather than on the message text, which is written for people
+and may be reworded.
+
+| Code | Typical status | Means |
+| --- | --- | --- |
+| `CERTIFICATE_NOT_FOUND` | 404 | No certificate for that domain on this instance |
+| `CERT_FILE_NOT_FOUND` | 404 | The certificate exists but the requested file does not |
+| `JOB_NOT_FOUND` | 404 | Unknown async issuance job id |
+| `DOMAIN_REQUIRED` | 400 | The request named no domain |
+| `INVALID_REQUEST` / `INVALID_FORMAT` | 400 | The body failed validation |
+| `INVALID_FILE` / `INVALID_FILE_TYPE` / `INVALID_PATH` | 400 | Bad file argument |
+| `INVALID_KEY_FORMAT` / `KEY_FORMAT_NOT_APPLICABLE` / `KEY_CONVERSION_FAILED` | 400/422 | Key export could not be produced in the requested form |
+| `AUTO_RENEW_FLAG_REQUIRED` | 400 | `enabled` missing from an auto-renew update |
+| `INCOMPATIBLE_PARAMETERS` | 400 | Two request fields contradict each other |
+| `AUTH_HEADER_MISSING` / `INVALID_AUTH_FORMAT` / `INVALID_AUTH_SCHEME` / `INVALID_TOKEN` / `AUTH_ERROR` | 401 | Authentication failed, and which part |
+| `SESSION_REQUIRED` | 401 | The endpoint needs a browser session, not a bearer token |
+| `INSUFFICIENT_ROLE` | 403 | Authenticated, but the role is too low |
+| `DOMAIN_OUT_OF_SCOPE` | 403 | The API key is scoped to other domains |
+| `PRIVKEY_REQUIRES_OPERATOR` | 403 | Private-key download needs operator or above |
+| `CERTIFICATE_ALREADY_EXISTS` | 409 | A certificate for that domain is already managed |
+| `DOMAIN_OPERATION_IN_PROGRESS` | 409 | Another create/renew holds this domain's lock |
+| `METADATA_SCHEMA_DOWNGRADE` | 409 | `metadata.json` was written by a newer build; the write was refused |
+| `DOMAIN_NOT_IN_SETTINGS` | 409 | The certificate exists on disk but no settings entry names it |
+| `ACME_RATE_LIMITED` | 422 | The CA refused because a rate limit was reached — waiting is the fix, retrying is the cause |
+| `CERTIFICATE_CREATION_FAILED` / `CERTIFICATE_REISSUE_FAILED` / `CERTIFICATE_REISSUE_REJECTED` | 422 | Issuance was attempted and refused |
+| `RENEWAL_CONFIG_BROKEN` | 422 | certbot's renewal config for this lineage no longer resolves; reissue |
+| `DNS_ACCOUNT_NOT_CONFIGURED` | 422 | The DNS account this certificate uses is gone from settings |
+| `ADOPTION_UNAVAILABLE` | 503 | Discovery/adoption is not available on this build |
+| `ASYNC_ISSUANCE_DISABLED` | 503 | Async issuance is switched off |
+| `CERTIFICATE_CREATION_ERROR` / `CERTIFICATE_RENEWAL_ERROR` / `CERTIFICATE_REISSUE_ERROR` / `CERTIFICATE_DOWNLOAD_ERROR` / `AUTO_RENEW_UPDATE_FAILED` | 500 | The operation failed unexpectedly; the server log has the cause |
+| `INTERNAL_SERVER_ERROR` | 500 | An exception escaped a handler |
+| `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `REQUEST_ENTITY_TOO_LARGE`, … | 4xx | Refused by the HTTP layer; the symbol is the status name |
 
 ### Common HTTP Status Codes
 
@@ -643,7 +698,10 @@ session has to be restarted.
 | 201  | Created             | Certificate created       |
 | 400  | Bad Request         | Missing required field    |
 | 401  | Unauthorized        | Invalid/missing token     |
+| 403  | Forbidden           | Role or domain scope      |
 | 404  | Not Found           | Certificate doesn't exist |
+| 409  | Conflict            | Operation already running |
+| 422  | Unprocessable       | Issuance refused by the CA |
 | 429  | Too Many Requests   | Rate limit exceeded       |
 | 500  | Server Error        | Internal error            |
 | 503  | Service Unavailable | OCSP/CRL not available    |
@@ -657,7 +715,8 @@ curl http://localhost:8000/api/client-certs/invalid-id \
 # Response
 {
  "error": "Certificate not found: invalid-id",
- "code": 404,
+ "message": "Certificate not found: invalid-id",
+ "code": "NOT_FOUND",
  "status": 404
 }
 ```

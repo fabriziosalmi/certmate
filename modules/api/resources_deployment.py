@@ -46,7 +46,8 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
 
             cert_info = ctx.certificates.get_certificate_info(domain)
             if not cert_info or not cert_info.get('exists'):
-                return {'error': f'Certificate not found for domain: {domain}'}, 404
+                return {'error': f'Certificate not found for domain: {domain}',
+                        'code': 'CERTIFICATE_NOT_FOUND'}, 404
 
             if refresh_requested:
                 ctx.cache.remove_from_cache(domain)
@@ -267,7 +268,8 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
             if err:
                 return {'error': err}, 400
             if not cert_dir.exists():
-                return {'error': f'Certificate not found for domain: {domain}'}, 404
+                return {'error': f'Certificate not found for domain: {domain}',
+                        'code': 'CERTIFICATE_NOT_FOUND'}, 404
 
             try:
                 summary = ctx.deployer.run_manual_deploy(domain)

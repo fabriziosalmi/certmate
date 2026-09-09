@@ -35,12 +35,12 @@ API = REPO / 'modules' / 'api'
 # raise one: that is what the test is for.
 UNCODED_CEILING = {
     'resources_backup.py': 31,
-    'resources_certificates.py': 18,
+    'resources_certificates.py': 14,
     'resources_inventory.py': 18,
     'resources_storage.py': 18,
     'resources_settings.py': 16,
-    'resources_deployment.py': 9,
-    'resources_discovery.py': 6,
+    'resources_deployment.py': 7,
+    'resources_discovery.py': 5,
     'resources_ca.py': 3,
     'resources_cache.py': 2,
     'resources_health.py': 2,

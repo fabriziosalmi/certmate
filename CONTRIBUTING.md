@@ -63,13 +63,19 @@ catch something:
 
 | Gate | Command |
 |---|---|
-| Syntax + bug-class lint (**fails CI**) | `flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714 --show-source` |
+| Syntax + bug-class lint (**fails CI**) | `flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714,F401,F841,E722 --show-source` |
 | Security scan (**fails CI**) | `bandit -r modules/ app.py --severity-level medium` |
-| Tests + coverage floor of 75% on `modules/` | `pytest -m "not ui" --cov=modules --cov-fail-under=75` |
+| Tests + coverage floor of 75% on `modules/` | `pytest -m "not ui and not network" --cov=modules --cov-fail-under=75` |
 | Theme tokens | `python3 scripts/theme_codemod.py --check` |
 | CSS bundle freshness | `npm ci && npm run css:build`, then commit `static/css/tailwind.min.css` |
 | No emoji in `RELEASE_NOTES.md` | `.github/workflows/lint-emoji.yml` |
 | Image builds | `docker build -t certmate:test .` |
+
+Both commands are the ones `ci.yml` runs, character for character. They had
+drifted — the lint row was missing `F401,F841,E722` and the test row was
+missing `not network` — which is the worst way for this table to be wrong: it
+passes locally and fails on the PR, or it fails locally on the CA-reachability
+tier that CI deliberately does not gate on.
 
 The full style pass (`flake8 .` with no `--select`) is informational — the
 codebase is not clean against it and CI runs it with `--exit-zero`. Do not

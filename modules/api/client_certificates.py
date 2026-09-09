@@ -1,11 +1,59 @@
 import logging
-from flask import request, send_file, Response
+from flask import abort as flask_abort, request, send_file, Response
 from ..core.domain_paths import IDENTIFIER_RE, is_path_safe_segment
 from werkzeug.exceptions import HTTPException
-from flask_restx import Resource, fields, abort
+from flask_restx import Resource, fields
 from io import BytesIO
 
 logger = logging.getLogger(__name__)
+
+
+def abort(status, message, code=None):
+    """Refuse in the same envelope as the rest of the API.
+
+    These resources are the only ones in the codebase that answer through
+    flask-restx's ``abort``, and its body is ``{"message": ...}`` — no
+    ``error``, no ``code``. Everything else returns ``{'error': ..., 'code':
+    ...}``, so one API replied in two shapes depending on which file the
+    endpoint lived in, and a client could not read a failure the same way
+    twice.
+
+    ``abort`` puts its keyword arguments straight onto the exception as
+    ``data``, and flask-restx returns that verbatim — which is also why an
+    ``@api.errorhandler`` cannot fix this from outside. So the envelope is
+    added here. ``message`` is kept alongside ``error`` rather than replaced:
+    every existing client of these endpoints reads it, and this is a change
+    that only ADDS fields.
+
+    ``code`` defaults to the symbol for the status rather than to a
+    per-call-site invention: a uniform, honest answer beats fifty new
+    constants nobody has a use for yet. Pass one where it earns its keep.
+    """
+    from ..core.factory import error_code_for_status
+    try:
+        flask_abort(status)
+    except HTTPException as exc:
+        # Exactly what flask_restx.abort does with its kwargs, done here
+        # because its own first parameter is named `code`, so it cannot carry a
+        # payload key of that name — and `code` is the field this envelope is
+        # about.
+        exc.data = {
+            'error': str(message),
+            'message': str(message),
+            'code': code or error_code_for_status(
+                status, _STATUS_NAMES.get(status, '')),
+            'status': status,
+        }
+        raise
+
+
+# The werkzeug names for the statuses these resources use, so the symbolic code
+# reads NOT_FOUND rather than NotFound.
+_STATUS_NAMES = {
+    400: 'Bad Request', 403: 'Forbidden', 404: 'Not Found',
+    409: 'Conflict', 422: 'Unprocessable Entity', 500: 'Internal Server Error',
+    503: 'Service Unavailable',
+}
 
 def _validate_identifier(identifier):
     """Validate client certificate identifier to prevent path traversal.
