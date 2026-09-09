@@ -279,12 +279,48 @@ def _data_dir_is_on_its_own_mount(data_dir: Path) -> bool:
         current = current.parent
 
 
+# The four directories CertMate keeps its state in, with the environment
+# variable that relocates each and the name it has under the install root.
+STATE_DIRECTORIES = (
+    ('cert_dir', 'CERTMATE_CERT_DIR', 'certificates'),
+    ('data_dir', 'CERTMATE_DATA_DIR', 'data'),
+    ('backup_dir', 'CERTMATE_BACKUP_DIR', 'backups'),
+    ('logs_dir', 'CERTMATE_LOGS_DIR', 'logs'),
+)
+
+
+def resolve_state_directories(test_config=None) -> dict:
+    """Where the four state directories are, in order of who decides.
+
+    They were derived from `Path(__file__).parent.parent.parent` and nothing
+    could move them. That is a sound default — it is what makes the image and
+    the systemd unit work with no configuration — but it was also the only
+    answer available, so a deployment that wanted certificates on one volume
+    and backups on another had to bind-mount over the install tree, and this
+    repository's own test suite redirects state by monkeypatching
+    `modules.core.factory.__file__`, which is not a thing an application
+    should require of anyone.
+
+    `test_config` is honoured first because it was already in the signature
+    and read nowhere: `create_app(test_config={...})` accepted a config that
+    could not affect anything, which is worse than not accepting one.
+
+    Relative values resolve against the current working directory, and every
+    result is resolved, so what the container reports is always absolute.
+    """
+    base = Path(__file__).resolve().parent.parent.parent
+    config = test_config or {}
+    resolved = {}
+    for attribute, env_name, default_name in STATE_DIRECTORIES:
+        override = config.get(env_name) or os.getenv(env_name, '').strip()
+        resolved[attribute] = (Path(override) if override
+                               else base / default_name).resolve()
+    return resolved
+
+
 def setup_directories(container: AppContainer, test_config=None):
-    _base = Path(__file__).resolve().parent.parent.parent
-    container.cert_dir = (_base / "certificates").resolve()
-    container.data_dir = (_base / "data").resolve()
-    container.backup_dir = (_base / "backups").resolve()
-    container.logs_dir = (_base / "logs").resolve()
+    for attribute, value in resolve_state_directories(test_config).items():
+        setattr(container, attribute, value)
 
     required = [
         ('certificates', container.cert_dir),
