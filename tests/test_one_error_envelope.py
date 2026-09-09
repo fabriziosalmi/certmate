@@ -29,7 +29,6 @@ These tests drive the real application rather than asserting on source, because
 the defect was invisible in every file taken on its own.
 """
 import json
-import os
 import pathlib
 
 import pytest
