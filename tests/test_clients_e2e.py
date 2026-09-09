@@ -159,56 +159,18 @@ def test_cli_health_unreachable_server_clean_error():
 
 
 # --------------------------------------------------------------------------
-# Contract: the SDK's REST endpoints must exist in the API's Swagger spec
+# Contract: the SDK's REST endpoints must exist in the application
 # --------------------------------------------------------------------------
-
-def _normalise(path: str) -> str:
-    """Drop a leading /api and collapse {param}/<param> to {} for comparison."""
-    import re
-    if path.startswith("/api"):
-        path = path[len("/api"):]
-    return re.sub(r"[<{][^>}]*[>}]", "{}", path)
-
-
-# The `/api/...` (flask-restx, Swagger-documented) endpoints the SDK relies on.
-# Web-blueprint endpoints (test-provider, backups) are intentionally excluded —
-# they are not part of the restx schema.
-_SDK_RESTX_ENDPOINTS = [
-    ("get", "/certificates"),
-    ("post", "/certificates/create"),
-    ("get", "/certificates/{}"),
-    ("delete", "/certificates/{}"),
-    ("post", "/certificates/{}/renew"),
-    ("post", "/certificates/{}/reissue"),
-    ("get", "/certificates/{}/download"),
-    ("get", "/certificates/jobs/{}"),
-    ("put", "/certificates/{}/auto-renew"),
-]
-
-
-def _fetch_spec(base_url: str):
-    import httpx
-    for path in ("/swagger.json", "/api/swagger.json", "/docs/swagger.json"):
-        try:
-            r = httpx.get(base_url.rstrip("/") + path, timeout=10)
-            if r.status_code == 200 and isinstance(r.json(), dict) and r.json().get("paths"):
-                return r.json()
-        except Exception:
-            continue
-    return None
-
-
-def test_sdk_endpoints_are_documented_in_swagger(docker_container):
-    spec = _fetch_spec(docker_container)
-    if not spec:
-        pytest.skip("Swagger spec not exposed by this build")
-    documented = set()
-    for raw_path, methods in spec.get("paths", {}).items():
-        norm = _normalise(raw_path)
-        for method in methods:
-            documented.add((method.lower(), norm))
-    missing = [ep for ep in _SDK_RESTX_ENDPOINTS if ep not in documented]
-    assert not missing, (
-        "SDK calls endpoints absent from the API's Swagger spec (drift!): "
-        f"{missing}"
-    )
+#
+# This lived here as nine endpoints in a literal list, checked against a
+# running container's Swagger spec. It is now
+# tests/test_the_sdk_calls_endpoints_that_exist.py, which reads the endpoints
+# out of the SDK's own source with `ast` and compares them against the
+# application's `url_map`.
+#
+# Why it moved: the list had drifted to nine of the SDK's nineteen calls, and
+# it deliberately excluded the `/api/web/...` blueprint endpoints the SDK also
+# uses — so the check written to catch a renamed endpoint could not see half
+# the client. Neither side needs a container to be read, and a contract between
+# two files in this repository does not belong in the slowest tier of the
+# suite.
