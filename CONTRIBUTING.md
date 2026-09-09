@@ -64,6 +64,7 @@ catch something:
 | Gate | Command |
 |---|---|
 | Syntax + bug-class lint (**fails CI**) | `flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714,F401,F841,E722 --show-source` |
+| Complexity budget (**fails CI**) | `python scripts/check_complexity_budget.py` |
 | Security scan (**fails CI**) | `bandit -r modules/ app.py --severity-level medium` |
 | Tests + coverage floor of 75% on `modules/` | `pytest -m "not ui and not network" --cov=modules --cov-fail-under=75` |
 | Theme tokens | `python3 scripts/theme_codemod.py --check` |
@@ -71,7 +72,7 @@ catch something:
 | No emoji in `RELEASE_NOTES.md` | `.github/workflows/lint-emoji.yml` |
 | Image builds | `docker build -t certmate:test .` |
 
-Both commands are the ones `ci.yml` runs, character for character. They had
+The gated commands are the ones `ci.yml` runs, character for character. They had
 drifted — the lint row was missing `F401,F841,E722` and the test row was
 missing `not network` — which is the worst way for this table to be wrong: it
 passes locally and fails on the PR, or it fails locally on the CA-reachability
@@ -83,6 +84,15 @@ reformat unrelated files to quieten it.
 
 The coverage floor is a floor, not a target. Raise it as a ratchet; never lower
 it to make a red build pass.
+
+The complexity budget works the same way in the other direction. Every function
+may reach a cyclomatic complexity of 40; the thirteen already above it are
+listed in `scripts/check_complexity_budget.py` with the value they measure
+today, and the check fails four ways: a new function over the limit with no
+entry, a budgeted function getting worse, a budgeted function getting *better*
+without its entry coming down, and an entry that matches nothing. Adding an
+entry is a decision to keep a function complex — decompose it instead, or argue
+for the entry in review.
 
 ### Editing templates or CSS
 
