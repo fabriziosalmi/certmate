@@ -26,7 +26,7 @@ PyYAML==6.0.3
 # version specifiers. Same reasoning as PyYAML above: it arrives transitively
 # today (pip, build tooling), so relying on that would break the test the day
 # something drops it, for reasons unrelated to what it checks.
-packaging==26.2
+packaging==26.3
 
 # Read by tests/test_complexity_ratchet_is_tight.py, which shells out to flake8
 # to measure the tree's worst cyclomatic complexity and compares it with the
