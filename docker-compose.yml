@@ -45,14 +45,18 @@ services:
     #   chgrp -R 0 ./{certificates,data,logs,backups}
     #   chmod -R g+rwX ./{certificates,data,logs,backups}
     #
+    # `:z` (shared) relabels for SELinux. Without it, Fedora/RHEL report the
+    # directories as present but creating a file inside them fails with ENOENT.
+    # nginx also mounts ./certificates, so this must be `:z` not `:Z`.
+    #
     # (Named volumes need none of this — see docs/docker.md. The app refuses to
     # start rather than half-work when a directory is not writable, and names
     # the directory and the fix in the error.)
     volumes:
-      - ./certificates:/app/certificates:rw
-      - ./logs:/app/logs:rw
-      - ./data:/app/data:rw
-      - ./backups:/app/backups:rw
+      - ./certificates:/app/certificates:rw,z
+      - ./logs:/app/logs:rw,z
+      - ./data:/app/data:rw,z
+      - ./backups:/app/backups:rw,z
     restart: unless-stopped
     cap_drop:
       - ALL
@@ -85,8 +89,8 @@ services:
     volumes:
       # Copy nginx.conf.example to nginx.conf and set your domain BEFORE `up`:
       # a missing host file makes Docker create nginx.conf as an empty DIRECTORY.
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certificates:/etc/nginx/ssl:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro,z
+      - ./certificates:/etc/nginx/ssl:ro,z
     depends_on:
       certmate:
         condition: service_healthy

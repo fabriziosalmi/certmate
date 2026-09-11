@@ -1,4 +1,5 @@
 import atexit
+import errno
 import os
 import re
 import secrets
@@ -209,6 +210,20 @@ def _verify_dir_writable(directory: Path) -> Optional[str]:
     except PermissionError:
         return "not writable by the container user (check host mount permissions)"
     except OSError as e:
+        # ENOENT after exists()+is_dir() succeeded is not a mode bit problem.
+        # Typical causes: SELinux blocking create and reporting it as ENOENT
+        # (Fedora/RHEL bind mounts without ':z'), a bind mount whose host
+        # path was deleted, or a Kubernetes subPath that did not materialise.
+        # ESTALE is the NFS equivalent of a vanished mount.
+        if e.errno in (errno.ENOENT, errno.ESTALE):
+            return (
+                f"visible as a directory but creating a file failed ({e}). "
+                "This is a broken or blocked mount, not a chmod problem. On "
+                "SELinux hosts (Fedora/RHEL) add ':z' to the bind mount; "
+                "otherwise recreate the host directory or volume"
+            )
+        if e.errno == errno.EROFS:
+            return "read-only filesystem (mount the volume read-write)"
         return f"OS error during write probe: {e}"
     return None
 
@@ -228,15 +243,21 @@ def _make_dir_arbitrary_uid_ready(directory: Path):
     """
     import stat as _stat
     try:
-        directory.mkdir()
-        _created = True
-    except FileExistsError:
-        _created = False
+        already_present = directory.exists() and directory.is_dir()
+    except OSError:
+        already_present = False
+
+    try:
+        # parents=True: CERTMATE_*_DIR can point at a nested path on a fresh
+        # volume, and backups/unified is one level below backups/. Without
+        # parents, a missing ancestor becomes ENOENT on the leaf and the
+        # write probe then misreports every directory as a permission error.
+        directory.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         logger.error(f"Failed to create {directory}: {e}")
         return
 
-    if not _created:
+    if already_present:
         return
     # Only relax group perms inside a container (the rootless-podman / OpenShift
     # arbitrary-UID case). On a bare-metal install we keep the umask default so a
@@ -348,11 +369,13 @@ def setup_directories(container: AppContainer, test_config=None):
     if failures:
         msg = (
             "Required directories are not writable by the CertMate process. "
-            "Fix host-mount permissions and restart. The default image runs as "
-            "UID/GID 1000:1000; under rootless podman / OpenShift it runs as an "
-            "arbitrary UID in group 0, so the mounts must be group-0 writable "
-            "(chown :0 and chmod g+rwX, or use a named volume / the ':U' mount "
-            "option). See issue #380:\n" + "\n".join(failures)
+            "Fix the mounts and restart. Permission errors: the default image "
+            "runs as UID/GID 1000:1000; under rootless podman / OpenShift it "
+            "runs as an arbitrary UID in group 0, so the mounts must be "
+            "group-0 writable (chown :0 and chmod g+rwX, a named volume, or "
+            "podman's ':U' mount option). ENOENT on a directory that exists "
+            "is a broken bind mount — on SELinux (Fedora/RHEL) add ':z', or "
+            "recreate the host directory. See issue #380:\n" + "\n".join(failures)
         )
         logger.error(msg)
         raise RuntimeError(msg)

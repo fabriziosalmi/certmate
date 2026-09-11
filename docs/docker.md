@@ -212,23 +212,31 @@ chmod -R g+rwX ./{data,certificates,logs,backups}
 
 podman run -d --name certmate \
   -p 8000:8000 \
-  -v ./data:/app/data \
-  -v ./certificates:/app/certificates \
-  -v ./logs:/app/logs \
-  -v ./backups:/app/backups \
+  -v ./data:/app/data:z \
+  -v ./certificates:/app/certificates:z \
+  -v ./logs:/app/logs:z \
+  -v ./backups:/app/backups:z \
   docker.io/fabriziosalmi/certmate:latest
 ```
 
+On SELinux hosts (Fedora, RHEL, CentOS) the `:z` option is required: it
+relabels the bind mount so the container can create files. Without it the
+directories `stat` as present but writing a file fails with **ENOENT**, which
+looks like a missing path rather than a policy denial. Use `:z` (shared), not
+`:Z`, if another container (the nginx profile, for example) also mounts
+`./certificates`.
+
 Alternatively let podman fix the ownership for you with the `:U` mount option
-(recursively chowns the source to match the container UID/GID):
+(recursively chowns the source to match the container UID/GID); combine it
+with `:z` on SELinux hosts:
 
 ```bash
 podman run -d --name certmate \
   -p 8000:8000 \
-  -v ./data:/app/data:U \
-  -v ./certificates:/app/certificates:U \
-  -v ./logs:/app/logs:U \
-  -v ./backups:/app/backups:U \
+  -v ./data:/app/data:U,z \
+  -v ./certificates:/app/certificates:U,z \
+  -v ./logs:/app/logs:U,z \
+  -v ./backups:/app/backups:U,z \
   docker.io/fabriziosalmi/certmate:latest
 ```
 
@@ -255,8 +263,11 @@ volumes:
 ```
 
 If startup aborts with *"Required directories are not writable by the CertMate
-process"*, the mount is not group-0 writable — apply the `chgrp 0 … && chmod
-g+rwX …` above, switch to a named volume, or add `:U` to the bind mounts.
+process"*, read the per-directory reason: a permission error means the mount is
+not group-0 writable — apply the `chgrp 0 … && chmod g+rwX …` above, switch to
+a named volume, or add `:U` to the bind mounts. **ENOENT** on a directory that
+exists is a broken or SELinux-blocked mount — add `:z` (the shipped
+`docker-compose.yml` already does), or recreate the host directory.
 
 > **Kubernetes / OpenShift:** no changes needed. Set
 > `spec.securityContext.fsGroup: 0` (or rely on the default restricted SCC,
