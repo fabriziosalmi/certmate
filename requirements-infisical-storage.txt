@@ -5,4 +5,4 @@
 # arm64 image installs it fine. 2.3.5 is the last release with complete
 # platform coverage. This is the only compiled dependency in the storage
 # extras; the rest ship pure-Python wheels and are architecture-neutral.
-infisical-python==2.3.5
+infisical-python==2.3.6
