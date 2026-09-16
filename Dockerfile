@@ -122,6 +122,28 @@ WORKDIR /app
 # reproducibility rationale written below for pinning pip and above for
 # pinning the base image by digest.
 #
+# One named exception to that, and it is named on purpose. The base image
+# carries perl-base 5.40.1-6, against which three CRITICAL advisories are
+# fixable today:
+#
+#   CVE-2026-13221  incorrect regular expression processing
+#   CVE-2026-8376   heap buffer overflow when compiling a regular expression
+#   CVE-2026-42496  path traversal in perl-archive-tar
+#
+# All three are fixed in 5.40.1-6+deb13u1, which trixie/main already serves.
+# The normal channel for an OS patch here is a base-image digest bump, and
+# that channel is closed: the pinned digest IS the current
+# python:3.12-slim-trixie, so there is nothing to bump to until upstream
+# rebuilds. Meanwhile the `Fail on a fixable CRITICAL` gate in
+# docker-multiplatform.yml is red on every pull request, which is the gate
+# doing its job.
+#
+# `--only-upgrade perl-base` keeps the variance bounded and named, which is
+# the same property the paragraph above is protecting: one package, stated
+# here, visible in the diff. It becomes a no-op the moment the base image
+# carries >= 5.40.1-6+deb13u1, and the line should be removed then rather
+# than left to accumulate.
+#
 # Be precise about what this buys, because it is not full reproducibility:
 # `apt-get install` below is still unpinned, so the three packages it names can
 # differ between builds. What changes is that the variance goes from unbounded
@@ -162,6 +184,7 @@ WORKDIR /app
 ARG PIP_VERSION=26.1.2
 RUN apt-get update && \
     apt-get install -y -o Acquire::Retries=3 bash curl tini && \
+    apt-get install -y -o Acquire::Retries=3 --only-upgrade perl-base && \
     rm -rf /var/lib/apt/lists/* && \
     pip install --no-cache-dir "pip==${PIP_VERSION}" && \
     useradd --create-home --shell /bin/bash certmate
