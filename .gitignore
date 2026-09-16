@@ -119,3 +119,4 @@ UI_REDESIGN_PLAN.md
 # Local nginx reverse-proxy config: copy nginx.conf.example to nginx.conf and
 # fill in your domain. The copy is yours; the example is tracked (#576).
 nginx.conf
+tls-erros.md
