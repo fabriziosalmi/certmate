@@ -1,6 +1,6 @@
 # CertMate Dokumentation
 
-<!-- CERTMATE-TRANSLATED-FROM b01040fe0dc00a0b -->
+<!-- CERTMATE-TRANSLATED-FROM f0796a8e8cbb2239 -->
 
 Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anleitungen zu allen Funktionen.
 

@@ -200,7 +200,7 @@ $(echo "$changed" | grep -E "$SENSITIVE_RE" | sed 's/^/  /')"
   info "Branch $branch off origin/main"
   git checkout -q -b "$branch" origin/main
   "$PY" - "$version" <<'PY'
-import json, pathlib, re, sys
+import hashlib, json, pathlib, re, sys
 v = sys.argv[1]
 init = pathlib.Path("modules/__init__.py")
 init.write_text(re.sub(r"__version__ = '[^']+'", f"__version__ = '{v}'", init.read_text()), encoding="utf-8")
@@ -263,6 +263,9 @@ if chart.exists():
 # it was the client-certificate launch write-up wearing that filename, and it
 # only carried the version stamp because of the name. The index is README.md,
 # which is also what GitHub renders when you browse to `docs/`.
+english_readme = pathlib.Path("docs/README.md")
+before = hashlib.sha256(english_readme.read_bytes()).hexdigest()[:16]
+
 docs = sorted(pathlib.Path("docs").glob("README.md")) + sorted(pathlib.Path("docs").glob("*/README.md"))
 for page in docs:
     text = page.read_text(encoding="utf-8")
@@ -273,6 +276,31 @@ for page in docs:
     )
     if bumped != text:
         page.write_text(bumped, encoding="utf-8")
+
+# Re-stamp the translations that were in step before this bump.
+#
+# scripts/check_translation_freshness.py asks every translated page which
+# English page it was made from, by recording the first 16 hex of that page's
+# sha256. Bumping the version changes docs/README.md, so every translated
+# README is reported as behind by a release that just edited all five files
+# with the same one-line change. That is the gate describing the release
+# process rather than the translations, and it failed the v2.33.0 release PR.
+#
+# Only pages whose recorded hash matched BEFORE the bump are re-stamped. A
+# translation that was already behind stays behind: the release must not be
+# able to declare a stale translation fresh by touching a version number in it.
+after = hashlib.sha256(english_readme.read_bytes()).hexdigest()[:16]
+if after != before:
+    marker = "CERTMATE-TRANSLATED-FROM"
+    for page in sorted(pathlib.Path("docs").glob("*/README.md")):
+        text = page.read_text(encoding="utf-8")
+        if f"{marker} {before}" not in text:
+            continue
+        page.write_text(
+            text.replace(f"{marker} {before}", f"{marker} {after}"),
+            encoding="utf-8",
+        )
+        print(f"    re-stamped {page} -> {after}")
 PY
   [ "$("$PY" -c 'import json;from modules import __version__;print(json.load(open("package.json"))["version"]==__version__)')" = "True" ] \
     || die "version files disagree after bump"
