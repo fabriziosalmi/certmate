@@ -1,5 +1,7 @@
 # Deployment Probes
 
+<!-- CERTMATE-TRANSLATED-FROM 2e4c6efa25e73341 -->
+
 Probes prüfen, ob Ihre Zertifikate im Netzwerk erreichbar sind, indem sie einen Live-TLS-Handshake mit dem deployten Server durchführen.
 
 ## Konfiguration

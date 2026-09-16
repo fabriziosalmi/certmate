@@ -1,5 +1,7 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
+<!-- CERTMATE-TRANSLATED-FROM 36e2134d9fcca7b2 -->
+
 ## Übersicht
 
 CertMate Client-Zertifikate ist eine umfassende, produktionsreife Lösung für die Verwaltung von Client-Zertifikaten mit:

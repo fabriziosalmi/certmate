@@ -1,5 +1,9 @@
 # Cumplimiento normativo y pista de auditoría
 
+<!-- CERTMATE-TRANSLATED-FROM 2bf88cfee49317c4 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Esta traducción no está actualizada.** La versión en inglés ([`docs/compliance.md`](../compliance.md)) se ha modificado desde entonces y es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
+
 Esta página relaciona la pista de auditoría de CertMate con los regímenes que los operadores consultan con mayor frecuencia — el AI Act de la UE, NIS2 y la ISO/IEC 42001 — cuando permiten que un agente IA/MCP gestione certificados de forma programada.
 
 > **Lea esto primero.** CertMate es una herramienta MIT auto-alojada mono-instancia. **No** es un sistema de IA, **no** es un sistema de IA de alto riesgo, **no** es una entidad regulada, y no «cumple» ni «certifica» nada. Las obligaciones de cumplimiento recaen sobre el **operador** que lo ejecuta. Lo que CertMate proporciona son **artefactos de evidencia** que un operador puede utilizar para *sus propias* obligaciones. Cada afirmación a continuación significa «permite al operador evidenciar X», con los límites indicados de forma explícita.

@@ -1,5 +1,7 @@
 # Deplacee
 
+<!-- CERTMATE-TRANSLATED-FROM fc2c79b3b067bc2e -->
+
 Cette page etait le texte de lancement des certificats clients, sous un nom de
 fichier qui la faisait passer pour l'index de la documentation. Son contenu se
 trouve desormais dans le [guide des certificats clients](./guide.md), et

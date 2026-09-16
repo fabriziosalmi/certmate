@@ -98,6 +98,18 @@ gating:
       hosted, and there is no reason for it to be advisory.
 
 advisory:
+  - context: translations
+    workflow: ci.yml
+    job: translations
+    why: >-
+      Fails when a translated page is behind its English source and does not
+      say so (#674). Advisory rather than gating because it is a documentation
+      property and because the remedy is always available to the author: update
+      the translation, or add the notice. Blocking a code fix on a German
+      markdown file would make the gate the reason not to improve the English,
+      which is the opposite of what it is for. Read it before merging anything
+      that edits docs/.
+
   - context: storage-live
     workflow: ci.yml
     job: storage-live

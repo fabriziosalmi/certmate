@@ -417,6 +417,32 @@ jobs:
   # Let's Encrypt staging. Weekly is the right cadence: a CA does not retire an
   # endpoint between two pull requests, and this must never be the reason a
   # merge is blocked.
+  # A translated page that is behind its English source has to say so (#674).
+  #
+  # It does not require current translations. It requires that improving the
+  # English brings the translation with it, or leaves the translation saying,
+  # in its own language, that it is behind. All four translations of
+  # docs/mcp.md described a job-polling loop for five weeks after the English
+  # page was fixed for describing one that could not run.
+  #
+  # No fetch-depth here: each page records the hash of the English it was
+  # translated from, so this needs no history at all. The first version
+  # compared commit dates and defeated itself, because marking a page as stale
+  # is an edit and an edit made it the fresher of the pair.
+  translations:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Every stale translation says it is stale
+      run: python scripts/check_translation_freshness.py
+
   ca-endpoints:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

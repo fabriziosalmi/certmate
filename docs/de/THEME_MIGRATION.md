@@ -1,5 +1,7 @@
 # Theme-Migration — Entkopplung von Hell/Dunkel über CSS-Variable-Tokens
 
+<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+
 Status: **ausgeliefert** (Phasen 0–5 in v2.9.0; Phase 6 folgt) · Verantwortlicher: Fabrizio · Erstellt: 2026-05-25
 
 ## Ziel

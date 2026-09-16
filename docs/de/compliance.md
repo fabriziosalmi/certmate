@@ -1,5 +1,9 @@
 # Compliance und Audit-Trail
 
+<!-- CERTMATE-TRANSLATED-FROM 2bf88cfee49317c4 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung ist nicht aktuell.** Die englische Fassung ([`docs/compliance.md`](../compliance.md)) wurde seitdem geändert und ist maßgeblich. Bei Abweichungen gilt das englische Dokument.
+
 Diese Seite ordnet den Audit-Trail von CertMate den Regelwerken zu, nach denen Betreiber am häufigsten fragen — dem EU AI Act, NIS2 und ISO/IEC 42001 — wenn sie einen KI/MCP-Agenten Zertifikate nach einem Zeitplan verwalten lassen.
 
 > **Zuerst lesen.** CertMate ist ein selbst gehostetes MIT-Tool für Einzelinstanzen. Es ist **kein** KI-System, **kein** KI-System mit hohem Risiko und **keine** regulierte Einheit, und es „erfüllt" oder „zertifiziert" nichts. Die Compliance-Pflichten liegen beim **Betreiber**, der es einsetzt. Was CertMate bereitstellt, sind **Nachweisartefakte**, die ein Betreiber für *seine eigenen* Verpflichtungen nutzen kann. Jede Aussage unten bedeutet „versetzt den Betreiber in die Lage, X nachzuweisen", mit den ausdrücklich genannten Einschränkungen.

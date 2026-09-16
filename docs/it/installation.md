@@ -1,5 +1,7 @@
 # Guida all'installazione
 
+<!-- CERTMATE-TRANSLATED-FROM 7fedcd37874f024e -->
+
 Questa guida illustra tutti i metodi di installazione e deploy di CertMate.
 
 ---

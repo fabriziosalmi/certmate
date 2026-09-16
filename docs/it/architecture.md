@@ -1,5 +1,9 @@
 # Architettura di CertMate
 
+<!-- CERTMATE-TRANSLATED-FROM 80c544b5f465e5d7 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Questa traduzione non è aggiornata.** La versione inglese ([`docs/architecture.md`](../architecture.md)) è stata modificata da allora ed è quella che fa fede. In caso di discordanza vale il documento inglese.
+
 Questo documento descrive l'architettura completa di CertMate — sia il sistema principale per i certificati server che il sottosistema per i certificati client.
 
 ---

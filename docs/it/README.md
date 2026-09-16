@@ -1,5 +1,7 @@
 # Documentazione CertMate
 
+<!-- CERTMATE-TRANSLATED-FROM b01040fe0dc00a0b -->
+
 Benvenuto nella documentazione di CertMate. Questa cartella contiene guide complete per tutte le funzionalità.
 
 ---

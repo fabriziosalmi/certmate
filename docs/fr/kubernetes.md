@@ -1,5 +1,9 @@
 # Notes de production Kubernetes
 
+<!-- CERTMATE-TRANSLATED-FROM db0f75b2a7a008f8 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Cette traduction n'est pas à jour.** La version anglaise ([`docs/kubernetes.md`](../kubernetes.md)) a été modifiée depuis et fait foi. En cas de divergence, le document anglais prévaut.
+
 Ce guide capture la configuration de dimensionnement de base pour CertMate lorsqu'il fonctionne derrière un Ingress/HTTPRoute Kubernetes et utilise un backend de certificats distant comme Azure Key Vault.
 
 ## Ressources recommandées

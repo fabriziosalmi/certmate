@@ -1,5 +1,7 @@
 # CertMate Certificati Client - Guida all'utilizzo
 
+<!-- CERTMATE-TRANSLATED-FROM 36e2134d9fcca7b2 -->
+
 ## Panoramica
 
 CertMate Certificati Client e una soluzione completa e pronta per la produzione per la gestione dei certificati client con:

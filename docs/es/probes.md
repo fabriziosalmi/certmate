@@ -1,5 +1,7 @@
 # Sondas de Despliegue (Probes)
 
+<!-- CERTMATE-TRANSLATED-FROM 2e4c6efa25e73341 -->
+
 Las sondas verifican que sus certificados son accesibles en la red realizando un handshake TLS en vivo contra el servidor desplegado.
 
 ## Configuración

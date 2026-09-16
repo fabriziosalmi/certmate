@@ -1,5 +1,7 @@
 # Build e distribuzione con Docker
 
+<!-- CERTMATE-TRANSLATED-FROM 688759cbf76ef5a2 -->
+
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
 
 ---

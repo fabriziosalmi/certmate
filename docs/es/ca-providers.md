@@ -1,5 +1,7 @@
 # Proveedores de autoridad de certificación (CA)
 
+<!-- CERTMATE-TRANSLATED-FROM 4a4fcc10de4a1e4b -->
+
 CertMate soporta múltiples proveedores de autoridad de certificación, permitiéndote elegir la CA más adecuada a tus necesidades.
 
 ---

@@ -1,5 +1,7 @@
 # Guida ai test
 
+<!-- CERTMATE-TRANSLATED-FROM 7bb2c3112ef81e62 -->
+
 Questa guida descrive il framework di test di CertMate, inclusi unit test, test di integrazione e la validazione degli endpoint API.
 
 ---

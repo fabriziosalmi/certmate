@@ -1,5 +1,7 @@
 # Zertifizierungsstellen (CA) Anbieter
 
+<!-- CERTMATE-TRANSLATED-FROM 4a4fcc10de4a1e4b -->
+
 CertMate unterstützt mehrere Zertifizierungsstellen-Anbieter, sodass Sie die für Ihre Anforderungen am besten geeignete CA auswählen können.
 
 ---

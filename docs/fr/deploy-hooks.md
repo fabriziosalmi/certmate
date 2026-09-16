@@ -1,5 +1,9 @@
 # Hooks de déploiement
 
+<!-- CERTMATE-TRANSLATED-FROM 380a402d93da0cfb -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Cette traduction n'est pas à jour.** La version anglaise ([`docs/deploy-hooks.md`](../deploy-hooks.md)) a été modifiée depuis et fait foi. En cas de divergence, le document anglais prévaut.
+
 Clôture [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
 Les hooks de déploiement sont des commandes shell courtes que CertMate exécute **après** l'émission, le renouvellement ou la révocation d'un certificat. Utilisez-les pour recharger des services, pousser le nouveau certificat vers un équilibreur de charge, envoyer une notification, ou toute autre action nécessaire suite à une exécution réussie de certbot.

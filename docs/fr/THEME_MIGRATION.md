@@ -1,5 +1,7 @@
 # Migration de thème — découplage clair/sombre via les tokens CSS
 
+<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+
 Statut : **livrée** (Phases 0-5 dans v2.9.0 ; Phase 6 suit) · Propriétaire : Fabrizio · Créé : 2026-05-25
 
 ## Objectif

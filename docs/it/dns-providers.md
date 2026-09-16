@@ -1,5 +1,7 @@
 # Provider DNS
 
+<!-- CERTMATE-TRANSLATED-FROM 3ef1007082851544 -->
+
 CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let's Encrypt tramite plugin certbot individuali. La lista completa si trova nella tabella seguente.
 
 ---
