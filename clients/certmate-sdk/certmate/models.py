@@ -15,6 +15,14 @@ class Certificate:
     domain: str
     expiry_date: Optional[str] = None
     days_until_expiry: Optional[int] = None
+    # API contract 2.2. `days_until_expiry` is whole days and truncates, so a
+    # certificate with hours left reports 0 and a client deriving validity from
+    # it calls a valid certificate expired. `expired` is the server's answer,
+    # and is None when the server could not parse the certificate at all, which
+    # is neither expired nor fine. Both are None against a server older than
+    # 2.2, so a caller that needs them should read the version header.
+    expired: Optional[bool] = None
+    seconds_left: Optional[int] = None
     needs_renewal: Optional[bool] = None
     ca_provider: Optional[str] = None
     dns_provider: Optional[str] = None
@@ -29,6 +37,8 @@ class Certificate:
             domain=d.get("domain") or d.get("name") or "",
             expiry_date=d.get("expiry_date") or d.get("expires") or d.get("not_after"),
             days_until_expiry=d.get("days_until_expiry"),
+            expired=d.get("expired"),
+            seconds_left=d.get("seconds_left"),
             needs_renewal=d.get("needs_renewal"),
             # Older payloads carry a boolean `staging` flag instead of a CA
             # name; map it to the staging CA identifier rather than leaking

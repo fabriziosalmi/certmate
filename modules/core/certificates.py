@@ -1768,24 +1768,61 @@ class CertificateManager:
                 if storage_result:
                     cert_files, metadata = storage_result
                     if 'cert.pem' in cert_files:
-                        # 'unknown', NOT 'missing'. retrieve_certificate_info
-                        # deliberately returns cert.pem alone — its whole point
-                        # is to avoid pulling private keys out of a secrets
-                        # backend for a listing view. Reading the absent key as
-                        # a missing key would mark every storage-backed
-                        # certificate as needing renewal (#608).
-                        # A CSR-only certificate has no key ANYWHERE, and the
-                        # metadata says so, so this branch can answer 'external'
-                        # rather than the honest-but-useless 'unknown' (#599).
-                        # Found by the real-CA E2E, not by a unit test: every
-                        # unit test exercised the filesystem branch, and the
-                        # local storage backend goes through this one.
-                        if cert_files.get('privkey.pem'):
-                            storage_key_state = 'present'
+                        # What the key state is, asked of the key rather than
+                        # of the shape of a dict.
+                        #
+                        # This branch used to decide from whether the answer
+                        # happened to contain privkey.pem: present meant
+                        # 'present', absent meant 'unknown'. On the default
+                        # installation the answer never contained a key, since
+                        # the base retrieve_certificate_info fetched the whole
+                        # bundle and then dropped everything but cert.pem. So
+                        # every certificate reported 'unknown', and a
+                        # certificate with no key at all was reported healthy,
+                        # which is the sentence #608 was closed for, on the
+                        # path #608's fix never ran (#830).
+                        #
+                        # A key that is here is here, and is compared rather
+                        # than believed: cert.pem from one issuance beside
+                        # privkey.pem from another cannot complete a handshake
+                        # and would otherwise pass as 'present'.
+                        #
+                        # A key that is NOT here is the ambiguous case, and the
+                        # backend has to say which kind of absence it is. One
+                        # that fetches everything and finds no key knows it is
+                        # gone; one with a cheap info-only path never looked,
+                        # and reading that as 'missing' would mark every
+                        # certificate as needing renewal.
+                        #
+                        # `is True`, not truthiness: a backend that does not
+                        # implement the question, and a test double that
+                        # answers every attribute with another double, both
+                        # fail that test and get 'unknown', which is the safe
+                        # side of being wrong.
+                        key_pem = cert_files.get('privkey.pem')
+                        if key_pem:
+                            storage_key_state = self.key_state_for_bytes(
+                                domain, key_pem, cert_files['cert.pem'], metadata)
                         elif (metadata or {}).get('key_management') == 'external':
+                            # A CSR-only certificate has no key ANYWHERE, and
+                            # the metadata says so, so this can answer
+                            # 'external' rather than the honest-but-useless
+                            # 'unknown' (#599).
                             storage_key_state = 'external'
                         else:
-                            storage_key_state = 'unknown'
+                            knows_about_keys = False
+                            asks = getattr(self.storage_manager,
+                                           'info_includes_private_key', None)
+                            if callable(asks):
+                                try:
+                                    knows_about_keys = asks() is True
+                                except Exception as e:
+                                    logger.debug(
+                                        "Storage backend could not say whether "
+                                        "it reports private keys for %s: %s",
+                                        domain, e)
+                                    knows_about_keys = False
+                            storage_key_state = 'missing' if knows_about_keys else 'unknown'
                         info = self._parse_certificate_info(
                             domain, cert_files['cert.pem'], metadata,
                             settings=cache_settings,
@@ -1884,15 +1921,7 @@ class CertificateManager:
         """
         key_file = self.cert_dir / domain / 'privkey.pem'
         if not key_file.exists():
-            # A key that was never ours to hold is not a key we lost. Note the
-            # order: a CSR-only certificate that somehow DOES have a key beside
-            # it falls through to the comparison below rather than being
-            # excused — that is an anomaly worth reporting, not hiding.
-            if (metadata or {}).get('key_management') == 'external':
-                return 'external'
-            return 'missing'
-        if cert_content is None:
-            return 'present'
+            return self.key_state_for_bytes(domain, None, cert_content, metadata)
 
         try:
             key_bytes = key_file.read_bytes()
@@ -1903,6 +1932,33 @@ class CertificateManager:
                 "Could not read the private key for %s: %s",
                 str(domain).replace(chr(10), ' ').replace(chr(13), ' '), e)
             return 'mismatched'
+
+        return self.key_state_for_bytes(domain, key_bytes, cert_content, metadata)
+
+    def key_state_for_bytes(self, domain, key_bytes, cert_content, metadata=None):
+        """The same question as `private_key_state`, asked about bytes.
+
+        Split out because the key does not always come off this filesystem.
+        `get_certificate_info` takes the storage-backend branch whenever a
+        StorageManager exists, which on a default installation is always, and
+        the bytes it holds there came from the backend. Before this existed
+        that branch decided the key state from whether a dict had a key in it,
+        which meant the default backend, whose answer already contained the
+        key, reported 'unknown' for every certificate (#830).
+
+        `key_bytes` of None means the backend looked and found nothing, not
+        that it did not look. A caller that cannot tell must not call this.
+        """
+        if key_bytes is None:
+            # A key that was never ours to hold is not a key we lost. Note the
+            # order: a CSR-only certificate that somehow DOES have a key beside
+            # it falls through to the comparison below rather than being
+            # excused — that is an anomaly worth reporting, not hiding.
+            if (metadata or {}).get('key_management') == 'external':
+                return 'external'
+            return 'missing'
+        if cert_content is None:
+            return 'present'
 
         key_digest = hashlib.sha256(key_bytes).digest()
         cert_digest = hashlib.sha256(cert_content).digest()
@@ -1995,7 +2051,18 @@ class CertificateManager:
             # arithmetic matches utc_now(), which is naive UTC by design.
             expiry_date = cert.not_valid_after_utc.replace(tzinfo=None)
             now_utc = utc_now()
-            days_left = (expiry_date - now_utc).days
+            remaining = expiry_date - now_utc
+            # timedelta.days truncates toward minus infinity, so anything with
+            # less than 24 hours left comes out as 0 and anything already
+            # expired comes out negative. That is a fine answer to "how many
+            # whole days", and clients read it, so it keeps its meaning. It is
+            # the wrong answer to "has this expired", which is what the
+            # dashboard was asking it (#829): a certificate with 23 hours of
+            # life reported 0 and was rendered as Expired. step-ca issues
+            # 24-hour certificates by default, so that was every certificate on
+            # a default private CA.
+            days_left = remaining.days
+            seconds_left = int(remaining.total_seconds())
 
             return {
                 'domain': domain,
@@ -2003,6 +2070,11 @@ class CertificateManager:
                 'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
                 'days_left': days_left,
                 'days_until_expiry': days_left,
+                # The two questions days_left cannot answer at once: how much
+                # life is left, and whether there is any. Both are derived from
+                # the same instant, so they cannot disagree with each other.
+                'seconds_left': seconds_left,
+                'expired': seconds_left <= 0,
                 # Inclusive boundary: a cert with exactly renewal_threshold_days
                 # left must renew. Using `<` skipped the boundary, delaying
                 # renewal by a day; digest.py and metrics.py already use `<=`.
@@ -2047,6 +2119,12 @@ class CertificateManager:
             'expiry_date': None,
             'days_left': None,
             'days_until_expiry': None,
+            # None, not False. This is the branch where the certificate could
+            # not be parsed, so whether it has expired is unknown, and unknown
+            # is not the same as fine. Answering False here is how the browser
+            # came to render `null <= 0` as Expired in the first place.
+            'seconds_left': None,
+            'expired': None,
             'needs_renewal': True,
             'private_key_present': _private_key_present(key_state),
             'private_key_state': key_state,
@@ -2074,6 +2152,11 @@ class CertificateManager:
             'expiry_date': None,
             'days_left': None,
             'days_until_expiry': None,
+            # Same shape as every other answer, so a client does not have to
+            # know which branch produced it. There is no certificate here, so
+            # there is nothing that has or has not expired.
+            'seconds_left': None,
+            'expired': None,
             'needs_renewal': False,
             'dns_provider': dns_provider
         }
