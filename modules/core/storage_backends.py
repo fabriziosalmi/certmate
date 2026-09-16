@@ -23,6 +23,57 @@ from .domain_paths import STORAGE_DOMAIN_RE, reject_unsafe_domain
 logger = logging.getLogger(__name__)
 
 
+class CertificateExistenceUnknown(RuntimeError):
+    """The backend could not determine whether the certificate is there.
+
+    `certificate_exists()` used to answer `False` for any exception, so a
+    timeout, a 403 or an expired credential all read as "the certificate is not
+    there" — a reassuring answer to a question nobody managed to ask, and the
+    shape that makes a present certificate get re-issued.
+
+    Two call sites in this file already refused to use it for that reason and
+    hand-rolled the probe instead, and AzureKeyVaultBackend carried a comment
+    describing the defect rather than fixing it. Three workarounds and no fix
+    is what a bad contract looks like from the inside.
+
+    So the contract is now three-valued, and the third value is an exception
+    because a bool cannot carry it:
+
+      True   the certificate is there
+      False  the certificate is definitely not there
+      raise  the backend could not tell, and says which error stopped it
+
+    Every backend narrows to the "absent" signal its own SDK raises, matched
+    the way this file already matches hvac's InvalidPath: by class name and by
+    error code, not by importing an optional dependency.
+    """
+
+
+
+def _looks_absent(error, *, codes=(), names=()) -> bool:
+    """True when *error* is the SDK's way of saying "no such thing".
+
+    Matched by error code and by exception class NAME, never by importing the
+    SDK: every one of these clients is an optional dependency, and the offline
+    suite runs these backends against fakes in an environment where the real
+    package is absent. `import hvac.exceptions` inside a handler once turned
+    every fake-backed call into "No module named 'hvac'".
+
+    Both forms are needed for boto3 alone. `get_object` raises `NoSuchKey`,
+    while `head_object` raises a generic `ClientError` carrying HTTP 404 — the
+    delete path in this file already checks for both, and a narrowing that
+    knew only the class name would pass against the in-memory fake and fail
+    against real S3.
+    """
+    if type(error).__name__ in names:
+        return True
+    response = getattr(error, 'response', None)
+    if not isinstance(response, dict):
+        return False
+    code = str(response.get('Error', {}).get('Code', ''))
+    status = response.get('ResponseMetadata', {}).get('HTTPStatusCode')
+    return code in codes or status == 404
+
 
 def _is_transient(exc):
     """Determine whether an exception is transient and worth retrying.
@@ -241,7 +292,12 @@ class CertificateStorageBackend(ABC):
     
     @abstractmethod
     def certificate_exists(self, domain: str) -> bool:
-        """Check if certificate exists for a domain"""
+        """Whether the domain's certificate is in this backend.
+
+        True means present and False means definitely absent. A backend that
+        cannot tell raises CertificateExistenceUnknown rather than answering
+        False; see that class for why a bool was not enough.
+        """
 
     @abstractmethod
     def get_backend_name(self) -> str:
@@ -639,13 +695,18 @@ class _AzureKeyVaultCertificateImporter:
             return False
 
     def exists(self, domain: str) -> bool:
-        """Return True if a Certificate object exists for the domain."""
+        """True, False, or CertificateExistenceUnknown. See that class."""
         cert_name = self._certificate_name(domain)
         try:
             self._get_cert_client().get_certificate(cert_name)
             return True
-        except Exception:
-            return False
+        except Exception as error:
+            if _looks_absent(error, codes=('404',),
+                             names=('ResourceNotFoundError',)):
+                return False
+            raise CertificateExistenceUnknown(
+                f'could not tell whether {domain} has a Key Vault certificate '
+                f'object: {error}') from error
 
     def verify_api_access(self) -> None:
         """Probe Certificate API access; propagates SDK exceptions to the caller.
@@ -1102,26 +1163,35 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         return False
 
     def certificate_exists(self, domain: str) -> bool:
-        """Check if certificate exists in Azure Key Vault (in any active mode)."""
+        """True, False, or CertificateExistenceUnknown. See that class.
+
+        This method used to carry a comment saying a transient auth or network
+        failure was reported as "the certificate does not exist", which is how
+        a present certificate gets re-issued, and that it "cannot be narrowed
+        without importing the Azure SDK exceptions". It can: this file already
+        matches hvac's InvalidPath by class name for exactly that reason, and
+        the same technique reads azure.core's ResourceNotFoundError without an
+        import. The comment described the defect for as long as it survived.
+
+        Two surfaces can be active at once. Absent means absent on every active
+        surface; a surface that could not answer makes the whole answer
+        unknown, because "not on the surface I could read" is not an answer
+        about the certificate.
+        """
         if self.writes_secrets:
+            secret_name = self._sanitize_secret_name(f"cert-{domain}-cert-pem")
             try:
                 client = self._get_client()
-                secret_name = self._sanitize_secret_name(f"cert-{domain}-cert-pem")
                 client.get_secret(secret_name)
                 return True
-            except Exception as e:
-                # A transient auth or network failure here is reported to the
-                # caller as "the certificate does not exist", which is how a
-                # present certificate gets re-issued. Cannot be narrowed
-                # without importing the Azure SDK exceptions, so at least say
-                # so out loud.
-                logger.debug(
-                    "Azure Key Vault secret lookup failed for %s: %s", domain, e)
+            except Exception as error:
+                if not _looks_absent(error, codes=('404',),
+                                     names=('ResourceNotFoundError',)):
+                    raise CertificateExistenceUnknown(
+                        f'could not tell whether {domain} is in Azure Key '
+                        f'Vault: {error}') from error
         if self.writes_certificate:
-            try:
-                return self._get_cert_importer().exists(domain)
-            except Exception:
-                return False
+            return self._get_cert_importer().exists(domain)
         return False
 
     def get_backend_name(self) -> str:
@@ -1273,14 +1343,23 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
             return False
     
     def certificate_exists(self, domain: str) -> bool:
-        """Check if certificate exists in AWS Secrets Manager"""
+        """True, False, or CertificateExistenceUnknown. See that class.
+
+        ResourceNotFoundException is the only answer that means absent; this
+        class already catches it by name on the retrieve path.
+        """
+        secret_name = f"certmate/certificates/{domain}"
         try:
             client = self._get_client()
-            secret_name = f"certmate/certificates/{domain}"
             client.describe_secret(SecretId=secret_name)
             return True
-        except Exception:
-            return False
+        except Exception as error:
+            if _looks_absent(error, codes=('ResourceNotFoundException', '404'),
+                             names=('ResourceNotFoundException',)):
+                return False
+            raise CertificateExistenceUnknown(
+                f'could not tell whether {domain} is in AWS Secrets Manager: '
+                f'{error}') from error
     
     def get_backend_name(self) -> str:
         return "aws_secrets_manager"
@@ -1478,11 +1557,24 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
             return False
     
     def certificate_exists(self, domain: str) -> bool:
-        """Check if certificate exists in HashiCorp Vault"""
+        """True, False, or CertificateExistenceUnknown. See that class.
+
+        InvalidPath is Vault's "no such secret"; an expired token is a
+        Forbidden, and reporting that as "not there" is how a certificate
+        Vault still holds gets re-issued. The delete path in this class
+        already discriminates the same way.
+        """
+        secret_path = f"certmate/certificates/{domain}"
         try:
+            # Inside the try on purpose. hvac authenticates when the client is
+            # built, so a bad token fails here rather than at the read, and
+            # letting that escape as a raw ValueError would mean the one
+            # promise this method makes ("it answers, or it raises
+            # CertificateExistenceUnknown") held for some failures and not for
+            # others. boto3 builds a client without talking to anything and
+            # fails at the call instead; the contract should not depend on
+            # which SDK is underneath.
             client = self._get_client()
-            secret_path = f"certmate/certificates/{domain}"
-            
             if self.engine_version == 'v2':
                 client.secrets.kv.v2.read_secret_version(
                     path=secret_path,
@@ -1494,8 +1586,12 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
                     mount_point=self.mount_point
                 )
             return True
-        except Exception:
-            return False
+        except Exception as error:
+            if _looks_absent(error, codes=('404',), names=('InvalidPath',)):
+                return False
+            raise CertificateExistenceUnknown(
+                f'could not tell whether {domain} is in Vault: {error}'
+            ) from error
     
     def get_backend_name(self) -> str:
         return "hashicorp_vault"
@@ -1714,18 +1810,29 @@ class InfisicalBackend(CertificateStorageBackend):
             return False
     
     def certificate_exists(self, domain: str) -> bool:
-        """Check if certificate exists in Infisical"""
+        """True, False, or CertificateExistenceUnknown. See that class.
+
+        Answered by listing rather than by fetching one secret, which is the
+        opposite of what the other backends do, and deliberate. The other four
+        narrow to the exception their SDK raises for "no such thing"; the
+        shapes are verifiable here because azure-core, hvac and botocore are
+        installed. `infisical-python` is NOT: the pin is held back on purpose
+        (it has no manylinux x86_64 wheel and no sdist), so it cannot be
+        imported, and its not-found exception cannot be read off the library.
+        Guessing a class name is how a contract gets invented instead of
+        copied.
+
+        `_list_certificates_attempt()` needs no such guess. It is the
+        unswallowed form of `list_certificates()`, so a listing that returns
+        makes absence definite, and a listing that raises is the honest
+        unknown.
+        """
         try:
-            client = self._get_client()
-            secret_key = f"certmate-{domain}-cert-pem"
-            client.get_secret(
-                secret_name=secret_key,
-                project_id=self.project_id,
-                environment=self.environment
-            )
-            return True
-        except Exception:
-            return False
+            return domain in self._list_certificates_attempt()
+        except Exception as error:
+            raise CertificateExistenceUnknown(
+                f'could not tell whether {domain} is in Infisical: {error}'
+            ) from error
     
     def get_backend_name(self) -> str:
         return "infisical"
@@ -1881,12 +1988,17 @@ class S3CompatibleBackend(CertificateStorageBackend):
             return False
 
     def certificate_exists(self, domain: str) -> bool:
+        """True, False, or CertificateExistenceUnknown. See that class."""
         try:
             client = self._get_client()
             client.head_object(Bucket=self.bucket, Key=self._key(domain))
             return True
-        except Exception:
-            return False
+        except Exception as error:
+            if _looks_absent(error, codes=('404', 'NoSuchKey', 'NotFound'),
+                             names=('NoSuchKey', '_NoSuchKey')):
+                return False
+            raise CertificateExistenceUnknown(
+                f'could not tell whether {domain} is in S3: {error}') from error
 
     def get_backend_name(self) -> str:
         return "s3_compatible"
@@ -2064,7 +2176,14 @@ class StorageManager:
         return backend.delete_certificate(domain)
     
     def certificate_exists(self, domain: str) -> bool:
-        """Check if certificate exists using the configured backend"""
+        """Whether the configured backend holds this domain's certificate.
+
+        Raises CertificateExistenceUnknown when the backend could not tell.
+        A caller that treats that as False is choosing to re-issue a
+        certificate the store may already hold; it should say so where it
+        makes that choice, rather than inheriting it from a swallowed
+        exception.
+        """
         backend = self.get_backend()
         return backend.certificate_exists(domain)
     
