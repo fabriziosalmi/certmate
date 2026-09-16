@@ -68,6 +68,14 @@ updates:
       # on #568. Moves with #103. Ignored entirely, like the rest of the
       # held set: 2.19.4 is where the 2.x line the plugin understands ends.
       - dependency-name: "cloudflare"
+      # infisical-python 2.3.6 ships no manylinux x86_64 wheel and no sdist,
+      # so the amd64 image cannot install it while the arm64 image can. The
+      # requirements files have said so next to the pin since it was set, and
+      # dependabot proposed 2.3.6 anyway (#795), leaving the explanation of
+      # why not to in place above the version it had just changed. A bump
+      # that can only install on one of the two published architectures is
+      # not a bump this project can take.
+      - dependency-name: "infisical-python"
 
   - package-ecosystem: "npm"
     directories:
