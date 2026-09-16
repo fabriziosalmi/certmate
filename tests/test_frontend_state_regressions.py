@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.historical_documents import is_historical
+
 
 pytestmark = [pytest.mark.unit]
 
@@ -152,6 +154,8 @@ def test_dockerignore_patterns_are_recursive():
 def test_no_doc_points_at_the_old_dns_accounts_prefix():
     """The multi-account API lives at /api/dns/<provider>/accounts (#416)."""
     for path in [ROOT / "README.md", *(ROOT / "docs").rglob("*.md")]:
+        if is_historical(path):
+            continue     # a release note names the prefix to say it was wrong
         text = path.read_text(encoding="utf-8")
         assert "/api/settings/dns-providers/" not in text, \
             f"{path.relative_to(ROOT)} documents a prefix that 404s"
@@ -160,6 +164,8 @@ def test_no_doc_points_at_the_old_dns_accounts_prefix():
 def test_no_doc_promises_the_default_account_endpoint():
     """It has never existed; the default travels as set_as_default (#416)."""
     for path in [ROOT / "README.md", *(ROOT / "docs").rglob("*.md")]:
+        if is_historical(path):
+            continue
         assert "default-account" not in path.read_text(encoding="utf-8"), \
             f"{path.relative_to(ROOT)} documents a route with no handler"
 
@@ -188,7 +194,7 @@ def test_no_doc_presents_host_or_flask_debug_as_working_env_vars():
             continue
         # The changelog quotes the removed variables while explaining that they
         # were removed. A record of history is allowed to name what it records.
-        if path.name in ("RELEASE_NOTES.md", "CHANGELOG.md"):
+        if is_historical(path):
             continue
         for number, line in enumerate(
                 path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
@@ -234,6 +240,8 @@ def test_the_documented_batch_limit_matches_the_code():
 
     offenders = []
     for path in sorted((ROOT / "docs").rglob("*.md")):
+        if is_historical(path):
+            continue
         for number, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), 1):
             if overclaim.search(url.sub("", line)):

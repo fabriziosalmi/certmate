@@ -69,7 +69,7 @@ catch something:
 | Tests + coverage floor of 75% on `modules/` | `pytest -m "not ui and not network" --cov=modules --cov-fail-under=75` |
 | Theme tokens | `python3 scripts/theme_codemod.py --check` |
 | CSS bundle freshness | `npm ci && npm run css:build`, then commit `static/css/tailwind.min.css` |
-| No emoji in `RELEASE_NOTES.md` | `.github/workflows/lint-emoji.yml` |
+| No emoji in the release notes (`RELEASE_NOTES.md` + `docs/releases/`) | `.github/workflows/lint-emoji.yml` |
 | Image builds | `docker build -t certmate:test .` |
 
 The gated commands are the ones `ci.yml` runs, character for character. They had

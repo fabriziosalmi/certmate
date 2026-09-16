@@ -26,13 +26,15 @@ import re
 
 import pytest
 
+from tests.historical_documents import is_historical
+
 
 pytestmark = [pytest.mark.unit]
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 _SKIP_DIRS = (".venv", "node_modules", ".git", "scratch", ".claude", "backups")
-_SKIP_FILES = ("RELEASE_NOTES.md", "CHANGELOG.md")
+# Release notes record what was true once; see tests/historical_documents.py.
 
 
 @functools.lru_cache(maxsize=1)
@@ -48,8 +50,11 @@ def _markdown():
     for root, dirs, files in os.walk(REPO_ROOT):
         dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
         for name in files:
-            if name.endswith(".md") and name not in _SKIP_FILES:
-                found.append(pathlib.Path(root) / name)
+            if not name.endswith(".md"):
+                continue
+            path = pathlib.Path(root) / name
+            if not is_historical(path):
+                found.append(path)
     return tuple(sorted(found))
 
 

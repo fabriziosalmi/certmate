@@ -29,6 +29,8 @@ import re
 
 import pytest
 
+from tests.historical_documents import is_historical
+
 
 pytestmark = [pytest.mark.unit]
 
@@ -36,7 +38,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 _SKIP_DIRS = (".venv", "node_modules", ".git", "scratch", ".claude", "backups")
 # History records what was true then, including a version we have moved off.
-_SKIP_FILES = ("RELEASE_NOTES.md", "CHANGELOG.md")
+# Release notes record what was true once; see tests/historical_documents.py.
 
 
 def _dockerfile_version():
@@ -61,7 +63,7 @@ def _documented():
     targets += sorted(REPO_ROOT.glob("docs/**/*.md"))
     targets += [REPO_ROOT / "CONTRIBUTING.md", REPO_ROOT / "SECURITY.md"]
     for path in targets:
-        if not path.exists() or path.name in _SKIP_FILES:
+        if not path.exists() or is_historical(path):
             continue
         if any(part in path.parts for part in _SKIP_DIRS):
             continue

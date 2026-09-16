@@ -17,6 +17,8 @@ import re
 
 import pytest
 
+from tests.historical_documents import is_historical
+
 
 pytestmark = [pytest.mark.unit]
 
@@ -271,7 +273,7 @@ def test_docs_use_the_port_the_app_actually_listens_on():
 
     wrong = []
     for path in ALL_MARKDOWN:
-        if path.name in ("RELEASE_NOTES.md", "CHANGELOG.md"):
+        if is_historical(path):
             continue  # a changelog quotes the wrong port while announcing its fix
         for number, line in enumerate(
                 path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
