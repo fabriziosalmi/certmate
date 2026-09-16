@@ -93,7 +93,9 @@ def carried_advisories(repo, token):
             if error.code in (403, 404):
                 raise SystemExit(
                     f"the Dependabot alerts API answered {error.code}. The "
-                    f"token needs `security-events: read` on {repo}; without "
+                    f"token needs `vulnerability-alerts: read` on {repo} "
+                    f"(NOT `security-events: read`, which is a different "
+                    f"permission and does not open this endpoint); without "
                     f"it this check cannot see what it is meant to check, and "
                     f"passing would be worse than failing.")
             raise

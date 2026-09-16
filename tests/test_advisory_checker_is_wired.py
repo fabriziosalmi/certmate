@@ -47,20 +47,38 @@ def test_a_workflow_runs_it():
 
 
 def test_the_job_can_read_the_alerts():
-    """`security-events: read` is what the Dependabot alerts API needs.
+    """`vulnerability-alerts: read` is what the Dependabot alerts API needs.
 
-    Without it the API answers 403 and the script exits non-zero with a
-    message naming the missing scope — loud, but weekly-loud. Asserting the
-    permission here turns that into a failure at review time instead.
+    This test used to assert `security-events: read`, and that is the whole
+    story: it asserted a belief about which permission opens the endpoint
+    rather than anything the endpoint does. The belief was wrong, and because
+    a job-level permissions block REPLACES the workflow-level `read-all`
+    rather than adding to it, writing it down also took `VulnerabilityAlerts`
+    off the token. The gate then answered 403 every week from 2026-08-31 to
+    2026-09-14 without reading a single advisory, while this test stayed
+    green over it.
+
+    What is checkable from inside the repository is the shape: a job that
+    narrows its own permissions must name the one the endpoint needs. What is
+    not checkable from here is that the token then works, which only a real
+    `workflow_dispatch` run can show.
     """
     ci = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
     job = ci.split("  advisories:", 1)
     assert len(job) == 2, "the `advisories` job is gone from ci.yml"
     # The job's own block ends at the next top-level job key.
     block = re.split(r"\n  [a-z][a-z0-9-]*:\n", job[1])[0]
-    assert "security-events: read" in block, (
-        "the advisories job no longer declares `security-events: read`; "
-        "listing Dependabot alerts needs it and the job would fail on 403"
+    if "permissions:" not in block:
+        # No block at all is fine: the job then inherits the workflow-level
+        # read-all, which does grant VulnerabilityAlerts.
+        return
+    assert "vulnerability-alerts: read" in block, (
+        "the advisories job narrows its own permissions but does not declare "
+        "`vulnerability-alerts: read`. A job-level block replaces the "
+        "workflow-level read-all, so the Dependabot alerts endpoint answers "
+        "403 and the gate fails weekly without reading anything. "
+        "`security-events: read` is a different permission and does not open "
+        "this endpoint."
     )
 
 
