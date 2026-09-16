@@ -543,9 +543,20 @@ jobs:
     - name: Start MinIO and Vault
       run: |
         set -euo pipefail
+        # quay.io, not Docker Hub. docker.io/minio/minio stopped serving
+        # anonymous pulls, so every run failed at this line with "pull access
+        # denied for minio/minio, repository does not exist or may require
+        # docker login", which reads like a typo and is not one: the tag and
+        # the digest both answer `unauthorized: authentication required`,
+        # while hashicorp/vault on the next line still pulls fine.
+        #
+        # The digest is unchanged. quay.io/minio/minio serves the same
+        # manifest, sha256:14cea493..., so this swaps the registry and not the
+        # image: same bytes, verified by asking both registries for the digest
+        # of :latest and getting the one already pinned here.
         docker run -d --name minio -p 19000:9000 \
           -e MINIO_ROOT_USER=certmate -e MINIO_ROOT_PASSWORD=certmate123 \
-          minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+          quay.io/minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
           server /data
         docker run -d --name vault -p 18200:8200 --cap-add IPC_LOCK \
           -e VAULT_DEV_ROOT_TOKEN_ID=certmate-root \
