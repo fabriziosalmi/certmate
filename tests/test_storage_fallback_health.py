@@ -44,3 +44,35 @@ def test_fallback_recorded_on_backend_init_failure(monkeypatch):
     assert mgr.get_fallback_backend() == 'azure_keyvault'
     # And it still serves a working (local) backend rather than crashing.
     assert mgr.get_backend() is not None
+
+
+def test_a_probe_that_cannot_read_the_backend_does_not_report_ok():
+    """The whole point of this check is "are the certificates really in
+    Azure/Vault/S3". It used to answer that question with 'ok' whenever
+    `get_fallback_backend()` raised: the exception was caught, the result set
+    to None, and control fell through to the healthy return. So an instance
+    that could not look reported the same state as one that had looked and
+    found everything in order, and nothing was logged either.
+
+    The severity stays healthy, deliberately: inventing a degraded status from
+    a question that could not be asked would page someone for nothing, and
+    tests/test_each_health_check_stands_alone.py holds that as a control. Only
+    the word changes, because `Check` keeps state and severity apart so a check
+    can be honest in the detail without moving the aggregate.
+    """
+    from modules.api.resources_health import HEALTHY, check_storage
+
+    storage = MagicMock()
+    storage.get_fallback_backend.side_effect = RuntimeError('backend unreachable')
+    ctx = MagicMock()
+    ctx.managers = {'storage': storage}
+
+    result = check_storage(ctx)
+
+    assert result.name == 'storage'
+    assert result.state == 'unknown', (
+        f"a probe that could not read the backend reported {result.state!r}"
+    )
+    assert result.severity == HEALTHY, (
+        'the aggregate must not move: not knowing is not a reason to page'
+    )

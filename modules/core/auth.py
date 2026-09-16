@@ -1099,7 +1099,26 @@ class AuthManager:
             try:
                 from pathlib import Path
                 return Path(token_file).read_text().strip()
-            except Exception:
+            except Exception as e:
+                # Returning '' is right — this function answers "what did the
+                # operator supply", and an unreadable file supplied nothing, so
+                # reconcile_bearer_token_from_env declines rather than writing
+                # a token it did not read. Doing it in silence is not: the
+                # operator who rotated the token in that file then gets 401 on
+                # every request with no line anywhere saying why, which is
+                # exactly the symptom #401 exists to have fixed.
+                #
+                # settings.py reads the same file and REFUSES TO SERVE when it
+                # cannot (see _bearer_token_from_env_or_generate). It only does
+                # so while creating settings.json, so on an existing install
+                # this reader is the only one that looks, and it must at least
+                # say what it found.
+                logger.warning(
+                    "API_BEARER_TOKEN_FILE is set to %r and could not be read "
+                    "(%s), so the token stored in settings.json was left as it "
+                    "is. If you rotated the token in that file, the new value "
+                    "does not authenticate yet. Fix the path or permissions "
+                    "and restart.", token_file, e)
                 return ''
         return (os.getenv('API_BEARER_TOKEN') or '').strip()
 

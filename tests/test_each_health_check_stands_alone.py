@@ -99,11 +99,18 @@ def test_a_storage_backend_that_did_not_fall_back_is_healthy():
 def test_a_backend_that_raises_when_asked_is_not_read_as_a_fallback():
     """CONTROL: an exception here must not be reported as "fell back to
     local". It means the question could not be answered, and inventing a
-    degraded status from it would page someone for nothing."""
+    degraded status from it would page someone for nothing.
+
+    So the SEVERITY stays healthy, and that is the part this control protects.
+    The state is a separate matter: it used to say 'ok', which answered "are
+    the certificates really in Azure/Vault/S3" on the strength of a question
+    nobody managed to ask. `Check` keeps state and severity apart for exactly
+    this, so the detail can be honest without the aggregate moving.
+    """
     storage = MagicMock()
     storage.get_fallback_backend.side_effect = RuntimeError('backend confused')
 
-    assert check_storage(_ctx(storage=storage)) == ('storage', 'ok', HEALTHY)
+    assert check_storage(_ctx(storage=storage)) == ('storage', 'unknown', HEALTHY)
 
 
 @pytest.mark.parametrize('storage', [None, object()])

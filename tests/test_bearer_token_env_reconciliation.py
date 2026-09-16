@@ -19,6 +19,7 @@ must NOT do: it must not act when the two already agree, must not store a
 malformed token, and must not touch an instance where the operator supplied
 nothing at all.
 """
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -227,3 +228,35 @@ def test_it_is_called_at_startup_after_the_hasher_is_installed():
         'reconciliation runs before the token hasher is installed, so the '
         'token would be written to settings.json in plaintext'
     )
+
+
+def test_an_unreadable_token_file_says_so_instead_of_reconciling_in_silence(
+        instance, monkeypatch, tmp_path, caplog):
+    """Declining is right; declining silently is not.
+
+    `_operator_supplied_token` answers "what did the operator supply", and an
+    unreadable file supplied nothing, so reconciliation correctly does not
+    write a token it never read. It used to swallow the error and return '',
+    which made that decision invisible: an operator who rotated the token in
+    that file got 401 on every request, with nothing anywhere saying the file
+    could not be opened. That is the symptom #401 exists to have fixed,
+    reintroduced through a different door.
+
+    The security question is asked elsewhere and answered differently:
+    `setup_mode_for` raises rather than treating an unreadable file as "no
+    credential" — see tests/test_bearer_token_file_failures_fail_closed.py.
+    This path only decides whether to rewrite what is stored, and it never
+    clears anything, so it cannot open an instance.
+    """
+    auth, settings = instance
+    missing = tmp_path / 'not-there' / 'token'
+    monkeypatch.setenv('API_BEARER_TOKEN_FILE', str(missing))
+
+    with caplog.at_level(logging.WARNING, logger='modules.core.auth'):
+        assert auth.reconcile_bearer_token_from_env() is False
+
+    messages = ' '.join(record.getMessage() for record in caplog.records)
+    assert 'API_BEARER_TOKEN_FILE' in messages, (
+        'the file could not be read and nothing said so'
+    )
+    assert str(missing) in messages, 'the message does not name the file'

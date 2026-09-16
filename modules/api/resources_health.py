@@ -110,8 +110,22 @@ def check_storage(ctx: ApiContext) -> Check:
         return NOTHING_TO_REPORT
     try:
         fell_back_from = storage.get_fallback_backend()
-    except Exception:
-        fell_back_from = None
+    except Exception as e:
+        # Severity stays HEALTHY on purpose, and the state stops saying 'ok'.
+        #
+        # The severity is the deliberate part, and it predates this branch:
+        # inventing a degraded status out of a question that could not be
+        # asked would page someone for nothing. That reasoning is right and is
+        # left alone.
+        #
+        # What was wrong is the word. Falling through to the healthy return
+        # answered 'ok' to "are my certificates really in Azure/Vault/S3" on
+        # the strength of a question nobody managed to ask, and logged
+        # nothing, so the operator had no way to find out. Check separates
+        # `state` from `severity` precisely so a check can report what it
+        # knows without moving the aggregate.
+        logger.warning(f"Health check could not read the storage backend: {e}")
+        return Check('storage', 'unknown', HEALTHY)
     if fell_back_from:
         return Check('storage',
                      f'fallback_to_local (configured backend: {fell_back_from})',
