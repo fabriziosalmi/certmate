@@ -7,6 +7,9 @@ from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
+# Typed by hand by whoever means it. See ClientCertificateAuthorityReset.
+CA_RESET_CONFIRMATION = 'reset-client-ca'
+
 
 def abort(status, message, code=None):
     """Refuse in the same envelope as the rest of the API.
@@ -101,6 +104,73 @@ def create_client_certificate_models(api):
         'client_cert_request': client_cert_request_model,
         'client_cert_revoke': client_cert_revoke_model
     }
+
+
+def _build_ca_reset_resource(auth_manager, client_cert_manager, crl_manager):
+    """The CA reset resource, built outside create_client_certificate_resources.
+
+    That function is a 3k-line closure registering every client-certificate
+    resource, and scripts/check_complexity_budget.py pins it at a number that
+    only comes down. Defining one more class inside it pushed it from 89 to 98;
+    taking the dependencies as arguments instead leaves it where it was, and
+    this is the shape the rest of those closures should eventually take.
+    """
+    class ClientCertificateAuthorityReset(Resource):
+            # The most destructive action in this namespace: it discards every
+            # client identity this instance has ever signed. Admin, and it takes
+            # more than a POST to trigger.
+            method_decorators = [auth_manager.require_role('admin')]
+
+            def post(self):
+                """Rebuild the client CA and remove the certificates it signed."""
+                try:
+                    data = request.get_json(silent=True) or {}
+
+                    # A typed phrase, not a boolean. `{"confirm": true}` is what a
+                    # mis-sent form or a retried request produces; this is not.
+                    if data.get('confirm') != CA_RESET_CONFIRMATION:
+                        abort(400,
+                              f"This destroys every client certificate signed by "
+                              f"the current CA and cannot be undone. Send "
+                              f'{{"confirm": "{CA_RESET_CONFIRMATION}"}} to proceed.')
+
+                    subject = data.get('subject')
+                    if subject is not None and not isinstance(subject, dict):
+                        abort(400, "subject must be an object with country, state, "
+                                   "organization, organizational_unit and common_name")
+
+                    actor = getattr(getattr(request, 'current_user', None), 'get', lambda *_: None)('username')
+                    success, error, summary = client_cert_manager.reset_certificate_authority(
+                        subject=subject, actor=actor)
+                    if not success:
+                        abort(400, error or "Failed to reset the certificate authority")
+
+                    # The CRL is signed by the CA key. The old one cannot be
+                    # verified against the new CA, and what it revoked no longer
+                    # exists, so republish rather than leave a file nothing can
+                    # check. No guard here on purpose: update_crl() already catches
+                    # and returns None, so wrapping it would add a handler that can
+                    # never fire.
+                    if crl_manager:
+                        crl_manager.update_crl()
+
+                    return {
+                        'message': 'Client certificate authority rebuilt',
+                        'certificates_removed': summary.get('certificates_removed', 0),
+                        'warning': (
+                            'Any CRL or OCSP response published for the previous CA '
+                            'can no longer be verified. Distribute the new CA '
+                            'certificate to everything that trusted the old one.'
+                        ),
+                    }, 200
+
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"Error resetting client CA: {str(e)}")
+                    abort(500, "Failed to reset the certificate authority")
+
+    return ClientCertificateAuthorityReset
 
 
 def create_client_certificate_resources(api, managers):
@@ -598,6 +668,9 @@ def create_client_certificate_resources(api, managers):
                 logger.error(f"Error getting CRL: {str(e)}")
                 abort(500, "Failed to get CRL")
 
+    ClientCertificateAuthorityReset = _build_ca_reset_resource(
+        auth_manager, client_cert_manager, crl_manager)
+
     # Return dictionary of resource classes
     return {
         'ClientCertificateList': ClientCertificateList,
@@ -608,6 +681,7 @@ def create_client_certificate_resources(api, managers):
         'ClientCertificateRenew': ClientCertificateRenew,
         'ClientCertificateStatistics': ClientCertificateStatistics,
         'ClientCertificateBatch': ClientCertificateBatch,
+        'ClientCertificateAuthorityReset': ClientCertificateAuthorityReset,
         'OCSPStatus': OCSPStatus,
         'CRLDistribution': CRLDistribution,
     }

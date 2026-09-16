@@ -183,6 +183,61 @@ produces certificates with no key, which is the case this exists for.
 
 ### Client certificates
 
+#### Rebuild the client certificate authority
+
+**Endpoint**: `POST /api/client-certs/ca/reset` (admin)
+
+The private CA that signs client certificates is generated once, on first
+start, and its subject comes from `client_ca_subject` in settings:
+
+```json
+{
+  "client_ca_subject": {
+    "country": "IT",
+    "state": "Liguria",
+    "organization": "Acme SpA",
+    "organizational_unit": "IT Security",
+    "common_name": "Acme Client CA"
+  }
+}
+```
+
+`country` is an ISO 3166-1 alpha-2 code and anything else is refused before a
+key is written. A field left empty is omitted from the subject rather than
+written as an empty attribute; `common_name` falls back to `CertMate CA`. An
+instance that configures nothing keeps the subject it has always had.
+
+That setting is read **when the CA is created and never again**, because
+re-reading it would mean an edit in Settings silently replacing the CA, after
+which every client certificate ever issued would stop verifying. Changing it
+afterwards is this endpoint.
+
+**Request**:
+
+```json
+{
+  "confirm": "reset-client-ca",
+  "subject": { "country": "IT", "organization": "Acme SpA", "common_name": "Acme Client CA" }
+}
+```
+
+`confirm` is a typed phrase rather than a boolean, because `{"confirm": true}`
+is what a mis-sent form or a retried request produces and neither means
+"discard every certificate we have issued". `subject` is optional; omit it to
+rebuild with the same subject.
+
+**What it does.** Backs up the existing CA, generates a new one, and removes
+every client certificate the old CA signed, because nothing can verify them
+any more. It republishes the CRL, which was signed by the old key and is
+therefore unverifiable the moment that key changes. It writes an audit record.
+
+**What it does not touch.** Server certificates, settings and DNS accounts.
+
+**Afterwards**, distribute the new CA certificate to everything that trusted
+the old one, and reissue the client certificates you still need. Any CRL or
+OCSP response published for the previous CA can no longer be verified.
+
+
 #### 1. Create Certificate
 
 **Endpoint**: `POST /api/client-certs/create`

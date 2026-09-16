@@ -5,6 +5,7 @@ Handles creation, management, renewal, and revocation of client certificates
 
 import logging
 import json
+import shutil
 import threading
 import os
 import re
@@ -110,6 +111,29 @@ class ClientCertificateManager:
             )
         except Exception:  # pragma: no cover - defensive
             logger.debug("Failed to emit scheduled client-cert renew audit")
+
+    def _audit_ca_reset(self, removed: int, actor: Optional[str]) -> None:
+        """Record the reset. Same shape as _audit_scheduled_renew above.
+
+        Guarded, and the guard is the point: the reset has already happened by
+        the time this runs. Failing to record it is bad; letting the failure
+        propagate would be worse, because the caller would see an error, retry,
+        and regenerate the CA a second time.
+        """
+        if not self._audit_logger:
+            return
+        try:
+            self._audit_logger.log_operation(
+                operation='ca_reset', resource_type='client_ca',
+                resource_id='client-ca', status='success',
+                error=None,
+                details={'certificates_removed': removed},
+                user=actor, actor=actor,
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.error(
+                'Client CA was reset and %d certificate(s) removed, but the '
+                'audit record could not be written.', removed)
 
     def _ensure_directories(self):
         """Create all required directories."""
@@ -771,6 +795,73 @@ class ClientCertificateManager:
         except Exception as e:
             logger.error(f"Error checking renewals: {str(e)}")
             return 0, 0, []
+
+    def reset_certificate_authority(
+        self,
+        subject: Optional[Dict[str, str]] = None,
+        actor: Optional[str] = None,
+    ) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+        """Rebuild the client CA, and remove the certificates it signed (#578).
+
+        Two things that have to happen together. Regenerating the CA alone
+        would leave a directory of client certificates that nothing can verify
+        any more, presented by a UI that still lists them as valid; removing
+        the certificates alone would leave a CA nobody asked to keep.
+
+        What it does NOT touch is the point of the name: server certificates,
+        settings and DNS accounts belong to other parts of the product and are
+        not this action's business.
+
+        The old CA is backed up first. That backup is the only thing that can
+        ever sign a CRL for the certificates it issued, so discarding it would
+        make every one of them permanently unrevocable.
+
+        `subject` is the reason most people will reach for this: the CA is
+        created once, so the only way to change its subject afterwards is to
+        make a new one. It is validated BEFORE anything is backed up, moved or
+        deleted, because a reset that fails halfway is worse than one that
+        refuses.
+
+        Returns (ok, error, summary).
+        """
+        summary: Dict[str, Any] = {'certificates_removed': 0, 'backup': None}
+
+        # Validate first. PrivateCAGenerator raises on a subject that cannot
+        # produce a certificate; catching it here keeps the caller's contract
+        # (ok, error, summary) rather than making every caller handle both.
+        try:
+            PrivateCAGenerator(self.private_ca.ca_dir, subject=subject)._build_subject()
+        except ValueError as error:
+            return False, str(error), summary
+
+        existing = self.list_client_certificates()
+
+        if not self.private_ca.regenerate(subject=subject):
+            return False, 'could not regenerate the certificate authority; see the log', summary
+        summary['backup'] = str(self.private_ca.ca_dir)
+
+        removed = 0
+        for cert_dir in (self.vpn_certs_dir, self.api_certs_dir, self.other_certs_dir):
+            if not cert_dir.exists():
+                continue
+            for entry in sorted(cert_dir.iterdir()):
+                # Only directories holding a metadata.json, which is what
+                # list_client_certificates() counts. A stray file in here is
+                # not ours to delete.
+                if entry.is_dir() and (entry / 'metadata.json').exists():
+                    shutil.rmtree(entry, ignore_errors=True)
+                    removed += 1
+        summary['certificates_removed'] = removed
+        summary['certificates_before'] = len(existing)
+
+        self._ensure_directories()
+
+        self._audit_ca_reset(removed, actor)
+
+        logger.warning(
+            'Client CA regenerated; %d client certificate(s) removed. Any CRL '
+            'published for the previous CA can no longer be verified.', removed)
+        return True, None, summary
 
     def get_statistics(self) -> Dict[str, Any]:
         """
