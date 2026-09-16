@@ -53,6 +53,13 @@ HELD = {
     "cryptography": 'SECURITY.md "Known dependency constraint"',
     "dns-lexicon": "dns-lexicon",
     "cloudflare": "#568",
+    # Added after dependabot proposed 2.3.6 in #795, past a comment sitting
+    # directly above the pin that explains why not. The pin was documented and
+    # unheld, and this suite had no check for that combination: it asked "is
+    # every held package ignored" and "is every ignored package documented",
+    # never "is every deliberately held-back pin actually held". A reason
+    # written down and not enforced is a reason that gets overwritten.
+    "infisical-python": "the last release with complete",
     # Promoted from DEFENSIVE (#657). It used to arrive only as certbot's own
     # dependency, and certbot bounds it not at all — so the version was
     # whatever PyPI served, while the pyopenssl and cryptography reasons above
