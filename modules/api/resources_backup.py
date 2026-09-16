@@ -51,8 +51,8 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
 
     class BackupList(Resource):
         @api.doc(security='Bearer')
-        @api.marshal_with(models['backup_list_model'])
         @ctx.auth.require_role('viewer')
+        @api.marshal_with(models['backup_list_model'])
         def get(self):
             """List all available backups"""
             try:

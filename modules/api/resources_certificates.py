@@ -75,8 +75,8 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
 
     class CertificateList(Resource):
         @api.doc(security='Bearer')
-        @api.marshal_list_with(models['certificate_model'])
         @ctx.auth.require_role('viewer')
+        @api.marshal_list_with(models['certificate_model'])
         def get(self):
             """List all certificates.
 

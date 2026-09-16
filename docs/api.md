@@ -800,8 +800,10 @@ Until the contract version moved to **2.0**, `code` on that second shape was
 the status *integer* while every application error used a string, so a client
 could not branch on the field without checking its type first. It is one type
 now, and the number a caller may have been reading is in `status` on those same
-responses. The version is on every response as `X-CertMate-API-Version`; it is
-**2.1** since the async issuance endpoints gained `ISSUANCE_QUEUE_FULL`.
+responses. The version is on every response as `X-CertMate-API-Version`. It became
+**2.1** when the async issuance endpoints gained `ISSUANCE_QUEUE_FULL`, and
+**2.2** when every certificate-info response gained `expired` and
+`seconds_left`.
 
 ### Codes
 
