@@ -185,7 +185,7 @@ produces certificates with no key, which is the case this exists for.
 
 #### Rebuild the client certificate authority
 
-**Endpoint**: `POST /api/client-certs/ca/reset` (admin)
+**Endpoint**: `POST /api/client-certs/ca/reset` (admin), since API contract **2.3**
 
 The private CA that signs client certificates is generated once, on first
 start, and its subject comes from `client_ca_subject` in settings:
@@ -1104,7 +1104,7 @@ now, and the number a caller may have been reading is in `status` on those same
 responses. The version is on every response as `X-CertMate-API-Version`. It became
 **2.1** when the async issuance endpoints gained `ISSUANCE_QUEUE_FULL`, and
 **2.2** when every certificate-info response gained `expired` and
-`seconds_left`.
+`seconds_left`, and **2.3** when `POST /api/client-certs/ca/reset` was added.
 
 ### Codes
 

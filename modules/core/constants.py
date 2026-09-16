@@ -128,6 +128,13 @@ METADATA_SCHEMA_VERSION = 1
 # that in six places (#829). Both new fields are None on the branch where the
 # certificate could not be parsed, because unknown is not the same as fine.
 #
+# 2.3 for POST /api/client-certs/ca/reset: the client-certificate CA can be
+# rebuilt with a subject the operator chooses, and that is a new endpoint. By
+# the rule below a new endpoint is a MINOR, and this one arrived without moving
+# the number at all: the surface grew and a client polling this version had no
+# way to learn it. Nothing compared the route table with the version, which is
+# why tests/test_the_contract_moves_with_the_surface.py now does.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -137,7 +144,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.2'
+API_CONTRACT_VERSION = '2.3'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
