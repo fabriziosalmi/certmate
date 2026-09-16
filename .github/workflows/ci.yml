@@ -100,6 +100,9 @@ jobs:
         # come down. The script fails on a new offender, on a regression, on an
         # improvement left unrecorded, and on an entry matching nothing.
         python scripts/check_complexity_budget.py
+        # The same shape for broad exception handlers. #671 counted 397 and
+        # nothing measured it again, so it reached 425 with the issue open.
+        python scripts/check_exception_budget.py
         # Style is reported, never enforced: line length is not a defect class.
         flake8 . --count --exit-zero --max-line-length=127 --statistics
 
