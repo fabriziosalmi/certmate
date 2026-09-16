@@ -73,6 +73,22 @@ GENERAL_LIMIT = 10
 # which already catches internally and returns None, so it could never fire.
 TOTAL_LIMIT = 427
 
+# Broad handlers that neither record the failure nor carry a comment saying why
+# silence is correct. This is the tractable half of #671: `except Exception` is
+# often the right call, but a handler that discards the exception AND says
+# nothing about it leaves no way to tell a path that worked from one that
+# failed and decided not to mention it.
+#
+# Two of these were fixed in the commit that added this pin, and both had
+# turned a failure into a confident answer: the storage health check answered
+# "ok" when it could not read the backend, and the API_BEARER_TOKEN_FILE reader
+# returned "no token supplied" for a file it could not open, so an operator who
+# rotated the token there got 401 with nothing in the log.
+#
+# A comment satisfies this, deliberately. The aim is that the silence be
+# chosen, and a reader can judge a stated reason; they cannot judge an absence.
+UNACCOUNTED_LIMIT = 36
+
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
     'modules/core/storage_backends.py': 65,
@@ -102,15 +118,54 @@ def _is_broad(handler: ast.ExceptHandler) -> bool:
     return any(ast.unparse(part) in ('Exception', 'BaseException') for part in parts)
 
 
-def measure() -> tuple[dict[str, int], list[str], list[str]]:
-    """Broad handlers per file, plus every bare and every silent-broad site."""
+# Calls that leave a trace of the failure. A handler that makes one of these
+# has handled the exception; a handler that makes none has discarded it.
+_RECORDING_CALLS = frozenset({
+    'debug', 'info', 'warning', 'warn', 'error', 'exception', 'critical',
+    'log', 'log_operation', 'print', 'capture_exception', 'flash',
+})
+
+
+def _records(handler: ast.ExceptHandler) -> bool:
+    """True if the handler logs, re-raises, or otherwise records the failure."""
+    module = ast.Module(body=handler.body, type_ignores=[])
+    for node in ast.walk(module):
+        if isinstance(node, ast.Raise):
+            return True
+        if isinstance(node, ast.Call):
+            name = getattr(node.func, 'attr', None) or getattr(node.func, 'id', None)
+            if name in _RECORDING_CALLS:
+                return True
+    return False
+
+
+def _explained(handler: ast.ExceptHandler, lines: list[str]) -> bool:
+    """True if a comment sits on, above, or immediately inside the handler.
+
+    Three places because all three are how this codebase already writes the
+    reason down, and insisting on one of them would be a style rule wearing a
+    gate's clothes.
+    """
+    on = lines[handler.lineno - 1] if handler.lineno <= len(lines) else ''
+    above = lines[handler.lineno - 2].strip() if handler.lineno >= 2 else ''
+    inside = ''
+    if handler.body and handler.body[0].lineno - 2 < len(lines):
+        inside = lines[handler.body[0].lineno - 2].strip()
+    return '#' in on or above.startswith('#') or inside.startswith('#')
+
+
+def measure() -> tuple[dict[str, int], list[str], list[str], list[str]]:
+    """Broad handlers per file, plus the bare, silent and unaccounted sites."""
     per_file: dict[str, int] = {}
     bare: list[str] = []
     silent: list[str] = []
+    unaccounted: list[str] = []
     for path in _sources():
         relative = path.relative_to(REPO).as_posix()
+        text = path.read_text(encoding='utf-8')
+        lines = text.split('\n')
         try:
-            tree = ast.parse(path.read_text(encoding='utf-8'))
+            tree = ast.parse(text)
         except SyntaxError as error:
             # Not this gate's job to report, but dying with a bare traceback
             # here reads as "the budget script is broken" rather than "that
@@ -132,12 +187,15 @@ def measure() -> tuple[dict[str, int], list[str], list[str]]:
             count += 1
             if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
                 silent.append(f'{relative}:{node.lineno}')
+            if not _records(node) and not _explained(node, lines):
+                unaccounted.append(f'{relative}:{node.lineno}')
         if count:
             per_file[relative] = count
-    return per_file, bare, silent
+    return per_file, bare, silent, unaccounted
 
 
-def evaluate(per_file, bare, silent, budget, general_limit, total_limit):
+def evaluate(per_file, bare, silent, unaccounted, budget, general_limit,
+             total_limit, unaccounted_limit):
     problems: list[str] = []
 
     for site in bare:
@@ -153,6 +211,26 @@ def evaluate(per_file, bare, silent, budget, general_limit, total_limit):
             f'is not handled, it is discarded, and no caller can tell this '
             f'path from one that worked. Log it, re-raise it, or narrow the '
             f'handler to the exception you meant.'
+        )
+
+    if len(unaccounted) > unaccounted_limit:
+        problems.append(
+            f'{len(unaccounted)} broad handlers neither record the failure nor '
+            f'say why not, over the pinned {unaccounted_limit}. A handler that '
+            f'logs nothing turns a failure into an answer: the storage health '
+            f'check reported "ok" when it could not read the backend at all, '
+            f'which is the reverse of what that check exists to say. Log it, '
+            f'or write one line saying why silence is right here.\n'
+            f'      The gate cannot tell which one is new; here are the first '
+            f'few of all {len(unaccounted)}, and `git diff` names yours:\n      '
+            + '\n      '.join(sorted(set(unaccounted))[:8])
+        )
+    elif len(unaccounted) < unaccounted_limit:
+        problems.append(
+            f'{len(unaccounted)} broad handlers neither record nor explain, '
+            f'below the pinned {unaccounted_limit}. Lower UNACCOUNTED_LIMIT to '
+            f'{len(unaccounted)} in the same commit, for the same reason the '
+            f'total is pinned both ways.'
         )
 
     total = sum(per_file.values())
@@ -201,13 +279,15 @@ def evaluate(per_file, bare, silent, budget, general_limit, total_limit):
 
 
 def main() -> int:
-    per_file, bare, silent = measure()
-    problems = evaluate(per_file, bare, silent, BUDGET, GENERAL_LIMIT, TOTAL_LIMIT)
+    per_file, bare, silent, unaccounted = measure()
+    problems = evaluate(per_file, bare, silent, unaccounted, BUDGET,
+                        GENERAL_LIMIT, TOTAL_LIMIT, UNACCOUNTED_LIMIT)
     if not problems:
         print(
             f'Exception budget OK: {sum(per_file.values())} broad handlers '
-            f'(pinned {TOTAL_LIMIT}), 0 bare, 0 silent, nothing over '
-            f'{GENERAL_LIMIT} outside the budget.'
+            f'(pinned {TOTAL_LIMIT}), 0 bare, 0 silent, '
+            f'{len(unaccounted)} unaccounted (pinned {UNACCOUNTED_LIMIT}), '
+            f'nothing over {GENERAL_LIMIT} outside the budget.'
         )
         return 0
     print('\nException budget failed:\n')
