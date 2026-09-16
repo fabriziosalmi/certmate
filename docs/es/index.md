@@ -1,5 +1,7 @@
 # Movida
 
+<!-- CERTMATE-TRANSLATED-FROM fc2c79b3b067bc2e -->
+
 Esta pagina era el texto de lanzamiento de los certificados de cliente, bajo un
 nombre que la hacia parecer el indice de la documentacion. Su contenido esta
 ahora en la [guia de certificados de cliente](./guide.md), y el indice es

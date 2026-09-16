@@ -1,5 +1,7 @@
 # Sondes de Déploiement (Probes)
 
+<!-- CERTMATE-TRANSLATED-FROM 2e4c6efa25e73341 -->
+
 Les sondes vérifient que vos certificats sont accessibles sur le réseau en effectuant une poignée de main TLS en direct avec le serveur déployé.
 
 ## Configuration

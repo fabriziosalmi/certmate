@@ -1,5 +1,9 @@
 # CertMate Certificados de Cliente - Referencia de API
 
+<!-- CERTMATE-TRANSLATED-FROM 13de52d0ee4b09b1 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Esta traducción no está actualizada.** La versión en inglés ([`docs/api.md`](../api.md)) se ha modificado desde entonces y es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
+
 ## Descripción general
 
 La API CertMate de gestión de certificados de cliente proporciona endpoints REST para una gestión completa de certificados con autenticación, limitación de tasa y registro de auditoría.

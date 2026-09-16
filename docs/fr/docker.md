@@ -1,5 +1,7 @@
 # Construction et déploiement Docker
 
+<!-- CERTMATE-TRANSLATED-FROM 688759cbf76ef5a2 -->
+
 Ce guide couvre la construction, le déploiement et l'exécution de CertMate dans Docker — incluant le support multi-plateforme pour ARM et AMD64.
 
 ---

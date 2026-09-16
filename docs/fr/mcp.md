@@ -1,5 +1,9 @@
 # Serveur MCP (Model Context Protocol) CertMate
 
+<!-- CERTMATE-TRANSLATED-FROM bd8f5c3823ff857a -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Cette traduction n'est pas à jour.** La version anglaise ([`docs/mcp.md`](../mcp.md)) a été modifiée depuis et fait foi. En cas de divergence, le document anglais prévaut.
+
 CertMate inclut un serveur MCP (Model Context Protocol) intégré écrit en Node.js. Cela permet aux assistants IA agentiques (tels que Claude ou Gemini) d'inspecter en toute sécurité les statuts des certificats, de déclencher des renouvellements, de demander des diagnostics et d'interagir directement avec l'API CertMate.
 
 ## Fonctionnalités et outils

@@ -1,5 +1,7 @@
 # CertMate Certificados de Cliente - Guía de uso
 
+<!-- CERTMATE-TRANSLATED-FROM 36e2134d9fcca7b2 -->
+
 ## Descripción general
 
 CertMate Certificados de Cliente es una solución completa y lista para producción para la gestión de certificados de cliente con:

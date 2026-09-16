@@ -1,5 +1,7 @@
 # Testhandbuch
 
+<!-- CERTMATE-TRANSLATED-FROM 7bb2c3112ef81e62 -->
+
 Dieses Handbuch beschreibt das Test-Framework von CertMate, einschließlich Unit-Tests, Integrationstests und der Validierung von API-Endpoints.
 
 ---

@@ -1,5 +1,7 @@
 # Probe di Deployment
 
+<!-- CERTMATE-TRANSLATED-FROM 2e4c6efa25e73341 -->
+
 Le probe verificano che i tuoi certificati siano raggiungibili sulla rete eseguendo un TLS handshake in tempo reale con il server deployato.
 
 ## Configurazione

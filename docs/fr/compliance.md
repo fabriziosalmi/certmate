@@ -1,5 +1,9 @@
 # Conformité et piste d'audit
 
+<!-- CERTMATE-TRANSLATED-FROM 2bf88cfee49317c4 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Cette traduction n'est pas à jour.** La version anglaise ([`docs/compliance.md`](../compliance.md)) a été modifiée depuis et fait foi. En cas de divergence, le document anglais prévaut.
+
 Cette page fait le lien entre la piste d'audit de CertMate et les régimes que les opérateurs interrogent le plus souvent — l'AI Act européen, NIS2 et l'ISO/IEC 42001 — lorsqu'ils laissent un agent IA/MCP gérer des certificats sur un calendrier.
 
 > **À lire d'abord.** CertMate est un outil MIT auto-hébergé mono-instance. Ce n'est **pas** un système d'IA, **pas** un système d'IA à haut risque, et **pas** une entité réglementée, et il ne « se conforme pas » à quoi que ce soit ni ne « certifie » rien. Les obligations de conformité incombent à **l'opérateur** qui l'exécute. Ce que CertMate fournit, ce sont des **artefacts de preuve** qu'un opérateur peut utiliser pour *ses propres* obligations. Chaque affirmation ci-dessous signifie « permet à l'opérateur de prouver X », avec les limites explicitement énoncées.

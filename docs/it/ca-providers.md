@@ -1,5 +1,7 @@
 # Fornitori di Certificate Authority (CA)
 
+<!-- CERTMATE-TRANSLATED-FROM 4a4fcc10de4a1e4b -->
+
 CertMate supporta diversi fornitori di Certificate Authority, consentendoti di scegliere la CA più adatta alle tue esigenze.
 
 ---

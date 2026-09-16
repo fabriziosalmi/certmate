@@ -1,5 +1,9 @@
 # Conformità e traccia di audit
 
+<!-- CERTMATE-TRANSLATED-FROM 2bf88cfee49317c4 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Questa traduzione non è aggiornata.** La versione inglese ([`docs/compliance.md`](../compliance.md)) è stata modificata da allora ed è quella che fa fede. In caso di discordanza vale il documento inglese.
+
 Questa pagina mette in relazione la traccia di audit di CertMate con i regimi che gli operatori chiedono più spesso — l'AI Act dell'UE, NIS2 e ISO/IEC 42001 — quando lasciano che un agente IA/MCP gestisca i certificati su un calendario.
 
 > **Da leggere prima.** CertMate è uno strumento MIT self-hosted a istanza singola. **Non** è un sistema di IA, **non** è un sistema di IA ad alto rischio, **non** è un'entità regolamentata e non "si conforma a" né "certifica" nulla. Gli obblighi di conformità ricadono sull'**operatore** che lo utilizza. Ciò che CertMate fornisce sono **artefatti probatori** che un operatore può usare per i *propri* obblighi. Ogni affermazione di seguito significa "consente all'operatore di dimostrare X", con i limiti esplicitamente indicati.

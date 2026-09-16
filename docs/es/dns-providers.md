@@ -1,5 +1,7 @@
 # Proveedores DNS
 
+<!-- CERTMATE-TRANSLATED-FROM 3ef1007082851544 -->
+
 CertMate soporta una amplia gama de proveedores DNS para los desafíos Let's Encrypt DNS-01 mediante plugins de certbot individuales. La lista completa se encuentra en la tabla a continuación.
 
 ---

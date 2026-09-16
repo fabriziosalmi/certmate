@@ -1,5 +1,7 @@
 # Spostata
 
+<!-- CERTMATE-TRANSLATED-FROM fc2c79b3b067bc2e -->
+
 Questa pagina era il documento di lancio dei certificati client, sotto un nome
 che la faceva sembrare l'indice della documentazione. Il contenuto e ora nella
 [guida ai certificati client](./guide.md), e l'indice e

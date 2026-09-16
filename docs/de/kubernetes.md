@@ -1,5 +1,9 @@
 # Kubernetes-Produktionshinweise
 
+<!-- CERTMATE-TRANSLATED-FROM db0f75b2a7a008f8 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung ist nicht aktuell.** Die englische Fassung ([`docs/kubernetes.md`](../kubernetes.md)) wurde seitdem geändert und ist maßgeblich. Bei Abweichungen gilt das englische Dokument.
+
 Dieser Leitfaden enthält die Basiswerte für die Produktionsdimensionierung von CertMate, wenn es hinter einem Kubernetes Ingress/HTTPRoute betrieben wird und ein entferntes Zertifikat-Backend wie Azure Key Vault verwendet.
 
 ## Empfohlene Ressourcen
