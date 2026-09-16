@@ -90,7 +90,98 @@ HTTP 429 Too Many Requests
 
 ## Endpoints
 
-### Certificate Management
+### Managed certificates
+
+The certificates CertMate issues and renews for your domains. (The section
+below this one covers *client* certificates, which are a different feature.)
+
+Every field named here is generated from `modules/api/models.py` into
+`/api/swagger.json`, and `tests/test_the_swagger_contract_describes_the_real_response.py`
+fails if the code returns a field the contract does not declare.
+
+#### List certificates
+
+**Endpoint**: `GET /api/certificates`
+
+Returns an array of the objects described below, one per managed domain.
+
+#### Get one certificate
+
+**Endpoint**: `GET /api/certificates/<domain>`
+
+**Response** (200 OK). This example is the real shape, taken from the code
+rather than written by hand:
+
+```json
+{
+  "domain": "app.example.com",
+  "exists": true,
+  "expiry_date": "2026-11-30 09:17:11",
+  "days_left": 74,
+  "days_until_expiry": 74,
+  "seconds_left": 6479999,
+  "expired": false,
+  "needs_renewal": false,
+  "private_key_present": true,
+  "private_key_state": "present",
+  "usable": true,
+  "dns_provider": "cloudflare",
+  "domain_alias": null,
+  "alias_dns_provider": null,
+  "san_domains": ["www.example.com"],
+  "ca_provider": "letsencrypt",
+  "challenge_type": "dns-01",
+  "account_id": "default",
+  "storage_warning": null,
+  "deployment_port": null,
+  "deployment_protocol": null,
+  "created_at": "2026-09-01T10:14:02Z",
+  "renewed_at": "2026-09-14T02:31:55Z"
+}
+```
+
+##### Is it still valid?
+
+Read `expired`. Do not compute it from a day count.
+
+`days_left` and `days_until_expiry` are a whole number of days and round down,
+so a certificate with 23 hours of life left reports `0`. `days_until_expiry <= 0`
+therefore calls a perfectly valid certificate expired, and CertMate's own
+dashboard did exactly that until 2.32.2. It is not a corner case: step-ca
+issues 24-hour certificates by default, so on a private CA it was every
+certificate from the moment it was issued.
+
+| field | meaning |
+| :--- | :--- |
+| `expired` | Whether it has expired. `null` when the certificate could not be parsed, which is neither expired nor fine. |
+| `seconds_left` | Remaining life in seconds, negative once expired. Use it for ordering: `days_left` cannot separate a certificate with hours left from one that lapsed hours ago. |
+| `days_left`, `days_until_expiry` | Whole days remaining, rounded down. The same number under two names, kept for compatibility. |
+
+`expired` and `seconds_left` arrived in API contract **2.2**; read the
+`X-CertMate-API-Version` response header if you need to support older servers.
+
+##### Can it actually serve TLS?
+
+A certificate with no private key beside it cannot complete a handshake, and
+`exists: true` does not tell you whether it has one.
+
+| field | meaning |
+| :--- | :--- |
+| `private_key_state` | `present`, `missing`, `mismatched`, `unknown`, or `external`. |
+| `private_key_present` | Whether a key was found. `null` when it was not looked for. |
+| `usable` | `exists` AND a matching key. `null` when the storage backend does not fetch key material on this path and says so, which today means Azure Key Vault. |
+
+`mismatched` is a certificate from one issuance sitting beside a key from
+another: the two are compared, not assumed to match. `external` is a CSR-only
+certificate, where the key was generated on the device that will serve it and
+was never sent here, so its absence is the design rather than a fault, and it
+does not force renewal.
+
+`missing` and `mismatched` force `needs_renewal`, because a certificate that
+cannot serve TLS has nothing to wait for. Restoring a share-safe backup
+produces certificates with no key, which is the case this exists for.
+
+### Client certificates
 
 #### 1. Create Certificate
 

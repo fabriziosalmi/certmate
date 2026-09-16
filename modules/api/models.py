@@ -160,15 +160,35 @@ def create_api_models(api):
         'expiry_date': fields.String(description='Certificate expiry date'),
         'days_left': fields.Integer(description='Days until expiry'),
         'days_until_expiry': fields.Integer(description='Days until expiry (alias for days_left)'),
+        'expired': fields.Boolean(
+            description=(
+                'Whether this certificate has expired. Read this rather than '
+                'comparing days_left to zero: days_left is a whole number of '
+                'days and rounds down, so a certificate with 23 hours of life '
+                'left reports 0 and that comparison calls it expired. Null '
+                'when the certificate could not be parsed, which is neither '
+                'expired nor fine. Added in API contract 2.2.'
+            )),
+        'seconds_left': fields.Integer(
+            description=(
+                'Remaining life in seconds, negative once expired. The field '
+                'to use for ordering or for anything finer than a day; '
+                'days_left cannot separate a certificate with hours left from '
+                'one that lapsed hours ago. Null when the certificate could '
+                'not be parsed. Added in API contract 2.2.'
+            )),
         'needs_renewal': fields.Boolean(description='Whether certificate needs renewal'),
         'usable': fields.Boolean(
             description=(
                 'Whether this certificate can actually serve TLS: it exists AND '
-                'a matching private key is beside it. Null on the '
-                'storage-backend listing path, which fetches the certificate '
-                'without the key on purpose and therefore cannot say. A false '
-                'here also forces needs_renewal, because a keyless certificate '
-                'has nothing to wait for.'
+                'a matching private key is beside it. Null only when the '
+                'storage backend does not fetch key material on this path and '
+                'says so, which today means Azure Key Vault; the default '
+                'filesystem backend answers. It used to be null on every '
+                'storage-backed read, including the default one, which is how '
+                'a certificate with no key at all was reported as needing '
+                'nothing (#830). A false here forces needs_renewal, because a '
+                'keyless certificate has nothing to wait for.'
             )),
         'private_key_present': fields.Boolean(
             description=(
@@ -195,6 +215,18 @@ def create_api_models(api):
         'ca_provider': fields.String(description='CA provider the certificate was issued with (from metadata; null for older certificates)'),
         'challenge_type': fields.String(description='Challenge type used at issuance (from metadata)'),
         'account_id': fields.String(description='DNS provider account used at issuance (from metadata)'),
+        'storage_warning': fields.String(
+            description=(
+                'Why the last write to the configured external storage did not '
+                'land, or null when it did. Surfaced on the certificate rather '
+                'than left in the logs, because a disaster-recovery copy that '
+                'is missing or stale is not something to discover during a '
+                'recovery.'
+            )),
+        'created_at': fields.String(
+            description='When the certificate was first issued, ISO 8601, from its metadata.'),
+        'renewed_at': fields.String(
+            description='When the certificate was last renewed, ISO 8601, from its metadata. Null if it has never been renewed.'),
         'total_issued': fields.Integer(description='Total certificates issued'),
         'total_active': fields.Integer(description='Total active certificates'),
         'total_revoked': fields.Integer(description='Total revoked certificates'),
