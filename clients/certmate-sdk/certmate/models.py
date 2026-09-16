@@ -51,6 +51,31 @@ class Certificate:
             raw=d,
         )
 
+    def has_expired(self) -> Optional[bool]:
+        """Has this certificate expired? None when it cannot be known.
+
+        Exists so callers stop writing `days_until_expiry <= 0`, which is
+        wrong and was wrong in CertMate's own dashboard until server 2.32.2:
+        `days_until_expiry` is whole days and truncates, so a certificate with
+        23 hours of life left reports 0 and that comparison calls it expired.
+        step-ca issues 24-hour certificates by default, so on a private CA that
+        was every certificate.
+
+        Against a server on API contract 2.2 or later this is the server's own
+        answer. Against an older one there is no better information than the
+        day count, and this returns what that count can actually support:
+        negative is definitely expired, positive is definitely not, and zero is
+        the ambiguous day the whole defect lives in, so it answers None rather
+        than guessing. None also covers a certificate the server could not
+        parse, which is neither expired nor fine.
+        """
+        if self.expired is not None:
+            return self.expired
+        days = self.days_until_expiry
+        if days is None or days == 0:
+            return None
+        return days < 0
+
 
 # Terminal job states, normalised.
 JOB_DONE = {"succeeded", "success", "completed", "done"}

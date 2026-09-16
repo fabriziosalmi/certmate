@@ -223,6 +223,40 @@ def test_client_dunder_version_matches_its_pyproject(dist, module):
     )
 
 
+SDK_FLOOR = re.compile(r'"certmate-sdk>=([^"]+)"')
+
+
+def test_the_cli_requires_the_sdk_it_is_written_against():
+    """The CLI's SDK floor must not be older than the SDK in this tree.
+
+    They release as a pair: publish-clients.yml refuses a tag unless both
+    packages carry that exact version. The CLI is written against the SDK
+    beside it, so a floor below that version lets pip resolve an SDK without
+    the methods the CLI calls, and the failure is an AttributeError at
+    runtime, in a released wheel, on someone else's machine.
+
+    The pyproject comment already said "the SDK floor tracks the CLI release".
+    Nothing enforced it, and it had drifted: the floor sat at 0.1.3 while both
+    packages were 0.1.4, and 0.1.5 added Certificate.has_expired(), which the
+    CLI now calls on every `cert ls`.
+    """
+    cli = (REPO_ROOT / "clients" / "certmate-cli" / "pyproject.toml").read_text(encoding="utf-8")
+    sdk = (REPO_ROOT / "clients" / "certmate-sdk" / "pyproject.toml").read_text(encoding="utf-8")
+    floor = SDK_FLOOR.search(cli)
+    sdk_version = PYPROJECT_VERSION.search(sdk)
+    assert floor, "certmate-cli no longer declares a certmate-sdk floor at all"
+    assert sdk_version, "certmate-sdk has no version in pyproject.toml"
+
+    def parts(text):
+        return tuple(int(piece) for piece in text.split("."))
+
+    assert parts(floor.group(1)) >= parts(sdk_version.group(1)), (
+        f"certmate-cli requires certmate-sdk>={floor.group(1)} while the SDK "
+        f"in this tree is {sdk_version.group(1)}. pip is free to install the "
+        f"older one, which does not have what the CLI calls."
+    )
+
+
 def test_both_clients_ship_the_same_version():
     """The CLI depends on the SDK and they are released from one `clients-v*`
     tag, so a split version means the tag names only half of what it built."""
