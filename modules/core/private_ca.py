@@ -81,7 +81,27 @@ class PrivateCAGenerator:
     Used for issuing client certificates.
     """
 
-    def __init__(self, ca_dir: Path):
+    # The subject the CA has always had. Kept exactly as it was so an install
+    # that configures nothing sees no change: this CA signs client
+    # certificates, and a different issuer name on a renewal would surprise
+    # anything pinning it.
+    DEFAULT_SUBJECT = {
+        'country': 'CH',
+        'state': 'Switzerland',
+        'organization': 'CertMate',
+        'organizational_unit': 'Certificate Authority',
+        'common_name': 'CertMate CA',
+    }
+
+    _SUBJECT_OIDS = (
+        ('country', NameOID.COUNTRY_NAME),
+        ('state', NameOID.STATE_OR_PROVINCE_NAME),
+        ('organization', NameOID.ORGANIZATION_NAME),
+        ('organizational_unit', NameOID.ORGANIZATIONAL_UNIT_NAME),
+        ('common_name', NameOID.COMMON_NAME),
+    )
+
+    def __init__(self, ca_dir: Path, subject: Optional[Dict[str, str]] = None):
         """
         Initialize Private CA Generator.
 
@@ -89,6 +109,11 @@ class PrivateCAGenerator:
             ca_dir: Directory to store CA private key and certificate
         """
         self.ca_dir = Path(ca_dir)
+        # Read when the CA is created and never again. initialize() returns
+        # early when both files are present, so editing this later cannot
+        # regenerate the CA and invalidate every certificate it has signed;
+        # that is what the deliberate reset action is for (#578).
+        self._subject = dict(subject) if subject else None
         self.ca_key_path = self.ca_dir / "ca.key"
         self.ca_cert_path = self.ca_dir / "ca.crt"
         self.ca_metadata_path = self.ca_dir / "ca_metadata.json"
@@ -178,7 +203,18 @@ class PrivateCAGenerator:
 
         Returns:
             True if CA was initialized/exists, False if error
+
+        Raises:
+            ValueError: the configured CA subject cannot produce a valid
+                certificate. Deliberately not swallowed into a False return:
+                the caller ignores that, so a mistyped country code would
+                leave the instance with no CA at all and the confusing error
+                would surface later, when someone tried to issue a client
+                certificate.
         """
+        # Before the try, and before anything touches the disk.
+        self._build_subject()
+
         try:
             # Create CA directory if it doesn't exist
             self.ca_dir.mkdir(parents=True, exist_ok=True)
@@ -227,6 +263,58 @@ class PrivateCAGenerator:
             logger.error(f"Error initializing CA: {e}")
             return False
 
+    def regenerate(self, subject: Optional[Dict[str, str]] = None) -> bool:
+        """Back up the current CA and generate a new one.
+
+        The only supported way to change the subject of a CA that already
+        exists, because `initialize()` deliberately will not: re-reading the
+        subject on every start would mean a settings edit silently replacing
+        the CA, and every certificate it had signed would stop verifying.
+
+        This does NOT remove the certificates the old CA signed. They become
+        unverifiable the moment the key changes, so leaving them behind is not
+        a kindness; ClientCertificateManager.reset_certificate_authority()
+        does both halves together and is what callers should use.
+        """
+        if subject is not None:
+            self._subject = dict(subject)
+        return self.initialize(force=True)
+
+    def _build_subject(self) -> x509.Name:
+        """The CA's subject, from configuration or from the default.
+
+        A field left empty is omitted rather than written as an empty string:
+        not every organisation has a state, and a subject carrying `ST=` with
+        nothing after it is worse than one that does not mention it. The
+        common name is the exception, because a CA with no CN is legal and
+        unreadable in every certificate viewer, so it falls back.
+        """
+        configured = self._subject
+        if configured is None:
+            configured = self.DEFAULT_SUBJECT
+
+        country = str(configured.get('country') or '').strip()
+        if country and (len(country) != 2 or not country.isalpha()):
+            # cryptography refuses this at signing time with a message about
+            # attribute lengths, which is not something an operator can act
+            # on. Refuse here, before anything is written, and say what to
+            # type: X.509 `C` is an ISO 3166-1 alpha-2 code.
+            raise ValueError(
+                f"CA subject country must be a two-letter ISO country code "
+                f"(for example 'IT', 'CH', 'US'), got {country!r}"
+            )
+
+        attributes = []
+        for field, oid in self._SUBJECT_OIDS:
+            value = str(configured.get(field) or '').strip()
+            if field == 'common_name' and not value:
+                value = self.DEFAULT_SUBJECT['common_name']
+            if field == 'country' and value:
+                value = value.upper()
+            if value:
+                attributes.append(x509.NameAttribute(oid, value))
+        return x509.Name(attributes)
+
     def _generate_ca(self) -> bool:
         """
         Generate a new self-signed CA certificate and private key.
@@ -244,13 +332,7 @@ class PrivateCAGenerator:
             )
 
             # Create CA subject and issuer (same for self-signed)
-            subject = issuer = x509.Name([
-                x509.NameAttribute(NameOID.COUNTRY_NAME, "CH"),
-                x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Switzerland"),
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "CertMate"),
-                x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Certificate Authority"),
-                x509.NameAttribute(NameOID.COMMON_NAME, "CertMate CA"),
-            ])
+            subject = issuer = self._build_subject()
 
             # Build CA certificate
             cert_builder = x509.CertificateBuilder()
@@ -430,10 +512,16 @@ class PrivateCAGenerator:
                 "expires_at": cert.not_valid_after_utc.isoformat(),
                 "serial_number": str(cert.serial_number),
                 "key_size": key.key_size,
+                # Read off the certificate, not retyped. These were hardcoded
+                # to CH / CertMate, which was true only while the subject was,
+                # and would have started lying the moment it became
+                # configurable (#578).
                 "issuer": {
-                    "country": "CH",
-                    "organization": "CertMate",
-                    "common_name": common_name
+                    field: (
+                        cert.subject.get_attributes_for_oid(oid)[0].value
+                        if cert.subject.get_attributes_for_oid(oid) else None
+                    )
+                    for field, oid in self._SUBJECT_OIDS
                 }
             }
 

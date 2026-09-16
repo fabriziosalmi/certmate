@@ -658,7 +658,14 @@ def initialize_managers(container: AppContainer, app):
     ca_manager = CAManager(settings_manager)
 
     ca_dir = container.data_dir / "certs" / "ca"
-    private_ca = PrivateCAGenerator(ca_dir)
+    # The client CA's subject, read ONCE when the CA is first created (#578).
+    # PrivateCAGenerator.initialize() returns early when the CA exists, so
+    # editing this later changes nothing: a settings edit silently replacing
+    # the CA would stop every certificate it ever signed from verifying. The
+    # deliberate path is POST /api/client-certs/ca/reset.
+    client_ca_subject = (settings_manager.load_settings() or {}).get('client_ca_subject')
+    private_ca = PrivateCAGenerator(
+        ca_dir, subject=client_ca_subject if isinstance(client_ca_subject, dict) else None)
     private_ca.initialize()
 
     client_certs_dir = container.data_dir / "certs" / "client"
@@ -1254,6 +1261,7 @@ def setup_api(container: AppContainer, app):
     ns_client_certs.add_resource(api_resources['ClientCertificateRenew'], '/<string:identifier>/renew')
     ns_client_certs.add_resource(api_resources['ClientCertificateStatistics'], '/stats')
     ns_client_certs.add_resource(api_resources['ClientCertificateBatch'], '/batch')
+    ns_client_certs.add_resource(api_resources['ClientCertificateAuthorityReset'], '/ca/reset')
 
     ns_ocsp.add_resource(api_resources['OCSPStatus'], '/status/<int:serial_number>')
     ns_crl.add_resource(api_resources['CRLDistribution'], '/download/<string:format_type>')

@@ -52,7 +52,26 @@ GENERAL_LIMIT = 10
 # Every broad handler in the tree. Pinned because this is the number #671
 # names, and because a per-file budget alone cannot stop a new file adding
 # GENERAL_LIMIT more.
-TOTAL_LIMIT = 425
+#
+# 425 -> 427 on 2026-09-16, for the client CA reset (#578), and written down
+# because that is what raising this is supposed to cost. Both are the kind the
+# docstring above calls defensible, and both LOG:
+#
+#   modules/api/client_certificates.py   the new resource's catch-all, the same
+#                                        `except Exception -> logger.error ->
+#                                        abort(500)` every sibling resource in
+#                                        that file already has.
+#   modules/core/client_certificates.py  the guard around the audit record, the
+#                                        same shape as _audit_scheduled_renew
+#                                        directly above it. The reset has
+#                                        already happened when it runs: letting
+#                                        the failure propagate would make the
+#                                        caller retry and regenerate the CA a
+#                                        second time.
+#
+# A third one was removed rather than counted: it wrapped CRLManager.update_crl(),
+# which already catches internally and returns None, so it could never fire.
+TOTAL_LIMIT = 427
 
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
@@ -64,8 +83,8 @@ BUDGET = {
     'modules/core/auth.py': 13,
     'modules/core/factory.py': 13,
     'modules/web/settings_routes.py': 13,
-    'modules/api/client_certificates.py': 12,
-    'modules/core/client_certificates.py': 11,
+    'modules/api/client_certificates.py': 13,
+    'modules/core/client_certificates.py': 12,
     'modules/core/private_ca.py': 11,
     'modules/core/settings.py': 11,
 }
