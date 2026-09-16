@@ -166,11 +166,31 @@ def cert_ls(ctx: typer.Context):
     table.add_column("DAYS", justify="right")
     table.add_column("CA")
     table.add_column("AUTO-RENEW")
-    for c in sorted(certs, key=lambda x: (x.days_until_expiry if x.days_until_expiry is not None else 1 << 30)):
+    # Sort by seconds where the server sends them: a certificate with 23 hours
+    # left and one that lapsed an hour ago are both 0 or -1 in whole days, and
+    # would otherwise land next to each other in either order.
+    def _remaining(cert):
+        if cert.seconds_left is not None:
+            return cert.seconds_left
+        if cert.days_until_expiry is not None:
+            return cert.days_until_expiry * 86400
+        return 1 << 40
+
+    for c in sorted(certs, key=_remaining):
         days = c.days_until_expiry
-        days_str = "-" if days is None else str(days)
-        colour = "green"
-        if days is not None:
+        expired = c.has_expired()
+        # "0" for a certificate with 23 hours left was read as expired by
+        # everything that saw it, including CertMate's own dashboard until
+        # server 2.32.2. Say which of the two it is instead of printing the
+        # number that cannot tell them apart.
+        if expired is True:
+            days_str, colour = "expired", "red"
+        elif days is None:
+            days_str, colour = "-", "green"
+        elif days == 0:
+            days_str, colour = ("<1" if expired is False else "?"), "red"
+        else:
+            days_str = str(days)
             colour = "red" if days < 7 else ("yellow" if days < 30 else "green")
         table.add_row(
             c.domain,
@@ -187,8 +207,16 @@ def cert_info(ctx: typer.Context, domain: str):
     """Show a certificate's details."""
     c = _run(lambda: _client(ctx).get_certificate(domain))
     out.print(f"[bold]{c.domain}[/]")
-    out.print(f"  expires:     {c.expiry_date or '-'}  "
-              f"({c.days_until_expiry if c.days_until_expiry is not None else '?'} days)")
+    if c.has_expired() is True:
+        remaining = "[red]expired[/]"
+    elif c.days_until_expiry is None:
+        remaining = "? days"
+    elif c.days_until_expiry == 0:
+        # Under a day, and not expired, or the server is too old to say.
+        remaining = "less than a day" if c.has_expired() is False else "? days"
+    else:
+        remaining = f"{c.days_until_expiry} days"
+    out.print(f"  expires:     {c.expiry_date or '-'}  ({remaining})")
     out.print(f"  CA:          {c.ca_provider or '-'}")
     out.print(f"  DNS:         {c.dns_provider or '-'}")
     out.print(f"  auto-renew:  {c.auto_renew}")

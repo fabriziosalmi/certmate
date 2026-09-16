@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "certmate-cli"
-version = "0.1.4"
+version = "0.1.5"
 description = "CertMate command-line interface — the SSL certificate lifecycle from your terminal"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,10 +30,13 @@ classifiers = [
 ]
 # Built ON the SDK (never the reverse). typer for the command surface, rich
 # for tables/spinners. Still light — no server deps.
-# The SDK floor tracks the CLI release: 0.1.2 needs TransportError and the
-# renew/audit semantics introduced in certmate-sdk 0.1.2.
+# The SDK floor tracks the CLI release, and now something enforces that:
+# tests/test_version_consistency.py fails if this floor falls behind the SDK
+# in the tree. It had already drifted once, sitting at 0.1.3 while both
+# packages were 0.1.4. 0.1.5 is needed for Certificate.has_expired(), which
+# `cert ls` and `cert info` call on every row.
 dependencies = [
-    "certmate-sdk>=0.1.3",
+    "certmate-sdk>=0.1.5",
     "typer>=0.9",
     "rich>=13",
 ]
