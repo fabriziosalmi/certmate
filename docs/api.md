@@ -769,6 +769,307 @@ session has to be restarted.
 
 ---
 
+### Health
+
+#### Health check
+
+**Endpoint**: `GET /api/health`
+
+**No credential required**, deliberately: this is what a load balancer or an
+orchestrator polls, and a probe that needs a secret is a probe that stops
+working during the incident it exists to report.
+
+It answers `200` when the instance is healthy or degraded, and `500` when it is
+unhealthy, so a liveness check can read the status line alone. The body names
+each subsystem:
+
+```json
+{
+ "status": "degraded",
+ "checks": {
+   "settings": "ok",
+   "scheduler": "not_running",
+   "storage": "fallback_to_local (configured backend: azure_keyvault)"
+ }
+}
+```
+
+`checks` carries only subsystems that have something to report. An instance
+with no remote storage backend has no `storage` key at all, rather than a green
+tick for a subsystem it does not have. The `storage` check is worth watching
+even when everything else is green: it is how you learn that the configured
+cloud backend failed to initialise and certificates are on local disk. It reads
+`unknown` when the backend could not be read at all, which is not the same as
+`ok`.
+
+`status` is `healthy`, `degraded` or `unhealthy`, and the worst of the checks
+wins. A stopped scheduler is `degraded`, not `unhealthy`: renewals have stopped
+firing, which monitoring must see, but the instance still serves and failing
+liveness on it would take a working install out of rotation.
+
+Every response carries `X-CertMate-API-Version`; `/api/health` also reports it
+as `api_contract_version` for anything that already polls here.
+
+### Authentication and session
+
+These are the endpoints the login flow uses. They are listed because they are
+part of the public surface, not because an API client normally needs them: a
+machine client authenticates with a bearer token on every request (see
+[Authentication](#authentication)) and needs none of this.
+
+#### Log in
+
+**Endpoint**: `POST /api/auth/login` — no credential required, by necessity.
+
+Exchanges a username and password for a session cookie. Rate-limited on two
+buckets: per IP and per username.
+
+#### Log out
+
+**Endpoint**: `POST /api/auth/logout` — no credential required.
+
+Invalidates the session server-side, not only the cookie.
+
+#### Who am I
+
+**Endpoint**: `GET /api/auth/me`
+
+Returns the caller's username and role, which is how the dashboard decides
+which controls to render. This endpoint has its own answer shape and does not
+use the error envelope: it replies `{"user": null}` with `401` when there is no
+session, because a UI deciding whether to draw a login form wants that as data
+rather than as an error. During first-run setup, before any credential exists,
+it answers `200` with `{"auth_mode": "bypass"}`.
+
+#### SSO descriptor
+
+**Endpoint**: `GET /api/auth/oidc/config` — no credential required.
+
+Tells the login page whether to render an SSO button. It returns affordances
+only; no client secret and no issuer internals.
+
+#### Start the SSO flow
+
+**Endpoint**: `GET /api/auth/oidc/login` — no credential required,
+rate-limited.
+
+Begins the Authorization Code + PKCE flow. The next-URL is validated to be a
+path on this site, so it cannot be used as an open redirect.
+
+### Inventory and discovery
+
+The inventory is every certificate CertMate knows about: the ones it manages
+and the ones it has found on your hosts or in the Certificate Transparency
+logs. Discovery is what fills the second half.
+
+#### List the inventory
+
+**Endpoint**: `GET /api/inventory` — viewer
+
+Returns managed and discovered certificates with an expiry forecast. Filters:
+`?managed=true|false`, and the usual paging.
+
+#### Forget a discovered certificate
+
+**Endpoint**: `DELETE /api/inventory/<fingerprint>` — operator
+
+Removes a discovered record. Managed certificates are not deleted this way;
+this only forgets something discovery found.
+
+#### Adoption plan
+
+**Endpoint**: `GET /api/inventory/<fingerprint>/adopt` — viewer
+
+Returns what adopting that certificate would do: the create parameters
+pre-filled from what was observed on the wire, and whether CertMate believes it
+can take it over. Read-only, so it is safe to call before deciding.
+
+#### Adopt it
+
+**Endpoint**: `POST /api/inventory/<fingerprint>/adopt` — operator
+
+Issues and manages the certificate from the observed metadata, then marks the
+inventory record as adopted.
+
+#### Discovery configuration
+
+**Endpoint**: `GET /api/inventory/config` — viewer
+**Endpoint**: `POST /api/inventory/config` — admin
+
+Reads and updates discovery and CT-log monitoring settings.
+
+#### Run discovery now
+
+**Endpoint**: `POST /api/inventory/scan` — admin
+
+Runs a discovery sweep and a CT-log poll immediately and returns both
+summaries. The two are failure-isolated: one failing does not stop the other,
+and the summary says which.
+
+#### Cryptographic readiness report
+
+**Endpoint**: `GET /api/inventory/crypto-report` — viewer
+
+Classifies the key and signature algorithms across every managed and
+discovered certificate against published deprecation timelines. It is an
+inventory, not a recommendation engine: it counts what is deployed and says
+what is behind. Add `?format=csv` for the per-asset table.
+
+### Deployment
+
+#### Deploy-hook history
+
+**Endpoint**: `GET /api/deploy/history` — admin
+
+What ran, when, and whether it succeeded.
+
+#### Deploys waiting for a window
+
+**Endpoint**: `GET /api/deploy/pending` — admin
+
+Certificates that were renewed but whose deploy hook is being held until the
+configured maintenance window opens.
+
+#### Dry-run a deploy hook
+
+**Endpoint**: `POST /api/deploy/test/<hook_id>` — admin
+
+Runs the hook without a real certificate change, so a broken hook is found
+before a renewal depends on it.
+
+#### Record browser-side reachability
+
+**Endpoint**: `POST /api/certificates/deployment-status/browser` — viewer
+
+The dashboard reports what it could reach from the visitor's network and posts
+it here. This exists because the server and the browser can see different
+things: a certificate that is fine from inside the network and unreachable
+from outside it is a deployment problem the server alone cannot detect.
+
+### DNS provider accounts
+
+#### List and add accounts
+
+**Endpoint**: `GET /api/dns/accounts` — admin
+**Endpoint**: `POST /api/dns/accounts` — admin
+
+The multi-account surface: several credentials per provider, each with its own
+`account_id`, selected per certificate.
+
+`GET /api/dns-providers/accounts` and `POST /api/dns-providers/accounts` do the
+same thing, at the same role, through a different implementation. They are the
+dashboard's path, also reachable publicly. Prefer `/api/dns/accounts`: it is
+the one flask-restx generates into `/api/swagger.json`, so it is the one the
+generated clients speak.
+
+#### Update or remove an account
+
+**Endpoint**: `PUT /api/dns-providers/accounts/<account_id>` — admin
+**Endpoint**: `DELETE /api/dns-providers/accounts/<account_id>` — admin
+
+#### Provider configuration
+
+**Endpoint**: `GET /api/settings/dns-providers` — viewer
+
+Not the same as the two above: this returns which providers are configured and
+how, not the list of accounts. Credential values are masked.
+
+### Notifications and events
+
+#### Notification configuration
+
+**Endpoint**: `GET /api/notifications/config` — admin
+**Endpoint**: `POST /api/notifications/config` — admin
+
+Reads and replaces the whole notifications block. POST replaces rather than
+merges.
+
+#### Send a test message
+
+**Endpoint**: `POST /api/notifications/test` — admin
+
+Sends through one channel without persisting anything, so a channel can be
+proved before it is saved.
+
+#### Preview a webhook payload
+
+**Endpoint**: `POST /api/notifications/webhook/preview` — admin
+
+Renders what a generic webhook would send for a sample event: method, URL and
+header *names*. Credential values are never echoed back.
+
+#### Webhook delivery log
+
+**Endpoint**: `GET /api/webhooks/deliveries` — admin
+
+Recent deliveries, newest first, so a webhook that is failing silently is
+visible.
+
+#### Send the weekly digest now
+
+**Endpoint**: `POST /api/digest/send` — admin
+
+Triggers the digest immediately and returns the send result, rather than
+waiting for the schedule.
+
+#### Live event stream
+
+**Endpoint**: `GET /api/events/stream` — viewer, **session only**
+
+Server-Sent Events for certificate lifecycle events. This is the one endpoint
+on this page that a bearer token does **not** open: it requires a session
+cookie, because it is built for a browser tab. A machine client should poll the
+certificate endpoints or use a webhook.
+
+### Cache
+
+#### Cache statistics
+
+**Endpoint**: `GET /api/cache/stats` — viewer
+
+#### Clear the deployment cache
+
+**Endpoint**: `POST /api/cache/clear` — admin
+
+Audited, like any other administrative action.
+
+### Users and API keys
+
+#### Edit or remove a user
+
+**Endpoint**: `PUT /api/users/<username>` — admin
+**Endpoint**: `DELETE /api/users/<username>` — admin
+
+#### Revoke an API key
+
+**Endpoint**: `DELETE /api/keys/<key_id>` — admin
+
+Revocation takes effect immediately; the key stops authenticating on the next
+request.
+
+### Backups and storage
+
+#### Delete a backup
+
+**Endpoint**: `DELETE /api/backups/delete/<backup_type>/<filename>` — admin
+
+#### Test a CA provider
+
+**Endpoint**: `POST /api/settings/test-ca-provider` — operator
+
+Checks that the configured ACME directory answers, before an issuance depends
+on it.
+
+#### Backfill Azure Key Vault certificate objects
+
+**Endpoint**: `POST /api/storage/azure-keyvault/backfill-certificates` — admin
+
+For an instance that stored certificates as Key Vault *secrets* and later
+enabled the native *certificate* surface: this creates the certificate objects
+for domains that already exist as secrets. It does not re-issue anything.
+
+---
+
 ## Error Handling
 
 ### Error Response Format
