@@ -42,7 +42,14 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         except Exception:
             return jsonify({'error': 'Backup creation failed'}), 500
 
-    @app.route('/api/cache/stats', methods=['GET'])
+    # Only /api/web/... is registered here. The bare /api/cache/stats is
+    # owned by the flask-restx CacheStats resource, registered first in
+    # setup_api, so it always won the duplicate rule and this binding was
+    # dead. Same shadowing that cert_routes.py documents for
+    # /api/certificates/create. Leaving it bound was not harmless: the
+    # restx CacheClear writes an audit entry and this one does not, so a
+    # change in registration order would have silently stopped auditing
+    # cache clears.
     @app.route('/api/web/cache/stats', methods=['GET'])
     @auth_manager.require_role('viewer')
     def cache_stats_web():
@@ -53,7 +60,6 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         except Exception:
             return jsonify({'error': 'Failed to get cache stats'}), 500
 
-    @app.route('/api/cache/clear', methods=['POST'])
     @app.route('/api/web/cache/clear', methods=['POST'])
     @auth_manager.require_role('admin')
     def cache_clear_web():

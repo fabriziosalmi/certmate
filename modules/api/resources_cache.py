@@ -20,8 +20,8 @@ def create_cache_resources(api, models, ctx: ApiContext) -> dict:
 
     class CacheStats(Resource):
         @api.doc(security='Bearer')
-        @api.marshal_with(models['cache_stats_model'])
         @ctx.auth.require_role('viewer')
+        @api.marshal_with(models['cache_stats_model'])
         def get(self):
             """Get cache statistics"""
             try:
@@ -33,8 +33,8 @@ def create_cache_resources(api, models, ctx: ApiContext) -> dict:
 
     class CacheClear(Resource):
         @api.doc(security='Bearer')
-        @api.marshal_with(models['cache_clear_response_model'])
         @ctx.auth.require_role('admin')
+        @api.marshal_with(models['cache_clear_response_model'])
         def post(self):
             """Clear deployment cache"""
             try:

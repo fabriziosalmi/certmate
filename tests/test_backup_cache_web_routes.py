@@ -11,6 +11,12 @@ answer a fixed message. That is a deliberate choice — the detail belongs in th
 log, not in an HTTP body — but it means a broken manager and a working one
 differ only in the status code, and nothing was checking that the status code
 was right.
+
+These probe `/api/web/...` only. The handlers used to be bound to the bare
+`/api/cache/stats` and `/api/cache/clear` as well, and this file asserted both
+— but in the real application those two paths are served by the flask-restx
+CacheStats and CacheClear resources, registered first, so the bindings here
+never ran. Asserting them proved the behaviour of code no request reached.
 """
 from unittest.mock import MagicMock
 
@@ -109,7 +115,7 @@ def test_cache_stats_are_returned(wired):
     client, _file_ops, _settings, cache = wired
     cache.get_cache_stats.return_value = {'entries': 3}
 
-    for path in ('/api/cache/stats', '/api/web/cache/stats'):
+    for path in ('/api/web/cache/stats',):
         response = client.get(path)
         assert response.status_code == 200, path
         assert response.get_json()['entries'] == 3
@@ -118,7 +124,7 @@ def test_cache_stats_are_returned(wired):
 def test_clearing_the_cache_calls_through(wired):
     client, _file_ops, _settings, cache = wired
 
-    for path in ('/api/cache/clear', '/api/web/cache/clear'):
+    for path in ('/api/web/cache/clear',):
         cache.clear_cache.reset_mock()
         response = client.post(path)
         assert response.status_code == 200, path
@@ -128,8 +134,8 @@ def test_clearing_the_cache_calls_through(wired):
 @pytest.mark.parametrize('method,path,manager_attr,call', [
     ('get', '/api/web/backups', 'file_ops', 'list_backups'),
     ('post', '/api/web/backups/create', 'file_ops', 'create_unified_backup'),
-    ('get', '/api/cache/stats', 'cache', 'get_cache_stats'),
-    ('post', '/api/cache/clear', 'cache', 'clear_cache'),
+    ('get', '/api/web/cache/stats', 'cache', 'get_cache_stats'),
+    ('post', '/api/web/cache/clear', 'cache', 'clear_cache'),
 ])
 def test_a_failing_manager_is_a_500_and_not_a_stack_trace(
         wired, method, path, manager_attr, call):
