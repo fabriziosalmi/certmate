@@ -12,7 +12,7 @@
 #       bump the version, commit, push and open the release PR.
 #   scripts/release.sh publish X.Y.Z
 #       After that PR is merged to main: tag vX.Y.Z and create the GH release
-#       from the RELEASE_NOTES.md section. Run this only once CI is green.
+#       from docs/releases/vX.Y.Z.md. Run this only once CI is green.
 #
 # Gates (prepare): flake8 (syntax/undefined), bandit, unit+integration suite,
 # UI (Playwright), real-cert E2E (LE staging via Cloudflare from .env), Docker
@@ -79,12 +79,15 @@ if bad:
 PY
 }
 
-notes_section() {  # print the RELEASE_NOTES.md block for vX.Y.Z (stops at the --- rule)
-  awk -v v="## v$1 " '
-    index($0, v)==1 {f=1}
-    f && /^---$/ {exit}
-    f {print}
-  ' RELEASE_NOTES.md
+# Each release owns a file. This used to awk a section out of one 4,780-line
+# RELEASE_NOTES.md, stopping at the next `---` rule, which meant a stray
+# horizontal rule inside a section silently truncated the GitHub release body.
+# A file has ends of its own.
+NOTES_DIR="docs/releases"
+notes_file() { echo "${NOTES_DIR}/v$1.md"; }
+notes_section() {  # print the release notes for vX.Y.Z
+  local f; f="$(notes_file "$1")"
+  [ -f "$f" ] && cat "$f"
 }
 
 semver_ok() { [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; }
@@ -130,9 +133,12 @@ then re-run prepare."
   local cur; cur="$("$PY" -c 'from modules import __version__; print(__version__)')"
   version_gt "$version" "$cur" || die "version $version is not greater than current $cur"
 
-  info "RELEASE_NOTES.md must document v$version"
-  [ -n "$(notes_section "$version")" ] || die "no '## v$version' section in RELEASE_NOTES.md - write the notes first"
-  emoji_scan RELEASE_NOTES.md || die "emoji in RELEASE_NOTES.md (arrows/em-dash are fine)"
+  info "$(notes_file "$version") must exist"
+  [ -f "$(notes_file "$version")" ] || die "no $(notes_file "$version") - write the notes first"
+  [ -n "$(notes_section "$version")" ] || die "$(notes_file "$version") is empty"
+  emoji_scan "$(notes_file "$version")" || die "emoji in $(notes_file "$version") (arrows/em-dash are fine)"
+  info "the generated index is current"
+  "$PY" scripts/build_release_index.py --check || die "RELEASE_NOTES.md is stale - run scripts/build_release_index.py and commit it"
 
   info "Real-cert policy (path-aware)"
   local last_tag changed touches=0
@@ -308,9 +314,9 @@ cmd_publish() {
   [ "$head_v" = "$version" ] || die "main is at v$head_v, not v$version - is the release PR merged?"
   git log -1 --format='%s' | grep -q "v$version" || die "main HEAD is not the v$version release commit"
   git rev-parse --verify "v$version" >/dev/null 2>&1 && die "tag v$version already exists"
-  emoji_scan RELEASE_NOTES.md || die "emoji in RELEASE_NOTES.md"
+  emoji_scan "$(notes_file "$version")" || die "emoji in $(notes_file "$version")"
   local notes; notes="$(notes_section "$version")"
-  [ -n "$notes" ] || die "no RELEASE_NOTES section for v$version"
+  [ -n "$notes" ] || die "no $(notes_file "$version") for v$version"
   local title; title="$(echo "$notes" | head -1 | sed 's/^## //')"
 
   # CI status on the exact commit being released (#413). Every other gate

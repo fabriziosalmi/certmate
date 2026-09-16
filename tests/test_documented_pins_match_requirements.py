@@ -30,6 +30,8 @@ import re
 
 import pytest
 
+from tests.historical_documents import is_historical
+
 pytestmark = [pytest.mark.unit]
 
 
@@ -37,7 +39,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 _SKIP_DIRS = (".venv", "node_modules", ".git", "scratch", ".claude", "backups")
 # History is allowed to quote what it corrected.
-_SKIP_FILES = ("RELEASE_NOTES.md", "CHANGELOG.md")
+# Release notes record what was true once; see tests/historical_documents.py.
 
 
 def _requirement_pins():
@@ -57,7 +59,7 @@ def _documented_pins():
     for path in sorted(REPO_ROOT.rglob("*.md")):
         if any(part in path.parts for part in _SKIP_DIRS):
             continue
-        if path.name in _SKIP_FILES:
+        if is_historical(path):
             continue
         fenced = False
         for number, line in enumerate(

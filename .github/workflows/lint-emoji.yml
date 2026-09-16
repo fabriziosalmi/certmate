@@ -24,7 +24,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-    - name: Scan RELEASE_NOTES.md for emoji
+    - name: Scan the release notes for emoji
       run: |
         python3 - <<'PY'
         import re, sys, pathlib
@@ -34,14 +34,24 @@ jobs:
             "[\U0001F000-\U0001FAFF\U00002600-\U000026FF"
             "\U00002700-\U000027BF\U00002B50\U00002B55\U0000FE0F]"
         )
-        p = pathlib.Path("RELEASE_NOTES.md")
-        bad = []
-        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
-            if EMOJI.search(line):
-                bad.append((n, line.strip()))
-        if bad:
-            for n, line in bad:
-                print(f"::error file=RELEASE_NOTES.md,line={n}::emoji not allowed: {line}")
+        # RELEASE_NOTES.md is generated from docs/releases/, so the notes
+        # themselves are where an emoji would be written and where the error
+        # has to point. Scanning only the index would report the right file
+        # and the wrong line, in a file nobody edits.
+        files = [pathlib.Path("RELEASE_NOTES.md")]
+        files += sorted(pathlib.Path("docs/releases").glob("v*.md"))
+        if len(files) < 2:
+            print("::error::docs/releases/ has no release files; the scan would "
+                  "pass by having nothing to read")
             sys.exit(1)
-        print("RELEASE_NOTES.md: no emoji")
+        bad = []
+        for p in files:
+            for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+                if EMOJI.search(line):
+                    bad.append((p, n, line.strip()))
+        if bad:
+            for p, n, line in bad:
+                print(f"::error file={p},line={n}::emoji not allowed: {line}")
+            sys.exit(1)
+        print(f"{len(files)} release files: no emoji")
         PY

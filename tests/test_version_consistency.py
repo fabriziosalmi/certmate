@@ -122,17 +122,20 @@ def test_release_notes_document_the_current_version():
     but that check only runs on the machine cutting the release. This makes the
     same rule hold in CI, for any path that reaches main.
     """
-    text = (REPO_ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
-    # The trailing space is part of the contract, not sloppiness: notes_section()
-    # in scripts/release.sh matches with `awk -v v="## v$1 "` and index($0,v)==1,
-    # so a bare "## v2.24.1" heading with no title extracts an EMPTY section and
-    # the release dies there. Asserting the looser form would let CI go green on
-    # notes the release script cannot read.
-    assert re.search(rf"^## v{re.escape(__version__)} \S", text, re.M), (
-        f"RELEASE_NOTES.md has no '## v{__version__} <title>' section. Every "
-        f"released version needs one, and the heading must carry a title after "
-        f"the version - scripts/release.sh extracts the GitHub release body by "
-        f"matching the literal prefix '## v{__version__} '."
+    notes = REPO_ROOT / "docs" / "releases" / f"v{__version__}.md"
+    assert notes.exists(), (
+        f"docs/releases/v{__version__}.md does not exist. Every released "
+        f"version owns a file there; scripts/release.sh reads it as the GitHub "
+        f"release body, and RELEASE_NOTES.md is generated from that directory "
+        f"by scripts/build_release_index.py."
+    )
+    # The title after the version is part of the contract, not tidiness. It is
+    # what the index shows and what the release is called, and a heading with
+    # nothing after the number produces a release named after a number.
+    first = notes.read_text(encoding="utf-8").lstrip().split("\n", 1)[0]
+    assert re.match(rf"^## v{re.escape(__version__)} \S", first), (
+        f"docs/releases/v{__version__}.md must start with "
+        f"'## v{__version__} <title>'; it starts with {first!r}."
     )
 
 

@@ -172,6 +172,10 @@ MUST_BE_COVERED = [
 MUST_NOT_BE_COVERED = [
     "README.md",
     "RELEASE_NOTES.md",
+    # Where the notes actually live now; the index above is generated
+    # from this directory. A release whose only change is its own notes
+    # must not be forced through a four-minute real issuance.
+    "docs/releases/v2.32.2.md",
     "SECURITY.md",
     "docs/api.md",
     "docs/it/guide.md",
