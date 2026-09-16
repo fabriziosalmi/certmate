@@ -480,10 +480,18 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      # Listing Dependabot alerts needs this explicitly; the workflow-level
-      # read-all already grants it, but a job that reads security data should
-      # say so where someone reviewing the job can see it.
-      security-events: read
+      # A job-level permissions block REPLACES the workflow-level read-all, it
+      # does not add to it. This block used to name `security-events: read`,
+      # on the belief that it was documenting what read-all already granted.
+      # It was not documenting it, it was narrowing it: the token came out
+      # with Contents / Metadata / SecurityEvents and without
+      # VulnerabilityAlerts, which is the one the Dependabot alerts endpoint
+      # actually checks, so the API answered 403 and this gate failed every
+      # week from 2026-08-31 without ever looking at an advisory.
+      #
+      # `vulnerability-alerts` is the documented key for "Read Dependabot
+      # alerts" and takes read or none, never write.
+      vulnerability-alerts: read
       contents: read
     steps:
     - name: Checkout code
