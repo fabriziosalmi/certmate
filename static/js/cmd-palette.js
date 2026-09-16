@@ -121,9 +121,14 @@
         // renew something that may be perfectly valid.
         function describeExpiry(c) {
             if (!c.exists) { return 'Not found'; }
+            // `expired`, not a day count. days_until_expiry truncates, so a
+            // certificate with 23 hours left reports 0, and `days > 0` read
+            // that as Expired -- which is exactly what the comment above says
+            // not to do to an operator (#829).
+            if (c.expired === true) { return 'Expired'; }
             var days = c.days_until_expiry;
-            if (days === null || days === undefined) { return 'Expiry unknown'; }
-            return days > 0 ? days + ' days left' : 'Expired';
+            if (c.expired !== false || days === null || days === undefined) { return 'Expiry unknown'; }
+            return days === 0 ? 'Less than a day left' : days + ' days left';
         }
 
         // Server certificates.

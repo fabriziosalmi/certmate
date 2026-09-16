@@ -235,7 +235,11 @@
                     var days = c.days_until_expiry;
                     if (days === null || days === undefined) return;
                     var type = null;
-                    if (days <= 0) type = 'expired';
+                    // `expired` rather than `days <= 0`: a certificate with
+                    // less than a day left has days 0 and has not expired
+                    // (#829). Fall back to the day count only when the field
+                    // is absent, which is an older response, not a valid one.
+                    if (c.expired === true || (c.expired === undefined && days < 0)) type = 'expired';
                     else if (days <= 7) type = 'critical';
                     else if (days <= 30) type = 'warning';
                     if (type) out.push({ domain: c.domain, days: days, type: type, expiry_date: c.expiry_date });

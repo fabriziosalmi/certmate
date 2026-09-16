@@ -124,6 +124,41 @@ class TestCertificateDownload:
         issuer = assert_staging_issuer(bundle["cert_pem"])
         print(f"[e2e] issued by staging issuer: {issuer}")
 
+    def test_05c_the_api_knows_its_own_key_and_expiry(self, api):
+        """The two things a dashboard shows, asked of a real certificate.
+
+        Both were wrong in ways no unit test could see, because both were
+        wrong on the path only a running instance takes.
+
+        `private_key_state` came back 'unknown' for every certificate on a
+        default installation: create_container always builds a StorageManager,
+        the storage branch is taken whenever one exists, and the default
+        backend read privkey.pem off the disk and dropped it before answering.
+        A certificate with no key at all was therefore reported healthy, which
+        is what #608 was closed for, on the path #608's fix never ran (#830).
+
+        `expired` did not exist, and clients derived it from a day count that
+        truncates, so anything with under 24 hours left read as expired (#829).
+
+        This runs against a certificate Let's Encrypt staging actually issued,
+        stored by the real backend, read back through the real API.
+        """
+        info = api.get(f"/api/certificates/{TEST_DOMAIN}").json()
+
+        assert info["private_key_state"] == "present", (
+            f"the instance just issued this certificate and holds its key, "
+            f"yet reports {info['private_key_state']!r}"
+        )
+        assert info["private_key_present"] is True
+        assert info["usable"] is True
+
+        assert info["expired"] is False
+        assert info["seconds_left"] > 0
+        # A freshly issued Let's Encrypt certificate is 90 days, so the day
+        # count and the second count have to agree about roughly where it is.
+        assert info["days_left"] > 0
+        assert abs(info["seconds_left"] / 86400 - info["days_left"]) < 1.5
+
     def test_06_invalid_format_returns_400(self, api):
         r = api.get(f"/api/certificates/{TEST_DOMAIN}/download?format=tar")
         assert r.status_code == 400

@@ -96,22 +96,19 @@ METADATA_SCHEMA_VERSION = 1
 # client that pinned the release number would refuse a patch that changed
 # nothing; one that ignored it had nothing else to read.
 #
-# Bump the MINOR when the surface grows in a way a caller can ignore: a new
-# endpoint, a new field on a response, a new optional request field. Bump the
-# MAJOR when something a caller may depend on goes away or changes meaning: an
-# endpoint removed, a response field removed or retyped, a request field that
-# becomes required, a status code that changes for an existing condition.
+# What each version was is below; the rule for choosing the next one is
+# last, immediately above the constant, because that is where the person
+# changing the surface is looking. It used to sit above the history, and
+# every version added pushed it further from the line it governs until
+# tests/test_the_contract_says_when_it_changes.py stopped finding it.
 #
-# Deprecating something does NOT bump either — that is the point of deprecating
-# rather than removing. It is announced with the Deprecation and Sunset headers
-# (see modules/api/deprecation.py) and the removal is what bumps the major.
 # 2.0 because `code` was retyped: on failures raised by the HTTP layer it was
 # the status INTEGER while every application error used a string symbol, so one
 # API answered in two types under one field name and a client had to check the
 # type before it could branch. It is a string everywhere now, and the number a
 # caller may have been reading is in `status` on those same responses — a
 # one-line migration, and the version is how they learn to make it. By the rule
-# above this is a retype, and a retype is a MAJOR; picking the comfortable
+# below this is a retype, and a retype is a MAJOR; picking the comfortable
 # number instead would make the rule decorative.
 #
 # 2.1 for the bounded issuance queue: the async create/renew/reissue endpoints
@@ -121,7 +118,26 @@ METADATA_SCHEMA_VERSION = 1
 # every /api/ path goes through the rate limiter, which answers 429 — so a
 # client that handles 429 at all needs no change, and one that does not was
 # already exposed. What is new is a condition, not a type or a shape.
-API_CONTRACT_VERSION = '2.1'
+#
+# 2.2 for `expired` and `seconds_left` on every certificate-info response.
+# MINOR because nothing changed type or disappeared: `days_left` and
+# `days_until_expiry` keep their meaning, whole days, truncated. What is new
+# is that a client no longer has to derive validity from them, which it could
+# not do correctly: under 24 hours truncates to 0, so `days_until_expiry <= 0`
+# called a valid certificate expired, and CertMate's own dashboard did exactly
+# that in six places (#829). Both new fields are None on the branch where the
+# certificate could not be parsed, because unknown is not the same as fine.
+#
+# Bump the MINOR when the surface grows in a way a caller can ignore: a new
+# endpoint, a new field on a response, a new optional request field. Bump the
+# MAJOR when something a caller may depend on goes away or changes meaning: an
+# endpoint removed, a response field removed or retyped, a request field that
+# becomes required, a status code that changes for an existing condition.
+#
+# Deprecating something does NOT bump either — that is the point of deprecating
+# rather than removing. It is announced with the Deprecation and Sunset headers
+# (see modules/api/deprecation.py) and the removal is what bumps the major.
+API_CONTRACT_VERSION = '2.2'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

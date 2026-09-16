@@ -191,12 +191,32 @@ class CertificateStorageBackend(ABC):
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata for a domain"""
 
+    # Does this backend's retrieve_certificate_info answer about private keys?
+    #
+    # The caller needs to tell "there is no key" from "I did not look", because
+    # the first means a certificate that cannot serve TLS and the second means
+    # nothing at all. A backend that overrides the method below with a genuinely
+    # cheap path, one that never fetches key material, sets this False and its
+    # certificates are reported with an unknown key state rather than a missing
+    # one (#608). The default implementation does a full retrieve, so it always
+    # knows, and says so.
+    info_includes_private_key = True
+
     def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve only the certificate material needed by list/info views.
 
         Backends can override this to avoid fetching private keys or full
         bundles. The default preserves compatibility by falling back to the
         full retrieve path.
+
+        privkey.pem is carried through when the retrieve produced one. This
+        default has already paid for it: it fetches the whole bundle and used
+        to drop everything but cert.pem, so the cost was incurred and the
+        information discarded. On the local filesystem backend, which is what a
+        default installation runs, that discarding is why every certificate
+        reported private_key_state 'unknown' and a certificate with no key at
+        all was reported healthy (#830). Dropping it never saved a fetch here;
+        the backends where it does save one override this method.
         """
         result = self.retrieve_certificate(domain)
         if not result:
@@ -205,7 +225,11 @@ class CertificateStorageBackend(ABC):
         cert_pem = cert_files.get('cert.pem')
         if not cert_pem:
             return None
-        return {'cert.pem': cert_pem}, metadata
+        info = {'cert.pem': cert_pem}
+        key_pem = cert_files.get('privkey.pem')
+        if key_pem:
+            info['privkey.pem'] = key_pem
+        return info, metadata
     
     @abstractmethod
     def list_certificates(self) -> List[str]:
@@ -837,6 +861,10 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             logger.debug(f"Metadata not found in Azure Key Vault for {domain}: {e}")
 
         return {'cert.pem': cert_pem}, metadata, cert_pem_update
+
+    # Never fetches key material on this path, so it cannot tell a missing
+    # key from one it did not ask for. See the base class.
+    info_includes_private_key = False
 
     def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve only cert.pem and metadata for dashboard/listing paths."""
@@ -2012,6 +2040,18 @@ class StorageManager:
         """Retrieve lightweight certificate info using the configured backend."""
         backend = self.get_backend()
         return backend.retrieve_certificate_info(domain)
+
+    def info_includes_private_key(self) -> bool:
+        """Does retrieve_certificate_info answer about private keys?
+
+        A method rather than an attribute because the backend is resolved per
+        call: get_backend() re-reads settings, so a storage reconfiguration
+        that swaps Azure for the local filesystem has to change this answer
+        too. Defaults to False for anything that does not say, since claiming
+        to know and being wrong is how a certificate with no key gets reported
+        as healthy (#830).
+        """
+        return bool(getattr(self.get_backend(), 'info_includes_private_key', False))
     
     def list_certificates(self) -> List[str]:
         """List certificates using the configured backend"""

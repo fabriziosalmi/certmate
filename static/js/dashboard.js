@@ -161,6 +161,35 @@
         return rows.join('');
     }
 
+    // Whether a certificate has expired is the API's answer, not a day count.
+    //
+    // days_until_expiry is whole days and truncates, so a certificate with 23
+    // hours left reports 0. Reading `<= 0` as expired therefore rendered a
+    // perfectly valid certificate with a red Expired badge, which is every
+    // certificate on a default step-ca, whose default lifetime is 24 hours
+    // (#829). The API now sends `expired` and `seconds_left`.
+    //
+    // `expired` is null when the certificate could not be parsed. That is
+    // neither expired nor fine, so lifeKnown() is false there and the row
+    // falls through to the same "we do not know" handling as before, instead
+    // of `null <= 0` quietly meaning true.
+    function lifeKnown(cert) {
+        return cert.expired === true || cert.expired === false;
+    }
+
+    function hasExpired(cert) {
+        return cert.expired === true;
+    }
+
+    // Seconds where the API sends them, days elsewhere: ordering a 23-hour
+    // certificate against one that lapsed an hour ago needs finer grain than
+    // a day, and both of those are 0 or -1 in days.
+    function remaining(cert) {
+        if (typeof cert.seconds_left === 'number') return cert.seconds_left;
+        if (typeof cert.days_until_expiry === 'number') return cert.days_until_expiry * 86400;
+        return 0;
+    }
+
     function updateStats(certificates) {
         // Ensure certificates is an array
         if (!Array.isArray(certificates)) {
@@ -168,9 +197,9 @@
         }
 
         var total = certificates.length;
-        var valid = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry > 30; }).length;
-        var expiring = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30; }).length;
-        var expired = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0; }).length;
+        var valid = certificates.filter(function (cert) { return cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30; }).length;
+        var expiring = certificates.filter(function (cert) { return cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30; }).length;
+        var expired = certificates.filter(function (cert) { return cert.exists && hasExpired(cert); }).length;
 
         var statsContainer = document.getElementById('statsCards');
 
@@ -335,9 +364,9 @@
             // Status filter (free-text search now lives in the ⌘K palette)
             var matchesStatus = true;
             if (statusFilter !== 'all') {
-                var isExpired = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0;
-                var isExpiringSoon = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
-                var isValid = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry > 30;
+                var isExpired = cert.exists && hasExpired(cert);
+                var isExpiringSoon = cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30;
+                var isValid = cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30;
 
                 switch (statusFilter) {
                     case 'valid':
@@ -395,8 +424,8 @@
         var dir = currentSort.dir === 'asc' ? 1 : -1;
         return certs.slice().sort(function (a, b) {
             if (field === 'domain') return dir * a.domain.localeCompare(b.domain);
-            if (field === 'status') return dir * ((a.days_until_expiry || 0) - (b.days_until_expiry || 0));
-            if (field === 'expiry') return dir * ((a.days_until_expiry || 0) - (b.days_until_expiry || 0));
+            if (field === 'status') return dir * (remaining(a) - remaining(b));
+            if (field === 'expiry') return dir * (remaining(a) - remaining(b));
             if (field === 'provider') {
                 var pa = (a.dns_provider || '').toLowerCase();
                 var pb = (b.dns_provider || '').toLowerCase();
@@ -408,7 +437,7 @@
                 }
                 // Tiebreaker: within a provider group, order by expiry (most
                 // overdue / soonest first), independent of the chosen direction.
-                return (a.days_until_expiry || 0) - (b.days_until_expiry || 0);
+                return remaining(a) - remaining(b);
             }
             return 0;
         });
@@ -662,8 +691,8 @@
             }
 
             var daysKnown = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
-            var isExpired = daysKnown && cert.days_until_expiry <= 0;
-            var isExpiringSoon = daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
+            var isExpired = hasExpired(cert);
+            var isExpiringSoon = lifeKnown(cert) && !isExpired && cert.days_until_expiry <= 30;
             var statusClass, statusIcon, statusText, healthClass;
             if (isExpired) {
                 statusClass = 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
@@ -681,9 +710,16 @@
             // encodes the state, not just the expired/expiring alarm cases.
             var daysClass = isExpired ? 'text-danger-fg' : isExpiringSoon ? 'text-warning-fg' : 'text-success-fg';
             var absDays = Math.abs(cert.days_until_expiry);
-            var daysText = isExpired
-                ? absDays + (absDays === 1 ? ' day ago' : ' days ago')
-                : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
+            // "0 days left" was the other half of the same lie: under a day
+            // is not none, and under a day expired is not a whole day ago.
+            var daysText;
+            if (isExpired) {
+                daysText = absDays === 0 ? 'less than a day ago'
+                    : absDays + (absDays === 1 ? ' day ago' : ' days ago');
+            } else {
+                daysText = cert.days_until_expiry === 0 ? 'less than a day left'
+                    : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
+            }
 
             // Inline subtle glyph instead of a rounded blue panel — the
             // rounded panel read like an interactive control to users
@@ -940,8 +976,8 @@
                 '</div>';
         } else {
             var daysKnown2 = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
-            var isExpired = daysKnown2 && cert.days_until_expiry <= 0;
-            var isExpiringSoon = daysKnown2 && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
+            var isExpired = hasExpired(cert);
+            var isExpiringSoon = lifeKnown(cert) && !isExpired && cert.days_until_expiry <= 30;
             var expiryDate = new Date(cert.expiry_date);
             var statusClass, statusText;
             if (isExpired) { statusClass = 'text-danger-fg'; statusText = 'Expired'; }
@@ -949,9 +985,16 @@
             else { statusClass = 'text-success-fg'; statusText = 'Valid'; }
 
             var absDays = Math.abs(cert.days_until_expiry);
-            var daysText = isExpired
-                ? absDays + (absDays === 1 ? ' day ago' : ' days ago')
-                : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
+            // "0 days left" was the other half of the same lie: under a day
+            // is not none, and under a day expired is not a whole day ago.
+            var daysText;
+            if (isExpired) {
+                daysText = absDays === 0 ? 'less than a day ago'
+                    : absDays + (absDays === 1 ? ' day ago' : ' days ago');
+            } else {
+                daysText = cert.days_until_expiry === 0 ? 'less than a day left'
+                    : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
+            }
             var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             var bannerBg = isExpired ? 'bg-danger-surface' : isExpiringSoon ? 'bg-warning-surface' : 'bg-success-surface';
             var bannerIcon = isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
