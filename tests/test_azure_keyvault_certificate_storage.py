@@ -605,6 +605,55 @@ class TestCertificateExists:
         backend._client.get_secret.assert_not_called()
         importer.exists.assert_called_once_with("test.example.com")
 
+    def test_a_missing_secret_is_absent(self, vault_config):
+        """ResourceNotFoundError is the one answer that means "not there"."""
+        from modules.core.storage_backends import AzureKeyVaultBackend
+
+        class ResourceNotFoundError(Exception):
+            """Named as azure.core.exceptions names it; matched by name so the
+            offline suite needs no Azure SDK installed."""
+
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "secrets"})
+        backend._client = MagicMock()
+        backend._client.get_secret.side_effect = ResourceNotFoundError()
+
+        assert backend.certificate_exists("test.example.com") is False
+
+    def test_a_credential_failure_is_not_read_as_absent(self, vault_config):
+        """The defect this method carried a comment about for as long as it
+        had it: a transient auth or network failure reported as "the
+        certificate does not exist", which is how a present certificate gets
+        re-issued."""
+        from modules.core.storage_backends import (
+            AzureKeyVaultBackend, CertificateExistenceUnknown,
+        )
+
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "secrets"})
+        backend._client = MagicMock()
+        backend._client.get_secret.side_effect = PermissionError('403 Forbidden')
+
+        with pytest.raises(CertificateExistenceUnknown):
+            backend.certificate_exists("test.example.com")
+
+    def test_one_surface_that_cannot_answer_makes_the_whole_answer_unknown(
+            self, vault_config):
+        """Both surfaces active. "Not on the surface I could read" is not an
+        answer about the certificate."""
+        from modules.core.storage_backends import (
+            AzureKeyVaultBackend, CertificateExistenceUnknown,
+        )
+
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+        backend._client = MagicMock()
+        backend._client.get_secret.side_effect = TimeoutError('vault timed out')
+        importer = MagicMock()
+        importer.exists.return_value = False
+        backend._cert_importer = importer
+
+        with pytest.raises(CertificateExistenceUnknown):
+            backend.certificate_exists("test.example.com")
+        importer.exists.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Settings migration: legacy settings.json without storage_mode → secrets

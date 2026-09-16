@@ -620,7 +620,7 @@ jobs:
         # of zero tests. Belt and braces: assert the count too, because
         # "0 passed" is a suspiciously agreeable result.
         pytest tests/test_storage_backends_live.py -m live -v | tee /tmp/live.log
-        grep -q "10 passed" /tmp/live.log || {
+        grep -q "12 passed" /tmp/live.log || {
           echo "::error::the live storage suite did not run the expected tests"
           exit 1
         }

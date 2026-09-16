@@ -179,3 +179,54 @@ def test_content_that_cannot_round_trip_is_refused_not_mangled(backend):
     assert backend.certificate_exists(domain) is False, (
         "the store refused but wrote something anyway"
     )
+
+
+# --- "not there" and "could not tell" are different answers ----------------
+#
+# certificate_exists() answered False for any exception, so a timeout, a 403
+# or an expired credential all read as "the certificate is not there" — the
+# shape that makes a present certificate get re-issued. Two call sites in
+# storage_backends.py already refused to use it for that reason, and the Azure
+# backend carried a comment describing the defect rather than fixing it.
+#
+# These two cases are the reason this belongs in the LIVE suite rather than
+# beside the fakes. The in-memory S3 fake raises its own NoSuchKey from
+# head_object; real boto3 raises a generic ClientError carrying HTTP 404 for a
+# missing key and HTTP 403 for bad credentials. A narrowing written against the
+# fake passes there and is wrong here, which is exactly the class of mistake a
+# fake reproduces because it was written from the same understanding.
+
+def test_s3_bad_credentials_are_not_reported_as_a_missing_certificate(s3):
+    from modules.core.storage_backends import (
+        CertificateExistenceUnknown, S3CompatibleBackend,
+    )
+
+    wrong = S3CompatibleBackend({
+        "endpoint_url": S3_ENDPOINT,
+        "bucket": s3.bucket,
+        "access_key_id": "certmate",
+        "secret_access_key": "definitely-not-the-password",
+        "region": "us-east-1",
+    })
+
+    with pytest.raises(CertificateExistenceUnknown):
+        wrong.certificate_exists("live.example.com")
+
+
+def test_vault_a_bad_token_is_not_reported_as_a_missing_certificate(vault):
+    from modules.core.storage_backends import (
+        CertificateExistenceUnknown, HashiCorpVaultBackend,
+    )
+
+    # Keys copied from the `vault` fixture above, not recalled: the first
+    # attempt guessed "url"/"token" and the backend requires vault_url and
+    # vault_token, so the test failed before it could ask its question.
+    wrong = HashiCorpVaultBackend({
+        "vault_url": VAULT_ADDR,
+        "vault_token": "not-the-root-token",
+        "mount_point": "secret",
+        "engine_version": "v2",
+    })
+
+    with pytest.raises(CertificateExistenceUnknown):
+        wrong.certificate_exists("live.example.com")

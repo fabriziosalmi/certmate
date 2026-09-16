@@ -71,7 +71,7 @@ GENERAL_LIMIT = 10
 #
 # A third one was removed rather than counted: it wrapped CRLManager.update_crl(),
 # which already catches internally and returns None, so it could never fire.
-TOTAL_LIMIT = 427
+TOTAL_LIMIT = 426
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
@@ -87,11 +87,11 @@ TOTAL_LIMIT = 427
 #
 # A comment satisfies this, deliberately. The aim is that the silence be
 # chosen, and a reader can judge a stated reason; they cannot judge an absence.
-UNACCOUNTED_LIMIT = 36
+UNACCOUNTED_LIMIT = 30
 
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
-    'modules/core/storage_backends.py': 65,
+    'modules/core/storage_backends.py': 64,
     'modules/core/certificates.py': 44,
     'modules/core/file_operations.py': 16,
     'modules/web/misc_routes.py': 16,
