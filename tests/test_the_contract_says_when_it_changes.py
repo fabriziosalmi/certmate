@@ -22,11 +22,13 @@ Which is the second half. There was no deprecation mechanism at all: no
 abruptly, with a 404 as the first notice, or kept forever because removing it
 was the only alternative.
 
-`DEPRECATIONS` is empty, and that is the honest state — nothing is deprecated
-today. The mechanism ships before it is needed on purpose: the alternative is
-inventing it under time pressure in the release where something has to go,
-which is the release where it gets skipped. These tests exercise it against an
-example entry so it stays tested while nothing uses it.
+The mechanism shipped before it was needed, with `DEPRECATIONS` empty, because
+the alternative is inventing it under time pressure in the release where
+something has to go, which is the release where it gets skipped. It is not
+empty any more: `/api/dns-providers/accounts`, a second public address for the
+operation `/api/dns/accounts` already serves, is deprecated since 2026-09-18.
+Most of these tests still drive an example entry rather than production data,
+so the shape stays tested independently of what happens to be deprecated.
 """
 import datetime
 import pathlib
@@ -102,10 +104,28 @@ def test_health_reports_it_as_a_field(app_client):
 
 # --- deprecation ---------------------------------------------------------
 
-def test_nothing_is_deprecated_today():
-    """The honest state, asserted so that adding an entry is a deliberate act
-    that shows up in a diff next to this line."""
-    assert DEPRECATIONS == {}
+def test_every_deprecation_is_complete_and_coherent():
+    """This used to assert that DEPRECATIONS was empty, so that adding an entry
+    would be a deliberate act showing up in a diff next to that line. It did
+    its job: the first entry arrived on 2026-09-18, for
+    /api/dns-providers/accounts, and the assertion is what made the change
+    visible here.
+
+    What replaces it is the rule that matters once entries exist. An
+    announcement without a replacement tells a caller their endpoint is going
+    away and nothing else, and a sunset before the deprecation date is a
+    typo that deprecation_headers() will emit without complaint, because it
+    refuses to turn a bad date into a 500.
+    """
+    for name, entry in DEPRECATIONS.items():
+        for field in ('since', 'sunset', 'link', 'note'):
+            assert entry.get(field), f'{name} has no {field}'
+        since = datetime.datetime.strptime(entry['since'], '%Y-%m-%d')
+        sunset = datetime.datetime.strptime(entry['sunset'], '%Y-%m-%d')
+        assert sunset > since, (
+            f'{name}: the sunset ({entry["sunset"]}) is not after the '
+            f'deprecation date ({entry["since"]})'
+        )
 
 
 def test_the_headers_follow_the_specs():

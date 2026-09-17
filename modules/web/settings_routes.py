@@ -300,7 +300,13 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         return jsonify({'error': msg}), 400
 
     @app.route('/api/dns/<string:provider>/accounts', methods=['GET', 'POST'])
-    @app.route('/api/dns-providers/accounts', methods=['GET', 'POST'])
+    # Its own endpoint name, not a shared one. This function serves three
+    # paths, and DEPRECATIONS is keyed by `request.endpoint`: without a
+    # separate name, announcing that this duplicate is going away would put
+    # Deprecation and Sunset headers on /api/web/settings/accounts too, which
+    # is the dashboard's own call and is not going anywhere.
+    @app.route('/api/dns-providers/accounts', methods=['GET', 'POST'],
+               endpoint='api_dns_accounts_deprecated')
     @app.route('/api/web/settings/accounts', methods=['GET', 'POST'])
     @auth_manager.require_role('admin')
     def api_dns_accounts(provider=None):
@@ -368,8 +374,11 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/dns/<string:provider>/accounts/<string:account_id>',
                methods=['DELETE', 'PUT'])
+    # Same reasoning as the listing above: a name of its own, so the
+    # announcement reaches this path and not the dashboard's.
     @app.route('/api/dns-providers/accounts/<string:account_id>',
-               methods=['DELETE', 'PUT'])
+               methods=['DELETE', 'PUT'],
+               endpoint='api_dns_account_detail_deprecated')
     @app.route('/api/web/settings/accounts/<string:account_id>',
                methods=['DELETE', 'PUT'])
     @auth_manager.require_role('admin')
