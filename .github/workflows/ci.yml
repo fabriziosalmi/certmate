@@ -536,6 +536,47 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python scripts/check_advisories.py ${{ github.repository }}
 
+  # The wiki is the fourth place this project documents its API, and the only
+  # one no test could reach: it is a separate git repository, so
+  # test_advertised_endpoints_exist.py and test_the_api_surface_is_documented.py
+  # cannot see it.
+  #
+  # Left alone it rots, and it did. Twenty-seven days and seven releases after
+  # its last edit, DNS-Providers.md carried six copy-pasteable curl commands
+  # that all answered 404, against a prefix that does not exist and a
+  # `default-account` endpoint that never has. This repository has a test
+  # asserting that `default-account` has never existed; it could not see the
+  # page documenting it.
+  #
+  # Weekly rather than a merge gate for a structural reason, not taste: editing
+  # the wiki does not run this workflow, so a merge gate would only ever check
+  # the wiki at the moments it had not changed. Same shape as `advisories`.
+  wiki-endpoints:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # The wiki has no CI of its own, so it is fetched here. A clone failure
+    # must fail the job rather than skip it: a check that reports success on a
+    # wiki it never read is the failure this job exists to prevent.
+    - name: Fetch the wiki
+      run: git clone --depth 1 https://github.com/${{ github.repository }}.wiki.git /tmp/wiki
+
+    - name: Every endpoint the wiki states is one the application serves
+      run: python scripts/check_wiki_endpoints.py /tmp/wiki
+
   # Storage backends against real servers rather than a faithful fake.
   #
   # The in-memory S3 fake is a good test and cannot disagree with me: it
