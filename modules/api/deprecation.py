@@ -16,10 +16,16 @@ client warn instead of fail, which is what makes removal possible later:
   shortcut.
 * `Link: <...>; rel="deprecation"` — where to read what to do instead.
 
-Nothing is deprecated today, and that is the honest state: this module is the
-mechanism, and `DEPRECATIONS` is empty. Shipping the mechanism before it is
-needed is the point — the alternative is inventing it under time pressure, in
-the release where something has to go, which is when it gets skipped.
+This module shipped with `DEPRECATIONS` empty, before anything needed it, so
+that the shape existed before the release where something had to go. It is not
+empty any more: `/api/dns-providers/accounts` is a second address for the same
+operation as `/api/dns/accounts`, at the same role, through a different
+implementation, and two public addresses that can drift apart is one too many.
+
+Deprecating does not bump the contract version. That is the point of
+deprecating rather than removing, and the rule is written beside
+API_CONTRACT_VERSION in modules/core/constants.py: the removal is what bumps
+the major.
 
 `tests/test_the_contract_says_when_it_changes.py` checks the shape against an
 example entry rather than against production data, so the mechanism stays
@@ -40,7 +46,31 @@ logger = logging.getLogger(__name__)
 #       'link': 'https://.../docs/api.md#certificates',
 #       'note': 'Use GET /api/v2/certificates.',
 #   }
-DEPRECATIONS = {}
+DEPRECATIONS = {
+    # /api/dns-providers/accounts duplicates /api/dns/accounts: same role, same
+    # behaviour, a different implementation, both public. Nothing in the
+    # product calls it - not the dashboard, which uses /api/dns/accounts, not
+    # the SDK, which uses the same, not the templates - so the cost of it is
+    # not that somebody depends on it, but that two implementations of one
+    # operation can answer differently and nobody would know which one a
+    # caller reached.
+    #
+    # Keyed by these names and not by `api_dns_accounts`, which the dashboard's
+    # own /api/web/settings/accounts shares: see the note above the routes in
+    # modules/web/settings_routes.py.
+    'api_dns_accounts_deprecated': {
+        'since': '2026-09-18',
+        'sunset': '2027-03-18',
+        'link': 'https://github.com/fabriziosalmi/certmate/blob/main/docs/api.md#dns-provider-accounts',
+        'note': 'Use GET/POST /api/dns/accounts, or /api/dns/<provider>/accounts.',
+    },
+    'api_dns_account_detail_deprecated': {
+        'since': '2026-09-18',
+        'sunset': '2027-03-18',
+        'link': 'https://github.com/fabriziosalmi/certmate/blob/main/docs/api.md#dns-provider-accounts',
+        'note': 'Use PUT/DELETE /api/dns/<provider>/accounts/<account_id>.',
+    },
+}
 
 
 def _http_date(day):

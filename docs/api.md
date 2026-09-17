@@ -957,15 +957,25 @@ The multi-account surface: several credentials per provider, each with its own
 `account_id`, selected per certificate.
 
 `GET /api/dns-providers/accounts` and `POST /api/dns-providers/accounts` do the
-same thing, at the same role, through a different implementation. They are the
-dashboard's path, also reachable publicly. Prefer `/api/dns/accounts`: it is
-the one flask-restx generates into `/api/swagger.json`, so it is the one the
-generated clients speak.
+same thing, at the same role, through a different implementation, and are
+**deprecated since 2026-09-18**. They answer with `Deprecation`, `Sunset` and a
+`Link` header pointing here, and the sunset date is **2027-03-18**: that is the
+earliest they may stop answering, not the date they will.
+
+Use `/api/dns/accounts`, or `/api/dns/<provider>/accounts`. That is the pair
+flask-restx generates into `/api/swagger.json`, so it is what a generated
+client speaks.
+
+Deprecating does not move the contract version, which is the point of
+deprecating rather than removing; the removal is what would bump the major.
 
 #### Update or remove an account
 
-**Endpoint**: `PUT /api/dns-providers/accounts/<account_id>` — admin
-**Endpoint**: `DELETE /api/dns-providers/accounts/<account_id>` — admin
+**Endpoint**: `PUT /api/dns/<provider>/accounts/<account_id>` — admin
+**Endpoint**: `DELETE /api/dns/<provider>/accounts/<account_id>` — admin
+
+The `/api/dns-providers/accounts/<account_id>` forms of these are deprecated on
+the same terms as the listing above.
 
 #### Provider configuration
 
