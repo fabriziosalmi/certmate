@@ -764,279 +764,29 @@ Include the Authorization header in all API requests:
 Authorization: Bearer your_api_token_here
 ```
 
-### Core Endpoints
+### Endpoints
 
-#### Health & Status
+The full reference is **[docs/api.md](docs/api.md)**: every endpoint, the role
+it needs, the shape it answers with, and the error format.
+
+This section used to be a second catalogue, and the two had drifted: of the
+endpoints each named, six were in both. A reader had no way to tell which was
+current, and the reference was missing surfaces this file carried, which is
+where the storage backend, backup, metrics and zombie-scan sections in
+docs/api.md came from.
+
+A worked example, so the shape is here even if the list is not:
+
 ```bash
-# Health check
-GET /health
+# Every request carries the token.
+curl -H "Authorization: Bearer $CERTMATE_TOKEN" \
+  https://certmate.example.com/api/certificates
 
-# API documentation
-GET /docs/ # Swagger UI
-GET /redoc/ # ReDoc documentation
-
-# Prometheus/OpenMetrics monitoring
-GET /metrics # Prometheus-compatible metrics
-GET /api/metrics # JSON metrics summary
-```
-
-#### Settings Management
-```bash
-# Get current settings
-GET /api/settings
-Authorization: Bearer your_token_here
-
-# Update settings
-POST /api/settings
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "dns_provider": "cloudflare",
- "dns_providers": {
- "cloudflare": {
- "api_token": "your_cloudflare_token"
- }
- },
- "domains": [{
- "domain": "example.com",
- "dns_provider": "cloudflare"
- }
- ],
- "email": "admin@example.com",
- "auto_renew": true
-}
-```
-
-#### Certificate Management
-```bash
-# List all certificates
-GET /api/certificates
-Authorization: Bearer your_token_here
-
-# Create new certificate
-POST /api/certificates/create
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "domain": "example.com",
- "dns_provider": "cloudflare", # Optional, uses default from settings
- "account_id": "production" # Optional, specify which account to use
-}
-
-# Create SAN certificate (multiple domains)
-POST /api/certificates/create
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "domain": "example.com",
- "san_domains": ["www.example.com", "mail.example.com", "api.example.com"],
- "dns_provider": "cloudflare"
-}
-# This creates a single certificate covering all specified domains.
-# The primary domain is "example.com" and san_domains are additional 
-# Subject Alternative Names included in the certificate.
-# Note: All domains must use the same DNS provider for validation.
-
-# Create certificate with specific account
-POST /api/certificates/create
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "domain": "staging.example.com",
- "dns_provider": "cloudflare",
- "account_id": "staging"
-}
-
-# Create certificate with DNS alias via CNAME delegation
-POST /api/certificates/create
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "domain": "example.com",
- "dns_provider": "cloudflare",
- "domain_alias": "validation.example.org"
-}
-# DNS alias validation works via CNAME delegation. Before issuing, create
-# a CNAME record in your DNS zone:
-#
-#   _acme-challenge.example.com  CNAME  _acme-challenge.validation.example.org
-#
-# CertMate creates the TXT record on the provider-managed alias name, and
-# Let's Encrypt follows the CNAME chain during the DNS-01 challenge.
-# Alias mode is supported for CertMate's first-class DNS providers; generic
-# fallback providers are rejected until a dedicated adapter exists.
-# This is useful when:
-# - The primary domain's DNS does not support an API
-# - You want to centralize ACME validations on a dedicated domain
-# - There are DNS restrictions on the primary zone
-
-# Renew certificate
-POST /api/certificates/example.com/renew
-Authorization: Bearer your_token_here
-
-# Download certificate bundle as JSON
-GET /api/certificates/example.com/download?format=json
-Authorization: Bearer your_token_here
-
-# Check certificate deployment status
-GET /api/certificates/example.com/deployment-status
-Authorization: Bearer your_token_here
-
-# Scan filesystem for orphan ("zombie") certificates no longer tracked by Certbot
-POST /api/certificates/zombies/scan
-Authorization: Bearer your_token_here
-```
-
-#### Multi-Account Management
-```bash
-# Add multiple accounts for a provider
-POST /api/dns/cloudflare/accounts
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "account_id": "production",
- "config": {
- "name": "Production Environment",
- "description": "Main production Cloudflare account",
- "api_token": "your_production_token_here"
- }
-}
-
-# List all accounts for a provider
-GET /api/dns/cloudflare/accounts
-Authorization: Bearer your_token_here
-
-# Set default account for a provider — there is no dedicated endpoint:
-# "set_as_default" travels with the account payload.
-PUT /api/dns/cloudflare/accounts/production
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "set_as_default": true
-}
-
-# Update account configuration
-PUT /api/dns/cloudflare/accounts/staging
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "config": {
- "name": "Staging & Testing",
- "description": "Updated staging environment",
- "api_token": "new_staging_token_here"
- }
-}
-```
-
-#### Storage Backend Management
-```bash
-# Get current storage backend information
-GET /api/storage/info
-Authorization: Bearer your_token_here
-
-# Update storage backend configuration
-POST /api/storage/config
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "backend": "azure_keyvault",
- "azure_keyvault": {
- "vault_url": "https://yourvault.vault.azure.net/",
- "tenant_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
- "client_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
- "client_secret": "your_client_secret"
- }
-}
-
-# Test storage backend connectivity
-POST /api/storage/test
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "backend": "aws_secrets_manager",
- "config": {
- "region": "us-east-1",
- "access_key_id": "AKIAIOSFODNN7EXAMPLE",
- "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
- }
-}
-
-# Migrate certificates between storage backends
-POST /api/storage/migrate
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "source_backend": "local_filesystem",
- "target_backend": "azure_keyvault",
- "source_config": {
- "cert_dir": "certificates"
- },
- "target_config": {
- "vault_url": "https://yourvault.vault.azure.net/",
- "tenant_id": "...",
- "client_id": "...",
- "client_secret": "..."
- }
-}
-```
-
-#### Backup Management
-```bash
-# List all available backups.
-# Each entry carries `can_restore` and, when false, `restore_blocked_reason`:
-# an archive with masked credentials, or one this instance cannot open, is
-# not a restore point and is not offered as one.
-GET /api/backups
-Authorization: Bearer your_token_here
-
-# Create new backup
-POST /api/backups/create
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "reason": "manual_backup"
-}
-
-# Download specific backup
-GET /api/backups/download/unified/{filename}
-Authorization: Bearer your_token_here
-
-# Example:
-GET /api/backups/download/unified/unified_backup_20241225_120000.zip
-
-# Upload a backup kept off this machine (admin).
-# This is how you recover after losing the volume: restore only ever reads
-# files already present on disk. Uploading STORES the archive under a name
-# CertMate generates — the filename you send is discarded — and does not
-# restore it. Restore it afterwards with the call below, once you have
-# checked the listing agrees it can restore.
-POST /api/backups/upload
-Authorization: Bearer your_token_here
-Content-Type: multipart/form-data
-
-file=@disaster-recovery-backup.zip.enc
-
-# Restore from backup
-POST /api/backups/restore/unified
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
- "filename": "unified_backup_20241225_120000.zip",
- "create_backup_before_restore": true
-}
+# Issue one. The response is the certificate record, not a job id.
+curl -X POST -H "Authorization: Bearer $CERTMATE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "api.example.com", "dns_provider": "cloudflare"}' \
+  https://certmate.example.com/api/certificates/create
 ```
 
 ### Automation-Friendly Download URL
@@ -1132,62 +882,13 @@ The same JSON response shape can be consumed directly by Ansible's `uri` module 
 
 #### Infrastructure as Code Examples
 
-**Terraform Provider Example:**
-```hcl
-# Configure the CertMate provider
-terraform {
- required_providers {
- certmate = {
- source = "local/certmate"
- version = "~> 1.0"
- }
- }
-}
+**Terraform:** there is no CertMate Terraform provider. This README used to
+show one, with `source = "local/certmate"` and `certmate_certificate`
+resources; neither the registry nor any repository has it, so the example
+could not be run. Drive the REST API from Terraform with the `http` provider
+or a `local-exec`, or use the Ansible and shell examples below, which are
+against the real API.
 
-provider "certmate" {
- endpoint = "https://certmate.company.com"
- token = var.certmate_token
-}
-
-# Create certificates for multiple domains with different accounts
-resource "certmate_certificate" "api" {
- domain = "api.company.com"
- dns_provider = "cloudflare"
- account_id = "production"
-}
-
-resource "certmate_certificate" "web" {
- domain = "web.company.com" 
- dns_provider = "route53"
- account_id = "main-aws"
-}
-
-resource "certmate_certificate" "staging" {
- domain = "staging.company.com"
- dns_provider = "cloudflare"
- account_id = "staging"
-}
-
-# Download certificates to local files
-data "certmate_certificate_download" "api" {
- domain = certmate_certificate.api.domain
-}
-
-# Use in nginx configuration
-resource "kubernetes_secret" "api_tls" {
- metadata {
- name = "api-tls"
- namespace = "default"
- }
- 
- type = "kubernetes.io/tls"
- 
- data = {
- "tls.crt" = data.certmate_certificate_download.api.fullchain_pem
- "tls.key" = data.certmate_certificate_download.api.private_key_pem
- }
-}
-```
 **Bash Automation Script:**
 ```bash
 #!/bin/bash
