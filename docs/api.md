@@ -1080,6 +1080,103 @@ for domains that already exist as secrets. It does not re-issue anything.
 
 ---
 
+### Storage backends
+
+Where certificates live. The default is the local filesystem; the remote
+backends are Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical
+and any S3-compatible object store.
+
+#### Read the current backend
+
+**Endpoint**: `GET /api/storage/info` — viewer
+
+Reports which backend is configured and, if a remote one failed to initialise,
+that CertMate fell back to local disk. `/api/health` carries the same fact as a
+`storage` check, which is the one to watch: an instance that believes it is
+writing to Azure and is writing to an ephemeral container filesystem looks
+perfectly healthy from everywhere else.
+
+#### Change the backend
+
+**Endpoint**: `POST /api/storage/config` — admin
+
+#### Test a backend before committing to it
+
+**Endpoint**: `POST /api/storage/test` — operator
+
+Opens a connection with the credentials given and reports whether they work,
+without storing them. Worth doing before `POST /api/storage/config`: a backend
+that cannot authenticate is a backend that silently falls back.
+
+#### Migrate between backends
+
+**Endpoint**: `POST /api/storage/migrate` — admin
+
+Copies certificates from the current backend to another. Read
+`docs/storage-backends.md` before running it.
+
+#### Backfill Azure Key Vault certificate objects
+
+**Endpoint**: `POST /api/storage/azure-keyvault/backfill-certificates` — admin
+
+For an instance that stored certificates as Key Vault *secrets* and later
+enabled the native *certificate* surface: creates the certificate objects for
+domains that already exist as secrets. It does not re-issue anything.
+
+### Backups
+
+#### List backups
+
+**Endpoint**: `GET /api/backups` — viewer
+
+#### Create one
+
+**Endpoint**: `POST /api/backups/create` — admin
+
+`include_secrets` decides whether the archive can restore this instance. The
+default is a share-safe archive: private keys, the ACME account key and the
+private CA key are left out, so it is a configuration snapshot rather than a
+restorable backup. Set `CERTMATE_BACKUP_PASSPHRASE` and ask for secrets to get
+one that can actually restore, encrypted at rest.
+
+#### Download, restore, delete
+
+**Endpoint**: `GET /api/backups/download/<backup_type>/<filename>` — admin
+**Endpoint**: `POST /api/backups/restore/<backup_type>` — admin
+**Endpoint**: `DELETE /api/backups/delete/<backup_type>/<filename>` — admin
+
+Only unified backups can be restored.
+
+#### Upload one taken elsewhere
+
+**Endpoint**: `POST /api/backups/upload` — admin
+
+For moving an instance to a new host: upload the archive here, then restore it.
+
+### Monitoring
+
+#### Metrics summary
+
+**Endpoint**: `GET /api/metrics` — viewer
+
+A JSON summary of what the Prometheus exporter exposes. It answers `503` when
+the Prometheus client library is not installed.
+
+The scrape target itself is the separate `/metrics` route, and it is **not**
+public: it carries the same viewer requirement, because its series enumerate
+every managed domain.
+
+#### Scan for zombie domains
+
+**Endpoint**: `POST /api/certificates/zombies/scan` — admin
+
+Looks for managed domains whose DNS no longer resolves to anything you control.
+A certificate for a name you have let go is a certificate that will keep being
+renewed and can no longer be validated, and the renewal failures are the first
+anyone usually hears of it.
+
+---
+
 ## Error Handling
 
 ### Error Response Format
