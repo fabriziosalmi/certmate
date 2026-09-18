@@ -100,6 +100,31 @@ def verify(secret, header, body, max_age=300):
     return hmac.compare_digest(expected, parts['v1'])
 ```
 
+## A worked example: deploying through an automation runner
+
+A webhook is worth more than it looks when the receiver on the other end can
+act. @tuxpowered built and
+[shared a starter n8n workflow](https://share-n8n.com/shared/eFFBfVRU8uF5) that
+takes the deploy-hook payload and pushes the certificate onward, and it is the
+clearest answer anyone has given to "how do I get certificates onto hosts
+without CertMate holding credentials for all of them" (#396).
+
+The shape is worth understanding even if you use something other than n8n:
+
+1. CertMate fires the webhook. It knows the runner's URL and nothing else.
+2. The runner fetches the credentials it needs from a secrets store of its own.
+   In that example it is OpenBao, so the only secret CertMate's receiver holds
+   is the one for reaching the store.
+3. The runner deploys, by SSH or an API or whatever the target speaks.
+4. Optionally a second listener lets a host **ask** for its own certificate,
+   authenticated with a per-domain key held in the same store.
+
+The property that makes this worth the hop: **CertMate never holds a credential
+for a host it deploys to**. A certificate manager that can reach every server
+is a certificate manager worth attacking, and this inverts it. It is also why
+running the hooks on CertMate itself, which is what deploy hooks do, is the
+simpler option and not always the right one.
+
 ## Outbound safety
 
 The URL must be `http://` or `https://`. A host that resolves to a loopback,
