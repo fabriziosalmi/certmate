@@ -147,6 +147,12 @@ METADATA_SCHEMA_VERSION = 1
 # the order instead of after the CA refuses it. A new endpoint is a MINOR. It
 # advises and never gates — the create endpoint does not consult it.
 #
+# 2.6 for GET /api/inventory/domains: when each tracked domain's registration
+# expires, from RDAP or WHOIS, and a `domain_registration` section in the
+# inventory config and scan responses. A new endpoint and new response fields,
+# so a MINOR. `not_published` is a status, not a missing field: some
+# registries (.de, .eu) do not publish expiry, and that is the answer.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -156,7 +162,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.5'
+API_CONTRACT_VERSION = '2.6'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

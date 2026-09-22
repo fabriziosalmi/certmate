@@ -1,0 +1,19 @@
+% IANA WHOIS server
+% for more information on IANA, visit http://www.iana.org
+% This query returned 1 object
+
+domain:       IT
+
+organisation: IIT - CNR
+
+organisation: IIT - CNR
+
+organisation: IIT - CNR
+
+whois:        whois.nic.it
+
+status:       ACTIVE
+
+created:      1987-12-23
+changed:      2025-12-17
+source:       IANA

@@ -17,8 +17,9 @@ This guide covers:
 6. [The Inventory dashboard](#the-inventory-dashboard)
 7. [Adopting a discovered certificate](#adopting-a-discovered-certificate)
 8. [Cryptographic readiness report](#cryptographic-readiness-report)
-9. [API reference](#api-reference)
-10. [Security model](#security-model)
+9. [Domain registration expiry](#domain-registration-expiry)
+10. [API reference](#api-reference)
+11. [Security model](#security-model)
 
 Everything here is **opt-in**: an upgrade never starts probing external hosts or
 polling CT logs until you enable it.
@@ -248,6 +249,74 @@ and "Print / Save as PDF".
 
 ---
 
+## Domain registration expiry
+
+A certificate that renews on time is worth nothing on a domain whose
+registration lapsed: the name stops resolving, and every certificate under it
+goes with it. The inventory therefore also tracks when each **domain** expires.
+
+It follows every *registrable* domain CertMate knows about, each asked once
+however many hosts sit under it: `www.shop.example.co.uk` and `api.example.co.uk`
+are both `example.co.uk`. The set is:
+
+- every managed domain and its SANs;
+- what discovery found (probed endpoints, CT-log entries), unless
+  `include_inventory` is off;
+- any `extra_domains` you list.
+
+Names are reduced with the Public Suffix List bundled in `tldextract`, read
+offline. Where the answer comes from:
+
+1. **RDAP**, at the server the [IANA bootstrap](https://data.iana.org/rdap/dns.json)
+   lists for the TLD. Every gTLD has one, and so do many ccTLDs (`.uk`, `.fr`,
+   `.nl`, `.pl`, ...).
+2. **WHOIS**, only for a TLD with no RDAP service, at the server IANA names
+   for it. This matters more than it sounds: `.it`, `.eu`, `.de`, `.es`,
+   `.ch`, `.at`, `.io` and `.co` have no RDAP in the bootstrap.
+
+| `status` | Meaning |
+|---|---|
+| `ok` | registered, and the registry published the expiry date |
+| `not_published` | registered, but the registry does not publish an expiry date. DENIC (`.de`) and EURid (`.eu`) are the common cases. |
+| `not_registered` | the registry says the name does not exist |
+| `unavailable` | no answer this time (timeout, rate limit, unreadable reply). `error` says which. A known expiry is kept rather than erased. |
+
+A date is shown only when a registry published it. `not_published` is an
+answer, not a gap: it is never replaced by an estimate. A WHOIS reply whose
+expiry field is in a form CertMate does not recognise is `unavailable`, not a
+guess.
+
+```jsonc
+{
+  "domain_registration": {
+    "enabled": true,              // opt-in, like the rest of discovery
+    "include_inventory": true,    // also follow domains discovery found
+    "extra_domains": ["brand.it"]
+  }
+}
+```
+
+**When it runs.** Daily at 06:00, after discovery and the CT poll, and on
+**Scan now**. Registries rate-limit, and some answer a burst with a temporary
+ban, so a sweep:
+
+- asks at most 100 registries, one second apart;
+- asks a domain again only when its answer is due: daily within 60 days of
+  expiry, weekly otherwise, and after 6 hours when the last lookup failed.
+
+A large estate is therefore covered over a few days, not in one burst.
+
+**Network.** RDAP goes over HTTPS and honours `HTTPS_PROXY`. WHOIS is a raw
+TCP connection to port 43. It cannot go through an HTTP proxy, and it is
+refused for private and loopback addresses by the same SSRF guard as the probe.
+On a host that reaches the internet only through a proxy, the TLDs without
+RDAP come back `unavailable`.
+
+The **Domain registrations** panel on `/inventory` lists them, soonest expiry
+first, with the registrar and whether the answer came over RDAP or WHOIS.
+
+---
+
 ## API reference
 
 All endpoints require at least a `viewer` credential; writes require `admin`
@@ -261,6 +330,7 @@ subject/SAN falls within their `allowed_domains`.
 | POST | `/api/inventory/config` | admin | Update discovery / CT-log config |
 | POST | `/api/inventory/scan` | admin | Run a discovery sweep + CT poll now |
 | GET | `/api/inventory/crypto-report` | viewer | Readiness report (`?format=csv`) |
+| GET | `/api/inventory/domains` | viewer | Domain registration expiry, soonest first (since API contract 2.6) |
 | GET | `/api/inventory/<fingerprint>/adopt` | viewer | Adoption plan (feasibility + pre-fill) |
 | POST | `/api/inventory/<fingerprint>/adopt` | operator | Adopt & manage the certificate |
 | DELETE | `/api/inventory/<fingerprint>` | operator | Forget a record (the certificate itself is untouched) |

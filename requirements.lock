@@ -3,8 +3,8 @@
 #     scripts/regenerate_lockfiles.sh
 #
 # The fully resolved install set for requirements.txt, produced by pip's own resolver
-# inside the base image this project publishes from. 43 of these are
-# pinned by requirements.txt; the other 75 are transitive and were chosen by
+# inside the base image this project publishes from. 44 of these are
+# pinned by requirements.txt; the other 74 are transitive and were chosen by
 # the resolver, which is exactly why they are written down here.
 #
 # The two published architectures resolve this set identically, which is what

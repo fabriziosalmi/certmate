@@ -23,6 +23,11 @@ Schema (versioned via ``PRAGMA user_version``):
 * ``endpoints`` — every ``(host, port)`` a fingerprint was observed at, each
   with its own ``first_seen`` / ``last_seen`` (cascade-deleted with the cert).
 
+v3 adds ``domain_registrations``: one row per registrable domain CertMate
+tracks, with when its registration expires and where that answer came from
+(see ``domain_registration.py``). It is keyed by domain, not by certificate,
+because one registration covers every certificate issued under it.
+
 v2 adds the certificate's last revocation answer (``revocation_*`` columns).
 Unlike the rest of the row it is mutable — a certificate can be revoked after
 it was first seen — so it is rewritten on every checked observation, with one
@@ -45,7 +50,7 @@ from .utils import utc_now_iso
 logger = logging.getLogger(__name__)
 
 # Bump when the schema changes and add a migration branch in ``_migrate``.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Recognised discovery sources. ``issued`` = CertMate minted it; ``probed`` =
 # seen live via the TLS probe; ``ct-log`` = discovered in Certificate
@@ -87,6 +92,21 @@ CREATE TABLE IF NOT EXISTS endpoints (
 CREATE INDEX IF NOT EXISTS idx_endpoints_hostport ON endpoints(host, port);
 CREATE INDEX IF NOT EXISTS idx_certificates_managed ON certificates(managed);
 CREATE INDEX IF NOT EXISTS idx_certificates_not_after ON certificates(not_after);
+"""
+
+# v2 -> v3: registration expiry per registrable domain.
+_REGISTRATION_SCHEMA = """
+CREATE TABLE IF NOT EXISTS domain_registrations (
+    domain           TEXT PRIMARY KEY,   -- registrable domain, lower case
+    status           TEXT NOT NULL,      -- ok / not_published / not_registered / unavailable
+    expires_at       TEXT,
+    registrar        TEXT,
+    registry_status  TEXT,               -- JSON array
+    source           TEXT,               -- rdap / whois
+    error            TEXT,
+    checked_at       TEXT NOT NULL,
+    first_seen       TEXT NOT NULL
+);
 """
 
 # v1 -> v2: the last revocation answer for each certificate.
@@ -167,6 +187,8 @@ class CertInventory:
                     if name not in existing:
                         # Both parts are module constants above, never input.
                         conn.execute(f'ALTER TABLE certificates ADD COLUMN {name} {sql_type}')
+            if version < 3:
+                conn.executescript(_REGISTRATION_SCHEMA)
             conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
             logger.info(
                 "Certificate inventory schema initialised at %s (v%d)",
@@ -464,6 +486,85 @@ class CertInventory:
             )
             return cur.rowcount > 0
 
+    # --- domain registrations (v3) ------------------------------------------ #
+
+    def record_registration(self, result):
+        """Store a :meth:`RegistrationClient.lookup` result, keyed by domain.
+
+        An ``unavailable`` answer does not erase a known expiry: a registry
+        that timed out today has not changed the date it published yesterday,
+        so the previous expiry and registrar are kept and only the status,
+        error and ``checked_at`` move. Returns the domain.
+        """
+        domain = (result.get('domain') or '').strip().lower()
+        if not domain:
+            raise ValueError('domain is required')
+        now = result.get('checked_at') or utc_now_iso()
+        status_json = json.dumps(list(result.get('registry_status') or []))
+        keep_known = result.get('status') == 'unavailable'
+        with self._write_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO domain_registrations (
+                    domain, status, expires_at, registrar, registry_status,
+                    source, error, checked_at, first_seen
+                ) VALUES (?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(domain) DO UPDATE SET
+                    status = excluded.status,
+                    error = excluded.error,
+                    checked_at = excluded.checked_at,
+                    expires_at = CASE WHEN ? THEN domain_registrations.expires_at
+                                      ELSE excluded.expires_at END,
+                    registrar = CASE WHEN ? THEN domain_registrations.registrar
+                                     ELSE excluded.registrar END,
+                    registry_status = CASE WHEN ? THEN domain_registrations.registry_status
+                                           ELSE excluded.registry_status END,
+                    source = CASE WHEN ? THEN domain_registrations.source
+                                  ELSE excluded.source END
+                """,
+                (
+                    domain, result.get('status'), result.get('expires_at'),
+                    result.get('registrar'), status_json, result.get('source'),
+                    result.get('error'), now, now,
+                    keep_known, keep_known, keep_known, keep_known,
+                ),
+            )
+        return domain
+
+    def get_registration(self, domain):
+        """The stored registration for *domain*, or None."""
+        with self._read_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM domain_registrations WHERE domain = ?",
+                (domain.strip().lower(),),
+            ).fetchone()
+        return _registration_view(row) if row else None
+
+    def list_registrations(self):
+        """Every stored registration, soonest expiry first, unknown last."""
+        with self._read_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM domain_registrations "
+                "ORDER BY expires_at IS NULL, expires_at, domain"
+            ).fetchall()
+        return [_registration_view(r) for r in rows]
+
+    def prune_registrations(self, keep):
+        """Forget registrations for domains no longer tracked. Returns how many.
+
+        The tracked set is recomputed on every sweep from what CertMate
+        manages and has discovered; a domain that left it is not something
+        the operator is asking about any more.
+        """
+        keep = {d.strip().lower() for d in keep}
+        with self._write_conn() as conn:
+            existing = [r['domain'] for r in conn.execute(
+                "SELECT domain FROM domain_registrations")]
+            stale = [d for d in existing if d not in keep]
+            conn.executemany("DELETE FROM domain_registrations WHERE domain = ?",
+                             [(d,) for d in stale])
+        return len(stale)
+
     def count(self):
         """Return the number of distinct certificates in the inventory."""
         with self._read_conn() as conn:
@@ -522,4 +623,23 @@ def _revocation_view(cert_row):
         'revoked_at': cert_row['revoked_at'],
         'error': cert_row['revocation_error'],
         'checked_at': cert_row['revocation_checked_at'],
+    }
+
+
+def _registration_view(row):
+    """A stored domain registration as a JSON-safe dict."""
+    try:
+        registry_status = json.loads(row['registry_status']) if row['registry_status'] else []
+    except (ValueError, TypeError):
+        registry_status = []
+    return {
+        'domain': row['domain'],
+        'status': row['status'],
+        'expires_at': row['expires_at'],
+        'registrar': row['registrar'],
+        'registry_status': registry_status,
+        'source': row['source'],
+        'error': row['error'],
+        'checked_at': row['checked_at'],
+        'first_seen': row['first_seen'],
     }

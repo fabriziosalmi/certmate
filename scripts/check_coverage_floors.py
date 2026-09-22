@@ -138,6 +138,9 @@ FLOORS = {
     'modules/core/dns_strategies.py': 80,
     'modules/core/dns_zone_discovery.py': 95,
     'modules/core/domain_paths.py': 85,
+    # Measured at 91.4% when it arrived; what is left is transport glue that
+    # the network-marked test exercises against the real registries.
+    'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
     'modules/core/factory.py': 80,
     'modules/core/file_operations.py': 80,

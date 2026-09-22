@@ -229,7 +229,7 @@ def test_the_inventory_group_builds_from_a_minimal_context(api):
     resources = create_inventory_resources(api, {}, ctx)
 
     assert set(resources) == {
-        'InventoryList', 'InventoryRecord', 'InventoryConfig', 'InventoryScan',
+        'InventoryList', 'InventoryRecord', 'InventoryConfig', 'InventoryScan', 'InventoryDomains',
         'InventoryCryptoReport', 'InventoryAdopt'}
     for name, cls in resources.items():
         assert issubclass(cls, Resource), f'{name} is not a Resource'

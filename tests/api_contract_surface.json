@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.5",
+  "contract_version": "2.6",
   "surface": [
     "DELETE /api/backups/delete/<X>/<X>",
     "DELETE /api/certificates/<X>",
@@ -47,6 +47,7 @@
     "GET /api/inventory/<X>/adopt",
     "GET /api/inventory/config",
     "GET /api/inventory/crypto-report",
+    "GET /api/inventory/domains",
     "GET /api/keys",
     "GET /api/metrics",
     "GET /api/notifications/config",

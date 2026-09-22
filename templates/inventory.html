@@ -54,6 +54,35 @@
         </div>
     </div>
 
+    <!-- Domain registrations: when the domain itself lapses (RDAP, WHOIS where a TLD has no RDAP) -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="registrationsPanel">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+            <span class="text-sm font-medium text-foreground"><i class="fas fa-globe mr-2 text-muted"></i>Domain registrations</span>
+            <span class="text-xs text-muted" id="regCount"></span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-danger-fg" id="regExpired">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-warning-fg" id="reg30">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="reg90">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The registry does not publish an expiry date (.de, .eu, ...)">Not published</div><div class="text-xl font-semibold text-foreground" id="regNotPublished">–</div></div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
+                    <tr>
+                        <th class="text-left font-medium px-4 py-2">Domain</th>
+                        <th class="text-left font-medium px-4 py-2">Registration expires</th>
+                        <th class="text-left font-medium px-4 py-2">Registrar</th>
+                        <th class="text-left font-medium px-4 py-2">Source</th>
+                    </tr>
+                </thead>
+                <tbody id="registrationsBody" class="divide-y divide-gray-100 dark:divide-white/5">
+                    <tr><td colspan="4" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- Config panel (admin only; revealed by JS when role >= admin) -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4 hidden" id="configPanel">
         <details class="group">
@@ -89,6 +118,18 @@
                     </label>
                     <label class="block text-xs text-muted mb-1">Domains to monitor (one per line)</label>
                     <textarea id="cfgCtDomains" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;example.org"></textarea>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-foreground mb-2">Domain registration expiry</h3>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2" title="Asks each registry once a day at most: RDAP, or WHOIS where the TLD has no RDAP">
+                        <input type="checkbox" id="cfgRegEnabled" class="rounded border-border"> Enabled
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgRegIncludeInventory" class="rounded border-border"> Also follow domains discovery found
+                    </label>
+                    <label class="block text-xs text-muted mb-1">Extra domains (one per line)</label>
+                    <textarea id="cfgRegExtra" rows="3" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.it&#10;example.co.uk"></textarea>
+                    <p class="mt-1 text-xs text-muted">Managed domains are always included.</p>
                 </div>
             </div>
             <div class="px-6 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">
