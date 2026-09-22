@@ -21,6 +21,7 @@ dns-lexicon==3.25.1
 
 # Core application dependencies
 urllib3!=2.2.0,>=2.7.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
+dnspython==2.8.0                   # Used directly: CAA lookups (modules/core/caa.py) and the DNS-alias hook. It used to arrive only through the DNS plugins, so a plugin dropping it would have taken our own code with it.
 requests==2.34.2
 python-dotenv==1.2.3
 APScheduler==3.11.3
