@@ -206,7 +206,7 @@ def test_a_listing_is_reported_with_the_list_that_holds_it():
     lookup = _lookup({'13.2.0.192.zen.spamhaus.org': ['127.0.0.2']})
     result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
     assert result['status'] == dh.FAILING
-    assert 'zen.spamhaus.org' in result['detail']
+    assert result['detail'] == 'listed on zen.spamhaus.org'
     assert result['listings'] == [{'address': '192.0.2.13',
                                    'list': 'zen.spamhaus.org',
                                    'codes': ['127.0.0.2']}]
@@ -317,7 +317,9 @@ def test_one_broken_list_does_not_discard_the_others():
         return []
     result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
     assert result['status'] == dh.WARNING
-    assert any('bl.spamcop.net' in u for u in result['unanswered'])
+    assert result['unanswered'] == [
+        'bl.spamcop.net: did not answer its own test point, so its answers '
+        'about this domain would mean nothing']
 
 
 def test_the_self_test_is_asked_once_per_sweep_not_once_per_name():
@@ -703,7 +705,7 @@ def test_force_runs_even_while_the_sweep_is_switched_off(tmp_path):
 
 def test_one_name_blowing_up_does_not_stop_the_sweep(tmp_path):
     def exploding(name):
-        if name.endswith('boom.com'):
+        if name in ('boom.com', '_dmarc.boom.com'):
             raise RuntimeError('resolver on fire')
         return []
 
@@ -713,7 +715,7 @@ def test_one_name_blowing_up_does_not_stop_the_sweep(tmp_path):
     }, lookups=(exploding, lambda n: [], lambda n: [], lambda n: []))
     result = manager.run_check()
     names = {r['name'] for r in result['results']}
-    assert 'fine.com' in names
+    assert names == {'boom.com', 'fine.com'}
     assert manager.inventory.get_domain_health('fine.com')['status'] != dh.UNKNOWN
     assert manager.inventory.get_domain_health('boom.com')['status'] == dh.UNKNOWN
 
@@ -1016,8 +1018,8 @@ def test_sans_in_a_certificate_metadata_file_are_tracked(tmp_path):
     (meta / 'metadata.json').write_text(
         '{"san_domains": ["shop.example.com", "mail.example.net"]}', encoding='utf-8')
     tracked = manager.tracked_names()
-    assert 'shop.example.com' in tracked
-    assert tracked['example.net'] is True
+    assert tracked.get('shop.example.com') is False
+    assert tracked.get('example.net') is True
 
 
 def test_an_unreadable_metadata_file_is_skipped(tmp_path):
@@ -1028,7 +1030,7 @@ def test_an_unreadable_metadata_file_is_skipped(tmp_path):
     meta = manager.cert_dir / 'example.com'
     meta.mkdir(parents=True)
     (meta / 'metadata.json').write_text('{ not json', encoding='utf-8')
-    assert 'example.com' in manager.tracked_names()
+    assert manager.tracked_names().get('example.com') is True
 
 
 def test_names_the_inventory_discovered_are_tracked_when_asked(tmp_path):
@@ -1041,8 +1043,8 @@ def test_names_the_inventory_discovered_are_tracked_when_asked(tmp_path):
         subject_cn='discovered.example.org', san_dns=['alt.example.net'],
         source='probed')
     tracked = manager.tracked_names()
-    assert 'discovered.example.org' in tracked
-    assert tracked['example.net'] is True
+    assert tracked.get('discovered.example.org') is False
+    assert tracked.get('example.net') is True
 
 
 def test_a_name_that_could_split_a_query_never_becomes_a_tracked_name(tmp_path):
@@ -1054,7 +1056,7 @@ def test_a_name_that_could_split_a_query_never_becomes_a_tracked_name(tmp_path):
         'evil.com\r\nX: 1', 'ok.com']
     tracked = manager.tracked_names()
     assert not any('\r' in n or '\n' in n for n in tracked)
-    assert 'ok.com' in tracked
+    assert tracked.get('ok.com') is True
 
 
 # --------------------------------------------------------------------------- #
