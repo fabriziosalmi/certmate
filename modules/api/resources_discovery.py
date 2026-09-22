@@ -11,6 +11,7 @@ from flask import request
 from flask_restx import Resource
 
 from ..core.inventory_sources import collect_domain_sources
+from ..core.request_fields import json_booleans
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import ApiContext, check_domain_scope
 
@@ -71,6 +72,7 @@ def create_discovery_resources(api, models, ctx: ApiContext) -> dict:
     class CheckDNSAlias(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('viewer')
+        @json_booleans(wildcard=False)
         def post(self):
             """Check DNS-01 alias CNAME records before creating a certificate."""
             data = api.payload or {}
@@ -80,7 +82,7 @@ def create_discovery_resources(api, models, ctx: ApiContext) -> dict:
             if not isinstance(san_domains, list):
                 return {'error': 'san_domains must be an array'}, 400
 
-            wildcard = bool(data.get('wildcard'))
+            wildcard = request.json_booleans['wildcard']
             if wildcard and domain:
                 wildcard_domain = '*.' + domain.lstrip('*.')
                 if wildcard_domain not in san_domains:

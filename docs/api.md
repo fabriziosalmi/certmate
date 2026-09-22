@@ -17,6 +17,22 @@ The CertMate Client Certificates API provides REST endpoints for complete certif
 
 ---
 
+## Booleans are booleans
+
+A field documented as a boolean is read as written: `true` or `false`, without
+quotes. A string, a number or `null` is refused with `400 INVALID_REQUEST` and
+a message naming the field, rather than interpreted.
+
+That refusal replaces a silent misreading. Python's `bool("false")` is `True`,
+so a client that sent a boolean as a string — easy from a shell, an Ansible or
+Terraform template, or an agent filling a tool schema — used to get the
+opposite of what it asked for, with a 200. For `include_secrets` on a backup,
+the opposite was a plaintext dump of every private key instead of the masked
+archive that was requested.
+
+An absent field still falls back to its documented default; only a value that
+is present and not a boolean is an error.
+
 ## Authentication
 
 All API endpoints require Bearer token authentication.
