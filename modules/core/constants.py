@@ -142,6 +142,11 @@ METADATA_SCHEMA_VERSION = 1
 # in tests/test_the_contract_moves_with_the_surface.py cannot see a new field,
 # so this one moved by reading the rule, not because a test demanded it.
 #
+# 2.5 for POST /api/certificates/check-caa: what the CAA records say about
+# issuing a set of names from a given CA, so the create form can warn before
+# the order instead of after the CA refuses it. A new endpoint is a MINOR. It
+# advises and never gates — the create endpoint does not consult it.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -151,7 +156,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.4'
+API_CONTRACT_VERSION = '2.5'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

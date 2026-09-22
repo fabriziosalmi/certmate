@@ -1233,6 +1233,7 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['CreateCertificate'], '/create')
     ns_certificates.add_resource(api_resources['ZombieScan'], '/zombies/scan')
     ns_certificates.add_resource(api_resources['CheckDNSAlias'], '/check-dns-alias')
+    ns_certificates.add_resource(api_resources['CheckCAA'], '/check-caa')
     ns_certificates.add_resource(api_resources['CertificateDetail'], '/<string:domain>')
     ns_certificates.add_resource(api_resources['CertificateDeploymentStatus'], '/<string:domain>/deployment-status')
     ns_certificates.add_resource(api_resources['CertificateDeploymentBrowserReports'], '/deployment-status/browser')

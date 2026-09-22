@@ -111,6 +111,7 @@ FLOORS = {
     'modules/core/auth.py': 85,
     'modules/core/ca_manager.py': 70,
     'modules/core/cache.py': 60,
+    'modules/core/caa.py': 95,
     'modules/core/cert_adopt.py': 95,
     'modules/core/cert_discovery.py': 95,
     'modules/core/cert_inventory.py': 95,
