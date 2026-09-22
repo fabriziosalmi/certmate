@@ -149,6 +149,9 @@ FLOORS = {
     'modules/core/oidc.py': 75,
     'modules/core/private_ca.py': 80,
     'modules/core/rate_limit.py': 70,
+    # Measured at 90.1% when it arrived. What is left is defensive: an AIA
+    # payload in PEM or PKCS#7, an Ed25519 responder, a malformed CRL body.
+    'modules/core/revocation.py': 90,
     'modules/core/secret_refs.py': 95,
     'modules/core/settings.py': 80,
     'modules/core/shell.py': 75,

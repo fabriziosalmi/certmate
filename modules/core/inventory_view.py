@@ -92,8 +92,9 @@ def build_inventory_view(records, now=None):
 
     Each certificate is the stored record plus a live ``days_until_expiry``,
     ``expiry_status`` and ``group`` (``issued`` when managed, else
-    ``discovered``). The summary rolls up totals, source breakdown, and an
-    expiry forecast (expired + within 7/30/90 days) across every record.
+    ``discovered``). The summary rolls up totals, source breakdown, an
+    expiry forecast (expired + within 7/30/90 days) and the revocation answers
+    across every record.
     """
     now = now or datetime.utcnow()
     certificates = []
@@ -103,6 +104,9 @@ def build_inventory_view(records, now=None):
         'discovered': 0,
         'by_source': {},
         'expiry': {'expired': 0, '7': 0, '30': 0, '90': 0, 'unknown': 0},
+        # Last revocation answer per certificate; 'unchecked' = never asked.
+        'revocation': {'revoked': 0, 'good': 0, 'unknown': 0,
+                       'unavailable': 0, 'not_applicable': 0, 'unchecked': 0},
     }
 
     for record in records:
@@ -119,6 +123,11 @@ def build_inventory_view(records, now=None):
         summary[group] += 1
         source = record.get('source') or 'unknown'
         summary['by_source'][source] = summary['by_source'].get(source, 0) + 1
+
+        rev_status = (record.get('revocation') or {}).get('status') or 'unchecked'
+        if rev_status not in summary['revocation']:
+            rev_status = 'unavailable'
+        summary['revocation'][rev_status] += 1
 
         if days is None:
             summary['expiry']['unknown'] += 1

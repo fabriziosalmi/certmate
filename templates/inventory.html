@@ -24,7 +24,7 @@
         </div>
 
         <!-- Summary cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-px bg-gray-100 dark:bg-white/5" id="summaryCards">
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-px bg-gray-100 dark:bg-white/5" id="summaryCards">
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Total</div><div class="text-xl font-semibold text-foreground" id="sumTotal">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Issued</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Discovered</div><div class="text-xl font-semibold text-foreground" id="sumDiscovered">–</div></div>
@@ -32,6 +32,7 @@
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 7 days</div><div class="text-xl font-semibold text-orange-600 dark:text-orange-400" id="sum7">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-warning-fg" id="sum30">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="sum90">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="A verified OCSP or CRL answer says the issuer revoked it">Revoked</div><div class="text-xl font-semibold text-danger-fg" id="sumRevoked">–</div></div>
         </div>
     </div>
 
@@ -71,6 +72,9 @@
                     </label>
                     <label class="flex items-center gap-2 text-sm text-muted mb-2">
                         <input type="checkbox" id="cfgAllowPrivate" class="rounded border-border"> Allow private/loopback targets
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2" title="Asks the OCSP responder or CRL that each certificate names; those requests go to the issuing CA">
+                        <input type="checkbox" id="cfgCheckRevocation" class="rounded border-border"> Check revocation (OCSP, then CRL)
                     </label>
                     <label class="block text-xs text-muted mb-1">Endpoints (one <code>host</code> or <code>host:port</code> per line)</label>
                     <textarea id="cfgEndpoints" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;api.example.com:8443"></textarea>
@@ -118,6 +122,7 @@
                 <option value="critical">≤ 7 days</option>
                 <option value="warning">≤ 30 days</option>
                 <option value="ok">Healthy</option>
+                <option value="revoked">Revoked</option>
             </select>
             <span class="text-xs text-muted ml-auto" id="invCount"></span>
         </div>
