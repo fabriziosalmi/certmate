@@ -655,7 +655,9 @@ def test_scan_runs_the_registration_check_last(real_app):
     mgr = container.managers['domain_registration']
     mgr.run_check = MagicMock(return_value={'skipped': True, 'reason': 'disabled', 'results': []})
     body = application.test_client().post('/api/inventory/scan').get_json()
-    assert list(body) == ['discovery', 'ct_monitoring', 'domain_registration']
+    # The registration check runs after discovery and the CT poll, so it sees
+    # what they just added; the name-level checks follow it for the same reason.
+    assert list(body) == ['discovery', 'ct_monitoring', 'domain_registration', 'domain_health']
     mgr.run_check.assert_called_once_with()
 
 

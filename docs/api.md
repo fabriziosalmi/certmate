@@ -1139,6 +1139,58 @@ answer gains a `domain_registration` summary. What each status means, and why
 some TLDs are answered over WHOIS:
 [Domain registration expiry](discovery-inventory.md#domain-registration-expiry).
 
+#### Domain health
+
+**Endpoint**: `GET /api/inventory/health` — viewer, since API contract **2.9**
+
+The checks that are about the *name* rather than the certificate: SPF, DMARC
+and MX, the DNS blocklists, and the HSTS header the host serves. Worst first,
+so the answer opens on what is wrong; a scoped key sees only its own names.
+
+```json
+{
+  "names": [
+    {
+      "name": "example.com",
+      "status": "failing",
+      "checks": {
+        "spf": {"status": "ok", "detail": "published",
+                "record": "v=spf1 include:_spf.example.net -all"},
+        "dmarc": {"status": "failing",
+                  "detail": "no DMARC record, so a receiver has no instruction for mail that fails authentication"},
+        "mx": {"status": "ok", "detail": "2 mail exchangers",
+               "hosts": ["mx1.example.net", "mx2.example.net"]},
+        "blocklists": {"status": "unknown",
+                       "detail": "no blocklist answered the query — a public resolver is usually the reason; point CertMate at a resolver of your own",
+                       "unanswered": ["zen.spamhaus.org (192.0.2.13): refused this resolver"]},
+        "hsts": {"status": "ok", "detail": "max-age 31536000s",
+                 "max_age": 31536000, "includes_subdomains": true, "preload": false}
+      },
+      "checked_at": "2026-09-22T06:30:11Z",
+      "first_seen": "2026-09-01T06:30:09Z"
+    }
+  ],
+  "summary": {"total": 1, "by_status": {"failing": 1, "warning": 0, "unknown": 0, "ok": 0}}
+}
+```
+
+Every check reports one of four statuses, and `unknown` is the one to read
+carefully: it means the check could not be completed, and it is **not** a pass.
+A blocklist that refuses the query — which is what every public resolver gets
+from Spamhaus — has said nothing about the address, and reporting that as "not
+listed" is the mistake this endpoint exists not to make. Because that refusal
+can arrive as a plain NXDOMAIN, indistinguishable from "not listed", each list
+is first asked about its own always-listed test point; one that cannot answer
+that is not asked about your domains at all, and is named in `unanswered`.
+Point CertMate at a resolver of your own and the answers become real.
+
+Mail checks and blocklists run against the *registrable* domain, because DMARC
+falls back to the organisational domain; HSTS runs against each host, because
+that is what serves the site. The checks are configured under `domain_health`
+in `/api/inventory/config` and also run on `POST /api/inventory/scan`, whose
+answer gains a `domain_health` summary. What each check means:
+[Domain health](discovery-inventory.md#domain-health).
+
 ### Deployment
 
 #### Deploy-hook history

@@ -140,6 +140,12 @@ FLOORS = {
     'modules/core/domain_paths.py': 85,
     # Measured at 91.4% when it arrived; what is left is transport glue that
     # the network-marked test exercises against the real registries.
+    # 95 from a measured 100%: every check is a pure function over the answer
+    # it judges, and the two functions that would otherwise need a network —
+    # the dnspython lookups and the HSTS fetch — are tested against a scripted
+    # resolver and a scripted socket, because the distinction they encode
+    # ("could not ask" vs "asked, nothing there") is what every check rests on.
+    'modules/core/domain_health.py': 95,
     'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
     'modules/core/factory.py': 80,
