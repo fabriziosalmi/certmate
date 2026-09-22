@@ -15,6 +15,7 @@ import time
 from functools import wraps
 from flask import request
 from datetime import datetime, timezone
+from .structured_logging import scrub_log_value
 from .utils import utc_now
 
 try:
@@ -629,8 +630,12 @@ class AuthManager:
             data['setup_origin_confirmed_at'] = utc_now().isoformat()
             data['setup_origin_confirmed_by'] = confirmed_by
             if self._save_api_keys(api_keys):
-                logger.info("API key '%s' created during setup was confirmed by %s",
-                            data.get('name'), confirmed_by)
+                # The key id, not its name: the name is text whoever created
+                # the key chose, and it is read out of the api_keys record,
+                # which also holds the token hash. Nothing derived from that
+                # record needs to reach a log line.
+                logger.info("API key %s, created during setup, was confirmed by %s",
+                            key_id, scrub_log_value(confirmed_by))
                 return True, "API key confirmed"
             return False, "Failed to save changes"
         except (OSError, ValueError, KeyError) as e:
