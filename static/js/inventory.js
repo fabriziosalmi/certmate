@@ -240,6 +240,58 @@
             });
     }
 
+    // Domain registrations. Only a registry-published date gets a day count;
+    // "not published" (.de, .eu) and a failed lookup say so in words instead
+    // of showing a number nobody stated.
+    function registrationExpiryCell(r) {
+        if (r.status === 'ok') {
+            return statusBadge(r.expiry_status, r.days_until_expiry)
+                + ' <span class="text-xs text-muted">' + escapeHtml((r.expires_at || '').slice(0, 10)) + '</span>';
+        }
+        var words = {
+            not_published: ['Not published by the registry', 'This registry does not publish when a registration expires.'],
+            not_registered: ['Not registered', 'The registry says this name does not exist.'],
+            unavailable: ['Could not check', r.error || 'No answer from the registry.']
+        }[r.status] || ['Unknown', ''];
+        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs whitespace-nowrap '
+            + (r.status === 'not_registered'
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300')
+            + '" title="' + escapeHtml(words[1]) + '">' + escapeHtml(words[0]) + '</span>';
+    }
+
+    function loadRegistrations() {
+        fetch('/api/inventory/domains', { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (data) {
+                var rows = data.domains || [];
+                var s = data.summary || {};
+                var ex = s.expiry || {};
+                el('regExpired').textContent = ex.expired || 0;
+                el('reg30').textContent = ex['30'] || 0;
+                el('reg90').textContent = ex['90'] || 0;
+                el('regNotPublished').textContent = (s.by_status || {}).not_published || 0;
+                el('regCount').textContent = rows.length ? rows.length + ' domains' : '';
+                if (!rows.length) {
+                    el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-muted">'
+                        + 'No domain registrations checked yet. Enable the check in Discovery configuration, then Scan now.</td></tr>';
+                    return;
+                }
+                el('registrationsBody').innerHTML = rows.map(function (r) {
+                    return '<tr class="hover:bg-hover">'
+                        + '<td class="px-4 py-2 font-medium text-foreground">' + escapeHtml(r.domain) + '</td>'
+                        + '<td class="px-4 py-2">' + registrationExpiryCell(r) + '</td>'
+                        + '<td class="px-4 py-2 text-xs text-muted">' + escapeHtml(r.registrar || '—') + '</td>'
+                        + '<td class="px-4 py-2 text-xs text-muted" title="Checked ' + escapeHtml(r.checked_at || '') + '">'
+                        + escapeHtml((r.source || '—').toUpperCase()) + '</td>'
+                        + '</tr>';
+                }).join('');
+            })
+            .catch(function (err) {
+                el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-red-500">Failed to load domain registrations (' + escapeHtml(err) + ').</td></tr>';
+            });
+    }
+
     function loadCryptoSummary() {
         fetch('/api/inventory/crypto-report', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
@@ -267,6 +319,10 @@
                 el('cfgCtEnabled').checked = !!c.enabled;
                 el('cfgCtIncludeManaged').checked = c.include_managed !== false;
                 el('cfgCtDomains').value = (c.domains || []).join('\n');
+                var g = cfg.domain_registration || {};
+                el('cfgRegEnabled').checked = !!g.enabled;
+                el('cfgRegIncludeInventory').checked = g.include_inventory !== false;
+                el('cfgRegExtra').value = (g.extra_domains || []).join('\n');
             })
             .catch(function () { /* viewer without config access — panel stays hidden */ });
     }
@@ -291,6 +347,11 @@
                 enabled: el('cfgCtEnabled').checked,
                 include_managed: el('cfgCtIncludeManaged').checked,
                 domains: lines('cfgCtDomains')
+            },
+            domain_registration: {
+                enabled: el('cfgRegEnabled').checked,
+                include_inventory: el('cfgRegIncludeInventory').checked,
+                extra_domains: lines('cfgRegExtra')
             }
         };
         fetch('/api/inventory/config', {
@@ -312,7 +373,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning…';
         fetch('/api/inventory/scan', { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-            .then(function () { load(); })
+            .then(function () { load(); loadRegistrations(); })
             .catch(function () { /* keep current view */ })
             .then(function () { btn.disabled = false; btn.innerHTML = original; });
     }
@@ -359,6 +420,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         load();
         loadCryptoSummary();
+        loadRegistrations();
         gateAdminControls();
     });
 }());

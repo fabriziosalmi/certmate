@@ -1,0 +1,2 @@
+Domain:             this-does-not-exist-certmate-2026.it
+Status:             AVAILABLE

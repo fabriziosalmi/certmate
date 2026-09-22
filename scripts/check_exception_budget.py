@@ -83,7 +83,22 @@ GENERAL_LIMIT = 10
 # resolver factory now catches ImportError only, and the per-name catch-all
 # went, because every dnspython failure is already a DNSException that the
 # resolver turns into LookupFailed.
-TOTAL_LIMIT = 427
+#
+# 427 -> 428 on 2026-09-22, for the domain registration step of the inventory
+# scan:
+#
+#   modules/api/resources_inventory.py   InventoryScan runs discovery, the CT
+#                                        poll and now the registration check,
+#                                        each in its own `except Exception ->
+#                                        logger.error -> error entry`, so one
+#                                        failing step cannot lose the other
+#                                        two's results. The same shape as the
+#                                        two handlers directly above it.
+#
+# The sweep itself (DomainRegistrationManager.run_check) has no catch-all: a
+# single lookup never raises, and anything else is left to the scheduler
+# wrapper, which already logs it and records the run.
+TOTAL_LIMIT = 428
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is

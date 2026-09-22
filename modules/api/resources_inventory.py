@@ -19,7 +19,7 @@ import logging
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import DomainOperationInProgress
-from ..core.inventory_view import build_inventory_view
+from ..core.inventory_view import build_inventory_view, build_registrations_view
 from ..core.utils import utc_now_iso
 from .resource_context import (
     ApiContext,
@@ -29,6 +29,68 @@ from .resource_context import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _config_view(discovery, ct_monitor, registration):
+    """The discovery configuration as GET and POST both answer it."""
+    view = {
+        'discovery': discovery.get_config(),
+        'ct_monitoring': ct_monitor.get_config(),
+    }
+    if registration is not None:
+        view['domain_registration'] = registration.get_config()
+    return view
+
+
+def _save_registration_config(registration, payload):
+    """Persist the ``domain_registration`` section of a config POST, if any.
+    Raises ValueError for a name no registry holds, like the other sections."""
+    section = payload.get('domain_registration')
+    if registration is not None and isinstance(section, dict):
+        registration.save_config(section)
+
+
+def _scan_registrations(registration, result):
+    """Run the registration check as the last step of a scan, isolated like
+    the discovery and CT steps: its failure is reported, not propagated."""
+    if registration is None:
+        return
+    try:
+        result['domain_registration'] = registration.run_check()
+    except Exception as e:
+        logger.error(f"Domain registration check failed: {e}")
+        result['domain_registration'] = {'error': 'domain registration check failed'}
+
+
+def _registrations_response(ctx):
+    """GET /api/inventory/domains: registrations the caller's scope covers."""
+    inventory = ctx.managers.get('cert_inventory')
+    if inventory is None:
+        return {'error': 'Certificate inventory not available',
+                'code': 'INVENTORY_UNAVAILABLE'}, 503
+    records = [r for r in inventory.list_registrations()
+               if is_record_in_scope(ctx, {'subject_cn': r['domain'], 'san_dns': []})]
+    return build_registrations_view(records)
+
+
+def _inventory_domains_resource(api, ctx):
+    """Build the GET /api/inventory/domains resource.
+
+    Outside create_inventory_resources so the closure's complexity budget —
+    a ceiling that only comes down — pays nothing for it.
+    """
+    class InventoryDomains(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('viewer')
+        def get(self):
+            """When each tracked domain's registration expires.
+
+            One row per registrable domain, from RDAP, or WHOIS where the TLD
+            has no RDAP. A scoped key sees only the domains its scope covers.
+            """
+            return _registrations_response(ctx)
+
+    return InventoryDomains
 
 
 def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
@@ -109,10 +171,8 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             ct_monitor = ctx.managers.get('ct_monitor')
             if discovery is None or ct_monitor is None:
                 return {'error': 'Certificate discovery not available'}, 503
-            return {
-                'discovery': discovery.get_config(),
-                'ct_monitoring': ct_monitor.get_config(),
-            }
+            return _config_view(discovery, ct_monitor,
+                                ctx.managers.get('domain_registration'))
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
@@ -128,17 +188,16 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             if discovery is None or ct_monitor is None:
                 return {'error': 'Certificate discovery not available'}, 503
             payload = request.get_json(silent=True) or {}
+            registration = ctx.managers.get('domain_registration')
             try:
                 if isinstance(payload.get('discovery'), dict):
                     discovery.save_config(payload['discovery'])
                 if isinstance(payload.get('ct_monitoring'), dict):
                     ct_monitor.save_config(payload['ct_monitoring'])
+                _save_registration_config(registration, payload)
             except ValueError as e:
                 return {'error': str(e)}, 400
-            return {
-                'discovery': discovery.get_config(),
-                'ct_monitoring': ct_monitor.get_config(),
-            }
+            return _config_view(discovery, ct_monitor, registration)
 
     class InventoryScan(Resource):
         @api.doc(security='Bearer')
@@ -161,7 +220,11 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             except Exception as e:
                 logger.error(f"CT-log poll failed: {e}")
                 result['ct_monitoring'] = {'error': 'ct poll failed'}
+            # Last, so it sees what discovery and the CT poll just added.
+            _scan_registrations(ctx.managers.get('domain_registration'), result)
             return result
+
+    InventoryDomains = _inventory_domains_resource(api, ctx)
 
     class InventoryCryptoReport(Resource):
         @api.doc(security='Bearer')
@@ -288,6 +351,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
         'InventoryRecord': InventoryRecord,
         'InventoryConfig': InventoryConfig,
         'InventoryScan': InventoryScan,
+        'InventoryDomains': InventoryDomains,
         'InventoryCryptoReport': InventoryCryptoReport,
         'InventoryAdopt': InventoryAdopt,
     }

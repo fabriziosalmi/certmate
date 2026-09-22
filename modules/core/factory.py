@@ -775,9 +775,14 @@ def initialize_managers(container: AppContainer, app):
     from .cert_inventory import CertInventory
     from .cert_discovery import CertDiscoveryManager
     from .ct_monitor import CTMonitorManager
+    from .domain_registration import DomainRegistrationManager
     cert_inventory = CertInventory(container.data_dir)
     cert_discovery = CertDiscoveryManager(settings_manager, cert_inventory)
     ct_monitor = CTMonitorManager(settings_manager, cert_inventory)
+    # Registration expiry of every tracked domain (RDAP, WHOIS where a TLD has
+    # no RDAP). Opt-in, like the rest of discovery.
+    domain_registration = DomainRegistrationManager(
+        settings_manager, cert_inventory, container.cert_dir)
 
     container.managers = {
         'file_ops': file_ops,
@@ -809,6 +814,7 @@ def initialize_managers(container: AppContainer, app):
         'cert_inventory': cert_inventory,
         'cert_discovery': cert_discovery,
         'ct_monitor': ct_monitor,
+        'domain_registration': domain_registration,
     }
 
 
@@ -983,6 +989,18 @@ def _ct_monitor_job():
         _run_manager_job('ct_monitor', 'run_poll')
 
 
+def _domain_registration_job():
+    """Picklable wrapper for the daily registration-expiry check. Own lock so
+    several workers on one data dir do not ask the same registries twice —
+    registries rate-limit, and some answer a burst with a temporary ban."""
+    with _renewal_process_lock('.domain-registration.lock') as may_run:
+        if not may_run:
+            logger.info("Scheduled domain registration check skipped: another "
+                        "process holds the lock.")
+            return
+        _run_manager_job('domain_registration', 'run_check')
+
+
 def _deploy_window_drain_job():
     """Run deploys held for a maintenance window (#632).
 
@@ -1094,6 +1112,14 @@ def setup_scheduler(container: AppContainer):
             func=_ct_monitor_job,
             trigger="cron", hour=5, minute=0,
             id='ct_log_monitor', replace_existing=True
+        )
+        # Domain registration expiry: once a day at 06:00, after discovery
+        # and the CT poll have refreshed what the inventory knows. A no-op
+        # unless the operator enabled it.
+        scheduler.add_job(
+            func=_domain_registration_job,
+            trigger="cron", hour=6, minute=0,
+            id='domain_registration_check', replace_existing=True
         )
         # Deploy maintenance windows (#632). See the job's docstring for why
         # this is every minute. `coalesce` from job_defaults collapses a burst
@@ -1270,6 +1296,7 @@ def setup_api(container: AppContainer, app):
     ns_inventory.add_resource(api_resources['InventoryList'], '')
     ns_inventory.add_resource(api_resources['InventoryConfig'], '/config')
     ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
+    ns_inventory.add_resource(api_resources['InventoryDomains'], '/domains')
     ns_inventory.add_resource(api_resources['InventoryCryptoReport'], '/crypto-report')
     ns_inventory.add_resource(api_resources['InventoryAdopt'], '/<string:fingerprint>/adopt')
     # '/<string:fingerprint>' sits at the same depth as '/config', '/scan' and

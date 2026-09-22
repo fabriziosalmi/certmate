@@ -1,0 +1,51 @@
+
+*********************************************************************
+* Please note that the following result could be a subgroup of      *
+* the data contained in the database.                               *
+*                                                                   *
+* Additional information can be visualized at:                      *
+* http://web-whois.nic.it                                           *
+*********************************************************************
+
+Domain:             nic.it
+Status:             ok
+Signed:             yes
+Created:            1997-08-27 00:00:00
+Last Update:        2026-01-16 00:46:30
+Expire Date:        2026-12-31
+
+Registrant
+  Organization:    REDACTED
+  Address:         REDACTED
+  Created:          2007-03-01 10:26:04
+  Last Update:      2013-01-17 16:43:35
+
+Admin Contact
+  Name:            REDACTED
+  Organization:    REDACTED
+  Address:         REDACTED
+  Created:          2024-09-16 16:01:21
+  Last Update:      2024-09-16 16:01:21
+
+Technical Contacts
+  Name:            REDACTED
+  Organization:    REDACTED
+  Address:         REDACTED
+  Created:          1998-04-14 00:00:00
+  Last Update:      2013-01-17 16:43:35
+
+Registrar
+  Organization:     ccTLD 'it' Registry
+  Name:             REGISTRY-REG
+  Web:              http://www.registro.it
+  DNSSEC:           yes
+
+
+Nameservers
+  dns.nic.it
+  a.dns.it
+  v.dns.it
+  nameserver.cnr.it
+  m.dns.it
+  r.dns.it
+

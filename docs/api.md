@@ -1045,6 +1045,47 @@ discovered certificate against published deprecation timelines. It is an
 inventory, not a recommendation engine: it counts what is deployed and says
 what is behind. Add `?format=csv` for the per-asset table.
 
+#### Domain registrations
+
+**Endpoint**: `GET /api/inventory/domains` — viewer, since API contract **2.6**
+
+When each tracked domain's *registration* expires, from RDAP, or WHOIS where
+the TLD has no RDAP. One row per registrable domain, soonest expiry first; a
+scoped key sees only the domains its scope covers.
+
+```json
+{
+  "domains": [
+    {
+      "domain": "example.com",
+      "status": "ok",
+      "expires_at": "2026-10-29T15:57:39Z",
+      "days_until_expiry": 37,
+      "expiry_status": "ok",
+      "registrar": "Example Registrar Inc.",
+      "registry_status": ["client transfer prohibited"],
+      "source": "rdap",
+      "error": null,
+      "checked_at": "2026-09-22T06:00:04Z",
+      "first_seen": "2026-09-01T06:00:02Z"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "by_status": {"ok": 1, "not_published": 0, "not_registered": 0, "unavailable": 0},
+    "expiry": {"expired": 0, "30": 0, "60": 1, "90": 1}
+  }
+}
+```
+
+`status` is `ok`, `not_published` (the registry does not publish an expiry —
+`.de`, `.eu`), `not_registered` or `unavailable`; only `ok` carries a date and a
+day count. The check is configured under `domain_registration` in
+`/api/inventory/config` and also runs on `POST /api/inventory/scan`, whose
+answer gains a `domain_registration` summary. What each status means, and why
+some TLDs are answered over WHOIS:
+[Domain registration expiry](discovery-inventory.md#domain-registration-expiry).
+
 ### Deployment
 
 #### Deploy-hook history
