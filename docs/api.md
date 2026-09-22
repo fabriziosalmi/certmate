@@ -993,6 +993,43 @@ rate-limited.
 Begins the Authorization Code + PKCE flow. The next-URL is validated to be a
 path on this site, so it cannot be used as an open redirect.
 
+### Probing a host
+
+#### Read the certificate a host is serving
+
+**Endpoint**: `POST /api/probe` — viewer, since API contract **2.8**
+
+```json
+{ "host": "shop.example.com", "port": 443, "server_name": "shop.example.com", "check_revocation": true }
+```
+
+Only `host` is required. `port` defaults to 443, `server_name` to `host`, and
+`check_revocation` to `true`.
+
+The answer is the deep probe's own shape — `status`, `certificate`,
+`validation`, `chain`, `revocation`, `connect_ip`, `probed_at` — the same one
+the inventory stores, described in
+[the discovery guide](discovery-inventory.md#the-deep-tls-probe). In short:
+
+- `status` is `ok`, `blocked` (the SSRF guard refused the target) or
+  `unreachable` (`error_class` says which way);
+- PKI trust is deliberately **not** validated, so an expired, self-signed or
+  mismatched certificate is still described, with `validation` reporting the
+  condition;
+- `revocation` is the verified OCSP/CRL answer, or `null` when
+  `check_revocation` is false. It is never `good` unless a signed, current
+  answer said so — see [Revocation](discovery-inventory.md#revocation).
+
+This is how another tool asks CertMate what is being served rather than
+implementing TLS again. It is rate-limited as its own category, because each
+call opens a TLS connection to a third party and may fetch that CA's OCSP or
+CRL.
+
+**Boundaries.** A scoped key may only probe hosts its `allowed_domains` cover,
+and `server_name` is checked too, because that is the name the probe asks the
+host for. Private, loopback and other non-global addresses are refused by the
+probe's SSRF guard, which answers `blocked` instead of raising.
+
 ### Inventory and discovery
 
 The inventory is every certificate CertMate knows about: the ones it manages

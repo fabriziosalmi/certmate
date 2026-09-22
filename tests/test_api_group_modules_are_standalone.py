@@ -514,7 +514,7 @@ FINAL_GROUPS = {
                     'CertificateRunDeploy'}),
     'discovery': ('modules.api.resources_discovery',
                   'create_discovery_resources',
-                  {'ZombieScan', 'CheckDNSAlias', 'CheckCAA', 'CertificateDNSAliasCheck'}),
+                  {'ZombieScan', 'CheckDNSAlias', 'CheckCAA', 'ProbeEndpoint', 'CertificateDNSAliasCheck'}),
 }
 
 

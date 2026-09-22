@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.7",
+  "contract_version": "2.8",
   "surface": [
     "DELETE /api/backups/delete/<X>/<X>",
     "DELETE /api/certificates/<X>",
@@ -95,6 +95,7 @@
     "POST /api/notifications/config",
     "POST /api/notifications/test",
     "POST /api/notifications/webhook/preview",
+    "POST /api/probe",
     "POST /api/settings",
     "POST /api/settings/test-ca-provider",
     "POST /api/storage/azure-keyvault/backfill-certificates",
