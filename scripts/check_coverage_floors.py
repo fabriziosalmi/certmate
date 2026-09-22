@@ -57,7 +57,13 @@ FLOORS = {
     # than 84 leaves room for a collector added without its own test to be a
     # review comment instead of a red gate.
     'modules/api/resources_health.py': 80,
-    'modules/api/resources_inventory.py': 80,
+    # 80 -> 85 on 2026-09-23, measured 87.7%. The domain-health resource
+    # arrived and took the module below 80, which is the gate working; what
+    # brought it back was tests through the app for the new endpoint's scope
+    # filter and 503, and for the four scan/response branches — two of them
+    # the registration feature's, never entered before — that "cannot happen"
+    # and so had never been run.
+    'modules/api/resources_inventory.py': 85,
     # Raised from 55 after covering the exception-to-status arms, which is
     # where this module's behaviour is: it is the entry point for every
     # create, renew and reissue, and a 500 where a 422 belongs sends an
@@ -140,6 +146,12 @@ FLOORS = {
     'modules/core/domain_paths.py': 85,
     # Measured at 91.4% when it arrived; what is left is transport glue that
     # the network-marked test exercises against the real registries.
+    # 95 from a measured 100%: every check is a pure function over the answer
+    # it judges, and the two functions that would otherwise need a network —
+    # the dnspython lookups and the HSTS fetch — are tested against a scripted
+    # resolver and a scripted socket, because the distinction they encode
+    # ("could not ask" vs "asked, nothing there") is what every check rests on.
+    'modules/core/domain_health.py': 95,
     'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
     'modules/core/factory.py': 80,

@@ -317,6 +317,108 @@ first, with the registrar and whether the answer came over RDAP or WHOIS.
 
 ---
 
+## Domain health
+
+The certificate is valid, the registration is paid, and the site is still
+broken: mail stopped being accepted because the SPF record was edited, or the
+server's address landed on a blocklist, or the HSTS header quietly went away
+with a reverse-proxy change. None of that is visible from a certificate, and
+all of it lands on whoever answers for the domain.
+
+Five checks, run daily against every name CertMate already tracks.
+
+| Check | What it asks | Scope |
+|---|---|---|
+| `spf` | is there exactly one `v=spf1` TXT record, and does it end in an `all` mechanism | registrable domain |
+| `dmarc` | is there a `v=DMARC1` TXT at `_dmarc`, and does it carry a `p=` policy | registrable domain |
+| `mx` | does the domain accept mail at all | registrable domain |
+| `blocklists` | are the domain's addresses listed on a DNSBL | registrable domain |
+| `hsts` | what `Strict-Transport-Security` the host serves | each host |
+
+Mail and blocklist checks run against the **registrable** domain, not each
+host: DMARC falls back to the organisational domain, so asking
+`_dmarc.www.example.com` on its own would report "no DMARC" for a domain that
+publishes one. HSTS is the opposite — it belongs to the host that serves the
+site — so `www.example.com` and `example.com` each get their own answer.
+
+### Four statuses, and why `unknown` is one of them
+
+| `status` | Meaning |
+|---|---|
+| `ok` | the check ran and found nothing wrong |
+| `warning` | worth knowing, not broken: no MX, an SPF with no `all`, an HSTS `max-age` under six months |
+| `failing` | a finding: no SPF or DMARC, two SPF records, `+all`, a listing on a blocklist, no HSTS header |
+| `unknown` | **the check could not be completed.** It is not a pass. |
+
+`unknown` exists because of the blocklists, and it takes two forms of not
+answering to explain why.
+
+The first is the polite one. A DNSBL that does not want to serve your query
+answers with a `127.255.255.x` code instead of an error — `.254` means "query
+via public resolver", and that is what `8.8.8.8`, `1.1.1.1`, `9.9.9.9` and
+Quad9 alike get from Spamhaus. Spamhaus's own documentation says these "must
+not be taken to imply that the object of the query is listed". It still looks
+like an answer, and reading it as "not listed" is how a tool reports a domain
+clean while having learned nothing about it.
+
+The second is the one that has no tell at all. Send the same query through a
+forwarder — a corporate resolver, a caching proxy, Tailscale's MagicDNS — and
+the refusal can come back as plain **NXDOMAIN**, which at the DNS level is
+identical to "this address is not on the list". Nothing in the reply says
+otherwise.
+
+So CertMate does not take a list's silence at face value. Before trusting any
+list it asks that list about its own **test point**: by long convention every
+DNSBL keeps `127.0.0.2` permanently listed and `127.0.0.1` permanently
+unlisted, precisely so a client can confirm it is reaching the list at all. A
+list that will not report `127.0.0.2` as listed is not answering you, so
+CertMate does not ask it about your domains and says so in `unanswered`. A
+list that reports even `127.0.0.1` is answering everything — a hijacked or
+wildcarding resolver — and is dropped for the opposite reason.
+
+What you see, then, is one of: *listed*, *not listed on N lists*, or *nobody
+answered*. If no list is usable the check is `unknown`. If some are and some
+are not, the result stands and still names the ones that did not answer. The
+fix is almost always to point CertMate at a resolver of your own rather than a
+public one.
+
+The same rule holds elsewhere: a TXT lookup that timed out is `unknown`, not
+"no SPF record"; a host that could not be reached over HTTPS is `unknown`, not
+"no HSTS". Spamhaus's own `127.0.0.10`/`127.0.0.11` (the Policy Block List)
+means "this is consumer or dynamic address space", which describes the range
+and not this host's behaviour, so it is not reported as a listing.
+
+DMARC is reported, not graded. `p=none` is where a careful rollout starts, and
+marking it a failure would be an opinion about someone's deployment rather than
+a check.
+
+```jsonc
+{
+  "domain_health": {
+    "enabled": true,             // opt-in, like the rest of discovery
+    "include_inventory": true,   // also check names discovery found
+    "check_mail": true,          // SPF, DMARC, MX
+    "check_blocklists": true,
+    "check_hsts": true,
+    "extra_domains": ["brand.it"]
+  }
+}
+```
+
+**When it runs.** Daily at 06:30, between the registration check and the expiry
+warnings, and on **Scan now**. A name is asked again only once a day, so a
+second scan the same morning costs nothing; at most four addresses per domain
+are checked against each list, because a name behind a CDN can answer with a
+dozen and each one costs a query per list.
+
+**Network.** All of it is DNS, except HSTS, which is one `HEAD` over HTTPS
+through the same SSRF guard as the probe, pinned to the validated address. That
+request verifies the certificate: a browser ignores HSTS served over a
+connection it did not trust, so a header read from an untrusted one would
+describe a policy nobody applies.
+
+---
+
 ## API reference
 
 All endpoints require at least a `viewer` credential; writes require `admin`
@@ -331,6 +433,7 @@ subject/SAN falls within their `allowed_domains`.
 | POST | `/api/inventory/scan` | admin | Run a discovery sweep + CT poll now |
 | GET | `/api/inventory/crypto-report` | viewer | Readiness report (`?format=csv`) |
 | GET | `/api/inventory/domains` | viewer | Domain registration expiry, soonest first (since API contract 2.6) |
+| GET | `/api/inventory/health` | viewer | SPF/DMARC/MX, blocklists and HSTS per name, worst first (since API contract 2.9) |
 | GET | `/api/inventory/<fingerprint>/adopt` | viewer | Adoption plan (feasibility + pre-fill) |
 | POST | `/api/inventory/<fingerprint>/adopt` | operator | Adopt & manage the certificate |
 | DELETE | `/api/inventory/<fingerprint>` | operator | Forget a record (the certificate itself is untouched) |

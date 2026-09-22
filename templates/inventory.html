@@ -83,6 +83,37 @@
         </div>
     </div>
 
+    <!-- Domain health: the checks that are about the name, not the certificate -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="domainHealthPanel">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+            <span class="text-sm font-medium text-foreground"><i class="fas fa-heart-pulse mr-2 text-muted"></i>Domain health</span>
+            <span class="text-xs text-muted" id="healthCount"></span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Failing</div><div class="text-xl font-semibold text-danger-fg" id="healthFailing">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Warning</div><div class="text-xl font-semibold text-warning-fg" id="healthWarning">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The check could not be completed. This is not a pass.">Not verifiable</div><div class="text-xl font-semibold text-foreground" id="healthUnknown">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">OK</div><div class="text-xl font-semibold text-foreground" id="healthOk">–</div></div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
+                    <tr>
+                        <th class="text-left font-medium px-4 py-2">Name</th>
+                        <th class="text-left font-medium px-4 py-2">SPF</th>
+                        <th class="text-left font-medium px-4 py-2">DMARC</th>
+                        <th class="text-left font-medium px-4 py-2">MX</th>
+                        <th class="text-left font-medium px-4 py-2" title="A list that refuses the query has said nothing about the address">Blocklists</th>
+                        <th class="text-left font-medium px-4 py-2">HSTS</th>
+                    </tr>
+                </thead>
+                <tbody id="domainHealthBody" class="divide-y divide-gray-100 dark:divide-white/5">
+                    <tr><td colspan="6" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- Config panel (admin only; revealed by JS when role >= admin) -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4 hidden" id="configPanel">
         <details class="group">
@@ -130,6 +161,29 @@
                     <label class="block text-xs text-muted mb-1">Extra domains (one per line)</label>
                     <textarea id="cfgRegExtra" rows="3" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.it&#10;example.co.uk"></textarea>
                     <p class="mt-1 text-xs text-muted">Managed domains are always included.</p>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-foreground mb-2">Domain health</h3>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2" title="SPF, DMARC, MX, blocklists and HSTS, once a day at most">
+                        <input type="checkbox" id="cfgHealthEnabled" class="rounded border-border"> Enabled
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgHealthIncludeInventory" class="rounded border-border"> Also check names discovery found
+                    </label>
+                    <div class="flex flex-wrap gap-4 mb-2">
+                        <label class="flex items-center gap-2 text-sm text-muted">
+                            <input type="checkbox" id="cfgHealthMail" class="rounded border-border"> Mail (SPF, DMARC, MX)
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-muted" title="Public resolvers are refused by most blocklists; point CertMate at a resolver of your own to get real answers">
+                            <input type="checkbox" id="cfgHealthBlocklists" class="rounded border-border"> Blocklists
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-muted">
+                            <input type="checkbox" id="cfgHealthHsts" class="rounded border-border"> HSTS
+                        </label>
+                    </div>
+                    <label class="block text-xs text-muted mb-1">Extra names (one per line)</label>
+                    <textarea id="cfgHealthExtra" rows="3" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.it&#10;shop.example.com"></textarea>
+                    <p class="mt-1 text-xs text-muted">Mail and blocklist checks run on the registrable domain; HSTS on each host.</p>
                 </div>
             </div>
             <div class="px-6 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">

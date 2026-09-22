@@ -23,6 +23,10 @@ Schema (versioned via ``PRAGMA user_version``):
 * ``endpoints`` — every ``(host, port)`` a fingerprint was observed at, each
   with its own ``first_seen`` / ``last_seen`` (cascade-deleted with the cert).
 
+v5 adds ``domain_health``: the last answer to the checks that are about the
+name rather than the certificate — SPF, DMARC, MX, blocklists and HSTS (see
+``domain_health.py``). One row per name, holding whichever checks apply to it.
+
 v4 adds ``expiry_notices``: what has already been said about which expiry
 date, so a warning speaks once per threshold instead of every night (see
 ``expiry_watch.py``).
@@ -54,7 +58,7 @@ from .utils import utc_now_iso
 logger = logging.getLogger(__name__)
 
 # Bump when the schema changes and add a migration branch in ``_migrate``.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Recognised discovery sources. ``issued`` = CertMate minted it; ``probed`` =
 # seen live via the TLS probe; ``ct-log`` = discovered in Certificate
@@ -122,6 +126,17 @@ CREATE TABLE IF NOT EXISTS expiry_notices (
     threshold   INTEGER NOT NULL,   -- days-left mark that was announced
     noticed_at  TEXT NOT NULL,
     PRIMARY KEY (kind, name, expires_at, threshold)
+);
+"""
+
+# v4 -> v5: the last answer to the name-level checks (SPF/DMARC/MX/RBL/HSTS).
+_DOMAIN_HEALTH_SCHEMA = """
+CREATE TABLE IF NOT EXISTS domain_health (
+    name        TEXT PRIMARY KEY,   -- registrable domain or managed host, lower case
+    status      TEXT NOT NULL,      -- worst status across the checks that ran
+    checks      TEXT NOT NULL,      -- JSON object, one entry per check
+    checked_at  TEXT NOT NULL,
+    first_seen  TEXT NOT NULL
 );
 """
 
@@ -207,6 +222,8 @@ class CertInventory:
                 conn.executescript(_REGISTRATION_SCHEMA)
             if version < 4:
                 conn.executescript(_EXPIRY_NOTICE_SCHEMA)
+            if version < 5:
+                conn.executescript(_DOMAIN_HEALTH_SCHEMA)
             conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
             logger.info(
                 "Certificate inventory schema initialised at %s (v%d)",
@@ -625,6 +642,66 @@ class CertInventory:
             cur = conn.execute("DELETE FROM expiry_notices WHERE expires_at < ?", (cutoff,))
             return cur.rowcount
 
+    # --- domain health (v5) -------------------------------------------------- #
+
+    def record_domain_health(self, name, status, checks, checked_at=None):
+        """Store the latest name-level checks for *name*. Returns the name.
+
+        The whole result is replaced: unlike a registration expiry, none of
+        these answers stays true once a re-check disagrees with it, and a check
+        that could not run already says ``unknown`` in *checks* rather than
+        going missing.
+        """
+        name = (name or '').strip().lower()
+        if not name:
+            raise ValueError('name is required')
+        now = checked_at or utc_now_iso()
+        with self._write_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO domain_health (name, status, checks, checked_at, first_seen)
+                VALUES (?,?,?,?,?)
+                ON CONFLICT(name) DO UPDATE SET
+                    status = excluded.status,
+                    checks = excluded.checks,
+                    checked_at = excluded.checked_at
+                """,
+                (name, status, json.dumps(checks or {}), now, now),
+            )
+        return name
+
+    def get_domain_health(self, name):
+        """The stored checks for *name*, or None."""
+        with self._read_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM domain_health WHERE name = ?",
+                ((name or '').strip().lower(),),
+            ).fetchone()
+        return _domain_health_view(row) if row else None
+
+    def list_domain_health(self):
+        """Every stored result, worst first, so the page opens on what is wrong."""
+        with self._read_conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM domain_health
+                ORDER BY CASE status
+                    WHEN 'failing' THEN 0 WHEN 'warning' THEN 1
+                    WHEN 'unknown' THEN 2 ELSE 3 END, name
+                """
+            ).fetchall()
+        return [_domain_health_view(r) for r in rows]
+
+    def prune_domain_health(self, keep):
+        """Forget names no longer tracked. Returns how many were forgotten."""
+        keep = {n.strip().lower() for n in keep}
+        with self._write_conn() as conn:
+            existing = [r['name'] for r in conn.execute("SELECT name FROM domain_health")]
+            stale = [n for n in existing if n not in keep]
+            conn.executemany("DELETE FROM domain_health WHERE name = ?",
+                             [(n,) for n in stale])
+        return len(stale)
+
     def count(self):
         """Return the number of distinct certificates in the inventory."""
         with self._read_conn() as conn:
@@ -683,6 +760,21 @@ def _revocation_view(cert_row):
         'revoked_at': cert_row['revoked_at'],
         'error': cert_row['revocation_error'],
         'checked_at': cert_row['revocation_checked_at'],
+    }
+
+
+def _domain_health_view(row):
+    """A stored domain-health row as a JSON-safe dict."""
+    try:
+        checks = json.loads(row['checks']) if row['checks'] else {}
+    except (ValueError, TypeError):
+        checks = {}
+    return {
+        'name': row['name'],
+        'status': row['status'],
+        'checks': checks,
+        'checked_at': row['checked_at'],
+        'first_seen': row['first_seen'],
     }
 
 

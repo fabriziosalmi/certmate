@@ -792,6 +792,7 @@ def initialize_managers(container: AppContainer, app):
     from .cert_inventory import CertInventory
     from .cert_discovery import CertDiscoveryManager
     from .ct_monitor import CTMonitorManager
+    from .domain_health import DomainHealthManager
     from .domain_registration import DomainRegistrationManager
     from .expiry_watch import ExpiryWatch
     cert_inventory = CertInventory(container.data_dir)
@@ -800,6 +801,10 @@ def initialize_managers(container: AppContainer, app):
     # Registration expiry of every tracked domain (RDAP, WHOIS where a TLD has
     # no RDAP). Opt-in, like the rest of discovery.
     domain_registration = DomainRegistrationManager(
+        settings_manager, cert_inventory, container.cert_dir)
+    # The checks that are about the name rather than the certificate: SPF,
+    # DMARC, MX, the blocklists and the HSTS header. Opt-in like the rest.
+    domain_health = DomainHealthManager(
         settings_manager, cert_inventory, container.cert_dir)
 
     # Says that a certificate or a domain registration is about to expire,
@@ -838,6 +843,7 @@ def initialize_managers(container: AppContainer, app):
         'cert_discovery': cert_discovery,
         'ct_monitor': ct_monitor,
         'domain_registration': domain_registration,
+        'domain_health': domain_health,
         'expiry_watch': expiry_watch,
     }
 
@@ -1025,6 +1031,19 @@ def _domain_registration_job():
         _run_manager_job('domain_registration', 'run_check')
 
 
+def _domain_health_job():
+    """Picklable wrapper for the daily name-level checks. Own lock so several
+    workers on one data dir do not each query the blocklists: the lists
+    rate-limit, and a burst is what gets a resolver refused in the first
+    place — the condition these checks report as `unknown`."""
+    with _renewal_process_lock('.domain-health.lock') as may_run:
+        if not may_run:
+            logger.info("Scheduled domain health check skipped: another "
+                        "process holds the lock.")
+            return
+        _run_manager_job('domain_health', 'run_check')
+
+
 def _expiry_watch_job():
     """Picklable wrapper for the daily expiry warnings. Own lock so several
     workers on one data dir do not each announce the same expiry — the notice
@@ -1155,6 +1174,13 @@ def setup_scheduler(container: AppContainer):
             func=_domain_registration_job,
             trigger="cron", hour=6, minute=0,
             id='domain_registration_check', replace_existing=True
+        )
+        # Name-level checks: once a day at 06:30, between the registration
+        # check and the expiry warnings. A no-op unless the operator enabled it.
+        scheduler.add_job(
+            func=_domain_health_job,
+            trigger="cron", hour=6, minute=30,
+            id='domain_health_check', replace_existing=True
         )
         # Expiry warnings: once a day at 07:00, after the renewal sweep has
         # had its chance (02:00) and after the registration check (06:00), so
@@ -1341,6 +1367,7 @@ def setup_api(container: AppContainer, app):
     ns_inventory.add_resource(api_resources['InventoryConfig'], '/config')
     ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
     ns_inventory.add_resource(api_resources['InventoryDomains'], '/domains')
+    ns_inventory.add_resource(api_resources['InventoryHealth'], '/health')
     ns_probe.add_resource(api_resources['ProbeEndpoint'], '')
     ns_inventory.add_resource(api_resources['InventoryCryptoReport'], '/crypto-report')
     ns_inventory.add_resource(api_resources['InventoryAdopt'], '/<string:fingerprint>/adopt')

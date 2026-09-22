@@ -169,6 +169,14 @@ METADATA_SCHEMA_VERSION = 1
 # revocation status that was assumed rather than checked. A new endpoint is a
 # MINOR. A scoped key probes only what its scope covers.
 #
+# 2.9 for GET /api/inventory/health: what the name-level checks last found —
+# SPF, DMARC, MX, the blocklists and the HSTS header — plus a `domain_health`
+# section in the inventory config and scan responses. A new endpoint and new
+# response fields, so a MINOR. `unknown` is a status a caller must not read as
+# a pass: a blocklist that refused the query (every public resolver gets that
+# from Spamhaus) has said nothing about the address, and the tool these checks
+# came from reported exactly that case as "not listed".
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -178,7 +186,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.8'
+API_CONTRACT_VERSION = '2.9'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

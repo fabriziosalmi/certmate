@@ -292,6 +292,57 @@
             });
     }
 
+    // A check's status as a chip. `unknown` is deliberately not green and not
+    // red: it means nobody answered, which is neither a pass nor a finding.
+    function healthChip(check) {
+        if (!check) { return '<span class="text-xs text-muted">—</span>'; }
+        var styles = {
+            ok: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+            warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+            failing: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+            unknown: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+        };
+        var labels = { ok: 'OK', warning: 'Warning', failing: 'Failing', unknown: 'Not verifiable' };
+        var status = check.status || 'unknown';
+        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs whitespace-nowrap '
+            + (styles[status] || styles.unknown) + '" title="' + escapeHtml(check.detail || '')
+            + '">' + escapeHtml(labels[status] || status) + '</span>';
+    }
+
+    function loadDomainHealth() {
+        fetch('/api/inventory/health', { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (data) {
+                var rows = data.names || [];
+                var by = (data.summary || {}).by_status || {};
+                el('healthFailing').textContent = by.failing || 0;
+                el('healthWarning').textContent = by.warning || 0;
+                el('healthUnknown').textContent = by.unknown || 0;
+                el('healthOk').textContent = by.ok || 0;
+                el('healthCount').textContent = rows.length ? rows.length + ' names' : '';
+                if (!rows.length) {
+                    el('domainHealthBody').innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-muted">'
+                        + 'No names checked yet. Enable Domain health in Discovery configuration, then Scan now.</td></tr>';
+                    return;
+                }
+                el('domainHealthBody').innerHTML = rows.map(function (r) {
+                    var c = r.checks || {};
+                    return '<tr class="hover:bg-hover">'
+                        + '<td class="px-4 py-2 font-medium text-foreground" title="Checked '
+                        + escapeHtml(r.checked_at || '') + '">' + escapeHtml(r.name) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.spf) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.dmarc) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.mx) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.blocklists) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.hsts) + '</td>'
+                        + '</tr>';
+                }).join('');
+            })
+            .catch(function (err) {
+                el('domainHealthBody').innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-red-500">Failed to load domain health (' + escapeHtml(err) + ').</td></tr>';
+            });
+    }
+
     function loadCryptoSummary() {
         fetch('/api/inventory/crypto-report', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
@@ -323,6 +374,13 @@
                 el('cfgRegEnabled').checked = !!g.enabled;
                 el('cfgRegIncludeInventory').checked = g.include_inventory !== false;
                 el('cfgRegExtra').value = (g.extra_domains || []).join('\n');
+                var h = cfg.domain_health || {};
+                el('cfgHealthEnabled').checked = !!h.enabled;
+                el('cfgHealthIncludeInventory').checked = h.include_inventory !== false;
+                el('cfgHealthMail').checked = h.check_mail !== false;
+                el('cfgHealthBlocklists').checked = h.check_blocklists !== false;
+                el('cfgHealthHsts').checked = h.check_hsts !== false;
+                el('cfgHealthExtra').value = (h.extra_domains || []).join('\n');
             })
             .catch(function () { /* viewer without config access — panel stays hidden */ });
     }
@@ -352,6 +410,14 @@
                 enabled: el('cfgRegEnabled').checked,
                 include_inventory: el('cfgRegIncludeInventory').checked,
                 extra_domains: lines('cfgRegExtra')
+            },
+            domain_health: {
+                enabled: el('cfgHealthEnabled').checked,
+                include_inventory: el('cfgHealthIncludeInventory').checked,
+                check_mail: el('cfgHealthMail').checked,
+                check_blocklists: el('cfgHealthBlocklists').checked,
+                check_hsts: el('cfgHealthHsts').checked,
+                extra_domains: lines('cfgHealthExtra')
             }
         };
         fetch('/api/inventory/config', {
@@ -373,7 +439,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning…';
         fetch('/api/inventory/scan', { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-            .then(function () { load(); loadRegistrations(); })
+            .then(function () { load(); loadRegistrations(); loadDomainHealth(); })
             .catch(function () { /* keep current view */ })
             .then(function () { btn.disabled = false; btn.innerHTML = original; });
     }
@@ -421,6 +487,7 @@
         load();
         loadCryptoSummary();
         loadRegistrations();
+        loadDomainHealth();
         gateAdminControls();
     });
 }());
