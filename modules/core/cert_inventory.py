@@ -23,6 +23,10 @@ Schema (versioned via ``PRAGMA user_version``):
 * ``endpoints`` — every ``(host, port)`` a fingerprint was observed at, each
   with its own ``first_seen`` / ``last_seen`` (cascade-deleted with the cert).
 
+v4 adds ``expiry_notices``: what has already been said about which expiry
+date, so a warning speaks once per threshold instead of every night (see
+``expiry_watch.py``).
+
 v3 adds ``domain_registrations``: one row per registrable domain CertMate
 tracks, with when its registration expires and where that answer came from
 (see ``domain_registration.py``). It is keyed by domain, not by certificate,
@@ -50,7 +54,7 @@ from .utils import utc_now_iso
 logger = logging.getLogger(__name__)
 
 # Bump when the schema changes and add a migration branch in ``_migrate``.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Recognised discovery sources. ``issued`` = CertMate minted it; ``probed`` =
 # seen live via the TLS probe; ``ct-log`` = discovered in Certificate
@@ -106,6 +110,18 @@ CREATE TABLE IF NOT EXISTS domain_registrations (
     error            TEXT,
     checked_at       TEXT NOT NULL,
     first_seen       TEXT NOT NULL
+);
+"""
+
+# v3 -> v4: one row per (kind, name, expiry, threshold) already announced.
+_EXPIRY_NOTICE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS expiry_notices (
+    kind        TEXT NOT NULL,      -- certificate / domain
+    name        TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,      -- the expiry this was said about
+    threshold   INTEGER NOT NULL,   -- days-left mark that was announced
+    noticed_at  TEXT NOT NULL,
+    PRIMARY KEY (kind, name, expires_at, threshold)
 );
 """
 
@@ -189,6 +205,8 @@ class CertInventory:
                         conn.execute(f'ALTER TABLE certificates ADD COLUMN {name} {sql_type}')
             if version < 3:
                 conn.executescript(_REGISTRATION_SCHEMA)
+            if version < 4:
+                conn.executescript(_EXPIRY_NOTICE_SCHEMA)
             conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
             logger.info(
                 "Certificate inventory schema initialised at %s (v%d)",
@@ -564,6 +582,48 @@ class CertInventory:
             conn.executemany("DELETE FROM domain_registrations WHERE domain = ?",
                              [(d,) for d in stale])
         return len(stale)
+
+    # --- expiry notices (v4) ------------------------------------------------ #
+
+    def record_expiry_notice(self, *, kind, name, expires_at, threshold, noticed_at):
+        """Claim a warning. True the first time, False if it was already said.
+
+        Keyed by the expiry date as well as the threshold, so a renewed
+        certificate — a new expiry — starts again from the first threshold,
+        while a repeated run says nothing.
+        """
+        if not (kind and name and expires_at):
+            return False
+        with self._write_conn() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO expiry_notices (kind, name, expires_at, threshold, noticed_at)
+                VALUES (?,?,?,?,?)
+                ON CONFLICT(kind, name, expires_at, threshold) DO NOTHING
+                """,
+                (kind, str(name).lower(), str(expires_at), int(threshold), noticed_at),
+            )
+            return cur.rowcount > 0
+
+    def expiry_notices(self):
+        """Every warning already announced, newest first. For tests and support."""
+        with self._read_conn() as conn:
+            rows = conn.execute(
+                "SELECT kind, name, expires_at, threshold, noticed_at "
+                "FROM expiry_notices ORDER BY noticed_at DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def prune_expiry_notices(self, before):
+        """Forget notices about expiry dates older than *before* (a datetime).
+
+        The rows exist to stop a warning repeating; once the date they are
+        about is well past, they are only taking up space.
+        """
+        cutoff = before.isoformat()
+        with self._write_conn() as conn:
+            cur = conn.execute("DELETE FROM expiry_notices WHERE expires_at < ?", (cutoff,))
+            return cur.rowcount
 
     def count(self):
         """Return the number of distinct certificates in the inventory."""

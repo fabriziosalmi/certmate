@@ -591,7 +591,14 @@ _EVENT_TITLES = {
     'certificate_failed': 'Certificate Failed',
     'certificate_revoked': 'Certificate Revoked',
     'certificate_deployed': 'Certificate Deployed',
+    'certificate_expiring': 'Certificate Expiring',
+    'domain_expiring': 'Domain Registration Expiring',
     'deploy_hook_failed': 'Deploy Hook Failed',
+    # Published by DeployManager and listed in the notifier's
+    # _ALWAYS_NOTIFY_EVENTS, which exists so an operator cannot filter it away
+    # by accident. Without a title here this function returned None and the
+    # notifier was never reached, so the event nobody could silence was silent.
+    'certificate_deploy_incomplete': 'Certificate Not Deployed',
 }
 
 
@@ -624,6 +631,16 @@ def build_notification_message(event, data):
     hook_name = data.get('hook_name')
     if hook_name:
         message += f" (hook: {hook_name})"
+    # An expiry warning is only useful with the number in it.
+    days_left = data.get('days_left')
+    if event in ('certificate_expiring', 'domain_expiring') and days_left is not None:
+        when = f" ({data['expires_at']})" if data.get('expires_at') else ''
+        if data.get('expired'):
+            message += f' — expired{when}'
+        elif days_left == 0:
+            message += f' — expires today{when}'
+        else:
+            message += f" — {days_left} day{'s' if days_left != 1 else ''} left{when}"
     err = data.get('error')
     if err:
         message += f" — {err}"
@@ -776,6 +793,7 @@ def initialize_managers(container: AppContainer, app):
     from .cert_discovery import CertDiscoveryManager
     from .ct_monitor import CTMonitorManager
     from .domain_registration import DomainRegistrationManager
+    from .expiry_watch import ExpiryWatch
     cert_inventory = CertInventory(container.data_dir)
     cert_discovery = CertDiscoveryManager(settings_manager, cert_inventory)
     ct_monitor = CTMonitorManager(settings_manager, cert_inventory)
@@ -783,6 +801,11 @@ def initialize_managers(container: AppContainer, app):
     # no RDAP). Opt-in, like the rest of discovery.
     domain_registration = DomainRegistrationManager(
         settings_manager, cert_inventory, container.cert_dir)
+
+    # Says that a certificate or a domain registration is about to expire,
+    # once per threshold, through the same event bus every other alert uses.
+    expiry_watch = ExpiryWatch(settings_manager, certificate_manager,
+                               cert_inventory, event_bus)
 
     container.managers = {
         'file_ops': file_ops,
@@ -815,6 +838,7 @@ def initialize_managers(container: AppContainer, app):
         'cert_discovery': cert_discovery,
         'ct_monitor': ct_monitor,
         'domain_registration': domain_registration,
+        'expiry_watch': expiry_watch,
     }
 
 
@@ -1001,6 +1025,17 @@ def _domain_registration_job():
         _run_manager_job('domain_registration', 'run_check')
 
 
+def _expiry_watch_job():
+    """Picklable wrapper for the daily expiry warnings. Own lock so several
+    workers on one data dir do not each announce the same expiry — the notice
+    table would dedupe them, but the lock keeps the work to one process."""
+    with _renewal_process_lock('.expiry-watch.lock') as may_run:
+        if not may_run:
+            logger.info("Scheduled expiry watch skipped: another process holds the lock.")
+            return
+        _run_manager_job('expiry_watch', 'run')
+
+
 def _deploy_window_drain_job():
     """Run deploys held for a maintenance window (#632).
 
@@ -1120,6 +1155,14 @@ def setup_scheduler(container: AppContainer):
             func=_domain_registration_job,
             trigger="cron", hour=6, minute=0,
             id='domain_registration_check', replace_existing=True
+        )
+        # Expiry warnings: once a day at 07:00, after the renewal sweep has
+        # had its chance (02:00) and after the registration check (06:00), so
+        # what it announces is what is still true this morning.
+        scheduler.add_job(
+            func=_expiry_watch_job,
+            trigger="cron", hour=7, minute=0,
+            id='expiry_watch', replace_existing=True
         )
         # Deploy maintenance windows (#632). See the job's docstring for why
         # this is every minute. `coalesce` from job_defaults collapses a burst

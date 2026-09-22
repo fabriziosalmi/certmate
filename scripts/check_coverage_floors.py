@@ -143,6 +143,9 @@ FLOORS = {
     'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
     'modules/core/factory.py': 80,
+    # Measured at 94.9%: what is left is the defensive parse of a stored
+    # expiry timestamp that the registration check writes in ISO form.
+    'modules/core/expiry_watch.py': 90,
     'modules/core/file_operations.py': 80,
     'modules/core/inventory_sources.py': 95,
     'modules/core/inventory_view.py': 95,
