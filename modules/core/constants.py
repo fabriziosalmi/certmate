@@ -161,6 +161,14 @@ METADATA_SCHEMA_VERSION = 1
 # fix instead: a key minted in setup mode was minted by whoever could reach
 # the instance, and it outlived setup, so no client could rely on it safely.
 #
+# 2.8 for POST /api/probe: read the certificate a host is serving right now,
+# with the verified revocation answer. The inventory could only probe what its
+# configuration named, and deployment-status only a managed domain, so a tool
+# that wanted CertMate to answer "what is being served at this host" had no way
+# to ask and reimplemented the probe — badly, in at least one case, with a
+# revocation status that was assumed rather than checked. A new endpoint is a
+# MINOR. A scoped key probes only what its scope covers.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -170,7 +178,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.7'
+API_CONTRACT_VERSION = '2.8'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

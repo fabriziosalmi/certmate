@@ -1281,11 +1281,12 @@ def setup_api(container: AppContainer, app):
     ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
     ns_diagnostics = Namespace('diagnostics', description='Sanitized diagnostic snapshot for bug reports')
     ns_inventory = Namespace('inventory', description='Certificate inventory (issued + discovered)')
+    ns_probe = Namespace('probe', description='Read the certificate a host is serving, now')
 
     namespaces = [
         ns_certificates, ns_client_certs, ns_ocsp, ns_crl, ns_settings,
         ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics,
-        ns_inventory
+        ns_inventory, ns_probe
     ]
     for ns in namespaces:
         api.add_namespace(ns)
@@ -1340,6 +1341,7 @@ def setup_api(container: AppContainer, app):
     ns_inventory.add_resource(api_resources['InventoryConfig'], '/config')
     ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
     ns_inventory.add_resource(api_resources['InventoryDomains'], '/domains')
+    ns_probe.add_resource(api_resources['ProbeEndpoint'], '')
     ns_inventory.add_resource(api_resources['InventoryCryptoReport'], '/crypto-report')
     ns_inventory.add_resource(api_resources['InventoryAdopt'], '/<string:fingerprint>/adopt')
     # '/<string:fingerprint>' sits at the same depth as '/config', '/scan' and
@@ -1745,6 +1747,8 @@ def setup_rate_limiting(app, container: AppContainer):
             endpoint = 'certificate_create'
         elif 'certificates' in path and 'batch' in path:
             endpoint = 'certificate_batch'
+        elif path.rstrip('/').endswith('/api/probe'):
+            endpoint = 'probe'
         elif 'certificates' in path and 'renew' in path:
             endpoint = 'certificate_renew'
         elif 'certificates' in path and 'revoke' in path:
