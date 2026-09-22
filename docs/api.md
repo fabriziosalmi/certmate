@@ -1242,12 +1242,41 @@ Audited, like any other administrative action.
 **Endpoint**: `PUT /api/users/<username>` — admin
 **Endpoint**: `DELETE /api/users/<username>` — admin
 
+#### Create an API key
+
+**Endpoint**: `POST /api/keys` — admin
+
+Refused with `409 SETUP_BOOTSTRAP_ONLY` while the instance is still in setup
+mode. In that state every request is served as admin to anyone who can reach
+the instance, so a key minted then would be minted by whoever was there, and
+it would stay valid once setup is complete. Enable local authentication (or set
+`API_BEARER_TOKEN`), sign in, then create keys. `POST /api/users` answers the
+same `409` for any user after the first one while setup is incomplete: the
+first admin is the bootstrap.
+
 #### Revoke an API key
 
 **Endpoint**: `DELETE /api/keys/<key_id>` — admin
 
 Revocation takes effect immediately; the key stops authenticating on the next
 request.
+
+#### Confirm a key created during setup
+
+**Endpoint**: `PATCH /api/keys/<key_id>` — admin, since API contract **2.7**
+
+```json
+{ "confirmed": true }
+```
+
+Keys that earlier versions let be created while the instance was in setup mode
+(`created_by: "setup_user"`) stay valid, but `GET /api/keys` lists them with
+`created_during_setup: true` and `needs_review: true`, and the startup log says
+how many there are. Confirming records who vouched for the key and when
+(`setup_origin_confirmed_by`, `setup_origin_confirmed_at`) and clears
+`needs_review`; revoking removes it. Confirming is refused in setup mode, for a
+key that was not created during setup (`400 API_KEY_NOT_CONFIRMABLE`), and for
+an unknown key (`404 API_KEY_NOT_FOUND`).
 
 ### Backups and storage
 

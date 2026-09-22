@@ -1819,6 +1819,25 @@ def create_app(test_config=None):
                 "admin and enable local auth) or set API_BEARER_TOKEN before "
                 "exposing it."
             )
+        elif _auth is not None:
+            # Keys created while the instance was in setup mode were created by
+            # whoever could reach it then, and they stay valid after setup. They
+            # can no longer be minted; the ones that exist wait for review.
+            # Said here, in the log, and in Settings -> API Keys: never on the
+            # unauthenticated /health, which would tell whoever planted one
+            # that it is still there.
+            # This module's logger is a StructuredLogger: message plus keyword
+            # fields, no %-arguments (a positional one raises TypeError, which
+            # the except below would have swallowed at debug level).
+            unreviewed = _auth.unreviewed_setup_keys()
+            if unreviewed:
+                logger.critical(
+                    f"{len(unreviewed)} API key(s) were created while this instance "
+                    "was in setup mode, when every request was served as admin to "
+                    "anyone who could reach it. Nobody can vouch for who created "
+                    "them, and they are still valid. Review them in Settings -> API "
+                    "Keys: confirm the ones you made, revoke the rest.",
+                    unreviewed_setup_keys=len(unreviewed))
     except Exception as e:
         logger.debug(f"Setup-mode startup check failed: {e}")
 

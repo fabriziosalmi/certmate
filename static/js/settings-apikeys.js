@@ -149,7 +149,7 @@
             revokeKey: function (keyId, keyName) {
                 var self = this;
                 CertMate.confirm(
-                    'Are you sure you want to revoke API key "' + CertMate.escapeHtml(keyName) + '"? This cannot be undone.',
+                    'Are you sure you want to revoke API key "' + keyName + '"? This cannot be undone.',
                     'Revoke API Key'
                 ).then(function (confirmed) {
                     if (!confirmed) return;
@@ -168,6 +168,38 @@
                             });
                         })
                         .catch(function () { showMessage('Failed to revoke API key', 'error'); });
+                });
+            },
+
+            // A key created during setup mode stays valid but is flagged: only
+            // an operator who made it can vouch for it (see auth.py).
+            confirmKey: function (keyId, keyName) {
+                var self = this;
+                CertMate.confirm(
+                    // CertMate.confirm escapes the message itself; escaping here too
+                    // would show "&amp;" for a key named "a&b".
+                    'Confirm that you created API key "' + keyName + '". '
+                    + 'It was created while this instance was in setup mode, when anyone who could '
+                    + 'reach it was served as admin. If you do not recognise it, revoke it instead.',
+                    'Confirm API key'
+                ).then(function (confirmed) {
+                    if (!confirmed) { return; }
+                    fetch('/api/keys/' + encodeURIComponent(keyId), {
+                        method: 'PATCH', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ confirmed: true })
+                    })
+                        .then(function (r) {
+                            return r.json().then(function (data) {
+                                if (r.ok) {
+                                    showMessage('API key confirmed', 'success');
+                                    self.loadKeys();
+                                } else {
+                                    showMessage(data.error || 'Failed to confirm key', 'error');
+                                }
+                            });
+                        })
+                        .catch(function () { showMessage('Failed to confirm API key', 'error'); });
                 });
             },
 

@@ -63,11 +63,17 @@ def url_map(tmp_path_factory):
         patch.setattr("modules.core.factory.__file__", str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
-    return {
-        _normalise(str(rule)): {m for m in rule.methods
-                                if m not in ("HEAD", "OPTIONS")}
-        for rule in app.url_map.iter_rules()
-    }
+    # Methods are UNIONED across every rule with the same path, never taken
+    # from the last one seen. Two rules can share a path — `/api/keys/<id>`
+    # is DELETE on one view and PATCH on another — and a dict comprehension
+    # keyed by path silently kept whichever came second, so a correctly
+    # documented verb was reported as unsupported. scripts/check_wiki_endpoints.py
+    # carries the same warning about the same mistake.
+    methods_by_path = {}
+    for rule in app.url_map.iter_rules():
+        verbs = {m for m in rule.methods if m not in ("HEAD", "OPTIONS")}
+        methods_by_path.setdefault(_normalise(str(rule)), set()).update(verbs)
+    return methods_by_path
 
 
 def _documented():
@@ -142,3 +148,9 @@ def test_every_documented_path_is_a_real_route(doc, number, verb, path, url_map)
         f"application serves. Anyone integrating against the API reference "
         f"gets a 404."
     )
+
+
+def test_methods_are_unioned_across_rules_with_the_same_path(url_map):
+    """The regression this fixture had: `/api/keys/<id>` is DELETE on one view
+    and PATCH on another, and only one of them used to survive."""
+    assert {'DELETE', 'PATCH'} <= url_map['/api/keys/<X>']
