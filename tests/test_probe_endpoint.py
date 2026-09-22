@@ -170,3 +170,24 @@ def test_revocation_can_be_left_out(probe_app):
     body = _probe(application, {'host': 'letsencrypt.org', 'check_revocation': False}).get_json()
     assert body['status'] == 'ok'
     assert body['revocation'] is None
+
+
+# --------------------------------------------------------------------------- #
+# The client another tool will use
+# --------------------------------------------------------------------------- #
+
+def test_the_sdk_asks_the_endpoint_the_way_it_expects():
+    """Read from the source, not by importing: the SDK is only installed in
+    the jobs that exercise the clients, and importorskip here would be a check
+    that quietly does not run.
+
+    What matters is that the SDK sends the body this endpoint documents, and
+    validates the boolean before the request rather than coercing it — the
+    trap #863 is about.
+    """
+    import pathlib
+    source = (pathlib.Path(__file__).resolve().parent.parent
+              / 'clients' / 'certmate-sdk' / 'certmate' / 'client.py').read_text(encoding='utf-8')
+    assert 'def probe(' in source
+    assert '"POST", "/api/probe"' in source
+    assert 'self._require_bool("check_revocation", check_revocation)' in source

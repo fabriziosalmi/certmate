@@ -351,6 +351,30 @@ class Client:
     def health(self) -> Dict[str, Any]:
         return self._request("GET", "/health") or {}
 
+    # -- probing a host ------------------------------------------------------
+    def probe(self, host: str, *, port: int = 443,
+              server_name: Optional[str] = None,
+              check_revocation: bool = True) -> Dict[str, Any]:
+        """Read the certificate *host* is serving right now.
+
+        Returns the probe's answer as the server gives it: ``status``
+        (ok / blocked / unreachable), ``certificate``, ``validation``,
+        ``chain`` and ``revocation``. Nothing raises for a host that refuses
+        or does not resolve — that is a status, not an error.
+
+        ``revocation`` is a verified OCSP or CRL answer, ``None`` when
+        *check_revocation* is False. It is never ``good`` unless a signed,
+        current answer from the issuer said so.
+        """
+        body: Dict[str, Any] = {
+            "host": host,
+            "port": port,
+            "check_revocation": self._require_bool("check_revocation", check_revocation),
+        }
+        if server_name is not None:
+            body["server_name"] = server_name
+        return self._request("POST", "/api/probe", json=body) or {}
+
     # -- backups -------------------------------------------------------------
     def list_backups(self) -> Any:
         return self._request("GET", "/api/web/backups")
