@@ -515,3 +515,70 @@ def test_dnspython_is_in_what_the_image_installs(lockfile):
     assert any(line.startswith('dnspython==') for line in text.splitlines()), (
         f'dnspython is no longer in {lockfile}; pin it in the matching '
         'requirements file, or the CAA check silently stops working')
+
+
+# --------------------------------------------------------------------------- #
+# The dnspython resolver's translation of what DNS answers, offline
+# --------------------------------------------------------------------------- #
+
+class _FakeRdata:
+    def __init__(self, flags, tag, value):
+        self.flags, self.tag, self.value = flags, tag, value
+
+
+@pytest.mark.parametrize('raised, expected', [
+    ('NoAnswer', []),         # the name exists, no CAA: climb
+    ('NXDOMAIN', []),         # the name does not exist: climb
+])
+def test_dnspython_no_records_means_climb(monkeypatch, raised, expected):
+    import dns.resolver
+    exc = getattr(dns.resolver, raised)
+
+    def resolve(self, name, rdtype):
+        raise exc()
+    monkeypatch.setattr(dns.resolver.Resolver, 'resolve', resolve)
+    assert caa._dnspython_resolver(1.0)('example.com') == expected
+
+
+@pytest.mark.parametrize('exc_path', [
+    'dns.resolver.NoNameservers',      # SERVFAIL everywhere
+    'dns.exception.Timeout',
+    'dns.name.EmptyLabel',             # any other DNSException
+])
+def test_dnspython_failures_are_lookup_failed_not_no_records(monkeypatch, exc_path):
+    """A SERVFAIL is not 'no CAA records': a CA that gets one refuses, so
+    reading it as permission to climb would call a refusal allowed."""
+    import importlib
+    import dns.resolver
+    module, _, name = exc_path.rpartition('.')
+    exc = getattr(importlib.import_module(module), name)
+
+    def resolve(self, qname, rdtype):
+        raise exc()
+    monkeypatch.setattr(dns.resolver.Resolver, 'resolve', resolve)
+    with pytest.raises(LookupFailed):
+        caa._dnspython_resolver(1.0)('example.com')
+
+
+def test_dnspython_records_are_decoded(monkeypatch):
+    import dns.resolver
+
+    def resolve(self, name, rdtype):
+        assert rdtype == 'CAA'
+        return [_FakeRdata(0, b'issue', b'letsencrypt.org'),
+                _FakeRdata(128, b'tbs', b'\xff\xfe')]
+    monkeypatch.setattr(dns.resolver.Resolver, 'resolve', resolve)
+    assert caa._dnspython_resolver(1.0)('example.com') == [
+        (0, 'issue', 'letsencrypt.org'), (128, 'tbs', '��')]
+
+
+def test_dnspython_timeout_is_passed_as_the_resolver_lifetime(monkeypatch):
+    import dns.resolver
+    seen = {}
+
+    def resolve(self, name, rdtype):
+        seen['lifetime'] = self.lifetime
+        return []
+    monkeypatch.setattr(dns.resolver.Resolver, 'resolve', resolve)
+    caa._dnspython_resolver(2.5)('example.com')
+    assert seen['lifetime'] == 2.5
