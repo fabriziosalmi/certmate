@@ -10,6 +10,7 @@ This guide covers:
 
 1. [How it fits together](#how-it-fits-together)
 2. [The deep TLS probe](#the-deep-tls-probe)
+   - [Revocation](#revocation)
 3. [The inventory model](#the-inventory-model)
 4. [Endpoint discovery](#endpoint-discovery)
 5. [CT-log monitoring (crt.sh)](#ct-log-monitoring)
@@ -63,6 +64,49 @@ expired, self-signed, or hostname-mismatched certificate — a `validation` bloc
 reports those conditions instead of a bare error. IPv6 and any port are
 supported. See also the reachability probe in [Probes](./probes.en.md).
 
+### Revocation
+
+A certificate can be revoked by its issuer long before it expires, and a
+revoked certificate still being served looks healthy on every other axis. When
+a discovery sweep runs with `check_revocation` (the default), the probe also
+asks the issuer:
+
+1. **OCSP** first, at the responder named in the certificate's AIA extension.
+2. **The CRL** when there is no responder, when it does not answer, or when it
+   says it does not know the certificate. Let's Encrypt turned OCSP off in 2025,
+   so for its certificates the CRL is the only source.
+
+The issuer certificate comes from the served chain when the Python runtime can
+hand it over (the one in the image cannot, so in practice this is the next
+route) and otherwise from the certificate's AIA `caIssuers` URL. It must have
+actually signed the certificate either way.
+
+An answer counts only if it is **verified**. An OCSP response has to be signed
+by the issuer, or by a responder the issuer signed that carries the OCSP-signing
+extended key usage, and it has to be current. A CRL has to be issued and signed
+by the issuer and not be past its `nextUpdate`. Anything short of that is
+reported as `unavailable` with the reason, never as `good`:
+
+| `revocation.status` | Meaning |
+|---|---|
+| `good` | a verified OCSP or CRL answer says it is not revoked |
+| `revoked` | a verified answer says it is; `revoked_at` and `reason` carry what the issuer published |
+| `unknown` | the OCSP responder does not know the certificate and no CRL settled it |
+| `unavailable` | no verified answer could be obtained; `error` says why |
+| `not_applicable` | self-signed, so there is no issuer to revoke it |
+| *(null)* | never checked: revocation checking is off, or the certificate has not been swept since |
+
+`revoked` is final. A later sweep in which the responder is down, or even one
+that gets a different answer, does not overwrite it, because a CA cannot
+un-revoke a certificate.
+
+The requests go to the OCSP and CRL URLs written in the certificate, which for a
+discovered certificate means URLs chosen by whoever issued it. They pass through
+the same SSRF guard as the probe, only plain `http` is fetched (the payloads are
+signed, so TLS would add nothing), redirects are not followed, and responses are
+size-capped. The issuer certificate and each CRL are cached for the sweep, so
+a hundred hosts behind one CA cost one CRL download.
+
 ---
 
 ## The inventory model
@@ -81,11 +125,13 @@ A record carries:
 | `managed` | whether CertMate manages it, with `managed_domain` linking it |
 | `first_seen` / `last_seen` | |
 | `endpoints[]` | every `host:port` it was observed at, each with its own first/last-seen |
+| `revocation` | the last verified revocation answer: `{status, method, reason, revoked_at, error, checked_at}`, or `null` if never checked (see [Revocation](#revocation)); since API contract **2.4** |
 
 Records are created and updated **idempotently** by fingerprint: re-observing a
 certificate only refreshes `last_seen` and merges the endpoint; the cryptographic
 metadata is immutable (the fingerprint *is* its hash). `source` is preserved from
-first discovery; `managed` is sticky-true.
+first discovery; `managed` is sticky-true. The revocation answer is the one
+mutable part, updated on every checked sweep, except that `revoked` is final.
 
 Storage is a single SQLite database at `<data_dir>/inventory/inventory.db`. It is
 included in the [unified backup](./guide.md) alongside the PKI and audit chain,
@@ -107,7 +153,8 @@ a renewed certificate that was never deployed.
     "enabled": true,
     "endpoints": ["example.com", "api.example.com:8443", "[2001:db8::1]:443"],
     "include_managed": true,     // also probe the hosts of managed domains
-    "allow_private": false       // refuse private/loopback targets (SSRF guard)
+    "allow_private": false,      // refuse private/loopback targets (SSRF guard)
+    "check_revocation": true     // ask OCSP, then the CRL (see Revocation)
   }
 }
 ```
@@ -159,7 +206,10 @@ requests. Polling is rate-limited and failure-isolated per domain and per entry.
 subject/SAN, issuer, expiry (days remaining + status colour), key
 algorithm/size, source, and endpoints. Filter by group, source, expiry, or free
 text. Summary cards give an **expiry forecast** (expired / within 7 / 30 / 90
-days) across *everything*, not just issued certs.
+days) across *everything*, not just issued certs, plus a count of certificates
+a verified answer says are **revoked**. Each row shows its revocation answer
+under the expiry badge; a certificate that could not be checked says so in grey
+and gives the reason on hover, rather than looking fine.
 
 Admins get an inline configuration panel for the monitored endpoints and CT-log
 domains, plus **Scan now**.
@@ -239,7 +289,8 @@ sweep, so remove it from **Discovery configuration** first when the intent is
   other non-globally-routable address — including IPv4-mapped IPv6 — unless
   `allow_private` is set. The validated IP is pinned for the connection with SNI
   set to the hostname, so a DNS rebind between the check and the handshake cannot
-  redirect the probe to an internal host.
+  redirect the probe to an internal host. The OCSP, CRL and issuer URLs a
+  certificate names are fetched through the same guard.
 - **Domain scope.** A scoped API key only sees inventory records within its
   `allowed_domains`, the same boundary the certificate API enforces.
 - **CSV safety.** Certificate fields come from untrusted (probed / CT-logged)

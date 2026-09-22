@@ -37,6 +37,27 @@
         return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' + m[0] + '">' + escapeHtml(m[1]) + '</span>';
     }
 
+    // Only a verified answer is shown as good or revoked; everything else is
+    // grey with the reason on hover, so "could not check" never reads as fine.
+    function revocationBadge(rev) {
+        if (!rev || !rev.status) { return ''; }
+        var map = {
+            revoked: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Revoked',
+                'Revoked' + (rev.revoked_at ? ' on ' + rev.revoked_at : '') + (rev.reason ? ' (' + rev.reason + ')' : '')
+                + (rev.method ? ' — ' + rev.method.toUpperCase() : '')],
+            good: ['bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', 'Not revoked',
+                'Not revoked — verified ' + (rev.method || '').toUpperCase() + ' answer, ' + (rev.checked_at || '')],
+            unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation unknown',
+                rev.error || 'The responder does not know this certificate'],
+            unavailable: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation not checked',
+                rev.error || 'No verified answer could be obtained']
+        };
+        var m = map[rev.status];
+        if (!m) { return ''; }
+        return '<span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ' + m[0] + '" title="'
+            + escapeHtml(m[2]) + '">' + escapeHtml(m[1]) + '</span>';
+    }
+
     function sourceBadge(source, managed) {
         var cls = managed
             ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
@@ -102,7 +123,9 @@
         var q = el('invSearch').value.trim().toLowerCase();
         if (group && r.group !== group) { return false; }
         if (source && r.source !== source) { return false; }
-        if (expiry && r.expiry_status !== expiry) { return false; }
+        if (expiry === 'revoked') {
+            if (!r.revocation || r.revocation.status !== 'revoked') { return false; }
+        } else if (expiry && r.expiry_status !== expiry) { return false; }
         if (q) {
             var hay = [r.subject_cn, r.issuer_cn, r.issuer, (r.san_dns || []).join(' ')]
                 .join(' ').toLowerCase();
@@ -125,7 +148,8 @@
             return '<tr class="hover:bg-hover">'
                 + '<td class="px-4 py-2">' + subjectCell(r) + '</td>'
                 + '<td class="px-4 py-2 text-xs text-muted">' + escapeHtml(r.issuer_cn || r.issuer || '—') + '</td>'
-                + '<td class="px-4 py-2">' + statusBadge(r.expiry_status, r.days_until_expiry) + '</td>'
+                + '<td class="px-4 py-2">' + statusBadge(r.expiry_status, r.days_until_expiry)
+                    + '<div>' + revocationBadge(r.revocation) + '</div></td>'
                 + '<td class="px-4 py-2 text-xs">' + keyLabel(r.key) + '</td>'
                 + '<td class="px-4 py-2">' + sourceBadge(r.source, r.managed) + '</td>'
                 + '<td class="px-4 py-2">' + endpointsCell(r) + '</td>'
@@ -200,6 +224,7 @@
         el('sum7').textContent = ex['7'] || 0;
         el('sum30').textContent = ex['30'] || 0;
         el('sum90').textContent = ex['90'] || 0;
+        el('sumRevoked').textContent = (s.revocation || {}).revoked || 0;
     }
 
     function load() {
@@ -237,6 +262,7 @@
                 el('cfgDiscEnabled').checked = !!d.enabled;
                 el('cfgIncludeManaged').checked = d.include_managed !== false;
                 el('cfgAllowPrivate').checked = !!d.allow_private;
+                el('cfgCheckRevocation').checked = d.check_revocation !== false;
                 el('cfgEndpoints').value = (d.endpoints || []).join('\n');
                 el('cfgCtEnabled').checked = !!c.enabled;
                 el('cfgCtIncludeManaged').checked = c.include_managed !== false;
@@ -258,6 +284,7 @@
                 enabled: el('cfgDiscEnabled').checked,
                 include_managed: el('cfgIncludeManaged').checked,
                 allow_private: el('cfgAllowPrivate').checked,
+                check_revocation: el('cfgCheckRevocation').checked,
                 endpoints: lines('cfgEndpoints')
             },
             ct_monitoring: {

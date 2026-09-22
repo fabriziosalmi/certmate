@@ -23,6 +23,12 @@ Schema (versioned via ``PRAGMA user_version``):
 * ``endpoints`` — every ``(host, port)`` a fingerprint was observed at, each
   with its own ``first_seen`` / ``last_seen`` (cascade-deleted with the cert).
 
+v2 adds the certificate's last revocation answer (``revocation_*`` columns).
+Unlike the rest of the row it is mutable — a certificate can be revoked after
+it was first seen — so it is rewritten on every checked observation, with one
+exception: ``revoked`` is final. Revocation cannot be undone, so a later
+``unavailable`` (a responder that did not answer) never replaces it.
+
 The store is thread-safe by opening a short-lived connection per operation:
 SQLite serialises writers at the file level, and each public method runs in a
 single committed transaction, so concurrent Flask worker threads are safe.
@@ -39,7 +45,7 @@ from .utils import utc_now_iso
 logger = logging.getLogger(__name__)
 
 # Bump when the schema changes and add a migration branch in ``_migrate``.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Recognised discovery sources. ``issued`` = CertMate minted it; ``probed`` =
 # seen live via the TLS probe; ``ct-log`` = discovered in Certificate
@@ -82,6 +88,16 @@ CREATE INDEX IF NOT EXISTS idx_endpoints_hostport ON endpoints(host, port);
 CREATE INDEX IF NOT EXISTS idx_certificates_managed ON certificates(managed);
 CREATE INDEX IF NOT EXISTS idx_certificates_not_after ON certificates(not_after);
 """
+
+# v1 -> v2: the last revocation answer for each certificate.
+_REVOCATION_COLUMNS = (
+    ('revocation_status', 'TEXT'),      # good/revoked/unknown/unavailable/not_applicable
+    ('revocation_method', 'TEXT'),      # ocsp / crl
+    ('revocation_reason', 'TEXT'),      # CRLReason name, when revoked
+    ('revoked_at', 'TEXT'),
+    ('revocation_error', 'TEXT'),       # why it is unavailable/unknown
+    ('revocation_checked_at', 'TEXT'),
+)
 
 
 class CertInventory:
@@ -142,8 +158,15 @@ class CertInventory:
             version = conn.execute('PRAGMA user_version').fetchone()[0]
             if version >= SCHEMA_VERSION:
                 return
-            # v0 -> v1: initial schema.
-            conn.executescript(_SCHEMA)
+            if version < 1:
+                # v0 -> v1: initial schema.
+                conn.executescript(_SCHEMA)
+            if version < 2:
+                existing = {r['name'] for r in conn.execute('PRAGMA table_info(certificates)')}
+                for name, sql_type in _REVOCATION_COLUMNS:
+                    if name not in existing:
+                        # Both parts are module constants above, never input.
+                        conn.execute(f'ALTER TABLE certificates ADD COLUMN {name} {sql_type}')
             conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
             logger.info(
                 "Certificate inventory schema initialised at %s (v%d)",
@@ -289,7 +312,7 @@ class CertInventory:
         """
         if not isinstance(probe_result, dict) or probe_result.get('status') != 'ok':
             return None
-        return self.record_certificate(
+        fingerprint = self.record_certificate(
             probe_result.get('certificate') or {},
             host=probe_result.get('host'),
             port=probe_result.get('port'),
@@ -298,6 +321,38 @@ class CertInventory:
             managed_domain=managed_domain,
             observed_at=observed_at,
         )
+        if fingerprint and isinstance(probe_result.get('revocation'), dict):
+            self.record_revocation(fingerprint, probe_result['revocation'])
+        return fingerprint
+
+    def record_revocation(self, fingerprint, revocation):
+        """Store the latest revocation answer for *fingerprint*.
+
+        ``revoked`` is final: once a verified answer said revoked, a later
+        answer of any other kind is ignored (a CA cannot un-revoke, and a
+        responder being down tomorrow says nothing new). Returns True if the
+        row was updated.
+        """
+        status = revocation.get('status')
+        if not status:
+            return False
+        with self._write_conn() as conn:
+            cur = conn.execute(
+                """
+                UPDATE certificates SET
+                    revocation_status = ?, revocation_method = ?,
+                    revocation_reason = ?, revoked_at = ?,
+                    revocation_error = ?, revocation_checked_at = ?
+                WHERE fingerprint = ?
+                  AND (revocation_status IS NULL OR revocation_status != 'revoked')
+                """,
+                (
+                    status, revocation.get('method'), revocation.get('reason'),
+                    revocation.get('revoked_at'), revocation.get('error'),
+                    revocation.get('checked_at') or utc_now_iso(), fingerprint,
+                ),
+            )
+            return cur.rowcount > 0
 
     # --- reads -------------------------------------------------------------- #
 
@@ -442,6 +497,7 @@ def _row_to_record(cert_row, endpoint_rows):
         'managed_domain': cert_row['managed_domain'],
         'first_seen': cert_row['first_seen'],
         'last_seen': cert_row['last_seen'],
+        'revocation': _revocation_view(cert_row),
         'endpoints': [
             {
                 'host': e['host'],
@@ -451,4 +507,19 @@ def _row_to_record(cert_row, endpoint_rows):
             }
             for e in endpoint_rows
         ],
+    }
+
+
+def _revocation_view(cert_row):
+    """The stored revocation answer, or None when it was never checked."""
+    status = cert_row['revocation_status']
+    if not status:
+        return None
+    return {
+        'status': status,
+        'method': cert_row['revocation_method'],
+        'reason': cert_row['revocation_reason'],
+        'revoked_at': cert_row['revoked_at'],
+        'error': cert_row['revocation_error'],
+        'checked_at': cert_row['revocation_checked_at'],
     }
