@@ -10,8 +10,25 @@ PagerDuty, an ITSM endpoint, your own service.
 
 `certificate_created`, `certificate_renewed`, `certificate_expiring`,
 `certificate_revoked`, `certificate_failed`, `certificate_deployed`,
-`deploy_hook_failed`. Each webhook can be limited to a subset (leave the list
-empty for all).
+`domain_expiring`, `deploy_hook_failed`, `certificate_deploy_incomplete`. Each
+webhook can be limited to a subset (leave the list empty for all).
+
+`deploy_hook_failed` and `certificate_deploy_incomplete` are delivered whatever
+the filter says: they report a failure an operator must not be able to silence
+by accident.
+
+### The two expiry warnings
+
+| Event | When |
+|---|---|
+| `certificate_expiring` | a managed certificate is at 14, 7, 3 or 1 days, or has expired. With auto-renew off the first warning comes at the renewal threshold instead, because nothing else is going to act. |
+| `domain_expiring` | a tracked domain *registration* is at 60, 30, 14, 7 or 1 days, or has expired ([registration expiry](discovery-inventory.md#domain-registration-expiry)). |
+
+Each threshold is announced **once per expiry date**: a renewed certificate
+starts again from the first threshold, and an unfixed one is announced at each
+mark rather than every morning. Both carry `days_left`, `days_until_expiry`,
+`expires_at`, `expired` and `threshold_days` in `details`; `certificate_expiring`
+adds `auto_renew`, and `domain_expiring` adds `registrar` and `source`.
 
 ## The default body
 
