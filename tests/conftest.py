@@ -84,6 +84,28 @@ def _isolate_runtime_dirs(tmp_path_factory):
         yield
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _caa_never_asks_real_dns():
+    """The suite never sends a CAA query to the real DNS.
+
+    A failed issuance asks what the CAA records say (modules/core/caa.py), and
+    dozens of tests fail certbot on purpose — with a MagicMock executor, which
+    answers True to `produces_artifacts` like any other attribute, so nothing
+    upstream can tell a scripted failure from a real one. Left alone, each of
+    those tests would resolve `example.com` and its parents against whatever
+    resolver the machine has: slower, dependent on the network, and answering
+    a question about a CA that was never contacted.
+
+    Replaced with a resolver that finds no records, so the answer is "no CAA
+    policy" and no explanation is added. Tests about CAA pass their own
+    `resolve` and are unaffected.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr("modules.core.caa.resolver_factory",
+                      lambda timeout: (lambda name: []))
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

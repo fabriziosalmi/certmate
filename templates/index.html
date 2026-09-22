@@ -219,6 +219,9 @@
                                 <div id="ca-provider-info" class="mt-2 text-xs text-muted hidden">
                                     <!-- CA provider info will be populated here -->
                                 </div>
+                                <!-- CAA advice (never a gate): filled by checkCaaFromForm when a
+                                     CAA record would make the chosen CA refuse these names. -->
+                                <div id="caa_warning" class="mt-2 hidden" role="status" aria-live="polite"></div>
                             </div>
                         </div>
                         

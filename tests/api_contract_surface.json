@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.4",
+  "contract_version": "2.5",
   "surface": [
     "DELETE /api/backups/delete/<X>/<X>",
     "DELETE /api/certificates/<X>",
@@ -70,6 +70,7 @@
     "POST /api/certificates/<X>/deploy",
     "POST /api/certificates/<X>/reissue",
     "POST /api/certificates/<X>/renew",
+    "POST /api/certificates/check-caa",
     "POST /api/certificates/check-dns-alias",
     "POST /api/certificates/create",
     "POST /api/certificates/deployment-status/browser",

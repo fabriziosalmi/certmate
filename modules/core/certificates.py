@@ -2659,6 +2659,34 @@ class CertificateManager:
                 certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
         return certbot_cmd, process_env
 
+    def _caa_explanation(self, ca_provider, domains, challenge_type):
+        """What the CAA records say about a failed issuance, as a suffix.
+
+        Returns ``"\n\n" + a sentence`` when a CAA record refuses this CA,
+        otherwise ``""``, so the caller can append it unconditionally. Only
+        asked after certbot has already failed, so a working issuance never
+        pays for the DNS lookups; and never raises, because an error while
+        explaining an error must not replace the error being explained.
+        """
+        try:
+            from . import caa
+            if not ca_provider:
+                # Metadata written before ca_provider was recorded: the
+                # certificate came from whatever the default CA was.
+                ca_provider = (self.settings_manager.load_settings() or {}).get(
+                    'default_ca', 'letsencrypt')
+            ca_name = None
+            if self.ca_manager is not None:
+                ca_name = (getattr(self.ca_manager, 'ca_providers', {})
+                           .get(ca_provider) or {}).get('name')
+            sentence = caa.explain_failure(ca_provider, domains,
+                                           challenge_type=challenge_type,
+                                           ca_name=ca_name)
+        except Exception as e:
+            logger.warning("Could not check CAA after a failed issuance: %s", e)
+            return ''
+        return f"\n\n{sentence}" if sentence else ''
+
     def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None):
         """Create SSL certificate using configurable CA with DNS challenge
 
@@ -2839,7 +2867,9 @@ class CertificateManager:
                 logger.error(f"Certbot failed for {domain}: {result.stderr}")
                 from .utils import sanitize_certbot_stderr
                 safe_stderr = sanitize_certbot_stderr(result.stderr)
-                raise RuntimeError(f"Certificate creation failed: {safe_stderr}")
+                raise RuntimeError(
+                    f"Certificate creation failed: {safe_stderr}"
+                    + self._caa_explanation(ca_provider, all_domains, challenge_type))
             
             # Move certificates to standard location. Publish live/ to the flat
             # directory through the SAME staged-promote helper the renew path
@@ -3461,7 +3491,11 @@ class CertificateManager:
                 logger.error(f"Certificate renewal failed for {domain}: {error_msg}")
                 from .utils import sanitize_certbot_stderr
                 safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
-                raise RuntimeError(f"Renewal failed: {safe_error}")
+                caa_domains = [domain] + list(metadata.get('san_domains') or [])
+                raise RuntimeError(
+                    f"Renewal failed: {safe_error}"
+                    + self._caa_explanation(metadata.get('ca_provider'), caa_domains,
+                                            challenge_type))
         except subprocess.TimeoutExpired:
             # Explicit, clean message before the generic handler below re-wraps
             # every exception as "Exception: ...". The finally block still runs,

@@ -242,6 +242,66 @@ somewhere else) or `error` (the lookup failed, with `error` saying why). The
 top-level `ok` is true only when there is at least one check and every one is
 `ok`.
 
+#### Check CAA before issuing
+
+**Endpoint**: `POST /api/certificates/check-caa` — viewer, since API contract **2.5**
+
+What the CAA records (RFC 8659) say about issuing a set of names from a given
+CA. A CAA record names the CAs allowed to issue for a domain, and a CA must
+refuse when it is not named — so a record that names a different CA turns
+into a failed order, or a failed renewal weeks later.
+
+```json
+{
+  "domain": "example.com",
+  "san_domains": ["www.example.com"],
+  "ca_provider": "letsencrypt",
+  "challenge_type": "dns-01"
+}
+```
+
+`ca_provider` and `challenge_type` default to the ones in settings. At most
+100 names per request. A scoped key gets `403 DOMAIN_OUT_OF_SCOPE` for any name
+outside its scope, as the DNS-alias check does.
+
+**Response** (200 OK):
+
+```json
+{
+  "status": "forbidden",
+  "ca_provider": "letsencrypt",
+  "identifiers": ["letsencrypt.org"],
+  "domains": [
+    {
+      "domain": "example.com",
+      "status": "forbidden",
+      "relevant_name": "example.com",
+      "records": ["0 issue \"pki.goog\""],
+      "reason": "example.com issue allows only pki.goog"
+    }
+  ],
+  "message": "CAA: example.com issue allows only pki.goog, so Let's Encrypt (letsencrypt.org) will refuse example.com. Add a record such as example.com. CAA 0 issue \"letsencrypt.org\" or choose a CA the record names.",
+  "suggested_record": "example.com. CAA 0 issue \"letsencrypt.org\""
+}
+```
+
+| `status` | meaning |
+| :--- | :--- |
+| `allowed` | a record names this CA, or the records restrict nothing relevant |
+| `no_policy` | no CAA records anywhere up the tree: any CA may issue |
+| `forbidden` | records exist and none authorises this CA (for this challenge type, when `validationmethods` is set) |
+| `unknown` | the lookup failed; a CA that gets the same answer refuses too |
+| `not_applicable` | a private CA: whether it checks CAA is its operator's choice |
+
+The top-level `status` is the most severe across all names. Wildcard names are
+judged by `issuewild` when the record set has any. The lookup climbs from each
+name towards the TLD and uses the first name that has records, as a CA does.
+
+**This advises, it never gates.** CertMate's resolver is not the CA's —
+split-horizon DNS, a record changed a minute ago — and the create endpoint does
+not consult it. When an issuance or a renewal does fail and a CAA record
+refuses the CA, the same sentence as `message` is appended to the error.
+
 ### Client certificates
 
 #### Rebuild the client certificate authority
