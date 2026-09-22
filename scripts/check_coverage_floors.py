@@ -57,7 +57,13 @@ FLOORS = {
     # than 84 leaves room for a collector added without its own test to be a
     # review comment instead of a red gate.
     'modules/api/resources_health.py': 80,
-    'modules/api/resources_inventory.py': 80,
+    # 80 -> 85 on 2026-09-23, measured 87.7%. The domain-health resource
+    # arrived and took the module below 80, which is the gate working; what
+    # brought it back was tests through the app for the new endpoint's scope
+    # filter and 503, and for the four scan/response branches — two of them
+    # the registration feature's, never entered before — that "cannot happen"
+    # and so had never been run.
+    'modules/api/resources_inventory.py': 85,
     # Raised from 55 after covering the exception-to-status arms, which is
     # where this module's behaviour is: it is the entry point for every
     # create, renew and reissue, and a 500 where a 422 belongs sends an

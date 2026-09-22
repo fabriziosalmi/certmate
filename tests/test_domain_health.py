@@ -1055,3 +1055,142 @@ def test_a_name_that_could_split_a_query_never_becomes_a_tracked_name(tmp_path):
     tracked = manager.tracked_names()
     assert not any('\r' in n or '\n' in n for n in tracked)
     assert 'ok.com' in tracked
+
+
+# --------------------------------------------------------------------------- #
+# Through the API
+# --------------------------------------------------------------------------- #
+#
+# The HTTP layer has its own coverage floor for a reason (#662): a resource
+# that no test enters is a resource whose auth, scope filter and error path
+# are only believed to work. These drive the real app.
+
+@pytest.fixture
+def real_app(tmp_path, monkeypatch):
+    from modules.core.factory import create_app
+    root = tmp_path / 'certmate' / 'modules' / 'core'
+    root.mkdir(parents=True)
+    (root / 'factory.py').write_text('# anchor\n')
+    monkeypatch.setattr('modules.core.factory.__file__', str(root / 'factory.py'))
+    monkeypatch.setenv('FLASK_ENV', 'testing')
+    monkeypatch.setenv('TESTING', 'true')
+    return create_app()
+
+
+def test_the_health_endpoint_lists_what_was_found(real_app):
+    application, container = real_app
+    inv = container.managers['cert_inventory']
+    inv.record_domain_health('bad.example', dh.FAILING,
+                             {'spf': {'status': dh.FAILING, 'detail': 'no v=spf1 record'}})
+    inv.record_domain_health('fine.example', dh.OK,
+                             {'spf': {'status': dh.OK, 'detail': 'published'}})
+    body = application.test_client().get('/api/inventory/health').get_json()
+    assert [n['name'] for n in body['names']] == ['bad.example', 'fine.example']
+    assert body['summary'] == {'total': 2,
+                               'by_status': {'failing': 1, 'warning': 0,
+                                             'unknown': 0, 'ok': 1}}
+    assert body['names'][0]['checks']['spf']['detail'] == 'no v=spf1 record'
+
+
+def test_the_health_endpoint_counts_a_status_it_has_no_column_for(real_app):
+    """A row written by a newer CertMate must not make the summary throw."""
+    application, container = real_app
+    container.managers['cert_inventory'].record_domain_health(
+        'odd.example', 'something-new', {})
+    body = application.test_client().get('/api/inventory/health').get_json()
+    assert body['summary']['by_status']['something-new'] == 1
+
+
+def test_the_health_endpoint_filters_by_scope(tmp_path, monkeypatch):
+    """A viewer key scoped to one tenant sees that tenant's names only.
+
+    The bearer token is set first: an instance still in setup mode serves
+    every request as admin and ignores the key, so the scope would never be
+    exercised and this would pass for the wrong reason.
+    """
+    import secrets
+
+    from modules.core.factory import create_app
+    admin_token = secrets.token_urlsafe(32)
+    root = tmp_path / 'certmate' / 'modules' / 'core'
+    root.mkdir(parents=True)
+    (root / 'factory.py').write_text('# anchor\n')
+    monkeypatch.setattr('modules.core.factory.__file__', str(root / 'factory.py'))
+    monkeypatch.setenv('FLASK_ENV', 'testing')
+    monkeypatch.setenv('TESTING', 'true')
+    monkeypatch.setenv('API_BEARER_TOKEN', admin_token)
+    application, container = create_app()
+    assert not container.managers['auth'].is_setup_mode()
+
+    inv = container.managers['cert_inventory']
+    inv.record_domain_health('tenant-a.example', dh.OK, {})
+    inv.record_domain_health('tenant-b.example', dh.OK, {})
+    client = application.test_client()
+    admin = {'Authorization': f'Bearer {admin_token}'}
+    created = client.post('/api/keys', headers=admin, json={
+        'name': 'tenant-a', 'role': 'viewer', 'allowed_domains': ['tenant-a.example']})
+    assert created.status_code in (200, 201), created.get_json()
+    scoped = {'Authorization': f'Bearer {created.get_json()["token"]}'}
+
+    seen = client.get('/api/inventory/health', headers=scoped).get_json()
+    assert [n['name'] for n in seen['names']] == ['tenant-a.example']
+    assert seen['summary']['total'] == 1
+    everything = client.get('/api/inventory/health', headers=admin).get_json()
+    assert [n['name'] for n in everything['names']] == ['tenant-a.example',
+                                                        'tenant-b.example']
+
+
+def test_the_health_endpoint_says_so_when_there_is_no_inventory(real_app):
+    application, container = real_app
+    container.managers['cert_inventory'] = None
+    response = application.test_client().get('/api/inventory/health')
+    assert response.status_code == 503
+    assert response.get_json()['code'] == 'INVENTORY_UNAVAILABLE'
+
+
+def test_config_round_trips_the_health_section(real_app):
+    application, _ = real_app
+    client = application.test_client()
+    assert client.get('/api/inventory/config').get_json()['domain_health'] == {
+        'enabled': False, 'include_inventory': True, 'check_mail': True,
+        'check_blocklists': True, 'check_hsts': True, 'extra_domains': []}
+    r = client.post('/api/inventory/config', json={'domain_health': {
+        'enabled': True, 'check_blocklists': False, 'extra_domains': ['brand.it']}})
+    assert r.status_code == 200
+    saved = r.get_json()['domain_health']
+    assert saved['enabled'] is True
+    assert saved['check_blocklists'] is False
+    assert saved['extra_domains'] == ['brand.it']
+    bad = client.post('/api/inventory/config', json={'domain_health': {
+        'extra_domains': ['not a domain']}})
+    assert bad.status_code == 400
+
+
+def test_scan_runs_the_health_check_after_the_registration_one(real_app):
+    application, container = real_app
+    mgr = container.managers['domain_health']
+    mgr.run_check = MagicMock(return_value={'skipped': True, 'reason': 'disabled',
+                                            'results': []})
+    body = application.test_client().post('/api/inventory/scan').get_json()
+    assert list(body)[-1] == 'domain_health'
+    mgr.run_check.assert_called_once_with()
+
+
+def test_a_health_check_that_blows_up_does_not_lose_the_rest_of_the_scan(real_app):
+    application, container = real_app
+    container.managers['domain_health'].run_check = MagicMock(
+        side_effect=RuntimeError('resolver on fire'))
+    body = application.test_client().post('/api/inventory/scan').get_json()
+    assert body['domain_health'] == {'error': 'domain health check failed'}
+    assert 'discovery' in body and 'ct_monitoring' in body
+
+
+def test_a_scan_on_an_instance_without_the_health_manager_still_scans(real_app):
+    """Nothing in the tree builds one today, but the resource is written to
+    work without it, and untested "cannot happen" branches are how that stops
+    being true."""
+    application, container = real_app
+    container.managers.pop('domain_health')
+    body = application.test_client().post('/api/inventory/scan').get_json()
+    assert 'domain_health' not in body
+    assert 'discovery' in body
