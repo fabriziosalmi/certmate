@@ -153,6 +153,14 @@ METADATA_SCHEMA_VERSION = 1
 # so a MINOR. `not_published` is a status, not a missing field: some
 # registries (.de, .eu) do not publish expiry, and that is the answer.
 #
+# 2.7 for PATCH /api/keys/<key_id>: an operator confirms an API key that was
+# created while the instance was in setup mode. New endpoint, so a MINOR.
+# The same change refuses POST /api/keys, and any user after the first, with
+# 409 SETUP_BOOTSTRAP_ONLY while in setup mode. That is a new answer to an
+# existing request, which the rule below would call MAJOR. It is a security
+# fix instead: a key minted in setup mode was minted by whoever could reach
+# the instance, and it outlived setup, so no client could rely on it safely.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -162,7 +170,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.6'
+API_CONTRACT_VERSION = '2.7'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

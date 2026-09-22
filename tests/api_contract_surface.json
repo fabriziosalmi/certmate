@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.6",
+  "contract_version": "2.7",
   "surface": [
     "DELETE /api/backups/delete/<X>/<X>",
     "DELETE /api/certificates/<X>",
@@ -60,6 +60,7 @@
     "GET /api/users",
     "GET /api/webhooks/deliveries",
     "PATCH /api/certificates/<X>",
+    "PATCH /api/keys/<X>",
     "POST /api/auth/config",
     "POST /api/auth/login",
     "POST /api/auth/logout",
