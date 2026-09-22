@@ -282,20 +282,20 @@ def test_old_notices_are_forgotten(tmp_path):
 
 @pytest.mark.parametrize('event', ['certificate_expiring', 'domain_expiring'])
 def test_the_message_carries_the_number(event):
+    """The whole line, not fragments of it: an operator reads one sentence,
+    and asserting the exact text is also what keeps it from drifting."""
     title, message = build_notification_message(event, {
         'domain': 'a.example.com', 'days_left': 7, 'expires_at': '2026-10-06 07:00:00'})
-    assert 'a.example.com' in message
-    assert '7 days left' in message
-    assert '2026-10-06' in message
+    assert message == f'{title}: a.example.com — 7 days left (2026-10-06 07:00:00)'
 
 
 def test_the_message_says_today_and_expired_plainly():
     _t, today = build_notification_message('certificate_expiring', {
         'domain': 'a', 'days_left': 0, 'expires_at': '2026-09-22 07:00:00'})
-    assert 'expires today' in today
+    assert today == 'Certificate Expiring: a — expires today (2026-09-22 07:00:00)'
     _t, gone = build_notification_message('certificate_expiring', {
         'domain': 'a', 'days_left': -2, 'expired': True, 'expires_at': '2026-09-20 07:00:00'})
-    assert 'expired' in gone
+    assert gone == 'Certificate Expiring: a — expired (2026-09-20 07:00:00)'
     _t, one = build_notification_message('domain_expiring', {
         'domain': 'a', 'days_left': 1, 'expires_at': '2026-09-23'})
     assert '1 day left' in one and '1 days' not in one
