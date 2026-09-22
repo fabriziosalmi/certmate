@@ -220,6 +220,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     "X-CertMate-Agent-Id": AGENT_ID
   };
 
+  // A tool argument declared boolean in the schema arrives as whatever the
+  // model wrote. "false" is a string, and a string is not a boolean.
+  function requireBoolean(name, value) {
+    if (typeof value !== "boolean") {
+      throw new Error(`${name} must be true or false, not ${JSON.stringify(value)}`);
+    }
+    return value;
+  }
+
   async function makeRequest(method, path, body = null) {
     const url = `${baseUrl.replace(/\/$/, '')}${path}`;
     try {
@@ -294,8 +303,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await makeRequest("GET", `/api/certificates/${encodeURIComponent(args.domain)}/download?format=json`);
         break;
       case "certmate_set_auto_renew":
+        // The tool schema says boolean, but nothing enforces a schema on the
+        // way in: a model that writes "false" would otherwise send a string,
+        // which the server now refuses — and which older servers read as true.
         result = await makeRequest("PUT", `/api/certificates/${encodeURIComponent(args.domain)}/auto-renew`, {
-          enabled: args.enabled
+          enabled: requireBoolean("enabled", args.enabled)
         });
         break;
       case "certmate_list_dns_providers":

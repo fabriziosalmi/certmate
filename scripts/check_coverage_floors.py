@@ -156,6 +156,10 @@ FLOORS = {
     'modules/core/oidc.py': 75,
     'modules/core/private_ca.py': 80,
     'modules/core/rate_limit.py': 70,
+    # 100% when it arrived: 32 statements of pure parsing, plus the decorator,
+    # with no I/O. A boolean this refuses is one a caller sent by mistake, so
+    # there is no honest reason for a branch of it to go unreached.
+    'modules/core/request_fields.py': 100,
     # Measured at 90.1% when it arrived. What is left is defensive: an AIA
     # payload in PEM or PKCS#7, an Ed25519 responder, a malformed CRL body.
     'modules/core/revocation.py': 90,

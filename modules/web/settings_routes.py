@@ -4,6 +4,7 @@ from functools import partial, wraps
 
 from flask import request, jsonify
 
+from modules.core.request_fields import json_booleans
 from modules.core.constants import iter_cert_domain_dirs
 from modules.core.domain_entries import entry_domain
 
@@ -569,6 +570,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     # A key minted in setup mode is minted by whoever can reach the instance,
     # and it stays valid once the operator completes setup.
     @bootstrap_only(auth_manager_ref, audit_logger, 'create_api_key', 'api_key', 'name')
+    @json_booleans(is_agent=False)
     def api_keys():
         """List or create API keys"""
         if request.method == 'GET':
@@ -585,7 +587,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             role = data.get('role', 'viewer')
             expires_at = data.get('expires_at')
             allowed_domains = data.get('allowed_domains')
-            is_agent = bool(data.get('is_agent', False))
+            is_agent = request.json_booleans['is_agent']
 
             if not name:
                 return jsonify({'error': 'Key name is required'}), 400
