@@ -930,6 +930,15 @@ logs. Discovery is what fills the second half.
 Returns managed and discovered certificates with an expiry forecast. Filters:
 `?managed=true|false`, and the usual paging.
 
+Since API contract **2.4** every record carries `revocation`: the last verified
+OCSP/CRL answer for that certificate, as `{status, method, reason, revoked_at,
+error, checked_at}`, or `null` when it was never checked. `status` is one of
+`good`, `revoked`, `unknown`, `unavailable` or `not_applicable`, and only a
+signed, current answer from the issuer is ever `good` or `revoked`. The
+summary adds a `revocation` count per status (plus `unchecked`). What each
+status means and how the answer is verified:
+[Revocation](discovery-inventory.md#revocation).
+
 #### Forget a discovered certificate
 
 **Endpoint**: `DELETE /api/inventory/<fingerprint>` — operator
