@@ -181,6 +181,67 @@ does not force renewal.
 cannot serve TLS has nothing to wait for. Restoring a share-safe backup
 produces certificates with no key, which is the case this exists for.
 
+#### Turn automatic renewal on or off
+
+**Endpoint**: `PUT /api/certificates/<domain>/auto-renew` — operator
+
+```json
+{ "enabled": false }
+```
+
+`enabled` is a JSON boolean. Answers `{"message", "domain", "auto_renew"}`.
+A missing `enabled` is `400 AUTO_RENEW_FLAG_REQUIRED`; a domain that is not
+tracked in settings is `404 DOMAIN_NOT_IN_SETTINGS`, because only those have a
+renewal flag to toggle. The change is audited and published on the event
+stream as `certificate_auto_renew_changed`.
+
+#### Check DNS-01 alias records
+
+**Endpoints**:
+`POST /api/certificates/check-dns-alias` — viewer, before a certificate exists;
+`GET /api/certificates/<domain>/dns-alias-check` — viewer, for one that does.
+
+With DNS alias mode the `_acme-challenge` record of each name is a CNAME into a
+zone CertMate can write. These check that every CNAME is in place, before the
+order rather than after the CA fails to find the TXT record.
+
+```json
+{
+  "domain": "example.com",
+  "domain_alias": "validation.example.org",
+  "san_domains": ["www.example.com"],
+  "wildcard": false
+}
+```
+
+`domain` and `domain_alias` are required for the `POST`; `wildcard: true` adds
+`*.<domain>` to the names. The `GET` reads both from the certificate and answers
+`400` when it does not use alias mode. Every name is checked against the
+caller's scope.
+
+```json
+{
+  "domain": "example.com",
+  "domain_alias": "validation.example.org",
+  "ok": false,
+  "checks": [
+    {
+      "source": "_acme-challenge.example.com",
+      "expected_target": "_acme-challenge.validation.example.org",
+      "found_targets": [],
+      "status": "missing",
+      "ok": false,
+      "error": null
+    }
+  ]
+}
+```
+
+`status` per check is `ok`, `missing` (no CNAME), `mismatch` (a CNAME to
+somewhere else) or `error` (the lookup failed, with `error` saying why). The
+top-level `ok` is true only when there is at least one check and every one is
+`ok`.
+
 ### Client certificates
 
 #### Rebuild the client certificate authority
@@ -936,6 +997,27 @@ configured maintenance window opens.
 
 Runs the hook without a real certificate change, so a broken hook is found
 before a renewal depends on it.
+
+#### Run a certificate's deploy hooks now
+
+**Endpoint**: `POST /api/certificates/<domain>/deploy` — admin
+
+Runs every enabled hook and deploy target that applies to the domain, with
+`CERTMATE_EVENT=manual`. The `on_events` filter and maintenance windows are
+ignored: pressing the button is the decision to deploy now.
+
+```json
+{ "ok": true, "total": 2, "succeeded": 2, "failed": 0, "results": [ ... ] }
+```
+
+It answers **200 even when `ok` is false**, so the summary can be read: deploy
+hooks disabled, or nothing configured for this domain, come back as `ok: false`
+with an `error` that says which. Non-2xx is reserved for a bad domain path
+(`400`), a certificate that does not exist (`404 CERTIFICATE_NOT_FOUND`), a
+deploy manager that is not running (`503`) and an unexpected failure (`500`).
+Each `results[]` entry is one hook or target run (`hook_name`, `exit_code`,
+`success`, `stdout`, `stderr`, ...), the same record `GET /api/deploy/history`
+keeps.
 
 #### Record browser-side reachability
 
