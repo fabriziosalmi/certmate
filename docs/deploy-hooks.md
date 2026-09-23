@@ -30,7 +30,7 @@ A hook is a JSON object with five fields:
 | `command` | string | yes | A single shell command (`sh -c`). Max 1024 chars. See [security](#security-model). |
 | `enabled` | boolean | no | Defaults to `true`. Disabled hooks are skipped during automatic firing but can still be tested manually. |
 | `timeout` | integer | no | Seconds. Default 30, capped at the system `MAX_TIMEOUT` (currently 300). |
-| `on_events` | string array | no | Subset of `["created", "renewed", "revoked"]`. If absent, the hook runs on `created` and `renewed` — `revoked` is opted into, so that adding a hook does not start running commands on revocations nobody wrote it for. |
+| `on_events` | string array | no | Subset of `["created", "renewed", "revoked"]`. If absent when the config is saved, it is set to `["created", "renewed"]` — `revoked` is opted into, so that adding a hook does not start running commands on revocations nobody wrote it for. A hook written into `settings.json` by hand is never normalised, so without `on_events` it fires on no certificate event at all; it still runs from a manual trigger. |
 | `window` | object | no | A [maintenance window](#maintenance-windows). If absent, the hook runs as soon as the certificate is issued or renewed — the behaviour every hook has had until now. |
 
 Hooks live under two keys in `deploy_hooks`:
@@ -68,7 +68,7 @@ Hooks live under two keys in `deploy_hooks`:
 }
 ```
 
-If `enabled` at the top level is `false`, no hooks run on certificate events. Manual test runs (`POST /api/deploy/test/<id>`) still work — useful when iterating on a hook before flipping the master switch.
+If `enabled` at the top level is `false`, no hooks run on certificate events. Per-hook test runs (`POST /api/deploy/test/<id>`) still work — useful when iterating on a hook before flipping the master switch. Running all hooks for a domain (`POST /api/certificates/<domain>/deploy`) does not: it refuses while the switch is off.
 
 ---
 
@@ -79,7 +79,7 @@ If `enabled` at the top level is `false`, no hooks run on certificate events. Ma
 `Settings → Deploy Hooks`. Toggle the **Enabled** switch, then add Global or Per-Domain hooks. Each row has:
 
 - name + command + timeout + event checkboxes
-- a **Test** button (runs the hook against a synthetic domain `test.example.com` with `CERTMATE_EVENT=manual`)
+- a **Test** button (runs the hook against a synthetic domain `test.example.com` with `CERTMATE_EVENT=test` and `CERTMATE_DRY_RUN=1`)
 - enable/disable toggle
 - delete
 
@@ -92,12 +92,12 @@ Save settings to persist.
 curl -H "Authorization: Bearer $TOKEN" \
   https://certmate.local/api/deploy/config
 
-# Replace config (full document write — pass the whole deploy_hooks dict)
+# Write config (top-level keys you send replace the stored ones)
 curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d @hooks.json https://certmate.local/api/deploy/config
 ```
 
-The POST replaces the whole `deploy_hooks` block; merge client-side if you want to preserve existing entries.
+The POST merges at the top level of `deploy_hooks`: each key you send (`enabled`, `global_hooks`, `domain_hooks`, `targets`) replaces the stored value whole, and a key you leave out is kept as it was. So sending `global_hooks` replaces the entire list; to add one hook, read the list, append, and send it back. An explicit empty list clears that key.
 
 ---
 
@@ -112,8 +112,10 @@ Every invocation sets these in the hook's process environment:
 | `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` — **not set** for a [CSR-only certificate](csr-only-certificates.md), whose key stays on the device |
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
 | `CERTMATE_CHAIN_PATH` | `/app/certificates/api.example.com/chain.pem` (intermediates only, no leaf — for targets that want the chain as a separate file) |
-| `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` |
-| `CERTMATE_DRY_RUN` | Set to `1` only during dry-run; absent otherwise. |
+| `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` (Deploy Now) / `test` (per-hook test) |
+| `CERTMATE_DRY_RUN` | Set to `1` only for a per-hook test (`/api/deploy/test/<id>`, the **Test** button); absent otherwise, including for Deploy Now. The command still runs; this is only a signal your script can check. |
+
+The paths are under CertMate's certificate directory: `/app/certificates` in the Docker image, or wherever `CERTMATE_CERT_DIR` points.
 
 Your command can reference these as `$CERTMATE_DOMAIN`, `"$CERTMATE_FULLCHAIN_PATH"`, etc. The values are passed by environment, not by string interpolation, so quoting works the same as in any normal shell.
 
@@ -192,7 +194,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   https://certmate.local/api/deploy/test/<hook_id>
 ```
 
-Runs only the hook with that `id`, against the synthetic domain `test.example.com`, with `CERTMATE_EVENT=manual`. Bypasses the `on_events` filter — useful for "does this command actually work?".
+Runs only the hook with that `id`, against the synthetic domain `test.example.com` (or the `domain` given in a JSON body), with `CERTMATE_EVENT=test` and `CERTMATE_DRY_RUN=1`. The command really runs. Bypasses the `on_events` filter, the hook's own `enabled` flag and the master switch — useful for "does this command actually work?".
 
 ### Run all hooks for a domain (admin)
 
@@ -201,7 +203,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   https://certmate.local/api/certificates/api.example.com/deploy
 ```
 
-Fires every enabled global + domain-specific hook for `api.example.com` with `CERTMATE_EVENT=manual`, ignoring `on_events`. Returns a structured summary:
+Fires every enabled global + domain-specific hook (and every matching typed deploy target) for `api.example.com` with `CERTMATE_EVENT=manual`, ignoring `on_events`. Refused while the master switch is off. Returns a structured summary:
 
 ```jsonc
 {
@@ -216,7 +218,7 @@ Fires every enabled global + domain-specific hook for `api.example.com` with `CE
 }
 ```
 
-This is what the **Run Deploy Hooks Now** button in the cert detail panel calls.
+This is what the **Run deploy hooks now** button (play icon, Deployment section of the certificate detail panel) calls.
 
 ---
 
@@ -230,14 +232,15 @@ Hooks are arbitrary code execution by design — that's the feature. To keep the
 |---|---|
 | `` ` `` (backticks) | command substitution |
 | `$(...)` | command substitution |
-| `${...}` | parameter expansion (env var expansion is fine — only the `${...}` form is blocked) |
+| `${...}` | parameter expansion. `$VAR` is fine, and so is `${CERTMATE_NAME}` with the closing brace right after the name; any other `${...}` form, including `${CERTMATE_DOMAIN:-x}`, is blocked |
 | `&&` / `\|\|` | logical chaining |
 | `;` | statement separator |
-| `\|` | pipe |
 | `\r` / `\n` | newlines (so `sh -c` can't interpret them as `;`) |
 | `> /` (redirect to absolute path) | prevents overwriting system files |
 | `<<` | here-doc |
 | `eval`, `source`, `. /` | shell builtins that load arbitrary code |
+
+Two things that look like they belong on that list are allowed on purpose (#115): a simple pipe, for post-processing such as `curl ... | jq .`, and a redirect to a relative path (`> out.txt`). Only a redirect to an absolute path is blocked.
 
 If you need any of those, put the logic in a script file inside the container and call the script directly:
 
@@ -249,16 +252,16 @@ If you need any of those, put the logic in a script file inside the container an
 
 References to CertMate's own sensitive files are rejected outright (case-insensitive):
 
-`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`, `private*key`, `.pem`
+`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`
 
-So `cat $CERTMATE_FULLCHAIN_PATH` is fine (the variable is expanded by the shell, the literal string `.pem` doesn't appear in `command`), but `cat /app/data/settings.json` would be rejected at save.
+Certificate files are not on the list: installing the certificate and its key (`privkey.pem`, `$CERTMATE_KEY_PATH`) is the normal job of a hook. `cat /app/data/settings.json` would be rejected at save.
 
 ### What's allowed
 
 - **Plain commands**: `/usr/sbin/nginx -s reload`, `systemctl reload haproxy`
 - **Curl POSTs (webhooks)**: `curl -X POST -H "Content-Type: application/json" https://hooks.slack.com/...`
 - **Variable expansion in arguments**: `curl -d "domain=$CERTMATE_DOMAIN" https://...`
-- **JSON payloads with `$VAR` (no `${}`)**: `curl -d '{"domain":"$CERTMATE_DOMAIN"}' ...`
+- **JSON payloads with `$VAR`**: `curl -H "Content-Type: application/json" -d "{\"domain\":\"$CERTMATE_DOMAIN\"}" ...`. The body has to be in double quotes: inside single quotes the shell never expands `$CERTMATE_DOMAIN`, and the receiver gets the literal text.
 - **Single-script invocations**: `/opt/scripts/deploy.sh "$CERTMATE_DOMAIN"`
 
 If a command you used to be able to save now triggers `Command blocked at runtime: contains dangerous shell metacharacters`, see the version notes — the validator was tightened in v2.4.0 and slightly relaxed in v2.4.1+.
@@ -304,9 +307,9 @@ scp "$CERTMATE_FULLCHAIN_PATH" "$CERTMATE_KEY_PATH" deploy@lb:/etc/ssl/$CERTMATE
 ssh deploy@lb 'systemctl reload haproxy'
 ```
 
-### Skip hooks during dry-run
+### Skip real work during a Test run
 
-In your script:
+In your script (the variable is set only by the per-hook **Test**):
 
 ```sh
 [ -n "${CERTMATE_DRY_RUN:-}" ] && { echo "dry run, skipping"; exit 0; }
@@ -332,12 +335,12 @@ Every hook run writes an `operation: deploy_hook` entry to the audit log with st
 
 | Symptom | Likely cause |
 |---|---|
-| `Hook not found` | The hook ID in the test request doesn't match any hook in the saved config (UI was stale or the hook was just deleted). Refresh the page. |
+| `Hook <id> is no longer in settings...` | The hook ID in the test request doesn't match any hook in the saved config: the page is stale, the hook was just deleted, or its command was rejected at save. Refresh the page. |
 | `Command blocked at runtime` | One of the [blocked patterns](#blocked-shell-patterns) made it past save. Move the offending logic into a script file. |
 | `exit code 127` | Command not found inside the container (e.g. `nginx` isn't on `$PATH`). Use absolute paths or install the binary in the image. |
 | `timeout after 30s` | Hook ran longer than its `timeout`. Bump it (max 300s) or move the work to a backgrounded script. |
-| `Deploy hooks disabled` | `deploy_hooks.enabled` is `false`. Toggle the master switch in Settings. |
-| `No hooks configured for <domain>` | Trying to run hooks for a domain with no global hooks AND no entry under `domain_hooks[<domain>]`. Add a hook (or call `/api/deploy/test/<id>` for a specific one). |
+| `Deploy hooks are disabled. Enable them in Settings → Deploy.` | `deploy_hooks.enabled` is `false` and you ran all hooks for a domain. Toggle the master switch in Settings. |
+| `No enabled hooks or deploy targets configured for <domain>...` | Trying to run hooks for a domain with no enabled global hook, no enabled entry under `domain_hooks[<domain>]` and no typed target for it. Add a hook (or call `/api/deploy/test/<id>` for a specific one). |
 
 ---
 
