@@ -254,7 +254,7 @@ def test_a_malformed_name_is_unknown_not_a_crash():
 
 
 def test_without_dnspython_the_answer_is_unknown_and_says_why(monkeypatch):
-    def missing(timeout):
+    def missing(timeout, nameservers=None):
         raise ImportError("No module named 'dns'")
     monkeypatch.setattr(caa, 'resolver_factory', missing)
     result = check('letsencrypt', ['example.com'])
@@ -275,7 +275,7 @@ def test_explain_failure_speaks_only_for_a_refusal():
 # Where it speaks: failed create, failed renewal
 # --------------------------------------------------------------------------- #
 
-def _forbidding_resolver(timeout):
+def _forbidding_resolver(timeout, nameservers=None):
     return _zone({'example.com': [(0, 'issue', 'pki.goog')]})
 
 
@@ -349,7 +349,7 @@ def test_failed_renewal_explains_the_caa_refusal(tmp_path, monkeypatch):
 def test_renewal_without_a_recorded_ca_uses_the_default(tmp_path, monkeypatch):
     """Metadata written before ca_provider was recorded: the certificate came
     from the default CA, so that is the one the CAA records are read for."""
-    monkeypatch.setattr(caa, 'resolver_factory', lambda timeout: _zone({
+    monkeypatch.setattr(caa, 'resolver_factory', lambda timeout, nameservers=None: _zone({
         'example.com': [(0, 'issue', 'letsencrypt.org')]}))
     _existing(tmp_path, 'app.example.com', {})
     mgr = _cert_mgr(tmp_path, _failing_shell(), default_ca='google')
@@ -359,7 +359,7 @@ def test_renewal_without_a_recorded_ca_uses_the_default(tmp_path, monkeypatch):
 
 
 def test_an_error_while_explaining_keeps_the_original_error(tmp_path, monkeypatch):
-    def broken(timeout):
+    def broken(timeout, nameservers=None):
         raise RuntimeError('dnspython exploded')
     monkeypatch.setattr(caa, 'check', MagicMock(side_effect=RuntimeError('boom')))
     monkeypatch.setattr(caa, 'resolver_factory', broken)
@@ -390,7 +390,7 @@ def caa_app(tmp_path, monkeypatch):
 
     resolver = _zone({'example.com': [(0, 'issue', 'pki.goog')],
                       'tenant-a.example': [(0, 'issue', 'letsencrypt.org')]})
-    monkeypatch.setattr(caa, 'resolver_factory', lambda timeout: resolver)
+    monkeypatch.setattr(caa, 'resolver_factory', lambda timeout, nameservers=None: resolver)
 
     auth = MagicMock()
     auth.require_role = MagicMock(side_effect=_passthrough)

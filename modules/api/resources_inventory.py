@@ -31,11 +31,17 @@ from .resource_context import (
 logger = logging.getLogger(__name__)
 
 
-def _config_view(discovery, ct_monitor, registration, health=None):
+def _config_view(discovery, ct_monitor, registration, health=None, settings=None):
     """The discovery configuration as GET and POST both answer it."""
+    from ..core.dns_resolver import configured_nameservers
+
     view = {
         'discovery': discovery.get_config(),
         'ct_monitoring': ct_monitor.get_config(),
+        # Not a discovery setting as such — it governs every lookup CertMate
+        # makes for itself, CAA included — but this is the page an operator is
+        # on when a refused blocklist tells them to change it.
+        'dns_resolver': {'nameservers': configured_nameservers(settings or {})},
     }
     if registration is not None:
         view['domain_registration'] = registration.get_config()
@@ -50,6 +56,21 @@ def _save_registration_config(registration, payload):
     section = payload.get('domain_registration')
     if registration is not None and isinstance(section, dict):
         registration.save_config(section)
+
+
+def _save_resolver_config(settings_manager, payload):
+    """Persist the ``dns_resolver`` section of a config POST, if any.
+    Raises ValueError for anything that is not an IP address."""
+    from ..core.dns_resolver import parse_nameservers
+
+    section = payload.get('dns_resolver')
+    if settings_manager is None or not isinstance(section, dict):
+        return
+    nameservers = parse_nameservers(section.get('nameservers'))
+    settings_manager.update(
+        lambda s: s.__setitem__('dns_resolver', {'nameservers': nameservers}),
+        'dns_resolver_save',
+    )
 
 
 def _save_health_config(health, payload):
@@ -234,7 +255,8 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                 return {'error': 'Certificate discovery not available'}, 503
             return _config_view(discovery, ct_monitor,
                                 ctx.managers.get('domain_registration'),
-                                ctx.managers.get('domain_health'))
+                                ctx.managers.get('domain_health'),
+                                ctx.managers['settings'].load_settings() or {})
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
@@ -262,9 +284,11 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                     ct_monitor.save_config(payload['ct_monitoring'])
                 _save_registration_config(registration, payload)
                 _save_health_config(health, payload)
+                _save_resolver_config(ctx.managers.get('settings'), payload)
             except ValueError as e:
                 return {'error': str(e)}, 400
-            return _config_view(discovery, ct_monitor, registration, health)
+            return _config_view(discovery, ct_monitor, registration, health,
+                                ctx.managers['settings'].load_settings() or {})
 
     class InventoryScan(Resource):
         @api.doc(security='Bearer')

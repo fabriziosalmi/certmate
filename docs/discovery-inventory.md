@@ -384,8 +384,34 @@ What you see, then, is one of: *listed*, *not listed on N lists*, or *nobody
 answered*. If no list is usable the check is `unknown`. If some are and some
 are not, the answer is downgraded to a **warning** — "not listed where it
 could be checked" — and names the ones that did not answer, because a partial
-sweep is not the clean bill of health a full one would be. The fix is almost
-always to point CertMate at a resolver of your own rather than a public one.
+sweep is not the clean bill of health a full one would be.
+
+The fix is almost always to point CertMate at a resolver of its own rather
+than a public one, and there is a setting for it:
+
+```jsonc
+{
+  "dns_resolver": {
+    "nameservers": ["10.0.0.53", "10.0.0.54:5353"]
+  }
+}
+```
+
+in `POST /api/inventory/config`, or `CERTMATE_DNS_RESOLVERS=10.0.0.53,10.0.0.54`
+in the environment — which is usually the right place in a container, where
+the resolver is the engine's stub and belongs to whoever wrote the compose
+file. The stored setting wins over the environment, so a resolver saved in the
+interface takes effect rather than appearing to.
+
+Addresses only, not hostnames: resolving a nameserver's name would need the
+resolver you are replacing. A port may follow (`10.0.0.53:5353`, or
+`[2001:db8::1]:5353` for IPv6), for a resolver that does not listen on 53.
+With nothing set, CertMate uses the system's — `/etc/resolv.conf`, Docker's
+`--dns`, the pod's `dnsConfig` — exactly as before.
+
+The setting covers every lookup CertMate makes for itself, the CAA check
+included, so there is one answer to "which nameservers does this instance
+ask" rather than one per feature.
 
 One more thing the test points cannot tell you: they are `127.0.0.2` and
 `127.0.0.1`, so they prove a list answers about **IPv4** and say nothing about

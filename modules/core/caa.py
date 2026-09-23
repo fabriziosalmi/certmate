@@ -80,7 +80,7 @@ class LookupFailed(Exception):
     """The CAA query could not be answered (SERVFAIL, timeout, no resolver)."""
 
 
-def _dnspython_resolver(timeout):
+def _dnspython_resolver(timeout, nameservers=None):
     """Return ``resolve(name) -> [(flags, tag, value)]`` backed by dnspython.
 
     An empty list means the name has no CAA records (NOERROR/NODATA or
@@ -91,8 +91,9 @@ def _dnspython_resolver(timeout):
     import dns.exception
     import dns.resolver
 
-    resolver = dns.resolver.Resolver()
-    resolver.lifetime = timeout
+    from .dns_resolver import build
+
+    resolver = build(timeout, nameservers)
 
     def resolve(name):
         try:
@@ -223,7 +224,7 @@ def check_domain(name, identifiers, *, challenge_type=None, resolve):
 
 
 def check(ca_provider, domains, *, challenge_type=None, resolve=None,
-          timeout=DEFAULT_TIMEOUT_SECONDS, ca_name=None):
+          timeout=DEFAULT_TIMEOUT_SECONDS, ca_name=None, nameservers=None):
     """CAA verdict for issuing *domains* from *ca_provider*. Never raises.
 
     Returns ``{'status', 'ca_provider', 'identifiers', 'domains': [...],
@@ -244,7 +245,7 @@ def check(ca_provider, domains, *, challenge_type=None, resolve=None,
 
     if resolve is None:
         try:
-            resolve = resolver_factory(timeout)
+            resolve = resolver_factory(timeout, nameservers)
         except ImportError as e:
             # dnspython reaches the image transitively, through the DNS
             # plugins; if one day it does not, say so rather than fail.
@@ -303,7 +304,8 @@ def _message(status, ca_label, identifiers, results):
 
 
 def explain_failure(ca_provider, domains, *, challenge_type=None, resolve=None,
-                    timeout=DEFAULT_TIMEOUT_SECONDS, ca_name=None):
+                    timeout=DEFAULT_TIMEOUT_SECONDS, ca_name=None,
+                    nameservers=None):
     """A sentence to append to an issuance/renewal error, or None.
 
     Only a CAA record that refuses this CA earns an explanation: an ``unknown``
@@ -311,6 +313,7 @@ def explain_failure(ca_provider, domains, *, challenge_type=None, resolve=None,
     ``allowed`` one means CAA is not why it failed.
     """
     result = check(ca_provider, domains, challenge_type=challenge_type,
+                   nameservers=nameservers,
                    resolve=resolve, timeout=timeout, ca_name=ca_name)
     if result['status'] == STATUS_FORBIDDEN:
         return result['message']

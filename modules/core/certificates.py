@@ -2679,9 +2679,12 @@ class CertificateManager:
             if self.ca_manager is not None:
                 ca_name = (getattr(self.ca_manager, 'ca_providers', {})
                            .get(ca_provider) or {}).get('name')
-            sentence = caa.explain_failure(ca_provider, domains,
-                                           challenge_type=challenge_type,
-                                           ca_name=ca_name)
+            from .dns_resolver import configured_nameservers
+            sentence = caa.explain_failure(
+                ca_provider, domains, challenge_type=challenge_type,
+                ca_name=ca_name,
+                nameservers=configured_nameservers(
+                    self.settings_manager.load_settings() or {}))
         except Exception as e:
             logger.warning("Could not check CAA after a failed issuance: %s", e)
             return ''

@@ -1163,7 +1163,7 @@ answer opens on what is wrong; a scoped key sees only its own names.
         "mx": {"status": "ok", "detail": "2 mail exchangers",
                "hosts": ["mx1.example.net", "mx2.example.net"]},
         "blocklists": {"status": "unknown",
-                       "detail": "no blocklist answered usefully — the resolver CertMate uses is almost always the reason, because the large lists refuse public resolvers; point it at a resolver of your own",
+                       "detail": "no blocklist answered usefully — the resolver CertMate uses is almost always the reason, because the large lists refuse public resolvers. Name one of your own under dns_resolver in the discovery configuration, or in CERTMATE_DNS_RESOLVERS",
                        "unanswered": ["zen.spamhaus.org (192.0.2.13): refused this resolver"],
                        "not_covered": []},
         "hsts": {"status": "ok", "detail": "max-age 31536000s",
@@ -1196,7 +1196,9 @@ listed" is the mistake this endpoint exists not to make. Because that refusal
 can arrive as a plain NXDOMAIN, indistinguishable from "not listed", each list
 is first asked about its own always-listed test point; one that cannot answer
 that is not asked about your domains at all, and is named in `unanswered`.
-Point CertMate at a resolver of your own and the answers become real.
+Point CertMate at a resolver of your own — `dns_resolver.nameservers` in
+`/api/inventory/config`, or `CERTMATE_DNS_RESOLVERS` in the environment — and
+the answers become real.
 
 `weak_tls` is present only when `check_weak_tls` is on: it is the one check
 that opens connections a host did not invite. Its `unknown` never means the

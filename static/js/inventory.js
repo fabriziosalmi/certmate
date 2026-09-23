@@ -385,6 +385,7 @@
                 el('cfgHealthHeaders').checked = h.check_headers !== false;
                 el('cfgHealthWeakTls').checked = !!h.check_weak_tls;
                 el('cfgHealthExtra').value = (h.extra_domains || []).join('\n');
+                el('cfgDnsResolvers').value = ((cfg.dns_resolver || {}).nameservers || []).join('\n');
             })
             .catch(function () { /* viewer without config access — panel stays hidden */ });
     }
@@ -423,7 +424,8 @@
                 check_headers: el('cfgHealthHeaders').checked,
                 check_weak_tls: el('cfgHealthWeakTls').checked,
                 extra_domains: lines('cfgHealthExtra')
-            }
+            },
+            dns_resolver: { nameservers: lines('cfgDnsResolvers') }
         };
         fetch('/api/inventory/config', {
             method: 'POST', headers: API_HEADERS, credentials: 'same-origin',
