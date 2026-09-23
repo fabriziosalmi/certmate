@@ -24,7 +24,7 @@
         </div>
 
         <!-- Summary cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-px bg-gray-100 dark:bg-white/5" id="summaryCards">
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-px bg-gray-100 dark:bg-white/5" id="summaryCards">
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Total</div><div class="text-xl font-semibold text-foreground" id="sumTotal">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Issued</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Discovered</div><div class="text-xl font-semibold text-foreground" id="sumDiscovered">–</div></div>
@@ -32,6 +32,7 @@
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 7 days</div><div class="text-xl font-semibold text-orange-600 dark:text-orange-400" id="sum7">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-warning-fg" id="sum30">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="sum90">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="A verified OCSP or CRL answer says the issuer revoked it">Revoked</div><div class="text-xl font-semibold text-danger-fg" id="sumRevoked">–</div></div>
         </div>
     </div>
 
@@ -50,6 +51,69 @@
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Acceptable</div><div class="text-xl font-semibold text-foreground" id="cryptoAcceptable">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Modern</div><div class="text-xl font-semibold text-success-fg" id="cryptoModern">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="Classically strong but quantum-vulnerable">Quantum-vulnerable</div><div class="text-xl font-semibold text-warning-fg" id="cryptoQuantum">–</div></div>
+        </div>
+    </div>
+
+    <!-- Domain registrations: when the domain itself lapses (RDAP, WHOIS where a TLD has no RDAP) -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="registrationsPanel">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+            <span class="text-sm font-medium text-foreground"><i class="fas fa-globe mr-2 text-muted"></i>Domain registrations</span>
+            <span class="text-xs text-muted" id="regCount"></span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-danger-fg" id="regExpired">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-warning-fg" id="reg30">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="reg90">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The registry does not publish an expiry date (.de, .eu, ...)">Not published</div><div class="text-xl font-semibold text-foreground" id="regNotPublished">–</div></div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
+                    <tr>
+                        <th class="text-left font-medium px-4 py-2">Domain</th>
+                        <th class="text-left font-medium px-4 py-2">Registration expires</th>
+                        <th class="text-left font-medium px-4 py-2">Registrar</th>
+                        <th class="text-left font-medium px-4 py-2">Source</th>
+                    </tr>
+                </thead>
+                <tbody id="registrationsBody" class="divide-y divide-gray-100 dark:divide-white/5">
+                    <tr><td colspan="4" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Domain health: the checks that are about the name, not the certificate -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="domainHealthPanel">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+            <span class="text-sm font-medium text-foreground"><i class="fas fa-heart-pulse mr-2 text-muted"></i>Domain health</span>
+            <span class="text-xs text-muted" id="healthCount"></span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Failing</div><div class="text-xl font-semibold text-danger-fg" id="healthFailing">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Warning</div><div class="text-xl font-semibold text-warning-fg" id="healthWarning">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The check could not be completed. This is not a pass.">Not verifiable</div><div class="text-xl font-semibold text-foreground" id="healthUnknown">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">OK</div><div class="text-xl font-semibold text-foreground" id="healthOk">–</div></div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
+                    <tr>
+                        <th class="text-left font-medium px-4 py-2">Name</th>
+                        <th class="text-left font-medium px-4 py-2">SPF</th>
+                        <th class="text-left font-medium px-4 py-2">DMARC</th>
+                        <th class="text-left font-medium px-4 py-2">MX</th>
+                        <th class="text-left font-medium px-4 py-2" title="A list that refuses the query has said nothing about the address">Blocklists</th>
+                        <th class="text-left font-medium px-4 py-2">HSTS</th>
+                        <th class="text-left font-medium px-4 py-2" title="X-Frame-Options or CSP frame-ancestors, X-Content-Type-Options, Content-Security-Policy">Headers</th>
+                        <th class="text-left font-medium px-4 py-2" title="Whether the response names the software and version answering it">Disclosure</th>
+                        <th class="text-left font-medium px-4 py-2" title="Whether the host still accepts TLS 1.0 or 1.1, deprecated by RFC 8996">Old TLS</th>
+                    </tr>
+                </thead>
+                <tbody id="domainHealthBody" class="divide-y divide-gray-100 dark:divide-white/5">
+                    <tr><td colspan="9" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -72,6 +136,9 @@
                     <label class="flex items-center gap-2 text-sm text-muted mb-2">
                         <input type="checkbox" id="cfgAllowPrivate" class="rounded border-border"> Allow private/loopback targets
                     </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2" title="Asks the OCSP responder or CRL that each certificate names; those requests go to the issuing CA">
+                        <input type="checkbox" id="cfgCheckRevocation" class="rounded border-border"> Check revocation (OCSP, then CRL)
+                    </label>
                     <label class="block text-xs text-muted mb-1">Endpoints (one <code>host</code> or <code>host:port</code> per line)</label>
                     <textarea id="cfgEndpoints" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;api.example.com:8443"></textarea>
                 </div>
@@ -85,6 +152,44 @@
                     </label>
                     <label class="block text-xs text-muted mb-1">Domains to monitor (one per line)</label>
                     <textarea id="cfgCtDomains" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;example.org"></textarea>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-foreground mb-2">Domain registration expiry</h3>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2" title="Asks each registry once a day at most: RDAP, or WHOIS where the TLD has no RDAP">
+                        <input type="checkbox" id="cfgRegEnabled" class="rounded border-border"> Enabled
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgRegIncludeInventory" class="rounded border-border"> Also follow domains discovery found
+                    </label>
+                    <label class="block text-xs text-muted mb-1">Extra domains (one per line)</label>
+                    <textarea id="cfgRegExtra" rows="3" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.it&#10;example.co.uk"></textarea>
+                    <p class="mt-1 text-xs text-muted">Managed domains are always included.</p>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-foreground mb-2">Domain health</h3>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2" title="SPF, DMARC, MX, blocklists and HSTS, once a day at most">
+                        <input type="checkbox" id="cfgHealthEnabled" class="rounded border-border"> Enabled
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgHealthIncludeInventory" class="rounded border-border"> Also check names discovery found
+                    </label>
+                    <div class="flex flex-wrap gap-4 mb-2">
+                        <label class="flex items-center gap-2 text-sm text-muted">
+                            <input type="checkbox" id="cfgHealthMail" class="rounded border-border"> Mail (SPF, DMARC, MX)
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-muted" title="Public resolvers are refused by most blocklists; point CertMate at a resolver of your own to get real answers">
+                            <input type="checkbox" id="cfgHealthBlocklists" class="rounded border-border"> Blocklists
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-muted" title="One HEAD request per host: HSTS, the protective headers, and what the response discloses">
+                            <input type="checkbox" id="cfgHealthHeaders" class="rounded border-border"> Response headers
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-muted" title="Two extra handshakes per host, offering TLS 1.0 and 1.1 to see whether they are accepted">
+                            <input type="checkbox" id="cfgHealthWeakTls" class="rounded border-border"> Old TLS versions
+                        </label>
+                    </div>
+                    <label class="block text-xs text-muted mb-1">Extra names (one per line)</label>
+                    <textarea id="cfgHealthExtra" rows="3" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.it&#10;shop.example.com"></textarea>
+                    <p class="mt-1 text-xs text-muted">Mail and blocklist checks run on the registrable domain; HSTS on each host.</p>
                 </div>
             </div>
             <div class="px-6 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">
@@ -118,6 +223,7 @@
                 <option value="critical">≤ 7 days</option>
                 <option value="warning">≤ 30 days</option>
                 <option value="ok">Healthy</option>
+                <option value="revoked">Revoked</option>
             </select>
             <span class="text-xs text-muted ml-auto" id="invCount"></span>
         </div>

@@ -141,13 +141,26 @@ class Client:
             return job
         return self.wait_for_job(job.job_id, on_progress=on_progress) if wait else job
 
+    @staticmethod
+    def _require_bool(name: str, value: Any) -> bool:
+        """A boolean parameter is a boolean.
+
+        ``bool(value)`` here would repeat the server-side trap on the client:
+        every non-empty string is true, so ``force="false"`` would send
+        ``true``. The server refuses a non-boolean; refusing it here says which
+        argument was wrong, before a request is made.
+        """
+        if not isinstance(value, bool):
+            raise TypeError(f"{name} must be True or False, not {value!r}")
+        return value
+
     def renew_certificate(self, domain: str, *, force: bool = False) -> Dict[str, Any]:
         # The server reads force from the JSON body (payload.get('force')),
         # never from the query string. Always send a body — even when force is
         # False — so endpoints that read request.json don't 415 on a bodyless
         # POST. The per-request timeout covers multi-minute DNS-01 renewals.
         return self._request("POST", f"/api/certificates/{domain}/renew",
-                             json={"force": bool(force)},
+                             json={"force": self._require_bool("force", force)},
                              timeout=_RENEW_TIMEOUT) or {}
 
     def reissue_certificate(self, domain: str, **body: Any) -> Dict[str, Any]:
@@ -233,7 +246,7 @@ class Client:
 
     def set_auto_renew(self, domain: str, enabled: bool) -> Dict[str, Any]:
         return self._request("PUT", f"/api/certificates/{domain}/auto-renew",
-                             json={"enabled": bool(enabled)}) or {}
+                             json={"enabled": self._require_bool("enabled", enabled)}) or {}
 
     def deploy_certificate(self, domain: str) -> Dict[str, Any]:
         return self._request("POST", f"/api/certificates/{domain}/deploy", json={}) or {}
@@ -337,6 +350,30 @@ class Client:
 
     def health(self) -> Dict[str, Any]:
         return self._request("GET", "/health") or {}
+
+    # -- probing a host ------------------------------------------------------
+    def probe(self, host: str, *, port: int = 443,
+              server_name: Optional[str] = None,
+              check_revocation: bool = True) -> Dict[str, Any]:
+        """Read the certificate *host* is serving right now.
+
+        Returns the probe's answer as the server gives it: ``status``
+        (ok / blocked / unreachable), ``certificate``, ``validation``,
+        ``chain`` and ``revocation``. Nothing raises for a host that refuses
+        or does not resolve — that is a status, not an error.
+
+        ``revocation`` is a verified OCSP or CRL answer, ``None`` when
+        *check_revocation* is False. It is never ``good`` unless a signed,
+        current answer from the issuer said so.
+        """
+        body: Dict[str, Any] = {
+            "host": host,
+            "port": port,
+            "check_revocation": self._require_bool("check_revocation", check_revocation),
+        }
+        if server_name is not None:
+            body["server_name"] = server_name
+        return self._request("POST", "/api/probe", json=body) or {}
 
     # -- backups -------------------------------------------------------------
     def list_backups(self) -> Any:

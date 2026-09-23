@@ -33,6 +33,9 @@ DEFAULT_DISCOVERY_CONFIG = {
     'endpoints': [],
     'allow_private': False,
     'include_managed': True,
+    # Ask OCSP/CRL whether each served certificate has been revoked. Outbound
+    # requests go to the URLs the certificate names, through the SSRF guard.
+    'check_revocation': True,
 }
 
 
@@ -100,6 +103,7 @@ def discover_endpoints(
     managed_domains=None,
     probe=probe_certificate,
     observed_at=None,
+    check_revocation=False,
 ):
     """Probe each endpoint and upsert results into *inventory*.
 
@@ -107,7 +111,9 @@ def discover_endpoints(
     IPv6). *managed_domains* optionally maps a host (case-insensitive) to the
     managed-domain name CertMate issues for; a match records the observation as
     ``source='issued'``, ``managed=True`` and links the managed domain, so a
-    served-vs-issued comparison is possible.
+    served-vs-issued comparison is possible. With *check_revocation* each
+    probe also asks OCSP/CRL whether the served certificate is revoked, and the
+    answer is stored with the inventory record.
 
     Returns a list of per-endpoint result dicts, one per input spec, each with
     ``endpoint`` (the raw spec), ``host``, ``port``, ``status`` (``ok`` /
@@ -133,6 +139,7 @@ def discover_endpoints(
         try:
             probe_result = probe(
                 host, port=port, timeout=timeout, allow_private=allow_private,
+                check_revocation=check_revocation,
             )
         except Exception as e:  # defensive: the probe is meant never to raise
             logger.warning("Discovery probe crashed for %s:%s: %s", host, port, e)
@@ -147,6 +154,7 @@ def discover_endpoints(
             'endpoint': spec, 'host': host, 'port': port,
             'status': probe_result.get('status'), 'fingerprint': None,
             'error': probe_result.get('error'),
+            'revocation': (probe_result.get('revocation') or {}).get('status'),
         }
         if probe_result.get('status') == STATUS_OK:
             # The inventory write is inside the isolation boundary: a storage
@@ -232,6 +240,7 @@ class CertDiscoveryManager:
             'endpoints': endpoints,
             'allow_private': bool(config.get('allow_private', False)),
             'include_managed': bool(config.get('include_managed', True)),
+            'check_revocation': bool(config.get('check_revocation', True)),
         }
         self.settings_manager.update(
             lambda s: s.__setitem__('monitored_endpoints', clean),
@@ -271,6 +280,7 @@ class CertDiscoveryManager:
             allow_private=bool(config.get('allow_private', False)),
             managed_domains=managed_map,
             probe=self._probe,
+            check_revocation=bool(config.get('check_revocation', True)),
         )
         ok = sum(1 for r in results if r['status'] == STATUS_OK)
         logger.info(

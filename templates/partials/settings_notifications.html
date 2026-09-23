@@ -23,13 +23,13 @@
                 <div>
                     <label class="block text-sm font-medium text-label mb-2"><i class="fas fa-filter mr-1.5 text-blue-500"></i>Notify on Events</label>
                     <div class="flex flex-wrap gap-2">
-                        <template x-for="evt in ['certificate_created','certificate_renewed','certificate_expiring','certificate_revoked','certificate_failed']">
+                        <template x-for="evt in ['certificate_created','certificate_renewed','certificate_expiring','certificate_revoked','certificate_failed','domain_expiring']">
                             <label class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer border transition"
                                    :class="config.events.includes(evt) ? 'bg-primary/10 border-primary text-primary' : 'bg-surface-2 border-border text-muted'">
                                 <input type="checkbox" class="sr-only" :value="evt"
                                        :checked="config.events.includes(evt)"
                                        @change="toggleEvent(evt)">
-                                <span x-text="evt.replace('certificate_','').replace('_',' ')"></span>
+                                <span x-text="evt.replace('certificate_','').replace('domain_expiring','domain expiring').replace('_',' ')"></span>
                             </label>
                         </template>
                     </div>
@@ -133,7 +133,7 @@
                                 <div class="mt-1">
                                     <label class="text-xs text-muted mb-1 block">Events (leave empty for all)</label>
                                     <div class="flex flex-wrap gap-1.5">
-                                        <template x-for="evt in ['certificate_created','certificate_renewed','certificate_expiring','certificate_revoked','certificate_failed']">
+                                        <template x-for="evt in ['certificate_created','certificate_renewed','certificate_expiring','certificate_revoked','certificate_failed','domain_expiring']">
                                             <label class="inline-flex items-center px-2 py-1 rounded text-xs cursor-pointer border transition"
                                                    :class="(wh.events||[]).includes(evt) ? 'bg-primary/10 border-primary text-primary' : 'bg-sunken border-border text-muted'">
                                                 <input type="checkbox" class="sr-only" :value="evt"

@@ -1,0 +1,248 @@
+{
+ "rdapConformance": [
+  "rdap_level_0",
+  "icann_rdap_response_profile_1",
+  "icann_rdap_technical_implementation_guide_1",
+  "redacted"
+ ],
+ "notices": [
+  {
+   "title": "Terms of Service",
+   "description": [
+    "Public Interest Registry provides this RDAP service for informational purposes only, and to assist persons in obtaining information about or related to a domain name registration record. Public Interest Registry does not guarantee its accuracy. Users accessing the Public Interest Registry RDAP service agree to use the data only for lawful purposes, and under no circumstances may this data be used to: a) allow, enable, or otherwise support the transmission by e-mail, telephone, or facsimile of mass unsolicited, commercial advertising or solicitations to entities other than the registrar's own existing customers and b) enable high volume, automated, electronic processes that send queries or data to the systems of Public Interest Registry or any ICANN-accredited registrar, except as reasonably necessary to register domain names or modify existing registrations. When using the Public Interest Registry RDAP service, please consider the following: the RDAP service is not a replacement for standard EPP commands to the SRS service. RDAP is not considered authoritative for registered domain objects. The RDAP service may be scheduled for downtime during production or OT&E maintenance periods. Queries to the RDAP services are throttled. If too many queries are received from a single IP address within a specified time, the service will begin to reject further queries for a period of time to prevent disruption of RDAP service access. Abuse of the RDAP system through data mining is mitigated by detecting and limiting bulk query access from single sources. Where applicable, the presence of a [Non-Public Data] tag indicates that such data is not made publicly available due to applicable data privacy laws or requirements. Should you wish to contact the registrant, please refer to the RDAP records available through the registrar URL listed above. Access to non-public data may be provided, upon request, where it can be reasonably confirmed that the requester holds a specific legitimate interest and a proper legal basis for accessing the withheld data. Access to this data can be requested by submitting a request to WHOISrequest@pir.org. Public Interest Registry Inc. reserves the right to modify these terms at any time. By submitting this query, you agree to abide by this policy."
+   ],
+   "links": [
+    {
+     "value": "https://rdap.publicinterestregistry.org/rdap/domain/wikipedia.org",
+     "rel": "terms-of-service",
+     "href": "https://thenew.org/org-people/about-pir/policies/",
+     "type": "text/html"
+    }
+   ]
+  },
+  {
+   "title": "Status Codes",
+   "description": [
+    "For more information on domain status codes, please visit https://icann.org/epp"
+   ],
+   "links": [
+    {
+     "value": "https://rdap.publicinterestregistry.org/rdap/domain/wikipedia.org",
+     "rel": "glossary",
+     "href": "https://icann.org/epp",
+     "type": "application/rdap+json"
+    }
+   ]
+  },
+  {
+   "title": "RDDS Inaccuracy Complaint Form",
+   "description": [
+    "URL of the ICANN RDDS Inaccuracy Complaint Form: https://icann.org/wicf"
+   ],
+   "links": [
+    {
+     "value": "https://rdap.publicinterestregistry.org/rdap/domain/wikipedia.org",
+     "rel": "help",
+     "href": "https://icann.org/wicf",
+     "type": "application/rdap+json"
+    }
+   ]
+  }
+ ],
+ "ldhName": "wikipedia.org",
+ "unicodeName": "wikipedia.org",
+ "nameservers": [
+  {
+   "ldhName": "ns0.wikimedia.org",
+   "unicodeName": "ns0.wikimedia.org",
+   "ipAddresses": {
+    "v4": [
+     "208.80.154.238"
+    ],
+    "v6": [
+     "2620:0:861:53::1"
+    ]
+   },
+   "objectClassName": "nameserver",
+   "handle": "da1a201ee62d40d980c058827f8fa8ae-LROR",
+   "status": [
+    "associated"
+   ]
+  },
+  {
+   "ldhName": "ns1.wikimedia.org",
+   "unicodeName": "ns1.wikimedia.org",
+   "ipAddresses": {
+    "v4": [
+     "208.80.153.231"
+    ],
+    "v6": [
+     "2620:0:860:53::1"
+    ]
+   },
+   "objectClassName": "nameserver",
+   "handle": "b4994397345e4a07b9f67afa8f92ede3-LROR",
+   "status": [
+    "associated"
+   ]
+  },
+  {
+   "ldhName": "ns2.wikimedia.org",
+   "unicodeName": "ns2.wikimedia.org",
+   "ipAddresses": {
+    "v4": [
+     "198.35.27.27"
+    ],
+    "v6": [
+     "2a02:ec80:53::1"
+    ]
+   },
+   "objectClassName": "nameserver",
+   "handle": "8d17984d82c7433183f3f5f7ea42d0c3-LROR",
+   "status": [
+    "associated"
+   ]
+  }
+ ],
+ "secureDNS": {
+  "delegationSigned": false,
+  "maxSigLife": 1
+ },
+ "redacted": [
+  {
+   "name": {
+    "type": "Registry Domain ID"
+   },
+   "prePath": "$.handle",
+   "pathLang": "jsonpath",
+   "method": "removal"
+  }
+ ],
+ "objectClassName": "domain",
+ "status": [
+  "client delete prohibited",
+  "client transfer prohibited",
+  "client update prohibited"
+ ],
+ "events": [
+  {
+   "eventAction": "transfer",
+   "eventDate": "2012-03-09T16:33:50.754Z"
+  },
+  {
+   "eventAction": "expiration",
+   "eventDate": "2027-01-13T00:12:14Z"
+  },
+  {
+   "eventAction": "registration",
+   "eventDate": "2001-01-13T00:12:14.754Z"
+  },
+  {
+   "eventAction": "last changed",
+   "eventDate": "2026-08-12T08:47:19.41Z"
+  },
+  {
+   "eventAction": "last update of RDAP database",
+   "eventDate": "2026-09-22T16:33:56.397Z"
+  }
+ ],
+ "entities": [
+  {
+   "vcardArray": [
+    "vcard",
+    [
+     [
+      "version",
+      {},
+      "text",
+      "4.0"
+     ],
+     [
+      "fn",
+      {},
+      "text",
+      "MarkMonitor Inc."
+     ]
+    ]
+   ],
+   "roles": [
+    "registrar"
+   ],
+   "publicIds": [
+    {
+     "type": "IANA Registrar ID",
+     "identifier": "292"
+    }
+   ],
+   "objectClassName": "entity",
+   "handle": "292",
+   "entities": [
+    {
+     "vcardArray": [
+      "vcard",
+      [
+       [
+        "version",
+        {},
+        "text",
+        "4.0"
+       ],
+       [
+        "fn",
+        {},
+        "text",
+        ""
+       ],
+       [
+        "tel",
+        {
+         "type": "voice"
+        },
+        "uri",
+        "tel:+1.2083895740"
+       ],
+       [
+        "email",
+        {},
+        "text",
+        "abusecomplaints@markmonitor.com"
+       ]
+      ]
+     ],
+     "roles": [
+      "abuse"
+     ],
+     "objectClassName": "entity"
+    }
+   ],
+   "links": [
+    {
+     "value": "https://rdap.publicinterestregistry.org/rdap/entity/292",
+     "rel": "self",
+     "href": "https://rdap.publicinterestregistry.org/rdap/entity/292",
+     "type": "application/rdap+json"
+    },
+    {
+     "value": "https://rdap.markmonitor.com/rdap/",
+     "rel": "about",
+     "href": "https://rdap.markmonitor.com/rdap/",
+     "type": "application/rdap+json"
+    }
+   ]
+  }
+ ],
+ "links": [
+  {
+   "value": "https://rdap.publicinterestregistry.org/rdap/domain/wikipedia.org",
+   "rel": "related",
+   "href": "https://rdap.markmonitor.com/rdap/domain/wikipedia.org",
+   "type": "application/rdap+json"
+  },
+  {
+   "value": "https://rdap.publicinterestregistry.org/rdap/domain/wikipedia.org",
+   "rel": "self",
+   "href": "https://rdap.publicinterestregistry.org/rdap/domain/wikipedia.org",
+   "type": "application/rdap+json"
+  }
+ ]
+}

@@ -5,6 +5,7 @@ import time
 from ..core.audit_chain import CheckpointReadError
 from ..core.metrics import generate_metrics_response
 from flask import request, jsonify, Response, stream_with_context
+from modules.core.request_fields import json_booleans
 
 # Log-stream pacing (#418). The poll interval bounds how long a new line
 # waits; the idle ceiling bounds how long an abandoned tab can hold a worker
@@ -529,6 +530,8 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
     @app.route('/api/settings/rate-limits', methods=['GET', 'PUT'])
     @auth_manager.require_role('admin')
+    # GET carries no body, so the default simply applies there.
+    @json_booleans(enabled=True)
     def api_rate_limits_config():
         """Get or replace the configurable API rate limits (#319).
 
@@ -560,7 +563,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             if not isinstance(data, dict):
                 return jsonify({'error': 'Body must be a JSON object'}), 400
 
-            enabled = bool(data.get('enabled', True))
+            enabled = request.json_booleans['enabled']
             raw_limits = data.get('limits', {})
             if not isinstance(raw_limits, dict):
                 return jsonify({'error': 'limits must be an object'}), 400

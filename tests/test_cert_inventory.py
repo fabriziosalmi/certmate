@@ -21,6 +21,7 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from modules.core import cert_inventory
 from modules.core.cert_inventory import CertInventory, SCHEMA_VERSION, SOURCES
 
 pytestmark = [pytest.mark.unit]
@@ -426,3 +427,83 @@ def test_backup_restore_round_trips_inventory(tmp_path):
     assert rec is not None
     assert rec['managed'] is True
     assert rec['subject_cn'] == 'example.com'
+
+
+# --------------------------------------------------------------------------- #
+# revocation (schema v2)
+# --------------------------------------------------------------------------- #
+
+def _probe_ok(fingerprint='fprev', revocation=None):
+    return {
+        'status': 'ok', 'host': 'r.example.com', 'port': 443,
+        'certificate': {
+            'fingerprint_sha256': fingerprint, 'subject_cn': 'r.example.com',
+            'serial_number': '7', 'not_after': '2027-01-01T00:00:00Z',
+        },
+        'revocation': revocation,
+    }
+
+
+def _rev(status, **kw):
+    out = {'status': status, 'method': 'crl', 'reason': None, 'revoked_at': None,
+           'error': None, 'checked_at': '2026-09-22T00:00:00Z'}
+    out.update(kw)
+    return out
+
+
+def test_unchecked_certificate_has_no_revocation(tmp_path):
+    inv = CertInventory(tmp_path / 'data')
+    inv.record_probe_result(_probe_ok())
+    assert inv.get('fprev')['revocation'] is None
+
+
+def test_revocation_answer_is_stored_and_updated(tmp_path):
+    inv = CertInventory(tmp_path / 'data')
+    inv.record_probe_result(_probe_ok(revocation=_rev('unavailable', error='CRL down')))
+    assert inv.get('fprev')['revocation']['status'] == 'unavailable'
+    assert inv.get('fprev')['revocation']['error'] == 'CRL down'
+    inv.record_probe_result(_probe_ok(revocation=_rev('good')))
+    assert inv.get('fprev')['revocation']['status'] == 'good'
+    assert inv.get('fprev')['revocation']['error'] is None
+
+
+def test_revoked_is_final(tmp_path):
+    """A CA cannot un-revoke: a responder that is down tomorrow, or even a
+    later 'good', must not wipe a verified 'revoked'."""
+    inv = CertInventory(tmp_path / 'data')
+    inv.record_probe_result(_probe_ok(revocation=_rev(
+        'revoked', reason='key_compromise', revoked_at='2026-09-01T00:00:00Z')))
+    inv.record_probe_result(_probe_ok(revocation=_rev('unavailable', error='timeout')))
+    inv.record_probe_result(_probe_ok(revocation=_rev('good')))
+    rev = inv.get('fprev')['revocation']
+    assert rev['status'] == 'revoked'
+    assert rev['reason'] == 'key_compromise'
+    assert rev['revoked_at'] == '2026-09-01T00:00:00Z'
+
+
+def test_v1_database_is_migrated_in_place(tmp_path):
+    """An inventory written by the previous release keeps its rows and gains
+    the revocation columns; opening it twice is harmless."""
+    import sqlite3
+    inv_dir = tmp_path / 'data' / 'inventory'
+    inv_dir.mkdir(parents=True)
+    db = inv_dir / 'inventory.db'
+    conn = sqlite3.connect(str(db))
+    conn.executescript(cert_inventory._SCHEMA)
+    conn.execute(
+        "INSERT INTO certificates (fingerprint, subject_cn, source, managed, first_seen, last_seen) "
+        "VALUES ('old', 'old.example.com', 'probed', 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+    conn.execute('PRAGMA user_version = 1')
+    conn.commit()
+    conn.close()
+
+    inv = CertInventory(tmp_path / 'data')
+    record = inv.get('old')
+    assert record['subject_cn'] == 'old.example.com'
+    assert record['revocation'] is None
+    assert inv.record_revocation('old', _rev('revoked')) is True
+    CertInventory(tmp_path / 'data')  # re-open: no duplicate-column error
+    assert inv.get('old')['revocation']['status'] == 'revoked'
+    conn = sqlite3.connect(str(db))
+    assert conn.execute('PRAGMA user_version').fetchone()[0] == cert_inventory.SCHEMA_VERSION
+    conn.close()

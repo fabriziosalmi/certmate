@@ -24,6 +24,10 @@ class RateLimitConfig:
         'certificate_list': 60,  # Listing is cheaper
         'certificate_revoke': 60,
         'certificate_renew': 30,
+        # Each probe opens a TLS connection to a third party and, with
+        # revocation on, fetches that CA's OCSP or CRL. Cheap for CertMate,
+        # not free for them.
+        'probe': 30,
         'ocsp_status': 200,  # OCSP should be high
         'crl_download': 60,
         # Per-IP ceiling applied to EVERY /api/ request regardless of the

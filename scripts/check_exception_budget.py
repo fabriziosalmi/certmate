@@ -71,7 +71,55 @@ GENERAL_LIMIT = 10
 #
 # A third one was removed rather than counted: it wrapped CRLManager.update_crl(),
 # which already catches internally and returns None, so it could never fire.
-TOTAL_LIMIT = 426
+#
+# 426 -> 427 on 2026-09-22, for the CAA explanation on a failed issuance:
+#
+#   modules/core/certificates.py   _caa_explanation. It runs inside the branch
+#                                  that is already raising certbot's failure,
+#                                  and anything it raises would replace that
+#                                  error with its own. It logs and returns ''.
+#
+# Two more were narrowed instead of counted, both in modules/core/caa.py: the
+# resolver factory now catches ImportError only, and the per-name catch-all
+# went, because every dnspython failure is already a DNSException that the
+# resolver turns into LookupFailed.
+#
+# 427 -> 428 on 2026-09-22, for the domain registration step of the inventory
+# scan:
+#
+#   modules/api/resources_inventory.py   InventoryScan runs discovery, the CT
+#                                        poll and now the registration check,
+#                                        each in its own `except Exception ->
+#                                        logger.error -> error entry`, so one
+#                                        failing step cannot lose the other
+#                                        two's results. The same shape as the
+#                                        two handlers directly above it.
+#
+# The sweep itself (DomainRegistrationManager.run_check) has no catch-all: a
+# single lookup never raises, and anything else is left to the scheduler
+# wrapper, which already logs it and records the run.
+#
+# 428 -> 430 on 2026-09-22, for the name-level checks (SPF/DMARC/MX/blocklists/
+# HSTS). Both LOG:
+#
+#   modules/api/resources_inventory.py   the scan's domain-health step, the
+#                                        same shape as the three steps above
+#                                        it, for the same reason.
+#   modules/core/domain_health.py        DomainHealthManager.check_one. This is
+#                                        where it differs from the registration
+#                                        sweep above: that one checks each
+#                                        domain through a client that turns
+#                                        every failure into a status, so it can
+#                                        leave the rest to the wrapper. This one
+#                                        runs five checks per name against
+#                                        injected lookups, and one name's
+#                                        surprise must not cost the other two
+#                                        hundred their sweep. It records the
+#                                        name as `unknown`, never as passing,
+#                                        which is what
+#                                        test_a_failed_name_is_recorded_as_
+#                                        unknown_not_as_passing pins.
+TOTAL_LIMIT = 430
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
@@ -92,7 +140,7 @@ UNACCOUNTED_LIMIT = 30
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
     'modules/core/storage_backends.py': 64,
-    'modules/core/certificates.py': 44,
+    'modules/core/certificates.py': 45,
     'modules/core/file_operations.py': 16,
     'modules/web/misc_routes.py': 16,
     'modules/api/resources_health.py': 15,

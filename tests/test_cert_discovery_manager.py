@@ -57,9 +57,12 @@ class _FakeProbe:
     def __init__(self, mapping):
         self.mapping = mapping
         self.calls = []
+        self.revocation_flags = []
 
-    def __call__(self, host, port=443, timeout=None, allow_private=False):
+    def __call__(self, host, port=443, timeout=None, allow_private=False,
+                 check_revocation=False):
         self.calls.append((host, port, allow_private))
+        self.revocation_flags.append(check_revocation)
         return self.mapping.get(host, {
             'host': host, 'port': port, 'status': 'unreachable',
             'error': 'no route', 'certificate': None,
@@ -80,7 +83,7 @@ def test_default_config(settings_manager, inventory):
     cfg = mgr.get_config()
     assert cfg == {
         'enabled': False, 'endpoints': [], 'allow_private': False,
-        'include_managed': True,
+        'include_managed': True, 'check_revocation': True,
     }
 
 
@@ -190,3 +193,45 @@ def test_discovery_job_registered_in_factory():
     # The picklable job wrapper exists (APScheduler requires a module-level fn).
     assert hasattr(factory, '_certificate_discovery_job')
     assert callable(factory._certificate_discovery_job)
+
+
+# --------------------------------------------------------------------------- #
+# revocation checking
+# --------------------------------------------------------------------------- #
+
+def test_revocation_is_checked_by_default(settings_manager, inventory):
+    """A sweep asks for revocation unless the operator turned it off."""
+    probe = _FakeProbe({'a.example.com': _ok('a.example.com')})
+    mgr = CertDiscoveryManager(settings_manager, inventory, probe=probe)
+    saved = mgr.save_config({'enabled': True, 'endpoints': ['a.example.com'],
+                             'include_managed': False})
+    assert saved['check_revocation'] is True
+    mgr.run_discovery()
+    assert probe.revocation_flags == [True]
+
+
+def test_revocation_check_can_be_turned_off(settings_manager, inventory):
+    probe = _FakeProbe({'a.example.com': _ok('a.example.com')})
+    mgr = CertDiscoveryManager(settings_manager, inventory, probe=probe)
+    mgr.save_config({'enabled': True, 'endpoints': ['a.example.com'],
+                     'include_managed': False, 'check_revocation': False})
+    mgr.run_discovery()
+    assert probe.revocation_flags == [False]
+
+
+def test_sweep_stores_the_revocation_answer(settings_manager, inventory):
+    result = _ok('a.example.com')
+    result['revocation'] = {
+        'status': 'revoked', 'method': 'ocsp', 'reason': 'key_compromise',
+        'revoked_at': '2026-09-01T00:00:00Z', 'error': None,
+        'checked_at': '2026-09-22T00:00:00Z',
+    }
+    probe = _FakeProbe({'a.example.com': result})
+    mgr = CertDiscoveryManager(settings_manager, inventory, probe=probe)
+    mgr.save_config({'enabled': True, 'endpoints': ['a.example.com'],
+                     'include_managed': False})
+    out = mgr.run_discovery()
+    assert out['results'][0]['revocation'] == 'revoked'
+    record = inventory.list_all()[0]
+    assert record['revocation']['status'] == 'revoked'
+    assert record['revocation']['reason'] == 'key_compromise'

@@ -17,6 +17,22 @@ The CertMate Client Certificates API provides REST endpoints for complete certif
 
 ---
 
+## Booleans are booleans
+
+A field documented as a boolean is read as written: `true` or `false`, without
+quotes. A string, a number or `null` is refused with `400 INVALID_REQUEST` and
+a message naming the field, rather than interpreted.
+
+That refusal replaces a silent misreading. Python's `bool("false")` is `True`,
+so a client that sent a boolean as a string — easy from a shell, an Ansible or
+Terraform template, or an agent filling a tool schema — used to get the
+opposite of what it asked for, with a 200. For `include_secrets` on a backup,
+the opposite was a plaintext dump of every private key instead of the masked
+archive that was requested.
+
+An absent field still falls back to its documented default; only a value that
+is present and not a boolean is an error.
+
 ## Authentication
 
 All API endpoints require Bearer token authentication.
@@ -180,6 +196,127 @@ does not force renewal.
 `missing` and `mismatched` force `needs_renewal`, because a certificate that
 cannot serve TLS has nothing to wait for. Restoring a share-safe backup
 produces certificates with no key, which is the case this exists for.
+
+#### Turn automatic renewal on or off
+
+**Endpoint**: `PUT /api/certificates/<domain>/auto-renew` — operator
+
+```json
+{ "enabled": false }
+```
+
+`enabled` is a JSON boolean. Answers `{"message", "domain", "auto_renew"}`.
+A missing `enabled` is `400 AUTO_RENEW_FLAG_REQUIRED`; a domain that is not
+tracked in settings is `404 DOMAIN_NOT_IN_SETTINGS`, because only those have a
+renewal flag to toggle. The change is audited and published on the event
+stream as `certificate_auto_renew_changed`.
+
+#### Check DNS-01 alias records
+
+**Endpoints**:
+`POST /api/certificates/check-dns-alias` — viewer, before a certificate exists;
+`GET /api/certificates/<domain>/dns-alias-check` — viewer, for one that does.
+
+With DNS alias mode the `_acme-challenge` record of each name is a CNAME into a
+zone CertMate can write. These check that every CNAME is in place, before the
+order rather than after the CA fails to find the TXT record.
+
+```json
+{
+  "domain": "example.com",
+  "domain_alias": "validation.example.org",
+  "san_domains": ["www.example.com"],
+  "wildcard": false
+}
+```
+
+`domain` and `domain_alias` are required for the `POST`; `wildcard: true` adds
+`*.<domain>` to the names. The `GET` reads both from the certificate and answers
+`400` when it does not use alias mode. Every name is checked against the
+caller's scope.
+
+```json
+{
+  "domain": "example.com",
+  "domain_alias": "validation.example.org",
+  "ok": false,
+  "checks": [
+    {
+      "source": "_acme-challenge.example.com",
+      "expected_target": "_acme-challenge.validation.example.org",
+      "found_targets": [],
+      "status": "missing",
+      "ok": false,
+      "error": null
+    }
+  ]
+}
+```
+
+`status` per check is `ok`, `missing` (no CNAME), `mismatch` (a CNAME to
+somewhere else) or `error` (the lookup failed, with `error` saying why). The
+top-level `ok` is true only when there is at least one check and every one is
+`ok`.
+
+#### Check CAA before issuing
+
+**Endpoint**: `POST /api/certificates/check-caa` — viewer, since API contract **2.5**
+
+What the CAA records (RFC 8659) say about issuing a set of names from a given
+CA. A CAA record names the CAs allowed to issue for a domain, and a CA must
+refuse when it is not named — so a record that names a different CA turns
+into a failed order, or a failed renewal weeks later.
+
+```json
+{
+  "domain": "example.com",
+  "san_domains": ["www.example.com"],
+  "ca_provider": "letsencrypt",
+  "challenge_type": "dns-01"
+}
+```
+
+`ca_provider` and `challenge_type` default to the ones in settings. At most
+100 names per request. A scoped key gets `403 DOMAIN_OUT_OF_SCOPE` for any name
+outside its scope, as the DNS-alias check does.
+
+**Response** (200 OK):
+
+```json
+{
+  "status": "forbidden",
+  "ca_provider": "letsencrypt",
+  "identifiers": ["letsencrypt.org"],
+  "domains": [
+    {
+      "domain": "example.com",
+      "status": "forbidden",
+      "relevant_name": "example.com",
+      "records": ["0 issue \"pki.goog\""],
+      "reason": "example.com issue allows only pki.goog"
+    }
+  ],
+  "message": "CAA: example.com issue allows only pki.goog, so Let's Encrypt (letsencrypt.org) will refuse example.com. Add a record such as example.com. CAA 0 issue \"letsencrypt.org\" or choose a CA the record names.",
+  "suggested_record": "example.com. CAA 0 issue \"letsencrypt.org\""
+}
+```
+
+| `status` | meaning |
+| :--- | :--- |
+| `allowed` | a record names this CA, or the records restrict nothing relevant |
+| `no_policy` | no CAA records anywhere up the tree: any CA may issue |
+| `forbidden` | records exist and none authorises this CA (for this challenge type, when `validationmethods` is set) |
+| `unknown` | the lookup failed; a CA that gets the same answer refuses too |
+| `not_applicable` | a private CA: whether it checks CAA is its operator's choice |
+
+The top-level `status` is the most severe across all names. Wildcard names are
+judged by `issuewild` when the record set has any. The lookup climbs from each
+name towards the TLD and uses the first name that has records, as a CA does.
+
+**This advises, it never gates.** CertMate's resolver is not the CA's —
+split-horizon DNS, a record changed a minute ago — and the create endpoint does
+not consult it. When an issuance or a renewal does fail and a CAA record
+refuses the CA, the same sentence as `message` is appended to the error.
 
 ### Client certificates
 
@@ -856,6 +993,43 @@ rate-limited.
 Begins the Authorization Code + PKCE flow. The next-URL is validated to be a
 path on this site, so it cannot be used as an open redirect.
 
+### Probing a host
+
+#### Read the certificate a host is serving
+
+**Endpoint**: `POST /api/probe` — viewer, since API contract **2.8**
+
+```json
+{ "host": "shop.example.com", "port": 443, "server_name": "shop.example.com", "check_revocation": true }
+```
+
+Only `host` is required. `port` defaults to 443, `server_name` to `host`, and
+`check_revocation` to `true`.
+
+The answer is the deep probe's own shape — `status`, `certificate`,
+`validation`, `chain`, `revocation`, `connect_ip`, `probed_at` — the same one
+the inventory stores, described in
+[the discovery guide](discovery-inventory.md#the-deep-tls-probe). In short:
+
+- `status` is `ok`, `blocked` (the SSRF guard refused the target) or
+  `unreachable` (`error_class` says which way);
+- PKI trust is deliberately **not** validated, so an expired, self-signed or
+  mismatched certificate is still described, with `validation` reporting the
+  condition;
+- `revocation` is the verified OCSP/CRL answer, or `null` when
+  `check_revocation` is false. It is never `good` unless a signed, current
+  answer said so — see [Revocation](discovery-inventory.md#revocation).
+
+This is how another tool asks CertMate what is being served rather than
+implementing TLS again. It is rate-limited as its own category, because each
+call opens a TLS connection to a third party and may fetch that CA's OCSP or
+CRL.
+
+**Boundaries.** A scoped key may only probe hosts its `allowed_domains` cover,
+and `server_name` is checked too, because that is the name the probe asks the
+host for. Private, loopback and other non-global addresses are refused by the
+probe's SSRF guard, which answers `blocked` instead of raising.
+
 ### Inventory and discovery
 
 The inventory is every certificate CertMate knows about: the ones it manages
@@ -868,6 +1042,15 @@ logs. Discovery is what fills the second half.
 
 Returns managed and discovered certificates with an expiry forecast. Filters:
 `?managed=true|false`, and the usual paging.
+
+Since API contract **2.4** every record carries `revocation`: the last verified
+OCSP/CRL answer for that certificate, as `{status, method, reason, revoked_at,
+error, checked_at}`, or `null` when it was never checked. `status` is one of
+`good`, `revoked`, `unknown`, `unavailable` or `not_applicable`, and only a
+signed, current answer from the issuer is ever `good` or `revoked`. The
+summary adds a `revocation` count per status (plus `unchecked`). What each
+status means and how the answer is verified:
+[Revocation](discovery-inventory.md#revocation).
 
 #### Forget a discovered certificate
 
@@ -915,6 +1098,117 @@ discovered certificate against published deprecation timelines. It is an
 inventory, not a recommendation engine: it counts what is deployed and says
 what is behind. Add `?format=csv` for the per-asset table.
 
+#### Domain registrations
+
+**Endpoint**: `GET /api/inventory/domains` — viewer, since API contract **2.6**
+
+When each tracked domain's *registration* expires, from RDAP, or WHOIS where
+the TLD has no RDAP. One row per registrable domain, soonest expiry first; a
+scoped key sees only the domains its scope covers.
+
+```json
+{
+  "domains": [
+    {
+      "domain": "example.com",
+      "status": "ok",
+      "expires_at": "2026-10-29T15:57:39Z",
+      "days_until_expiry": 37,
+      "expiry_status": "ok",
+      "registrar": "Example Registrar Inc.",
+      "registry_status": ["client transfer prohibited"],
+      "source": "rdap",
+      "error": null,
+      "checked_at": "2026-09-22T06:00:04Z",
+      "first_seen": "2026-09-01T06:00:02Z"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "by_status": {"ok": 1, "not_published": 0, "not_registered": 0, "unavailable": 0},
+    "expiry": {"expired": 0, "30": 0, "60": 1, "90": 1}
+  }
+}
+```
+
+`status` is `ok`, `not_published` (the registry does not publish an expiry —
+`.de`, `.eu`), `not_registered` or `unavailable`; only `ok` carries a date and a
+day count. The check is configured under `domain_registration` in
+`/api/inventory/config` and also runs on `POST /api/inventory/scan`, whose
+answer gains a `domain_registration` summary. What each status means, and why
+some TLDs are answered over WHOIS:
+[Domain registration expiry](discovery-inventory.md#domain-registration-expiry).
+
+#### Domain health
+
+**Endpoint**: `GET /api/inventory/health` — viewer, since API contract **2.9**
+
+The checks that are about the *name* rather than the certificate: SPF, DMARC
+and MX, the DNS blocklists, and the HSTS header the host serves. Worst first,
+so the answer opens on what is wrong; a scoped key sees only its own names.
+
+```json
+{
+  "names": [
+    {
+      "name": "example.com",
+      "status": "failing",
+      "checks": {
+        "spf": {"status": "ok", "detail": "published",
+                "record": "v=spf1 include:_spf.example.net -all"},
+        "dmarc": {"status": "failing",
+                  "detail": "no DMARC record, so a receiver has no instruction for mail that fails authentication"},
+        "mx": {"status": "ok", "detail": "2 mail exchangers",
+               "hosts": ["mx1.example.net", "mx2.example.net"]},
+        "blocklists": {"status": "unknown",
+                       "detail": "no blocklist answered the query — a public resolver is usually the reason; point CertMate at a resolver of your own",
+                       "unanswered": ["zen.spamhaus.org (192.0.2.13): refused this resolver"]},
+        "hsts": {"status": "ok", "detail": "max-age 31536000s",
+                 "max_age": 31536000, "includes_subdomains": true, "preload": false},
+        "security_headers": {"status": "warning",
+                             "detail": "no X-Content-Type-Options: nosniff",
+                             "broken": [], "missing": ["no X-Content-Type-Options: nosniff"],
+                             "checked_host": "www.example.com"},
+        "weak_tls": {"status": "failing",
+                     "detail": "the host still accepts TLS 1.0, deprecated by RFC 8996 since 2021",
+                     "accepted": ["TLS 1.0"], "refused": ["TLS 1.1"], "unasked": []},
+        "disclosure": {"status": "warning",
+                       "detail": "the response names the software running it: Server: nginx/1.24.0",
+                       "disclosed": ["Server: nginx/1.24.0"],
+                       "checked_host": "www.example.com"}
+      },
+      "checked_at": "2026-09-22T06:30:11Z",
+      "first_seen": "2026-09-01T06:30:09Z"
+    }
+  ],
+  "summary": {"total": 1, "by_status": {"failing": 1, "warning": 0, "unknown": 0, "ok": 0}}
+}
+```
+
+Every check reports one of four statuses, and `unknown` is the one to read
+carefully: it means the check could not be completed, and it is **not** a pass.
+A blocklist that refuses the query — which is what every public resolver gets
+from Spamhaus — has said nothing about the address, and reporting that as "not
+listed" is the mistake this endpoint exists not to make. Because that refusal
+can arrive as a plain NXDOMAIN, indistinguishable from "not listed", each list
+is first asked about its own always-listed test point; one that cannot answer
+that is not asked about your domains at all, and is named in `unanswered`.
+Point CertMate at a resolver of your own and the answers become real.
+
+`weak_tls` is present only when `check_weak_tls` is on: it is the one check
+that opens connections a host did not invite. Its `unknown` means this CertMate
+build could not offer the old version — not that the host refused it.
+
+Mail checks and blocklists run against the *registrable* domain, because DMARC
+falls back to the organisational domain; the three header checks run against
+each host, because that is what serves the site, and they share one `HEAD`
+request. `checked_host` says which name answered it — a redirect from the apex
+to `www` within the same registrable domain is followed, so the headers
+described are the page's and not the redirect's. The checks are configured under `domain_health`
+in `/api/inventory/config` and also run on `POST /api/inventory/scan`, whose
+answer gains a `domain_health` summary. What each check means:
+[Domain health](discovery-inventory.md#domain-health).
+
 ### Deployment
 
 #### Deploy-hook history
@@ -936,6 +1230,27 @@ configured maintenance window opens.
 
 Runs the hook without a real certificate change, so a broken hook is found
 before a renewal depends on it.
+
+#### Run a certificate's deploy hooks now
+
+**Endpoint**: `POST /api/certificates/<domain>/deploy` — admin
+
+Runs every enabled hook and deploy target that applies to the domain, with
+`CERTMATE_EVENT=manual`. The `on_events` filter and maintenance windows are
+ignored: pressing the button is the decision to deploy now.
+
+```json
+{ "ok": true, "total": 2, "succeeded": 2, "failed": 0, "results": [ ... ] }
+```
+
+It answers **200 even when `ok` is false**, so the summary can be read: deploy
+hooks disabled, or nothing configured for this domain, come back as `ok: false`
+with an `error` that says which. Non-2xx is reserved for a bad domain path
+(`400`), a certificate that does not exist (`404 CERTIFICATE_NOT_FOUND`), a
+deploy manager that is not running (`503`) and an unexpected failure (`500`).
+Each `results[]` entry is one hook or target run (`hook_name`, `exit_code`,
+`success`, `stdout`, `stderr`, ...), the same record `GET /api/deploy/history`
+keeps.
 
 #### Record browser-side reachability
 
@@ -1050,12 +1365,41 @@ Audited, like any other administrative action.
 **Endpoint**: `PUT /api/users/<username>` — admin
 **Endpoint**: `DELETE /api/users/<username>` — admin
 
+#### Create an API key
+
+**Endpoint**: `POST /api/keys` — admin
+
+Refused with `409 SETUP_BOOTSTRAP_ONLY` while the instance is still in setup
+mode. In that state every request is served as admin to anyone who can reach
+the instance, so a key minted then would be minted by whoever was there, and
+it would stay valid once setup is complete. Enable local authentication (or set
+`API_BEARER_TOKEN`), sign in, then create keys. `POST /api/users` answers the
+same `409` for any user after the first one while setup is incomplete: the
+first admin is the bootstrap.
+
 #### Revoke an API key
 
 **Endpoint**: `DELETE /api/keys/<key_id>` — admin
 
 Revocation takes effect immediately; the key stops authenticating on the next
 request.
+
+#### Confirm a key created during setup
+
+**Endpoint**: `PATCH /api/keys/<key_id>` — admin, since API contract **2.7**
+
+```json
+{ "confirmed": true }
+```
+
+Keys that earlier versions let be created while the instance was in setup mode
+(`created_by: "setup_user"`) stay valid, but `GET /api/keys` lists them with
+`created_during_setup: true` and `needs_review: true`, and the startup log says
+how many there are. Confirming records who vouched for the key and when
+(`setup_origin_confirmed_by`, `setup_origin_confirmed_at`) and clears
+`needs_review`; revoking removes it. Confirming is refused in setup mode, for a
+key that was not created during setup (`400 API_KEY_NOT_CONFIRMABLE`), and for
+an unknown key (`404 API_KEY_NOT_FOUND`).
 
 ### Backups and storage
 

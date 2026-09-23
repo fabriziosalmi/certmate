@@ -92,8 +92,9 @@ def build_inventory_view(records, now=None):
 
     Each certificate is the stored record plus a live ``days_until_expiry``,
     ``expiry_status`` and ``group`` (``issued`` when managed, else
-    ``discovered``). The summary rolls up totals, source breakdown, and an
-    expiry forecast (expired + within 7/30/90 days) across every record.
+    ``discovered``). The summary rolls up totals, source breakdown, an
+    expiry forecast (expired + within 7/30/90 days) and the revocation answers
+    across every record.
     """
     now = now or datetime.utcnow()
     certificates = []
@@ -103,6 +104,9 @@ def build_inventory_view(records, now=None):
         'discovered': 0,
         'by_source': {},
         'expiry': {'expired': 0, '7': 0, '30': 0, '90': 0, 'unknown': 0},
+        # Last revocation answer per certificate; 'unchecked' = never asked.
+        'revocation': {'revoked': 0, 'good': 0, 'unknown': 0,
+                       'unavailable': 0, 'not_applicable': 0, 'unchecked': 0},
     }
 
     for record in records:
@@ -120,6 +124,11 @@ def build_inventory_view(records, now=None):
         source = record.get('source') or 'unknown'
         summary['by_source'][source] = summary['by_source'].get(source, 0) + 1
 
+        rev_status = (record.get('revocation') or {}).get('status') or 'unchecked'
+        if rev_status not in summary['revocation']:
+            rev_status = 'unavailable'
+        summary['revocation'][rev_status] += 1
+
         if days is None:
             summary['expiry']['unknown'] += 1
         elif days < 0:
@@ -131,3 +140,42 @@ def build_inventory_view(records, now=None):
                     summary['expiry'][str(bucket)] += 1
 
     return {'certificates': certificates, 'summary': summary}
+
+
+REGISTRATION_FORECAST_BUCKETS = (30, 60, 90)
+
+
+def build_registrations_view(records, now=None):
+    """Return ``{'domains': [...], 'summary': {...}}`` for domain registrations.
+
+    Each record gains ``days_until_expiry`` and ``expiry_status`` — the same
+    thresholds as certificates — computed only when the registry published an
+    expiry. ``not_published`` and ``unavailable`` stay ``unknown`` rather than
+    being given a number nobody stated.
+    """
+    now = now or datetime.utcnow()
+    domains = []
+    summary = {
+        'total': 0,
+        'by_status': {'ok': 0, 'not_published': 0, 'not_registered': 0, 'unavailable': 0},
+        'expiry': {'expired': 0, '30': 0, '60': 0, '90': 0},
+    }
+    for record in records:
+        item = dict(record)
+        days = days_until_expiry(record.get('expires_at'), now) if record.get('expires_at') else None
+        item['days_until_expiry'] = days
+        item['expiry_status'] = expiry_status(days)
+        domains.append(item)
+
+        summary['total'] += 1
+        status = record.get('status') or 'unavailable'
+        summary['by_status'][status] = summary['by_status'].get(status, 0) + 1
+        if days is None:
+            continue
+        if days < 0:
+            summary['expiry']['expired'] += 1
+        else:
+            for bucket in REGISTRATION_FORECAST_BUCKETS:
+                if days <= bucket:
+                    summary['expiry'][str(bucket)] += 1
+    return {'domains': domains, 'summary': summary}

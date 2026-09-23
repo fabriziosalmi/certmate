@@ -1,0 +1,306 @@
+{
+ "rdapConformance": [
+  "rdap_level_0",
+  "icann_rdap_response_profile_1",
+  "icann_rdap_technical_implementation_guide_1"
+ ],
+ "objectClassName": "domain",
+ "entities": [
+  {
+   "objectClassName": "entity",
+   "entities": [
+    {
+     "objectClassName": "entity",
+     "roles": [
+      "abuse"
+     ],
+     "status": [
+      "active"
+     ],
+     "vcardArray": [
+      "vcard",
+      [
+       [
+        "version",
+        {},
+        "text",
+        "4.0"
+       ],
+       [
+        "fn",
+        {},
+        "text",
+        "Redacted Person"
+       ],
+       [
+        "tel",
+        {
+         "type": [
+          "voice"
+         ]
+        },
+        "uri",
+        "tel:+1.2083895740"
+       ],
+       [
+        "email",
+        {},
+        "text",
+        "registryescalations@markmonitor.com"
+       ]
+      ]
+     ]
+    }
+   ],
+   "handle": "292",
+   "links": [
+    {
+     "href": "https://pubapi.registry.google/rdap/entity/292",
+     "rel": "self",
+     "type": "application/rdap+json",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    },
+    {
+     "href": "http://www.markmonitor.com",
+     "rel": "about",
+     "type": "text/html",
+     "value": "https://rdap.markmonitor.com/rdap/"
+    }
+   ],
+   "publicIds": [
+    {
+     "identifier": "292",
+     "type": "IANA Registrar ID"
+    }
+   ],
+   "remarks": [
+    {
+     "description": [
+      "Summary data only. For complete data, send a specific query for the object."
+     ],
+     "title": "Incomplete Data",
+     "type": "object truncated due to unexplainable reasons"
+    }
+   ],
+   "roles": [
+    "registrar"
+   ],
+   "vcardArray": [
+    "vcard",
+    [
+     [
+      "version",
+      {},
+      "text",
+      "4.0"
+     ],
+     [
+      "fn",
+      {},
+      "text",
+      "MarkMonitor Inc."
+     ]
+    ]
+   ]
+  }
+ ],
+ "events": [
+  {
+   "eventAction": "registration",
+   "eventActor": "CharlestonRoad",
+   "eventDate": "2018-10-29T15:57:39.435Z"
+  },
+  {
+   "eventAction": "expiration",
+   "eventDate": "2026-10-29T15:57:39.435Z"
+  },
+  {
+   "eventAction": "last update of RDAP database",
+   "eventDate": "2026-09-22T16:33:57.373Z"
+  },
+  {
+   "eventAction": "last changed",
+   "eventDate": "2025-10-23T18:23:47.809Z"
+  }
+ ],
+ "handle": "2E35D5AB3-DEV",
+ "ldhName": "web.dev",
+ "links": [
+  {
+   "href": "https://pubapi.registry.google/rdap/domain/web.dev",
+   "rel": "self",
+   "type": "application/rdap+json",
+   "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+  },
+  {
+   "href": "https://rdap.markmonitor.com/rdap/domain/web.dev",
+   "rel": "related",
+   "type": "application/rdap+json",
+   "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+  }
+ ],
+ "nameservers": [
+  {
+   "objectClassName": "nameserver",
+   "handle": "77C811_GOOGLE-GOOGLE",
+   "ldhName": "ns1.zdns.google",
+   "links": [
+    {
+     "href": "https://pubapi.registry.google/rdap/nameserver/ns1.zdns.google",
+     "rel": "self",
+     "type": "application/rdap+json",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    }
+   ],
+   "remarks": [
+    {
+     "description": [
+      "Summary data only. For complete data, send a specific query for the object."
+     ],
+     "title": "Incomplete Data",
+     "type": "object truncated due to unexplainable reasons"
+    }
+   ]
+  },
+  {
+   "objectClassName": "nameserver",
+   "handle": "1B2921_GOOGLE-GOOGLE",
+   "ldhName": "ns2.zdns.google",
+   "links": [
+    {
+     "href": "https://pubapi.registry.google/rdap/nameserver/ns2.zdns.google",
+     "rel": "self",
+     "type": "application/rdap+json",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    }
+   ],
+   "remarks": [
+    {
+     "description": [
+      "Summary data only. For complete data, send a specific query for the object."
+     ],
+     "title": "Incomplete Data",
+     "type": "object truncated due to unexplainable reasons"
+    }
+   ]
+  },
+  {
+   "objectClassName": "nameserver",
+   "handle": "585931_GOOGLE-GOOGLE",
+   "ldhName": "ns3.zdns.google",
+   "links": [
+    {
+     "href": "https://pubapi.registry.google/rdap/nameserver/ns3.zdns.google",
+     "rel": "self",
+     "type": "application/rdap+json",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    }
+   ],
+   "remarks": [
+    {
+     "description": [
+      "Summary data only. For complete data, send a specific query for the object."
+     ],
+     "title": "Incomplete Data",
+     "type": "object truncated due to unexplainable reasons"
+    }
+   ]
+  },
+  {
+   "objectClassName": "nameserver",
+   "handle": "4853A2_GOOGLE-GOOGLE",
+   "ldhName": "ns4.zdns.google",
+   "links": [
+    {
+     "href": "https://pubapi.registry.google/rdap/nameserver/ns4.zdns.google",
+     "rel": "self",
+     "type": "application/rdap+json",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    }
+   ],
+   "remarks": [
+    {
+     "description": [
+      "Summary data only. For complete data, send a specific query for the object."
+     ],
+     "title": "Incomplete Data",
+     "type": "object truncated due to unexplainable reasons"
+    }
+   ]
+  }
+ ],
+ "secureDNS": {
+  "delegationSigned": false,
+  "zoneSigned": true
+ },
+ "status": [
+  "client delete prohibited",
+  "client transfer prohibited",
+  "client update prohibited",
+  "server delete prohibited",
+  "server transfer prohibited",
+  "server update prohibited"
+ ],
+ "notices": [
+  {
+   "description": [
+    "By querying our Domain Database as part of the RDAP pilot program (RDAP Domain Database), you are agreeing to comply with these terms and acknowledging that your information will be used in accordance with Charleston Road Registry's Privacy Policy (https://www.registry.google/about/privacy.html), so please read the terms and Privacy Policy carefully.",
+    "Any information provided is 'as is' without any guarantee of accuracy.",
+    "Please do not misuse the RDAP Domain Database. It is intended solely for query-based access on an experimental basis and should not be used for or relied upon for any other purpose.",
+    "Don't use the RDAP Domain Database to allow, enable, or otherwise support the transmission of mass unsolicited, commercial advertising or solicitations.",
+    "Don't access our RDAP Domain Database through the use of high volume, automated electronic processes that send queries or data to the systems of Charleston Road Registry or any ICANN-accredited registrar.",
+    "You may only use the information contained in the RDAP Domain Database for lawful purposes.",
+    "Do not compile, repackage, disseminate, or otherwise use the information contained in the RDAP Domain Database in its entirety, or in any substantial portion, without our prior written permission.",
+    "We may retain certain details about queries to our RDAP Domain Database for the purposes of detecting and preventing misuse.",
+    "We reserve the right to restrict or deny your access to the RDAP Domain Database if we suspect that you have failed to comply with these terms.",
+    "We reserve the right to modify or discontinue our participation in the RDAP pilot program and suspend or terminate access to the RDAP Domain Database at any time and for any reason in our sole discretion.",
+    "Reminder that underlying Registrant data may be requested via ICANN's RDRS service (https://rdrs.icann.org/).",
+    "We reserve the right to modify this agreement at any time.",
+    ""
+   ],
+   "links": [
+    {
+     "href": "https://pubapi.registry.google/rdap/help/tos",
+     "rel": "self",
+     "type": "application/rdap+json",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    },
+    {
+     "href": "https://www.registry.google/policies/rdap-terms/",
+     "rel": "terms-of-service",
+     "type": "text/html",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    }
+   ],
+   "title": "RDAP Terms of Service"
+  },
+  {
+   "description": [
+    "For more information on domain status codes, please visit https://icann.org/epp"
+   ],
+   "links": [
+    {
+     "href": "https://icann.org/epp",
+     "rel": "glossary",
+     "type": "text/html",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    }
+   ],
+   "title": "Status Codes"
+  },
+  {
+   "description": [
+    "URL of the ICANN RDDS Inaccuracy Complaint Form: https://icann.org/wicf"
+   ],
+   "links": [
+    {
+     "href": "https://icann.org/wicf",
+     "rel": "help",
+     "type": "text/html",
+     "value": "https://pubapi.registry.google/rdap/domain/web.dev"
+    }
+   ],
+   "title": "RDDS Inaccuracy Complaint Form"
+  }
+ ]
+}

@@ -17,7 +17,14 @@ pytestmark = [pytest.mark.unit]
 
 def _build_app(caller):
     sm = MagicMock()
-    sm.load_settings.return_value = {}
+    # A caller with a role and a scope only exists once setup is complete:
+    # in setup mode every request is the anonymous setup admin, and key
+    # creation is refused outright (SETUP_BOOTSTRAP_ONLY). So the instance
+    # here has finished setup: one local admin, local login on.
+    sm.load_settings.return_value = {
+        'local_auth_enabled': True,
+        'users': {'root': {'role': 'admin', 'password_hash': 'x'}},
+    }
     sm.update.return_value = True
     auth = AuthManager(sm)                       # real: domain_matches_scope + create_api_key
     auth.require_role = lambda role: (lambda fn: fn)   # passthrough the role gate
