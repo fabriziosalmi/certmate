@@ -845,9 +845,21 @@ class FileOperations:
                 if not isinstance(settings, dict) or not settings:
                     return False, 'the archive contains no usable settings'
                 if not backup_can_restore(zipf, names, settings):
-                    return False, ('secrets are masked, so restoring it would '
-                                   'install the mask in place of every '
-                                   'credential and lock this instance out')
+                    # Measured, not assumed: a masked archive carries no
+                    # credentials at all — the mask is not written back as a
+                    # value. This used to say restoring it "would install the
+                    # mask in place of every credential and lock this instance
+                    # out", which is the sentence an operator reads in the
+                    # backup list, and it frightened them away from a recovery
+                    # path that works.
+                    return False, ('secrets are masked, so it cannot bring this '
+                                   'instance back on its own — the credentials '
+                                   'are not in it. Restored onto an instance with '
+                                   'no certificates it still returns domains, '
+                                   'deploy hooks, the inventory and the audit '
+                                   'chain; the certificates come back without '
+                                   'their private keys and the credentials must '
+                                   'be re-entered')
         except Exception as e:
             logger.debug(f"Could not assess {backup_file.name}: {e}")
             return False, 'the archive could not be read'
@@ -1149,10 +1161,10 @@ class FileOperations:
                             if masked_mode:
                                 logger.warning(
                                     "Restoring a masked backup onto a fresh "
-                                    "install: secret fields will remain as the "
-                                    "mask sentinel. Operator must re-enter "
-                                    "DNS / storage / SMTP credentials before "
-                                    "the next renewal."
+                                    "install: the archive carries no "
+                                    "credentials, so DNS / storage / SMTP "
+                                    "settings come back without them and must "
+                                    "be re-entered before the next renewal."
                                 )
 
                         if self.safe_file_write(settings_file, settings_data_to_write, is_json=True):
