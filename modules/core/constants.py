@@ -177,6 +177,14 @@ METADATA_SCHEMA_VERSION = 1
 # from Spamhaus) has said nothing about the address, and the tool these checks
 # came from reported exactly that case as "not listed".
 #
+# 2.10 for `security_headers` and `disclosure` on GET /api/inventory/health,
+# and `check_headers` in place of `check_hsts` in the `domain_health` config.
+# New response fields are a MINOR. The config key is read both ways on the way
+# in, so an instance configured before this does not silently start making a
+# request it had turned off; `check_hsts` is no longer written back, because
+# the switch now covers three checks over one request and a name that says
+# only one of them would be a lie about what turning it off stops.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -186,7 +194,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.9'
+API_CONTRACT_VERSION = '2.10'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

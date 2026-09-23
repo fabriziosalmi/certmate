@@ -96,7 +96,10 @@ DEFAULT_HEALTH_CONFIG = {
     'include_inventory': True,
     'check_mail': True,
     'check_blocklists': True,
-    'check_hsts': True,
+    # Named for what it now covers. `check_hsts` is still read on the way in,
+    # because an instance configured before the other two headers existed
+    # would otherwise silently start making a request it had turned off.
+    'check_headers': True,
     'extra_domains': [],
 }
 
@@ -331,6 +334,121 @@ def check_hsts(header):
 
 
 # --------------------------------------------------------------------------- #
+# The other response headers
+# --------------------------------------------------------------------------- #
+#
+# Three things a browser does with what a site sends, beyond HSTS: refuse to
+# frame it, refuse to guess a content type for it, and refuse to run script
+# the site did not sanction. And one thing the site says that only helps an
+# attacker: which software, at which version, is answering.
+
+# A version is digits-and-dots after the product name: `nginx/1.24.0`,
+# `Apache/2.4.58`. `nginx` or `cloudflare` on their own name the product and
+# disclose nothing an attacker could look up a CVE for, which is why this is
+# a pattern and not a presence check — the tool these checks came from
+# reported `Server: cloudflare` as "Server Version Disclosed".
+_VERSION_IN_HEADER = re.compile(r'\d+\.\d+')
+
+# Only these two are honoured. ALLOW-FROM was dropped by every modern browser,
+# so a site relying on it is not protected and does not know it.
+_VALID_FRAME_OPTIONS = frozenset({'deny', 'sameorigin'})
+
+_DISCLOSING_HEADERS = ('x-powered-by', 'x-aspnet-version', 'x-aspnetmvc-version',
+                       'x-generator')
+
+
+def _header(headers, name):
+    """A header's value, case-insensitively, or None. HTTP header names are
+    case-insensitive and servers disagree about which case they use."""
+    if not headers:
+        return None
+    for key, value in headers.items():
+        if key.lower() == name:
+            return value
+    return None
+
+
+def check_security_headers(served):
+    """What the browser is told to refuse. *served* is a
+    :func:`fetch_response_headers` result, or None.
+
+    A header that looks like protection and is not enforced is worse than a
+    missing one, because it answers the question "are we covered?" with a yes,
+    so those are findings and the absences are warnings.
+    """
+    if served is None:
+        return _result(UNKNOWN, 'the site could not be reached over HTTPS')
+    if served.get('stopped_at_redirect'):
+        return _result(UNKNOWN,
+                       'the host only redirects, so these headers belong to the '
+                       'name it redirects to, not to this one')
+
+    headers = served['headers']
+    csp = _header(headers, 'content-security-policy')
+    csp_report_only = _header(headers, 'content-security-policy-report-only')
+    frame_options = (_header(headers, 'x-frame-options') or '').strip().lower()
+    nosniff = (_header(headers, 'x-content-type-options') or '').strip().lower()
+    framed_by_csp = bool(csp and 'frame-ancestors' in csp.lower())
+
+    broken, missing = [], []
+    if frame_options and frame_options not in _VALID_FRAME_OPTIONS:
+        broken.append(f'X-Frame-Options: {frame_options} is not a value browsers '
+                      f'honour, so the site is not protected from framing')
+    elif not frame_options and not framed_by_csp:
+        missing.append('no X-Frame-Options and no CSP frame-ancestors, so the page '
+                       'can be framed')
+    if not csp and csp_report_only:
+        broken.append('only Content-Security-Policy-Report-Only: violations are '
+                      'reported and nothing is blocked')
+    elif not csp and not csp_report_only:
+        missing.append('no Content-Security-Policy')
+    if nosniff and nosniff != 'nosniff':
+        broken.append(f'X-Content-Type-Options: {nosniff} is not "nosniff", so it '
+                      f'does nothing')
+    elif not nosniff:
+        missing.append('no X-Content-Type-Options: nosniff')
+
+    present = {'content_security_policy': csp, 'x_frame_options': frame_options or None,
+               'x_content_type_options': nosniff or None,
+               'frame_ancestors_in_csp': framed_by_csp}
+    if broken:
+        return _result(FAILING, '; '.join(broken), broken=broken, missing=missing,
+                       headers=present, checked_host=served['final_host'])
+    if missing:
+        return _result(WARNING, '; '.join(missing), broken=[], missing=missing,
+                       headers=present, checked_host=served['final_host'])
+    return _result(OK, 'framing, sniffing and script sources are all restricted',
+                   broken=[], missing=[], headers=present,
+                   checked_host=served['final_host'])
+
+
+def check_disclosure(served):
+    """What the response volunteers about the software behind it.
+
+    Never a failure: knowing the version does not let anyone in, it only
+    saves them the reconnaissance. It is worth telling an operator about
+    because it is usually one line of configuration.
+    """
+    if served is None:
+        return _result(UNKNOWN, 'the site could not be reached over HTTPS')
+    headers = served['headers']
+    leaks = []
+    server = _header(headers, 'server')
+    if server and _VERSION_IN_HEADER.search(server):
+        leaks.append(f'Server: {server}')
+    for name in _DISCLOSING_HEADERS:
+        value = _header(headers, name)
+        if value:
+            leaks.append(f'{name}: {value}')
+    if leaks:
+        return _result(WARNING, f'the response names the software running it: '
+                                f'{"; ".join(leaks)}', disclosed=leaks,
+                       checked_host=served['final_host'])
+    return _result(OK, 'the response does not name its software version',
+                   disclosed=[], checked_host=served['final_host'])
+
+
+# --------------------------------------------------------------------------- #
 # Live lookups
 # --------------------------------------------------------------------------- #
 
@@ -391,15 +509,15 @@ def dns_lookups(timeout=DEFAULT_TIMEOUT_SECONDS):
     return txt, mx, addresses, rbl
 
 
-def fetch_hsts_header(host, *, timeout=DEFAULT_TIMEOUT_SECONDS, allow_private=False):
-    """The Strict-Transport-Security header *host* serves, '' if none, None if
-    it could not be reached.
+def _one_response(host, *, timeout, allow_private):
+    """One HEAD to *host*, returning ``(status, headers)`` or ``(None, None)``.
 
     Through the probe's SSRF guard and pinned to the validated address, like
     every other connection CertMate opens towards a name it did not choose.
     Unlike the probe, this one *verifies* the certificate: a browser ignores
-    HSTS served over a connection it did not trust, so reporting a header read
-    from an untrusted one would describe a policy nobody applies.
+    the policies these headers carry when it did not trust the connection, so
+    reporting them from an untrusted one would describe a policy nobody
+    applies.
     """
     import http.client
     import ssl
@@ -409,12 +527,12 @@ def fetch_hsts_header(host, *, timeout=DEFAULT_TIMEOUT_SECONDS, allow_private=Fa
     if any(c in host for c in '\r\n \t'):
         # Never reachable through the inventory, which holds validated names,
         # but this string is about to become a request line.
-        return None
+        return None, None
 
     family, connect_ip, reason = _resolve_and_guard(host, 443, allow_private)
     if reason is not None:
-        logger.info("HSTS check skipped for %s: %s", host, reason)
-        return None
+        logger.info("Header check skipped for %s: %s", host, reason)
+        return None, None
 
     context = ssl.create_default_context()
     context.minimum_version = ssl.TLSVersion.TLSv1_2
@@ -431,13 +549,85 @@ def fetch_hsts_header(host, *, timeout=DEFAULT_TIMEOUT_SECONDS, allow_private=Fa
                 response = http.client.HTTPResponse(tls, method='HEAD')
                 response.begin()
                 try:
-                    return response.getheader('Strict-Transport-Security') or ''
+                    return response.status, dict(response.getheaders())
                 finally:
                     response.close()
     except (OSError, ssl.SSLError, http.client.HTTPException,
             ValueError, TypeError, UnicodeError) as e:
-        logger.info("HSTS check could not reach %s: %s", host, e.__class__.__name__)
+        logger.info("Header check could not reach %s: %s", host, e.__class__.__name__)
+        return None, None
+
+
+def _redirect_target(headers, from_host):
+    """The https host a 3xx points at, or None if it is not one to follow.
+
+    Only https, and only a name under the same registrable domain: an apex
+    that redirects to ``www`` is the case worth following, and following a
+    redirect off the estate would be reading someone else's headers and
+    calling them this domain's.
+    """
+    from urllib.parse import urlsplit
+
+    from .domain_registration import registrable_domain
+
+    location = _header(headers, 'location')
+    if not location:
         return None
+    parts = urlsplit(location.strip())
+    if parts.scheme != 'https' or not parts.hostname:
+        return None
+    target = parts.hostname.lower()
+    if target == from_host.lower():
+        return None
+    if registrable_domain(target) != registrable_domain(from_host):
+        return None
+    return target
+
+
+def fetch_response_headers(host, *, timeout=DEFAULT_TIMEOUT_SECONDS,
+                           allow_private=False, max_redirects=3):
+    """What *host* serves, as ``{'headers': {...}, 'final_host': str}``, or None.
+
+    Redirects within the same registrable domain are followed, because the
+    apex of most estates is a 301 to ``www`` and the protective headers live
+    on the page, not on the redirect. HSTS is the exception and is read from
+    the *first* response: a browser records it from whatever the host sent,
+    including a 301, so taking it from the last hop would miss an apex that
+    sets it and a ``www`` that does not.
+    """
+    status, headers = _one_response(host, timeout=timeout, allow_private=allow_private)
+    if headers is None:
+        return None
+    first_hsts = _header(headers, 'strict-transport-security')
+    seen = {host.lower()}
+    current = host
+    for _ in range(max_redirects):
+        if not (status and 300 <= status < 400):
+            break
+        target = _redirect_target(headers, current)
+        if target is None or target in seen:
+            break
+        seen.add(target)
+        next_status, next_headers = _one_response(
+            target, timeout=timeout, allow_private=allow_private)
+        if next_headers is None:
+            # The hop failed. What we have is the redirect's own headers,
+            # which say nothing about the page, so this is not an answer.
+            return {'headers': headers, 'final_host': current,
+                    'first_hsts': first_hsts, 'stopped_at_redirect': True}
+        status, headers, current = next_status, next_headers, target
+    at_redirect = bool(status and 300 <= status < 400)
+    return {'headers': headers, 'final_host': current, 'first_hsts': first_hsts,
+            'stopped_at_redirect': at_redirect}
+
+
+def fetch_hsts_header(host, **kwargs):
+    """The Strict-Transport-Security header *host* itself serves, '' if none,
+    None if it could not be reached."""
+    served = fetch_response_headers(host, **kwargs)
+    if served is None:
+        return None
+    return served['first_hsts'] or ''
 
 
 # --------------------------------------------------------------------------- #
@@ -452,14 +642,18 @@ def worst_status(checks):
     return min(statuses, key=lambda s: _SEVERITY.get(s, _SEVERITY[UNKNOWN]))
 
 
-def check_name(name, *, lookups=None, hsts_fetcher=None, mail=True,
-               blocklists=True, hsts=True, is_registrable=True, rbl_cache=None):
+def check_name(name, *, lookups=None, headers_fetcher=None, mail=True,
+               blocklists=True, headers=True, is_registrable=True, rbl_cache=None):
     """Run the applicable checks for one name and return ``{check: result}``.
 
     Mail and blocklist checks only apply to a registrable domain: DMARC falls
     back to the organisational domain, so asking ``_dmarc.www.example.com``
-    alone would report "no DMARC" for a domain that publishes one. HSTS is the
-    opposite — it belongs to the host that serves the site.
+    alone would report "no DMARC" for a domain that publishes one. The header
+    checks are the opposite — they belong to the host that serves the site.
+
+    The three header checks share **one** request. They are separate answers
+    because they are separate jobs to do, but a site should not be asked three
+    times to produce them.
     """
     txt, mx_lookup, addresses, rbl = lookups if lookups else dns_lookups()
     checks = {}
@@ -470,9 +664,13 @@ def check_name(name, *, lookups=None, hsts_fetcher=None, mail=True,
     if blocklists and is_registrable:
         checks['blocklists'] = check_blocklists(name, addresses(name), rbl,
                                                 cache=rbl_cache)
-    if hsts:
-        fetch = hsts_fetcher or fetch_hsts_header
-        checks['hsts'] = check_hsts(fetch(name))
+    if headers:
+        fetch = headers_fetcher or fetch_response_headers
+        served = fetch(name)
+        checks['hsts'] = check_hsts(None if served is None
+                                    else served['first_hsts'] or '')
+        checks['security_headers'] = check_security_headers(served)
+        checks['disclosure'] = check_disclosure(served)
     return checks
 
 
@@ -498,12 +696,12 @@ class DomainHealthManager:
     """
 
     def __init__(self, settings_manager, inventory, cert_dir,
-                 *, lookups=None, hsts_fetcher=None, now=None, sleep=time.sleep):
+                 *, lookups=None, headers_fetcher=None, now=None, sleep=time.sleep):
         self.settings_manager = settings_manager
         self.inventory = inventory
         self.cert_dir = Path(cert_dir)
         self._lookups = lookups
-        self._hsts_fetcher = hsts_fetcher
+        self._headers_fetcher = headers_fetcher
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._sleep = sleep
 
@@ -528,7 +726,8 @@ class DomainHealthManager:
             'include_inventory': bool(config.get('include_inventory', True)),
             'check_mail': bool(config.get('check_mail', True)),
             'check_blocklists': bool(config.get('check_blocklists', True)),
-            'check_hsts': bool(config.get('check_hsts', True)),
+            'check_headers': bool(config.get('check_headers',
+                                             config.get('check_hsts', True))),
             'extra_domains': extra,
         }
         self.settings_manager.update(
@@ -589,10 +788,10 @@ class DomainHealthManager:
             return check_name(
                 name,
                 lookups=self._lookups,
-                hsts_fetcher=self._hsts_fetcher,
+                headers_fetcher=self._headers_fetcher,
                 mail=config.get('check_mail', True),
                 blocklists=config.get('check_blocklists', True),
-                hsts=config.get('check_hsts', True),
+                headers=config.get('check_headers', config.get('check_hsts', True)),
                 is_registrable=is_registrable,
                 rbl_cache=rbl_cache,
             )

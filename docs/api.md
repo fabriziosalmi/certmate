@@ -1164,7 +1164,15 @@ so the answer opens on what is wrong; a scoped key sees only its own names.
                        "detail": "no blocklist answered the query — a public resolver is usually the reason; point CertMate at a resolver of your own",
                        "unanswered": ["zen.spamhaus.org (192.0.2.13): refused this resolver"]},
         "hsts": {"status": "ok", "detail": "max-age 31536000s",
-                 "max_age": 31536000, "includes_subdomains": true, "preload": false}
+                 "max_age": 31536000, "includes_subdomains": true, "preload": false},
+        "security_headers": {"status": "warning",
+                             "detail": "no X-Content-Type-Options: nosniff",
+                             "broken": [], "missing": ["no X-Content-Type-Options: nosniff"],
+                             "checked_host": "www.example.com"},
+        "disclosure": {"status": "warning",
+                       "detail": "the response names the software running it: Server: nginx/1.24.0",
+                       "disclosed": ["Server: nginx/1.24.0"],
+                       "checked_host": "www.example.com"}
       },
       "checked_at": "2026-09-22T06:30:11Z",
       "first_seen": "2026-09-01T06:30:09Z"
@@ -1185,8 +1193,11 @@ that is not asked about your domains at all, and is named in `unanswered`.
 Point CertMate at a resolver of your own and the answers become real.
 
 Mail checks and blocklists run against the *registrable* domain, because DMARC
-falls back to the organisational domain; HSTS runs against each host, because
-that is what serves the site. The checks are configured under `domain_health`
+falls back to the organisational domain; the three header checks run against
+each host, because that is what serves the site, and they share one `HEAD`
+request. `checked_host` says which name answered it — a redirect from the apex
+to `www` within the same registrable domain is followed, so the headers
+described are the page's and not the redirect's. The checks are configured under `domain_health`
 in `/api/inventory/config` and also run on `POST /api/inventory/scan`, whose
 answer gains a `domain_health` summary. What each check means:
 [Domain health](discovery-inventory.md#domain-health).
