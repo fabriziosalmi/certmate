@@ -325,7 +325,8 @@ server's address landed on a blocklist, or the HSTS header quietly went away
 with a reverse-proxy change. None of that is visible from a certificate, and
 all of it lands on whoever answers for the domain.
 
-Five checks, run daily against every name CertMate already tracks.
+Seven checks, run daily against every name CertMate already tracks, plus an
+eighth that is opt-in because it opens connections a host did not invite.
 
 | Check | What it asks | Scope |
 |---|---|---|
@@ -417,8 +418,8 @@ dozen and each one costs a query per list.
 
 ### The response headers
 
-Three of the five checks read the same response, so a site is asked once, not
-three times.
+Three of them read the same response, so a site is asked once, not three
+times.
 
 `security_headers` is about what a browser is told to refuse:
 

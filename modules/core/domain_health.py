@@ -6,7 +6,7 @@ landed on a blocklist. These are the checks that were living in a separate
 tool, brought in beside the certificate and the registration, because they are
 about the same thing: the name, and whether it still works.
 
-Five checks, each of which can say *it does not know*:
+Seven checks, each of which can say *it does not know*:
 
 * **SPF** — a ``v=spf1`` TXT record on the domain. Absent is a finding; more
   than one is a misconfiguration every receiver treats as permerror.
@@ -25,6 +25,18 @@ Five checks, each of which can say *it does not know*:
   list that cannot answer that is not asked about anything else.
 * **HSTS** — the ``Strict-Transport-Security`` header the host serves. Read
   over the connection the probe already knows how to make safely.
+* **Security headers** — whether the browser is told to refuse framing, MIME
+  sniffing and unsanctioned script. A missing header is a warning; one that
+  looks like protection and is not enforced is a finding, because it answers
+  "are we covered?" with a yes.
+* **Disclosure** — whether the response names the software and *version*
+  answering it. ``nginx/1.24.0`` tells an attacker which CVEs to try;
+  ``cloudflare`` does not, which is why this is a version pattern and not a
+  presence check.
+
+The last three share one request. An eighth check, whether the host still
+accepts TLS 1.0 or 1.1, lives in ``weak_tls.py``: it is the only one that
+opens a connection a host did not invite, so it is opt-in and kept separate.
 
 Everything is offline-testable: each check takes its resolver or fetcher, so
 the parsing is exercised against real answers rather than live DNS.
