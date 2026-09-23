@@ -48,6 +48,9 @@ does not serve.
 
 Both are refused with a 400 rather than ignored.
 
+The `csr` value is limited to 64 KiB (65,536 bytes); a larger one is refused
+with a 400 before it is parsed.
+
 ## What a CSR-only certificate looks like
 
 ```json
@@ -99,9 +102,12 @@ Two consequences worth knowing:
 * **If `csr.pem` goes missing**, renewal fails loudly rather than silently doing
   nothing. Submit the CSR again from the device that holds the key.
 * **If the CA returns the same certificate** — what a repeat request inside a
-  CA's reuse window produces — the renewal is reported as "the certificate did
-  not change" rather than advancing `renewed_at` past an expiry that stood
+  CA's reuse window produces — the renewal comes back with `renewed: false`
+  and the message "Reissued from the stored CSR, but the CA returned the same
+  certificate", rather than advancing `renewed_at` past an expiry that stood
   still.
+* **`force` has no effect.** A CSR renewal always re-submits the stored CSR,
+  whether or not `force` is set.
 
 ## Key rotation
 
@@ -121,7 +127,8 @@ A CSR-only certificate has no key to deploy, so:
 * **Typed deploy targets** (the Kubernetes secret target) cannot serve one: they
   all publish the key alongside the certificate. They report exactly that,
   naming the reason, instead of a generic "certificate files unreadable" on
-  every renewal.
+  every renewal. The check is on the files, not the metadata: any certificate
+  with a `fullchain.pem` and no `privkey.pem` gets this report.
 
 Use a shell hook that fetches only the certificate and chain.
 
@@ -129,11 +136,15 @@ Use a shell hook that fetches only the certificate and chain.
 
 | Situation | Result |
 | --- | --- |
-| The CSR does not cover `domain` | Refused. The directory is named for `domain` and everything later finds it by that name. |
-| The CSR's signature does not verify | Refused before anything is written. The CA would reject it anyway, after CertMate had created a directory and reported progress. |
-| The CSR names no domains (no CN, no SAN) | Refused. |
-| `domain` already has a CertMate-managed private key | Refused. Converting it would leave the old `privkey.pem` beside a certificate it cannot serve — an unusable pair, reported as `mismatched` from then on. Delete the certificate first if you mean to move its key onto a device. |
-| A CSR covering a name outside the API key's `allowed_domains` | Refused, per name, the same way SANs are. |
+| The CSR does not cover `domain` | Refused with a 422. The directory is named for `domain` and everything later finds it by that name. |
+| The CSR's signature does not verify | Refused with a 400, before anything is written. The CA would reject it anyway, after CertMate had created a directory and reported progress. |
+| The CSR names no domains (no CN, no SAN) | Refused with a 400. |
+| `domain` already has a CertMate-managed private key | Refused: a 409 `CERTIFICATE_ALREADY_EXISTS` when its `cert.pem` is there (the usual case), otherwise a 422. Converting it would leave the old `privkey.pem` beside a certificate it cannot serve — an unusable pair, reported as `mismatched` from then on. Delete the certificate first if you mean to move its key onto a device. |
+| A CSR covering a name outside the API key's `allowed_domains` | Refused with a 403, per name, the same way SANs are. |
+
+The status codes are those of a synchronous create. With `async`, the 400 and
+403 cases are still answered immediately; the 409 and 422 cases are checked
+during issuance and fail the job instead.
 
 ## See also
 

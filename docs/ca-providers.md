@@ -15,7 +15,7 @@ CertMate supports multiple Certificate Authority providers, allowing you to choo
 - **Best For**: Development, small businesses, personal projects
 
 **Configuration:**
-- **Email**: Required for certificate notifications
+- **Email**: ACME account contact (see [Account email](#account-email))
 
 ### Let's Encrypt (Staging)
 
@@ -30,6 +30,32 @@ flag: select it as the CA when creating a certificate, or set it as the default 
 testing. The email falls back to the Let's Encrypt account email when left empty.
 Converting a staging certificate to production requires a reissue with the production CA.
 
+### ZeroSSL
+
+- **Type**: Free 90-day DV certificates
+- **Certificate Types**: Domain Validation (DV)
+- **Wildcard Support**: Yes
+- **EAB Required**: Yes
+
+**Configuration Requirements:**
+- **ACME Directory URL**: `https://acme.zerossl.com/v2/DV90` (fixed, preconfigured)
+- **EAB Key ID**: From the ZeroSSL Developer Dashboard
+- **EAB HMAC Key**: From the ZeroSSL Developer Dashboard
+- **Email**: ACME account contact (see [Account email](#account-email))
+
+### Google Trust Services
+
+- **Type**: Free DV certificates
+- **Certificate Types**: Domain Validation (DV)
+- **Wildcard Support**: Yes
+- **EAB Required**: Yes
+
+**Configuration Requirements:**
+- **ACME Directory URL**: `https://dv.acme-v02.api.pki.goog/directory` (fixed, preconfigured)
+- **EAB Key ID**: From your Google Cloud project
+- **EAB HMAC Key**: From your Google Cloud project
+- **Email**: ACME account contact (see [Account email](#account-email))
+
 ### DigiCert ACME
 
 - **Type**: Enterprise-grade SSL certificates
@@ -42,7 +68,7 @@ Converting a staging certificate to production requires a reissue with the produ
 - **ACME Directory URL**: `https://one.digicert.com/mpki/api/v1/acme/v2/directory`
 - **EAB Key ID**: Provided by DigiCert
 - **EAB HMAC Key**: Provided by DigiCert
-- **Email**: Required for certificate notifications
+- **Email**: ACME account contact (see [Account email](#account-email))
 
 ### Actalis
 
@@ -56,13 +82,26 @@ Converting a staging certificate to production requires a reissue with the produ
 - **ACME Directory URL**: `https://acme-api.actalis.com/acme/directory` (fixed, preconfigured)
 - **EAB Key ID**: From your Actalis customer area
 - **EAB HMAC Key**: From your Actalis customer area
-- **Email**: Required for certificate notifications
+- **Email**: ACME account contact (see [Account email](#account-email))
 
 **Free plan limits:**
 - Single-domain certificates only — a request with SAN entries is rejected with
   `Your account only grants single-domain 90-days DV certificates`
 - 90-day validity
 - No wildcard certificates (paid SAN plans cover up to 5 hostnames)
+
+### SSL.com
+
+- **Type**: Commercial certificates
+- **Certificate Types**: DV, OV, EV
+- **Wildcard Support**: Yes
+- **EAB Required**: Yes
+
+**Configuration Requirements:**
+- **ACME Directory URL**: `https://acme.ssl.com/sslcom-dv-rsa` (fixed, preconfigured)
+- **EAB Key ID**: Provided by SSL.com
+- **EAB HMAC Key**: Provided by SSL.com
+- **Email**: ACME account contact (see [Account email](#account-email))
 
 ### Private CA
 
@@ -96,8 +135,23 @@ The Private CA entry is also the generic escape hatch for any ACME CA without a 
 2. Scroll to **Certificate Authority (CA) Providers**
 3. Select your default CA provider
 4. Configure the required fields
-5. Click **Test CA Connection** to verify
+5. Click **Test CA Connection** to check the fields
 6. Save settings
+
+**Test CA Connection** only contacts the CA for a Private CA: it fetches the
+ACME directory URL (using the CA certificate, if one is given). For every other
+CA it checks that the required fields are filled in (and, for DigiCert, that
+the EAB credentials are not implausibly short) without contacting the CA, so a
+passing test does not prove the credentials work. The first issuance does.
+
+### Account email
+
+The email certbot registers the ACME account with is the global `email`
+setting, whichever CA issues the certificate. Saving settings in the web
+interface copies the email from the **default** CA's section into that setting;
+the email fields of the other CA sections are stored but not passed to
+certbot. Issuance fails with `Email not configured` when the global setting is
+empty.
 
 ### Default vs. Per-Certificate CA
 
@@ -106,6 +160,12 @@ Set a default CA for all new certificates. Override it per-certificate during cr
 1. Go to **Certificates** page
 2. Select the desired CA from the **Certificate Authority** dropdown
 3. Proceed with certificate creation
+
+If the chosen CA has no saved configuration (or the requested CA account does
+not exist), issuance does not fail: it falls back to Let's Encrypt (to Let's
+Encrypt staging when the request was a staging one) and logs a warning. Check
+the `ca_provider` in the response or the certificate's metadata to confirm
+which CA issued it.
 
 ### Via API
 
@@ -138,7 +198,7 @@ curl -X POST http://localhost:8000/api/settings/test-ca-provider \
 
 ## External Account Binding (EAB)
 
-Some CA providers (like DigiCert and Actalis) require External Account Binding to link your ACME client to your CA account.
+ZeroSSL, Google Trust Services, DigiCert, SSL.com and Actalis require External Account Binding to link your ACME client to your CA account.
 
 ### What is EAB?
 
@@ -152,6 +212,9 @@ Some CA providers (like DigiCert and Actalis) require External Account Binding t
 2. Navigate to ACME settings
 3. Generate or retrieve your EAB Key ID and HMAC Key
 
+**ZeroSSL:**
+- Generate EAB credentials in the ZeroSSL Developer Dashboard
+
 **Actalis:**
 1. Register a free account at [actalis.com](https://www.actalis.com/)
 2. In the customer area, open **Manage with ACME**
@@ -159,16 +222,15 @@ Some CA providers (like DigiCert and Actalis) require External Account Binding t
 
 **Private CA:**
 - **step-ca**: EAB can be enabled/disabled per provisioner
-- **Boulder**: Typically requires EAB for production
 - Check your private CA documentation for specific requirements
 
 ---
 
 ## SSL Certificate Trust
 
-### Public CAs (Let's Encrypt, DigiCert)
+### Public CAs (Let's Encrypt, ZeroSSL, Google Trust Services, DigiCert, SSL.com, Actalis)
 
-Certificates are automatically trusted by browsers and operating systems.
+Certificates are automatically trusted by browsers and operating systems (except those from Let's Encrypt staging).
 
 ### Private CAs
 
@@ -213,8 +275,11 @@ You can optionally provide the root CA certificate in CertMate for trust chain v
 ## Migration Between CAs
 
 1. **New certificates** use the new default CA
-2. **Existing certificates** continue using their original CA until renewal
-3. **Forced migration**: Manually renew to switch to the new CA
+2. **Existing certificates** stay on the CA they were issued by: renewal runs
+   `certbot renew` against the original CA, including a manual or forced renewal
+3. **Moving a certificate to another CA**: reissue it with the new CA
+   (`POST /api/certificates/<domain>/reissue` with `ca_provider`; see the
+   [API reference](api.md))
 
 **Best Practices:**
 - Test new CA configuration before making it default
@@ -227,8 +292,8 @@ You can optionally provide the root CA certificate in CertMate for trust chain v
 ## Security Considerations
 
 - EAB HMAC keys are not displayed after saving
-- Private keys are generated locally and never transmitted
-- Use HTTPS for all CA communications
+- Private keys are generated locally and never sent to the CA (a remote storage backend or deploy target you configure does receive them)
+- Use an `https://` ACME directory URL for a Private CA
 - Consider VPN for private CA access
 
 ---
