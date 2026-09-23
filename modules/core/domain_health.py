@@ -299,11 +299,15 @@ def check_blocklists(domain, addresses, lookup, cache=None):
     # does not serve IPv6", which is the false-clean this module exists to
     # prevent, one level below the refusal codes. Until there is a self-test
     # that proves otherwise, an IPv6 address is not asked about.
-    ipv6 = [a for a in addresses[:MAX_ADDRESSES]
-            if _is_ipv6(a)]
-    for address in ipv6:
-        unanswered.append(f'{address}: IPv6, and the lists are only self-tested '
-                          f'for IPv4, so an empty answer would prove nothing')
+    #
+    # Kept apart from `unanswered` on purpose. A list that refused is a hole in
+    # coverage of something we should have been able to check; an IPv6 address
+    # is a boundary of what these lists answer about at all. Counting the
+    # second as the first would put nearly every healthy dual-stack domain —
+    # which is most of them — at a permanent warning, and a warning that is
+    # always on is one nobody reads.
+    not_covered = [f'{a}: IPv6, which these lists are not self-tested for'
+                   for a in addresses[:MAX_ADDRESSES] if _is_ipv6(a)]
     # Only answers that carry information count. A refusal is not a check that
     # came back clean, and counting it as one is the whole defect this module
     # was written to avoid.
@@ -329,23 +333,30 @@ def check_blocklists(domain, addresses, lookup, cache=None):
                 listings.append({'address': address, 'list': rbl, 'codes': list(codes)})
             # 'policy' and 'not_listed' are both "no reputation finding here".
 
+    extra = {'unanswered': unanswered, 'not_covered': not_covered}
     if listings:
         where = ', '.join(sorted({entry['list'] for entry in listings}))
-        return _result(FAILING, f'listed on {where}', listings=listings,
-                       unanswered=unanswered)
+        return _result(FAILING, f'listed on {where}', listings=listings, **extra)
     if not answered:
+        if not_covered and not unanswered:
+            return _result(UNKNOWN,
+                           'this domain resolves only to IPv6, and the blocklists are '
+                           'self-tested for IPv4 only, so nothing was asked about it',
+                           **extra)
         return _result(UNKNOWN,
                        'no blocklist answered usefully — the resolver CertMate uses is '
                        'almost always the reason, because the large lists refuse public '
                        'resolvers; point it at a resolver of your own',
-                       unanswered=unanswered)
+                       **extra)
     if unanswered:
         return _result(WARNING,
                        f'not listed where it could be checked, but '
-                       f'{len(unanswered)} lookup(s) went unanswered',
-                       unanswered=unanswered)
-    return _result(OK, f'not listed on {len(lists)} blocklist'
-                       f'{"s" if len(lists) != 1 else ""}')
+                       f'{len(unanswered)} lookup(s) went unanswered', **extra)
+    detail = (f'not listed on {len(lists)} blocklist'
+              f'{"s" if len(lists) != 1 else ""}')
+    if not_covered:
+        detail += f'; {len(not_covered)} IPv6 address(es) not covered by them'
+    return _result(OK, detail, **extra)
 
 
 # --------------------------------------------------------------------------- #

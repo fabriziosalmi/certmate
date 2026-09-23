@@ -1589,7 +1589,8 @@ def test_an_ipv6_only_domain_is_unknown_not_clean():
     as "not listed"."""
     result = dh.check_blocklists('example.com', ['2001:db8::1'], _answering_lists())
     assert result['status'] == dh.UNKNOWN
-    assert 'IPv6' in result['unanswered'][0]
+    assert 'IPv6' in result['not_covered'][0]
+    assert 'only to IPv6' in result['detail']
 
 
 def test_an_ipv6_address_is_never_queried_against_an_ipv4_self_tested_list():
@@ -1603,16 +1604,43 @@ def test_an_ipv6_address_is_never_queried_against_an_ipv4_self_tested_list():
     assert not [n for n in asked if n.startswith('1.0.0.0.0')]
 
 
-def test_a_dual_stack_domain_reports_on_the_address_it_could_check():
+def test_a_clean_dual_stack_domain_stays_ok_and_still_says_what_it_skipped():
+    """Most real domains are dual-stack. Counting the IPv6 address as an
+    unanswered lookup would put nearly every healthy domain at a permanent
+    warning, and a warning that is always on is one nobody reads. The IPv6
+    address is a boundary of what these lists cover, not a hole in coverage of
+    something we should have checked, so it is reported without changing the
+    verdict."""
     result = dh.check_blocklists('example.com', ['192.0.2.13', '2001:db8::1'],
                                  _answering_lists())
+    assert result['status'] == dh.OK
+    assert result['unanswered'] == []
+    assert any('IPv6' in n for n in result['not_covered'])
+    # The detail mentions what was skipped, without pinning the wording.
+    assert 'IPv6' in result['detail']
+
+
+def test_a_refused_list_still_downgrades_a_dual_stack_domain():
+    """The two are kept apart, not conflated in the other direction: a list
+    that refused is still a hole, IPv6 present or not."""
+    lookup = _answering_lists({'13.2.0.192.zen.spamhaus.org': ['127.255.255.254']})
+    result = dh.check_blocklists('example.com', ['192.0.2.13', '2001:db8::1'], lookup)
     assert result['status'] == dh.WARNING
-    assert any('IPv6' in u for u in result['unanswered'])
+    assert len(result['unanswered']) == 1
+    assert len(result['not_covered']) == 1
+
+
+def test_a_listing_on_ipv4_is_still_a_finding_on_a_dual_stack_domain():
+    lookup = _answering_lists({'13.2.0.192.zen.spamhaus.org': ['127.0.0.2']})
+    result = dh.check_blocklists('example.com', ['192.0.2.13', '2001:db8::1'], lookup)
+    assert result['status'] == dh.FAILING
 
 
 def test_an_ipv4_only_domain_is_unaffected():
-    assert dh.check_blocklists('example.com', ['192.0.2.13'],
-                               _answering_lists())['status'] == dh.OK
+    result = dh.check_blocklists('example.com', ['192.0.2.13'], _answering_lists())
+    assert result['status'] == dh.OK
+    assert result['not_covered'] == []
+    assert 'IPv6' not in result['detail']
 
 
 def test_a_negative_control_that_did_not_answer_does_not_pass_the_list():

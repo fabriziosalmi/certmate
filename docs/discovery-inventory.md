@@ -391,9 +391,20 @@ One more thing the test points cannot tell you: they are `127.0.0.2` and
 `127.0.0.1`, so they prove a list answers about **IPv4** and say nothing about
 IPv6. Most DNSBLs either do not list IPv6 or use a separate zone for it, which
 would make an empty answer about an AAAA address indistinguishable from "this
-list does not serve IPv6". So IPv6 addresses are not asked about at all: they
-are named in `unanswered`, and a domain that resolves only to IPv6 comes back
-`unknown` rather than clean.
+list does not serve IPv6". So IPv6 addresses are not asked about at all. They
+appear in `not_covered`, separately from `unanswered`, and the difference
+matters:
+
+| | means | changes the verdict |
+|---|---|---|
+| `unanswered` | a list refused, or a lookup failed — a hole in coverage of something we should have been able to check | yes: downgrades to `warning` |
+| `not_covered` | an IPv6 address, which these lists do not answer about at all | no |
+
+Most real domains are dual-stack. If the IPv6 address counted as an unanswered
+lookup, nearly every healthy domain would sit at a permanent warning, and a
+warning that is always on is one nobody reads. So a dual-stack domain whose
+IPv4 addresses are clean stays `ok` and says what it skipped; a domain that
+resolves **only** to IPv6 is `unknown`, because then nothing was asked at all.
 
 The same rule holds elsewhere: a TXT lookup that timed out is `unknown`, not
 "no SPF record"; a host that could not be reached over HTTPS is `unknown`, not
