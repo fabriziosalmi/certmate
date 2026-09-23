@@ -1,7 +1,8 @@
 """
 Certificate storage backends module for CertMate
 Provides pluggable storage solutions for certificate storage including 
-local filesystem, Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, and Infisical
+local filesystem, Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical,
+and S3-compatible object storage
 """
 
 import os

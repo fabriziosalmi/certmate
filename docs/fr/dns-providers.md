@@ -1,6 +1,6 @@
 # Fournisseurs DNS
 
-<!-- CERTMATE-TRANSLATED-FROM 3ef1007082851544 -->
+<!-- CERTMATE-TRANSLATED-FROM 3a8b12ad29555929 -->
 
 CertMate supporte une large gamme de fournisseurs DNS pour les défis Let's Encrypt DNS-01 via des plugins certbot individuels. La liste complète est dans le tableau ci-dessous.
 
@@ -759,16 +759,20 @@ Voir le [Guide d'architecture](./architecture.md) pour les détails d'implément
 
 | Erreur | Solution |
 |--------|----------|
-| "Fournisseur DNS non configuré" | Vérifiez que tous les identifiants requis sont fournis |
+| `DNS provider '<provider>' account '<id>' not configured` | Le compte indiqué par le certificat n'a pas d'identifiants enregistrés. Ajoutez-les dans Paramètres ou choisissez un compte existant |
 | "Échec de création du certificat" | Vérifiez les permissions DNS et la propriété du domaine |
-| "Plugin non trouvé" | Exécutez `pip install -r requirements.txt` ou reconstruisez Docker |
+| `The certbot plugin '<plugin>' is not installed` | Exécutez `pip install certbot-<plugin>` ou reconstruisez l'image Docker avec `REQUIREMENTS_FILE=requirements.txt` |
 | "Échec de détection du fournisseur" | Vérifiez le champ `dns_provider` dans les paramètres du domaine |
 
 ### Mode débogage
 
 ```bash
-export CERTMATE_LOG_LEVEL=DEBUG
-python app.py
+# En lançant app.py directement : utilisez l'option. --log-level vaut INFO
+# par défaut et l'emporte sur CERTMATE_LOG_LEVEL.
+python app.py --log-level DEBUG
+
+# Docker / gunicorn : définissez la variable d'environnement, par ex. dans .env
+CERTMATE_LOG_LEVEL=DEBUG
 ```
 
 ### Tester la configuration du fournisseur

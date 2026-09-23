@@ -779,7 +779,7 @@ Cada certificado tiene un archivo `metadata.json` que contiene:
 
 ### Recomendaciones para producción
 
-- Usar un backend de almacenamiento (Azure, AWS, Vault) para que el material de los certificados sobreviva al nodo
+- Usar un backend de almacenamiento (Azure, AWS, Vault, Infisical, S3-compatible) para que el material de los certificados sobreviva al nodo
 - Habilitar el registro de auditoría para cumplimiento normativo
 - Configurar la limitación de tasa en función de la carga
 - Actualizaciones regulares de la CRL (diarias o en cada revocación)
@@ -802,7 +802,7 @@ Cómo se consigue la disponibilidad aquí — **activo/en espera**:
    sistema de archivos replicado). Ese es el estado que importa: ajustes,
    cadena de auditoría, AC privada y los certificados en sí.
 2. Configurar un [backend de almacenamiento](#backends-de-almacenamiento)
-   (Azure Key Vault, AWS Secrets Manager, Vault, Infisical) para que el
+   (Azure Key Vault, AWS Secrets Manager, Vault, Infisical, S3-compatible) para que el
    material de los certificados también viva con independencia del nodo.
 3. Ejecutar **una** instancia. Ante un fallo, arrancar un reemplazo contra los
    mismos datos y apuntar el ingress hacia él. Perder una ventana de renovación

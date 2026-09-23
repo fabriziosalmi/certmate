@@ -189,10 +189,11 @@ class AuditLogger:
         if self._chain_enabled:
             self._recover_chain_state()
 
-        # Phase 3: signed checkpoints. Every `checkpoint_interval` entries (and
-        # on demand / graceful shutdown) the current chain head is signed and
-        # appended to a checkpoint file, giving a third party signed anchors to
-        # verify an exported bundle against. No-op when no signer is wired.
+        # Phase 3: signed checkpoints. Every `checkpoint_interval` entries (or
+        # when write_checkpoint() is called directly) the current chain head is
+        # signed and appended to a checkpoint file, giving a third party signed
+        # anchors to verify an exported bundle against. No-op when no signer is
+        # wired.
         self._signer = signer
         self._checkpoint_interval = max(1, int(checkpoint_interval))
         self.audit_checkpoint_file = self._chain_dir / audit_chain.CHECKPOINT_FILENAME
@@ -299,8 +300,9 @@ class AuditLogger:
     def write_checkpoint(self) -> Optional[Dict[str, Any]]:
         """Sign the current chain head and append it to the checkpoint file.
         No-op (returns None) without a signer or with an empty chain. Best-effort:
-        a checkpoint failure never breaks audit logging. Call on graceful
-        shutdown to seal the tail."""
+        a checkpoint failure never breaks audit logging. The only caller today is
+        the every-`checkpoint_interval`-entries path in the append; nothing calls
+        it on shutdown, so entries after the last checkpoint stay unsealed."""
         if self._signer is None or not getattr(self._signer, 'available', False):
             return None
         try:

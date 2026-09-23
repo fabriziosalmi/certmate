@@ -157,8 +157,9 @@ def urlopen(req, timeout=None):
 
 # Events that are always delivered, whatever the operator's event filter, because
 # they report a failure the operator must not be able to silence by accident.
-# deploy_hook_failed is the one that motivated this: it is not among the five
-# certificate_* events the UI offers, so any filter drops it — see notify().
+# deploy_hook_failed is the one that motivated this: it is not among the six
+# events the UI offers (five certificate_* plus domain_expiring), so any filter
+# set there drops it — see notify().
 #
 # certificate_deploy_incomplete is here for the same reason and answers a
 # different question. deploy_hook_failed says which target broke, once per
@@ -388,10 +389,10 @@ class Notifier:
         # the silent-deploy alarm: a renewal succeeds but its deploy hook (nginx
         # reload, LB push) exits non-zero, so the service keeps serving the OLD
         # certificate while the dashboard says success. The events UI only
-        # offers the five certificate_* events, so an operator who ticks any of
-        # them sets a filter that does not include deploy_hook_failed and
-        # permanently silences exactly the alert it exists to raise — with no way
-        # to re-enable it. An operator must never be able to filter away a
+        # offers six events (five certificate_* plus domain_expiring), so an
+        # operator who ticks any of them sets a filter that does not include
+        # deploy_hook_failed and permanently silences exactly the alert it
+        # exists to raise — with no way to re-enable it. An operator must never be able to filter away a
         # failure they need to see, so these are always delivered.
         events_filter = config.get('events', [])
         if (events_filter and event not in events_filter

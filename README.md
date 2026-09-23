@@ -365,7 +365,7 @@ PORT=8000
 
 > **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, or any S3-compatible object storage via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
 
-> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. **Set `CERTMATE_BACKUP_PASSPHRASE`.** With it, every automatic backup is complete and encrypted at rest, so it can actually restore this instance; without it, automatic backups keep their credentials masked and are configuration snapshots that cannot. The backup list marks which archives can restore, and refuses to offer the ones that cannot. Then keep a copy off the host — archives on the host are pruned after 30 days, and a lost volume takes them with it. `POST /api/backups/upload` brings one back.
+> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. **Set `CERTMATE_BACKUP_PASSPHRASE`.** With it, every automatic backup is complete and encrypted at rest, so it can actually restore this instance; without it, automatic backups keep their credentials masked and are configuration snapshots that cannot. The backup list marks which archives can restore, and Settings disables Restore on the ones that cannot. Then keep a copy off the host — archives on the host are pruned after 30 days, and a lost volume takes them with it. `POST /api/backups/upload` brings one back.
 
 ### 3. Deploy
 
@@ -412,7 +412,7 @@ Choose the installation method that best fits your environment:
 ### Docker (Recommended)
 Isolated, reproducible, and the way CertMate is tested and released. Run **one**
 container (see the single-instance note above); give it more CPU and memory
-rather than more replicas. **Supports multiple architectures**: AMD64 (Intel/AMD), ARM64 (Apple Silicon, ARM servers), and ARM v7 (Raspberry Pi).
+rather than more replicas. **Published images cover two architectures**: AMD64 (Intel/AMD) and ARM64 (Apple Silicon, ARM servers). ARM v7 (32-bit Raspberry Pi) is not published; build it yourself with `./build-multiplatform.sh --platforms linux/arm/v7`.
 
 ```bash
 # Quick start with Docker Compose
@@ -1274,7 +1274,7 @@ by the schema, with a message naming the accepted set — for example
 | `CERTMATE_ENABLE_HSTS` |      | `false`        | Send `Strict-Transport-Security`, and mark the session cookie `Secure`. Only set it when TLS really terminates in front — an HSTS header on a plain-HTTP instance locks browsers out of it |
 | `SESSION_TIMEOUT_HOURS` |     | `8`            | How long a login session stays valid. The server record and the browser cookie both use this value, so they cannot drift apart |
 | `CERTMATE_ALLOW_INTERNAL_WEBHOOKS` | | `false` | Allow notification webhooks to private, loopback and link-local addresses. Off by default because a webhook URL is operator-supplied and an SSRF into the host network is the obvious abuse |
-| `CERTMATE_PROBE_ALLOW_PRIVATE` | |  `false`      | Same relaxation for the deployment probe: allow it to connect to private addresses. Needed to probe a service on the same host, and it removes an SSRF guard |
+| `CERTMATE_PROBE_ALLOW_PRIVATE` | |  `false`      | Same relaxation for the certificate probe behind `POST /api/probe` (discovery sweeps ignore it and use `monitored_endpoints.allow_private` from settings): allow it to connect to private addresses. Needed to probe a service on the same host, and it removes an SSRF guard |
 | `CERTMATE_AUDIT_CHAIN` |      | `1`            | Set `0` to stop writing the tamper-evident audit hash chain. A kill switch, not a tuning knob: with it off, `/api/audit/verify` can no longer prove the log was not edited |
 | `AUDIT_SIGNING_KEY_FILE` |    | -              | Path to an Ed25519 private key that signs audit checkpoints, so the key can live off this box. If set and unreadable, signing is DISABLED rather than a new key generated — a fresh key would fork the instance's identity and make earlier signatures unverifiable |
 | `CERTMATE_ALLOW_SCHEMA_DOWNGRADE` | | `0`       | Set `1` to let this build read and overwrite a `settings.json` or `metadata.json` written by a NEWER version. It will drop fields it does not understand — that is the whole reason it refuses by default |
@@ -1295,7 +1295,7 @@ by the schema, with a message naming the accepted set — for example
 | `CERTMATE_EVENT_WORKERS` |    | `4`            | Threads dispatching event listeners (deploy hooks, cache invalidation). Clamped to 1-32. Nothing is dropped when they are busy; the backlog is logged instead |
 | `CERTMATE_EVENT_DRAIN_SECONDS` |    | `5`            | How long a shutdown waits for queued event dispatches to start before giving up on them. Clamped to 0-60. Whatever is left is logged with its event and domain, so a deploy hook that never ran after a renewal is named rather than lost |
 | `CERTMATE_CERTBOT_PROBE_TTL` |    | `300`          | Seconds before the certbot readiness answer is re-checked. Clamped to 30-3600. The probe used to run once per process, so a transient failure at boot made the instance permanently unready and a certbot that broke later never turned `/health/ready` red |
-| `CERTMATE_PROBE_TIMEOUT_SECONDS` | | `5`       | Deployment-probe connection timeout. Clamped to 1-30 |
+| `CERTMATE_PROBE_TIMEOUT_SECONDS` | | `5`       | Connection timeout of the certificate probe used by discovery sweeps and `POST /api/probe`. Clamped to 1-30. The deployment check has its own, `CERTMATE_TLS_PROBE_TIMEOUT_SECONDS` |
 | `CERTMATE_LAST_USED_PERSIST_SECONDS` | | `60`  | How often a session's "last used" timestamp is written to disk. `0` writes on every request, which is the original behaviour and one write per request |
 | `CERTMATE_SLOW_REQUEST_LOGGING` | | `true`       | Log a warning, with the thread's stack, for requests that outlive the threshold below. The stack is what makes a hung request diagnosable after the fact |
 | `CERTMATE_SLOW_REQUEST_THRESHOLD_SECONDS` | | `30` | How long a request must run before it is reported |
@@ -1392,6 +1392,7 @@ CertMate supports multiple storage backends for certificates, providing flexibil
 > - **AWS Secrets Manager**: Ideal for AWS infrastructure and cross-region deployments
 > - **HashiCorp Vault**: Excellent for multi-cloud environments and advanced secret management
 > - **Infisical**: Great for teams wanting open-source secret management with collaboration features
+> - **S3-compatible object storage**: One bucket on any S3 endpoint (Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi, MinIO, AWS)
 
 #### Local Filesystem (Default)
 The default storage backend stores certificates in the local filesystem with secure permissions:
@@ -1404,6 +1405,7 @@ certificates/
  chain.pem # Certificate chain
  fullchain.pem # Full chain
  privkey.pem # Private key (600 permissions)
+ metadata.json # Certificate metadata (600 permissions)
 ```
 
 **Configuration:**
@@ -1565,6 +1567,30 @@ pip install -r requirements-infisical-storage.txt
 - Self-hosted secret management
 - Multi-environment certificate management
 
+#### S3-Compatible Object Storage
+One backend for any S3 endpoint, selected by `endpoint_url`: Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi, self-hosted MinIO, or AWS S3 itself. Each domain is stored as one JSON object, `<prefix>/<domain>.json`, holding the certificate files and their metadata.
+
+**Required Dependencies:** `boto3`, already in `requirements.txt` and `requirements-storage-all.txt` (not in `requirements-minimal.txt`).
+
+**Configuration:**
+```json
+{
+ "certificate_storage": {
+ "backend": "s3_compatible",
+ "s3_compatible": {
+ "endpoint_url": "https://fsn1.your-objectstorage.com",
+ "bucket": "certmate",
+ "access_key_id": "your_access_key_id",
+ "secret_access_key": "your_secret_access_key",
+ "region": "us-east-1",
+ "prefix": "certmate/certificates"
+ }
+ }
+}
+```
+
+`endpoint_url`, `bucket`, `access_key_id` and `secret_access_key` are required; `region` defaults to `us-east-1` and `prefix` to `certmate/certificates`.
+
 #### Quick Installation Guide
 
 **Install All Storage Backends:**
@@ -1586,6 +1612,8 @@ pip install -r requirements-vault-storage.txt
 
 # Infisical only
 pip install -r requirements-infisical-storage.txt
+
+# S3-compatible storage: no separate file — boto3 is in requirements.txt
 ```
 
 **Requirements File Overview:**
@@ -1625,13 +1653,15 @@ curl -X POST "http://localhost:8000/api/storage/test" \
 curl -X GET "http://localhost:8000/api/storage/info" \
  -H "Authorization: Bearer your_token"
 
-# Update storage backend configuration
+# Update storage backend configuration. Unlike /api/storage/test, the settings
+# go under a key named after the backend, not under "config" — a "config" key
+# here is ignored and the backend is saved with no credentials.
 curl -X POST "http://localhost:8000/api/storage/config" \
  -H "Authorization: Bearer your_token" \
  -H "Content-Type: application/json" \
  -d '{
  "backend": "hashicorp_vault",
- "config": {
+ "hashicorp_vault": {
  "vault_url": "https://vault.example.com:8200",
  "vault_token": "hvs.xxxxxxxxxxxxxxxxxxxx",
  "mount_point": "secret",
@@ -1640,14 +1670,16 @@ curl -X POST "http://localhost:8000/api/storage/config" \
  }'
 ```
 
-** Migrating Between Backends:**
+**Migrating Between Backends:**
 
-*Zero-Downtime Migration Process:*
-1. Configure the new storage backend
-2. Test connectivity and verify access
-3. Use the migration tool in Settings or API
-4. Verify all certificates are accessible in new backend
-5. Optionally clean up old storage
+Migration copies every certificate from a source backend to a target backend,
+one domain at a time. When no `source_backend` is given, the source is the
+backend currently saved in settings, so migrate **before** switching:
+1. Test the new backend (`POST /api/storage/test`)
+2. Migrate (`POST /api/storage/migrate`, or the migration tool in Settings)
+3. Check the response: `migrated_count`, `failed_count`, and `migration_results`, one `true`/`false` per domain
+4. Switch the active backend (`POST /api/storage/config`)
+5. Optionally clean up the old storage — CertMate never deletes it
 
 *Migration via API:*
 ```bash
@@ -1661,16 +1693,14 @@ curl -X POST "http://localhost:8000/api/storage/migrate" \
  "region": "us-east-1",
  "access_key_id": "AKIAIOSFODNN7EXAMPLE", 
  "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
- },
- "verify_migration": true
+ }
  }'
 ```
 
-*Migration Benefits:*
-- Zero downtime during migration
-- Automatic verification of migrated certificates
-- Rollback capability if issues are detected
-- Preservation of certificate metadata and permissions
+Each certificate's metadata is copied along with its files. There is no
+separate verification pass and no rollback: a domain whose copy failed is
+reported as `false` in `migration_results`, and the source is left untouched,
+so re-running the migration or staying on the old backend are both safe.
 
 **Backward Compatibility:**
 - Existing installations continue working without changes
@@ -1868,14 +1898,14 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 - **Simplified Management**: One file per snapshot. A disaster-recovery archive (`include_secrets=true`) contains everything needed for complete restoration; the default share-safe archive contains certificates, chains, metadata, the audit chain and the inventory — no credentials and no private keys
 
 **Two kinds of archive:**
-- **Share-safe**: settings with every credential masked, and **no private keys** — no ACME `privkey.pem`, no ACME account key, no private-CA key, no `.pfx`. Certificates, chains, metadata, the audit chain and the inventory are all there. The manifest says so (`secrets_masked`, `key_material_excluded`). Such an archive cannot restore an instance on its own, and neither the restore path nor the backup list pretends otherwise.
+- **Share-safe**: settings with every credential masked, and **no private keys** — no ACME `privkey.pem`, no ACME account key, no private-CA key, no `.pfx`. Certificates, chains, metadata, the audit chain and the inventory are all there. The manifest says so (`secrets_masked`, `key_material_excluded`). Such an archive cannot restore an instance on its own: `GET /api/backups` reports it with `can_restore: false` and Settings disables its Restore button. The restore API does not read `can_restore`. It refuses a share-safe archive when this instance already holds certificates; otherwise it restores it, keeping the credentials already in this instance's `settings.json`, or — on an instance with no `settings.json` — leaving every credential masked, to be re-entered before the next renewal.
 - **Disaster recovery**: plaintext settings and every key — encrypted at rest when `CERTMATE_BACKUP_PASSPHRASE` is set. This is the archive to keep off-site.
 
 **Which one you get automatically depends on one thing:** whether a backup passphrase is
 configured. With `CERTMATE_BACKUP_PASSPHRASE` set, automatic backups are disaster-recovery
 archives, encrypted at rest. Without it they stay share-safe, because a complete archive
 that cannot be encrypted would be a plaintext credential dump written to disk on every
-settings change. The instance logs a notice once at startup when it has no passphrase.
+settings change. Without a passphrase, the instance logs a notice once per process, at the first automatic backup it takes.
 
 CertMate never generates or stores that passphrase: keeping it beside the archive it
 protects would make the encryption meaningless. It is yours to set and to keep.
@@ -1918,23 +1948,25 @@ Access backup features from the Settings page:
 
 **Create Backup:**
 ```bash
-# Create backup (settings + certificates)
+# Create backup (settings + certificates); "type" is required
 curl -X POST "http://localhost:8000/api/backups/create" \
  -H "Authorization: Bearer your_token" \
  -H "Content-Type: application/json" \
- -d '{"reason": "manual_backup"}'
+ -d '{"type": "unified", "reason": "manual_backup"}'
 
-# Response includes backup file information
+# Response (201)
 {
- "success": true,
- "backup_file": "unified_backup_20241225_120000.zip",
- "size": "2.5MB",
- "contents": {
- "settings": true,
- "certificates": 15
- }
+ "message": "Backup created successfully",
+ "backups": [
+ {"type": "unified", "filename": "backup_20241225_120000_123456_manual_backup.zip"}
+ ],
+ "secrets_masked": true,
+ "recommendation": null
 }
 ```
+
+Archives are named `backup_<YYYYmmdd_HHMMSS_ffffff>_<reason>.zip` (UTC timestamp), or
+`.zip.enc` when `CERTMATE_BACKUP_PASSPHRASE` is set.
 
 **List and Download Backups:**
 ```bash
@@ -1944,7 +1976,7 @@ curl -H "Authorization: Bearer your_token" \
 
 # Download backup
 curl -H "Authorization: Bearer your_token" \
- "http://localhost:8000/api/backups/download/unified/unified_backup_20241225_120000.zip" \
+ "http://localhost:8000/api/backups/download/unified/backup_20241225_120000_123456_manual_backup.zip" \
  -o backup.zip
 ```
 
@@ -1977,7 +2009,7 @@ backup_20260821_120000_000000_manual.zip
 1. Navigate to Settings → Backup Management
 2. Select the backup to restore from
 3. Confirm restoration (restores both settings and certificates atomically)
-4. Application will restart to apply new settings
+4. The page reloads the restored settings; nothing is restarted
 5. Verify all certificates and configurations are working
 
 *API Restoration:*
@@ -1986,7 +2018,7 @@ backup_20260821_120000_000000_manual.zip
 curl -X POST "http://localhost:8000/api/backups/restore/unified" \
  -H "Authorization: Bearer your_token" \
  -H "Content-Type: application/json" \
- -d '{"filename": "unified_backup_20241225_120000.zip", "create_backup_before_restore": true}'
+ -d '{"filename": "backup_20241225_120000_123456_manual_backup.zip", "create_backup_before_restore": true}'
 ```
 
 #### External Backup Integration
@@ -2006,10 +2038,14 @@ RETENTION_DAYS=30
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Download latest backup via API
+# Download the newest backup that can restore (there is no "latest" alias;
+# the list is ordered oldest to newest by name)
+LATEST=$(curl -s -H "Authorization: Bearer $API_TOKEN" http://localhost:8000/api/backups \
+ | jq -r '[.unified[] | select(.can_restore)] | last | .filename // empty')
+[ -n "$LATEST" ] || { echo "No restorable backup on this instance" >&2; exit 1; }
 curl -H "Authorization: Bearer $API_TOKEN" \
- "http://localhost:8000/api/backups/download/unified/latest" \
- -o "$BACKUP_DIR/certmate_backup.zip"
+ "http://localhost:8000/api/backups/download/unified/$LATEST" \
+ -o "$BACKUP_DIR/$LATEST"
 
 # Backup certificates directory
 tar -czf "$BACKUP_DIR/certificates.tar.gz" "$CERT_DIR"
@@ -2019,8 +2055,8 @@ tar -czf "$BACKUP_DIR/data.tar.gz" "$DATA_DIR"
 
 # Encrypt backups (optional)
 gpg --cipher-algo AES256 --compress-algo 1 --symmetric \
- --output "$BACKUP_DIR/certmate_backup.zip.gpg" \
- "$BACKUP_DIR/certmate_backup.zip"
+ --output "$BACKUP_DIR/$LATEST.gpg" \
+ "$BACKUP_DIR/$LATEST"
 
 # Cleanup old backups
 find /backup/certmate -type d -mtime +$RETENTION_DAYS -exec rm -rf {} \;
@@ -2185,7 +2221,7 @@ curl -s -H "Authorization: Bearer $API_TOKEN" http://localhost:8000/api/backups 
 # Restore the newest one whose can_restore is true
 curl -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"filename": "backup_YYYYMMDD_HHMMSS.zip", "create_backup_before_restore": true}' \
+  -d '{"filename": "backup_YYYYmmdd_HHMMSS_ffffff_<reason>.zip", "create_backup_before_restore": true}' \
   http://localhost:8000/api/backups/restore/unified
 ```
 
@@ -2205,7 +2241,7 @@ docker exec -it certmate python scripts/reset_admin_password.py
 
 #### Certificate Creation Failures
 
-**Issue**: `DNS validation failed`
+**Issue**: `Certificate creation failed: ...` with a DNS-01 challenge error (the text after the prefix is certbot's own)
 ```bash
 # Check DNS propagation
 dig TXT _acme-challenge.example.com @8.8.8.8
@@ -2242,22 +2278,18 @@ sudo chmod 600 /opt/certmate/certificates/*/privkey.pem
 curl -H "Authorization: Bearer your_token_here" \
  http://localhost:8000/api/certificates
 
-# Check token in settings
-docker exec certmate cat /app/data/settings.json | jq .api_bearer_token
+# The token cannot be read back: settings.json stores only an HMAC of it
+# (api_bearer_token_hash). Compare against what you set in API_BEARER_TOKEN
+# or API_BEARER_TOKEN_FILE.
 ```
 
-**Issue**: `Token not found`
+**Issue**: lost or forgotten API token
 ```bash
-# Reset API token
-docker exec -it certmate python -c "
-import json
-with open('/app/data/settings.json', 'r+') as f:
- data = json.load(f)
- data['api_bearer_token'] = 'new_secure_token_here'
- f.seek(0)
- json.dump(data, f, indent=2)
- f.truncate()
-"
+# Set a new token and restart: at startup, the token from API_BEARER_TOKEN
+# (or API_BEARER_TOKEN_FILE) replaces the stored one.
+# (32+ characters; a malformed token is ignored and the old one stays.)
+openssl rand -hex 32   # put the output in .env as API_BEARER_TOKEN=...
+docker-compose up -d --force-recreate certmate
 ```
 
 #### Docker & Container Issues
@@ -2373,14 +2405,16 @@ az network dns zone list
 Enable debug logging for troubleshooting:
 
 ```bash
-# Development server: debug and log level are CLI flags, not env vars
+# Docker / gunicorn: CERTMATE_LOG_LEVEL. The stock docker-compose.yml does not
+# pass it through, so add it under the certmate service's environment: and
+# recreate the container
+      - CERTMATE_LOG_LEVEL=DEBUG
+
+# Development server: --log-level overrides CERTMATE_LOG_LEVEL (default INFO)
 python app.py --debug --log-level DEBUG
 
 # FLASK_ENV=production makes --debug refuse to start, by design
 FLASK_ENV=development
-
-# Or in Docker Compose
-docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
 ```
 
 ### What's New in v2.0.0

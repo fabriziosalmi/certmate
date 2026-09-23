@@ -31,7 +31,7 @@ Un hook è un oggetto JSON con cinque campi:
 | `command` | string | sì | Un singolo comando shell (`sh -c`). Max 1024 caratteri. Vedi [sicurezza](#modello-di-sicurezza). |
 | `enabled` | boolean | no | Predefinito `true`. Gli hook disabilitati vengono ignorati durante l'attivazione automatica ma possono ancora essere testati manualmente. |
 | `timeout` | integer | no | Secondi. Predefinito 30, limitato al `MAX_TIMEOUT` di sistema (attualmente 300). |
-| `on_events` | string array | no | Sottoinsieme di `["created", "renewed", "revoked"]`. Se assente, l'hook viene eseguito per tutti e tre. |
+| `on_events` | string array | no | Sottoinsieme di `["created", "renewed", "revoked"]`. Se assente al salvataggio della configurazione, viene impostato a `["created", "renewed"]`. Un hook scritto a mano in `settings.json` senza `on_events` non parte mai su un evento del certificato; parte comunque da un'attivazione manuale. |
 
 Gli hook si trovano sotto due chiavi in `deploy_hooks`:
 
@@ -68,7 +68,7 @@ Gli hook si trovano sotto due chiavi in `deploy_hooks`:
 }
 ```
 
-Se `enabled` al livello superiore è `false`, nessun hook viene eseguito durante gli eventi del certificato. I test manuali (`POST /api/deploy/test/<id>`) continuano a funzionare — utile per iterare su un hook prima di attivare l'interruttore principale.
+Se `enabled` al livello superiore è `false`, nessun hook viene eseguito durante gli eventi del certificato. I test dei singoli hook (`POST /api/deploy/test/<id>`) continuano a funzionare — utile per iterare su un hook prima di attivare l'interruttore principale. L'esecuzione di tutti gli hook di un dominio (`POST /api/certificates/<domain>/deploy`) invece no: viene rifiutata finché l'interruttore è spento.
 
 ---
 
@@ -79,7 +79,7 @@ Se `enabled` al livello superiore è `false`, nessun hook viene eseguito durante
 `Impostazioni → Deploy Hook`. Attiva/disattiva l'interruttore **Abilitato**, quindi aggiungi hook globali o per dominio. Ogni riga ha:
 
 - nome + comando + timeout + caselle di controllo degli eventi
-- un pulsante **Test** (esegue l'hook su un dominio sintetico `test.example.com` con `CERTMATE_EVENT=manual`)
+- un pulsante **Test** (esegue l'hook su un dominio sintetico `test.example.com` con `CERTMATE_EVENT=test` e `CERTMATE_DRY_RUN=1`)
 - interruttore di abilitazione/disabilitazione
 - eliminazione
 
@@ -92,12 +92,12 @@ Salva le impostazioni per rendere le modifiche persistenti.
 curl -H "Authorization: Bearer $TOKEN" \
   https://certmate.local/api/deploy/config
 
-# Sostituire la configurazione (scrittura completa del documento — passa l'intero dizionario deploy_hooks)
+# Scrivere la configurazione (le chiavi di primo livello inviate sostituiscono quelle salvate)
 curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d @hooks.json https://certmate.local/api/deploy/config
 ```
 
-Il POST sostituisce l'intero blocco `deploy_hooks`; esegui il merge lato client se vuoi preservare le voci esistenti.
+Il POST fa un merge al primo livello di `deploy_hooks`: ogni chiave inviata (`enabled`, `global_hooks`, `domain_hooks`, `targets`) sostituisce per intero il valore salvato, e una chiave omessa resta com'era. Quindi inviare `global_hooks` sostituisce l'intera lista; per aggiungere un hook, leggi la lista, aggiungi la voce e rimandala. Una lista vuota esplicita svuota quella chiave.
 
 ---
 
@@ -112,8 +112,10 @@ Ogni invocazione imposta queste variabili nell'ambiente del processo dell'hook:
 | `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` |
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
 | `CERTMATE_CHAIN_PATH` | `/app/certificates/api.example.com/chain.pem` (solo intermediari, senza il certificato foglia — per i target che richiedono la chain come file separato) |
-| `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` |
-| `CERTMATE_DRY_RUN` | Impostato a `1` solo durante il dry-run; assente altrimenti. |
+| `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` (Deploy Now) / `test` (test del singolo hook) |
+| `CERTMATE_DRY_RUN` | Impostato a `1` solo nel test di un singolo hook (`/api/deploy/test/<id>`, il pulsante **Test**); assente altrimenti, anche per Deploy Now. Il comando viene eseguito comunque: è solo un segnale che lo script può controllare. |
+
+I percorsi sono nella directory dei certificati di CertMate: `/app/certificates` nell'immagine Docker, oppure dove punta `CERTMATE_CERT_DIR`.
 
 Il tuo comando può fare riferimento a queste variabili come `$CERTMATE_DOMAIN`, `"$CERTMATE_FULLCHAIN_PATH"`, ecc. I valori vengono passati tramite l'ambiente, non per interpolazione di stringa, quindi il quoting funziona come in qualsiasi shell normale.
 
@@ -132,7 +134,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   https://certmate.local/api/deploy/test/<hook_id>
 ```
 
-Esegue solo l'hook con quell'`id`, sul dominio sintetico `test.example.com`, con `CERTMATE_EVENT=manual`. Bypassa il filtro `on_events` — utile per "questo comando funziona davvero?".
+Esegue solo l'hook con quell'`id`, sul dominio sintetico `test.example.com` (o sul `domain` indicato in un body JSON), con `CERTMATE_EVENT=test` e `CERTMATE_DRY_RUN=1`. Il comando viene eseguito davvero. Bypassa il filtro `on_events`, il flag `enabled` dell'hook e l'interruttore principale — utile per "questo comando funziona davvero?".
 
 ### Eseguire tutti gli hook per un dominio (admin)
 
@@ -141,7 +143,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   https://certmate.local/api/certificates/api.example.com/deploy
 ```
 
-Attiva tutti gli hook globali + specifici per il dominio abilitati per `api.example.com` con `CERTMATE_EVENT=manual`, ignorando `on_events`. Restituisce un riepilogo strutturato:
+Attiva tutti gli hook globali + specifici per il dominio abilitati (e ogni deploy target tipizzato applicabile) per `api.example.com` con `CERTMATE_EVENT=manual`, ignorando `on_events`. Viene rifiutato finché l'interruttore principale è spento. Restituisce un riepilogo strutturato:
 
 ```jsonc
 {
@@ -156,7 +158,7 @@ Attiva tutti gli hook globali + specifici per il dominio abilitati per `api.exam
 }
 ```
 
-Questo è ciò che il pulsante **Esegui Deploy Hook ora** nel pannello di dettaglio del certificato richiama.
+Questo è ciò che richiama il pulsante **Run deploy hooks now** (icona play, sezione Deployment del pannello di dettaglio del certificato).
 
 ---
 
@@ -170,14 +172,15 @@ Gli hook sono esecuzione di codice arbitrario per definizione — questa è la f
 |---|---|
 | `` ` `` (backtick) | sostituzione di comando |
 | `$(...)` | sostituzione di comando |
-| `${...}` | espansione di parametro (l'espansione delle variabili d'ambiente è consentita — solo la forma `${...}` è bloccata) |
+| `${...}` | espansione di parametro. `$VAR` è consentito, e anche `${CERTMATE_NOME}` con la graffa chiusa subito dopo il nome; ogni altra forma `${...}`, compresa `${CERTMATE_DOMAIN:-x}`, è bloccata |
 | `&&` / `\|\|` | concatenazione logica |
 | `;` | separatore di istruzione |
-| `\|` | pipe |
 | `\r` / `\n` | newline (impedisce a `sh -c` di interpretarli come `;`) |
 | `> /` (redirect verso percorso assoluto) | impedisce la sovrascrittura di file di sistema |
 | `<<` | here-doc |
 | `eval`, `source`, `. /` | builtin shell che caricano codice arbitrario |
+
+Due cose che sembrerebbero da elenco sono consentite di proposito (#115): una pipe semplice, per l'elaborazione a valle come `curl ... | jq .`, e un redirect verso un percorso relativo (`> out.txt`). È bloccato solo il redirect verso un percorso assoluto.
 
 Se hai bisogno di uno di questi, inserisci la logica in un file script all'interno del container e richiama lo script direttamente:
 
@@ -189,16 +192,16 @@ Se hai bisogno di uno di questi, inserisci la logica in un file script all'inter
 
 I riferimenti ai file sensibili di CertMate vengono rifiutati (senza distinzione tra maiuscole e minuscole):
 
-`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`, `private*key`, `.pem`
+`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`
 
-Quindi `cat $CERTMATE_FULLCHAIN_PATH` è accettabile (la variabile viene espansa dalla shell, la stringa letterale `.pem` non compare in `command`), ma `cat /app/data/settings.json` verrebbe rifiutato al salvataggio.
+I file del certificato non sono nella lista: installare il certificato e la sua chiave (`privkey.pem`, `$CERTMATE_KEY_PATH`) è il compito normale di un hook. `cat /app/data/settings.json` verrebbe rifiutato al salvataggio.
 
 ### Cosa è consentito
 
 - **Comandi semplici**: `/usr/sbin/nginx -s reload`, `systemctl reload haproxy`
 - **Richieste curl (webhook)**: `curl -X POST -H "Content-Type: application/json" https://hooks.slack.com/...`
 - **Espansione di variabili negli argomenti**: `curl -d "domain=$CERTMATE_DOMAIN" https://...`
-- **Payload JSON con `$VAR` (senza `${}`)**: `curl -d '{"domain":"$CERTMATE_DOMAIN"}' ...`
+- **Payload JSON con `$VAR`**: `curl -H "Content-Type: application/json" -d "{\"domain\":\"$CERTMATE_DOMAIN\"}" ...`. Il corpo va tra virgolette doppie: tra apici singoli la shell non espande `$CERTMATE_DOMAIN` e il ricevente riceve il testo letterale.
 - **Invocazione di script singolo**: `/opt/scripts/deploy.sh "$CERTMATE_DOMAIN"`
 
 Se un comando che prima potevi salvare ora genera `Command blocked at runtime: contains dangerous shell metacharacters`, consulta le note di versione — il validatore è stato rafforzato nella v2.4.0 e leggermente allentato nella v2.4.1+.
@@ -244,9 +247,9 @@ scp "$CERTMATE_FULLCHAIN_PATH" "$CERTMATE_KEY_PATH" deploy@lb:/etc/ssl/$CERTMATE
 ssh deploy@lb 'systemctl reload haproxy'
 ```
 
-### Ignorare gli hook durante il dry-run
+### Saltare il lavoro reale durante un Test
 
-Nel tuo script:
+Nel tuo script (la variabile è impostata solo dal **Test** del singolo hook):
 
 ```sh
 [ -n "${CERTMATE_DRY_RUN:-}" ] && { echo "dry run, skipping"; exit 0; }
@@ -272,12 +275,12 @@ Ogni esecuzione di hook scrive una voce `operation: deploy_hook` nel log di audi
 
 | Sintomo | Causa probabile |
 |---|---|
-| `Hook not found` | L'ID dell'hook nella richiesta di test non corrisponde a nessun hook nella configurazione salvata (l'UI era obsoleta o l'hook è stato appena eliminato). Aggiorna la pagina. |
+| `Hook <id> is no longer in settings...` | L'ID dell'hook nella richiesta di test non corrisponde a nessun hook nella configurazione salvata: la pagina è obsoleta, l'hook è stato appena eliminato, oppure il suo comando è stato rifiutato al salvataggio. Aggiorna la pagina. |
 | `Command blocked at runtime` | Uno dei [pattern bloccati](#pattern-shell-bloccati) ha superato il salvataggio. Sposta la logica problematica in un file script. |
 | `exit code 127` | Comando non trovato all'interno del container (es. `nginx` non è nel `$PATH`). Usa percorsi assoluti o installa il binario nell'immagine. |
 | `timeout after 30s` | L'hook ha superato il suo `timeout`. Aumentalo (max 300s) o sposta il lavoro in uno script in background. |
-| `Deploy hooks disabled` | `deploy_hooks.enabled` è `false`. Attiva l'interruttore principale in Impostazioni. |
-| `No hooks configured for <domain>` | Si tenta di eseguire hook per un dominio senza hook globali E senza voce sotto `domain_hooks[<domain>]`. Aggiungi un hook (o chiama `/api/deploy/test/<id>` per uno specifico). |
+| `Deploy hooks are disabled. Enable them in Settings → Deploy.` | `deploy_hooks.enabled` è `false` e hai eseguito tutti gli hook di un dominio. Attiva l'interruttore principale in Impostazioni. |
+| `No enabled hooks or deploy targets configured for <domain>...` | Si tenta di eseguire hook per un dominio senza hook globali abilitati, senza voci abilitate sotto `domain_hooks[<domain>]` e senza target tipizzati applicabili. Aggiungi un hook (o chiama `/api/deploy/test/<id>` per uno specifico). |
 
 ---
 

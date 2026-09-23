@@ -1,6 +1,6 @@
 # Build e distribuzione con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 688759cbf76ef5a2 -->
+<!-- CERTMATE-TRANSLATED-FROM 38dc004104e2e9da -->
 
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
 
@@ -65,8 +65,8 @@ SECRET_KEY=your-super-secret-key-here
 # SECRET_KEY_FILE=/run/secrets/secret_key  # Alternative: takes precedence over SECRET_KEY
 API_BEARER_TOKEN=your-api-bearer-token-here
 # API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative: takes precedence over API_BEARER_TOKEN
-CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
-LOG_LEVEL=INFO
+CLOUDFLARE_TOKEN=your-cloudflare-api-token
+CERTMATE_LOG_LEVEL=INFO
 ```
 
 ```bash
@@ -87,7 +87,7 @@ docker run -d --name certmate \
   # -e SECRET_KEY_FILE="/run/secrets/secret_key" \  # Alternative: takes precedence over SECRET_KEY
   -e API_BEARER_TOKEN="your-api-bearer-token" \
   # -e API_BEARER_TOKEN_FILE="/run/secrets/api_bearer_token" \  # Alternative: takes precedence over API_BEARER_TOKEN
-  -e CLOUDFLARE_API_TOKEN="your-api-token" \
+  -e CLOUDFLARE_TOKEN="your-api-token" \
   -p 8000:8000 \
   -v certmate_certificates:/app/certificates \
   -v certmate_data:/app/data \
@@ -102,11 +102,9 @@ docker run -d --name certmate \
 | `SECRET_KEY_FILE` | No | Percorso di un file contenente la chiave segreta Flask (ha precedenza su `SECRET_KEY`) |
 | `API_BEARER_TOKEN` | No (auto-generato) | Token di autenticazione API. Generato automaticamente se non impostato, ma impostalo prima di esporre in rete un'istanza non ancora configurata; quando impostato, incollalo una volta nella schermata di primo avvio per creare l'admin |
 | `API_BEARER_TOKEN_FILE` | No | Percorso di un file contenente il token bearer API (ha precedenza su `API_BEARER_TOKEN`) |
-| `LOG_LEVEL` | No | `INFO` (predefinito), `DEBUG`, `WARNING`, `ERROR` |
+| `CERTMATE_LOG_LEVEL` | No | `INFO` (predefinito), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | No | Se impostata, i backup unificati vengono cifrati a riposo (`.zip.enc`, PBKDF2-SHA256 + Fernet). La stessa passphrase è richiesta per il ripristino. Non impostata = backup in chiaro `.zip` (comportamento precedente) |
-| `CLOUDFLARE_API_TOKEN` | No | Token del provider DNS Cloudflare |
-| `AWS_ACCESS_KEY_ID` | No | Chiave di accesso AWS Route53 |
-| `AWS_SECRET_ACCESS_KEY` | No | Chiave segreta AWS Route53 |
+| `CLOUDFLARE_TOKEN` | No | Token API dell'account DNS Cloudflare predefinito. Cloudflare è l'unico provider DNS letto dall'ambiente: Route53 e gli altri si configurano in Impostazioni → Provider DNS o tramite l'API, e impostare `AWS_ACCESS_KEY_ID` nel container non ha alcun effetto |
 
 Consulta la [Guida all'installazione](./installation.md#environment-variables) per l'elenco completo.
 
@@ -128,24 +126,23 @@ certbot viene eseguito e non viene mai riscritto. Lo stesso vale per il
 ### Configurazione di base
 
 ```yaml
-version: '3.8'
-
 services:
   certmate:
     image: fabriziosalmi/certmate:latest
     container_name: certmate
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # solo localhost; per l'accesso esterno mettere davanti un reverse proxy
     environment:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
       # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
       - certmate_data:/app/data
       - certmate_logs:/app/logs
+      - certmate_backups:/app/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -158,6 +155,7 @@ volumes:
   certmate_certificates:
   certmate_data:
   certmate_logs:
+  certmate_backups:
 ```
 
 ```bash
@@ -263,7 +261,7 @@ docker push USERNAME/certmate:v1.0.0
 ### GitHub Actions
 
 Secret richiesti:
-- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_USER`
 - `DOCKERHUB_TOKEN`
 
 ```bash

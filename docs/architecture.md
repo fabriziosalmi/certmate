@@ -824,7 +824,7 @@ Each certificate has a `metadata.json` file containing:
 
 ### Production Recommendations
 
-- Use a storage backend (Azure, AWS, Vault) so certificate material survives the node
+- Use a storage backend (Azure, AWS, Vault, Infisical, S3-compatible) so certificate material survives the node
 - Enable audit logging for compliance
 - Configure rate limiting based on load
 - Regular CRL updates (daily or on revocation)
@@ -847,7 +847,7 @@ What availability looks like instead — **active/standby**:
    replicated filesystem). This is the state that matters: settings, the audit
    chain, the private CA, and the certificates themselves.
 2. Configure a [storage backend](#storage-backends) (Azure Key Vault, AWS
-   Secrets Manager, Vault, Infisical) so certificate material also lives
+   Secrets Manager, Vault, Infisical, S3-compatible) so certificate material also lives
    somewhere independent of the node.
 3. Run **one** instance. On failure, start a replacement against the same data
    and point the ingress at it. A missed renewal window is not urgent — renewal

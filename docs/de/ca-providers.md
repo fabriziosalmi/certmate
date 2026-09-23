@@ -1,6 +1,8 @@
 # Zertifizierungsstellen (CA) Anbieter
 
 <!-- CERTMATE-TRANSLATED-FROM 4a4fcc10de4a1e4b -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung ist nicht aktuell.** Die englische Fassung ([`docs/ca-providers.md`](../ca-providers.md)) wurde seitdem geändert und ist maßgeblich. Bei Abweichungen gilt das englische Dokument.
 
 CertMate unterstützt mehrere Zertifizierungsstellen-Anbieter, sodass Sie die für Ihre Anforderungen am besten geeignete CA auswählen können.
 

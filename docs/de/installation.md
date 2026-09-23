@@ -1,6 +1,6 @@
 # Installationsanleitung
 
-<!-- CERTMATE-TRANSLATED-FROM 7fedcd37874f024e -->
+<!-- CERTMATE-TRANSLATED-FROM b288912f631e6321 -->
 
 Diese Anleitung beschreibt alle Methoden zur Installation und zum Deployment von CertMate.
 
@@ -163,17 +163,11 @@ BEHIND_PROXY=true
 # gespeicherte Passphrase würde selbst in Klartext-Backups landen.
 CERTMATE_BACKUP_PASSPHRASE=choose-a-long-random-passphrase
 
-# DNS-Provider (einen oder mehrere auswählen)
+# DNS-Provider. Cloudflare ist der einzige Provider, der aus der Umgebung
+# gelesen wird: dieser Token setzt das Standard-Cloudflare-Konto. Route53, Azure,
+# Google Cloud DNS, PowerDNS und die übrigen werden unter Einstellungen -> DNS-Provider
+# oder über die API konfiguriert; AWS_*, AZURE_* und ähnliche Variablen bewirken hier nichts.
 CLOUDFLARE_TOKEN=your_cloudflare_token
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AZURE_SUBSCRIPTION_ID=your_azure_subscription
-AZURE_TENANT_ID=your_azure_tenant
-AZURE_CLIENT_ID=your_azure_client
-AZURE_CLIENT_SECRET=your_azure_secret
-GOOGLE_PROJECT_ID=your_gcp_project
-POWERDNS_API_URL=https://your-powerdns:8081
-POWERDNS_API_KEY=your_powerdns_key
 ```
 
 ### Auflösungsreihenfolge
@@ -419,8 +413,9 @@ Sie Folgendes:
 
 Falls NFS unvermeidbar ist, hängen Sie mit `soft,timeo=30,retrans=3` ein (oder dem
 Äquivalent Ihrer Distribution), damit I/O bei einem blockierten Server schnell
-fehlschlägt statt zu hängen, und prüfen Sie `data/logs/certmate.log` nach dem
-ersten Start auf die WAL-Fallback-Zeile.
+fehlschlägt statt zu hängen, und prüfen Sie nach dem ersten Start das
+Anwendungslog auf die WAL-Fallback-Warnung (stdout, oder die mit
+`CERTMATE_LOG_FILE` angegebene Datei, falls gesetzt).
 
 ### Gunicorn verwenden
 
@@ -460,18 +455,19 @@ sudo systemctl start certmate
 ### Docker im Produktionsbetrieb verwenden
 
 ```yaml
-version: '3.8'
 services:
   certmate:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # nur localhost; der Reverse Proxy ist das, was im Netz steht
     environment:
       - API_BEARER_TOKEN=${API_BEARER_TOKEN}
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
     volumes:
       - ./certificates:/app/certificates
       - ./data:/app/data
+      - ./logs:/app/logs
+      - ./backups:/app/backups
     restart: unless-stopped
 ```
 

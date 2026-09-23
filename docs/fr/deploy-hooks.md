@@ -31,7 +31,7 @@ Un hook est un objet JSON avec cinq champs :
 | `command` | string | oui | Commande shell unique (`sh -c`). Max 1024 caractères. Voir [sécurité](#modèle-de-sécurité). |
 | `enabled` | boolean | non | Par défaut `true`. Les hooks désactivés sont ignorés pendant le déclenchement automatique mais peuvent encore être testés manuellement. |
 | `timeout` | integer | non | Secondes. Défaut 30, plafonné au `MAX_TIMEOUT` système (actuellement 300). |
-| `on_events` | string array | non | Sous-ensemble de `["created", "renewed", "revoked"]`. Si absent, le hook s'exécute pour les trois. |
+| `on_events` | string array | non | Sous-ensemble de `["created", "renewed", "revoked"]`. Si absent lors de l'enregistrement de la configuration, il est fixé à `["created", "renewed"]` — `revoked` doit être choisi explicitement, afin qu'ajouter un hook ne se mette pas à exécuter des commandes sur des révocations pour lesquelles personne ne l'a écrit. Un hook écrit à la main dans `settings.json` n'est jamais normalisé : sans `on_events`, il ne s'exécute sur aucun événement de certificat ; un déclenchement manuel le lance toujours. |
 
 Les hooks vivent sous deux clés dans `deploy_hooks` :
 

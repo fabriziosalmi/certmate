@@ -44,8 +44,7 @@
                 <div class="p-3 bg-warning-surface border border-warning-line rounded-lg text-sm">
                     <p class="font-medium text-warning-strong mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Blocked Shell Patterns</p>
                     <p class="text-xs text-warning-fg">
-                        For safety, the command field rejects pipes, redirects, command substitution, and chained commands:
-                        <code class="text-xs">|</code>,
+                        For safety, the command field rejects command substitution, chained commands, and redirects to absolute paths:
                         <code class="text-xs">&amp;&amp;</code>,
                         <code class="text-xs">||</code>,
                         <code class="text-xs">;</code>,
@@ -56,7 +55,8 @@
                         <code class="text-xs">&lt;&lt;</code>,
                         <code class="text-xs">eval</code>,
                         <code class="text-xs">source</code>.
-                        References to sensitive files (<code class="text-xs">.pem</code>, <code class="text-xs">.env</code>, <code class="text-xs">settings.json</code>, private keys, vault tokens) are also blocked.
+                        A simple pipe (<code class="text-xs">|</code>) and a redirect to a relative path are allowed.
+                        References to CertMate's own secrets (<code class="text-xs">.env</code>, <code class="text-xs">settings.json</code>, the API bearer token, client secrets, vault tokens) are also blocked; certificate and key files are not, because installing them is what a hook is for.
                         If you need any of those, put the logic in a script file inside the container and call the script path directly (e.g. <code class="text-xs">/opt/scripts/deploy.sh</code>).
                     </p>
                 </div>

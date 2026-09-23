@@ -1,6 +1,6 @@
 # CertMate Model Context Protocol (MCP) Server
 
-CertMate includes a built-in Model Context Protocol (MCP) server written in Node.js. This allows agentic AI assistants (such as Claude or Gemini) to securely inspect certificate statuses, trigger renewals, request diagnostics, and interact with the CertMate API directly.
+CertMate includes a built-in Model Context Protocol (MCP) server written in Node.js. This allows agentic AI assistants (such as Claude or Gemini) to inspect certificate statuses, trigger renewals, request diagnostics, and interact with the CertMate API directly.
 
 ## Capabilities & Tools
 
@@ -11,12 +11,12 @@ The CertMate MCP server exposes the following tools to AI assistants:
 2. **`certmate_get_certificate`** — Full detail for one domain: status, days until expiry, SANs, DNS/CA provider, auto-renew flag. Use it to decide whether a cert needs renewing.
 3. **`certmate_get_activity`** — Recent activity/audit log, to diagnose what changed or failed.
 4. **`certmate_diagnostics`** — Comprehensive, sanitized diagnostic snapshot.
-5. **`certmate_get_settings`** — Global settings and configuration.
+5. **`certmate_get_settings`** — Global settings and configuration, with secret values masked.
 
 **Lifecycle operations**
-6. **`certmate_create_certificate`** — Requests a new TLS certificate for a domain (optional DNS provider, account, CA). May return a `job_id` (HTTP 202) for async issuance.
-7. **`certmate_renew_certificate`** — Forces renewal of an existing certificate (may also return a `job_id`).
-8. **`certmate_get_job`** — Polls an async create/renew job by `job_id` until it reports completed or failed.
+6. **`certmate_create_certificate`** — Requests a new TLS certificate for a domain (optional DNS provider, account, CA). The server always asks for async issuance, so this returns a `job_id` (HTTP 202) to poll.
+7. **`certmate_renew_certificate`** — Forces renewal of an existing certificate. Also async: returns a `job_id`.
+8. **`certmate_get_job`** — Polls an async create/renew/update job by `job_id` until its status is `succeeded` or `failed` (`queued` and `running` are not final).
 9. **`certmate_set_auto_renew`** — Enables or disables automatic renewal for a single domain.
 10. **`certmate_deploy_certificate`** — Manually executes all configured deployment hooks for a domain.
 11. **`certmate_download_certificate`** — Returns a domain's certificate material as JSON (fullchain, key, chain) so an agent can deploy it elsewhere.
@@ -28,18 +28,18 @@ The CertMate MCP server exposes the following tools to AI assistants:
 **Editing and removing**
 14. **`certmate_update_certificate`** — Changes an existing certificate's coverage in place by reissuing it: replace the SAN set and/or the DNS-01 alias. The primary domain is the certificate's identity and cannot be changed here. Returns a `job_id`.
 15. **`certmate_delete_certificate`** — **Destructive and not reversible.** Removes the certificate files from disk and the domain from settings. **Requires `admin`.**
-16. **`certmate_get_certificate_file`** — Returns one certificate file as raw, pasteable PEM rather than JSON-wrapped. Anything carrying key material needs `operator`.
+16. **`certmate_get_certificate_file`** — Returns one certificate file as raw, pasteable PEM rather than JSON-wrapped. `cert.pem`, `chain.pem` and `fullchain.pem` are readable by a `viewer`; `privkey.pem`, `combined.pem` and `cert.pfx` carry key material and need `operator`.
 
 ## Roles
 
-Give the agent the narrowest token that does its job, and note that three tools
+Give the agent the narrowest token that does its job, and note that a few tools
 need more than the rest:
 
 | Tool | Minimum role |
 |---|---|
-| everything under Inventory & status, except diagnostics/settings | `viewer` |
-| `certmate_create_certificate`, `certmate_renew_certificate`, `certmate_set_auto_renew`, `certmate_update_certificate`, `certmate_download_certificate`, `certmate_get_certificate_file` | `operator` |
-| `certmate_diagnostics`, `certmate_get_settings` | `admin` |
+| everything under Inventory & status except diagnostics (`certmate_get_settings` returns secrets masked), `certmate_list_dns_providers`, `certmate_get_certificate_file` for `cert.pem` / `chain.pem` / `fullchain.pem` | `viewer` |
+| `certmate_create_certificate`, `certmate_renew_certificate`, `certmate_get_job`, `certmate_set_auto_renew`, `certmate_update_certificate`, `certmate_download_certificate`, `certmate_get_certificate_file` for `privkey.pem` / `combined.pem` / `cert.pfx` | `operator` |
+| `certmate_diagnostics` | `admin` |
 | **`certmate_deploy_certificate`** | **`admin`** |
 | **`certmate_list_dns_accounts`** | **`admin`** |
 | **`certmate_delete_certificate`** | **`admin`** |
@@ -110,8 +110,8 @@ schedule and call MCP tools will work.
 1. `certmate_list_certificates` (or `certmate_get_certificate` per domain) to read `days_left` / status.
 2. Decide per your condition, e.g. *renew when `days_left < 14`*.
 3. `certmate_renew_certificate` for each due domain.
-4. If a renewal returns a `job_id`, `certmate_get_job` until it reports `completed` / `failed`.
-5. On failure, surface it — and CertMate's own notification channels (email, Slack, Discord, Telegram, ntfy, Gotify) will also fire on `certificate_failed`, so you get a push regardless.
+4. Each renewal returns a `job_id`; call `certmate_get_job` until it reports `succeeded` / `failed`.
+5. On failure, surface it. A failed renew or reissue job also emits `certificate_failed`, so CertMate's own notification channels (email, Slack, Discord, Telegram, ntfy, Gotify) push it regardless. Two exceptions: a job that failed because another operation already held the domain (`error_code: DOMAIN_OPERATION_IN_PROGRESS`) does not emit it, and a failed async create does not either, so for those the agent's own report is the signal.
 
 ### Example scheduled prompts
 
@@ -130,13 +130,13 @@ schedule and call MCP tools will work.
 
 Because the conditions live in the prompt, you can tune the policy (threshold,
 which domains, what to do on failure) without touching any code. Give the agent a
-token scoped to exactly what it should do — `operator` for renew/deploy, `admin`
-only if it must change settings or read diagnostics.
+token scoped to exactly what it should do — `operator` for renew, `admin`
+only if it must run deploy hooks, list DNS accounts, delete certificates, or read diagnostics.
 
 ## Security
 
-1. **Token Protection** — The MCP server requires a valid `CERTMATE_TOKEN`. It passes this token securely in the `Authorization` header for all requests to the CertMate API.
-2. **Least privilege** — Scope the token to what the agent needs. A scheduled renew-keeper needs `operator`; reserve `admin` tokens for agents that must change settings or pull diagnostics. Revoke the token to instantly cut the agent off.
+1. **Token Protection** — The MCP server requires a valid `CERTMATE_TOKEN`. It sends this token in the `Authorization` header of every request to the CertMate API. The default `CERTMATE_URL` is plain `http://localhost:8000`; when CertMate runs on another host, use an `https://` URL, or the token crosses the network in clear text.
+2. **Least privilege** — Scope the token to what the agent needs. A scheduled renew-keeper needs `operator`; reserve `admin` tokens for agents that must run deploy hooks, list DNS accounts, delete certificates, or pull diagnostics. Revoke the token to instantly cut the agent off.
 3. **Log Sanitization Compatibility** — Tools like `certmate_diagnostics` retrieve data after the Log Sanitizer has stripped sensitive credentials, protecting keys and tokens from leaking into LLM contexts.
 
 ## Audit attribution
@@ -146,8 +146,9 @@ give the MCP server a **dedicated, agent-flagged API key** rather than the legac
 global bearer token:
 
 1. In CertMate, go to **Settings → API Keys**, create a key, and tick **AI agent
-   key** (or send `"is_agent": true` to `POST /api/keys`). Scope it with
-   `allowed_domains` and the least role it needs.
+   key** (or send `"is_agent": true` to `POST /api/keys`). Give it the least role it needs,
+   and for a `viewer` or `operator` key limit it with `allowed_domains`. An
+   `admin` key cannot be domain-scoped: the server refuses it with a 400.
 2. Set that key as `CERTMATE_TOKEN` for the MCP server.
 
 Every certificate action the agent then takes is recorded with

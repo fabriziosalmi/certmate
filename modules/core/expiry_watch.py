@@ -1,8 +1,8 @@
 """Saying that something is about to expire, once per threshold.
 
 `certificate_expiring` has been offered in the notification settings, named in
-the README and in docs/webhooks.md, and listed as one of the five events a
-channel can filter on. Nothing ever published it. The weekly digest was the
+the README and in docs/webhooks.md, and listed as one of the events a channel
+can filter on. Nothing ever published it. The weekly digest was the
 only warning an operator got, and a certificate that fails to renew on a
 Monday was first mentioned the following Sunday.
 

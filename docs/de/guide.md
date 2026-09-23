@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM 36e2134d9fcca7b2 -->
+<!-- CERTMATE-TRANSLATED-FROM 809425d238cebfed -->
 
 ## Übersicht
 
@@ -449,12 +449,21 @@ Bei automatischer Erneuerung:
 3. Implementieren Sie exponentielles Backoff
 4. Prüfen Sie das Limit für Ihren Endpoint
 
+Der Body zeigt, welches Limit greift. `"code": "ISSUANCE_QUEUE_FULL"` bedeutet,
+dass zu viele Zertifikatsjobs warten oder laufen: erneut versuchen, sobald einige
+fertig sind, oder `CERTMATE_ISSUANCE_QUEUE_LIMIT` / `CERTMATE_ISSUANCE_WORKERS`
+erhöhen. Das API-Ratenlimit und das Limit für Anmeldeversuche liefern beide
+`retry_after` in Sekunden.
+
 ### Logs prüfen
 
-Anwendungslogs anzeigen:
+Anwendungslogs anzeigen (CertMate loggt nach stdout):
 ```bash
-tail -f logs/certmate.log
+docker logs -f certmate
 ```
+
+Eine Logdatei gibt es nur, wenn Sie `CERTMATE_LOG_FILE` setzen (z. B.
+`CERTMATE_LOG_FILE=/app/logs/certmate.log`); dann `tail -f` auf diesen Pfad.
 
 Audit-Logs anzeigen:
 ```bash

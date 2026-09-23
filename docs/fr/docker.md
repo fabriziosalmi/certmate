@@ -1,6 +1,6 @@
 # Construction et déploiement Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 688759cbf76ef5a2 -->
+<!-- CERTMATE-TRANSLATED-FROM 38dc004104e2e9da -->
 
 Ce guide couvre la construction, le déploiement et l'exécution de CertMate dans Docker — incluant le support multi-plateforme pour ARM et AMD64.
 
@@ -65,8 +65,8 @@ SECRET_KEY=votre-cle-super-secrete
 # SECRET_KEY_FILE=/run/secrets/secret_key  # Alternative : prioritaire sur SECRET_KEY
 API_BEARER_TOKEN=votre-token-bearer-api
 # API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative : prioritaire sur API_BEARER_TOKEN
-CLOUDFLARE_API_TOKEN=votre-token-cloudflare
-LOG_LEVEL=INFO
+CLOUDFLARE_TOKEN=votre-token-cloudflare
+CERTMATE_LOG_LEVEL=INFO
 ```
 
 ```bash
@@ -85,7 +85,7 @@ docker run -d --name certmate \
 docker run -d --name certmate \
   -e SECRET_KEY="votre-cle-secrete" \
   -e API_BEARER_TOKEN="votre-token-bearer-api" \
-  -e CLOUDFLARE_API_TOKEN="votre-token-api" \
+  -e CLOUDFLARE_TOKEN="votre-token-api" \
   -p 8000:8000 \
   -v certmate_certificates:/app/certificates \
   -v certmate_data:/app/data \
@@ -100,11 +100,9 @@ docker run -d --name certmate \
 | `SECRET_KEY_FILE` | Non | Chemin vers un fichier contenant la clé secrète Flask (prioritaire sur `SECRET_KEY`) |
 | `API_BEARER_TOKEN` | Non (auto-généré) | Token d'authentification de l'API. Auto-généré si non défini, mais définissez-le avant d'exposer sur un réseau une instance pas encore configurée ; une fois défini, collez-le une fois sur l'écran de premier démarrage pour créer l'administrateur |
 | `API_BEARER_TOKEN_FILE` | Non | Chemin vers un fichier contenant le token bearer API (prioritaire sur `API_BEARER_TOKEN`) |
-| `LOG_LEVEL` | Non | `INFO` (défaut), `DEBUG`, `WARNING`, `ERROR` |
+| `CERTMATE_LOG_LEVEL` | Non | `INFO` (défaut), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | Non | Quand défini, sauvegardes chiffrées au repos (`.zip.enc`, PBKDF2-SHA256 + Fernet) |
-| `CLOUDFLARE_API_TOKEN` | Non | Token du fournisseur DNS Cloudflare |
-| `AWS_ACCESS_KEY_ID` | Non | Clé d'accès AWS Route53 |
-| `AWS_SECRET_ACCESS_KEY` | Non | Clé secrète AWS Route53 |
+| `CLOUDFLARE_TOKEN` | Non | Token API du compte DNS Cloudflare par défaut. Cloudflare est le seul fournisseur DNS lu depuis l'environnement : Route53 et les autres se configurent dans Paramètres → Fournisseurs DNS ou via l'API, et définir `AWS_ACCESS_KEY_ID` dans le conteneur n'a aucun effet |
 
 Voir le [Guide d'installation](./installation.md#variables-denvironnement) pour la liste complète.
 
@@ -126,22 +124,21 @@ même paire. Voir
 ### Configuration de base
 
 ```yaml
-version: '3.8'
-
 services:
   certmate:
     image: fabriziosalmi/certmate:latest
     container_name: certmate
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # localhost uniquement ; placez un reverse proxy devant pour l'accès externe
     environment:
       - SECRET_KEY=${SECRET_KEY:-}
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
       - certmate_data:/app/data
       - certmate_logs:/app/logs
+      - certmate_backups:/app/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -154,6 +151,7 @@ volumes:
   certmate_certificates:
   certmate_data:
   certmate_logs:
+  certmate_backups:
 ```
 
 ```bash
@@ -259,7 +257,7 @@ docker push UTILISATEUR/certmate:v1.0.0
 ### GitHub Actions
 
 Secrets requis :
-- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_USER`
 - `DOCKERHUB_TOKEN`
 
 ```bash

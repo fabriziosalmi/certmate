@@ -1,6 +1,6 @@
 # Docker Build & Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM 688759cbf76ef5a2 -->
+<!-- CERTMATE-TRANSLATED-FROM 38dc004104e2e9da -->
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 
@@ -65,8 +65,8 @@ SECRET_KEY=your-super-secret-key-here
 # SECRET_KEY_FILE=/run/secrets/secret_key  # Alternative: takes precedence over SECRET_KEY
 API_BEARER_TOKEN=your-api-bearer-token-here
 # API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative: takes precedence over API_BEARER_TOKEN
-CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
-LOG_LEVEL=INFO
+CLOUDFLARE_TOKEN=your-cloudflare-api-token
+CERTMATE_LOG_LEVEL=INFO
 ```
 
 ```bash
@@ -87,7 +87,7 @@ docker run -d --name certmate \
   # -e SECRET_KEY_FILE="/run/secrets/secret_key" \  # Alternative: takes precedence over SECRET_KEY
   -e API_BEARER_TOKEN="your-api-bearer-token" \
   # -e API_BEARER_TOKEN_FILE="/run/secrets/api_bearer_token" \  # Alternative: takes precedence over API_BEARER_TOKEN
-  -e CLOUDFLARE_API_TOKEN="your-api-token" \
+  -e CLOUDFLARE_TOKEN="your-api-token" \
   -p 8000:8000 \
   -v certmate_certificates:/app/certificates \
   -v certmate_data:/app/data \
@@ -102,11 +102,9 @@ docker run -d --name certmate \
 | `SECRET_KEY_FILE` | Nein | Pfad zu einer Datei mit dem Flask-Secret-Key (hat Vorrang vor `SECRET_KEY`) |
 | `API_BEARER_TOKEN` | Nein (automatisch generiert) | API-Authentifizierungs-Token. Wird automatisch generiert, wenn nicht gesetzt, aber setzen Sie es, bevor Sie eine noch nicht eingerichtete Instanz im Netzwerk verfügbar machen; wenn gesetzt, fügen Sie es einmal im Erststart-Bildschirm ein, um den Admin zu erstellen |
 | `API_BEARER_TOKEN_FILE` | Nein | Pfad zu einer Datei mit dem API-Bearer-Token (hat Vorrang vor `API_BEARER_TOKEN`) |
-| `LOG_LEVEL` | Nein | `INFO` (Standard), `DEBUG`, `WARNING`, `ERROR` |
+| `CERTMATE_LOG_LEVEL` | Nein | `INFO` (Standard), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | Nein | Wenn gesetzt, werden einheitliche Backups im Ruhezustand verschlüsselt (`.zip.enc`, PBKDF2-SHA256 + Fernet). Dieselbe Passphrase wird zur Wiederherstellung benötigt. Nicht gesetzt = ältere unverschlüsselte `.zip`-Backups |
-| `CLOUDFLARE_API_TOKEN` | Nein | Cloudflare-DNS-Provider-Token |
-| `AWS_ACCESS_KEY_ID` | Nein | AWS-Route53-Zugriffsschlüssel |
-| `AWS_SECRET_ACCESS_KEY` | Nein | AWS-Route53-Secret-Key |
+| `CLOUDFLARE_TOKEN` | Nein | API-Token für das Standard-Cloudflare-DNS-Konto. Cloudflare ist der einzige DNS-Provider, der aus der Umgebung gelesen wird: Route53 und die übrigen werden unter Einstellungen → DNS-Provider oder über die API konfiguriert, und `AWS_ACCESS_KEY_ID` im Container zu setzen bewirkt nichts |
 
 Siehe den [Installationsleitfaden](./installation.md#environment-variables) für die vollständige Liste.
 
@@ -128,24 +126,23 @@ dasselbe. Siehe
 ### Grundkonfiguration
 
 ```yaml
-version: '3.8'
-
 services:
   certmate:
     image: fabriziosalmi/certmate:latest
     container_name: certmate
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # nur localhost; für externen Zugriff einen Reverse Proxy davorschalten
     environment:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
       # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
       - certmate_data:/app/data
       - certmate_logs:/app/logs
+      - certmate_backups:/app/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -158,6 +155,7 @@ volumes:
   certmate_certificates:
   certmate_data:
   certmate_logs:
+  certmate_backups:
 ```
 
 ```bash
@@ -263,7 +261,7 @@ docker push USERNAME/certmate:v1.0.0
 ### GitHub Actions
 
 Erforderliche Secrets:
-- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_USER`
 - `DOCKERHUB_TOKEN`
 
 ```bash

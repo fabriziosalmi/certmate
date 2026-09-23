@@ -1,6 +1,6 @@
 # Construcción y despliegue con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 688759cbf76ef5a2 -->
+<!-- CERTMATE-TRANSLATED-FROM 38dc004104e2e9da -->
 
 Esta guía cubre la construcción, el despliegue y la ejecución de CertMate en Docker — incluyendo soporte multiplataforma para ARM y AMD64.
 
@@ -65,8 +65,8 @@ SECRET_KEY=your-super-secret-key-here
 # SECRET_KEY_FILE=/run/secrets/secret_key  # Alternative: takes precedence over SECRET_KEY
 API_BEARER_TOKEN=your-api-bearer-token-here
 # API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative: takes precedence over API_BEARER_TOKEN
-CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
-LOG_LEVEL=INFO
+CLOUDFLARE_TOKEN=your-cloudflare-api-token
+CERTMATE_LOG_LEVEL=INFO
 ```
 
 ```bash
@@ -87,7 +87,7 @@ docker run -d --name certmate \
   # -e SECRET_KEY_FILE="/run/secrets/secret_key" \  # Alternative: takes precedence over SECRET_KEY
   -e API_BEARER_TOKEN="your-api-bearer-token" \
   # -e API_BEARER_TOKEN_FILE="/run/secrets/api_bearer_token" \  # Alternative: takes precedence over API_BEARER_TOKEN
-  -e CLOUDFLARE_API_TOKEN="your-api-token" \
+  -e CLOUDFLARE_TOKEN="your-api-token" \
   -p 8000:8000 \
   -v certmate_certificates:/app/certificates \
   -v certmate_data:/app/data \
@@ -102,11 +102,9 @@ docker run -d --name certmate \
 | `SECRET_KEY_FILE` | No | Ruta a un archivo que contiene la clave secreta de Flask (tiene prioridad sobre `SECRET_KEY`) |
 | `API_BEARER_TOKEN` | No (autogenerado) | Token de autenticación de la API. Se genera automáticamente si no se define, pero defínelo antes de exponer en red una instancia aún sin configurar; cuando está definido, pégalo una vez en la pantalla de primer inicio para crear el admin |
 | `API_BEARER_TOKEN_FILE` | No | Ruta a un archivo que contiene el bearer token de la API (tiene prioridad sobre `API_BEARER_TOKEN`) |
-| `LOG_LEVEL` | No | `INFO` (por defecto), `DEBUG`, `WARNING`, `ERROR` |
+| `CERTMATE_LOG_LEVEL` | No | `INFO` (por defecto), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | No | Cuando se define, las copias de seguridad unificadas se cifran en reposo (`.zip.enc`, PBKDF2-SHA256 + Fernet). Se requiere la misma frase de contraseña para restaurarlas. Sin definir = copias de seguridad en texto claro `.zip` (comportamiento heredado) |
-| `CLOUDFLARE_API_TOKEN` | No | Token del proveedor DNS de Cloudflare |
-| `AWS_ACCESS_KEY_ID` | No | Clave de acceso de AWS Route53 |
-| `AWS_SECRET_ACCESS_KEY` | No | Clave secreta de AWS Route53 |
+| `CLOUDFLARE_TOKEN` | No | Token de API de la cuenta DNS de Cloudflare predeterminada. Cloudflare es el único proveedor DNS que se lee del entorno: Route53 y los demás se configuran en Ajustes → Proveedores DNS o a través de la API, y definir `AWS_ACCESS_KEY_ID` en el contenedor no tiene ningún efecto |
 
 Consulta la [Guía de instalación](./installation.md#environment-variables) para ver la lista completa.
 
@@ -128,24 +126,23 @@ par. Consulta
 ### Configuración básica
 
 ```yaml
-version: '3.8'
-
 services:
   certmate:
     image: fabriziosalmi/certmate:latest
     container_name: certmate
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # solo localhost; ponga un proxy inverso delante para el acceso externo
     environment:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
       # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
       - certmate_data:/app/data
       - certmate_logs:/app/logs
+      - certmate_backups:/app/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -158,6 +155,7 @@ volumes:
   certmate_certificates:
   certmate_data:
   certmate_logs:
+  certmate_backups:
 ```
 
 ```bash
@@ -263,7 +261,7 @@ docker push USERNAME/certmate:v1.0.0
 ### GitHub Actions
 
 Secrets requeridos:
-- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_USER`
 - `DOCKERHUB_TOKEN`
 
 ```bash
