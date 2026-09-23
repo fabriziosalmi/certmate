@@ -46,7 +46,7 @@ Hooks werden unter zwei Schlüsseln in `deploy_hooks` gespeichert:
       {
         "id": "5f8...",
         "name": "Reload nginx",
-        "command": "/usr/sbin/nginx -s reload",
+        "command": "curl -fsS -X POST https://lb.internal/api/reload",
         "enabled": true,
         "timeout": 30,
         "on_events": ["created", "renewed"]
@@ -195,7 +195,7 @@ Referenzen auf CertMates eigene sensible Dateien werden grundsätzlich abgelehnt
 
 ### Was erlaubt ist
 
-- **Einfache Befehle**: `/usr/sbin/nginx -s reload`, `systemctl reload haproxy`
+- **Einfache Befehle**: `curl -fsS https://lb.internal/api/reload`, `openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -dates`
 - **Curl-POSTs (Webhooks)**: `curl -X POST -H "Content-Type: application/json" https://hooks.slack.com/...`
 - **Variablenexpansion in Argumenten**: `curl -d "domain=$CERTMATE_DOMAIN" https://...`
 - **JSON-Payloads mit `$VAR` (kein `${}`)**: `curl -d '{"domain":"$CERTMATE_DOMAIN"}' ...`
@@ -205,21 +205,41 @@ Wenn ein Befehl, den Sie früher speichern konnten, jetzt `Command blocked at ru
 
 ---
 
+## Wo ein Hook läuft
+
+**Im CertMate-Container**, als der Prozess, der das Zertifikat ausgestellt hat — nicht auf dem Docker-Host und nicht auf der Maschine, die Sie neu laden wollen.
+
+Das ist das Entscheidende, bevor man einen Hook schreibt, und die Beispiele auf dieser Seite hatten es falsch. `systemctl reload haproxy` liest sich, als lade es Ihren Load Balancer neu. Es tut es nicht: es läuft in einem Container ohne systemd, ohne haproxy und ohne nginx und endet mit 127 — *not found* — was [#856](https://github.com/fabriziosalmi/certmate/issues/856) für `scp` gemeldet hat.
+
+Was das veröffentlichte Image für einen Hook tatsächlich enthält:
+
+| | |
+|---|---|
+| **vorhanden** | `sh`, `bash`, `curl`, `openssl` |
+| **nicht vorhanden** | `ssh`, `scp`, `sftp`, `rsync`, `jq`, `nginx`, `systemctl`, `haproxy` und alles Übrige |
+
+Die Liste ist absichtlich kurz: die Runtime-Stage installiert drei Pakete, und das Dockerfile begründet es — jedes zusätzliche Paket ist Fläche, die gepatcht und gescannt werden muss ([#403](https://github.com/fabriziosalmi/certmate/issues/403)). Es ist kein Versehen, also muss ein Hook mit dem auskommen, was da ist — oder etwas erreichen, das mehr hat.
+
+### Drei Wege, auf eine andere Maschine zu wirken
+
+**Über das Netz fragen.** Fast alles, was neu geladen werden will, hat eine API, und `curl` ist vorhanden.
+
+**Ein eigenes Image bauen.** Das von CertMate ist eine Basis wie jede andere:
+
+```
+FROM fabriziosalmi/certmate:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
+USER certmate
+```
+
+**Ein Skript einhängen.** Ein Hook darf jeden Pfad im Container aufrufen — es läuft aber weiterhin im Container, also muss auch alles, was es aufruft, dort vorhanden sein.
+
+---
+
 ## Häufige Rezepte
 
-### nginx neu laden (global, alle Ereignisse)
-
-```sh
-/usr/sbin/nginx -t && /usr/sbin/nginx -s reload
-```
-
-(Hinweis: `&&` ist blockiert. Verpacken Sie dies in ein Skript: `/opt/scripts/reload-nginx.sh`.)
-
-### haproxy neu laden
-
-```sh
-systemctl reload haproxy
-```
+Diese laufen im veröffentlichten Image. Jedes wird dagegen geprüft.
 
 ### An einen Slack-Webhook senden
 
@@ -227,31 +247,27 @@ systemctl reload haproxy
 curl -X POST -H 'Content-Type: application/json' -d "{\"text\":\"Cert renewed: $CERTMATE_DOMAIN\"}" https://hooks.slack.com/services/XXX/YYY/ZZZ
 ```
 
-### Zertifikat auf einen Remote-Host synchronisieren
-
-(In ein Skript verpacken — kein `;`, `&&` inline erlaubt.)
+### Etwas anderem mitteilen, dass sich das Zertifikat geändert hat
 
 ```sh
-/opt/scripts/sync-cert.sh
+curl -fsS -X POST -H "Authorization: Bearer $DEPLOY_TOKEN" --data-binary "@$CERTMATE_FULLCHAIN_PATH" https://lb.internal/api/certs/$CERTMATE_DOMAIN
 ```
 
-Wobei `sync-cert.sh` folgenden Inhalt hat:
+`-f` ist wichtig: ohne es endet `curl` auch bei einem HTTP-Fehler mit 0, und der Hook meldet Erfolg für ein Deployment, das nicht stattgefunden hat.
+
+### Prüfen, was ausgestellt wurde
 
 ```sh
-#!/bin/sh
-set -eu
-scp "$CERTMATE_FULLCHAIN_PATH" "$CERTMATE_KEY_PATH" deploy@lb:/etc/ssl/$CERTMATE_DOMAIN/
-ssh deploy@lb 'systemctl reload haproxy'
+openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -subject -dates
 ```
 
-### Hooks während eines Dry-Run überspringen
-
-In Ihrem Skript:
+### Ein eigenes Skript ausführen
 
 ```sh
-[ -n "${CERTMATE_DRY_RUN:-}" ] && { echo "dry run, skipping"; exit 0; }
+/opt/scripts/deploy.sh
 ```
 
+In den Container eingehängt und für das geschrieben, was der Container hat.
 ---
 
 ## Audit, Verlauf und Debugging

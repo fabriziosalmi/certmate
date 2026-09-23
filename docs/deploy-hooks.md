@@ -45,8 +45,8 @@ Hooks live under two keys in `deploy_hooks`:
     "global_hooks": [
       {
         "id": "5f8...",
-        "name": "Reload nginx",
-        "command": "/usr/sbin/nginx -s reload",
+        "name": "Tell the load balancer",
+        "command": "curl -fsS -X POST https://lb.internal/api/reload",
         "enabled": true,
         "timeout": 30,
         "on_events": ["created", "renewed"]
@@ -258,7 +258,7 @@ Certificate files are not on the list: installing the certificate and its key (`
 
 ### What's allowed
 
-- **Plain commands**: `/usr/sbin/nginx -s reload`, `systemctl reload haproxy`
+- **Plain commands**: `curl -fsS https://lb.internal/api/reload`, `openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -dates`
 - **Curl POSTs (webhooks)**: `curl -X POST -H "Content-Type: application/json" https://hooks.slack.com/...`
 - **Variable expansion in arguments**: `curl -d "domain=$CERTMATE_DOMAIN" https://...`
 - **JSON payloads with `$VAR`**: `curl -H "Content-Type: application/json" -d "{\"domain\":\"$CERTMATE_DOMAIN\"}" ...`. The body has to be in double quotes: inside single quotes the shell never expands `$CERTMATE_DOMAIN`, and the receiver gets the literal text.
@@ -268,21 +268,60 @@ If a command you used to be able to save now triggers `Command blocked at runtim
 
 ---
 
+## Where a hook runs
+
+**Inside the CertMate container**, as the process that issued the certificate —
+not on the Docker host, and not on the machine you want to reload.
+
+This is the single thing to get right before writing a hook, and the examples
+in this page used to get it wrong. A command like `systemctl reload haproxy`
+reads as if it reloads your load balancer. It does not: it runs in a container
+that has no systemd, no haproxy and no nginx, and exits 127 — `not found` —
+which is what [#856](https://github.com/fabriziosalmi/certmate/issues/856)
+reported for `scp`.
+
+What the published image actually contains, for a hook to use:
+
+| | |
+|---|---|
+| **present** | `sh`, `bash`, `curl`, `openssl` |
+| **not present** | `ssh`, `scp`, `sftp`, `rsync`, `jq`, `nginx`, `systemctl`, `haproxy`, and everything else |
+
+That list is short on purpose. The runtime stage installs three packages, and
+the Dockerfile explains why: every package added is surface that has to be
+patched and scanned ([#403](https://github.com/fabriziosalmi/certmate/issues/403)).
+It is not an oversight, so a hook has to work with what is there — or reach
+something that has more.
+
+`tests/test_a_hook_runs_where_certmate_runs.py` checks the examples below
+against the image, so this table cannot drift from it again.
+
+### Three ways to act on a machine that is not this one
+
+**Ask it over the network.** Most things worth reloading have an API, and
+`curl` is present. This is the pattern that works with no changes at all.
+
+**Build your own image.** CertMate's image is a base like any other:
+
+```
+FROM fabriziosalmi/certmate:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
+USER certmate
+```
+
+Now `scp` is there, along with whatever else you added, and the surface is
+yours to patch rather than everyone's.
+
+**Mount a script and its dependencies.** A hook may call any path in the
+container, so a bind-mounted script works — but it still runs in the
+container, so anything it invokes has to be in there too.
+
+---
+
 ## Common recipes
 
-### Reload nginx (global, all events)
-
-```sh
-/usr/sbin/nginx -t && /usr/sbin/nginx -s reload
-```
-
-(Note: `&&` is blocked. Wrap this in a script: `/opt/scripts/reload-nginx.sh`.)
-
-### Reload haproxy
-
-```sh
-systemctl reload haproxy
-```
+These run in the image as published. Each one is checked against it.
 
 ### Push to a Slack webhook
 
@@ -290,22 +329,33 @@ systemctl reload haproxy
 curl -X POST -H 'Content-Type: application/json' -d "{\"text\":\"Cert renewed: $CERTMATE_DOMAIN\"}" https://hooks.slack.com/services/XXX/YYY/ZZZ
 ```
 
-### Sync cert to a remote host
+### Tell something else the certificate changed
 
-(Wrap in a script — no `;`, `&&` allowed inline.)
-
-```sh
-/opt/scripts/sync-cert.sh
-```
-
-Where `sync-cert.sh` is:
+Anything with an HTTP API — a load balancer, a config management endpoint, your
+own small agent beside the service:
 
 ```sh
-#!/bin/sh
-set -eu
-scp "$CERTMATE_FULLCHAIN_PATH" "$CERTMATE_KEY_PATH" deploy@lb:/etc/ssl/$CERTMATE_DOMAIN/
-ssh deploy@lb 'systemctl reload haproxy'
+curl -fsS -X POST -H "Authorization: Bearer $DEPLOY_TOKEN" --data-binary "@$CERTMATE_FULLCHAIN_PATH" https://lb.internal/api/certs/$CERTMATE_DOMAIN
 ```
+
+`-f` matters: without it `curl` exits 0 on an HTTP error, and the hook reports
+success for a deploy that did not happen.
+
+### Check what was issued before shipping it
+
+```sh
+openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -subject -dates
+```
+
+### Run your own script
+
+```sh
+/opt/scripts/deploy.sh
+```
+
+Mounted into the container, and written against what the container has. Use a
+script whenever you need `;` or `&&` — the command field rejects both, and the
+script is where that logic belongs anyway.
 
 ### Skip real work during a Test run
 

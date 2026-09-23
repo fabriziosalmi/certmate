@@ -1102,7 +1102,10 @@ class DeployManager:
 
         The sanitizer intentionally allows:
         - $CERTMATE_* / ${CERTMATE_*} env vars (injected by CertMate itself)
-        - Simple pipes (|) for common post-processing (e.g. curl | jq)
+        - Simple pipes (|) for post-processing. Note what the image
+          actually carries: sh, bash, curl, openssl and nothing else,
+          because a hook runs inside it. This used to say `curl | jq`,
+          and jq is not there — see docs/deploy-hooks.md.
         - Simple output redirection (> file) to non-absolute paths
 
         It blocks:

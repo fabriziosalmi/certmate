@@ -46,7 +46,7 @@ Gli hook si trovano sotto due chiavi in `deploy_hooks`:
       {
         "id": "5f8...",
         "name": "Ricarica nginx",
-        "command": "/usr/sbin/nginx -s reload",
+        "command": "curl -fsS -X POST https://lb.internal/api/reload",
         "enabled": true,
         "timeout": 30,
         "on_events": ["created", "renewed"]
@@ -198,7 +198,7 @@ I file del certificato non sono nella lista: installare il certificato e la sua 
 
 ### Cosa è consentito
 
-- **Comandi semplici**: `/usr/sbin/nginx -s reload`, `systemctl reload haproxy`
+- **Comandi semplici**: `curl -fsS https://lb.internal/api/reload`, `openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -dates`
 - **Richieste curl (webhook)**: `curl -X POST -H "Content-Type: application/json" https://hooks.slack.com/...`
 - **Espansione di variabili negli argomenti**: `curl -d "domain=$CERTMATE_DOMAIN" https://...`
 - **Payload JSON con `$VAR`**: `curl -H "Content-Type: application/json" -d "{\"domain\":\"$CERTMATE_DOMAIN\"}" ...`. Il corpo va tra virgolette doppie: tra apici singoli la shell non espande `$CERTMATE_DOMAIN` e il ricevente riceve il testo letterale.
@@ -208,21 +208,41 @@ Se un comando che prima potevi salvare ora genera `Command blocked at runtime: c
 
 ---
 
+**Dentro il container di CertMate**, come il processo che ha emesso il certificato — non sull'host Docker, e non sulla macchina che vuoi ricaricare.
+
+È la cosa da capire prima di scrivere un hook, e gli esempi di questa pagina la sbagliavano. Un comando come `systemctl reload haproxy` sembra ricaricare il tuo load balancer. Non lo fa: gira in un container che non ha systemd, né haproxy, né nginx, ed esce con 127 — *not found* — che è quanto [#856](https://github.com/fabriziosalmi/certmate/issues/856) ha segnalato per `scp`.
+
+Cosa contiene davvero l'immagine pubblicata, per un hook:
+
+| | |
+|---|---|
+| **presenti** | `sh`, `bash`, `curl`, `openssl` |
+| **assenti** | `ssh`, `scp`, `sftp`, `rsync`, `jq`, `nginx`, `systemctl`, `haproxy`, e tutto il resto |
+
+L'elenco è corto di proposito: lo stage di runtime installa tre pacchetti, e il Dockerfile spiega perché — ogni pacchetto aggiunto è superficie da aggiornare e scansionare ([#403](https://github.com/fabriziosalmi/certmate/issues/403)). Non è una dimenticanza, quindi un hook deve lavorare con quello che c'è, oppure raggiungere qualcosa che ha di più.
+
+### Tre modi per agire su una macchina che non è questa
+
+**Chiederglielo via rete.** Quasi tutto ciò che vale la pena ricaricare ha un'API, e `curl` c'è. È lo schema che funziona senza cambiare nulla.
+
+**Costruire una propria immagine.** Quella di CertMate è una base come un'altra:
+
+```
+FROM fabriziosalmi/certmate:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
+USER certmate
+```
+
+Così `scp` c'è, insieme a ciò che hai aggiunto, e la superficie è tua da aggiornare invece che di tutti.
+
+**Montare uno script.** Un hook può chiamare qualunque percorso nel container, quindi uno script montato funziona — ma gira comunque nel container, quindi anche ciò che invoca deve stare lì dentro.
+
+---
+
 ## Ricette comuni
 
-### Ricaricare nginx (globale, tutti gli eventi)
-
-```sh
-/usr/sbin/nginx -t && /usr/sbin/nginx -s reload
-```
-
-(Nota: `&&` è bloccato. Racchiudi questo in uno script: `/opt/scripts/reload-nginx.sh`.)
-
-### Ricaricare haproxy
-
-```sh
-systemctl reload haproxy
-```
+Girano nell'immagine così com'è pubblicata. Ognuna è verificata contro di essa.
 
 ### Inviare a un webhook Slack
 
@@ -230,31 +250,29 @@ systemctl reload haproxy
 curl -X POST -H 'Content-Type: application/json' -d "{\"text\":\"Cert renewed: $CERTMATE_DOMAIN\"}" https://hooks.slack.com/services/XXX/YYY/ZZZ
 ```
 
-### Sincronizzare il certificato su un host remoto
+### Dire a qualcos'altro che il certificato è cambiato
 
-(Da racchiudere in uno script — `;` e `&&` non sono consentiti inline.)
-
-```sh
-/opt/scripts/sync-cert.sh
-```
-
-Dove `sync-cert.sh` è:
+Qualunque cosa abbia un'API HTTP — un load balancer, un endpoint di gestione della configurazione, un piccolo agente accanto al servizio:
 
 ```sh
-#!/bin/sh
-set -eu
-scp "$CERTMATE_FULLCHAIN_PATH" "$CERTMATE_KEY_PATH" deploy@lb:/etc/ssl/$CERTMATE_DOMAIN/
-ssh deploy@lb 'systemctl reload haproxy'
+curl -fsS -X POST -H "Authorization: Bearer $DEPLOY_TOKEN" --data-binary "@$CERTMATE_FULLCHAIN_PATH" https://lb.internal/api/certs/$CERTMATE_DOMAIN
 ```
 
-### Saltare il lavoro reale durante un Test
+`-f` conta: senza, `curl` esce con 0 anche su un errore HTTP, e l'hook riporta successo per un deploy che non è avvenuto.
 
-Nel tuo script (la variabile è impostata solo dal **Test** del singolo hook):
+### Controllare cosa è stato emesso prima di spedirlo
 
 ```sh
-[ -n "${CERTMATE_DRY_RUN:-}" ] && { echo "dry run, skipping"; exit 0; }
+openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -subject -dates
 ```
 
+### Eseguire uno script proprio
+
+```sh
+/opt/scripts/deploy.sh
+```
+
+Montato nel container e scritto per ciò che il container ha. Usa uno script ogni volta che ti servono `;` o `&&`: il campo del comando li rifiuta, ed è comunque lì che quella logica appartiene.
 ---
 
 ## Audit, cronologia e debug

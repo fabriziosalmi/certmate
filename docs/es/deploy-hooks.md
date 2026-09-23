@@ -46,7 +46,7 @@ Los hooks se ubican bajo dos claves en `deploy_hooks`:
       {
         "id": "5f8...",
         "name": "Reload nginx",
-        "command": "/usr/sbin/nginx -s reload",
+        "command": "curl -fsS -X POST https://lb.internal/api/reload",
         "enabled": true,
         "timeout": 30,
         "on_events": ["created", "renewed"]
@@ -195,7 +195,7 @@ Así, `cat $CERTMATE_FULLCHAIN_PATH` es válido (la variable la expande el shell
 
 ### Qué está permitido
 
-- **Comandos simples**: `/usr/sbin/nginx -s reload`, `systemctl reload haproxy`
+- **Comandos simples**: `curl -fsS https://lb.internal/api/reload`, `openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -dates`
 - **Peticiones curl (webhooks)**: `curl -X POST -H "Content-Type: application/json" https://hooks.slack.com/...`
 - **Expansión de variables en argumentos**: `curl -d "domain=$CERTMATE_DOMAIN" https://...`
 - **Payloads JSON con `$VAR` (sin `${}`)**: `curl -d '{"domain":"$CERTMATE_DOMAIN"}' ...`
@@ -205,21 +205,41 @@ Si un comando que antes podías guardar ahora produce `Command blocked at runtim
 
 ---
 
+## Dónde se ejecuta un hook
+
+**Dentro del contenedor de CertMate**, como el proceso que emitió el certificado — no en el host de Docker, ni en la máquina que quieres recargar.
+
+Es lo primero que hay que entender antes de escribir un hook, y los ejemplos de esta página lo tenían mal. `systemctl reload haproxy` parece recargar tu balanceador. No lo hace: se ejecuta en un contenedor sin systemd, sin haproxy y sin nginx, y termina con 127 — *not found* — que es lo que [#856](https://github.com/fabriziosalmi/certmate/issues/856) reportó para `scp`.
+
+Lo que la imagen publicada contiene de verdad, para un hook:
+
+| | |
+|---|---|
+| **presentes** | `sh`, `bash`, `curl`, `openssl` |
+| **ausentes** | `ssh`, `scp`, `sftp`, `rsync`, `jq`, `nginx`, `systemctl`, `haproxy`, y todo lo demás |
+
+La lista es corta a propósito: la etapa de runtime instala tres paquetes, y el Dockerfile explica por qué — cada paquete añadido es superficie que hay que parchear y escanear ([#403](https://github.com/fabriziosalmi/certmate/issues/403)).
+
+### Tres formas de actuar sobre una máquina que no es esta
+
+**Pedírselo por la red.** Casi todo lo que merece recargarse tiene una API, y `curl` está.
+
+**Construir tu propia imagen.** La de CertMate es una base como cualquier otra:
+
+```
+FROM fabriziosalmi/certmate:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
+USER certmate
+```
+
+**Montar un script.** Un hook puede llamar a cualquier ruta del contenedor — pero sigue ejecutándose en el contenedor, de modo que lo que invoque también tiene que estar ahí dentro.
+
+---
+
 ## Recetas comunes
 
-### Recargar nginx (global, todos los eventos)
-
-```sh
-/usr/sbin/nginx -t && /usr/sbin/nginx -s reload
-```
-
-(Nota: `&&` está bloqueado. Envuelve esto en un script: `/opt/scripts/reload-nginx.sh`.)
-
-### Recargar haproxy
-
-```sh
-systemctl reload haproxy
-```
+Se ejecutan en la imagen tal como se publica. Cada una se verifica contra ella.
 
 ### Enviar a un webhook de Slack
 
@@ -227,31 +247,27 @@ systemctl reload haproxy
 curl -X POST -H 'Content-Type: application/json' -d "{\"text\":\"Cert renewed: $CERTMATE_DOMAIN\"}" https://hooks.slack.com/services/XXX/YYY/ZZZ
 ```
 
-### Sincronizar el certificado con un host remoto
-
-(Envuelve en un script — no se permiten `;`, `&&` en línea.)
+### Avisar a otra cosa de que el certificado cambió
 
 ```sh
-/opt/scripts/sync-cert.sh
+curl -fsS -X POST -H "Authorization: Bearer $DEPLOY_TOKEN" --data-binary "@$CERTMATE_FULLCHAIN_PATH" https://lb.internal/api/certs/$CERTMATE_DOMAIN
 ```
 
-Donde `sync-cert.sh` es:
+`-f` importa: sin él, `curl` termina con 0 incluso ante un error HTTP, y el hook informa de éxito para un despliegue que no ocurrió.
+
+### Comprobar qué se emitió
 
 ```sh
-#!/bin/sh
-set -eu
-scp "$CERTMATE_FULLCHAIN_PATH" "$CERTMATE_KEY_PATH" deploy@lb:/etc/ssl/$CERTMATE_DOMAIN/
-ssh deploy@lb 'systemctl reload haproxy'
+openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -subject -dates
 ```
 
-### Omitir hooks durante un dry-run
-
-En tu script:
+### Ejecutar un script propio
 
 ```sh
-[ -n "${CERTMATE_DRY_RUN:-}" ] && { echo "dry run, skipping"; exit 0; }
+/opt/scripts/deploy.sh
 ```
 
+Montado en el contenedor y escrito para lo que el contenedor tiene.
 ---
 
 ## Auditoría, historial y depuración
