@@ -34,11 +34,27 @@ ALGORITHM = 'ed25519'
 class AuditSigner:
     """Holds the instance Ed25519 key and signs bytes."""
 
-    def __init__(self, data_dir, key_file_env: str = KEY_FILE_ENV):
+    def __init__(self, data_dir, key_file_env: str = KEY_FILE_ENV,
+                 *, create: bool = True):
+        """*create* decides what a missing key means.
+
+        ``True`` is first-run behaviour and is right for the application: a
+        fresh instance mints its identity and persists it.
+
+        ``False`` is for a tool that acts on an instance that already exists,
+        where a missing key is not a first run — it is the wrong directory, or
+        an unset ``AUDIT_SIGNING_KEY_FILE``, or a key that has been lost.
+        ``audit_prune`` is the case: it had a check for `available` that could
+        never fail, because the constructor it was checking had just created
+        the key it was asking about. Minting there signs the new anchor with a
+        key that is not the instance's, after deleting the records the anchor
+        replaces.
+        """
         self._private = None
         self._public = None
         try:
-            self._private = self._load_or_create(Path(data_dir), key_file_env)
+            self._private = self._load_or_create(Path(data_dir), key_file_env,
+                                                 create=create)
             if self._private is not None:
                 self._public = self._private.public_key()
         except Exception as e:  # pragma: no cover - defensive
@@ -50,7 +66,7 @@ class AuditSigner:
     def available(self) -> bool:
         return self._private is not None
 
-    def _load_or_create(self, data_dir: Path, env: str):
+    def _load_or_create(self, data_dir: Path, env: str, *, create: bool = True):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         from cryptography.hazmat.primitives import serialization
 
@@ -81,6 +97,13 @@ class AuditSigner:
                 return None
 
         # 3. First run: generate and persist with 0600 from the first byte.
+        #    Unless the caller said this is not a first run — see __init__.
+        if not create:
+            logger.error(
+                f"No audit signing key at {path} and creating one was not "
+                f"asked for; signing disabled. A new key here would be a new "
+                f"instance identity, not this instance's.")
+            return None
         key = Ed25519PrivateKey.generate()
         try:
             data_dir.mkdir(parents=True, exist_ok=True)

@@ -156,10 +156,17 @@ chain with no entries after the archived prefix — you never delete records
 whose only remaining copy is unverified, and you never end up with a chain that
 has nothing left to verify.
 
+It also refuses if `--key-dir` holds no signing key, or holds one belonging to
+a different instance than the one that exported the bundle. Both are checked
+**before** anything is removed: an anchor signed by the wrong key is one the
+instance's own `verify` rejects, and discovering that after the records are
+gone is too late to be useful.
+
 Point `--key-dir` at the instance's key. It defaults to `data` (relative to the
 directory you run the command from) and must hold the instance's
 `.audit_signing_key`, unless `AUDIT_SIGNING_KEY_FILE` is set the same way the
-instance sets it. Run it where the instance's key is.
+instance sets it. The tool never creates a key here: a new key would be a new
+instance identity, not this instance's.
 
 What it then does is the part that matters for compliance:
 
