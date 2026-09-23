@@ -20,7 +20,7 @@ cloudflare==2.19.4                 # Hold at 2.x: 3.x+ is a different SDK, certb
 dns-lexicon==3.25.1
 
 # Core application dependencies
-urllib3!=2.2.0,>=2.7.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
+urllib3!=2.2.0,>=2.8.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
 dnspython==2.8.0                   # Used directly: CAA lookups (modules/core/caa.py) and the DNS-alias hook. It used to arrive only through the DNS plugins, so a plugin dropping it would have taken our own code with it.
 requests==2.34.2
 tldextract==5.3.2                  # Used directly: the registrable domain for registration expiry (modules/core/domain_registration.py), from its bundled Public Suffix List, offline. Previously only transitive, through dns-lexicon.
@@ -39,4 +39,4 @@ gunicorn==26.2.0
 # gunicorn's worker import and restart-loop forever (#514). Nothing in CI had
 # ever built this file, which is why an advertised build argument shipped
 # broken; ci.yml now builds and boots it on every run.
-SQLAlchemy>=2.0.52,<3.0.0
+SQLAlchemy>=2.0.54,<3.0.0
