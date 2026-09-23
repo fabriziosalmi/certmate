@@ -6,7 +6,7 @@
 
 Cierra [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
-Los deploy hooks son comandos shell cortos que CertMate ejecuta **después** de emitir, renovar o revocar un certificado. Úsalos para recargar servicios, enviar el nuevo certificado a un load balancer, publicar una notificación o cualquier otra acción necesaria tras una ejecución exitosa de certbot.
+Los deploy hooks son comandos shell cortos que CertMate ejecuta **después** de emitir, renovar o revocar un certificado. En CertMate solo se pueden revocar certificados de cliente (`POST /api/client-certs/<id>/revoke`); un certificado de servidor no tiene revocación, así que para él no se ejecuta ningún hook. Úsalos para recargar servicios, enviar el nuevo certificado a un load balancer, publicar una notificación o cualquier otra acción necesaria tras una ejecución exitosa de certbot.
 
 Esta guía cubre:
 
@@ -31,7 +31,7 @@ Un hook es un objeto JSON con cinco campos:
 | `command` | string | sí | Un único comando shell (`sh -c`). Máximo 1024 caracteres. Ver [seguridad](#modelo-de-seguridad). |
 | `enabled` | boolean | no | Por defecto `true`. Los hooks desactivados se omiten durante el disparo automático pero pueden probarse manualmente. |
 | `timeout` | integer | no | Segundos. Valor por defecto 30, limitado al `MAX_TIMEOUT` del sistema (actualmente 300). |
-| `on_events` | string array | no | Subconjunto de `["created", "renewed", "revoked"]`. Si está ausente, el hook se ejecuta en los tres eventos. |
+| `on_events` | string array | no | Subconjunto de `["created", "renewed", "revoked"]`. Si está ausente al guardar la configuración, se fija en `["created", "renewed"]`: `revoked` hay que elegirlo, para que añadir un hook no empiece a ejecutar comandos en revocaciones para las que nadie lo escribió. Un hook escrito a mano en `settings.json` no se normaliza nunca: sin `on_events` no se ejecuta en ningún evento del certificado, aunque sí con una activación manual. |
 
 Los hooks se ubican bajo dos claves en `deploy_hooks`:
 

@@ -6,7 +6,7 @@
 
 Schliesst [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
-Deploy Hooks sind kurze Shell-Befehle, die CertMate **nach** der Ausstellung, Erneuerung oder dem Widerruf eines Zertifikats ausführt. Verwenden Sie sie, um Dienste neu zu laden, das neue Zertifikat an einen Load Balancer zu übermitteln, eine Benachrichtigung zu versenden oder alles andere, was nach einem erfolgreichen certbot-Lauf erledigt werden muss.
+Deploy Hooks sind kurze Shell-Befehle, die CertMate **nach** der Ausstellung, Erneuerung oder dem Widerruf eines Zertifikats ausführt. Widerrufen lassen sich über CertMate nur Client-Zertifikate (`POST /api/client-certs/<id>/revoke`); für ein Server-Zertifikat gibt es keinen Widerruf, also läuft dafür auch kein Hook. Verwenden Sie sie, um Dienste neu zu laden, das neue Zertifikat an einen Load Balancer zu übermitteln, eine Benachrichtigung zu versenden oder alles andere, was nach einem erfolgreichen certbot-Lauf erledigt werden muss.
 
 Diese Anleitung behandelt:
 
@@ -31,7 +31,7 @@ Ein Hook ist ein JSON-Objekt mit fünf Feldern:
 | `command` | string | ja | Ein einzelner Shell-Befehl (`sh -c`). Max. 1024 Zeichen. Siehe [Sicherheitsmodell](#sicherheitsmodell). |
 | `enabled` | boolean | nein | Standard: `true`. Deaktivierte Hooks werden beim automatischen Auslösen übersprungen, können aber weiterhin manuell getestet werden. |
 | `timeout` | integer | nein | Sekunden. Standard 30, begrenzt auf den systemweiten `MAX_TIMEOUT` (aktuell 300). |
-| `on_events` | string array | nein | Teilmenge von `["created", "renewed", "revoked"]`. Fehlt dieses Feld, läuft der Hook bei allen drei Ereignissen. |
+| `on_events` | string array | nein | Teilmenge von `["created", "renewed", "revoked"]`. Fehlt das Feld beim Speichern der Konfiguration, wird es auf `["created", "renewed"]` gesetzt — `revoked` muss ausdrücklich gewählt werden, damit ein neuer Hook nicht anfängt, bei Widerrufen Befehle auszuführen, für die ihn niemand geschrieben hat. Ein von Hand in `settings.json` eingetragener Hook wird nie normalisiert: ohne `on_events` läuft er bei keinem Zertifikatsereignis, wohl aber bei manueller Auslösung. |
 
 Hooks werden unter zwei Schlüsseln in `deploy_hooks` gespeichert:
 
