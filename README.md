@@ -2049,6 +2049,9 @@ certmate/
   Unknown or rejected keys are returned in a `400` response with a `hint` field pointing at the correct endpoint.
 - **Audit Trail for Configuration Changes**: every mutation to settings, the auth-config toggle, users, scoped API keys, and deploy hooks is recorded with operator identity and source IP. Authorization denials (out-of-scope domain access, blocked field writes) are recorded too. Logs are written to `data/audit/certificate_audit.log` as one JSON object per line — pipeable into your SIEM of choice.
 
+#### The Setup Window
+Until the first operator credential exists — a local admin with local auth enabled, `API_BEARER_TOKEN`, or OIDC — every request is served as admin to anyone who can reach the instance. So during setup CertMate only **bootstraps**: it creates the first admin and turns login on. API keys and further users are refused with `409 SETUP_BOOTSTRAP_ONLY` until setup is complete, because anything created in that window would be created by whoever was there and would outlive it. API keys that an older version let be created during setup stay valid but are flagged in Settings → API Keys and in the startup log, until an operator confirms or revokes each one.
+
 #### Certificate Security
 - **File Permissions**: Private keys stored with `600` permissions
 - **Directory Permissions**: Certificate directories with `700` permissions
@@ -2749,7 +2752,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[docs/api.md](docs/api.md)**                     | Client certificates API reference   | Developers            |
 | **[docs/mcp.md](docs/mcp.md)**                     | MCP server for AI agents: tools, auth, audit attribution | Developers, SRE |
 | **[docs/guide.md](docs/guide.md)**                 | Step-by-step guide for common tasks | All users             |
-| **[docs/discovery-inventory.md](docs/discovery-inventory.md)** | Discovery, inventory, adopt, crypto readiness | SRE, security |
+| **[docs/discovery-inventory.md](docs/discovery-inventory.md)** | Discovery, inventory, adopt, crypto readiness, domain registration + health | SRE, security |
 | **[docs/deploy-hooks.md](docs/deploy-hooks.md)**   | Post-issuance deploy hooks          | DevOps engineers      |
 | **[docs/csr-only-certificates.md](docs/csr-only-certificates.md)** | Issuing from a CSR when the key stays on the device | Appliance operators |
 | **[docs/webhooks.md](docs/webhooks.md)**           | Generic webhooks: payload templates, auth, signature verification | Integrators |

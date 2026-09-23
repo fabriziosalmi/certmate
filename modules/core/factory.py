@@ -792,6 +792,7 @@ def initialize_managers(container: AppContainer, app):
     from .cert_inventory import CertInventory
     from .cert_discovery import CertDiscoveryManager
     from .ct_monitor import CTMonitorManager
+    from .domain_health import DomainHealthManager
     from .domain_registration import DomainRegistrationManager
     from .expiry_watch import ExpiryWatch
     cert_inventory = CertInventory(container.data_dir)
@@ -800,6 +801,10 @@ def initialize_managers(container: AppContainer, app):
     # Registration expiry of every tracked domain (RDAP, WHOIS where a TLD has
     # no RDAP). Opt-in, like the rest of discovery.
     domain_registration = DomainRegistrationManager(
+        settings_manager, cert_inventory, container.cert_dir)
+    # The checks that are about the name rather than the certificate: SPF,
+    # DMARC, MX, the blocklists and the HSTS header. Opt-in like the rest.
+    domain_health = DomainHealthManager(
         settings_manager, cert_inventory, container.cert_dir)
 
     # Says that a certificate or a domain registration is about to expire,
@@ -838,6 +843,7 @@ def initialize_managers(container: AppContainer, app):
         'cert_discovery': cert_discovery,
         'ct_monitor': ct_monitor,
         'domain_registration': domain_registration,
+        'domain_health': domain_health,
         'expiry_watch': expiry_watch,
     }
 
@@ -1025,6 +1031,19 @@ def _domain_registration_job():
         _run_manager_job('domain_registration', 'run_check')
 
 
+def _domain_health_job():
+    """Picklable wrapper for the daily name-level checks. Own lock so several
+    workers on one data dir do not each query the blocklists: the lists
+    rate-limit, and a burst is what gets a resolver refused in the first
+    place — the condition these checks report as `unknown`."""
+    with _renewal_process_lock('.domain-health.lock') as may_run:
+        if not may_run:
+            logger.info("Scheduled domain health check skipped: another "
+                        "process holds the lock.")
+            return
+        _run_manager_job('domain_health', 'run_check')
+
+
 def _expiry_watch_job():
     """Picklable wrapper for the daily expiry warnings. Own lock so several
     workers on one data dir do not each announce the same expiry — the notice
@@ -1156,6 +1175,13 @@ def setup_scheduler(container: AppContainer):
             trigger="cron", hour=6, minute=0,
             id='domain_registration_check', replace_existing=True
         )
+        # Name-level checks: once a day at 06:30, between the registration
+        # check and the expiry warnings. A no-op unless the operator enabled it.
+        scheduler.add_job(
+            func=_domain_health_job,
+            trigger="cron", hour=6, minute=30,
+            id='domain_health_check', replace_existing=True
+        )
         # Expiry warnings: once a day at 07:00, after the renewal sweep has
         # had its chance (02:00) and after the registration check (06:00), so
         # what it announces is what is still true this morning.
@@ -1281,11 +1307,12 @@ def setup_api(container: AppContainer, app):
     ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
     ns_diagnostics = Namespace('diagnostics', description='Sanitized diagnostic snapshot for bug reports')
     ns_inventory = Namespace('inventory', description='Certificate inventory (issued + discovered)')
+    ns_probe = Namespace('probe', description='Read the certificate a host is serving, now')
 
     namespaces = [
         ns_certificates, ns_client_certs, ns_ocsp, ns_crl, ns_settings,
         ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics,
-        ns_inventory
+        ns_inventory, ns_probe
     ]
     for ns in namespaces:
         api.add_namespace(ns)
@@ -1340,6 +1367,8 @@ def setup_api(container: AppContainer, app):
     ns_inventory.add_resource(api_resources['InventoryConfig'], '/config')
     ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
     ns_inventory.add_resource(api_resources['InventoryDomains'], '/domains')
+    ns_inventory.add_resource(api_resources['InventoryHealth'], '/health')
+    ns_probe.add_resource(api_resources['ProbeEndpoint'], '')
     ns_inventory.add_resource(api_resources['InventoryCryptoReport'], '/crypto-report')
     ns_inventory.add_resource(api_resources['InventoryAdopt'], '/<string:fingerprint>/adopt')
     # '/<string:fingerprint>' sits at the same depth as '/config', '/scan' and
@@ -1745,6 +1774,8 @@ def setup_rate_limiting(app, container: AppContainer):
             endpoint = 'certificate_create'
         elif 'certificates' in path and 'batch' in path:
             endpoint = 'certificate_batch'
+        elif path.rstrip('/').endswith('/api/probe'):
+            endpoint = 'probe'
         elif 'certificates' in path and 'renew' in path:
             endpoint = 'certificate_renew'
         elif 'certificates' in path and 'revoke' in path:
@@ -1819,6 +1850,25 @@ def create_app(test_config=None):
                 "admin and enable local auth) or set API_BEARER_TOKEN before "
                 "exposing it."
             )
+        elif _auth is not None:
+            # Keys created while the instance was in setup mode were created by
+            # whoever could reach it then, and they stay valid after setup. They
+            # can no longer be minted; the ones that exist wait for review.
+            # Said here, in the log, and in Settings -> API Keys: never on the
+            # unauthenticated /health, which would tell whoever planted one
+            # that it is still there.
+            # This module's logger is a StructuredLogger: message plus keyword
+            # fields, no %-arguments (a positional one raises TypeError, which
+            # the except below would have swallowed at debug level).
+            unreviewed = _auth.unreviewed_setup_keys()
+            if unreviewed:
+                logger.critical(
+                    f"{len(unreviewed)} API key(s) were created while this instance "
+                    "was in setup mode, when every request was served as admin to "
+                    "anyone who could reach it. Nobody can vouch for who created "
+                    "them, and they are still valid. Review them in Settings -> API "
+                    "Keys: confirm the ones you made, revoke the rest.",
+                    unreviewed_setup_keys=len(unreviewed))
     except Exception as e:
         logger.debug(f"Setup-mode startup check failed: {e}")
 

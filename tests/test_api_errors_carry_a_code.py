@@ -34,7 +34,7 @@ API = REPO / 'modules' / 'api'
 # number when you add codes; a file at 0 is done and must stay done. Never
 # raise one: that is what the test is for.
 UNCODED_CEILING = {
-    'resources_backup.py': 31,
+    'resources_backup.py': 30,
     'resources_certificates.py': 14,
     'resources_inventory.py': 18,
     'resources_storage.py': 18,

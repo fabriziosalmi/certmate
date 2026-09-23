@@ -153,6 +153,45 @@ METADATA_SCHEMA_VERSION = 1
 # so a MINOR. `not_published` is a status, not a missing field: some
 # registries (.de, .eu) do not publish expiry, and that is the answer.
 #
+# 2.7 for PATCH /api/keys/<key_id>: an operator confirms an API key that was
+# created while the instance was in setup mode. New endpoint, so a MINOR.
+# The same change refuses POST /api/keys, and any user after the first, with
+# 409 SETUP_BOOTSTRAP_ONLY while in setup mode. That is a new answer to an
+# existing request, which the rule below would call MAJOR. It is a security
+# fix instead: a key minted in setup mode was minted by whoever could reach
+# the instance, and it outlived setup, so no client could rely on it safely.
+#
+# 2.8 for POST /api/probe: read the certificate a host is serving right now,
+# with the verified revocation answer. The inventory could only probe what its
+# configuration named, and deployment-status only a managed domain, so a tool
+# that wanted CertMate to answer "what is being served at this host" had no way
+# to ask and reimplemented the probe — badly, in at least one case, with a
+# revocation status that was assumed rather than checked. A new endpoint is a
+# MINOR. A scoped key probes only what its scope covers.
+#
+# 2.9 for GET /api/inventory/health: what the name-level checks last found —
+# SPF, DMARC, MX, the blocklists and the HSTS header — plus a `domain_health`
+# section in the inventory config and scan responses. A new endpoint and new
+# response fields, so a MINOR. `unknown` is a status a caller must not read as
+# a pass: a blocklist that refused the query (every public resolver gets that
+# from Spamhaus) has said nothing about the address, and the tool these checks
+# came from reported exactly that case as "not listed".
+#
+# 2.10 for `security_headers` and `disclosure` on GET /api/inventory/health,
+# and `check_headers` in place of `check_hsts` in the `domain_health` config.
+# New response fields are a MINOR. The config key is read both ways on the way
+# in, so an instance configured before this does not silently start making a
+# request it had turned off; `check_hsts` is no longer written back, because
+# the switch now covers three checks over one request and a name that says
+# only one of them would be a lie about what turning it off stops.
+#
+# 2.11 for `weak_tls` on GET /api/inventory/health, and `check_weak_tls` in the
+# `domain_health` config. A new response field is a MINOR. It is the only check
+# that opens connections a host did not invite — two handshakes per name,
+# offering TLS 1.0 and 1.1 — so it is off by default and the field is absent
+# until an operator turns it on. `unknown` there means this build could not
+# make the offer, which is not the same as the host refusing it.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -162,7 +201,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.6'
+API_CONTRACT_VERSION = '2.11'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
