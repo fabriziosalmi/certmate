@@ -15,9 +15,13 @@ A log file outlives the request, is shipped wherever logs are shipped, and ends
 up in a support bundle. "Internal" was doing a great deal of work in that
 sentence. The redacted copy goes to both places now.
 
-These tests drive the real `CertificateManager` failure paths with a scripted
-certbot rather than asserting on the source, because the interesting question
-is what reaches a log handler, not which expression appears in the file.
+What these tests do, precisely, because the distinction matters: one pair
+emits through the module's own logger with the values the failure paths now
+pass, and asserts on the records a handler receives; another reads the two
+call sites from the AST and asserts which names they interpolate. Neither
+constructs a CertificateManager — the create path needs certbot, a DNS
+provider and a filesystem — so the second is what stops the first passing
+while the code quietly goes back to the raw blob.
 """
 import logging
 
@@ -51,56 +55,80 @@ def _log_of(caplog):
     return '\n'.join(record.getMessage() for record in caplog.records)
 
 
+def _logged_stderr_arguments():
+    """For each `logger.error` in certificates.py whose message mentions a
+    certbot failure, the names it interpolates.
+
+    Read from the AST rather than by matching the source text. An earlier
+    version of this file asserted the exact f-string, which meant a genuine
+    improvement — moving to `%r` and logging arguments, the convention every
+    other domain-carrying line here already follows — broke the test that was
+    supposed to protect the property. A test that pins the spelling instead of
+    the property will block the next correct change too.
+    """
+    import ast
+    import inspect
+
+    from modules.core import certificates as certs_module
+
+    tree = ast.parse(inspect.getsource(certs_module))
+    found = {}
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == 'error'
+                and node.args):
+            continue
+        first = node.args[0]
+        text = first.value if isinstance(first, ast.Constant) else ''
+        if not isinstance(text, str):
+            continue
+        if 'Certbot failed' in text:
+            key = 'create'
+        elif 'Certificate renewal failed' in text:
+            key = 'renew'
+        else:
+            continue
+        found[key] = {ast.unparse(a) for a in node.args[1:]} | {
+            ast.unparse(v) for v in getattr(first, 'values', [])}
+    return found
+
+
 @pytest.mark.parametrize('path', ['create', 'renew'])
-def test_neither_failure_path_writes_the_secret_to_the_log(caplog, path,
-                                                           monkeypatch, tmp_path):
-    """The point of the change, asserted where it matters: on the records a
-    log handler receives."""
+def test_neither_failure_path_writes_the_secret_to_the_log(caplog, path):
+    """The redacted text is what a log handler receives."""
     from modules.core import certificates as certs_module
 
     caplog.set_level(logging.DEBUG, logger=certs_module.logger.name)
-    # Emit through the module's own logger exactly as the failure paths do,
-    # with the value they now pass.
     safe = sanitize_certbot_stderr(LEAKY_STDERR)
     if path == 'create':
-        certs_module.logger.error(f"Certbot failed for example.com: {safe}")
+        certs_module.logger.error("Certbot failed for %r: %r", 'example.com', safe)
     else:
-        certs_module.logger.error(
-            f"Certificate renewal failed for example.com: {safe}")
+        certs_module.logger.error("Certificate renewal failed for %r: %r",
+                                  'example.com', safe)
 
     logged = _log_of(caplog)
     assert SECRET not in logged
-    assert 'example.com' in logged
+    expected = ('Certbot failed' if path == 'create' else 'Certificate renewal failed')
+    assert logged == f"{expected} for 'example.com': {safe!r}"
 
 
-def test_the_source_no_longer_hands_raw_stderr_to_the_logger():
-    """A blunt read of the two call sites, because the test above proves the
-    sanitiser works on a string and not that the code passes it. If either
-    line goes back to the raw blob, the check above would keep passing."""
-    import inspect
-
-    from modules.core import certificates as certs_module
-
-    source = inspect.getsource(certs_module)
-    for needle in ('logger.error(f"Certbot failed for {domain}: {result.stderr}")',
-                   'logger.error(f"Certificate renewal failed for {domain}: {error_msg}")'):
-        assert needle not in source, (
-            f'{needle!r} is back: the log is getting the unsanitised stderr, '
-            f'which certbot plugins echo credentials into'
-        )
-
-
-def test_both_paths_log_the_name_of_the_variable_that_was_cleaned():
-    """Pins the pairing rather than the absence: the logged value must be the
-    sanitised one, not merely not-the-raw-one."""
-    import inspect
-
-    from modules.core import certificates as certs_module
-
-    source = inspect.getsource(certs_module)
-    assert 'logger.error(f"Certbot failed for {domain}: {safe_stderr}")' in source
-    assert ('logger.error(f"Certificate renewal failed for {domain}: '
-            '{safe_error}")') in source
+@pytest.mark.parametrize('path,clean,raw', [
+    ('create', 'safe_stderr', 'result.stderr'),
+    ('renew', 'safe_error', 'error_msg'),
+])
+def test_each_failure_path_logs_the_sanitised_name_and_not_the_raw_one(path, clean, raw):
+    """The behaviour test above proves the sanitiser works on a string, not
+    that the code passes it. This reads what the call actually interpolates."""
+    logged = _logged_stderr_arguments()
+    assert path in logged, f'no certbot failure log line found for the {path} path'
+    assert clean in logged[path], (
+        f'the {path} path no longer logs {clean}; it logs {logged[path]}'
+    )
+    assert raw not in logged[path], (
+        f'{raw} is back in the {path} path log line: certbot plugins echo '
+        f'credentials into it'
+    )
 
 
 def test_the_sanitiser_is_called_before_the_log_line_in_both_paths():
@@ -111,12 +139,27 @@ def test_the_sanitiser_is_called_before_the_log_line_in_both_paths():
     from modules.core import certificates as certs_module
 
     source = inspect.getsource(certs_module)
-    for clean, log in (
-        ('safe_stderr = sanitize_certbot_stderr(result.stderr)',
-         'logger.error(f"Certbot failed for {domain}: {safe_stderr}")'),
+    for clean_call, log_marker in (
+        ('safe_stderr = sanitize_certbot_stderr(result.stderr)', 'Certbot failed for'),
         ('safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg',
-         'logger.error(f"Certificate renewal failed for {domain}: {safe_error}")'),
+         'Certificate renewal failed for'),
     ):
-        assert source.index(clean) < source.index(log), (
+        assert source.index(clean_call) < source.index(log_marker), (
             'the stderr is logged before it is sanitised'
         )
+
+
+def test_the_domain_cannot_forge_a_second_log_line(caplog):
+    """The convention this file now follows is `%r` with logging arguments.
+    repr escapes a newline to a literal backslash-n, so a domain carrying one
+    cannot open a line of its own."""
+    from modules.core import certificates as certs_module
+
+    caplog.set_level(logging.DEBUG, logger=certs_module.logger.name)
+    forged = 'evil.example\nERROR certmate: all certificates revoked'
+    certs_module.logger.error("Certbot failed for %r: %r", forged, 'boom')
+
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    assert '\n' not in message
+    assert '\\n' in message

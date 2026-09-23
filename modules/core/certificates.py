@@ -2877,7 +2877,12 @@ class CertificateManager:
                 # it wrote them down. Internal audit finding H3.
                 from .utils import sanitize_certbot_stderr
                 safe_stderr = sanitize_certbot_stderr(result.stderr)
-                logger.error(f"Certbot failed for {domain}: {safe_stderr}")
+                # %r, and as logging ARGUMENTS: repr escapes a newline to a
+                # literal \n so neither the domain nor certbot's output can
+                # forge a second log line, and a handler can still filter on
+                # the values. Same convention as every other log line here
+                # that carries a domain.
+                logger.error("Certbot failed for %r: %r", domain, safe_stderr)
                 raise RuntimeError(
                     f"Certificate creation failed: {safe_stderr}"
                     + self._caa_explanation(ca_provider, all_domains, challenge_type))
@@ -3501,7 +3506,7 @@ class CertificateManager:
                 error_msg = result.stderr or "Certificate not found"
                 from .utils import sanitize_certbot_stderr
                 safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
-                logger.error(f"Certificate renewal failed for {domain}: {safe_error}")
+                logger.error("Certificate renewal failed for %r: %r", domain, safe_error)
                 caa_domains = [domain] + list(metadata.get('san_domains') or [])
                 raise RuntimeError(
                     f"Renewal failed: {safe_error}"
