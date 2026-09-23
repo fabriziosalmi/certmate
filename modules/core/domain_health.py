@@ -6,7 +6,7 @@ landed on a blocklist. These are the checks that were living in a separate
 tool, brought in beside the certificate and the registration, because they are
 about the same thing: the name, and whether it still works.
 
-Five checks, each of which can say *it does not know*:
+Seven checks, each of which can say *it does not know*:
 
 * **SPF** — a ``v=spf1`` TXT record on the domain. Absent is a finding; more
   than one is a misconfiguration every receiver treats as permerror.
@@ -25,6 +25,18 @@ Five checks, each of which can say *it does not know*:
   list that cannot answer that is not asked about anything else.
 * **HSTS** — the ``Strict-Transport-Security`` header the host serves. Read
   over the connection the probe already knows how to make safely.
+* **Security headers** — whether the browser is told to refuse framing, MIME
+  sniffing and unsanctioned script. A missing header is a warning; one that
+  looks like protection and is not enforced is a finding, because it answers
+  "are we covered?" with a yes.
+* **Disclosure** — whether the response names the software and *version*
+  answering it. ``nginx/1.24.0`` tells an attacker which CVEs to try;
+  ``cloudflare`` does not, which is why this is a version pattern and not a
+  presence check.
+
+The last three share one request. An eighth check, whether the host still
+accepts TLS 1.0 or 1.1, lives in ``weak_tls.py``: it is the only one that
+opens a connection a host did not invite, so it is opt-in and kept separate.
 
 Everything is offline-testable: each check takes its resolver or fetcher, so
 the parsing is exercised against real answers rather than live DNS.
@@ -112,6 +124,14 @@ RECHECK_AFTER_HOURS = 20
 MAX_NAMES_PER_RUN = 200
 
 
+# `all` is a mechanism, and a mechanism is a whole token. Matching it as a bare
+# word made `v=spf1 include:all.example.net` look like a record that ends in
+# `all` — a dot is a word boundary — so a record with no all-mechanism at all
+# reported `ok`. The qualifier is optional and may be +, -, ~ or ?.
+_ALL_MECHANISM = re.compile(r'(?:^|\s)[-+~?]?all(?:\s|$)', re.IGNORECASE)
+_PLUS_ALL = re.compile(r'(?:^|\s)\+?all(?:\s|$)', re.IGNORECASE)
+
+
 def _result(status, detail, **extra):
     return dict({'status': status, 'detail': detail}, **extra)
 
@@ -132,10 +152,10 @@ def check_spf(domain, txt_records):
                        f'{len(spf)} v=spf1 records; receivers treat more than one as permerror',
                        record=spf[0])
     record = spf[0]
-    if re.search(r'\ball\b', record) is None:
+    if _ALL_MECHANISM.search(record) is None:
         return _result(WARNING, 'the record has no "all" mechanism, so it says nothing '
                                 'about senders it does not list', record=record)
-    if re.search(r'\+all\b', record):
+    if _PLUS_ALL.search(record):
         return _result(FAILING, '"+all" authorises every sender, which is the same as '
                                 'publishing no SPF at all', record=record)
     return _result(OK, 'published', record=record)
@@ -181,6 +201,13 @@ def rbl_query_name(ip):
     return '.'.join(reversed(address.packed.hex()))
 
 
+def _is_ipv6(address):
+    try:
+        return ipaddress.ip_address(address).version == 6
+    except ValueError:
+        return False
+
+
 def classify_rbl_answer(codes):
     """What a DNSBL's answer means.
 
@@ -218,7 +245,10 @@ def list_is_answering(rbl, lookup):
     if listed is None or classify_rbl_answer(listed) not in ('listed', 'policy'):
         return False
     clean = lookup(f'{RBL_SELFTEST_UNLISTED}.{rbl}')
-    return clean is None or classify_rbl_answer(clean) != 'listed'
+    # A negative control that did not come back proves nothing either: the
+    # point of it is to catch a list (or resolver) that answers everything,
+    # and an unanswered query cannot rule that out.
+    return clean is not None and classify_rbl_answer(clean) != 'listed'
 
 
 def usable_lists(lookup, lists=DEFAULT_RBLS, cache=None):
@@ -261,11 +291,26 @@ def check_blocklists(domain, addresses, lookup, cache=None):
     unanswered = [f'{rbl}: did not answer its own test point, so its answers '
                   f'about this domain would mean nothing' for rbl in unusable]
     listings = []
+
+    # The test points are 127.0.0.2 and 127.0.0.1, which say whether a list
+    # answers about **IPv4**. They say nothing about IPv6, and most DNSBLs
+    # either do not list IPv6 at all or use a separate zone for it — so an
+    # empty answer about an AAAA address is indistinguishable from "this list
+    # does not serve IPv6", which is the false-clean this module exists to
+    # prevent, one level below the refusal codes. Until there is a self-test
+    # that proves otherwise, an IPv6 address is not asked about.
+    ipv6 = [a for a in addresses[:MAX_ADDRESSES]
+            if _is_ipv6(a)]
+    for address in ipv6:
+        unanswered.append(f'{address}: IPv6, and the lists are only self-tested '
+                          f'for IPv4, so an empty answer would prove nothing')
     # Only answers that carry information count. A refusal is not a check that
     # came back clean, and counting it as one is the whole defect this module
     # was written to avoid.
     answered = 0
     for address in addresses[:MAX_ADDRESSES]:
+        if _is_ipv6(address):
+            continue
         try:
             reversed_name = rbl_query_name(address)
         except ValueError:
@@ -493,15 +538,17 @@ def dns_lookups(timeout=DEFAULT_TIMEOUT_SECONDS):
         return [str(r.exchange).rstrip('.') for r in answers]
 
     def addresses(name):
-        found = []
+        found, failed = [], 0
         for rdtype in ('A', 'AAAA'):
             answers = query(name, rdtype)
             if answers is None:
-                if not found:
-                    return None
+                # Resolvers time out on AAAA alone often enough that one
+                # failure must not decide the answer; ask both, and only
+                # report "could not look" when neither came back.
+                failed += 1
                 continue
             found += [str(r) for r in answers]
-        return found
+        return None if failed == 2 else found
 
     def rbl(name):
         answers = query(name, 'A')

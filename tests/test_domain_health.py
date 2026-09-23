@@ -1536,3 +1536,119 @@ def test_a_host_redirecting_to_itself_is_not_followed(fake_https):
     assert served['final_host'] == 'example.com'
     assert served['stopped_at_redirect'] is True
     assert fake_https['guarded'] == ['example.com']
+
+
+# --------------------------------------------------------------------------- #
+# Four ways a check could still have said "clean"
+# --------------------------------------------------------------------------- #
+#
+# All four were found by the certmate-website session reading the module in
+# order to describe it. Each is the same shape as the defect the module was
+# written to prevent, one level further down.
+
+@pytest.mark.parametrize('record,expected', [
+    # `all` is a mechanism, and a mechanism is a whole token. Matched as a bare
+    # word, a dot counts as a boundary, so this record — which has no
+    # all-mechanism at all — reported `ok`.
+    ('v=spf1 include:all.example.net', dh.WARNING),
+    ('v=spf1 include:small.example.com', dh.WARNING),
+    ('v=spf1 a:mail.allied.net', dh.WARNING),
+    # ...while a real all-mechanism, with or without a qualifier, still counts.
+    ('v=spf1 a:mail.allied.net -all', dh.OK),
+    ('v=spf1 include:_spf.example.net ~all', dh.OK),
+    ('v=spf1 ?all', dh.OK),
+    # A bare `all` is `+all` by RFC 7208, and authorises everyone.
+    ('v=spf1 all', dh.FAILING),
+    ('v=spf1 +all', dh.FAILING),
+])
+def test_all_is_matched_as_a_mechanism_not_as_a_word(record, expected):
+    assert dh.check_spf('example.com', [record])['status'] == expected
+
+
+def _answering_lists(extra=None):
+    """A resolver where every list answers both its test points correctly."""
+    extra = extra or {}
+
+    def lookup(name):
+        if name in extra:
+            return extra[name]
+        if name.startswith(dh.RBL_SELFTEST_LISTED + '.'):
+            return ['127.0.0.2']
+        if name.startswith(dh.RBL_SELFTEST_UNLISTED + '.'):
+            return []
+        return []
+
+    return lookup
+
+
+def test_an_ipv6_only_domain_is_unknown_not_clean():
+    """The test points are 127.0.0.2 and 127.0.0.1: they prove a list answers
+    about IPv4 and say nothing about IPv6. Most DNSBLs do not list IPv6 at
+    all, so an empty answer about an AAAA address is indistinguishable from
+    "this list does not serve IPv6" — the same false-clean as a refusal read
+    as "not listed"."""
+    result = dh.check_blocklists('example.com', ['2001:db8::1'], _answering_lists())
+    assert result['status'] == dh.UNKNOWN
+    assert 'IPv6' in result['unanswered'][0]
+
+
+def test_an_ipv6_address_is_never_queried_against_an_ipv4_self_tested_list():
+    asked = []
+
+    def lookup(name):
+        asked.append(name)
+        return _answering_lists()(name)
+
+    dh.check_blocklists('example.com', ['2001:db8::1'], lookup)
+    assert not [n for n in asked if n.startswith('1.0.0.0.0')]
+
+
+def test_a_dual_stack_domain_reports_on_the_address_it_could_check():
+    result = dh.check_blocklists('example.com', ['192.0.2.13', '2001:db8::1'],
+                                 _answering_lists())
+    assert result['status'] == dh.WARNING
+    assert any('IPv6' in u for u in result['unanswered'])
+
+
+def test_an_ipv4_only_domain_is_unaffected():
+    assert dh.check_blocklists('example.com', ['192.0.2.13'],
+                               _answering_lists())['status'] == dh.OK
+
+
+def test_a_negative_control_that_did_not_answer_does_not_pass_the_list():
+    """The negative control exists to catch a list, or a resolver, that
+    answers everything. A query that never came back cannot rule that out, so
+    it is not evidence in the list's favour."""
+    def lookup(name):
+        if name.startswith(dh.RBL_SELFTEST_LISTED + '.'):
+            return ['127.0.0.2']
+        if name.startswith(dh.RBL_SELFTEST_UNLISTED + '.'):
+            return None          # the control lookup failed
+        return []
+
+    assert dh.list_is_answering('zen.spamhaus.org', lookup) is False
+    assert dh.check_blocklists('example.com', ['192.0.2.13'],
+                               lookup)['status'] == dh.UNKNOWN
+
+
+def test_an_aaaa_failure_does_not_discard_a_good_a_answer(fake_dns):
+    _, _, addresses, _ = dh.dns_lookups()
+    fake_dns['zone'][('example.com', 'A')] = [_Rdata('192.0.2.13')]
+    fake_dns['zone'][('example.com', 'AAAA')] = fake_dns['dns'].exception.Timeout()
+    assert addresses('example.com') == ['192.0.2.13']
+
+
+def test_an_a_failure_does_not_stop_aaaa_being_tried(fake_dns):
+    """An A lookup that timed out used to end the whole thing, so a name that
+    would have answered on AAAA reported "could not look"."""
+    _, _, addresses, _ = dh.dns_lookups()
+    fake_dns['zone'][('example.com', 'A')] = fake_dns['dns'].exception.Timeout()
+    fake_dns['zone'][('example.com', 'AAAA')] = [_Rdata('2001:db8::1')]
+    assert addresses('example.com') == ['2001:db8::1']
+
+
+def test_only_both_families_failing_is_could_not_look(fake_dns):
+    _, _, addresses, _ = dh.dns_lookups()
+    fake_dns['zone'][('example.com', 'A')] = fake_dns['dns'].exception.Timeout()
+    fake_dns['zone'][('example.com', 'AAAA')] = fake_dns['dns'].exception.Timeout()
+    assert addresses('example.com') is None

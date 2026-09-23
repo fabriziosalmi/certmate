@@ -300,7 +300,7 @@ guess.
 **Scan now**. Registries rate-limit, and some answer a burst with a temporary
 ban, so a sweep:
 
-- asks at most 100 registries, one second apart;
+- makes at most 100 lookups per sweep, one second apart;
 - asks a domain again only when its answer is due: daily within 60 days of
   expiry, weekly otherwise, and after 6 hours when the last lookup failed.
 
@@ -325,7 +325,8 @@ server's address landed on a blocklist, or the HSTS header quietly went away
 with a reverse-proxy change. None of that is visible from a certificate, and
 all of it lands on whoever answers for the domain.
 
-Five checks, run daily against every name CertMate already tracks.
+Seven checks, run daily against every name CertMate already tracks, plus an
+eighth that is opt-in because it opens connections a host did not invite.
 
 | Check | What it asks | Scope |
 |---|---|---|
@@ -381,9 +382,18 @@ wildcarding resolver — and is dropped for the opposite reason.
 
 What you see, then, is one of: *listed*, *not listed on N lists*, or *nobody
 answered*. If no list is usable the check is `unknown`. If some are and some
-are not, the result stands and still names the ones that did not answer. The
-fix is almost always to point CertMate at a resolver of your own rather than a
-public one.
+are not, the answer is downgraded to a **warning** — "not listed where it
+could be checked" — and names the ones that did not answer, because a partial
+sweep is not the clean bill of health a full one would be. The fix is almost
+always to point CertMate at a resolver of your own rather than a public one.
+
+One more thing the test points cannot tell you: they are `127.0.0.2` and
+`127.0.0.1`, so they prove a list answers about **IPv4** and say nothing about
+IPv6. Most DNSBLs either do not list IPv6 or use a separate zone for it, which
+would make an empty answer about an AAAA address indistinguishable from "this
+list does not serve IPv6". So IPv6 addresses are not asked about at all: they
+are named in `unanswered`, and a domain that resolves only to IPv6 comes back
+`unknown` rather than clean.
 
 The same rule holds elsewhere: a TXT lookup that timed out is `unknown`, not
 "no SPF record"; a host that could not be reached over HTTPS is `unknown`, not
@@ -410,15 +420,16 @@ a check.
 ```
 
 **When it runs.** Daily at 06:30, between the registration check and the expiry
-warnings, and on **Scan now**. A name is asked again only once a day, so a
+warnings, and on **Scan now**. A name is asked again only once its last answer
+is 20 hours old, so a
 second scan the same morning costs nothing; at most four addresses per domain
 are checked against each list, because a name behind a CDN can answer with a
 dozen and each one costs a query per list.
 
 ### The response headers
 
-Three of the five checks read the same response, so a site is asked once, not
-three times.
+Three of them read the same response, so a site is asked once, not three
+times.
 
 `security_headers` is about what a browser is told to refuse:
 
