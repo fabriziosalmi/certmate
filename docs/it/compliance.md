@@ -1,6 +1,6 @@
 # Conformità e traccia di audit
 
-<!-- CERTMATE-TRANSLATED-FROM 4aab2d31eea8b79a -->
+<!-- CERTMATE-TRANSLATED-FROM 290fc7c4f911c504 -->
 
 Questa pagina mette in relazione la traccia di audit di CertMate con i regimi che gli operatori chiedono più spesso — l'AI Act dell'UE, NIS2 e ISO/IEC 42001 — quando lasciano che un agente IA/MCP gestisca i certificati su un calendario.
 
@@ -43,6 +43,7 @@ Questa pagina mette in relazione la traccia di audit di CertMate con i regimi ch
 - **Autenticità, non completezza.** Le scritture di audit sono best-effort e non bloccano mai un'operazione sui certificati; la chain prova che le voci registrate sono autentiche e ordinate, e un `seq` mancante all'interno prova un'eliminazione, ma una scrittura che ha fallito prima di essere registrata non lascia alcuna voce da verificare.
 - **Il troncamento in coda viene rilevato fino all'ultimo checkpoint firmato.** La rimozione di voci dalla **fine** della chain lascia una chain più corta ma internamente coerente. `GET /api/audit/verify` ora confronta la chain con il checkpoint firmato più recente che verifica con la chiave dell'istanza, quindi qualsiasi troncamento, riavvolgimento o riscrittura **fino a** quel checkpoint compreso fa fallire la verifica — i checkpoint, prima solo scritti, ora vengono riletti. Restano due lacune: (a) le voci scritte **dopo** l'ultimo checkpoint possono ancora essere eliminate senza che ce ne si accorga finché il checkpoint successivo non le sigilla, e (b) un operatore che detiene la chiave di firma può firmare un nuovo checkpoint su una chain riscritta. Conservare export firmati successivi, oppure attendere l'ancoraggio esterno opzionale, se si ha bisogno di chiuderle.
 - **L'header di sessione dell'agente è una dichiarazione del client.** Viene registrato per correlazione ma è fornito dal client; l'identità attendibile è la chiave API autenticata.
+- **Le azioni di primo avvio sono attribuite a `setup_user`.** Finché il setup non è completo un'istanza serve ogni richiesta come admin, quindi non c'è un'identità reale da registrare e la catena lo dice apertamente. Una voce come `create` / `user` / `setup_user` significa che quell'utente è stato creato mentre chiunque riuscisse a raggiungere l'istanza era admin. Su una versione attuale solo il primo admin può nascere così — un secondo utente o una chiave API vengono rifiutati — quindi ci si aspetta esattamente una voce di questo tipo. Più di una significa che l'istanza è stata avviata con una versione precedente, e ogni utente oltre il primo va confermato o rimosso. Le chiavi API coniate in quella finestra sono segnalate nella pagina Chiavi API e aspettano l'operatore; gli utenti non lo sono, e per loro la risposta sta nella catena.
 - **Limite storico.** La chain inizia quando la funzionalità viene abilitata per la prima volta; la cronologia `.log` precedente non fa parte della chain verificabile.
 - **Una chain potata prova meno, e lo dice.** Se hai eseguito `audit_prune` (sotto), la verifica copre le voci dall'anchor in avanti. Il prefisso archiviato è attestato dall'anchor firmato e dal bundle esportato che conservi fuori dalla macchina — non dal file della chain. `verify` riporta `anchored` e il seq dell'anchor proprio per questo; considera un semplice "integra" riferito a un'istanza potata come un'esagerazione.
 
@@ -67,7 +68,9 @@ python -m modules.core.audit_prune --bundle archive-0-1199.json --data-dir data/
 
 Il comando senza `--yes` è una prova a secco. Rifiuta, e non rimuove nulla, se il bundle non verifica, non è firmato, è vuoto, non è un prefisso di *questa* chain o non coincide con la chain a un qualsiasi seq, oppure se la potatura lascerebbe la chain senza voci dopo il prefisso archiviato — non cancelli mai record la cui unica copia rimasta non è verificata, e non ti ritrovi mai con una chain in cui non resta nulla da verificare.
 
-Punta `--key-dir` alla chiave dell'istanza. Il valore predefinito è `data` (relativo alla directory da cui esegui il comando) e deve contenere la `.audit_signing_key` dell'istanza, a meno che `AUDIT_SIGNING_KEY_FILE` non sia impostata come la imposta l'istanza. Eseguilo dove si trova la chiave dell'istanza.
+Rifiuta anche se `--key-dir` non contiene alcuna chiave di firma, o ne contiene una che appartiene a un'istanza diversa da quella che ha esportato il bundle. Entrambi i controlli avvengono **prima** che venga rimosso qualcosa: un anchor firmato con la chiave sbagliata è un anchor che la verifica dell'istanza stessa rifiuta, e scoprirlo dopo che i record non ci sono più è troppo tardi per servire a qualcosa.
+
+Punta `--key-dir` alla chiave dell'istanza. Il valore predefinito è `data` (relativo alla directory da cui esegui il comando) e deve contenere la `.audit_signing_key` dell'istanza, a meno che `AUDIT_SIGNING_KEY_FILE` non sia impostata come la imposta l'istanza. Lo strumento non crea mai una chiave qui: una chiave nuova sarebbe una nuova identità d'istanza, non quella di questa istanza.
 
 Ciò che fa poi è la parte che conta per la conformità:
 

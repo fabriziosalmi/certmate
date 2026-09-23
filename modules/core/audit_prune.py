@@ -291,10 +291,52 @@ def main(argv=None) -> int:
         print("\nDry run. Re-run with --yes to prune, with CertMate stopped.")
         return 0
 
-    signer = audit_signing.AuditSigner(Path(args.key_dir))
+    # `create=False` is what makes the next line a check rather than a
+    # formality. Without it the constructor mints and persists a key when it
+    # finds none, so `available` was True however wrong `--key-dir` was, and
+    # the anchor got signed by a key this instance had never used — after the
+    # records it replaces were gone. The instance's own verify would then
+    # refuse the chain, which is the right answer arriving too late to help.
+    signer = audit_signing.AuditSigner(Path(args.key_dir), create=False)
     if not signer.available:
-        print("FAIL: no audit signing key; the anchor could not be signed",
-              file=sys.stderr)
+        print(f"FAIL: no audit signing key under {args.key_dir}; nothing was "
+              f"pruned. Point --key-dir at the directory holding "
+              f"{audit_signing.SIGNING_KEY_FILENAME}, or set "
+              f"{audit_signing.KEY_FILE_ENV} to the off-box key this instance "
+              f"signs with.", file=sys.stderr)
+        return 2
+
+    # The key loaded must be the one that signed the bundle. Both are answers
+    # to "which instance is this", and pruning is the one operation where
+    # getting it wrong destroys the evidence that would have shown it.
+    #
+    # The fingerprint comes from `verify_bundle`, which derives it from the
+    # public key it just checked the signature against. The manifest also
+    # carries one, under `instance_fingerprint`, and verify_bundle refuses a
+    # bundle where the two disagree — so today they are the same value and
+    # either would do. The derived one is used because it stays correct
+    # without depending on that check being there, and because reaching for
+    # the manifest invites reaching for the wrong key name: the first version
+    # of this read `manifest['fingerprint']`, which does not exist.
+    #
+    # Re-verified rather than threaded through the plan, because the plan is
+    # what gets signed into the anchor and this is not something the anchor
+    # should start carrying.
+    exported_by = audit_verify.verify_bundle(bundle)["fingerprint"]
+    if not exported_by:
+        # plan_prune already refused an unsigned bundle, so reaching here means
+        # a signed bundle that attributes itself to nobody — an inconsistency
+        # upstream rather than a state a caller can produce today. Fail closed:
+        # an unattributable archive is not something to delete records for.
+        print("FAIL: the bundle verifies but names no exporting instance; "
+              "nothing was pruned.", file=sys.stderr)
+        return 2
+    if exported_by != signer.fingerprint():
+        print(f"FAIL: the bundle was exported by instance {exported_by} and "
+              f"the key under {args.key_dir} belongs to {signer.fingerprint()}; "
+              f"nothing was pruned. Pruning with the wrong key writes an anchor "
+              f"this instance cannot verify, after the records it replaces are "
+              f"already gone.", file=sys.stderr)
         return 2
     try:
         execute_prune(chain_path, plan, signer)

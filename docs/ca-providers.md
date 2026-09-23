@@ -196,9 +196,12 @@ Set a default CA for all new certificates. Override it per-certificate during cr
 If the chosen CA has no saved configuration (or the requested CA account does
 not exist), most providers fall back to Let's Encrypt (to Let's Encrypt staging
 when the request was a staging one) and log a warning. Sectigo fails closed
-instead: an unknown account or missing HTTPS directory URL cannot silently
-issue from another CA. Check the `ca_provider` in the response or the
-certificate's metadata to confirm which CA issued it.
+instead: an unknown account or a missing https directory URL cannot silently
+issue from another CA. The **CA** column on the Certificates page names the
+authority each certificate was issued with, so a fallback is visible without
+going through a log; the same value is `ca_provider` in the API response and in
+the certificate's metadata. Certificates issued before CertMate recorded the CA
+show `—` there rather than a guess.
 
 ### Via API
 

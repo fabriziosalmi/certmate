@@ -114,6 +114,17 @@ operate certificates on a schedule.
   if you need to close those.
 - **The agent-session header is a claim.** It is recorded for correlation but is
   client-supplied; the trustworthy identity is the authenticated API key.
+- **Bootstrap actions are attributed to `setup_user`.** Until setup is complete
+  an instance serves every request as admin, so there is no real identity to
+  record and the chain says so plainly. An entry such as `create` / `user` /
+  `setup_user` means that user was created while anyone who could reach the
+  instance was an admin. On a current version only the first admin can be
+  created that way — a second user or an API key is refused — so exactly one
+  such entry is expected. More than one means the instance was bootstrapped
+  under an older version, and every user beyond the first is worth confirming
+  or removing. API keys minted in that window are badged in the API Keys page
+  and wait for an operator; users are not badged, and the chain is where the
+  answer for them lives.
 - **History boundary.** The chain starts when the feature is first enabled;
   earlier `.log` history is not part of the verifiable chain.
 - **A pruned chain proves less, and says so.** If you have run
@@ -156,10 +167,17 @@ chain with no entries after the archived prefix — you never delete records
 whose only remaining copy is unverified, and you never end up with a chain that
 has nothing left to verify.
 
+It also refuses if `--key-dir` holds no signing key, or holds one belonging to
+a different instance than the one that exported the bundle. Both are checked
+**before** anything is removed: an anchor signed by the wrong key is one the
+instance's own `verify` rejects, and discovering that after the records are
+gone is too late to be useful.
+
 Point `--key-dir` at the instance's key. It defaults to `data` (relative to the
 directory you run the command from) and must hold the instance's
 `.audit_signing_key`, unless `AUDIT_SIGNING_KEY_FILE` is set the same way the
-instance sets it. Run it where the instance's key is.
+instance sets it. The tool never creates a key here: a new key would be a new
+instance identity, not this instance's.
 
 What it then does is the part that matters for compliance:
 

@@ -177,7 +177,7 @@ Hooks sind konzeptbedingt beliebige Code-Ausführung — das ist das Feature. Um
 | `\r` / `\n` | Zeilenumbrüche (damit `sh -c` sie nicht als `;` interpretiert) |
 | `> /` (Umleitung auf absoluten Pfad) | Verhindert das Überschreiben von Systemdateien |
 | `<<` | Here-Doc |
-| `eval`, `source`, `. /` | Shell-Builtins, die beliebigen Code laden |
+| `eval`, `source`, `.` (die Source-Kurzform, mit beliebigem Argument) | Shell-Builtins, die beliebigen Code laden |
 
 Wenn Sie eines dieser Muster benötigen, legen Sie die Logik in eine Skriptdatei innerhalb des Containers und rufen Sie das Skript direkt auf:
 

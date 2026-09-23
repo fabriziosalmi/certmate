@@ -21,6 +21,19 @@ from modules.core.cert_inventory import CertInventory
 
 pytestmark = [pytest.mark.unit]
 
+# A globally routable address, used wherever a test needs one a blocklist would
+# actually answer about. It cannot be an RFC 5737 documentation address
+# (192.0.2.0/24 and friends): those are not global, which is exactly the
+# property `not_covered_reason` tests, so every blocklist test here used to
+# exercise a path production will now never take. Nothing contacts it.
+PUBLIC = '8.8.8.8'
+PUBLIC_REVERSED = '8.8.8.8'
+# Likewise for IPv6: 2001:db8::/32 is the documentation range and is NOT
+# global, so it is excluded for being non-public before the IPv6 rule is ever
+# reached. A test about the IPv6 rule needs an address that is genuinely
+# routable.
+PUBLIC_V6 = '2606:4700::1'
+
 
 # --------------------------------------------------------------------------- #
 # SPF
@@ -114,6 +127,8 @@ def test_mx_lookup_failure_is_unknown():
 # --------------------------------------------------------------------------- #
 
 def test_reversed_query_name_for_ipv4():
+    # A literal, not PUBLIC: 8.8.8.8 reverses to itself, which would let a
+    # broken implementation pass.
     assert dh.rbl_query_name('192.0.2.13') == '13.2.0.192'
 
 
@@ -181,7 +196,7 @@ def _real_addresses(lookup):
 def test_every_list_refusing_is_unknown_not_clean():
     """The defect at the summary level: four refusals is not 'not listed'."""
     lookup = _lookup({}, default=['127.255.255.254'], selftest=False)
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.UNKNOWN
     assert 'not listed' not in result['detail']
     assert len(result['unanswered']) == len(dh.DEFAULT_RBLS)
@@ -192,45 +207,45 @@ def test_every_lookup_failing_is_unknown_not_clean():
     def failing(name):
         return None
 
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], failing)
+    result = dh.check_blocklists('example.com', [PUBLIC], failing)
     assert result['status'] == dh.UNKNOWN
 
 
 def test_not_listed_everywhere_is_ok():
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], _lookup({}))
+    result = dh.check_blocklists('example.com', [PUBLIC], _lookup({}))
     assert result['status'] == dh.OK
     assert result['detail'] == f'not listed on {len(dh.DEFAULT_RBLS)} blocklists'
 
 
 def test_a_listing_is_reported_with_the_list_that_holds_it():
-    lookup = _lookup({'13.2.0.192.zen.spamhaus.org': ['127.0.0.2']})
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    lookup = _lookup({f'{PUBLIC_REVERSED}.zen.spamhaus.org': ['127.0.0.2']})
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.FAILING
     assert result['detail'] == 'listed on zen.spamhaus.org'
-    assert result['listings'] == [{'address': '192.0.2.13',
+    assert result['listings'] == [{'address': PUBLIC,
                                    'list': 'zen.spamhaus.org',
                                    'codes': ['127.0.0.2']}]
 
 
 def test_a_pbl_only_answer_is_not_a_reputation_finding():
     """127.0.0.10/11 describes the address range, not this host's behaviour."""
-    lookup = _lookup({'13.2.0.192.zen.spamhaus.org': ['127.0.0.10']})
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    lookup = _lookup({f'{PUBLIC_REVERSED}.zen.spamhaus.org': ['127.0.0.10']})
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.OK
 
 
 def test_some_lists_refusing_keeps_the_answer_but_says_so():
-    lookup = _lookup({'13.2.0.192.zen.spamhaus.org': ['127.255.255.254']})
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    lookup = _lookup({f'{PUBLIC_REVERSED}.zen.spamhaus.org': ['127.255.255.254']})
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.WARNING
     assert len(result['unanswered']) == 1
     assert 'unanswered' in result['detail']
 
 
 def test_a_listing_still_wins_over_a_refusal_elsewhere():
-    lookup = _lookup({'13.2.0.192.zen.spamhaus.org': ['127.0.0.2'],
-                      '13.2.0.192.bl.spamcop.net': ['127.255.255.254']})
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    lookup = _lookup({f'{PUBLIC_REVERSED}.zen.spamhaus.org': ['127.0.0.2'],
+                      f'{PUBLIC_REVERSED}.bl.spamcop.net': ['127.255.255.254']})
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.FAILING
 
 
@@ -281,7 +296,7 @@ def test_a_resolver_that_answers_nxdomain_for_every_list_reports_unknown():
     """The whole point: silence from a list that is not answering us is not
     evidence that a domain is clean."""
     lookup = _lookup({}, selftest=False)
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.UNKNOWN
     assert len(result['unanswered']) == len(dh.DEFAULT_RBLS)
     assert 'test point' in result['unanswered'][0]
@@ -289,7 +304,7 @@ def test_a_resolver_that_answers_nxdomain_for_every_list_reports_unknown():
 
 def test_an_unusable_list_is_never_queried_about_a_real_address():
     lookup = _lookup({}, selftest=False)
-    dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert _real_addresses(lookup) == []
 
 
@@ -303,7 +318,7 @@ def test_a_list_that_passes_its_test_point_then_times_out_is_unanswered():
             return []
         return None
 
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.UNKNOWN
     assert all('the lookup failed' in u for u in result['unanswered'])
 
@@ -315,7 +330,7 @@ def test_one_broken_list_does_not_discard_the_others():
         if name.startswith(dh.RBL_SELFTEST_LISTED + '.'):
             return ['127.0.0.2']
         return []
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], lookup)
+    result = dh.check_blocklists('example.com', [PUBLIC], lookup)
     assert result['status'] == dh.WARNING
     assert result['unanswered'] == [
         'bl.spamcop.net: did not answer its own test point, so its answers '
@@ -326,7 +341,7 @@ def test_the_self_test_is_asked_once_per_sweep_not_once_per_name():
     lookup = _lookup({})
     cache = {}
     for name in ('a.example', 'b.example', 'c.example'):
-        dh.check_blocklists(name, ['192.0.2.13'], lookup, cache=cache)
+        dh.check_blocklists(name, [PUBLIC], lookup, cache=cache)
     selftests = [n for n in lookup.asked
                  if n.startswith((dh.RBL_SELFTEST_LISTED + '.',
                                   dh.RBL_SELFTEST_UNLISTED + '.'))]
@@ -345,7 +360,7 @@ def test_the_sweep_shares_one_self_test_across_every_name(tmp_path):
     manager = _manager(tmp_path, {
         'domain_health': {'enabled': True, 'include_inventory': False},
         'domains': {'one.com': {}, 'two.com': {}, 'three.com': {}},
-    }, lookups=(lambda n: [], lambda n: [], lambda n: ['192.0.2.13'], rbl))
+    }, lookups=(lambda n: [], lambda n: [], lambda n: [PUBLIC], rbl))
     manager.run_check()
     selftests = [n for n in asked
                  if n.startswith((dh.RBL_SELFTEST_LISTED + '.',
@@ -365,14 +380,14 @@ def test_an_address_lookup_that_failed_is_unknown():
 def test_only_the_first_few_addresses_are_queried():
     """A CDN name answers with many addresses; each costs a query per list."""
     lookup = _lookup({})
-    addresses = [f'192.0.2.{i}' for i in range(1, 12)]
+    addresses = [f'8.8.8.{i}' for i in range(1, 12)]
     dh.check_blocklists('example.com', addresses, lookup)
     assert len(_real_addresses(lookup)) == dh.MAX_ADDRESSES * len(dh.DEFAULT_RBLS)
 
 
 def test_an_unparseable_address_is_skipped_not_fatal():
     lookup = _lookup({})
-    result = dh.check_blocklists('example.com', ['not-an-ip', '192.0.2.13'], lookup)
+    result = dh.check_blocklists('example.com', ['not-an-ip', PUBLIC], lookup)
     assert result['status'] == dh.OK
     assert len(_real_addresses(lookup)) == len(dh.DEFAULT_RBLS)
 
@@ -1031,17 +1046,17 @@ def test_a_lookup_that_could_not_be_made_is_none(fake_dns):
 
 def test_a_dnsbl_answer_comes_back_as_its_codes(fake_dns):
     _, _, _, rbl = dh.dns_lookups()
-    fake_dns['zone'][('13.2.0.192.zen.spamhaus.org', 'A')] = [
+    fake_dns['zone'][(f'{PUBLIC_REVERSED}.zen.spamhaus.org', 'A')] = [
         _Rdata('127.0.0.2'), _Rdata('127.0.0.4')]
-    assert rbl('13.2.0.192.zen.spamhaus.org') == ['127.0.0.2', '127.0.0.4']
+    assert rbl(f'{PUBLIC_REVERSED}.zen.spamhaus.org') == ['127.0.0.2', '127.0.0.4']
 
 
 def test_a_dnsbl_with_nothing_on_this_address_answers_empty(fake_dns):
     """An empty answer is 'not listed'. Only a failure is None."""
     _, _, _, rbl = dh.dns_lookups()
-    fake_dns['zone'][('13.2.0.192.zen.spamhaus.org', 'A')] = (
+    fake_dns['zone'][(f'{PUBLIC_REVERSED}.zen.spamhaus.org', 'A')] = (
         fake_dns['dns'].resolver.NXDOMAIN())
-    assert rbl('13.2.0.192.zen.spamhaus.org') == []
+    assert rbl(f'{PUBLIC_REVERSED}.zen.spamhaus.org') == []
 
 
 def test_txt_strings_are_joined_the_way_a_long_record_arrives(fake_dns):
@@ -1061,18 +1076,18 @@ def test_mx_exchanges_lose_their_trailing_dot(fake_dns):
 
 def test_addresses_come_from_both_families(fake_dns):
     _, _, addresses, _ = dh.dns_lookups()
-    fake_dns['zone'][('example.com', 'A')] = [_Rdata('192.0.2.13')]
+    fake_dns['zone'][('example.com', 'A')] = [_Rdata(PUBLIC)]
     fake_dns['zone'][('example.com', 'AAAA')] = [_Rdata('2001:db8::1')]
-    assert addresses('example.com') == ['192.0.2.13', '2001:db8::1']
+    assert addresses('example.com') == [PUBLIC, '2001:db8::1']
 
 
 def test_an_ipv6_failure_does_not_discard_the_ipv4_answers(fake_dns):
     """Plenty of resolvers time out on AAAA alone. Throwing away the A records
     would turn a working name into 'could not check'."""
     _, _, addresses, _ = dh.dns_lookups()
-    fake_dns['zone'][('example.com', 'A')] = [_Rdata('192.0.2.13')]
+    fake_dns['zone'][('example.com', 'A')] = [_Rdata(PUBLIC)]
     fake_dns['zone'][('example.com', 'AAAA')] = fake_dns['dns'].exception.Timeout()
-    assert addresses('example.com') == ['192.0.2.13']
+    assert addresses('example.com') == [PUBLIC]
 
 
 def test_an_ipv4_failure_with_nothing_else_is_none(fake_dns):
@@ -1132,7 +1147,7 @@ def fake_https(monkeypatch):
 
     def guard(host, port, allow_private):
         state['guarded'].append(host)
-        return (2, '192.0.2.13', None)
+        return (2, PUBLIC, None)
 
     monkeypatch.setattr('modules.core.cert_probe._resolve_and_guard', guard)
 
@@ -1566,10 +1581,13 @@ def test_all_is_matched_as_a_mechanism_not_as_a_word(record, expected):
 
 
 def _answering_lists(extra=None):
-    """A resolver where every list answers both its test points correctly."""
+    """A resolver where every list answers both its test points correctly,
+    recording what it was asked so a test can assert nothing went out."""
     extra = extra or {}
+    asked = []
 
     def lookup(name):
+        asked.append(name)
         if name in extra:
             return extra[name]
         if name.startswith(dh.RBL_SELFTEST_LISTED + '.'):
@@ -1578,7 +1596,86 @@ def _answering_lists(extra=None):
             return []
         return []
 
+    lookup.asked = asked
     return lookup
+
+
+# --------------------------------------------------------------------------- #
+# An internal address is not theirs to see, and not theirs to answer about
+# --------------------------------------------------------------------------- #
+
+PRIVATE_SHAPES = [
+    ('10.1.2.3', 'RFC 1918'),
+    ('192.168.7.9', 'RFC 1918'),
+    ('172.16.0.1', 'RFC 1918'),
+    ('127.0.0.1', 'loopback'),
+    ('169.254.1.1', 'link-local'),
+    ('100.64.0.1', 'carrier-grade NAT'),
+    ('fd00::1', 'unique local'),
+]
+
+
+@pytest.mark.parametrize('address,kind', PRIVATE_SHAPES,
+                         ids=[f'{a} ({k})' for a, k in PRIVATE_SHAPES])
+def test_a_non_public_address_is_never_sent_to_a_blocklist(address, kind):
+    """Two things at once, and the second is the one that bites.
+
+    A DNSBL lists hosts that send mail on the internet; it has nothing to say
+    about 10.0.0.0/8, so an empty answer is not "clean". And asking is not
+    free — the query carries an internal address to four third parties, which
+    is a piece of the estate's topology they had no reason to receive.
+
+    `100.64.0.1` is in the list on purpose: `is_private` answers False for
+    carrier-grade NAT, so a check written with that test would have kept
+    sending those.
+    """
+    lookup = _answering_lists()
+    result = dh.check_blocklists('internal.example', [address], lookup)
+
+    assert _real_addresses(lookup) == []
+    assert result['status'] == dh.UNKNOWN
+    assert any(address in n for n in result['not_covered'])
+
+
+def test_a_public_address_beside_a_private_one_is_still_checked():
+    """Split-horizon DNS is ordinary. The public address is the one a
+    blocklist can answer about, and it is answered about."""
+    lookup = _answering_lists()
+    result = dh.check_blocklists('mixed.example', ['8.8.8.8', '10.1.2.3'], lookup)
+
+    assert result['status'] == dh.OK
+    assert len(result['not_covered']) == 1
+    queried = _real_addresses(lookup)
+    assert queried, 'the public address was not checked either'
+    assert all(q.startswith('8.8.8.8.') for q in queried)
+    assert not any('3.2.1.10' in q for q in queried), 'the private address went out'
+
+
+def test_a_listing_on_the_public_address_still_reports():
+    lookup = _answering_lists({'8.8.8.8.zen.spamhaus.org': ['127.0.0.2']})
+    result = dh.check_blocklists('mixed.example', [PUBLIC, '10.1.2.3'], lookup)
+    assert result['status'] == dh.FAILING
+
+
+@pytest.mark.parametrize('address', ['8.8.8.8', '1.1.1.1', '2606:4700::1'])
+def test_a_public_address_is_not_mistaken_for_an_internal_one(address):
+    """The other direction: over-filtering would make the check useless."""
+    reason = dh.not_covered_reason(address)
+    if address.count(':'):
+        assert reason and 'IPv6' in reason      # excluded, but for the other reason
+    else:
+        assert reason is None
+
+
+def test_the_reason_says_which_kind_it_is():
+    """An operator reading `not_covered` should not have to guess whether an
+    address was skipped for being internal or for being IPv6."""
+    assert 'not a public address' in dh.not_covered_reason('10.1.2.3')
+    assert 'IPv6' in dh.not_covered_reason('2606:4700::1')
+
+
+def test_an_unparseable_address_is_left_to_the_caller():
+    assert dh.not_covered_reason('not-an-address') is None
 
 
 def test_an_ipv6_only_domain_is_unknown_not_clean():
@@ -1587,10 +1684,13 @@ def test_an_ipv6_only_domain_is_unknown_not_clean():
     all, so an empty answer about an AAAA address is indistinguishable from
     "this list does not serve IPv6" — the same false-clean as a refusal read
     as "not listed"."""
-    result = dh.check_blocklists('example.com', ['2001:db8::1'], _answering_lists())
+    result = dh.check_blocklists('example.com', [PUBLIC_V6], _answering_lists())
     assert result['status'] == dh.UNKNOWN
     assert 'IPv6' in result['not_covered'][0]
-    assert 'only to IPv6' in result['detail']
+    # The detail carries the reasons rather than a sentence per case, so a
+    # third kind of uncoverable address does not need new prose here.
+    assert 'nothing about this domain could be asked' in result['detail']
+    assert 'IPv6' in result['detail']
 
 
 def test_an_ipv6_address_is_never_queried_against_an_ipv4_self_tested_list():
@@ -1600,7 +1700,7 @@ def test_an_ipv6_address_is_never_queried_against_an_ipv4_self_tested_list():
         asked.append(name)
         return _answering_lists()(name)
 
-    dh.check_blocklists('example.com', ['2001:db8::1'], lookup)
+    dh.check_blocklists('example.com', [PUBLIC_V6], lookup)
     assert not [n for n in asked if n.startswith('1.0.0.0.0')]
 
 
@@ -1611,33 +1711,35 @@ def test_a_clean_dual_stack_domain_stays_ok_and_still_says_what_it_skipped():
     address is a boundary of what these lists cover, not a hole in coverage of
     something we should have checked, so it is reported without changing the
     verdict."""
-    result = dh.check_blocklists('example.com', ['192.0.2.13', '2001:db8::1'],
+    result = dh.check_blocklists('example.com', [PUBLIC, PUBLIC_V6],
                                  _answering_lists())
     assert result['status'] == dh.OK
     assert result['unanswered'] == []
     assert any('IPv6' in n for n in result['not_covered'])
-    # The detail mentions what was skipped, without pinning the wording.
-    assert 'IPv6' in result['detail']
+    # The detail says something was skipped. Which kind is in `not_covered`,
+    # because the detail now covers both reasons and naming one there would
+    # be wrong for the other.
+    assert 'not asked about' in result['detail']
 
 
 def test_a_refused_list_still_downgrades_a_dual_stack_domain():
     """The two are kept apart, not conflated in the other direction: a list
     that refused is still a hole, IPv6 present or not."""
-    lookup = _answering_lists({'13.2.0.192.zen.spamhaus.org': ['127.255.255.254']})
-    result = dh.check_blocklists('example.com', ['192.0.2.13', '2001:db8::1'], lookup)
+    lookup = _answering_lists({f'{PUBLIC_REVERSED}.zen.spamhaus.org': ['127.255.255.254']})
+    result = dh.check_blocklists('example.com', [PUBLIC, PUBLIC_V6], lookup)
     assert result['status'] == dh.WARNING
     assert len(result['unanswered']) == 1
     assert len(result['not_covered']) == 1
 
 
 def test_a_listing_on_ipv4_is_still_a_finding_on_a_dual_stack_domain():
-    lookup = _answering_lists({'13.2.0.192.zen.spamhaus.org': ['127.0.0.2']})
-    result = dh.check_blocklists('example.com', ['192.0.2.13', '2001:db8::1'], lookup)
+    lookup = _answering_lists({f'{PUBLIC_REVERSED}.zen.spamhaus.org': ['127.0.0.2']})
+    result = dh.check_blocklists('example.com', [PUBLIC, PUBLIC_V6], lookup)
     assert result['status'] == dh.FAILING
 
 
 def test_an_ipv4_only_domain_is_unaffected():
-    result = dh.check_blocklists('example.com', ['192.0.2.13'], _answering_lists())
+    result = dh.check_blocklists('example.com', [PUBLIC], _answering_lists())
     assert result['status'] == dh.OK
     assert result['not_covered'] == []
     assert 'IPv6' not in result['detail']
@@ -1655,15 +1757,15 @@ def test_a_negative_control_that_did_not_answer_does_not_pass_the_list():
         return []
 
     assert dh.list_is_answering('zen.spamhaus.org', lookup) is False
-    assert dh.check_blocklists('example.com', ['192.0.2.13'],
+    assert dh.check_blocklists('example.com', [PUBLIC],
                                lookup)['status'] == dh.UNKNOWN
 
 
 def test_an_aaaa_failure_does_not_discard_a_good_a_answer(fake_dns):
     _, _, addresses, _ = dh.dns_lookups()
-    fake_dns['zone'][('example.com', 'A')] = [_Rdata('192.0.2.13')]
+    fake_dns['zone'][('example.com', 'A')] = [_Rdata(PUBLIC)]
     fake_dns['zone'][('example.com', 'AAAA')] = fake_dns['dns'].exception.Timeout()
-    assert addresses('example.com') == ['192.0.2.13']
+    assert addresses('example.com') == [PUBLIC]
 
 
 def test_an_a_failure_does_not_stop_aaaa_being_tried(fake_dns):

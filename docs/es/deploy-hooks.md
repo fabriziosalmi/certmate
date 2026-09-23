@@ -177,7 +177,7 @@ Los hooks son ejecución de código arbitrario por diseño — esa es la funcion
 | `\r` / `\n` | saltos de línea (evita que `sh -c` los interprete como `;`) |
 | `> /` (redirección a ruta absoluta) | evita sobreescribir archivos del sistema |
 | `<<` | here-doc |
-| `eval`, `source`, `. /` | builtins del shell que cargan código arbitrario |
+| `eval`, `source`, `.` (el atajo de source, con cualquier argumento) | builtins del shell que cargan código arbitrario |
 
 Si necesitas alguno de estos elementos, coloca la lógica en un archivo script dentro del contenedor e invoca el script directamente:
 

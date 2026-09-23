@@ -109,9 +109,17 @@ is saved without retyping them. Preview masks less: it shows the URL, and
 masks only headers whose name contains `authorization`, `key`, `token`,
 `secret` or `cookie`.
 
-The delivery log records the webhook's name, type and URL, the event, the
-HTTP status, the number of attempts, the error and the duration. It does not
-record headers, tokens, the basic password or the body.
+The delivery log records the webhook's name and type, the **origin** of its
+URL, the event, the HTTP status, the number of attempts, the error and the
+duration. It does not record headers, tokens, the basic password or the body.
+
+Origin means scheme and host — `https://hooks.slack.com`, not the path after
+it. For Slack, Discord, ntfy and Gotify that path *is* the credential, and the
+log is a file that outlives the request and is read back through the API.
+Which host a delivery went to is what the log is for; the rest of the URL is
+not needed to answer that, and `Name` and `Type` already say which webhook it
+was. Entries written by an older version are reduced the same way when they
+are read.
 
 ## Signature
 

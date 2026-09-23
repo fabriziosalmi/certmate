@@ -1,6 +1,6 @@
 # Fornitori di Certificate Authority (CA)
 
-<!-- CERTMATE-TRANSLATED-FROM 1044447d11378cf0 -->
+<!-- CERTMATE-TRANSLATED-FROM 646f409a30787dbd -->
 <!-- CERTMATE-STALE-TRANSLATION -->
 
 > Questa traduzione non è aggiornata. Consulta la [versione inglese](../ca-providers.md) per il nuovo provider Sectigo ACME, gli URL HTTPS delle directory per account e le credenziali EAB.
@@ -166,9 +166,12 @@ Imposta una CA predefinita per tutti i nuovi certificati. Puoi sovrascriverla pe
 
 Se la CA scelta non ha una configurazione salvata (o l'account CA richiesto non
 esiste), l'emissione non fallisce: ripiega su Let's Encrypt (su Let's Encrypt
-staging se la richiesta era di staging) e registra un warning nel log.
-Controlla il `ca_provider` nella risposta o nei metadati del certificato per
-confermare quale CA lo ha emesso.
+staging se la richiesta era di staging) e registra un warning nel log. La
+colonna **CA** nella pagina Certificati indica con quale autorità è stato
+emesso ciascun certificato, così un ripiego si vede senza passare dal log; lo
+stesso valore è `ca_provider` nella risposta dell'API e nei metadati del
+certificato. I certificati emessi prima che CertMate registrasse la CA mostrano
+lì `—` invece di un'ipotesi.
 
 ### Tramite API
 

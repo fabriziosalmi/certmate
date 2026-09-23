@@ -1156,7 +1156,16 @@ class DeployManager:
             r'|<<'              # here-doc
             r'|\beval\b'        # eval built-in
             r'|\bsource\b'     # source built-in
-            r'|\b\.\s+/'       # ". /path" (source shorthand)
+            # `. path` — the source shorthand, and the reason it is spelled
+            # this way: the rule used to be `\b\.\s+/`, and `\b` before a dot
+            # needs a WORD character immediately before it. A command starts
+            # with `. `, or has ` . ` after a space or a pipe, and in every one
+            # of those the character before the dot is a space or nothing —
+            # so no word boundary exists and the rule never fired. It matched
+            # `x. /opt/s.sh`, which is not the source shorthand at all.
+            # `source` is blocked whatever its argument, so this is too:
+            # the asymmetry was the defect, not the absolute path.
+            r'|(?:^|[\s|])\.\s+\S'
         )
         if _DANGEROUS_SHELL.search(sanitized):
             return False, "contains dangerous shell metacharacters"
