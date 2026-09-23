@@ -76,11 +76,21 @@ def fetch_latest(url=RELEASES_URL, timeout=TIMEOUT_SECONDS):
     not what was expected. The caller turns that into `unknown`, never into
     `current`.
     """
+    # https only, checked here rather than trusted from the caller. `urlopen`
+    # will happily open `file:///etc/passwd` or a custom scheme, and this
+    # function takes its URL as an argument — so the constant above being
+    # correct is not the same as the function being safe. Refusing anything
+    # else is also what makes bandit's B310 a settled question rather than a
+    # suppression.
+    if not str(url).lower().startswith('https://'):
+        logger.warning("Update check refused a non-https URL")
+        return None
+
     request = urllib.request.Request(
         url, headers={'Accept': 'application/vnd.github+json',
                       'User-Agent': 'CertMate-update-check'})
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - https enforced above
             if response.status != 200:
                 return None
             body = json.loads(response.read(64 * 1024).decode('utf-8'))

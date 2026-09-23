@@ -338,3 +338,26 @@ def test_the_endpoint_needs_a_session(client):
 
     anonymous = client.application.test_client()
     assert anonymous.get('/api/web/update-check').status_code in (401, 302)
+
+
+@pytest.mark.parametrize('url', [
+    'file:///etc/passwd',
+    'http://example.invalid/releases',
+    'ftp://example.invalid/releases',
+    'gopher://example.invalid/',
+    '/etc/passwd',
+])
+def test_the_fetcher_opens_nothing_that_is_not_https(url, monkeypatch):
+    """`urlopen` will open file:// and custom schemes, and this function takes
+    its URL as an argument — so the constant being right is not the same as
+    the function being safe. The guard is what makes bandit's B310 a settled
+    question here rather than a suppression over nothing."""
+    def forbidden(*args, **kwargs):
+        raise AssertionError(f'opened {url!r}')
+
+    monkeypatch.setattr(uc.urllib.request, 'urlopen', forbidden)
+    assert uc.fetch_latest(url) is None
+
+
+def test_the_url_it_actually_uses_is_https():
+    assert uc.RELEASES_URL.startswith('https://')
