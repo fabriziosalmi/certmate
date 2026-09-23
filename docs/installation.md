@@ -162,17 +162,11 @@ BEHIND_PROXY=true
 # in settings.json would itself end up inside plaintext backups.
 CERTMATE_BACKUP_PASSPHRASE=choose-a-long-random-passphrase
 
-# DNS Providers (choose one or multiple)
+# DNS provider. Cloudflare is the only provider read from the environment:
+# this token sets the default Cloudflare account. Route53, Azure, Google Cloud
+# DNS, PowerDNS and the rest are configured in Settings -> DNS Providers or
+# through the API; AWS_*, AZURE_* and similar variables here do nothing.
 CLOUDFLARE_TOKEN=your_cloudflare_token
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AZURE_SUBSCRIPTION_ID=your_azure_subscription
-AZURE_TENANT_ID=your_azure_tenant
-AZURE_CLIENT_ID=your_azure_client
-AZURE_CLIENT_SECRET=your_azure_secret
-GOOGLE_PROJECT_ID=your_gcp_project
-POWERDNS_API_URL=https://your-powerdns:8081
-POWERDNS_API_KEY=your_powerdns_key
 ```
 
 ### Resolution Order
@@ -426,8 +420,9 @@ If you mount `data/` on a network filesystem (NFS, SMB), be aware:
 
 If NFS is unavoidable, mount with `soft,timeo=30,retrans=3` (or your
 distro's equivalent) so I/O fails fast instead of hanging on a stalled
-server, and check `data/logs/certmate.log` for the WAL-fallback line
-after first start.
+server, and check the application log for the WAL-fallback warning
+after first start (stdout, or the file named by `CERTMATE_LOG_FILE` if
+you set one).
 
 ### Using Gunicorn
 
@@ -467,18 +462,19 @@ sudo systemctl start certmate
 ### Using Docker in Production
 
 ```yaml
-version: '3.8'
 services:
   certmate:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # localhost only; the reverse proxy is what faces the network
     environment:
       - API_BEARER_TOKEN=${API_BEARER_TOKEN}
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
     volumes:
       - ./certificates:/app/certificates
       - ./data:/app/data
+      - ./logs:/app/logs
+      - ./backups:/app/backups
     restart: unless-stopped
 ```
 

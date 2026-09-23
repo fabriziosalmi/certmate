@@ -447,12 +447,20 @@ When auto-renewed:
 3. Implement exponential backoff
 4. Check limit for your endpoint
 
+The body says which limit you hit. `"code": "ISSUANCE_QUEUE_FULL"` means too
+many certificate jobs are queued or running: retry once some finish, or raise
+`CERTMATE_ISSUANCE_QUEUE_LIMIT` / `CERTMATE_ISSUANCE_WORKERS`. The API rate
+limit and the login-attempt limit both return `retry_after` in seconds.
+
 ### Checking Logs
 
-View application logs:
+View application logs (CertMate logs to stdout):
 ```bash
-tail -f logs/certmate.log
+docker logs -f certmate
 ```
+
+A log file exists only if you set `CERTMATE_LOG_FILE` (e.g.
+`CERTMATE_LOG_FILE=/app/logs/certmate.log`); then `tail -f` that path.
 
 View audit logs:
 ```bash

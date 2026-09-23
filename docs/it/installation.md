@@ -1,6 +1,6 @@
 # Guida all'installazione
 
-<!-- CERTMATE-TRANSLATED-FROM 7fedcd37874f024e -->
+<!-- CERTMATE-TRANSLATED-FROM b288912f631e6321 -->
 
 Questa guida illustra tutti i metodi di installazione e deploy di CertMate.
 
@@ -162,17 +162,11 @@ BEHIND_PROXY=true
 # compromissione totale delle chiavi.
 CERTMATE_BACKUP_PASSPHRASE=scegliere-una-lunga-passphrase-casuale
 
-# Provider DNS (scegliere uno o più)
+# Provider DNS. Cloudflare è l'unico provider letto dall'ambiente:
+# questo token imposta l'account Cloudflare predefinito. Route53, Azure,
+# Google Cloud DNS, PowerDNS e gli altri si configurano in Impostazioni -> Provider DNS
+# o tramite l'API; AWS_*, AZURE_* e variabili simili qui non hanno alcun effetto.
 CLOUDFLARE_TOKEN=your_cloudflare_token
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AZURE_SUBSCRIPTION_ID=your_azure_subscription
-AZURE_TENANT_ID=your_azure_tenant
-AZURE_CLIENT_ID=your_azure_client
-AZURE_CLIENT_SECRET=your_azure_secret
-GOOGLE_PROJECT_ID=your_gcp_project
-POWERDNS_API_URL=https://your-powerdns:8081
-POWERDNS_API_KEY=your_powerdns_key
 ```
 
 ### Ordine di risoluzione
@@ -466,18 +460,19 @@ sudo systemctl start certmate
 ### Usare Docker in produzione
 
 ```yaml
-version: '3.8'
 services:
   certmate:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # solo localhost; è il reverse proxy a stare sulla rete
     environment:
       - API_BEARER_TOKEN=${API_BEARER_TOKEN}
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
     volumes:
       - ./certificates:/app/certificates
       - ./data:/app/data
+      - ./logs:/app/logs
+      - ./backups:/app/backups
     restart: unless-stopped
 ```
 

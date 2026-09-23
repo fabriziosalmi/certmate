@@ -67,8 +67,8 @@ SECRET_KEY=your-super-secret-key-here
 # first-run screen to create the admin.
 API_BEARER_TOKEN=your-api-bearer-token-here
 # API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative: takes precedence over API_BEARER_TOKEN
-CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
-LOG_LEVEL=INFO
+CLOUDFLARE_TOKEN=your-cloudflare-api-token
+CERTMATE_LOG_LEVEL=INFO
 ```
 
 ```bash
@@ -89,7 +89,7 @@ docker run -d --name certmate \
   # -e SECRET_KEY_FILE="/run/secrets/secret_key" \  # Alternative: takes precedence over SECRET_KEY
   -e API_BEARER_TOKEN="your-api-bearer-token" \
   # -e API_BEARER_TOKEN_FILE="/run/secrets/api_bearer_token" \  # Alternative: takes precedence over API_BEARER_TOKEN
-  -e CLOUDFLARE_API_TOKEN="your-api-token" \
+  -e CLOUDFLARE_TOKEN="your-api-token" \
   -p 8000:8000 \
   -v certmate_certificates:/app/certificates \
   -v certmate_data:/app/data \
@@ -104,11 +104,9 @@ docker run -d --name certmate \
 | `SECRET_KEY_FILE` | No | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`). If set and the file cannot be read or is empty, CertMate refuses to start: a secret that failed to mount is a configuration error, and generating a key instead would sign out every user, on every restart, with sessions signed by a key you did not choose. |
 | `API_BEARER_TOKEN` | No (auto-generated) | API auth token. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin. **This value is authoritative:** if it differs from the token already stored, the stored one is replaced at startup and stops working. That is what makes adding or rotating the variable on an existing install take effect — previously enforcement used this value while authentication still checked the old one, and the first-run screen asked for a token it then rejected |
 | `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
-| `LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
+| `CERTMATE_LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **Set it if you want automatic backups you can restore from** | Encrypts unified backups at rest (`.zip.enc`, PBKDF2-SHA256 + Fernet), and is what makes automatic backups *complete* — with it they can restore this instance, without it they keep their credentials masked and cannot. The same passphrase is required to restore them, and CertMate never stores it for you. Keep it somewhere other than the machine holding the backups |
-| `CLOUDFLARE_API_TOKEN` | No | Cloudflare DNS provider token |
-| `AWS_ACCESS_KEY_ID` | No | AWS Route53 access key |
-| `AWS_SECRET_ACCESS_KEY` | No | AWS Route53 secret key |
+| `CLOUDFLARE_TOKEN` | No | API token for the default Cloudflare DNS account. Cloudflare is the only DNS provider read from the environment: Route53 and the others are configured in Settings → DNS Providers or through the API, and setting `AWS_ACCESS_KEY_ID` in the container does nothing |
 
 See the [Installation Guide](./installation.md#environment-variables) for the complete list.
 
@@ -129,24 +127,23 @@ works. The value is read when certbot runs and is never written back. The OIDC
 ### Basic Setup
 
 ```yaml
-version: '3.8'
-
 services:
   certmate:
     image: fabriziosalmi/certmate:latest
     container_name: certmate
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # localhost only; put a reverse proxy in front for external access
     environment:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
       # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
       - certmate_data:/app/data
       - certmate_logs:/app/logs
+      - certmate_backups:/app/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -159,6 +156,7 @@ volumes:
   certmate_certificates:
   certmate_data:
   certmate_logs:
+  certmate_backups:
 ```
 
 ```bash
@@ -390,7 +388,7 @@ docker push USERNAME/certmate:v1.0.0
 ### GitHub Actions
 
 Required secrets:
-- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_USER`
 - `DOCKERHUB_TOKEN`
 
 ```bash
