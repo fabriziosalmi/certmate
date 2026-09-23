@@ -336,6 +336,7 @@ Five checks, run daily against every name CertMate already tracks.
 | `hsts` | what `Strict-Transport-Security` the host serves | each host |
 | `security_headers` | whether the browser is told to refuse framing, MIME sniffing and unsanctioned script | each host |
 | `disclosure` | whether the response names the software and version answering it | each host |
+| `weak_tls` | whether the host still accepts TLS 1.0 or 1.1 | each host, **off by default** |
 
 Mail and blocklist checks run against the **registrable** domain, not each
 host: DMARC falls back to the organisational domain, so asking
@@ -402,6 +403,7 @@ a check.
     "check_mail": true,          // SPF, DMARC, MX
     "check_blocklists": true,
     "check_headers": true,       // HSTS + the protective headers + disclosure
+    "check_weak_tls": false,     // two extra handshakes per host; see below
     "extra_domains": ["brand.it"]
   }
 }
@@ -451,6 +453,41 @@ about a response nobody browses.
 HSTS is the exception: it is read from the **first** response, including a
 301, because that is what a browser records. An apex that sets HSTS and a
 `www` that does not are two different facts, and each name gets its own row.
+
+### Deprecated TLS versions
+
+RFC 8996 deprecated TLS 1.0 and 1.1 in March 2021 — MUST NOT be used — and PCI
+DSS had required 1.0 gone since 2018. A server that still accepts them is
+rarely doing it deliberately: it is a load balancer nobody re-read, or a vhost
+that never picked up the profile the others got.
+
+Nothing else in CertMate can see this. Both its probes set
+`minimum_version = TLSv1_2`, so they report the version that *was* negotiated
+and never the version the server would also have agreed to.
+
+This check is the only one that opens a connection the host did not invite —
+two handshakes per name, one offering TLS 1.0 and one offering 1.1, carrying no
+data and reading nothing — so it is **off by default**. Turn it on with
+`check_weak_tls`.
+
+**Why `unknown` matters more here than anywhere else.** A probe for old TLS is
+easy to write so that it can never find anything. Modern OpenSSL builds refuse
+to *offer* those versions: the distribution's `openssl.cnf` raises
+`MinProtocol`, or the security level excludes every cipher they can use. Every
+handshake then fails on the machine running CertMate, before a byte leaves it,
+and a probe that reads "handshake failed" as "the server said no" reports a
+clean estate having asked nothing.
+
+So before any host is contacted, CertMate asks its own runtime — in memory,
+against no server — whether it can produce a ClientHello for that version at
+all. If it cannot, the answer is `unknown` and says so. "Refuses old TLS" is
+only ever reached when this process could demonstrably make the offer *and*
+the host declined it. An acceptance is likewise only recorded when the
+handshake completed **at the version offered**, not merely when it completed.
+
+The certificate is deliberately not verified on these two connections: the
+question is which protocol version the server agrees to speak, and an expired
+certificate does not make an accepted TLS 1.0 handshake acceptable.
 
 **Network.** All of it is DNS, except the one `HEAD` per host over HTTPS,
 through the same SSRF guard as the probe and pinned to the validated address.

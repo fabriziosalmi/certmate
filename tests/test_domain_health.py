@@ -1355,7 +1355,8 @@ def test_config_round_trips_the_health_section(real_app):
     client = application.test_client()
     assert client.get('/api/inventory/config').get_json()['domain_health'] == {
         'enabled': False, 'include_inventory': True, 'check_mail': True,
-        'check_blocklists': True, 'check_headers': True, 'extra_domains': []}
+        'check_blocklists': True, 'check_headers': True,
+        'check_weak_tls': False, 'extra_domains': []}
     r = client.post('/api/inventory/config', json={'domain_health': {
         'enabled': True, 'check_blocklists': False, 'extra_domains': ['brand.it']}})
     assert r.status_code == 200

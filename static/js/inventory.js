@@ -321,7 +321,7 @@
                 el('healthOk').textContent = by.ok || 0;
                 el('healthCount').textContent = rows.length ? rows.length + ' names' : '';
                 if (!rows.length) {
-                    el('domainHealthBody').innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-muted">'
+                    el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-muted">'
                         + 'No names checked yet. Enable Domain health in Discovery configuration, then Scan now.</td></tr>';
                     return;
                 }
@@ -337,11 +337,12 @@
                         + '<td class="px-4 py-2">' + healthChip(c.hsts) + '</td>'
                         + '<td class="px-4 py-2">' + healthChip(c.security_headers) + '</td>'
                         + '<td class="px-4 py-2">' + healthChip(c.disclosure) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.weak_tls) + '</td>'
                         + '</tr>';
                 }).join('');
             })
             .catch(function (err) {
-                el('domainHealthBody').innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-red-500">Failed to load domain health (' + escapeHtml(err) + ').</td></tr>';
+                el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-red-500">Failed to load domain health (' + escapeHtml(err) + ').</td></tr>';
             });
     }
 
@@ -382,6 +383,7 @@
                 el('cfgHealthMail').checked = h.check_mail !== false;
                 el('cfgHealthBlocklists').checked = h.check_blocklists !== false;
                 el('cfgHealthHeaders').checked = h.check_headers !== false;
+                el('cfgHealthWeakTls').checked = !!h.check_weak_tls;
                 el('cfgHealthExtra').value = (h.extra_domains || []).join('\n');
             })
             .catch(function () { /* viewer without config access — panel stays hidden */ });
@@ -419,6 +421,7 @@
                 check_mail: el('cfgHealthMail').checked,
                 check_blocklists: el('cfgHealthBlocklists').checked,
                 check_headers: el('cfgHealthHeaders').checked,
+                check_weak_tls: el('cfgHealthWeakTls').checked,
                 extra_domains: lines('cfgHealthExtra')
             }
         };

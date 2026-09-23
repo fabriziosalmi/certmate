@@ -152,6 +152,11 @@ FLOORS = {
     # resolver and a scripted socket, because the distinction they encode
     # ("could not ask" vs "asked, nothing there") is what every check rests on.
     'modules/core/domain_health.py': 95,
+    # 95 from a measured 100%. The module is small and its only I/O is one
+    # socket and one in-memory handshake, both injected in the tests; the two
+    # that reach a real server are marked `network` and excluded here, so this
+    # figure is what CI actually measures.
+    'modules/core/weak_tls.py': 95,
     'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
     'modules/core/factory.py': 80,

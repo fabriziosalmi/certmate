@@ -100,6 +100,9 @@ DEFAULT_HEALTH_CONFIG = {
     # because an instance configured before the other two headers existed
     # would otherwise silently start making a request it had turned off.
     'check_headers': True,
+    # Off by default: it is the only check that opens connections a host did
+    # not invite, two per name, and an operator should choose that.
+    'check_weak_tls': False,
     'extra_domains': [],
 }
 
@@ -643,7 +646,8 @@ def worst_status(checks):
 
 
 def check_name(name, *, lookups=None, headers_fetcher=None, mail=True,
-               blocklists=True, headers=True, is_registrable=True, rbl_cache=None):
+               blocklists=True, headers=True, weak_tls=False, is_registrable=True,
+               rbl_cache=None, tls_capability=None, weak_tls_prober=None):
     """Run the applicable checks for one name and return ``{check: result}``.
 
     Mail and blocklist checks only apply to a registrable domain: DMARC falls
@@ -671,6 +675,13 @@ def check_name(name, *, lookups=None, headers_fetcher=None, mail=True,
                                     else served['first_hsts'] or '')
         checks['security_headers'] = check_security_headers(served)
         checks['disclosure'] = check_disclosure(served)
+    if weak_tls:
+        # Imported here, not at the top: weak_tls imports this module for the
+        # status vocabulary, and only the sweeps that ask for the check should
+        # pay for loading it.
+        from . import weak_tls as weak_tls_module
+        checks['weak_tls'] = weak_tls_module.check(
+            name, prober=weak_tls_prober, capability=tls_capability)
     return checks
 
 
@@ -728,6 +739,7 @@ class DomainHealthManager:
             'check_blocklists': bool(config.get('check_blocklists', True)),
             'check_headers': bool(config.get('check_headers',
                                              config.get('check_hsts', True))),
+            'check_weak_tls': bool(config.get('check_weak_tls', False)),
             'extra_domains': extra,
         }
         self.settings_manager.update(
@@ -782,7 +794,8 @@ class DomainHealthManager:
         sans = data.get('san_domains') if isinstance(data, dict) else None
         return [s for s in sans if isinstance(s, str)] if isinstance(sans, list) else []
 
-    def check_one(self, name, is_registrable, config, rbl_cache=None):
+    def check_one(self, name, is_registrable, config, rbl_cache=None,
+                  tls_capability=None):
         """One name, never raising: an unexpected failure becomes ``unknown``."""
         try:
             return check_name(
@@ -792,6 +805,8 @@ class DomainHealthManager:
                 mail=config.get('check_mail', True),
                 blocklists=config.get('check_blocklists', True),
                 headers=config.get('check_headers', config.get('check_hsts', True)),
+                weak_tls=config.get('check_weak_tls', False),
+                tls_capability=tls_capability,
                 is_registrable=is_registrable,
                 rbl_cache=rbl_cache,
             )
@@ -815,8 +830,12 @@ class DomainHealthManager:
         # Whether a list answers us is about the list and the resolver, not
         # about the domain, so it is decided once for the whole sweep.
         rbl_cache = {}
+        # Whether this build can offer an old TLS version is a fact about the
+        # runtime, the same for every host, so it is established once.
+        tls_capability = {}
         for name, is_registrable in due[:max_names]:
-            checks = self.check_one(name, is_registrable, config, rbl_cache)
+            checks = self.check_one(name, is_registrable, config, rbl_cache,
+                                    tls_capability)
             status = worst_status(checks)
             self.inventory.record_domain_health(name, status, checks)
             results.append({'name': name, 'status': status,

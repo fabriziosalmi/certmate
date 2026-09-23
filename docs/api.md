@@ -1169,6 +1169,9 @@ so the answer opens on what is wrong; a scoped key sees only its own names.
                              "detail": "no X-Content-Type-Options: nosniff",
                              "broken": [], "missing": ["no X-Content-Type-Options: nosniff"],
                              "checked_host": "www.example.com"},
+        "weak_tls": {"status": "failing",
+                     "detail": "the host still accepts TLS 1.0, deprecated by RFC 8996 since 2021",
+                     "accepted": ["TLS 1.0"], "refused": ["TLS 1.1"], "unasked": []},
         "disclosure": {"status": "warning",
                        "detail": "the response names the software running it: Server: nginx/1.24.0",
                        "disclosed": ["Server: nginx/1.24.0"],
@@ -1191,6 +1194,10 @@ can arrive as a plain NXDOMAIN, indistinguishable from "not listed", each list
 is first asked about its own always-listed test point; one that cannot answer
 that is not asked about your domains at all, and is named in `unanswered`.
 Point CertMate at a resolver of your own and the answers become real.
+
+`weak_tls` is present only when `check_weak_tls` is on: it is the one check
+that opens connections a host did not invite. Its `unknown` means this CertMate
+build could not offer the old version — not that the host refused it.
 
 Mail checks and blocklists run against the *registrable* domain, because DMARC
 falls back to the organisational domain; the three header checks run against
