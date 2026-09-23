@@ -629,6 +629,7 @@
         'zerossl': 'ZeroSSL',
         'google': 'Google Trust Services',
         'sslcom': 'SSL.com',
+        'sectigo': 'Sectigo',
         'actalis': 'Actalis'
     };
 
