@@ -4,6 +4,8 @@ Closes [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
 Deploy hooks are short shell commands CertMate runs **after** a certificate is issued, renewed, or revoked. Use them to reload services, push the new cert to a load balancer, post a notification, or anything else that needs to happen as a follow-up to a successful certbot run.
 
+> **On `revoked`.** Only client certificates can be revoked through CertMate — `POST /api/client-certs/<id>/revoke` — so that is when a `revoked` hook fires, with `CERTMATE_DOMAIN` set to the client certificate's identifier. There is no revoke operation for a server certificate, so no hook fires for one.
+
 This guide walks through:
 
 1. [What a hook is](#what-a-hook-is)
@@ -28,7 +30,7 @@ A hook is a JSON object with five fields:
 | `command` | string | yes | A single shell command (`sh -c`). Max 1024 chars. See [security](#security-model). |
 | `enabled` | boolean | no | Defaults to `true`. Disabled hooks are skipped during automatic firing but can still be tested manually. |
 | `timeout` | integer | no | Seconds. Default 30, capped at the system `MAX_TIMEOUT` (currently 300). |
-| `on_events` | string array | no | Subset of `["created", "renewed", "revoked"]`. If absent, the hook runs on all three. |
+| `on_events` | string array | no | Subset of `["created", "renewed", "revoked"]`. If absent, the hook runs on `created` and `renewed` — `revoked` is opted into, so that adding a hook does not start running commands on revocations nobody wrote it for. |
 | `window` | object | no | A [maintenance window](#maintenance-windows). If absent, the hook runs as soon as the certificate is issued or renewed — the behaviour every hook has had until now. |
 
 Hooks live under two keys in `deploy_hooks`:

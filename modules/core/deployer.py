@@ -25,6 +25,12 @@ from .deploy_window import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 30
+
+# What a hook that names no events runs on. Deliberately not all three: no
+# hook has ever run on a revocation, because nothing fired one, so putting
+# `revoked` in the default would start running commands on an upgrade that
+# nobody asked to run there. It is opted into.
+DEFAULT_ON_EVENTS = ['created', 'renewed']
 MAX_TIMEOUT = 300
 MAX_HISTORY_ENTRIES = 500
 
@@ -80,9 +86,14 @@ class DeployManager:
 
     def on_certificate_event(self, event, data):
         """EventBus callback — triggers deploy hooks on cert events."""
+        # The three words docs/deploy-hooks.md offers in `on_events`, and the
+        # three CERTMATE_EVENT can carry. `revoked` was documented, accepted
+        # by the config and never mapped here, so a hook written for it was
+        # stored, displayed back, and never run.
         event_map = {
             'certificate_created': 'created',
             'certificate_renewed': 'renewed',
+            'certificate_revoked': 'revoked',
         }
         event_type = event_map.get(event)
         if not event_type:
@@ -1184,7 +1195,7 @@ class DeployManager:
 
         hook['timeout'] = min(max(int(hook.get('timeout', DEFAULT_TIMEOUT)), 1), MAX_TIMEOUT)
         if not isinstance(hook.get('on_events'), list):
-            hook['on_events'] = ['created', 'renewed']
+            hook['on_events'] = list(DEFAULT_ON_EVENTS)
         if not isinstance(hook.get('enabled'), bool):
             hook['enabled'] = True
 
