@@ -150,15 +150,27 @@ def test_the_help_page_advertises_something():
 
 
 def test_the_readme_advertises_something():
-    """The check this file most needed and did not have.
+    """The extractor still reads the README, which is a smaller claim than it
+    used to make, and deliberately.
 
-    An extractor that quietly parses nothing passes every case below while
-    verifying no endpoint at all — and a green gate that reads nothing is worse
-    than no gate, because its existence reads as coverage. A first attempt at
-    this really did return zero from a plausible-looking regex.
+    This asserted at least 20 endpoints, which was the right threshold while
+    the README carried a catalogue of them. It does not any more: the catalogue
+    and docs/api.md had drifted to six endpoints in common, so the README now
+    points at the reference and keeps one worked example. Lowering the number
+    to fit is only honest because the subject moved rather than the extractor
+    breaking, and because the risk the threshold guarded is covered where the
+    endpoints went: test_the_api_surface_is_documented.py refuses to pass if
+    fewer than 30 paths come out of the documents, and
+    test_the_help_page_advertises_something covers the other source here.
+
+    The original reason still stands and is why this is not simply deleted: an
+    extractor that quietly parses nothing passes every case in this file while
+    verifying no endpoint at all, and a green gate that reads nothing is worse
+    than no gate. A first attempt really did return zero from a
+    plausible-looking regex.
     """
     listed = _readme_advertised()
-    assert len(listed) >= 20, (
+    assert len(listed) >= 1, (
         f"parsed {len(listed)} endpoints out of the README — the fenced-block "
         f"walk stopped matching and this file is no longer checking it."
     )
