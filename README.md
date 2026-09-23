@@ -1286,7 +1286,7 @@ by the schema, with a message naming the accepted set — for example
 | `CERTMATE_DOMAIN_LOCK_TIMEOUT` | | `5`         | Seconds to wait for a domain's lock before answering 409 "operation in progress". Clamped to 0-60 |
 | `CERTMATE_CERT_INFO_CACHE_TTL` | | `60`        | Seconds a parsed certificate's details stay cached. `0` re-reads from disk on every request. Clamped to 0-3600 |
 | `CERTMATE_ISSUANCE_WORKERS` | | `2`            | Threads serving asynchronous issuance jobs. Clamped to 1-16; each one can be running a certbot subprocess |
-| `CERTMATE_CERT_DIR` |    | `<install>/certificates` | Where issued certificates live. Absolute, or relative to the working directory |
+| `CERTMATE_CERT_DIR` |    | `<install>/certificates` | Where issued certificates live. Absolute, or relative to the working directory. The local storage backend follows it too, unless `certificate_storage.cert_dir` names a directory of its own |
 | `CERTMATE_DATA_DIR` |    | `<install>/data`         | Settings, the certificate inventory and the audit chain |
 | `CERTMATE_BACKUP_DIR` |  | `<install>/backups`      | Where backups are written and restored from |
 | `CERTMATE_LOGS_DIR` |    | `<install>/logs`         | Application and audit logs |

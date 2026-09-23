@@ -2008,8 +2008,59 @@ class S3CompatibleBackend(CertificateStorageBackend):
 class StorageManager:
     """Manager class for certificate storage backends"""
 
-    def __init__(self, settings_manager):
+    #: What `certificate_storage.cert_dir` holds on an instance that never
+    #: chose one. It is written into settings.json with the rest of the
+    #: defaults, so "the operator did not choose" cannot be told from "the
+    #: operator chose this" by presence alone — which is why the method below
+    #: compares against it rather than just checking for a value.
+    DEFAULT_LOCAL_CERT_DIRNAME = 'certificates'
+
+    def _local_cert_dir(self, storage_config):
+        """Where the local backend writes.
+
+        `CERTMATE_CERT_DIR` moved `CertificateManager` and left this behind,
+        so an instance pointed at a volume kept a second tree under its
+        working directory — while `get_certificate_info` read through here
+        first and `_store_in_backend` wrote here. Not an ignored variable: a
+        split, with the README describing the half that moved.
+
+        The stored value could not simply be honoured, because the shipped
+        defaults persist `'certificates'` into every settings.json. Treating
+        that literal as "unset" is what lets an existing instance be fixed
+        without a migration, and without writing a machine-specific absolute
+        path into a settings file that gets backed up and restored elsewhere.
+
+        Anything else is a directory the operator typed, and wins.
+        """
+        chosen = (storage_config.get('cert_dir') or '').strip()
+        if chosen and chosen != self.DEFAULT_LOCAL_CERT_DIRNAME:
+            return Path(chosen)
+        return self._default_cert_dir
+
+    def __init__(self, settings_manager, default_cert_dir=None):
+        """*default_cert_dir* is where the local backend writes when the
+        settings do not name a directory of their own.
+
+        It used to be the literal `'certificates'`, relative to the working
+        directory — so `CERTMATE_CERT_DIR` moved `CertificateManager` and left
+        the storage layer behind. That is not "the variable is ignored": it is
+        a split. `get_certificate_info` reads through the storage manager
+        first and `_store_in_backend` writes to it, so with the variable set
+        an instance kept a second tree under its working directory while the
+        README said certificates lived where it was pointed.
+
+        An explicit `certificate_storage.cert_dir` still wins: an operator who
+        named a directory meant it. This only decides what "unset" means, and
+        the container's certificate directory is a better answer than a
+        relative path whose meaning depends on where the process was started.
+
+        Every fallback below uses it too. Landing on a *different* tree when a
+        cloud backend fails is how an instance loses sight of certificates it
+        already has, at the moment it is least able to cope.
+        """
         self.settings_manager = settings_manager
+        self._default_cert_dir = (Path(default_cert_dir) if default_cert_dir
+                                  else Path('certificates'))
         self._backend = None
         self._initialized = False
         # Snapshot of the certificate_storage subtree that was used to build
@@ -2060,7 +2111,7 @@ class StorageManager:
             logger.error("StorageManager could not read settings: %s", e)
             if self._initialized:
                 return
-            self._backend = LocalFileSystemBackend(Path('certificates'))
+            self._backend = LocalFileSystemBackend(self._default_cert_dir)
             self._initialized = True
             self._config_signature = None
             return
@@ -2076,7 +2127,7 @@ class StorageManager:
 
             if backend_type == 'local_filesystem':
                 # Default local filesystem backend
-                cert_dir = Path(storage_config.get('cert_dir', 'certificates'))
+                cert_dir = self._local_cert_dir(storage_config)
                 self._backend = LocalFileSystemBackend(cert_dir)
                 
             elif backend_type == 'azure_keyvault':
@@ -2101,7 +2152,7 @@ class StorageManager:
 
             else:
                 logger.warning(f"Unknown storage backend: {backend_type}, falling back to local filesystem")
-                cert_dir = Path('certificates')
+                cert_dir = self._default_cert_dir
                 self._backend = LocalFileSystemBackend(cert_dir)
                 self._fallback_from = backend_type
 
@@ -2116,7 +2167,7 @@ class StorageManager:
                 "Fix the configuration and restart to activate the intended backend.",
                 backend_type, e
             )
-            self._backend = LocalFileSystemBackend(Path('certificates'))
+            self._backend = LocalFileSystemBackend(self._default_cert_dir)
             self._initialized = True
             # Cache the signature even on the fallback path so a subsequent
             # call doesn't keep retrying the broken backend on every get.
