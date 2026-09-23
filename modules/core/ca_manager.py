@@ -11,6 +11,39 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def acme_directory_refusal(url, what='ACME Directory URL'):
+    """Why *url* is not usable as an ACME directory, or None if it is.
+
+    One rule, one spelling. There were three, and they disagreed:
+
+    * `validate_ca_configuration`'s private-CA branch compared the scheme
+      case-insensitively and said "must use https" (#885);
+    * its branch for every other `requires_acme_url` provider used
+      `startswith('https://')`, which **refuses `HTTPS://`** — a valid URL,
+      since RFC 3986 makes the scheme case-insensitive — while telling the
+      operator they need HTTPS, which they have;
+    * `get_acme_server_url` carried a third copy of the same `startswith`.
+
+    The divergence appeared when #885 improved one branch and left the others
+    where they were, so it is not a defect in the provider that arrived after.
+    Measured before this:
+
+        private_ca  HTTPS://acme.example.com/directory -> accepted
+        sectigo     HTTPS://acme.example.com/directory -> refused
+
+    `http` gets its own message rather than falling into "invalid format",
+    because an operator told their URL is malformed goes looking for a typo.
+    """
+    text = str(url or '')
+    scheme = text.split('://', 1)[0].lower() if '://' in text else ''
+    if scheme == 'https':
+        return None
+    if scheme == 'http':
+        return (f"{what} must use https. A directory fetched over plain HTTP "
+                f"cannot be trusted to be the one you meant.")
+    return f"Invalid {what} format"
+
+
 class CAManager:
     """Manages different Certificate Authority providers"""
     
@@ -203,8 +236,10 @@ class CAManager:
                 url = (account_config or {}).get('acme_url')
             if not url:
                 raise ValueError(f"{ca_info['name']} ACME URL not configured")
-            if ca_info.get('requires_acme_url') and not url.startswith('https://'):
-                raise ValueError(f"{ca_info['name']} requires an HTTPS ACME Directory URL")
+            refusal = acme_directory_refusal(
+                url, f"{ca_info['name']} ACME Directory URL")
+            if refusal:
+                raise ValueError(refusal)
             return url
 
         # Other public CAs retain their pinned directory, even if an account
@@ -372,20 +407,15 @@ class CAManager:
                 if ca_provider == 'private_ca':
                     return False, "Private CA requires ACME server URL"
                 return False, f"{ca_info['name']} requires an ACME Directory URL"
-            if ca_provider == 'private_ca':
-                # An account-configured private CA directory is subject to
-                # the same HTTPS rule as the built-in CA directories (#885).
-                acme_url = config['acme_url']
-                scheme = acme_url.split('://', 1)[0].lower() if '://' in acme_url else ''
-                if scheme == 'http':
-                    return False, (
-                        "ACME server URL must use https. A directory fetched over "
-                        "plain HTTP cannot be trusted to be the one you meant."
-                    )
-                if scheme != 'https':
-                    return False, "Invalid ACME server URL format"
-            elif not config['acme_url'].startswith('https://'):
-                return False, f"{ca_info['name']} requires an HTTPS ACME Directory URL"
+            # The same HTTPS rule for every directory an account configures,
+            # private CA or public (#885). The wording keeps naming the
+            # provider so an operator with several configured knows which
+            # form refused them.
+            what = ('ACME server URL' if ca_provider == 'private_ca'
+                    else f"{ca_info['name']} ACME Directory URL")
+            refusal = acme_directory_refusal(config['acme_url'], what)
+            if refusal:
+                return False, refusal
         
         # Check required fields based on CA provider
         if ca_info['requires_eab']:

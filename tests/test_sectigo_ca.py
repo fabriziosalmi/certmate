@@ -50,7 +50,11 @@ def test_metadata_and_validation(accounts):
         **accounts['production-ov'], 'acme_url': 'not-a-url'})[0]
     valid, message = manager.validate_ca_configuration('sectigo', {
         **accounts['production-ov'], 'acme_url': 'http://acme.sectigo.com/v2/OV'})
-    assert not valid and 'HTTPS' in message
+    # The property, not the spelling: the refusal must be about the scheme.
+    # This asserted the literal 'HTTPS', which tied it to one wording and
+    # broke when the three copies of the rule were unified behind
+    # `acme_directory_refusal`.
+    assert not valid and 'https' in message.lower()
 
 
 def test_account_specific_directory_and_certbot_command(accounts):
@@ -74,10 +78,10 @@ def test_missing_directory_fails_closed_and_existing_ca_urls_unchanged(accounts)
     manager = CAManager(Settings(accounts))
     with pytest.raises(ValueError, match='Sectigo ACME URL'):
         manager.get_acme_server_url('sectigo', account_config={})
-    with pytest.raises(ValueError, match='HTTPS ACME Directory URL'):
+    with pytest.raises(ValueError, match='(?i)must use https'):
         manager.get_acme_server_url('sectigo', account_config={
             **accounts['production-ov'], 'acme_url': 'http://acme.sectigo.com/v2/OV'})
-    with pytest.raises(ValueError, match='HTTPS ACME Directory URL'):
+    with pytest.raises(ValueError, match='(?i)must use https'):
         manager.get_acme_server_url('sectigo', staging=True, account_config={
             **accounts['production-ov'], 'staging_url': 'http://acme.sectigo.com/v2/OV'})
     for provider in ('letsencrypt', 'digicert', 'actalis', 'zerossl', 'google'):

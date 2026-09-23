@@ -95,6 +95,48 @@ def test_the_error_says_what_to_do_rather_than_only_what_is_wrong(manager):
 
 
 # --------------------------------------------------------------------------- #
+# The same rule for every provider that configures its own directory
+# --------------------------------------------------------------------------- #
+
+def _providers_with_their_own_directory(manager):
+    """Every CA whose directory comes from the account, not the registry."""
+    return [key for key, info in manager.ca_providers.items()
+            if key == 'private_ca' or info.get('requires_acme_url')]
+
+
+def test_more_than_one_provider_configures_its_own_directory(manager):
+    """Guard the guard: with only `private_ca` in this set the two tests
+    below would say nothing about the rule being shared."""
+    assert len(_providers_with_their_own_directory(manager)) >= 2
+
+
+def test_an_uppercase_scheme_is_accepted_wherever_a_directory_is_configured(manager):
+    """`HTTPS://` is https. RFC 3986 makes the scheme case-insensitive, and
+    refusing it tells an operator to use HTTPS while they are using it.
+
+    This was true for `private_ca` and false for every other provider with
+    its own directory: those compared with `startswith('https://')`. The
+    divergence appeared when the private-CA branch was improved and the
+    others were left behind, so it is checked here across the whole set
+    rather than on the one provider that happened to be right.
+    """
+    for provider in _providers_with_their_own_directory(manager):
+        ok, error = _validate(manager, 'HTTPS://acme.internal/directory',
+                              provider=provider)
+        assert ok is True, f'{provider} refused an uppercase https scheme: {error}'
+
+
+def test_plain_http_is_refused_wherever_a_directory_is_configured(manager):
+    """The other direction of the same rule, across the same set."""
+    for provider in _providers_with_their_own_directory(manager):
+        ok, error = _validate(manager, 'HTTP://acme.internal/directory',
+                              provider=provider)
+        assert ok is False, f'{provider} accepted plain HTTP'
+        assert 'must use https' in error.lower(), (
+            f'{provider} refused it without saying what to fix: {error}')
+
+
+# --------------------------------------------------------------------------- #
 # The registry gate and this one cover the whole surface between them
 # --------------------------------------------------------------------------- #
 
