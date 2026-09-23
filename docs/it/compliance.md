@@ -1,6 +1,6 @@
 # Conformità e traccia di audit
 
-<!-- CERTMATE-TRANSLATED-FROM 4aab2d31eea8b79a -->
+<!-- CERTMATE-TRANSLATED-FROM c39f60429f625ab7 -->
 
 Questa pagina mette in relazione la traccia di audit di CertMate con i regimi che gli operatori chiedono più spesso — l'AI Act dell'UE, NIS2 e ISO/IEC 42001 — quando lasciano che un agente IA/MCP gestisca i certificati su un calendario.
 
@@ -67,7 +67,9 @@ python -m modules.core.audit_prune --bundle archive-0-1199.json --data-dir data/
 
 Il comando senza `--yes` è una prova a secco. Rifiuta, e non rimuove nulla, se il bundle non verifica, non è firmato, è vuoto, non è un prefisso di *questa* chain o non coincide con la chain a un qualsiasi seq, oppure se la potatura lascerebbe la chain senza voci dopo il prefisso archiviato — non cancelli mai record la cui unica copia rimasta non è verificata, e non ti ritrovi mai con una chain in cui non resta nulla da verificare.
 
-Punta `--key-dir` alla chiave dell'istanza. Il valore predefinito è `data` (relativo alla directory da cui esegui il comando) e deve contenere la `.audit_signing_key` dell'istanza, a meno che `AUDIT_SIGNING_KEY_FILE` non sia impostata come la imposta l'istanza. Eseguilo dove si trova la chiave dell'istanza.
+Rifiuta anche se `--key-dir` non contiene alcuna chiave di firma, o ne contiene una che appartiene a un'istanza diversa da quella che ha esportato il bundle. Entrambi i controlli avvengono **prima** che venga rimosso qualcosa: un anchor firmato con la chiave sbagliata è un anchor che la verifica dell'istanza stessa rifiuta, e scoprirlo dopo che i record non ci sono più è troppo tardi per servire a qualcosa.
+
+Punta `--key-dir` alla chiave dell'istanza. Il valore predefinito è `data` (relativo alla directory da cui esegui il comando) e deve contenere la `.audit_signing_key` dell'istanza, a meno che `AUDIT_SIGNING_KEY_FILE` non sia impostata come la imposta l'istanza. Lo strumento non crea mai una chiave qui: una chiave nuova sarebbe una nuova identità d'istanza, non quella di questa istanza.
 
 Ciò che fa poi è la parte che conta per la conformità:
 
