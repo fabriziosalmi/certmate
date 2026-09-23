@@ -780,7 +780,7 @@ Ogni certificato ha un file `metadata.json` contenente:
 
 ### Raccomandazioni per la produzione
 
-- Utilizzare un backend di archiviazione (Azure, AWS, Vault) perché il materiale dei certificati sopravviva al nodo
+- Utilizzare un backend di archiviazione (Azure, AWS, Vault, Infisical, S3-compatible) perché il materiale dei certificati sopravviva al nodo
 - Abilitare la registrazione di audit per la conformità
 - Configurare il rate limiting in base al carico
 - Aggiornamenti regolari della CRL (giornalieri o alla revoca)
@@ -803,7 +803,7 @@ Come si ottiene invece la disponibilità — **attivo/standby**:
    filesystem replicato). È questo lo stato che conta: impostazioni, catena di
    audit, CA privata e i certificati stessi.
 2. Configurare un [backend di archiviazione](#backend-di-archiviazione) (Azure Key
-   Vault, AWS Secrets Manager, Vault, Infisical) perché anche il materiale dei
+   Vault, AWS Secrets Manager, Vault, Infisical, S3-compatible) perché anche il materiale dei
    certificati viva indipendentemente dal nodo.
 3. Far girare **una** istanza. In caso di guasto, avviarne una di ricambio
    sugli stessi dati e puntarci l'ingress. Una finestra di rinnovo mancata non

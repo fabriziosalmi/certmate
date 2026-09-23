@@ -780,7 +780,7 @@ Chaque certificat a un fichier `metadata.json` contenant :
 
 ### Recommandations pour la production
 
-- Utiliser un backend de stockage (Azure, AWS, Vault) pour que le matériel des certificats survive au nœud
+- Utiliser un backend de stockage (Azure, AWS, Vault, Infisical, S3-compatible) pour que le matériel des certificats survive au nœud
 - Activer la journalisation d'audit pour la conformité
 - Configurer la limitation de débit en fonction de la charge
 - Mises à jour régulières de la CRL (quotidiennes ou lors des révocations)
@@ -804,7 +804,7 @@ autre chose que `1`.
    système de fichiers répliqué). C'est l'état qui compte : réglages, chaîne
    d'audit, AC privée et les certificats eux-mêmes.
 2. Configurer un [backend de stockage](#backends-de-stockage) (Azure Key Vault,
-   AWS Secrets Manager, Vault, Infisical) pour que le matériel des certificats
+   AWS Secrets Manager, Vault, Infisical, S3-compatible) pour que le matériel des certificats
    vive lui aussi indépendamment du nœud.
 3. Exécuter **une seule** instance. En cas de panne, démarrer un remplaçant sur
    les mêmes données et y pointer l'ingress. Une fenêtre de renouvellement

@@ -779,7 +779,7 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 
 ### Empfehlungen für den Produktionsbetrieb
 
-- Storage-Backend (Azure, AWS, Vault) verwenden, damit Zertifikatsmaterial den Knoten überlebt
+- Storage-Backend (Azure, AWS, Vault, Infisical, S3-compatible) verwenden, damit Zertifikatsmaterial den Knoten überlebt
 - Audit-Protokollierung zur Compliance aktivieren
 - Rate Limiting entsprechend der Last konfigurieren
 - Regelmäßige CRL-Aktualisierungen (täglich oder bei Sperrungen)
@@ -802,7 +802,7 @@ So sieht Verfügbarkeit stattdessen aus — **aktiv/standby**:
    ein repliziertes Dateisystem). Das ist der Zustand, auf den es ankommt:
    Einstellungen, Audit-Kette, private CA und die Zertifikate selbst.
 2. Ein [Storage-Backend](#storage-backends) (Azure Key Vault, AWS Secrets
-   Manager, Vault, Infisical) konfigurieren, damit auch Zertifikatsmaterial
+   Manager, Vault, Infisical, S3-compatible) konfigurieren, damit auch Zertifikatsmaterial
    unabhängig vom Knoten liegt.
 3. **Eine** Instanz betreiben. Bei einem Ausfall einen Ersatz gegen dieselben
    Daten starten und den Ingress darauf zeigen lassen. Ein verpasstes

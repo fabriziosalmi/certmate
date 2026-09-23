@@ -811,16 +811,20 @@ See the [Architecture Guide](./architecture.md) for full implementation details.
 
 | Error | Solution |
 |-------|----------|
-| "DNS provider not configured" | Verify all required credentials are provided |
+| `DNS provider '<provider>' account '<id>' not configured` | The account the certificate names has no credentials saved. Add them under Settings, or pick an account that exists |
 | "Certificate creation failed" | Check DNS permissions and domain ownership |
-| "Plugin not found" | Run `pip install -r requirements.txt` or rebuild Docker |
+| `The certbot plugin '<plugin>' is not installed` | Run `pip install certbot-<plugin>`, or rebuild the Docker image with `REQUIREMENTS_FILE=requirements.txt` |
 | "Provider detection failing" | Check `dns_provider` field in domain settings |
 
 ### Debug Mode
 
 ```bash
-export CERTMATE_LOG_LEVEL=DEBUG
-python app.py
+# Running app.py directly: use the flag. --log-level defaults to INFO
+# and overrides CERTMATE_LOG_LEVEL.
+python app.py --log-level DEBUG
+
+# Docker / gunicorn: set the environment variable, e.g. in .env
+CERTMATE_LOG_LEVEL=DEBUG
 ```
 
 ### Testing Provider Configuration
