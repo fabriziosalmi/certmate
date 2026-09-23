@@ -36,7 +36,10 @@ operate certificates on a schedule.
   (periodic checkpoints) and `GET /api/audit/export` produces an Ed25519-signed
   bundle. An auditor verifies it off the box, pinning the instance's public key
   (`GET /api/audit/public-key`) out of band — proving both that the record was
-  written, not edited, and which instance produced it.
+  written, not edited, and which instance produced it. That endpoint returns
+  JSON, not a PEM file: save its `public_key_pem` field as the `.pem` the
+  verifier's `--pubkey` expects. It answers 404 when the instance has no
+  signing key.
 - **SIEM audit sink (push).** Each audit entry can also be streamed live to an
   external collector in a standard format — **syslog** (RFC 5424) or **CEF**
   over UDP/TCP, or **generic HTTP/JSON** — configured under `audit_sink` in
@@ -44,7 +47,8 @@ operate certificates on a schedule.
   leave the process (a token in a detail field is redacted), and the sink is
   failure-isolated with a short timeout, like the hash chain: a dead collector
   never blocks or breaks a certificate operation. Lifecycle coverage includes
-  create / renew / deploy / revoke, plus a scheduled summary digest.
+  create / renew / deploy / revoke. The scheduled summary digest is not an
+  audit entry and is not sent through the sink.
 
 ## Regime mapping
 
@@ -146,9 +150,16 @@ python -m modules.core.audit_prune --bundle archive-0-1199.json --data-dir data/
 ```
 
 The command without `--yes` is a dry run. It refuses, and removes nothing, if
-the bundle does not verify, is unsigned, is not a prefix of *this* chain, or
-disagrees with the chain at any seq — you never delete records whose only
-remaining copy is unverified.
+the bundle does not verify, is unsigned, is empty, is not a prefix of *this*
+chain, or disagrees with the chain at any seq, or if pruning would leave the
+chain with no entries after the archived prefix — you never delete records
+whose only remaining copy is unverified, and you never end up with a chain that
+has nothing left to verify.
+
+Point `--key-dir` at the instance's key. It defaults to `data` (relative to the
+directory you run the command from) and must hold the instance's
+`.audit_signing_key`, unless `AUDIT_SIGNING_KEY_FILE` is set the same way the
+instance sets it. Run it where the instance's key is.
 
 What it then does is the part that matters for compliance:
 

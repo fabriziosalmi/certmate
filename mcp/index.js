@@ -42,7 +42,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_create_certificate",
-        description: "Create a new TLS certificate for a specified domain.",
+        description: "Create a new TLS certificate for a specified domain. Issuance runs asynchronously: the call returns a job_id (HTTP 202) to poll with certmate_get_job.",
         inputSchema: {
           type: "object",
           properties: {
@@ -56,7 +56,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_renew_certificate",
-        description: "Force renewal of an existing certificate for a domain.",
+        description: "Force renewal of an existing certificate for a domain. Runs asynchronously: the call returns a job_id (HTTP 202) to poll with certmate_get_job.",
         inputSchema: {
           type: "object",
           properties: {
@@ -99,11 +99,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_get_job",
-        description: "Poll the status of an asynchronous certificate job. certmate_create_certificate and certmate_renew_certificate may return a job_id (HTTP 202); call this with that job_id until status is completed or failed.",
+        description: "Poll the status of an asynchronous certificate job. certmate_create_certificate, certmate_renew_certificate and certmate_update_certificate return a job_id (HTTP 202); call this with that job_id until status is succeeded or failed (queued and running are not final).",
         inputSchema: {
           type: "object",
           properties: {
-            job_id: { type: "string", description: "The job_id returned by an async create/renew" }
+            job_id: { type: "string", description: "The job_id returned by an async create/renew/update" }
           },
           required: ["job_id"]
         }
@@ -169,7 +169,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_update_certificate",
-        description: "Edit an existing certificate's coverage in place by reissuing it (no delete-and-recreate): replace its SAN domains and/or change its DNS-01 alias. Omit sans to keep the current SAN set; pass an empty array to drop all SANs. The primary domain is the certificate's identity and cannot be changed here. May return a job_id (HTTP 202) to poll with certmate_get_job.",
+        description: "Edit an existing certificate's coverage in place by reissuing it (no delete-and-recreate): replace its SAN domains and/or change its DNS-01 alias. Omit sans to keep the current SAN set; pass an empty array to drop all SANs. The primary domain is the certificate's identity and cannot be changed here. Returns a job_id (HTTP 202) to poll with certmate_get_job.",
         inputSchema: {
           type: "object",
           properties: {
