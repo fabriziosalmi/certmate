@@ -201,11 +201,33 @@ def rbl_query_name(ip):
     return '.'.join(reversed(address.packed.hex()))
 
 
-def _is_ipv6(address):
+def not_covered_reason(address):
+    """Why a DNSBL cannot answer about *address*, or None if it can.
+
+    Two kinds, and neither is a gap in coverage — both are the boundary of
+    what these lists answer about at all:
+
+    * **Not a public address.** A DNSBL lists hosts that send mail on the
+      internet. It has nothing to say about 10.0.0.0/8, and an empty answer
+      about one is not "clean". Worse, asking is not free: the query carries
+      an internal address to four third parties, which is a piece of the
+      estate's topology they had no reason to receive. `is_global` rather
+      than `is_private`, because the latter answers False for 100.64.0.0/10 —
+      carrier-grade NAT, which is not public and not private by that test.
+
+    * **IPv6.** The self-test points are 127.0.0.2 and 127.0.0.1, so they
+      prove a list answers about IPv4 and nothing more.
+    """
     try:
-        return ipaddress.ip_address(address).version == 6
+        ip = ipaddress.ip_address(address)
     except ValueError:
-        return False
+        return None          # handled by the caller, which skips it
+    if not ip.is_global:
+        return (f'{address}: not a public address, so a blocklist has nothing '
+                f'to say about it and is not asked')
+    if ip.version == 6:
+        return f'{address}: IPv6, which these lists are not self-tested for'
+    return None
 
 
 def classify_rbl_answer(codes):
@@ -306,14 +328,14 @@ def check_blocklists(domain, addresses, lookup, cache=None):
     # second as the first would put nearly every healthy dual-stack domain —
     # which is most of them — at a permanent warning, and a warning that is
     # always on is one nobody reads.
-    not_covered = [f'{a}: IPv6, which these lists are not self-tested for'
-                   for a in addresses[:MAX_ADDRESSES] if _is_ipv6(a)]
+    not_covered = [r for r in (not_covered_reason(a)
+                               for a in addresses[:MAX_ADDRESSES]) if r]
     # Only answers that carry information count. A refusal is not a check that
     # came back clean, and counting it as one is the whole defect this module
     # was written to avoid.
     answered = 0
     for address in addresses[:MAX_ADDRESSES]:
-        if _is_ipv6(address):
+        if not_covered_reason(address):
             continue
         try:
             reversed_name = rbl_query_name(address)
@@ -340,9 +362,8 @@ def check_blocklists(domain, addresses, lookup, cache=None):
     if not answered:
         if not_covered and not unanswered:
             return _result(UNKNOWN,
-                           'this domain resolves only to IPv6, and the blocklists are '
-                           'self-tested for IPv4 only, so nothing was asked about it',
-                           **extra)
+                           'nothing about this domain could be asked: ' +
+                           '; '.join(not_covered), **extra)
         return _result(UNKNOWN,
                        'no blocklist answered usefully — the resolver CertMate uses is '
                        'almost always the reason, because the large lists refuse public '
@@ -356,7 +377,8 @@ def check_blocklists(domain, addresses, lookup, cache=None):
     detail = (f'not listed on {len(lists)} blocklist'
               f'{"s" if len(lists) != 1 else ""}')
     if not_covered:
-        detail += f'; {len(not_covered)} IPv6 address(es) not covered by them'
+        detail += (f'; {len(not_covered)} address(es) these lists do not '
+                   f'cover were not asked about')
     return _result(OK, detail, **extra)
 
 

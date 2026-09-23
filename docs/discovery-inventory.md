@@ -451,13 +451,25 @@ matters:
 | | means | changes the verdict |
 |---|---|---|
 | `unanswered` | a list refused, or a lookup failed — a hole in coverage of something we should have been able to check | yes: downgrades to `warning` |
-| `not_covered` | an IPv6 address, which these lists do not answer about at all | no |
+| `not_covered` | an address these lists do not answer about at all | no |
+
+Two kinds land in `not_covered`. IPv6, for the reason above. And any address
+that is **not public** — RFC 1918, loopback, link-local, and carrier-grade NAT
+(`100.64.0.0/10`, which is neither public nor "private" by the usual test).
+A blocklist lists hosts that send mail on the internet; it has nothing to say
+about `10.0.0.0/8`, so an empty answer is not a clean bill of health. CertMate
+does not ask, which also means an internal address is not handed to four third
+parties who had no reason to learn a piece of your topology.
 
 Most real domains are dual-stack. If the IPv6 address counted as an unanswered
 lookup, nearly every healthy domain would sit at a permanent warning, and a
 warning that is always on is one nobody reads. So a dual-stack domain whose
-IPv4 addresses are clean stays `ok` and says what it skipped; a domain that
-resolves **only** to IPv6 is `unknown`, because then nothing was asked at all.
+public IPv4 addresses are clean stays `ok` and says what it skipped; a domain
+that resolves **only** to addresses these lists do not cover — all IPv6, or
+all internal — is `unknown`, because then nothing was asked at all.
+
+That last case is the common one on a split-horizon estate: a name that
+resolves to `10.x` from where CertMate runs is reported `unknown`, not clean.
 
 The same rule holds elsewhere: a TXT lookup that timed out is `unknown`, not
 "no SPF record"; a host that could not be reached over HTTPS is `unknown`, not
