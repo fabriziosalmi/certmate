@@ -1731,12 +1731,20 @@
                 var safeReason = escapeHtml(reason);
                 var iconBtn = 'p-1.5 rounded transition-colors';
                 // Whether this archive can actually bring the instance back.
-                // Automatic backups are taken with secrets masked and cannot,
-                // and the restore endpoint refuses them — so offering an
-                // identical Restore button on every row made the newest entry
-                // a decoy restore point (#655). Treated as false unless the
-                // API explicitly says true: an older server that does not send
-                // the field must not be read as a promise that it can.
+                // Automatic backups are taken with secrets masked and cannot:
+                // the credentials are not in the archive. Offering an identical
+                // Restore button on every row made the newest entry a decoy
+                // restore point (#655). Treated as false unless the API
+                // explicitly says true: an older server that does not send the
+                // field must not be read as a promise that it can.
+                //
+                // It is not a claim that the endpoint rejects such archives,
+                // which is what this comment used to say. The endpoint refuses a masked
+                // archive over an instance that already holds certificates,
+                // and accepts one onto an empty instance as a configuration
+                // snapshot. `can_restore` answers "can this recover the
+                // instance", not "would the endpoint take the file"; the
+                // blocked reason below says what it can still do.
                 var canRestore = backup.can_restore === true;
                 var blockedReason = escapeHtml(backup.restore_blocked_reason ||
                     'this archive cannot restore the instance');
