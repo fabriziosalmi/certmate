@@ -55,7 +55,7 @@
                         <code class="text-xs">&lt;&lt;</code>,
                         <code class="text-xs">eval</code>,
                         <code class="text-xs">source</code>.
-                        A simple pipe (<code class="text-xs">|</code>) and a redirect to a relative path are allowed.
+                        A simple pipe (<code class="text-xs">|</code>) and a redirect to a relative path are allowed. The command runs <strong>inside the CertMate container</strong>, which carries <code class="text-xs">sh</code>, <code class="text-xs">bash</code>, <code class="text-xs">curl</code> and <code class="text-xs">openssl</code> — not <code class="text-xs">ssh</code>, <code class="text-xs">scp</code> or <code class="text-xs">systemctl</code>.
                         References to CertMate's own secrets (<code class="text-xs">.env</code>, <code class="text-xs">settings.json</code>, the API bearer token, client secrets, vault tokens) are also blocked; certificate and key files are not, because installing them is what a hook is for.
                         If you need any of those, put the logic in a script file inside the container and call the script path directly (e.g. <code class="text-xs">/opt/scripts/deploy.sh</code>).
                     </p>
