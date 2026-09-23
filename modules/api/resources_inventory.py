@@ -31,7 +31,7 @@ from .resource_context import (
 logger = logging.getLogger(__name__)
 
 
-def _config_view(discovery, ct_monitor, registration):
+def _config_view(discovery, ct_monitor, registration, health=None):
     """The discovery configuration as GET and POST both answer it."""
     view = {
         'discovery': discovery.get_config(),
@@ -39,6 +39,8 @@ def _config_view(discovery, ct_monitor, registration):
     }
     if registration is not None:
         view['domain_registration'] = registration.get_config()
+    if health is not None:
+        view['domain_health'] = health.get_config()
     return view
 
 
@@ -48,6 +50,14 @@ def _save_registration_config(registration, payload):
     section = payload.get('domain_registration')
     if registration is not None and isinstance(section, dict):
         registration.save_config(section)
+
+
+def _save_health_config(health, payload):
+    """Persist the ``domain_health`` section of a config POST, if any.
+    Raises ValueError for an extra name that is not a domain."""
+    section = payload.get('domain_health')
+    if health is not None and isinstance(section, dict):
+        health.save_config(section)
 
 
 def _scan_registrations(registration, result):
@@ -62,6 +72,17 @@ def _scan_registrations(registration, result):
         result['domain_registration'] = {'error': 'domain registration check failed'}
 
 
+def _scan_domain_health(health, result):
+    """Run the name-level checks as part of a scan, isolated the same way."""
+    if health is None:
+        return
+    try:
+        result['domain_health'] = health.run_check()
+    except Exception as e:
+        logger.error(f"Domain health check failed: {e}")
+        result['domain_health'] = {'error': 'domain health check failed'}
+
+
 def _registrations_response(ctx):
     """GET /api/inventory/domains: registrations the caller's scope covers."""
     inventory = ctx.managers.get('cert_inventory')
@@ -71,6 +92,44 @@ def _registrations_response(ctx):
     records = [r for r in inventory.list_registrations()
                if is_record_in_scope(ctx, {'subject_cn': r['domain'], 'san_dns': []})]
     return build_registrations_view(records)
+
+
+def _health_response(ctx):
+    """GET /api/inventory/health: name-level checks the caller's scope covers."""
+    inventory = ctx.managers.get('cert_inventory')
+    if inventory is None:
+        return {'error': 'Certificate inventory not available',
+                'code': 'INVENTORY_UNAVAILABLE'}, 503
+    records = [r for r in inventory.list_domain_health()
+               if is_record_in_scope(ctx, {'subject_cn': r['name'], 'san_dns': []})]
+    summary = {'total': len(records),
+               'by_status': {'failing': 0, 'warning': 0, 'unknown': 0, 'ok': 0}}
+    for record in records:
+        status = record.get('status') or 'unknown'
+        summary['by_status'][status] = summary['by_status'].get(status, 0) + 1
+    return {'names': records, 'summary': summary}
+
+
+def _inventory_health_resource(api, ctx):
+    """Build the GET /api/inventory/health resource.
+
+    Outside create_inventory_resources for the same reason as the domains
+    resource: the closure's complexity ceiling only ever comes down.
+    """
+    class InventoryHealth(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('viewer')
+        def get(self):
+            """What the name-level checks last found for each tracked name.
+
+            SPF, DMARC and MX, the blocklists, and the HSTS header the host
+            serves. A check that could not be completed reports ``unknown``,
+            which is not a pass: a blocklist that refused the query has said
+            nothing about the address. A scoped key sees only its own names.
+            """
+            return _health_response(ctx)
+
+    return InventoryHealth
 
 
 def _inventory_domains_resource(api, ctx):
@@ -172,7 +231,8 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             if discovery is None or ct_monitor is None:
                 return {'error': 'Certificate discovery not available'}, 503
             return _config_view(discovery, ct_monitor,
-                                ctx.managers.get('domain_registration'))
+                                ctx.managers.get('domain_registration'),
+                                ctx.managers.get('domain_health'))
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
@@ -189,15 +249,17 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                 return {'error': 'Certificate discovery not available'}, 503
             payload = request.get_json(silent=True) or {}
             registration = ctx.managers.get('domain_registration')
+            health = ctx.managers.get('domain_health')
             try:
                 if isinstance(payload.get('discovery'), dict):
                     discovery.save_config(payload['discovery'])
                 if isinstance(payload.get('ct_monitoring'), dict):
                     ct_monitor.save_config(payload['ct_monitoring'])
                 _save_registration_config(registration, payload)
+                _save_health_config(health, payload)
             except ValueError as e:
                 return {'error': str(e)}, 400
-            return _config_view(discovery, ct_monitor, registration)
+            return _config_view(discovery, ct_monitor, registration, health)
 
     class InventoryScan(Resource):
         @api.doc(security='Bearer')
@@ -222,9 +284,11 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                 result['ct_monitoring'] = {'error': 'ct poll failed'}
             # Last, so it sees what discovery and the CT poll just added.
             _scan_registrations(ctx.managers.get('domain_registration'), result)
+            _scan_domain_health(ctx.managers.get('domain_health'), result)
             return result
 
     InventoryDomains = _inventory_domains_resource(api, ctx)
+    InventoryHealth = _inventory_health_resource(api, ctx)
 
     class InventoryCryptoReport(Resource):
         @api.doc(security='Bearer')
@@ -352,6 +416,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
         'InventoryConfig': InventoryConfig,
         'InventoryScan': InventoryScan,
         'InventoryDomains': InventoryDomains,
+        'InventoryHealth': InventoryHealth,
         'InventoryCryptoReport': InventoryCryptoReport,
         'InventoryAdopt': InventoryAdopt,
     }

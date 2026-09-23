@@ -7,6 +7,7 @@ from flask import request, jsonify, send_file, after_this_request
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
+from modules.core.request_fields import json_booleans
 
 
 logger = logging.getLogger(__name__)
@@ -296,6 +297,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/web/certificates/<string:domain>/renew', methods=['POST'])
     @auth_manager.require_role('operator')
+    @json_booleans(force=False)
     def renew_certificate_web(domain):
         """Renew certificate via web"""
         try:
@@ -305,7 +307,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
             # Use the directory name (domain) for renewal
             domain_name = cert_dir.name
-            force = bool((request.get_json(silent=True) or {}).get('force', False))
+            force = request.json_booleans['force']
             user = getattr(request, 'current_user', None) or {}
             result = cert_service.renew(
                 domain=domain_name, force=force,

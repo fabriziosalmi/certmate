@@ -655,7 +655,9 @@ def test_scan_runs_the_registration_check_last(real_app):
     mgr = container.managers['domain_registration']
     mgr.run_check = MagicMock(return_value={'skipped': True, 'reason': 'disabled', 'results': []})
     body = application.test_client().post('/api/inventory/scan').get_json()
-    assert list(body) == ['discovery', 'ct_monitoring', 'domain_registration']
+    # The registration check runs after discovery and the CT poll, so it sees
+    # what they just added; the name-level checks follow it for the same reason.
+    assert list(body) == ['discovery', 'ct_monitoring', 'domain_registration', 'domain_health']
     mgr.run_check.assert_called_once_with()
 
 
@@ -673,3 +675,28 @@ def test_real_registries():
     it = client.lookup('nic.it')
     assert (it['status'], it['source']) == (STATUS_OK, 'whois')
     assert client.lookup('google.de')['status'] == STATUS_NOT_PUBLISHED
+
+
+def test_a_scan_without_the_registration_manager_still_scans(real_app):
+    application, container = real_app
+    container.managers.pop('domain_registration')
+    body = application.test_client().post('/api/inventory/scan').get_json()
+    assert 'domain_registration' not in body
+    assert 'discovery' in body
+
+
+def test_a_registration_check_that_blows_up_does_not_lose_the_scan(real_app):
+    application, container = real_app
+    container.managers['domain_registration'].run_check = MagicMock(
+        side_effect=RuntimeError('registry on fire'))
+    body = application.test_client().post('/api/inventory/scan').get_json()
+    assert body['domain_registration'] == {'error': 'domain registration check failed'}
+    assert 'ct_monitoring' in body
+
+
+def test_the_domains_endpoint_says_so_when_there_is_no_inventory(real_app):
+    application, container = real_app
+    container.managers['cert_inventory'] = None
+    response = application.test_client().get('/api/inventory/domains')
+    assert response.status_code == 503
+    assert response.get_json()['code'] == 'INVENTORY_UNAVAILABLE'

@@ -98,7 +98,28 @@ GENERAL_LIMIT = 10
 # The sweep itself (DomainRegistrationManager.run_check) has no catch-all: a
 # single lookup never raises, and anything else is left to the scheduler
 # wrapper, which already logs it and records the run.
-TOTAL_LIMIT = 428
+#
+# 428 -> 430 on 2026-09-22, for the name-level checks (SPF/DMARC/MX/blocklists/
+# HSTS). Both LOG:
+#
+#   modules/api/resources_inventory.py   the scan's domain-health step, the
+#                                        same shape as the three steps above
+#                                        it, for the same reason.
+#   modules/core/domain_health.py        DomainHealthManager.check_one. This is
+#                                        where it differs from the registration
+#                                        sweep above: that one checks each
+#                                        domain through a client that turns
+#                                        every failure into a status, so it can
+#                                        leave the rest to the wrapper. This one
+#                                        runs five checks per name against
+#                                        injected lookups, and one name's
+#                                        surprise must not cost the other two
+#                                        hundred their sweep. It records the
+#                                        name as `unknown`, never as passing,
+#                                        which is what
+#                                        test_a_failed_name_is_recorded_as_
+#                                        unknown_not_as_passing pins.
+TOTAL_LIMIT = 430
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
