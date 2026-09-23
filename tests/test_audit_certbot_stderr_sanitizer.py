@@ -11,8 +11,8 @@ landed in the JSON 422 the operator saw.
 
 The fix splits the two consumers:
 
-* The application log keeps the raw stderr — operators reading
-  ``data/logs/`` still see every detail and can debug the failure.
+* Issuance logs sanitise stderr and also redact the EAB values from the
+  Certbot argv before recording an error.
 * The exception that flows into the API response is sanitised:
   credential-bearing lines redact their value, paths to the
   credentials ``.ini`` are replaced with a generic marker, and the

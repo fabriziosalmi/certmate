@@ -57,6 +57,9 @@ CA_IDENTIFIERS = {
                  'quovadisglobal.com', 'amazon.com', 'amazontrust.com',
                  'awstrust.com', 'amazonaws.com'),
 }
+# ZeroSSL issues from the Sectigo hierarchy; the CCADB identifiers apply to
+# both providers, so keep their CAA advice in sync.
+CA_IDENTIFIERS['sectigo'] = CA_IDENTIFIERS['zerossl']
 
 # Property tags a CA understands. An unknown tag with the critical flag set
 # obliges the CA to refuse (RFC 8659 section 4.1), so it is reported as such.
