@@ -353,6 +353,60 @@ def _is_permanent_http_status(status) -> bool:
     return 400 <= status < 500 and status not in RETRYABLE_4XX
 
 
+#: What is kept when a URL carries no usable origin. Not an empty string: an
+#: entry whose url went missing and one that never had a parseable one are
+#: different facts, and a log that flattens them tells an operator less.
+DELIVERY_URL_UNPARSEABLE = '(unparseable)'
+
+
+def delivery_log_url(url) -> str:
+    """What a delivery record may keep of a webhook URL: its origin.
+
+    A webhook's URL **is** the credential. `modules/core/settings.py` says so
+    where it declares `webhooks.url` a secret: for Slack, Discord, ntfy and
+    Gotify the incoming-webhook URL embeds the bearer token in its path, so
+    anyone who reads it can post to the channel. It is masked in
+    `GET /api/web/settings` and kept out of the share-safe backup ZIP for
+    exactly that reason.
+
+    `_log_delivery` wrote it in full to `data/webhook_deliveries.jsonl`, and
+    `get_deliveries` handed it straight back through
+    `GET /api/webhooks/deliveries`. The same secret therefore sat in a second
+    file on disk and left by a second route, while the first was carefully
+    closed — the kind of gap that opens when a field is declared sensitive in
+    one module and copied in another.
+
+    This module already knew the answer. The SSRF refusal and the redirect
+    guard both log `urlparse(url).hostname` and nothing else; only this one
+    call site did not. The origin is what an operator debugging a delivery
+    needs — *which host did it go to* — and the record already carries
+    `webhook_name`, `webhook_type` and `event` for identity.
+
+    Userinfo goes with the rest: `https://u:p@host/x` keeps only
+    `https://host`. Port is kept, because a delivery to :8443 rather than :443
+    is a real difference when a receiver is behind a proxy.
+    """
+    text = str(url or '').strip()
+    if not text:
+        return ''
+    try:
+        parsed = urlparse(text)
+    except ValueError:
+        return DELIVERY_URL_UNPARSEABLE
+    # `hostname` rather than `netloc`: netloc carries any `user:password@`
+    # prefix, which is a credential of its own.
+    if not parsed.scheme or not parsed.hostname:
+        return DELIVERY_URL_UNPARSEABLE
+    host = parsed.hostname
+    try:
+        if parsed.port:
+            host = f'{host}:{parsed.port}'
+    except ValueError:
+        # A port that is not a number. The host is still worth keeping.
+        pass
+    return f'{parsed.scheme}://{host}'
+
+
 class Notifier:
     """Sends notifications via configured channels."""
 
@@ -560,7 +614,10 @@ class Notifier:
             'webhook_name': cfg.get('name', 'webhook'),
             'webhook_type': cfg.get('type', 'generic'),
             'event': event,
-            'url': cfg.get('url', ''),
+            # Origin only — see delivery_log_url. The full URL is the
+            # credential, and this file outlives the request, is readable by
+            # anything that can read data/, and leaves through the API.
+            'url': delivery_log_url(cfg.get('url', '')),
             'status': result.get('status'),
             'success': bool(result.get('success')),
             'attempts': attempts,
@@ -598,7 +655,17 @@ class Notifier:
             pass
 
     def get_deliveries(self, limit: int = 50) -> List[dict]:
-        """Read recent delivery log entries, newest first."""
+        """Read recent delivery log entries, newest first.
+
+        The url is reduced on the way out as well as on the way in. Fixing
+        only the writer would have left every line already on disk — up to
+        ``MAX_DELIVERY_LOG_ENTRIES`` of them, written by every earlier
+        version — still leaving through this endpoint until they aged out.
+        A file is not a cache; it keeps what it was given.
+
+        Reducing an already-reduced url is a no-op: ``https://host`` parses to
+        ``https://host``.
+        """
         try:
             if not self._delivery_log_path.exists():
                 return []
@@ -607,7 +674,10 @@ class Notifier:
             for line in reversed(lines[-limit:]):
                 line = line.strip()
                 if line:
-                    entries.append(json.loads(line))
+                    entry = json.loads(line)
+                    if isinstance(entry, dict) and 'url' in entry:
+                        entry['url'] = delivery_log_url(entry['url'])
+                    entries.append(entry)
             return entries
         except (OSError, json.JSONDecodeError) as e:
             logger.debug(f"Failed to read delivery log: {e}")

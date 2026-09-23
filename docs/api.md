@@ -1382,6 +1382,11 @@ header *names*. Credential values are never echoed back.
 Recent deliveries, newest first, so a webhook that is failing silently is
 visible.
 
+`url` is the **origin** only — `https://hooks.slack.com`, not the full
+endpoint. An incoming-webhook URL carries its bearer secret in the path, so the
+path, query and any `user:password@` are not kept. Entries written before this
+are reduced on read as well, so the endpoint never serves one in full.
+
 #### Send the weekly digest now
 
 **Endpoint**: `POST /api/digest/send` — admin
