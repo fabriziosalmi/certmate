@@ -238,9 +238,9 @@ Hooks are arbitrary code execution by design — that's the feature. To keep the
 | `\r` / `\n` | newlines (so `sh -c` can't interpret them as `;`) |
 | `> /` (redirect to absolute path) | prevents overwriting system files |
 | `<<` | here-doc |
-| `eval`, `source`, `. /` | shell builtins that load arbitrary code |
+| `eval`, `source`, `.` (the source shorthand, with any argument) | shell builtins that load arbitrary code |
 
-Two things that look like they belong on that list are allowed on purpose (#115): a simple pipe, for post-processing such as `curl ... | jq .`, and a redirect to a relative path (`> out.txt`). Only a redirect to an absolute path is blocked.
+Two things that look like they belong on that list are allowed on purpose (#115): a simple pipe, for post-processing such as `curl ... | grep -q ok` (both sides must be a command the image carries — `jq` is not one of them), and a redirect to a relative path (`> out.txt`). Only a redirect to an absolute path is blocked.
 
 If you need any of those, put the logic in a script file inside the container and call the script directly:
 

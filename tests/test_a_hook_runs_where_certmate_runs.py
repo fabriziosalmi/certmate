@@ -43,8 +43,12 @@ DOC = DOCS[0]
 # What the runtime stage installs, plus what the base image brings. Kept as a
 # literal so the unit test needs no container; `test_the_declared_set_is_the
 # _image_s` is what stops it becoming a wish.
+#
+# This is not the image's whole command set — it is the set the page's examples
+# are allowed to draw on, and the e2e test below proves each of them is really
+# there. It says nothing about what else the base image carries.
 COMMANDS_THE_IMAGE_HAS = {'sh', 'bash', 'curl', 'openssl', 'echo', 'exit',
-                          'set', 'cd', 'test', '['}
+                          'set', 'cd', 'test', '[', 'grep'}
 
 # Commands named in the page only to say they are NOT available. Listing them
 # here rather than excluding the section wholesale means removing the warning
@@ -73,6 +77,41 @@ def _example_commands(doc=None):
     return found
 
 
+def _inline_pipelines(doc=None):
+    """Commands shown in a pipeline written inline in the prose.
+
+    The fenced-block reader above misses these, and one slipped through: the
+    page explained that a simple pipe is allowed on purpose with the example
+    `curl ... | jq .`, forty-five lines above a table that lists `jq` among the
+    commands the image does not have. The same page, contradicting itself, past
+    a gate that only looked at fenced blocks.
+
+    **Only pipelines, and that is deliberate.** A gate over all inline code
+    would have to tell a recipe apart from a counter-example, and this page is
+    full of the latter — `systemctl reload haproxy` appears precisely to say it
+    does not work. No syntax distinguishes them, and a gate needing an
+    exception list for prose is a gate that rots. A pipeline is different: it
+    is always something being shown as writable.
+
+    Segments that do not begin with a word character or `/` are skipped, which
+    is how the escaped `\\|\\|` in the blocked-patterns table stays out.
+    """
+    text = (doc or DOC).read_text(encoding='utf-8')
+    text = re.sub(r'```.*?```', '', text, flags=re.S)
+    found = []
+    for span in re.findall(r'`([^`\n]+)`', text):
+        if '|' not in span:
+            continue
+        for segment in span.split('|'):
+            token = segment.strip().split()[0] if segment.strip() else ''
+            if not token or not re.match(r'[\w/]', token):
+                continue
+            if token.startswith('$'):
+                continue
+            found.append((span, token))
+    return found
+
+
 def test_the_page_still_has_examples():
     """Guard the guard: an empty list would make the check below vacuous."""
     assert len(_example_commands()) >= 4
@@ -94,6 +133,28 @@ def test_every_example_command_exists_in_the_image(doc):
         '\nEither use a command the image has, or show it as a derived-image '
         'or over-the-network pattern rather than as a recipe.'
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize('doc', DOCS, ids=[d.parent.name for d in DOCS])
+def test_a_pipeline_shown_in_the_prose_can_run(doc):
+    """Both sides of a pipe the page offers as an example must exist.
+
+    The English and Italian pages showed `curl ... | jq .`; `jq` is named on
+    the same page as absent from the image.
+    """
+    offenders = [(span, cmd) for span, cmd in _inline_pipelines(doc)
+                 if cmd not in COMMANDS_THE_IMAGE_HAS and not cmd.startswith('/opt/')]
+    assert not offenders, (
+        f'{doc.relative_to(REPO)} shows a pipeline using a command the image '
+        f'does not carry:\n' +
+        '\n'.join(f'  `{span}` -> {cmd}' for span, cmd in offenders))
+
+
+def test_at_least_one_page_shows_a_pipeline():
+    """Guard the guard: if the prose stops containing pipelines the check
+    above passes over nothing, and would keep passing if one came back."""
+    assert any(_inline_pipelines(doc) for doc in DOCS)
 
 
 WHERE_IT_RUNS = {'docs': 'Inside the CertMate container',
