@@ -671,7 +671,7 @@ def initialize_managers(container: AppContainer, app):
     # earlier it would persist the plaintext (#401).
     auth_manager.reconcile_bearer_token_from_env()
     cache_manager = CacheManager(settings_manager)
-    storage_manager = StorageManager(settings_manager)
+    storage_manager = StorageManager(settings_manager, default_cert_dir=container.cert_dir)
     ca_manager = CAManager(settings_manager)
 
     ca_dir = container.data_dir / "certs" / "ca"
