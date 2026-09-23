@@ -199,6 +199,15 @@ def register_web_routes(app, managers):
             'current_user': getattr(request, 'current_user', None),
         }
 
+    # The version, on every page. templates/help.html has told operators to
+    # find it "in the footer of every page" since before there was a footer,
+    # and #855 is someone who went looking. A context processor rather than a
+    # per-view argument so a page added later cannot forget it.
+    @app.context_processor
+    def _inject_version():
+        from modules import __version__
+        return {'certmate_version': __version__}
+
     from .ui_routes import register_ui_routes
     from .misc_routes import register_misc_routes
     from .auth_routes import register_auth_routes
