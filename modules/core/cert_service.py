@@ -123,7 +123,7 @@ class CertificateService:
             logger.debug("Audit emit failed for operation=%s", operation)
 
     def create(self, *, domain, san_domains=None, dns_provider=None,
-               account_id=None, ca_provider=None, challenge_type=None,
+               account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
                domain_alias=None, key_type=None, key_size=None,
                elliptic_curve=None, user=None, ip_address=None, audit_ctx=None,
                csr_pem=None):
@@ -145,7 +145,7 @@ class CertificateService:
         """
         return self.issue_create(self.prepare_create(
             domain=domain, san_domains=san_domains, dns_provider=dns_provider,
-            account_id=account_id, ca_provider=ca_provider,
+            account_id=account_id, ca_provider=ca_provider, ca_account_id=ca_account_id,
             challenge_type=challenge_type, domain_alias=domain_alias,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             user=user, ip_address=ip_address, audit_ctx=audit_ctx,
@@ -153,7 +153,7 @@ class CertificateService:
         ))
 
     def prepare_create(self, *, domain, san_domains=None, dns_provider=None,
-                        account_id=None, ca_provider=None, challenge_type=None,
+                        account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
                         domain_alias=None, key_type=None, key_size=None,
                         elliptic_curve=None, user=None, ip_address=None,
                         audit_ctx=None, csr_pem=None):
@@ -277,6 +277,7 @@ class CertificateService:
             'dns_provider': dns_provider,
             'account_id': account_id,
             'ca_provider': ca_provider,
+            'ca_account_id': ca_account_id,
             'domain_alias': domain_alias,
             'san_domains': san_domains,
             'challenge_type': challenge_type,
@@ -306,6 +307,7 @@ class CertificateService:
                 dns_provider=prepared['dns_provider'],
                 account_id=prepared['account_id'],
                 ca_provider=prepared['ca_provider'],
+                ca_account_id=prepared.get('ca_account_id'),
                 domain_alias=prepared['domain_alias'],
                 san_domains=prepared['san_domains'],
                 challenge_type=prepared['challenge_type'],

@@ -1,6 +1,9 @@
 # Fornitori di Certificate Authority (CA)
 
 <!-- CERTMATE-TRANSLATED-FROM 1044447d11378cf0 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+
+> Questa traduzione non è aggiornata. Consulta la [versione inglese](../ca-providers.md) per il nuovo provider Sectigo ACME, gli URL HTTPS delle directory per account e le credenziali EAB.
 
 CertMate supporta diversi fornitori di Certificate Authority, consentendoti di scegliere la CA più adatta alle tue esigenze.
 

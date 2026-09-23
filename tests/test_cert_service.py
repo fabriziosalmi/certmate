@@ -40,6 +40,13 @@ def _make_service(*, allowed=True, settings=None):
 
 
 class TestCreate:
+    def test_selected_ca_account_reaches_issuance(self):
+        svc, certs, *_ = _make_service()
+        svc.create(domain='shiny.example.com', ca_provider='sectigo',
+                   ca_account_id='production-ov', user={}, ip_address='1.2.3.4')
+        assert certs.create_certificate.call_args.kwargs['ca_provider'] == 'sectigo'
+        assert certs.create_certificate.call_args.kwargs['ca_account_id'] == 'production-ov'
+
     def test_happy_path_calls_manager_and_persists(self):
         svc, certs, settings_mgr, _auth, _audit = _make_service()
         result = svc.create(

@@ -119,6 +119,16 @@ class CAManager:
                 'supports_wildcard': False,
                 'certificate_types': ['DV'],
                 'description': 'European CA (Italy) with free 90-day DV certificates via ACME'
+            },
+            'sectigo': {
+                'name': 'Sectigo',
+                'production_url': 'custom',
+                'staging_url': 'custom',
+                'requires_acme_url': True,
+                'requires_eab': True,
+                'supports_wildcard': True,
+                'certificate_types': ['DV', 'OV'],
+                'description': 'Sectigo Certificate Manager ACME certificates (account-specific directory)'
             }
         }
     
@@ -186,20 +196,16 @@ class CAManager:
         
         ca_info = self.ca_providers[ca_provider]
         
-        if ca_provider == 'private_ca' and account_config:
-            # For private CA, use custom URL from configuration
-            if staging and account_config.get('staging_url'):
+        if ca_provider == 'private_ca' or ca_info.get('requires_acme_url'):
+            if staging and (account_config or {}).get('staging_url'):
                 return account_config['staging_url']
-            elif account_config.get('acme_url'):
+            if (account_config or {}).get('acme_url'):
                 return account_config['acme_url']
-            else:
-                raise ValueError("Private CA ACME URL not configured")
-        else:
-            # Use predefined URLs for public CAs
-            if staging:
-                return ca_info['staging_url']
-            else:
-                return ca_info['production_url']
+            raise ValueError(f"{ca_info['name']} ACME URL not configured")
+
+        # Other public CAs retain their pinned directory, even if an account
+        # contains an acme_url (as with the existing DigiCert settings form).
+        return ca_info['staging_url' if staging else 'production_url']
     
     def requires_eab(self, ca_provider: str) -> bool:
         """Check if CA provider requires External Account Binding"""
@@ -356,6 +362,26 @@ class CAManager:
             return False, f"Unsupported CA provider: {ca_provider}"
         
         ca_info = self.ca_providers[ca_provider]
+
+        if ca_provider == 'private_ca' or ca_info.get('requires_acme_url'):
+            if not config.get('acme_url'):
+                if ca_provider == 'private_ca':
+                    return False, "Private CA requires ACME server URL"
+                return False, f"{ca_info['name']} requires an ACME Directory URL"
+            if ca_provider == 'private_ca':
+                # An account-configured private CA directory is subject to
+                # the same HTTPS rule as the built-in CA directories (#885).
+                acme_url = config['acme_url']
+                scheme = acme_url.split('://', 1)[0].lower() if '://' in acme_url else ''
+                if scheme == 'http':
+                    return False, (
+                        "ACME server URL must use https. A directory fetched over "
+                        "plain HTTP cannot be trusted to be the one you meant."
+                    )
+                if scheme != 'https':
+                    return False, "Invalid ACME server URL format"
+            elif not config['acme_url'].startswith('https://'):
+                return False, f"{ca_info['name']} requires an HTTPS ACME Directory URL"
         
         # Check required fields based on CA provider
         if ca_info['requires_eab']:
@@ -363,36 +389,7 @@ class CAManager:
             has_hmac = config.get('eab_hmac_key') or config.get('eab_hmac')
             if not has_kid or not has_hmac:
                 return False, f"{ca_info['name']} requires EAB Key ID and HMAC Key"
-        
-        elif ca_provider == 'private_ca':
-            if not config.get('acme_url'):
-                return False, "Private CA requires ACME server URL"
-            
-            # An ACME directory is fetched, and then an account key is
-            # bound to it and orders are placed against it. Over plain HTTP
-            # every part of that is readable and rewritable by anything on
-            # the path, so it is refused here rather than left to the
-            # operator to notice. `test_every_ca_url_is_https` already holds
-            # the built-in CAs to this; an account-configured URL is the
-            # same directory, reached the same way, and gets the same rule.
-            # RFC 3986: the scheme is case-insensitive, so `HTTP://` is
-            # plain HTTP and has to be refused as such rather than falling
-            # through to "malformed" — which is true but tells the operator
-            # the wrong thing to fix.
-            acme_url = config.get('acme_url', '')
-            scheme = acme_url.split('://', 1)[0].lower() if '://' in acme_url else ''
-            if scheme == 'http':
-                return False, (
-                    "ACME server URL must use https. A directory fetched over "
-                    "plain HTTP cannot be trusted to be the one you meant."
-                )
-            if scheme != 'https':
-                return False, "Invalid ACME server URL format"
-        
-        elif ca_provider == 'letsencrypt':
-            # Let's Encrypt doesn't require additional configuration
-            pass
-        
+
         return True, "Configuration is valid"
     
     def get_ca_account_display_info(self, ca_provider: str, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -410,6 +407,8 @@ class CAManager:
             display_info['eab_configured'] = bool(
                 config.get('eab_key_id') or config.get('eab_kid')
             )
+            if self.ca_providers[ca_provider].get('requires_acme_url'):
+                display_info['acme_url'] = config.get('acme_url', '')
         elif ca_provider == 'private_ca':
             display_info['acme_url'] = config.get('acme_url', '')
             display_info['ca_cert_configured'] = bool(config.get('ca_cert'))
@@ -418,4 +417,3 @@ class CAManager:
             )
         
         return display_info
-

@@ -103,6 +103,38 @@ Converting a staging certificate to production requires a reissue with the produ
 - **EAB HMAC Key**: Provided by SSL.com
 - **Email**: ACME account contact (see [Account email](#account-email))
 
+### Sectigo
+
+- **Type**: Public/commercial ACME CA via Sectigo Certificate Manager (SCM)
+- **Certificate Types**: DV, OV (depending on the selected SCM account/profile)
+- **Wildcard Support**: Yes, when permitted by the SCM account/profile
+- **EAB Required**: Yes
+- **ACME Directory URL**: Copy the HTTPS URL from the SCM ACME account details; it is account-specific
+- **EAB Key ID / KID and HMAC Key**: Copy from the SCM ACME account details
+- **Email**: ACME account contact (see [Account email](#account-email))
+
+Example test configuration (the URL is **only an example**, not a universal endpoint):
+
+```json
+{
+  "ca_provider": "sectigo",
+  "config": {
+    "acme_url": "https://acme.sectigo.com/v2/OV",
+    "eab_kid": "your-sectigo-key-id",
+    "eab_hmac": "your-sectigo-hmac-key",
+    "email": "admin@example.com"
+  }
+}
+```
+
+For multiple accounts, configure `ca_providers.sectigo.accounts` in settings,
+with each account holding its own `acme_url`, `eab_kid`, `eab_hmac`, and `email`.
+Select an account using `ca_account_id` on the certificate creation API; if
+omitted, CertMate uses `default_ca_accounts.sectigo` or the first configured account.
+Renewal reuses the recorded CA account. DNS-01 (including Custom Script) and
+HTTP-01 remain available; SCM may already have authorized the requested domain.
+Existing Sectigo configurations under Private CA continue to work unchanged.
+
 ### Private CA
 
 - **Type**: Internal/Corporate Certificate Authority
@@ -162,10 +194,11 @@ Set a default CA for all new certificates. Override it per-certificate during cr
 3. Proceed with certificate creation
 
 If the chosen CA has no saved configuration (or the requested CA account does
-not exist), issuance does not fail: it falls back to Let's Encrypt (to Let's
-Encrypt staging when the request was a staging one) and logs a warning. Check
-the `ca_provider` in the response or the certificate's metadata to confirm
-which CA issued it.
+not exist), most providers fall back to Let's Encrypt (to Let's Encrypt staging
+when the request was a staging one) and log a warning. Sectigo fails closed
+instead: an unknown account or missing HTTPS directory URL cannot silently
+issue from another CA. Check the `ca_provider` in the response or the
+certificate's metadata to confirm which CA issued it.
 
 ### Via API
 
@@ -198,7 +231,7 @@ curl -X POST http://localhost:8000/api/settings/test-ca-provider \
 
 ## External Account Binding (EAB)
 
-ZeroSSL, Google Trust Services, DigiCert, SSL.com and Actalis require External Account Binding to link your ACME client to your CA account.
+ZeroSSL, Google Trust Services, DigiCert, SSL.com, Actalis and Sectigo require External Account Binding to link your ACME client to your CA account.
 
 ### What is EAB?
 
@@ -228,7 +261,7 @@ ZeroSSL, Google Trust Services, DigiCert, SSL.com and Actalis require External A
 
 ## SSL Certificate Trust
 
-### Public CAs (Let's Encrypt, ZeroSSL, Google Trust Services, DigiCert, SSL.com, Actalis)
+### Public CAs (Let's Encrypt, ZeroSSL, Google Trust Services, DigiCert, SSL.com, Actalis, Sectigo)
 
 Certificates are automatically trusted by browsers and operating systems (except those from Let's Encrypt staging).
 
@@ -259,6 +292,11 @@ You can optionally provide the root CA certificate in CertMate for trust chain v
 - **`Your account only grants single-domain 90-days DV certificates`**: The free plan rejects SAN/multi-domain requests — issue one certificate per hostname or upgrade the plan
 - **Invalid EAB credentials**: Retrieve fresh credentials from the customer area under Manage with ACME
 - **Wildcard rejected**: Wildcard certificates are not available via ACME at Actalis
+
+### Sectigo
+- **Invalid EAB credentials**: Verify the KID and HMAC against the selected SCM ACME account details
+- **Unauthorized identifier/domain**: Verify the domain is authorized for the selected SCM ACME account and organization
+- **Wrong ACME endpoint**: Verify the configured directory URL exactly matches the URL provided in SCM for that account
 
 ### Private CA
 - **ACME URL unreachable**: Check network connectivity
@@ -312,6 +350,10 @@ You can optionally provide the root CA certificate in CertMate for trust chain v
 ### Actalis
 - [How to enable ACME](https://guide.actalis.com/ssl/activation/acme)
 - [ACME FAQ](https://guide.actalis.com/faq/SSL/ACME)
+
+### Sectigo
+- [Understanding SCM ACME endpoints](https://docs.sectigo.com/scm/scm-administrator/understanding-acme-endpoints.html)
+- [Adding SCM ACME accounts](https://docs.sectigo.com/scm/scm-administrator/adding-acme-accounts.html)
 
 ### Private CA
 - [step-ca Documentation](https://smallstep.com/docs/step-ca/)

@@ -2,7 +2,7 @@
 
 <!-- CERTMATE-TRANSLATED-FROM 4a4fcc10de4a1e4b -->
 <!-- CERTMATE-STALE-TRANSLATION -->
-> **Esta traducción no está actualizada.** La versión en inglés ([`docs/ca-providers.md`](../ca-providers.md)) se ha modificado desde entonces y es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
+> **Esta traducción no está actualizada.** La versión en inglés ([`docs/ca-providers.md`](../ca-providers.md)) es la de referencia. También describe el nuevo proveedor Sectigo ACME, las URL de directorio HTTPS por cuenta y las credenciales EAB.
 
 CertMate soporta múltiples proveedores de autoridad de certificación, permitiéndote elegir la CA más adecuada a tus necesidades.
 

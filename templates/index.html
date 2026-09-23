@@ -213,12 +213,15 @@
                                     <option value="google">Google Trust Services (Free, DV certificates)</option>
                                     <option value="actalis">Actalis (Free, 90-day DV certificates)</option>
                                     <option value="digicert">DigiCert ACME (Enterprise, DV/OV/EV)</option>
+                                    <option value="sectigo">Sectigo ACME (SCM account)</option>
                                     <option value="sslcom">SSL.com (Enterprise, DV/OV/EV)</option>
                                     <option value="private_ca">Private CA (Internal/Corporate)</option>
                                 </select>
                                 <div id="ca-provider-info" class="mt-2 text-xs text-muted hidden">
                                     <!-- CA provider info will be populated here -->
                                 </div>
+                                <label for="ca_account_id" class="block text-sm text-label mt-2">CA account ID (optional)</label>
+                                <input type="text" id="ca_account_id" class="block w-full border border-border bg-input text-foreground rounded-lg py-2 px-4" placeholder="Use provider default account">
                                 <!-- CAA advice (never a gate): filled by checkCaaFromForm when a
                                      CAA record would make the chosen CA refuse these names. -->
                                 <div id="caa_warning" class="mt-2 hidden" role="status" aria-live="polite"></div>

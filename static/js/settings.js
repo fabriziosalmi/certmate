@@ -189,6 +189,11 @@
                 email = (caProviders.sslcom && caProviders.sslcom.email) || '';
             } else if (defaultCA === 'digicert') {
                 email = (caProviders.digicert && caProviders.digicert.email) || '';
+            } else if (defaultCA === 'sectigo') {
+                var sectigoSettings = caProviders.sectigo || {};
+                var sectigoAccounts = sectigoSettings.accounts || {};
+                var sectigoDefault = (currentSettings.default_ca_accounts || {}).sectigo || Object.keys(sectigoAccounts)[0];
+                email = sectigoSettings.email || (sectigoAccounts[sectigoDefault] || {}).email || '';
             } else if (defaultCA === 'private_ca') {
                 email = (caProviders.private_ca && caProviders.private_ca.email) || '';
             }
@@ -257,6 +262,7 @@
                     defaultCA === 'actalis' ? 'Actalis' :
                     defaultCA === 'sslcom' ? 'SSL.com' :
                     defaultCA === 'digicert' ? 'DigiCert' :
+                    defaultCA === 'sectigo' ? 'Sectigo' :
                     defaultCA === 'private_ca' ? 'Private CA' : defaultCA;
                 if (!currentSettings.setup_completed) {
                     throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
@@ -2040,12 +2046,13 @@
             'google': 'google-ca-config',
             'actalis': 'actalis-config',
             'digicert': 'digicert-config',
+            'sectigo': 'sectigo-config',
             'sslcom': 'sslcom-config',
             'private_ca': 'private-ca-config'
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'letsencrypt-staging-config', 'zerossl-config', 'google-ca-config', 'actalis-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'letsencrypt-staging-config', 'zerossl-config', 'google-ca-config', 'actalis-config', 'digicert-config', 'sectigo-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
@@ -2092,6 +2099,9 @@
                     break;
                 case 'digicert':
                     hintElement.textContent = 'Enter ACME URL, EAB credentials, and email, then test DigiCert connection';
+                    break;
+                case 'sectigo':
+                    hintElement.textContent = 'Copy the ACME directory URL and EAB credentials from your Sectigo SCM ACME account';
                     break;
                 case 'sslcom':
                     hintElement.textContent = 'Enter EAB credentials and email, then test SSL.com connection';
@@ -2182,6 +2192,18 @@
                 eab_hmac: dcEabHmac,
                 email: dcEmail
             };
+        } else if (caProvider === 'sectigo') {
+            config = {
+                acme_url: document.getElementById('sectigo-acme-url').value,
+                eab_kid: document.getElementById('sectigo-eab-kid').value,
+                eab_hmac: document.getElementById('sectigo-eab-hmac').value,
+                email: document.getElementById('sectigo-email').value
+            };
+            if (!config.acme_url.trim()) missingFields.push('ACME Directory URL');
+            if (!config.eab_kid.trim()) missingFields.push('EAB Key ID');
+            if (!config.eab_hmac.trim()) config.eab_hmac = sectigoAccountConfig().eab_hmac || '';
+            if (!config.eab_hmac.trim()) missingFields.push('EAB HMAC Key');
+            if (!config.email.trim()) missingFields.push('Email');
         } else if (caProvider === 'private_ca') {
             var pcAcmeUrl = document.getElementById('private-ca-acme-url').value;
             var pcEmail = document.getElementById('private-ca-email').value;
@@ -2573,6 +2595,20 @@
             document.getElementById('digicert-email').value = digicertConfig.email;
         }
 
+        var sectigoConfig = caProviders.sectigo || {};
+        var select = document.getElementById('sectigo-account-select');
+        select.replaceChildren();
+        var accounts = sectigoConfig.accounts || {};
+        if (!Object.keys(accounts).length && sectigoConfig.acme_url) {
+            select.add(new Option('Existing account', 'legacy'));
+        }
+        Object.keys(accounts).forEach(function (id) { select.add(new Option(id, id)); });
+        select.add(new Option('Add account...', 'new'));
+        select.value = (settings.default_ca_accounts || {}).sectigo || Object.keys(accounts)[0] ||
+            (sectigoConfig.acme_url ? 'legacy' : 'new');
+        select.onchange = loadSectigoAccount;
+        loadSectigoAccount();
+
         // Load Private CA settings
         var privateCaConfig = caProviders.private_ca || {};
         if (privateCaConfig.acme_url) {
@@ -2589,6 +2625,25 @@
         if (privateCaConfig.email) {
             document.getElementById('private-ca-email').value = privateCaConfig.email;
         }
+    }
+
+    function sectigoAccountConfig() {
+        var config = ((currentSettings.ca_providers || {}).sectigo || {});
+        var id = document.getElementById('sectigo-account-select').value;
+        return id === 'legacy' ? config : (config.accounts || {})[id] || {};
+    }
+
+    function loadSectigoAccount() {
+        var id = document.getElementById('sectigo-account-select').value;
+        var config = sectigoAccountConfig();
+        document.getElementById('sectigo-name').value = id === 'new' ?
+            (Object.keys((((currentSettings.ca_providers || {}).sectigo || {}).accounts || {})).length ? '' : 'default') :
+            (id === 'legacy' ? config.name || '' : id);
+        document.getElementById('sectigo-name').readOnly = id !== 'new' && id !== 'legacy';
+        document.getElementById('sectigo-acme-url').value = config.acme_url || '';
+        document.getElementById('sectigo-eab-kid').value = config.eab_kid || '';
+        document.getElementById('sectigo-eab-hmac').value = '';
+        document.getElementById('sectigo-email').value = config.email || '';
     }
 
     function loadStorageBackendSettings(settings) {
@@ -2702,6 +2757,38 @@
             eab_hmac: document.getElementById('digicert-eab-hmac').value || '',
             email: document.getElementById('digicert-email').value || ''
         };
+
+        var sectigoAccount = {
+            name: document.getElementById('sectigo-name').value || '',
+            acme_url: document.getElementById('sectigo-acme-url').value || '',
+            eab_kid: document.getElementById('sectigo-eab-kid').value || '',
+            eab_hmac: document.getElementById('sectigo-eab-hmac').value || '',
+            email: document.getElementById('sectigo-email').value || ''
+        };
+        var sectigoExisting = (currentSettings.ca_providers || {}).sectigo || {};
+        var selectedSectigo = document.getElementById('sectigo-account-select').value;
+        if (!sectigoExisting.acme_url && !sectigoExisting.accounts && !sectigoAccount.acme_url &&
+            document.getElementById('default-ca').value !== 'sectigo') {
+            caProviders.sectigo = {};
+        } else if (selectedSectigo === 'legacy') {
+            caProviders.sectigo = sectigoAccount;
+        } else {
+            var sectigoAccounts = Object.assign({}, sectigoExisting.accounts || {});
+            if (selectedSectigo === 'new' && sectigoExisting.acme_url && !Object.keys(sectigoAccounts).length) {
+                throw new Error('Existing single-account Sectigo settings cannot be converted without re-entering the saved HMAC key');
+            }
+            var sectigoId = selectedSectigo === 'new' ? sectigoAccount.name.trim() : selectedSectigo;
+            if (!sectigoId || sectigoId === '__proto__' || sectigoId === 'constructor') {
+                throw new Error('Enter a valid Sectigo account name');
+            }
+            if (document.getElementById('default-ca').value === 'sectigo' &&
+                (!sectigoAccount.acme_url || !sectigoAccount.eab_kid ||
+                 !(sectigoAccount.eab_hmac || sectigoAccountConfig().eab_hmac))) {
+                throw new Error('Sectigo requires an ACME Directory URL and EAB Key ID and HMAC Key');
+            }
+            sectigoAccounts[sectigoId] = sectigoAccount;
+            caProviders.sectigo = { accounts: sectigoAccounts };
+        }
 
         // SSL.com configuration
         caProviders.sslcom = {

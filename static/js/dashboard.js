@@ -1753,6 +1753,9 @@
                 case 'digicert':
                     infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Enterprise certificates (requires EAB credentials configured in Settings)';
                     break;
+                case 'sectigo':
+                    infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Sectigo SCM ACME (requires account directory URL and EAB credentials)';
+                    break;
                 case 'sslcom':
                     infoText = '<i class="fas fa-shield-alt mr-1 text-indigo-500"></i> Enterprise certificates from SSL.com (requires EAB)';
                     break;
@@ -2402,6 +2405,7 @@
         document.getElementById('dns_provider_select').value = '';
         document.getElementById('account_select').value = '';
         document.getElementById('ca_provider_select').value = '';
+        document.getElementById('ca_account_id').value = '';
         var aliasField = document.getElementById('dns_alias_domain');
         if (aliasField) { aliasField.value = ''; }
         updateDnsAliasHelp();
@@ -2538,6 +2542,8 @@
         if (caProvider) {
             requestBody.ca_provider = caProvider;
         }
+        var caAccountId = document.getElementById('ca_account_id').value.trim();
+        if (caAccountId) requestBody.ca_account_id = caAccountId;
 
         // A CSR generated on the device that will serve the certificate
         // (#599). When one is given the key never reaches this instance, and
