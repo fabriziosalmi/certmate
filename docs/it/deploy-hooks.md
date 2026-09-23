@@ -178,9 +178,9 @@ Gli hook sono esecuzione di codice arbitrario per definizione — questa è la f
 | `\r` / `\n` | newline (impedisce a `sh -c` di interpretarli come `;`) |
 | `> /` (redirect verso percorso assoluto) | impedisce la sovrascrittura di file di sistema |
 | `<<` | here-doc |
-| `eval`, `source`, `. /` | builtin shell che caricano codice arbitrario |
+| `eval`, `source`, `.` (la forma breve di source, con qualunque argomento) | builtin shell che caricano codice arbitrario |
 
-Due cose che sembrerebbero da elenco sono consentite di proposito (#115): una pipe semplice, per l'elaborazione a valle come `curl ... | jq .`, e un redirect verso un percorso relativo (`> out.txt`). È bloccato solo il redirect verso un percorso assoluto.
+Due cose che sembrerebbero da elenco sono consentite di proposito (#115): una pipe semplice, per l'elaborazione a valle come `curl ... | grep -q ok` (entrambi i lati devono essere un comando presente nell'immagine — `jq` non lo è), e un redirect verso un percorso relativo (`> out.txt`). È bloccato solo il redirect verso un percorso assoluto.
 
 Se hai bisogno di uno di questi, inserisci la logica in un file script all'interno del container e richiama lo script direttamente:
 
