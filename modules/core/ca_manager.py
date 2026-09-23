@@ -11,6 +11,39 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def acme_directory_refusal(url, what='ACME Directory URL'):
+    """Why *url* is not usable as an ACME directory, or None if it is.
+
+    One rule, one spelling. There were three, and they disagreed:
+
+    * `validate_ca_configuration`'s private-CA branch compared the scheme
+      case-insensitively and said "must use https" (#885);
+    * its branch for every other `requires_acme_url` provider used
+      `startswith('https://')`, which **refuses `HTTPS://`** — a valid URL,
+      since RFC 3986 makes the scheme case-insensitive — while telling the
+      operator they need HTTPS, which they have;
+    * `get_acme_server_url` carried a third copy of the same `startswith`.
+
+    The divergence appeared when #885 improved one branch and left the others
+    where they were, so it is not a defect in the provider that arrived after.
+    Measured before this:
+
+        private_ca  HTTPS://acme.example.com/directory -> accepted
+        sectigo     HTTPS://acme.example.com/directory -> refused
+
+    `http` gets its own message rather than falling into "invalid format",
+    because an operator told their URL is malformed goes looking for a typo.
+    """
+    text = str(url or '')
+    scheme = text.split('://', 1)[0].lower() if '://' in text else ''
+    if scheme == 'https':
+        return None
+    if scheme == 'http':
+        return (f"{what} must use https. A directory fetched over plain HTTP "
+                f"cannot be trusted to be the one you meant.")
+    return f"Invalid {what} format"
+
+
 class CAManager:
     """Manages different Certificate Authority providers"""
     
@@ -119,6 +152,16 @@ class CAManager:
                 'supports_wildcard': False,
                 'certificate_types': ['DV'],
                 'description': 'European CA (Italy) with free 90-day DV certificates via ACME'
+            },
+            'sectigo': {
+                'name': 'Sectigo',
+                'production_url': 'custom',
+                'staging_url': 'custom',
+                'requires_acme_url': True,
+                'requires_eab': True,
+                'supports_wildcard': True,
+                'certificate_types': ['DV', 'OV'],
+                'description': 'Sectigo Certificate Manager ACME certificates (account-specific directory)'
             }
         }
     
@@ -186,20 +229,22 @@ class CAManager:
         
         ca_info = self.ca_providers[ca_provider]
         
-        if ca_provider == 'private_ca' and account_config:
-            # For private CA, use custom URL from configuration
-            if staging and account_config.get('staging_url'):
-                return account_config['staging_url']
-            elif account_config.get('acme_url'):
-                return account_config['acme_url']
+        if ca_provider == 'private_ca' or ca_info.get('requires_acme_url'):
+            if staging and (account_config or {}).get('staging_url'):
+                url = account_config['staging_url']
             else:
-                raise ValueError("Private CA ACME URL not configured")
-        else:
-            # Use predefined URLs for public CAs
-            if staging:
-                return ca_info['staging_url']
-            else:
-                return ca_info['production_url']
+                url = (account_config or {}).get('acme_url')
+            if not url:
+                raise ValueError(f"{ca_info['name']} ACME URL not configured")
+            refusal = acme_directory_refusal(
+                url, f"{ca_info['name']} ACME Directory URL")
+            if refusal:
+                raise ValueError(refusal)
+            return url
+
+        # Other public CAs retain their pinned directory, even if an account
+        # contains an acme_url (as with the existing DigiCert settings form).
+        return ca_info['staging_url' if staging else 'production_url']
     
     def requires_eab(self, ca_provider: str) -> bool:
         """Check if CA provider requires External Account Binding"""
@@ -356,6 +401,21 @@ class CAManager:
             return False, f"Unsupported CA provider: {ca_provider}"
         
         ca_info = self.ca_providers[ca_provider]
+
+        if ca_provider == 'private_ca' or ca_info.get('requires_acme_url'):
+            if not config.get('acme_url'):
+                if ca_provider == 'private_ca':
+                    return False, "Private CA requires ACME server URL"
+                return False, f"{ca_info['name']} requires an ACME Directory URL"
+            # The same HTTPS rule for every directory an account configures,
+            # private CA or public (#885). The wording keeps naming the
+            # provider so an operator with several configured knows which
+            # form refused them.
+            what = ('ACME server URL' if ca_provider == 'private_ca'
+                    else f"{ca_info['name']} ACME Directory URL")
+            refusal = acme_directory_refusal(config['acme_url'], what)
+            if refusal:
+                return False, refusal
         
         # Check required fields based on CA provider
         if ca_info['requires_eab']:
@@ -363,36 +423,7 @@ class CAManager:
             has_hmac = config.get('eab_hmac_key') or config.get('eab_hmac')
             if not has_kid or not has_hmac:
                 return False, f"{ca_info['name']} requires EAB Key ID and HMAC Key"
-        
-        elif ca_provider == 'private_ca':
-            if not config.get('acme_url'):
-                return False, "Private CA requires ACME server URL"
-            
-            # An ACME directory is fetched, and then an account key is
-            # bound to it and orders are placed against it. Over plain HTTP
-            # every part of that is readable and rewritable by anything on
-            # the path, so it is refused here rather than left to the
-            # operator to notice. `test_every_ca_url_is_https` already holds
-            # the built-in CAs to this; an account-configured URL is the
-            # same directory, reached the same way, and gets the same rule.
-            # RFC 3986: the scheme is case-insensitive, so `HTTP://` is
-            # plain HTTP and has to be refused as such rather than falling
-            # through to "malformed" — which is true but tells the operator
-            # the wrong thing to fix.
-            acme_url = config.get('acme_url', '')
-            scheme = acme_url.split('://', 1)[0].lower() if '://' in acme_url else ''
-            if scheme == 'http':
-                return False, (
-                    "ACME server URL must use https. A directory fetched over "
-                    "plain HTTP cannot be trusted to be the one you meant."
-                )
-            if scheme != 'https':
-                return False, "Invalid ACME server URL format"
-        
-        elif ca_provider == 'letsencrypt':
-            # Let's Encrypt doesn't require additional configuration
-            pass
-        
+
         return True, "Configuration is valid"
     
     def get_ca_account_display_info(self, ca_provider: str, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -410,6 +441,8 @@ class CAManager:
             display_info['eab_configured'] = bool(
                 config.get('eab_key_id') or config.get('eab_kid')
             )
+            if self.ca_providers[ca_provider].get('requires_acme_url'):
+                display_info['acme_url'] = config.get('acme_url', '')
         elif ca_provider == 'private_ca':
             display_info['acme_url'] = config.get('acme_url', '')
             display_info['ca_cert_configured'] = bool(config.get('ca_cert'))
@@ -418,4 +451,3 @@ class CAManager:
             )
         
         return display_info
-

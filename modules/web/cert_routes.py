@@ -46,6 +46,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 dns_provider=data.get('dns_provider'),
                 account_id=data.get('account_id'),
                 ca_provider=data.get('ca_provider'),
+                ca_account_id=data.get('ca_account_id'),
                 challenge_type=data.get('challenge_type'),
                 domain_alias=data.get('domain_alias'),
                 user=user,
@@ -138,6 +139,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                     certificate_manager.create_certificate(
                         domain=domain, email=email,
                         dns_provider=dns_provider, ca_provider=ca_provider,
+                        ca_account_id=data.get('ca_account_id'),
                         challenge_type=challenge_type,
                     )
                     results.append({'domain': domain, 'success': True, 'message': 'Certificate created'})

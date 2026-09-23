@@ -199,13 +199,15 @@ def test_eab_validation_consistent_with_provider_flags():
         if provider == 'private_ca':
             continue  # validated on acme_url, not EAB
         if info['requires_eab']:
-            ok, msg = manager.validate_ca_configuration(provider, {})
+            url_config = {'acme_url': 'https://example.com/directory'} if info.get('requires_acme_url') else {}
+            ok, msg = manager.validate_ca_configuration(provider, url_config)
             assert not ok and 'EAB' in msg, (
                 f"'{provider}' requires EAB but validate_ca_configuration "
                 f"accepted an empty config"
             )
             ok, msg = manager.validate_ca_configuration(provider, {
                 'eab_kid': 'kid', 'eab_hmac': 'hmac',
+                'acme_url': 'https://example.com/directory',
             })
             assert ok, f"'{provider}' rejected UI-spelled EAB config: {msg}"
         else:

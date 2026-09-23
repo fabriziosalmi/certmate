@@ -22,6 +22,7 @@
                                     <option value="google">Google Trust Services</option>
                                     <option value="actalis">Actalis</option>
                                     <option value="digicert">DigiCert ACME</option>
+                                    <option value="sectigo">Sectigo</option>
                                     <option value="sslcom">SSL.com</option>
                                     <option value="private_ca">Private CA</option>
                                 </select>
@@ -222,6 +223,38 @@
                                 <p class="text-xs text-info-fg mt-2">
                                     DigiCert provides enterprise-grade SSL certificates via ACME. Requires EAB credentials from DigiCert.
                                 </p>
+                            </div>
+
+                            <!-- Sectigo Configuration -->
+                            <div id="sectigo-config" class="border border-info-line rounded-lg p-4 bg-info-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-info-strong mb-2">Sectigo ACME Configuration</h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label for="sectigo-account-select" class="block text-xs text-info-strong mb-1">CA account</label>
+                                        <select id="sectigo-account-select" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"></select>
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-name" class="block text-xs text-info-strong mb-1">Account name</label>
+                                        <input type="text" id="sectigo-name" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" placeholder="production-ov">
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-acme-url" class="block text-xs text-info-strong mb-1">ACME Directory URL (from SCM)</label>
+                                        <input type="url" id="sectigo-acme-url" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" placeholder="Copy the URL from your SCM ACME account" required>
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-eab-kid" class="block text-xs text-info-strong mb-1">EAB Key ID / KID</label>
+                                        <input type="text" id="sectigo-eab-kid" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" required>
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-eab-hmac" class="block text-xs text-info-strong mb-1">EAB HMAC Key</label>
+                                        <input type="password" id="sectigo-eab-hmac" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" autocomplete="new-password" spellcheck="false" data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-email" class="block text-xs text-info-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="sectigo-email" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-info-fg mt-2">Use the directory URL and EAB credentials from your Sectigo SCM ACME account. Wildcards depend on your account/profile.</p>
                             </div>
 
                             <!-- SSL.com Configuration -->

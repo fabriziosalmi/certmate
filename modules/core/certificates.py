@@ -2228,6 +2228,8 @@ class CertificateManager:
                 ca_account_config, used_ca_account_id = self.ca_manager.get_ca_config(ca_provider, ca_account_id)
                 logger.info(f"Using CA account: {used_ca_account_id}")
             except Exception as e:
+                if self.ca_manager.ca_providers.get(ca_provider, {}).get('requires_acme_url'):
+                    raise ValueError(f"CA account not configured for {ca_provider}: {e}") from e
                 if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
                     # Let's Encrypt needs no per-account credentials; with
                     # no saved CA config the plain-certbot branch below
@@ -2877,6 +2879,11 @@ class CertificateManager:
                 # it wrote them down. Internal audit finding H3.
                 from .utils import sanitize_certbot_stderr
                 safe_stderr = sanitize_certbot_stderr(result.stderr)
+                for flag in ('--eab-kid', '--eab-hmac-key'):
+                    if flag in certbot_cmd:
+                        secret = certbot_cmd[certbot_cmd.index(flag) + 1]
+                        if secret:
+                            safe_stderr = safe_stderr.replace(secret, '***')
                 # %r, and as logging ARGUMENTS: repr escapes a newline to a
                 # literal \n so neither the domain nor certbot's output can
                 # forge a second log line, and a handler can still filter on
