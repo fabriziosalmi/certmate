@@ -384,6 +384,12 @@
     {% block content %}{% endblock %}
     </main>
 
+    <footer class="px-6 py-4 text-xs text-muted text-center">
+        CertMate <span data-testid="app-version">v{{ certmate_version }}</span>
+        &middot;
+        <a href="https://github.com/fabriziosalmi/certmate/releases" target="_blank" rel="noopener noreferrer" class="hover:text-foreground transition">releases</a>
+    </footer>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
