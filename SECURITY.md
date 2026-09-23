@@ -253,19 +253,31 @@ is reached through one named API and through nothing else.
 
 **Actual exposure: none of the three is reachable.** Two need the X.509
 verifier (`PolicyBuilder` / `ClientVerifier` / `ServerVerifier`), one needs
-PKCS#7 `EnvelopedData` decryption. Neither API is called anywhere in the
+PKCS#7 `EnvelopedData` **decryption**. None of those is called anywhere in the
 shipped stack — verified across `modules/`, `app.py` and the pinned
 `certbot==2.10.0` / `acme==3.3.0` / `josepy==1.13.0`, none of which references
 `x509.verification`, `PolicyBuilder`, `ClientVerifier`, `ServerVerifier`,
-`pkcs7` or `EnvelopedData`.
+`pkcs7_decrypt_der`, `pkcs7_decrypt_pem`, `pkcs7_decrypt_smime`,
+`PKCS7EnvelopeBuilder` or `EnvelopedData`.
+
+This paragraph used to say that nothing referenced `pkcs7` at all, and as of
+v2.34.0 that is no longer true: `modules/core/revocation.py` calls
+`pkcs7.load_der_pkcs7_certificates` and `pkcs7.load_pem_pkcs7_certificates` to
+read an AIA `caIssuers` payload, which CAs publish as a certificates-only
+PKCS#7 bundle (`.p7c`). Those two loaders parse a bag of certificates; the
+advisory is about decrypting `EnvelopedData`, which is a different structure,
+a different API and a different code path. The conclusion is unchanged, but
+the reason had to be stated precisely rather than as "the module is untouched"
+— a blanket claim that a later change can quietly falsify, as this one did.
 
 What CertMate does use from `cryptography` is X.509 parsing and building,
+OCSP request/response handling and CRL parsing (`modules/core/revocation.py`),
 `Fernet`, hashes, key serialization, RSA and Ed25519 key generation, and
 PBKDF2. The `.pfx` export
 (`modules/core/storage_backends.py:175`) calls `serialization.pkcs12`, which
-is PKCS#12 — a different structure and a different code path from the PKCS#7
-`EnvelopedData` decryption the Bleichenbacher advisory describes. CertMate
-never decrypts PKCS#7 at all; it only ever writes PKCS#12.
+is PKCS#12 — a different structure and a different code path again. CertMate
+never decrypts PKCS#7; it reads certificate bundles from it and writes
+PKCS#12.
 
 **The constraint has tightened, not loosened.** Clearing all three needs
 `cryptography>=50.0.0`, and 50.0.0 is the exact version the re-verification
