@@ -10,8 +10,15 @@ PagerDuty, an ITSM endpoint, your own service.
 
 `certificate_created`, `certificate_renewed`, `certificate_expiring`,
 `certificate_revoked`, `certificate_failed`, `certificate_deployed`,
-`domain_expiring`, `deploy_hook_failed`, `certificate_deploy_incomplete`. Each
-webhook can be limited to a subset (leave the list empty for all).
+`domain_expiring`, `deploy_hook_failed`, `certificate_deploy_incomplete`.
+
+Two event lists narrow what is sent, and an empty list means every event: the
+global **Notify on Events** list (`notifications.events`) applies to every
+channel, email included, and each webhook can then be limited further by its
+own list. The settings page offers six events for both lists:
+`certificate_created`, `certificate_renewed`, `certificate_expiring`,
+`certificate_revoked`, `certificate_failed` and `domain_expiring`.
+`certificate_deployed` is not among them, so a list set there excludes it.
 
 `deploy_hook_failed` and `certificate_deploy_incomplete` are delivered whatever
 the filter says: they report a failure an operator must not be able to silence
@@ -78,7 +85,8 @@ renewal.
 
 **Preview** in the editor renders the request for a sample event without
 sending it: method, URL, header names (credential values masked) and the
-body. **Test** sends a real test event.
+body. **Test** sends one real request with the event name `test`: a single
+attempt, no retries, and no entry in the delivery log.
 
 ## Method, authentication, timeout, attempts
 
@@ -87,13 +95,23 @@ body. **Test** sends a real test event.
 | Method | `POST`, `PUT`, `PATCH` | `POST` |
 | Authentication | none · **Bearer token** (`Authorization: Bearer …`) · **Basic** (username + password) · **Header** (a header name and value, e.g. `X-API-Key`) | none |
 | Timeout | 1–60 s | 10 |
-| Attempts | 0–5 (total deliveries, exponential backoff 1 s, 2 s, 4 s…) | 3 |
+| Attempts | 1–5 (total deliveries, exponential backoff 1 s, 2 s, 4 s…); `0`, accepted from older configs, means 1 | 3 |
 
-Credentials — the bearer token, the basic password, the header value, and
-any custom header whose name contains `authorization`, `key`, `token`,
-`secret` or `cookie` — are masked as `********` when the configuration is
-read back and preserved unchanged when the form is saved without retyping
-them. They never appear in the delivery log.
+A failure that another attempt cannot change is not retried: a configuration
+error (a missing or non-`http(s)` URL, a refused internal address) or an HTTP
+4xx answer other than `408`, `425` and `429`. Timeouts, connection errors,
+`5xx` and those three statuses are retried with the backoff above.
+
+When the configuration is read back, the webhook URL, the bearer token, the
+basic password, the header value, the HMAC secret and the value of **every**
+custom header are masked as `********`, and preserved unchanged when the form
+is saved without retyping them. Preview masks less: it shows the URL, and
+masks only headers whose name contains `authorization`, `key`, `token`,
+`secret` or `cookie`.
+
+The delivery log records the webhook's name, type and URL, the event, the
+HTTP status, the number of attempts, the error and the duration. It does not
+record headers, tokens, the basic password or the body.
 
 ## Signature
 
