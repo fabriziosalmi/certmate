@@ -105,10 +105,12 @@
                         <th class="text-left font-medium px-4 py-2">MX</th>
                         <th class="text-left font-medium px-4 py-2" title="A list that refuses the query has said nothing about the address">Blocklists</th>
                         <th class="text-left font-medium px-4 py-2">HSTS</th>
+                        <th class="text-left font-medium px-4 py-2" title="X-Frame-Options or CSP frame-ancestors, X-Content-Type-Options, Content-Security-Policy">Headers</th>
+                        <th class="text-left font-medium px-4 py-2" title="Whether the response names the software and version answering it">Disclosure</th>
                     </tr>
                 </thead>
                 <tbody id="domainHealthBody" class="divide-y divide-gray-100 dark:divide-white/5">
-                    <tr><td colspan="6" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
+                    <tr><td colspan="8" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -177,8 +179,8 @@
                         <label class="flex items-center gap-2 text-sm text-muted" title="Public resolvers are refused by most blocklists; point CertMate at a resolver of your own to get real answers">
                             <input type="checkbox" id="cfgHealthBlocklists" class="rounded border-border"> Blocklists
                         </label>
-                        <label class="flex items-center gap-2 text-sm text-muted">
-                            <input type="checkbox" id="cfgHealthHsts" class="rounded border-border"> HSTS
+                        <label class="flex items-center gap-2 text-sm text-muted" title="One HEAD request per host: HSTS, the protective headers, and what the response discloses">
+                            <input type="checkbox" id="cfgHealthHeaders" class="rounded border-border"> Response headers
                         </label>
                     </div>
                     <label class="block text-xs text-muted mb-1">Extra names (one per line)</label>

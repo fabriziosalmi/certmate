@@ -443,6 +443,180 @@ def test_hsts_fetch_returns_none_when_the_guard_refuses(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# The other response headers
+# --------------------------------------------------------------------------- #
+
+PROTECTED = {'Content-Security-Policy': "default-src 'self'; frame-ancestors 'none'",
+             'X-Content-Type-Options': 'nosniff'}
+
+
+def test_a_fully_protected_response_is_ok():
+    result = dh.check_security_headers(_served(PROTECTED))
+    assert result['status'] == dh.OK
+    assert result['broken'] == [] and result['missing'] == []
+
+
+def test_x_frame_options_counts_even_without_csp_frame_ancestors():
+    result = dh.check_security_headers(_served({
+        'X-Frame-Options': 'SAMEORIGIN',
+        'Content-Security-Policy': "default-src 'self'",
+        'X-Content-Type-Options': 'nosniff'}))
+    assert result['status'] == dh.OK
+
+
+def test_csp_frame_ancestors_counts_without_x_frame_options():
+    """frame-ancestors supersedes X-Frame-Options; demanding both would report
+    a correctly configured site as unprotected."""
+    result = dh.check_security_headers(_served(PROTECTED))
+    assert result['headers']['x_frame_options'] is None
+    assert result['headers']['frame_ancestors_in_csp'] is True
+    assert result['status'] == dh.OK
+
+
+def test_a_bare_response_warns_about_each_missing_header():
+    result = dh.check_security_headers(_served({}))
+    assert result['status'] == dh.WARNING
+    assert len(result['missing']) == 3
+
+
+def test_an_x_frame_options_value_browsers_ignore_is_a_finding():
+    """ALLOW-FROM was dropped by every modern browser. A site relying on it
+    believes it is protected and is not, which is worse than knowing."""
+    result = dh.check_security_headers(_served(dict(
+        PROTECTED, **{'X-Frame-Options': 'ALLOW-FROM https://partner.example'})))
+    assert result['status'] == dh.FAILING
+    assert 'not a value browsers honour' in result['broken'][0]
+
+
+@pytest.mark.parametrize('value', ['DENY', 'SAMEORIGIN', 'deny', ' sameorigin '])
+def test_the_two_values_browsers_honour_are_accepted(value):
+    result = dh.check_security_headers(_served({
+        'X-Frame-Options': value,
+        'Content-Security-Policy': "default-src 'self'",
+        'X-Content-Type-Options': 'nosniff'}))
+    assert result['status'] == dh.OK
+
+
+@pytest.mark.parametrize('value', ['ALLOW-FROM', 'allow-from', 'ALLOWALL',
+                                   'SAME-ORIGIN', 'yes'])
+def test_no_other_value_is_accepted(value):
+    """Pins the set, not one example of what is outside it: browsers honour
+    DENY and SAMEORIGIN and ignore everything else, including the ALLOW-FROM
+    that sites still carry."""
+    result = dh.check_security_headers(_served(dict(
+        PROTECTED, **{'X-Frame-Options': value})))
+    assert result['status'] == dh.FAILING
+
+
+def test_report_only_csp_alone_is_a_finding_not_a_csp():
+    result = dh.check_security_headers(_served({
+        'Content-Security-Policy-Report-Only': "default-src 'self'",
+        'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff'}))
+    assert result['status'] == dh.FAILING
+    assert 'nothing is blocked' in result['broken'][0]
+
+
+def test_report_only_beside_a_real_csp_is_fine():
+    result = dh.check_security_headers(_served(dict(
+        PROTECTED, **{'Content-Security-Policy-Report-Only': "default-src 'none'"})))
+    assert result['status'] == dh.OK
+
+
+def test_a_content_type_options_value_that_is_not_nosniff_is_a_finding():
+    result = dh.check_security_headers(_served(dict(
+        PROTECTED, **{'X-Content-Type-Options': 'sniff'})))
+    assert result['status'] == dh.FAILING
+    assert 'does nothing' in result['broken'][0]
+
+
+def test_headers_are_read_case_insensitively():
+    """Servers disagree about header case, and HTTP says it does not matter."""
+    result = dh.check_security_headers(_served({
+        'content-security-policy': "frame-ancestors 'none'",
+        'X-CONTENT-TYPE-OPTIONS': 'nosniff'}))
+    assert result['status'] == dh.OK
+
+
+def test_an_unreachable_site_has_unknown_headers_not_missing_ones():
+    result = dh.check_security_headers(None)
+    assert result['status'] == dh.UNKNOWN
+
+
+def test_a_host_that_only_redirects_is_unknown_not_unprotected():
+    """The apex 301s somewhere CertMate could not follow. The redirect's own
+    headers say nothing about the page, and reporting "no CSP" from them would
+    be a finding about a response nobody browses."""
+    result = dh.check_security_headers(_served({}, stopped_at_redirect=True))
+    assert result['status'] == dh.UNKNOWN
+    assert 'redirects' in result['detail']
+
+
+def test_the_result_names_the_host_the_headers_came_from():
+    result = dh.check_security_headers(_served(PROTECTED, final_host='www.example.com'))
+    assert result['checked_host'] == 'www.example.com'
+
+
+# --- disclosure ------------------------------------------------------------ #
+
+def test_a_server_header_with_a_version_is_reported():
+    result = dh.check_disclosure(_served({'Server': 'nginx/1.24.0'}))
+    assert result['status'] == dh.WARNING
+    assert result['disclosed'] == ['Server: nginx/1.24.0']
+
+
+@pytest.mark.parametrize('server', ['nginx', 'cloudflare', 'Apache', 'gws'])
+def test_a_server_header_naming_only_the_product_discloses_nothing(server):
+    """The tool these checks came from reported `Server: cloudflare` as
+    "Server Version Disclosed". There is no version in it to disclose."""
+    result = dh.check_disclosure(_served({'Server': server}))
+    assert result['status'] == dh.OK
+    assert result['disclosed'] == []
+
+
+def test_no_server_header_at_all_is_ok():
+    assert dh.check_disclosure(_served({}))['status'] == dh.OK
+
+
+@pytest.mark.parametrize('name,value', [
+    ('X-Powered-By', 'PHP/8.2.1'),
+    ('X-AspNet-Version', '4.0.30319'),
+    ('X-AspNetMvc-Version', '5.2'),
+    ('X-Generator', 'Drupal 10'),
+])
+def test_a_header_whose_only_job_is_disclosure_is_reported(name, value):
+    """Unlike Server, these carry no protocol meaning: they exist to say what
+    is running, so any value is the whole finding."""
+    result = dh.check_disclosure(_served({name: value}))
+    assert result['status'] == dh.WARNING
+    assert result['disclosed'] == [f'{name.lower()}: {value}']
+
+
+def test_several_disclosures_are_all_reported():
+    result = dh.check_disclosure(_served({'Server': 'Apache/2.4.58',
+                                          'X-Powered-By': 'PHP/8.2.1'}))
+    assert len(result['disclosed']) == 2
+
+
+def test_disclosure_is_never_a_failure():
+    """Knowing the version does not let anyone in; it saves reconnaissance."""
+    result = dh.check_disclosure(_served({'Server': 'nginx/1.24.0',
+                                          'X-Powered-By': 'PHP/5.2.0'}))
+    assert result['status'] == dh.WARNING
+
+
+def test_an_unreachable_site_discloses_unknown():
+    assert dh.check_disclosure(None)['status'] == dh.UNKNOWN
+
+
+def test_disclosure_is_still_read_from_a_pure_redirect():
+    """Unlike the protective headers, a redirect's own Server header is this
+    host's, and it is what it leaks to anyone who touches the apex."""
+    result = dh.check_disclosure(_served({'Server': 'nginx/1.24.0'},
+                                         stopped_at_redirect=True))
+    assert result['status'] == dh.WARNING
+
+
+# --------------------------------------------------------------------------- #
 # Rolling several checks into one answer
 # --------------------------------------------------------------------------- #
 
@@ -462,6 +636,16 @@ def test_no_checks_at_all_is_unknown():
     assert dh.worst_status({}) == dh.UNKNOWN
 
 
+def _served(headers=None, *, final_host='example.com', first_hsts=None,
+            stopped_at_redirect=False):
+    """A scripted :func:`fetch_response_headers` result."""
+    headers = headers if headers is not None else {}
+    if first_hsts is None:
+        first_hsts = headers.get('Strict-Transport-Security')
+    return {'headers': headers, 'final_host': final_host,
+            'first_hsts': first_hsts, 'stopped_at_redirect': stopped_at_redirect}
+
+
 def _lookups(txt=None, mx=None, addresses=None, rbl=None):
     return (
         lambda name: (txt or {}).get(name, []),
@@ -475,23 +659,27 @@ def test_mail_checks_only_run_for_a_registrable_domain():
     """DMARC falls back to the organisational domain, so asking
     _dmarc.www.example.com alone would report 'no DMARC' for a domain that
     publishes one."""
-    checks = dh.check_name('www.example.com', lookups=_lookups(),
-                           hsts_fetcher=lambda host: 'max-age=31536000',
-                           is_registrable=False)
-    assert set(checks) == {'hsts'}
+    checks = dh.check_name(
+        'www.example.com', lookups=_lookups(),
+        headers_fetcher=lambda host: _served(
+            {'Strict-Transport-Security': 'max-age=31536000'}),
+        is_registrable=False)
+    assert set(checks) == {'hsts', 'security_headers', 'disclosure'}
 
 
 def test_a_registrable_domain_gets_every_check():
     checks = dh.check_name('example.com', lookups=_lookups(),
-                           hsts_fetcher=lambda host: '', is_registrable=True)
-    assert set(checks) == {'spf', 'dmarc', 'mx', 'blocklists', 'hsts'}
+                           headers_fetcher=lambda host: _served(),
+                           is_registrable=True)
+    assert set(checks) == {'spf', 'dmarc', 'mx', 'blocklists', 'hsts',
+                           'security_headers', 'disclosure'}
 
 
 def test_the_checks_the_operator_turned_off_do_not_run():
     checks = dh.check_name('example.com', lookups=_lookups(),
-                           hsts_fetcher=lambda host: '',
+                           headers_fetcher=lambda host: _served(),
                            mail=False, blocklists=False)
-    assert set(checks) == {'hsts'}
+    assert set(checks) == {'hsts', 'security_headers', 'disclosure'}
 
 
 def test_dmarc_is_asked_at_the_underscore_prefix():
@@ -502,7 +690,7 @@ def test_dmarc_is_asked_at_the_underscore_prefix():
         return ['v=DMARC1; p=reject'] if name.startswith('_dmarc.') else []
 
     lookups = (txt, lambda n: [], lambda n: [], lambda n: [])
-    checks = dh.check_name('example.com', lookups=lookups, hsts=False)
+    checks = dh.check_name('example.com', lookups=lookups, headers=False)
     assert '_dmarc.example.com' in asked
     assert checks['dmarc']['status'] == dh.OK
 
@@ -617,7 +805,11 @@ def _manager(tmp_path, settings, **kwargs):
     cert_dir = tmp_path / 'certificates'
     cert_dir.mkdir(exist_ok=True)
     kwargs.setdefault('lookups', _lookups())
-    kwargs.setdefault('hsts_fetcher', lambda host: 'max-age=31536000')
+    kwargs.setdefault('headers_fetcher', lambda host: _served({
+        'Strict-Transport-Security': 'max-age=31536000',
+        'Content-Security-Policy': "frame-ancestors 'none'",
+        'X-Content-Type-Options': 'nosniff',
+    }))
     kwargs.setdefault('now', lambda: NOW)
     return dh.DomainHealthManager(settings_manager, inventory, cert_dir, **kwargs)
 
@@ -932,15 +1124,22 @@ class _FakeSocket:
 
 @pytest.fixture
 def fake_https(monkeypatch):
-    """socket + TLS replaced, so fetch_hsts_header runs without a network."""
+    """socket + TLS replaced, so the header fetch runs without a network."""
     import ssl
 
-    state = {'socket': None, 'server_hostname': None}
+    state = {'socket': None, 'server_hostname': None, 'sockets': None,
+             'sni': [], 'guarded': []}
 
-    monkeypatch.setattr('modules.core.cert_probe._resolve_and_guard',
-                        lambda host, port, allow_private: (2, '192.0.2.13', None))
+    def guard(host, port, allow_private):
+        state['guarded'].append(host)
+        return (2, '192.0.2.13', None)
+
+    monkeypatch.setattr('modules.core.cert_probe._resolve_and_guard', guard)
 
     def make_socket(family, type_):
+        # `sockets` scripts one response per connection, for redirect chains.
+        if state['sockets'] is not None:
+            return state['sockets'].pop(0)
         return state['socket']
 
     class Context:
@@ -950,6 +1149,7 @@ def fake_https(monkeypatch):
 
         def wrap_socket(self, sock, server_hostname=None):
             state['server_hostname'] = server_hostname
+            state['sni'].append(server_hostname)
             if isinstance(state.get('tls_error'), Exception):
                 raise state['tls_error']
             return sock
@@ -1155,7 +1355,7 @@ def test_config_round_trips_the_health_section(real_app):
     client = application.test_client()
     assert client.get('/api/inventory/config').get_json()['domain_health'] == {
         'enabled': False, 'include_inventory': True, 'check_mail': True,
-        'check_blocklists': True, 'check_hsts': True, 'extra_domains': []}
+        'check_blocklists': True, 'check_headers': True, 'extra_domains': []}
     r = client.post('/api/inventory/config', json={'domain_health': {
         'enabled': True, 'check_blocklists': False, 'extra_domains': ['brand.it']}})
     assert r.status_code == 200
@@ -1196,3 +1396,142 @@ def test_a_scan_on_an_instance_without_the_health_manager_still_scans(real_app):
     body = application.test_client().post('/api/inventory/scan').get_json()
     assert 'domain_health' not in body
     assert 'discovery' in body
+
+
+# --------------------------------------------------------------------------- #
+# Following a redirect, and knowing when not to
+# --------------------------------------------------------------------------- #
+#
+# Most estates answer the apex with a 301 to www. Reading the protective
+# headers off that 301 would report "no CSP" for a site that serves one, so
+# the hop is followed — but only within the same registrable domain, and only
+# after the SSRF guard has passed the new name too.
+
+def _resp(status_line, headers=b'', body_len=b'Content-Length: 0\r\n'):
+    return _FakeSocket(status_line + b'\r\n' + headers + body_len + b'\r\n')
+
+
+REDIRECT_TO_WWW = _resp(b'HTTP/1.1 301 Moved Permanently',
+                        b'Location: https://www.example.com/\r\n'
+                        b'Strict-Transport-Security: max-age=31536000\r\n')
+
+
+def test_a_redirect_to_www_is_followed_and_its_headers_are_the_answer(fake_https):
+    fake_https['sockets'] = [
+        REDIRECT_TO_WWW,
+        _resp(b'HTTP/1.1 200 OK', b"Content-Security-Policy: frame-ancestors 'none'\r\n"),
+    ]
+    served = dh.fetch_response_headers('example.com')
+    assert served['final_host'] == 'www.example.com'
+    assert served['stopped_at_redirect'] is False
+    assert dh.check_security_headers(served)['headers']['frame_ancestors_in_csp'] is True
+
+
+def test_hsts_is_read_from_the_first_response_not_the_last(fake_https):
+    """A browser records HSTS from whatever the host sent, including a 301.
+    Taking it from the last hop would miss an apex that sets it."""
+    fake_https['sockets'] = [REDIRECT_TO_WWW, _resp(b'HTTP/1.1 200 OK')]
+    served = dh.fetch_response_headers('example.com')
+    assert served['first_hsts'] == 'max-age=31536000'
+    assert dh.check_hsts(served['first_hsts'])['status'] == dh.OK
+
+
+def test_each_hop_goes_through_the_guard_and_carries_its_own_sni(fake_https):
+    fake_https['sockets'] = [REDIRECT_TO_WWW, _resp(b'HTTP/1.1 200 OK')]
+    dh.fetch_response_headers('example.com')
+    assert fake_https['guarded'] == ['example.com', 'www.example.com']
+    assert fake_https['sni'] == ['example.com', 'www.example.com']
+
+
+def test_a_redirect_off_the_estate_is_not_followed(fake_https):
+    """Following it would read someone else's headers and file them under
+    this domain."""
+    fake_https['sockets'] = [_resp(b'HTTP/1.1 302 Found',
+                                   b'Location: https://evil.example.net/\r\n')]
+    served = dh.fetch_response_headers('example.com')
+    assert served['final_host'] == 'example.com'
+    assert served['stopped_at_redirect'] is True
+    assert fake_https['guarded'] == ['example.com']
+
+
+def test_a_redirect_to_plain_http_is_not_followed(fake_https):
+    fake_https['sockets'] = [_resp(b'HTTP/1.1 301 Moved Permanently',
+                                   b'Location: http://www.example.com/\r\n')]
+    assert dh.fetch_response_headers('example.com')['stopped_at_redirect'] is True
+
+
+def test_a_redirect_with_no_location_stops(fake_https):
+    fake_https['sockets'] = [_resp(b'HTTP/1.1 301 Moved Permanently')]
+    assert dh.fetch_response_headers('example.com')['stopped_at_redirect'] is True
+
+
+def test_a_redirect_loop_stops_instead_of_going_round(fake_https):
+    a = _resp(b'HTTP/1.1 301 Moved Permanently',
+              b'Location: https://www.example.com/\r\n')
+    b = _resp(b'HTTP/1.1 301 Moved Permanently',
+              b'Location: https://example.com/\r\n')
+    fake_https['sockets'] = [a, b]
+    served = dh.fetch_response_headers('example.com')
+    assert served['final_host'] == 'www.example.com'
+    assert fake_https['guarded'] == ['example.com', 'www.example.com']
+
+
+def test_a_chain_longer_than_the_cap_stops_at_the_cap(fake_https):
+    fake_https['sockets'] = [
+        _resp(b'HTTP/1.1 301 Moved Permanently', b'Location: https://a.example.com/\r\n'),
+        _resp(b'HTTP/1.1 301 Moved Permanently', b'Location: https://b.example.com/\r\n'),
+        _resp(b'HTTP/1.1 301 Moved Permanently', b'Location: https://c.example.com/\r\n'),
+        _resp(b'HTTP/1.1 301 Moved Permanently', b'Location: https://d.example.com/\r\n'),
+    ]
+    served = dh.fetch_response_headers('example.com', max_redirects=2)
+    assert served['final_host'] == 'b.example.com'
+    assert served['stopped_at_redirect'] is True
+
+
+def test_a_hop_that_cannot_be_reached_is_not_an_answer_about_the_page(fake_https):
+    fake_https['sockets'] = [REDIRECT_TO_WWW,
+                             _FakeSocket(raises=ConnectionRefusedError('nope'))]
+    served = dh.fetch_response_headers('example.com')
+    assert served['stopped_at_redirect'] is True
+    assert served['first_hsts'] == 'max-age=31536000'
+    assert dh.check_security_headers(served)['status'] == dh.UNKNOWN
+
+
+def test_a_relative_location_is_not_treated_as_another_host(fake_https):
+    fake_https['sockets'] = [_resp(b'HTTP/1.1 302 Found', b'Location: /home\r\n')]
+    served = dh.fetch_response_headers('example.com')
+    assert served['final_host'] == 'example.com'
+    assert fake_https['guarded'] == ['example.com']
+
+
+def test_a_plain_200_makes_exactly_one_request(fake_https):
+    fake_https['sockets'] = [_resp(b'HTTP/1.1 200 OK')]
+    served = dh.fetch_response_headers('example.com')
+    assert served['stopped_at_redirect'] is False
+    assert fake_https['guarded'] == ['example.com']
+
+
+def test_the_three_header_checks_share_one_request(fake_https):
+    """Three answers, one fetch: a site should not be asked three times to
+    produce the same response."""
+    fake_https['sockets'] = [_resp(b'HTTP/1.1 200 OK',
+                                   b'Strict-Transport-Security: max-age=31536000\r\n'
+                                   b"Content-Security-Policy: frame-ancestors 'none'\r\n"
+                                   b'X-Content-Type-Options: nosniff\r\n')]
+    checks = dh.check_name('example.com', lookups=_lookups(), mail=False,
+                           blocklists=False)
+    assert fake_https['guarded'] == ['example.com']
+    assert checks['hsts']['status'] == dh.OK
+    assert checks['security_headers']['status'] == dh.OK
+    assert checks['disclosure']['status'] == dh.OK
+
+
+def test_a_host_redirecting_to_itself_is_not_followed(fake_https):
+    """Some hosts 301 http->https on the same name and answer the https HEAD
+    with the same redirect. Following it would just ask again."""
+    fake_https['sockets'] = [_resp(b'HTTP/1.1 301 Moved Permanently',
+                                   b'Location: https://example.com/\r\n')]
+    served = dh.fetch_response_headers('example.com')
+    assert served['final_host'] == 'example.com'
+    assert served['stopped_at_redirect'] is True
+    assert fake_https['guarded'] == ['example.com']

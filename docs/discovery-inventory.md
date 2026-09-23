@@ -334,6 +334,8 @@ Five checks, run daily against every name CertMate already tracks.
 | `mx` | does the domain accept mail at all | registrable domain |
 | `blocklists` | are the domain's addresses listed on a DNSBL | registrable domain |
 | `hsts` | what `Strict-Transport-Security` the host serves | each host |
+| `security_headers` | whether the browser is told to refuse framing, MIME sniffing and unsanctioned script | each host |
+| `disclosure` | whether the response names the software and version answering it | each host |
 
 Mail and blocklist checks run against the **registrable** domain, not each
 host: DMARC falls back to the organisational domain, so asking
@@ -399,7 +401,7 @@ a check.
     "include_inventory": true,   // also check names discovery found
     "check_mail": true,          // SPF, DMARC, MX
     "check_blocklists": true,
-    "check_hsts": true,
+    "check_headers": true,       // HSTS + the protective headers + disclosure
     "extra_domains": ["brand.it"]
   }
 }
@@ -411,11 +413,50 @@ second scan the same morning costs nothing; at most four addresses per domain
 are checked against each list, because a name behind a CDN can answer with a
 dozen and each one costs a query per list.
 
-**Network.** All of it is DNS, except HSTS, which is one `HEAD` over HTTPS
-through the same SSRF guard as the probe, pinned to the validated address. That
-request verifies the certificate: a browser ignores HSTS served over a
-connection it did not trust, so a header read from an untrusted one would
-describe a policy nobody applies.
+### The response headers
+
+Three of the five checks read the same response, so a site is asked once, not
+three times.
+
+`security_headers` is about what a browser is told to refuse:
+
+* **framing** — `X-Frame-Options`, *or* a CSP with `frame-ancestors`. Either
+  is enough: `frame-ancestors` supersedes the older header, and demanding both
+  would report a correctly configured site as unprotected.
+* **MIME sniffing** — `X-Content-Type-Options: nosniff`.
+* **script sources** — a `Content-Security-Policy`.
+
+A missing one is a warning. A *broken* one is a finding, because it is worse:
+`X-Frame-Options: ALLOW-FROM …` is ignored by every modern browser, and a
+`Content-Security-Policy-Report-Only` with no enforcing policy reports
+violations and blocks nothing. Both answer "are we covered?" with a yes.
+
+`disclosure` is the opposite question — what the response volunteers about the
+software behind it. `Server` is reported only when it carries a **version**:
+`nginx/1.24.0` tells an attacker which CVEs to try, `cloudflare` does not.
+`X-Powered-By`, `X-AspNet-Version`, `X-AspNetMvc-Version` and `X-Generator`
+exist only to say what is running, so any value is the finding. It is never
+more than a warning: knowing the version does not let anyone in, it saves
+them the reconnaissance, and it is usually one line of configuration.
+
+**Redirects.** Most estates answer their apex with a 301 to `www`. The
+protective headers live on the page, not on the redirect, so CertMate follows
+the hop — at most three, only to `https`, and only to a name under the same
+registrable domain, with the SSRF guard re-run on each one. Following a
+redirect off the estate would be reading someone else's headers and filing
+them under your domain. If the hop cannot be followed, `security_headers` is
+`unknown` and says the host only redirects, rather than reporting "no CSP"
+about a response nobody browses.
+
+HSTS is the exception: it is read from the **first** response, including a
+301, because that is what a browser records. An apex that sets HSTS and a
+`www` that does not are two different facts, and each name gets its own row.
+
+**Network.** All of it is DNS, except the one `HEAD` per host over HTTPS,
+through the same SSRF guard as the probe and pinned to the validated address.
+That request verifies the certificate: a browser ignores the policies these
+headers carry when it did not trust the connection, so reading them from an
+untrusted one would describe a policy nobody applies.
 
 ---
 
