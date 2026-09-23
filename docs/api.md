@@ -1217,6 +1217,29 @@ in `/api/inventory/config` and also run on `POST /api/inventory/scan`, whose
 answer gains a `domain_health` summary. What each check means:
 [Domain health](discovery-inventory.md#domain-health).
 
+#### Is a newer CertMate out
+
+**Endpoint**: `GET /api/web/update-check` — session, viewer
+
+```json
+{ "status": "outdated", "running": "2.34.0", "latest": "v2.35.0" }
+```
+
+**Off by default, and it stays off until an operator turns it on.**
+`docs/ca-providers.md` offers the private CA for air-gapped systems, and an
+instance nobody asked to reach the internet must not reach it — so with
+`update_check.enabled` unset this answers `disabled` and no request is made.
+`disabled` and `unknown` are separate answers on purpose: the first means you
+did not ask, the second means CertMate asked GitHub and could not find out,
+which is a reason to look at egress rules rather than at CertMate.
+
+`unknown` is never rendered as `current`. An air-gapped instance told daily
+that it is up to date, while running a release with a known defect, is worse
+served than one told nothing.
+
+The answer is cached for a day, so the footer polling it on every page load
+does not make an instance into a source of traffic.
+
 ### Deployment
 
 #### Deploy-hook history

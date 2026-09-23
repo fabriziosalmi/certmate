@@ -69,7 +69,33 @@ def _stream_log_file(log_file, poll_seconds=None, max_idle_seconds=None):
 logger = logging.getLogger(__name__)
 
 
+def _register_update_check(app, managers, auth_manager):
+    """Mount GET /api/web/update-check.
+
+    Outside register_misc_routes so the closure's complexity budget — a
+    ceiling that only ever comes down — pays nothing for it.
+
+    require_session_role, like every other route in that function: this is
+    called from the page with a session cookie, and it is what the test
+    harnesses here stub. `require_web_auth` is applied at registration time
+    and those harnesses pass None for it, so using it turns every /health test
+    in test_scheduler_status_health.py into a TypeError at import.
+    """
+    @app.route('/api/web/update-check', methods=['GET'])
+    @auth_manager.require_session_role('viewer')
+    def api_web_update_check():
+        """What the footer asks. Answers `disabled` unless switched on, and
+        never blocks the page: the footer renders without it."""
+        checker = managers.get('update_check')
+        if checker is None:
+            return jsonify({'status': 'disabled', 'running': None, 'latest': None})
+        return jsonify(checker.status())
+
+
 def register_misc_routes(app, managers, require_web_auth, auth_manager):
+
+    _register_update_check(app, managers, auth_manager)
+
     """Register miscellaneous routes"""
 
     @app.route('/api/activity')

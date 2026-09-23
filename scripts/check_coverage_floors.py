@@ -162,6 +162,9 @@ FLOORS = {
     # that reach a real server are marked `network` and excluded here, so this
     # figure is what CI actually measures.
     'modules/core/weak_tls.py': 95,
+    # 100 from a measured 100%: it is parsing, a comparison and a guard, and
+    # every branch is a way the air-gap promise could be broken quietly.
+    'modules/core/update_check.py': 100,
     'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
     'modules/core/factory.py': 80,
