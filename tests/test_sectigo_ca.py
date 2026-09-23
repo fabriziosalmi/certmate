@@ -48,6 +48,9 @@ def test_metadata_and_validation(accounts):
         assert not valid and expected in message
     assert not manager.validate_ca_configuration('sectigo', {
         **accounts['production-ov'], 'acme_url': 'not-a-url'})[0]
+    valid, message = manager.validate_ca_configuration('sectigo', {
+        **accounts['production-ov'], 'acme_url': 'http://acme.sectigo.com/v2/OV'})
+    assert not valid and 'HTTPS' in message
 
 
 def test_account_specific_directory_and_certbot_command(accounts):
@@ -71,11 +74,21 @@ def test_missing_directory_fails_closed_and_existing_ca_urls_unchanged(accounts)
     manager = CAManager(Settings(accounts))
     with pytest.raises(ValueError, match='Sectigo ACME URL'):
         manager.get_acme_server_url('sectigo', account_config={})
+    with pytest.raises(ValueError, match='HTTPS ACME Directory URL'):
+        manager.get_acme_server_url('sectigo', account_config={
+            **accounts['production-ov'], 'acme_url': 'http://acme.sectigo.com/v2/OV'})
+    with pytest.raises(ValueError, match='HTTPS ACME Directory URL'):
+        manager.get_acme_server_url('sectigo', staging=True, account_config={
+            **accounts['production-ov'], 'staging_url': 'http://acme.sectigo.com/v2/OV'})
     for provider in ('letsencrypt', 'digicert', 'actalis', 'zerossl', 'google'):
         info = manager.ca_providers[provider]
         assert manager.get_acme_server_url(provider, account_config=accounts['production-ov']) == info['production_url']
         assert manager.get_acme_server_url(provider, staging=True, account_config=accounts['production-ov']) == info['staging_url']
     assert manager.get_acme_server_url('private_ca', account_config=accounts['production-ov']) == accounts['production-ov']['acme_url']
+    assert not manager.validate_ca_configuration('private_ca', {
+        'acme_url': 'http://internal-ca.example.com/directory'})[0]
+    assert manager.validate_ca_configuration('private_ca', {
+        'acme_url': 'https://internal-ca.example.com/directory'})[0]
 
 
 def test_unknown_account_never_falls_back_to_lets_encrypt(accounts):

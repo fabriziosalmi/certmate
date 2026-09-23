@@ -198,10 +198,14 @@ class CAManager:
         
         if ca_provider == 'private_ca' or ca_info.get('requires_acme_url'):
             if staging and (account_config or {}).get('staging_url'):
-                return account_config['staging_url']
-            if (account_config or {}).get('acme_url'):
-                return account_config['acme_url']
-            raise ValueError(f"{ca_info['name']} ACME URL not configured")
+                url = account_config['staging_url']
+            else:
+                url = (account_config or {}).get('acme_url')
+            if not url:
+                raise ValueError(f"{ca_info['name']} ACME URL not configured")
+            if ca_info.get('requires_acme_url') and not url.startswith('https://'):
+                raise ValueError(f"{ca_info['name']} requires an HTTPS ACME Directory URL")
+            return url
 
         # Other public CAs retain their pinned directory, even if an account
         # contains an acme_url (as with the existing DigiCert settings form).
