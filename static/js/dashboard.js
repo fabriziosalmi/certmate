@@ -439,6 +439,21 @@
                 // overdue / soonest first), independent of the chosen direction.
                 return remaining(a) - remaining(b);
             }
+            if (field === 'ca') {
+                // Same shape as 'provider' above, on purpose: sorting by CA is
+                // how #854's operator groups internal apart from public when
+                // both live in one list. Certificates with no recorded CA sort
+                // to the bottom either way rather than forming a group of
+                // their own at the top.
+                var ca = (a.ca_provider || '').toLowerCase();
+                var cb = (b.ca_provider || '').toLowerCase();
+                if (ca !== cb) {
+                    if (!ca) return 1;
+                    if (!cb) return -1;
+                    return dir * ca.localeCompare(cb);
+                }
+                return remaining(a) - remaining(b);
+            }
             return 0;
         });
     }
@@ -596,6 +611,43 @@
             (icon || '') + '<span>' + label + '</span></span>';
     }
 
+    // The authority that issued a certificate, spelled the way Settings spells
+    // it. #854 is a private-CA operator: the table named the DNS provider and
+    // said nothing about the CA, which is the one field that tells an
+    // internally-trusted certificate apart from a publicly-trusted one.
+    //
+    // A literal map rather than a fetch, because the table renders before any
+    // settings call returns and a column that fills in late reads as a bug.
+    // `tests/test_the_dashboard_says_which_ca_issued.py` runs this map against
+    // CAManager.ca_providers, so a CA added to the backend cannot quietly
+    // surface here as a bare key.
+    var CA_NAMES = {
+        'letsencrypt': "Let's Encrypt",
+        'letsencrypt_staging': "Let's Encrypt (Staging)",
+        'digicert': 'DigiCert',
+        'private_ca': 'Private CA',
+        'zerossl': 'ZeroSSL',
+        'google': 'Google Trust Services',
+        'sslcom': 'SSL.com',
+        'actalis': 'Actalis'
+    };
+
+    // Escaped, like providerDisplayName. An unrecognised key is shown as
+    // itself rather than dropped: metadata naming a CA this build has never
+    // heard of is still evidence about that certificate, and hiding it would
+    // put the row back in the state #854 complained about.
+    function caDisplayName(ca) {
+        return ca ? escapeHtml(CA_NAMES[ca] || ca) : '';
+    }
+
+    // An em-dash, not "Let's Encrypt". Certificates issued before CertMate
+    // recorded the CA in metadata have no answer here, and defaulting to the
+    // common one would be a guess presented as a fact to exactly the operator
+    // this column exists for.
+    var CA_NOT_RECORDED =
+        '<span class="text-muted" title="Not recorded \u2014 this certificate was ' +
+        'issued before CertMate stored the CA, or by an older version">\u2014</span>';
+
     function displayCertificates(certificates) {
         var container = document.getElementById('certificatesList');
         var thead = document.querySelector('#certificatesTable thead');
@@ -609,7 +661,7 @@
             thead.style.display = 'none';
 
             if (isFiltered) {
-                container.innerHTML = '<tr data-empty-state><td colspan="6">' +
+                container.innerHTML = '<tr data-empty-state><td colspan="7">' +
                     '<div class="px-6 py-12 text-center">' +
                     '<div class="mx-auto max-w-sm border-2 border-dashed border-border rounded-xl p-8">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-surface-2 rounded-full mb-4">' +
@@ -623,7 +675,7 @@
                     '</div>' +
                     '</td></tr>';
             } else {
-                container.innerHTML = '<tr data-empty-state><td colspan="6">' +
+                container.innerHTML = '<tr data-empty-state><td colspan="7">' +
                     '<div class="px-6 py-8"><div class="mx-auto max-w-lg">' +
                     '<div class="text-center mb-6">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
@@ -673,6 +725,8 @@
             // rowRaw() to opt out of re-escaping. cert.domain and
             // cert.domain_alias flow in unescaped; the helper escapes them.
             var providerLabel = providerDisplayName(cert.dns_provider);
+            var caLabel = caDisplayName(cert.ca_provider);
+            var caCell = caLabel ? '<span>' + caLabel + '</span>' : CA_NOT_RECORDED;
             var domainAlias = cert.domain_alias || '';
 
             if (!cert.exists) {
@@ -681,6 +735,7 @@
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap text-right">
                         <div class="flex items-center justify-end gap-1">
@@ -753,8 +808,14 @@
             var mobileProviderLine = providerLabel
                 ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted">${rowRaw(providerCellHtml(cert.dns_provider, providerLabel))}</div>`)
                 : false;
+            // Only when known: the meta block is a summary, and a row of
+            // em-dashes on a phone is noise. The detail panel is where an
+            // unanswered field still gets said out loud.
+            var mobileCaLine = caLabel
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted"><i class="fas fa-certificate mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span>${rowRaw(caLabel)}</span></div>`)
+                : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
-            var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
+            var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileCaLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             // An expired cert is no longer trusted; a closed padlock (the
             // "secure connection" glyph) is a visual paradox there. Show an
@@ -774,6 +835,7 @@
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${expiryStr}</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
@@ -956,6 +1018,7 @@
         var providerLabel = providerDisplayName(cert.dns_provider);
         var safeDomainAlias = escapeHtml(cert.domain_alias || '');
         var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
+        var caDetailLabel = caDisplayName(cert.ca_provider);
         var sanDomains = Array.isArray(cert.san_domains) ? cert.san_domains : [];
         var sanDomainsHtml = sanDomains.map(function (san) {
             return '<div class="break-all">' + escapeHtml(san) + '</div>';
@@ -1047,6 +1110,11 @@
                 // Details
                 '<dl class="divide-y divide-border">' +
                 (providerLabel ? detailRow('DNS Provider', providerCell) : '') +
+                // Always rendered, unlike the row above it. The panel is where
+                // an operator goes to ask "what is this certificate", and
+                // "not recorded" is an answer; silence would read as "public,
+                // like everything else".
+                detailRow('Issuing CA', caDetailLabel || CA_NOT_RECORDED) +
                 (sanDomains.length ? detailRow('SANs', '<div class="text-right">' + sanDomainsHtml + '</div>') : '') +
                 (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
                 (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +
