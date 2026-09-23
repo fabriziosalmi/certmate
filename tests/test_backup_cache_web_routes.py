@@ -92,23 +92,23 @@ def test_a_complete_backup_has_to_be_asked_for(wired):
     )
 
 
-def test_a_truthy_string_does_not_silently_become_a_plaintext_backup(wired):
-    """`bool("false")` is True. Worth knowing which way this route goes, since
-    a form posting the string "false" would otherwise write a credential dump.
+def test_a_truthy_string_is_refused_rather_than_read_as_true(wired):
+    """This is the deliberate change the previous version of this test asked
+    for: it recorded that `bool("false")` made the string truthy here, and
+    said that if the route were ever tightened, this test should be the thing
+    that changes. The string is now refused, and no backup is written at all.
     """
     client, file_ops, settings, _cache = wired
     file_ops.create_unified_backup.return_value = 'backup_x.zip'
     settings.load_settings.return_value = {}
 
-    client.post('/api/web/backups/create', json={'include_secrets': 'false'})
+    response = client.post('/api/web/backups/create', json={'include_secrets': 'false'})
 
-    _args, kwargs = file_ops.create_unified_backup.call_args
-    assert kwargs['include_secrets'] is True, (
-        'this route coerces with bool(), so the string "false" is truthy. That '
-        'is the current behaviour and it is recorded here rather than assumed '
-        'either way — if it is ever tightened, this test should be the thing '
-        'that changes, deliberately.'
-    )
+    assert response.status_code == 400
+    body = response.get_json()
+    assert body['code'] == 'INVALID_REQUEST'
+    assert body['error'].startswith('include_secrets must be a JSON boolean')
+    file_ops.create_unified_backup.assert_not_called()
 
 
 def test_cache_stats_are_returned(wired):

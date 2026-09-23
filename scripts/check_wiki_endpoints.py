@@ -92,7 +92,13 @@ def verbs_for(path: str, table) -> tuple[bool, set[str]]:
         parts = candidate.strip('/').split('/')
         if len(parts) != len(wanted):
             continue
-        if all(p == '<X>' or w == '<X>' or p == w for p, w in zip(parts, wanted)):
+        # Only the ROUTE's placeholder stands for a value the wiki wrote out
+        # (`/api/certificates/example.com` is `/api/certificates/<domain>`). A
+        # placeholder in the WIKI says nothing about a fixed route segment:
+        # matching it both ways let `/api/{x}/create` "exist" because
+        # `/api/certificates/create` does. The mirror of the same fix in
+        # tests/test_the_api_surface_is_documented.py.
+        if all(p == '<X>' or p == w for p, w in zip(parts, wanted)):
             found = True
             verbs |= candidate_verbs
     return found, verbs

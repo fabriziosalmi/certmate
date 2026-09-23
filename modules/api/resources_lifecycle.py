@@ -11,6 +11,7 @@ from flask import current_app, request
 from flask_restx import Resource
 
 from ..core.audit_context import audit_context_from_request
+from ..core.request_fields import json_booleans
 from ..core.cert_jobs import IssuanceQueueFull
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import DomainOperationInProgress
@@ -192,11 +193,12 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
     class RenewCertificate(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('operator')
+        @json_booleans(force=False)
         def post(self, domain):
             """Renew an existing certificate"""
             try:
                 payload = request.get_json(silent=True) or {}
-                force = bool(payload.get('force', False))
+                force = request.json_booleans['force']
                 _, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
                 if err:
                     return {'error': err, 'code': 'INVALID_REQUEST'}, 400
@@ -410,6 +412,9 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
     class CertificateAutoRenew(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('operator')
+        # default False so an ABSENT flag still reaches the view's own
+        # AUTO_RENEW_FLAG_REQUIRED answer; a present non-boolean is refused here.
+        @json_booleans(enabled=False)
         def put(self, domain):
             """Enable or disable automatic renewal for a single certificate (issue #111).
 
@@ -425,7 +430,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 data = api.payload or {}
                 if 'enabled' not in data:
                     return {'error': 'Missing "enabled" boolean in request body', 'code': 'AUTO_RENEW_FLAG_REQUIRED'}, 400
-                enabled = bool(data.get('enabled'))
+                enabled = request.json_booleans['enabled']
 
                 updated = ctx.certificates.set_auto_renew(domain, enabled)
                 if not updated:

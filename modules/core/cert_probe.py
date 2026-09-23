@@ -47,6 +47,7 @@ from cryptography.hazmat.primitives.asymmetric import (
 )
 from cryptography.x509.oid import ExtensionOID, NameOID
 
+from . import revocation as revocation_mod
 from .utils import utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -375,28 +376,39 @@ def _chain_entry(cert):
     }
 
 
-def _served_chain(tls_sock):
-    """Return the served (unverified) chain as a list of metadata dicts.
+def _served_chain_der(tls_sock):
+    """Return the served (unverified) chain as a list of DER bytes.
 
-    Uses ``SSLSocket.get_unverified_chain()`` (Python 3.13+); returns ``[]``
-    when the interpreter or peer does not provide it, in which case the caller
-    falls back to the leaf certificate alone. Best-effort: any error is
-    swallowed so chain extraction never fails the probe.
+    ``[]`` on interpreters without ``get_unverified_chain()`` (Python < 3.13)
+    or when the peer sends none. Best-effort, never raises.
     """
     getter = getattr(tls_sock, 'get_unverified_chain', None)
-    if getter is None:
+    if getter is None or _DER_ENCODING is None:
         return []
     try:
         chain = getter() or []
     except (ssl.SSLError, OSError, ValueError):
         return []
-
     out = []
     for entry in chain:
         try:
-            der = entry.public_bytes(_DER_ENCODING)
-            cert = x509.load_der_x509_certificate(der)
-            out.append(_chain_entry(cert))
+            out.append(entry.public_bytes(_DER_ENCODING))
+        except (ValueError, TypeError, AttributeError):
+            continue
+    return out
+
+
+def _served_chain(chain_der):
+    """Return the served (unverified) chain as a list of metadata dicts.
+
+    *chain_der* comes from :func:`_served_chain_der`; an empty list means the
+    interpreter or peer did not provide one, in which case the caller falls
+    back to the leaf certificate alone. Unparseable entries are skipped.
+    """
+    out = []
+    for der in chain_der:
+        try:
+            out.append(_chain_entry(x509.load_der_x509_certificate(der)))
         except (ValueError, TypeError):
             continue
     return out
@@ -420,6 +432,7 @@ def _blocked_result(host, port, reason):
         'certificate': None,
         'validation': None,
         'chain': [],
+        'revocation': None,
     }
 
 
@@ -434,11 +447,12 @@ def _unreachable_result(host, port, connect_ip, error_class, error):
         'certificate': None,
         'validation': None,
         'chain': [],
+        'revocation': None,
     }
 
 
 def probe_certificate(host, port=443, timeout=None, allow_private=None,
-                      server_name=None):
+                      server_name=None, check_revocation=False):
     """Inspect the TLS certificate served at *host*:*port*.
 
     Returns a dict describing the served certificate and never raises:
@@ -457,6 +471,11 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
 
     IPv6 and any port are supported. Set *allow_private* True (or the
     ``CERTMATE_PROBE_ALLOW_PRIVATE`` env var) to probe private/loopback targets.
+
+    With *check_revocation* the result also carries ``revocation`` — the
+    verified OCSP/CRL answer from :func:`revocation.check_revocation`, fetched
+    through the same SSRF guard. Without it, ``revocation`` is None: not
+    checked, which is different from checked and good.
     """
     if allow_private is None:
         allow_private = _env_allow_private()
@@ -485,7 +504,7 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
             raw.connect((connect_ip, port))
             with context.wrap_socket(raw, server_hostname=sni) as tls_sock:
                 cert_bytes = tls_sock.getpeercert(binary_form=True)
-                chain = _served_chain(tls_sock)
+                chain_der = _served_chain_der(tls_sock)
     except socket.timeout as e:
         return _unreachable_result(host, port, connect_ip, ERR_TIMEOUT, str(e) or 'timed out')
     except ssl.SSLError as e:
@@ -512,11 +531,18 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
     # get_unverified_chain() is only available on Python 3.13+, so on older
     # interpreters (or when the peer sends no chain) fall back to the leaf
     # certificate alone — the chain always names at least the served cert.
+    chain = _served_chain(chain_der)
     if not chain:
         try:
             chain = [_chain_entry(_load_certificate(cert_bytes))]
         except ValueError:
             chain = []
+
+    revocation = None
+    if check_revocation:
+        revocation = revocation_mod.check_revocation(
+            cert_bytes, chain_der, timeout=timeout, allow_private=allow_private,
+        )
 
     return {
         'host': host,
@@ -528,5 +554,6 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
         'certificate': parsed['certificate'],
         'validation': parsed['validation'],
         'chain': chain,
+        'revocation': revocation,
         'probed_at': utc_now_iso(),
     }

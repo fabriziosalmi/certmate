@@ -1,8 +1,10 @@
 import logging
 import re
+from functools import partial, wraps
 
 from flask import request, jsonify
 
+from modules.core.request_fields import json_booleans
 from modules.core.constants import iter_cert_domain_dirs
 from modules.core.domain_entries import entry_domain
 
@@ -12,6 +14,87 @@ logger = logging.getLogger(__name__)
 # (_SECRET_KEY_RE + mask_secrets_in_settings); the GET handler below
 # imports it. A local duplicate of that regex used to live here but had
 # been dead code since the handlers switched to the shared helper.
+
+
+def _refuse_during_setup(auth_manager, audit_logger, operation, resource_type,
+                         resource_id, only_if=None):
+    """409 SETUP_BOOTSTRAP_ONLY while the instance is in setup mode.
+
+    *only_if*, when given, narrows the refusal (a first user is the
+    bootstrap and must be allowed). Every refusal is audited: an attempt to
+    create credentials in the setup window is worth knowing about.
+    """
+    if not auth_manager.is_setup_mode():
+        return None
+    if only_if is not None and not only_if():
+        return None
+    if audit_logger:
+        audit_logger.log_authz_denied(
+            operation=operation, resource_type=resource_type,
+            resource_id=str(resource_id)[:64],
+            reason='setup mode allows only the bootstrap admin',
+            user=(getattr(request, 'current_user', None) or {}).get('username'),
+            ip_address=request.remote_addr,
+        )
+    return jsonify({
+        'error': ('Setup is not complete: every request is still served as '
+                  'admin to anyone who can reach this instance, so it only '
+                  'creates the first admin. Enable local authentication (or '
+                  'set API_BEARER_TOKEN), sign in, then create this.'),
+        'code': 'SETUP_BOOTSTRAP_ONLY',
+    }), 409
+
+
+def bootstrap_only(auth_manager, audit_logger, operation, resource_type,
+                   id_field, methods=('POST',), only_if=None):
+    """Decorator: refuse *methods* with 409 while the instance is in setup mode.
+
+    A decorator rather than a check inside each view, so the views stay as they
+    were: the rule is "setup mode only bootstraps", and it reads that way at the
+    top of the route it applies to.
+    """
+    def decorator(view):
+        @wraps(view)
+        def guarded(*args, **kwargs):
+            if request.method in methods:
+                data = request.get_json(silent=True) or {}
+                refusal = _refuse_during_setup(
+                    auth_manager, audit_logger, operation, resource_type,
+                    data.get(id_field) or '-', only_if=only_if)
+                if refusal is not None:
+                    return refusal
+            return view(*args, **kwargs)
+        return guarded
+    return decorator
+
+
+def _confirm_setup_key(auth_manager, audit_logger, key_id):
+    """PATCH /api/keys/<id> {"confirmed": true}: vouch for a key created
+    while the instance was in setup mode, clearing its review flag."""
+    data = request.get_json(silent=True) or {}
+    if data.get('confirmed') is not True:
+        return jsonify({'error': 'Body must be {"confirmed": true}',
+                        'code': 'INVALID_REQUEST'}), 400
+    # Confirming in setup mode would let the same anonymous admin who
+    # could mint the key vouch for it.
+    refusal = _refuse_during_setup(auth_manager, audit_logger, 'confirm_api_key',
+                                   'api_key', key_id)
+    if refusal:
+        return refusal
+    user = getattr(request, 'current_user', {}) or {}
+    ok, msg = auth_manager.confirm_setup_key(key_id, user.get('username'))
+    if not ok:
+        status = 404 if 'not found' in msg.lower() else 400
+        code = 'API_KEY_NOT_FOUND' if status == 404 else 'API_KEY_NOT_CONFIRMABLE'
+        return jsonify({'error': msg, 'code': code}), status
+    if audit_logger:
+        audit_logger.log_operation(
+            operation='confirm_api_key', resource_type='api_key',
+            resource_id=key_id, status='success',
+            details={'reason': 'created during setup, vouched for by an operator'},
+            user=user.get('username'), ip_address=request.remote_addr,
+        )
+    return jsonify({'message': msg, 'key_id': key_id})
 
 
 def register_settings_routes(app, managers, require_web_auth, auth_manager,
@@ -186,6 +269,13 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/api/users', methods=['GET', 'POST'])
     @app.route('/api/web/settings/users', methods=['GET', 'POST'])
     @auth_manager.require_role('admin')
+    # Setup mode serves every request as admin, so it may only bootstrap: the
+    # first admin, then local auth. A second user created now would be created
+    # by whoever can reach the instance and would outlive setup. 409 is what
+    # the setup page already reads as "an admin exists, go on and enable
+    # login", so a half-finished setup still completes.
+    @bootstrap_only(auth_manager, audit_logger, 'create_user', 'user', 'username',
+                    only_if=auth_manager.list_users)
     def api_users():
         """User management"""
         if request.method == 'GET':
@@ -477,6 +567,10 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/keys', methods=['GET', 'POST'])
     @auth_manager_ref.require_role('admin')
+    # A key minted in setup mode is minted by whoever can reach the instance,
+    # and it stays valid once the operator completes setup.
+    @bootstrap_only(auth_manager_ref, audit_logger, 'create_api_key', 'api_key', 'name')
+    @json_booleans(is_agent=False)
     def api_keys():
         """List or create API keys"""
         if request.method == 'GET':
@@ -493,7 +587,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             role = data.get('role', 'viewer')
             expires_at = data.get('expires_at')
             allowed_domains = data.get('allowed_domains')
-            is_agent = bool(data.get('is_agent', False))
+            is_agent = request.json_booleans['is_agent']
 
             if not name:
                 return jsonify({'error': 'Key name is required'}), 400
@@ -554,6 +648,15 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         except Exception as e:
             logger.error(f"Failed to create API key: {e}")
             return jsonify({'error': 'Failed to create API key'}), 500
+
+    # PATCH is registered separately, as a module-level view bound to this
+    # instance's managers: an operator confirming a key created during setup
+    # has nothing to do with revoking one.
+    app.add_url_rule(
+        '/api/keys/<string:key_id>', 'api_key_confirm',
+        auth_manager_ref.require_role('admin')(
+            partial(_confirm_setup_key, auth_manager_ref, audit_logger)),
+        methods=['PATCH'])
 
     @app.route('/api/keys/<string:key_id>', methods=['DELETE'])
     @auth_manager_ref.require_role('admin')

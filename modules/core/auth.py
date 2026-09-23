@@ -15,6 +15,7 @@ import time
 from functools import wraps
 from flask import request
 from datetime import datetime, timezone
+from .structured_logging import scrub_log_value
 from .utils import utc_now
 
 try:
@@ -27,11 +28,15 @@ logger = logging.getLogger(__name__)
 
 ROLE_HIERARCHY = {'viewer': 0, 'operator': 1, 'admin': 2}
 
+# Who a request is while the instance is in setup mode: anyone who can reach
+# it, served as admin. Anything created under this name was created by whoever
+# was there during the setup window, which is why it is recorded and reviewed.
+SETUP_USERNAME = 'setup_user'
+
 # Distinct from None/False so the operator-bearer-token detection can be
 # memoised (env/file are fixed for the process lifetime) without a False
 # result being mistaken for "not computed yet".
 _UNSET = object()
-
 
 
 # bcrypt has always ignored everything past the 72nd byte of a password. Until
@@ -568,8 +573,74 @@ class AuthManager:
                 'is_expired': is_expired,
                 'allowed_domains': data.get('allowed_domains'),
                 'is_agent': bool(data.get('is_agent')),
+                **self._setup_origin_view(data),
             }
         return result
+
+    # --- keys created during the setup window ------------------------------ #
+
+    @staticmethod
+    def _created_during_setup(data):
+        return (data or {}).get('created_by') == SETUP_USERNAME
+
+    def _setup_origin_view(self, data):
+        """The review state of a key created while the instance was in setup
+        mode, for the key listing.
+
+        While in setup mode every request is served as admin, so a key minted
+        then was minted by whoever could reach the instance, and nobody can
+        vouch for it. Such keys are no longer mintable (the route refuses in
+        setup mode); the ones that already exist stay valid, are flagged, and
+        wait for an operator to confirm or revoke them.
+        """
+        during_setup = self._created_during_setup(data)
+        confirmed_at = data.get('setup_origin_confirmed_at') if during_setup else None
+        return {
+            'created_during_setup': during_setup,
+            'setup_origin_confirmed_at': confirmed_at,
+            'setup_origin_confirmed_by': data.get('setup_origin_confirmed_by') if during_setup else None,
+            'needs_review': bool(during_setup and not confirmed_at and not data.get('revoked')),
+        }
+
+    def unreviewed_setup_keys(self):
+        """IDs of live keys created during setup that no operator has confirmed."""
+        return sorted(
+            key_id for key_id, data in self._get_api_keys().items()
+            if self._setup_origin_view(data)['needs_review']
+        )
+
+    def confirm_setup_key(self, key_id, confirmed_by):
+        """Record that an operator vouches for a key created during setup.
+
+        Returns ``(ok, message)``. Refused for a key that was not created during
+        setup (there is nothing to confirm), for a revoked key, and for one
+        already confirmed.
+        """
+        try:
+            api_keys = self._get_api_keys()
+            data = api_keys.get(key_id)
+            if data is None:
+                return False, "API key not found"
+            if not self._created_during_setup(data):
+                return False, "This key was not created during setup; there is nothing to confirm"
+            if data.get('revoked'):
+                return False, "API key is revoked"
+            if data.get('setup_origin_confirmed_at'):
+                return False, "API key is already confirmed"
+            data['setup_origin_confirmed_at'] = utc_now().isoformat()
+            data['setup_origin_confirmed_by'] = confirmed_by
+            if self._save_api_keys(api_keys):
+                # The key id, not its name: the name is text whoever created
+                # the key chose, and it is read out of the api_keys record,
+                # which also holds the token hash. Nothing derived from that
+                # record needs to reach a log line.
+                logger.info("API key %s, created during setup, was confirmed by %s",
+                            key_id, scrub_log_value(confirmed_by))
+                return True, "API key confirmed"
+            return False, "Failed to save changes"
+        except (OSError, ValueError, KeyError) as e:
+            logger.error(f"Error confirming API key: {e}")
+            return False, "An internal error occurred"
 
     def revoke_api_key(self, key_id):
         """Revoke an API key by ID (soft-delete)."""
@@ -1383,7 +1454,7 @@ class AuthManager:
             # credential (local auth + a user, OR an API bearer token), so a
             # configured bearer token is always enforced here.
             if self.is_setup_mode():
-                return {'username': 'setup_user', 'role': 'admin'}, None
+                return {'username': SETUP_USERNAME, 'role': 'admin'}, None
 
             # Check for session-based auth first (for web UI)
             session_id = request.cookies.get('certmate_session')
@@ -1501,7 +1572,7 @@ class AuthManager:
             @wraps(f)
             def decorated_function(*args, **kwargs):
                 if self.is_setup_mode():
-                    request.current_user = {'username': 'setup_user',
+                    request.current_user = {'username': SETUP_USERNAME,
                                             'role': 'admin'}
                     return f(*args, **kwargs)
 

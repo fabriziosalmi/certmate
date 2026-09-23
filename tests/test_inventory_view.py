@@ -174,3 +174,18 @@ def test_scope_wiring_matches_certificatelist_semantics():
     scoped = lambda d: dms(d, ['a.example.com'])              # noqa: E731
     assert record_in_scope(_rec(subject_cn='a.example.com', san_dns=[]), scoped) is True
     assert record_in_scope(_rec(subject_cn='b.example.com', san_dns=[]), scoped) is False
+
+
+def test_summary_counts_revocation_answers():
+    from modules.core.inventory_view import build_inventory_view
+    records = [
+        {'fingerprint': 'a', 'not_after': '2099-01-01T00:00:00Z', 'revocation': {'status': 'revoked'}},
+        {'fingerprint': 'b', 'not_after': '2099-01-01T00:00:00Z', 'revocation': {'status': 'good'}},
+        {'fingerprint': 'c', 'not_after': '2099-01-01T00:00:00Z', 'revocation': None},
+        {'fingerprint': 'd', 'not_after': '2099-01-01T00:00:00Z', 'revocation': {'status': 'unavailable'}},
+    ]
+    rev = build_inventory_view(records)['summary']['revocation']
+    assert rev['revoked'] == 1
+    assert rev['good'] == 1
+    assert rev['unchecked'] == 1
+    assert rev['unavailable'] == 1

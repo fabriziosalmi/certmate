@@ -72,9 +72,12 @@ class _FakeProbe:
     def __init__(self, mapping):
         self.mapping = mapping
         self.calls = []
+        self.revocation_flags = []
 
-    def __call__(self, host, port=443, timeout=None, allow_private=False):
+    def __call__(self, host, port=443, timeout=None, allow_private=False,
+                 check_revocation=False):
         self.calls.append((host, port, allow_private))
+        self.revocation_flags.append(check_revocation)
         outcome = self.mapping.get(host)
         if isinstance(outcome, Exception):
             raise outcome

@@ -37,6 +37,27 @@
         return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' + m[0] + '">' + escapeHtml(m[1]) + '</span>';
     }
 
+    // Only a verified answer is shown as good or revoked; everything else is
+    // grey with the reason on hover, so "could not check" never reads as fine.
+    function revocationBadge(rev) {
+        if (!rev || !rev.status) { return ''; }
+        var map = {
+            revoked: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Revoked',
+                'Revoked' + (rev.revoked_at ? ' on ' + rev.revoked_at : '') + (rev.reason ? ' (' + rev.reason + ')' : '')
+                + (rev.method ? ' — ' + rev.method.toUpperCase() : '')],
+            good: ['bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', 'Not revoked',
+                'Not revoked — verified ' + (rev.method || '').toUpperCase() + ' answer, ' + (rev.checked_at || '')],
+            unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation unknown',
+                rev.error || 'The responder does not know this certificate'],
+            unavailable: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation not checked',
+                rev.error || 'No verified answer could be obtained']
+        };
+        var m = map[rev.status];
+        if (!m) { return ''; }
+        return '<span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ' + m[0] + '" title="'
+            + escapeHtml(m[2]) + '">' + escapeHtml(m[1]) + '</span>';
+    }
+
     function sourceBadge(source, managed) {
         var cls = managed
             ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
@@ -102,7 +123,9 @@
         var q = el('invSearch').value.trim().toLowerCase();
         if (group && r.group !== group) { return false; }
         if (source && r.source !== source) { return false; }
-        if (expiry && r.expiry_status !== expiry) { return false; }
+        if (expiry === 'revoked') {
+            if (!r.revocation || r.revocation.status !== 'revoked') { return false; }
+        } else if (expiry && r.expiry_status !== expiry) { return false; }
         if (q) {
             var hay = [r.subject_cn, r.issuer_cn, r.issuer, (r.san_dns || []).join(' ')]
                 .join(' ').toLowerCase();
@@ -125,7 +148,8 @@
             return '<tr class="hover:bg-hover">'
                 + '<td class="px-4 py-2">' + subjectCell(r) + '</td>'
                 + '<td class="px-4 py-2 text-xs text-muted">' + escapeHtml(r.issuer_cn || r.issuer || '—') + '</td>'
-                + '<td class="px-4 py-2">' + statusBadge(r.expiry_status, r.days_until_expiry) + '</td>'
+                + '<td class="px-4 py-2">' + statusBadge(r.expiry_status, r.days_until_expiry)
+                    + '<div>' + revocationBadge(r.revocation) + '</div></td>'
                 + '<td class="px-4 py-2 text-xs">' + keyLabel(r.key) + '</td>'
                 + '<td class="px-4 py-2">' + sourceBadge(r.source, r.managed) + '</td>'
                 + '<td class="px-4 py-2">' + endpointsCell(r) + '</td>'
@@ -200,6 +224,7 @@
         el('sum7').textContent = ex['7'] || 0;
         el('sum30').textContent = ex['30'] || 0;
         el('sum90').textContent = ex['90'] || 0;
+        el('sumRevoked').textContent = (s.revocation || {}).revoked || 0;
     }
 
     function load() {
@@ -212,6 +237,112 @@
             })
             .catch(function (err) {
                 el('inventoryBody').innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-red-500">Failed to load inventory (' + escapeHtml(err) + ').</td></tr>';
+            });
+    }
+
+    // Domain registrations. Only a registry-published date gets a day count;
+    // "not published" (.de, .eu) and a failed lookup say so in words instead
+    // of showing a number nobody stated.
+    function registrationExpiryCell(r) {
+        if (r.status === 'ok') {
+            return statusBadge(r.expiry_status, r.days_until_expiry)
+                + ' <span class="text-xs text-muted">' + escapeHtml((r.expires_at || '').slice(0, 10)) + '</span>';
+        }
+        var words = {
+            not_published: ['Not published by the registry', 'This registry does not publish when a registration expires.'],
+            not_registered: ['Not registered', 'The registry says this name does not exist.'],
+            unavailable: ['Could not check', r.error || 'No answer from the registry.']
+        }[r.status] || ['Unknown', ''];
+        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs whitespace-nowrap '
+            + (r.status === 'not_registered'
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300')
+            + '" title="' + escapeHtml(words[1]) + '">' + escapeHtml(words[0]) + '</span>';
+    }
+
+    function loadRegistrations() {
+        fetch('/api/inventory/domains', { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (data) {
+                var rows = data.domains || [];
+                var s = data.summary || {};
+                var ex = s.expiry || {};
+                el('regExpired').textContent = ex.expired || 0;
+                el('reg30').textContent = ex['30'] || 0;
+                el('reg90').textContent = ex['90'] || 0;
+                el('regNotPublished').textContent = (s.by_status || {}).not_published || 0;
+                el('regCount').textContent = rows.length ? rows.length + ' domains' : '';
+                if (!rows.length) {
+                    el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-muted">'
+                        + 'No domain registrations checked yet. Enable the check in Discovery configuration, then Scan now.</td></tr>';
+                    return;
+                }
+                el('registrationsBody').innerHTML = rows.map(function (r) {
+                    return '<tr class="hover:bg-hover">'
+                        + '<td class="px-4 py-2 font-medium text-foreground">' + escapeHtml(r.domain) + '</td>'
+                        + '<td class="px-4 py-2">' + registrationExpiryCell(r) + '</td>'
+                        + '<td class="px-4 py-2 text-xs text-muted">' + escapeHtml(r.registrar || '—') + '</td>'
+                        + '<td class="px-4 py-2 text-xs text-muted" title="Checked ' + escapeHtml(r.checked_at || '') + '">'
+                        + escapeHtml((r.source || '—').toUpperCase()) + '</td>'
+                        + '</tr>';
+                }).join('');
+            })
+            .catch(function (err) {
+                el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-red-500">Failed to load domain registrations (' + escapeHtml(err) + ').</td></tr>';
+            });
+    }
+
+    // A check's status as a chip. `unknown` is deliberately not green and not
+    // red: it means nobody answered, which is neither a pass nor a finding.
+    function healthChip(check) {
+        if (!check) { return '<span class="text-xs text-muted">—</span>'; }
+        var styles = {
+            ok: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+            warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+            failing: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+            unknown: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+        };
+        var labels = { ok: 'OK', warning: 'Warning', failing: 'Failing', unknown: 'Not verifiable' };
+        var status = check.status || 'unknown';
+        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs whitespace-nowrap '
+            + (styles[status] || styles.unknown) + '" title="' + escapeHtml(check.detail || '')
+            + '">' + escapeHtml(labels[status] || status) + '</span>';
+    }
+
+    function loadDomainHealth() {
+        fetch('/api/inventory/health', { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (data) {
+                var rows = data.names || [];
+                var by = (data.summary || {}).by_status || {};
+                el('healthFailing').textContent = by.failing || 0;
+                el('healthWarning').textContent = by.warning || 0;
+                el('healthUnknown').textContent = by.unknown || 0;
+                el('healthOk').textContent = by.ok || 0;
+                el('healthCount').textContent = rows.length ? rows.length + ' names' : '';
+                if (!rows.length) {
+                    el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-muted">'
+                        + 'No names checked yet. Enable Domain health in Discovery configuration, then Scan now.</td></tr>';
+                    return;
+                }
+                el('domainHealthBody').innerHTML = rows.map(function (r) {
+                    var c = r.checks || {};
+                    return '<tr class="hover:bg-hover">'
+                        + '<td class="px-4 py-2 font-medium text-foreground" title="Checked '
+                        + escapeHtml(r.checked_at || '') + '">' + escapeHtml(r.name) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.spf) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.dmarc) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.mx) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.blocklists) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.hsts) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.security_headers) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.disclosure) + '</td>'
+                        + '<td class="px-4 py-2">' + healthChip(c.weak_tls) + '</td>'
+                        + '</tr>';
+                }).join('');
+            })
+            .catch(function (err) {
+                el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-red-500">Failed to load domain health (' + escapeHtml(err) + ').</td></tr>';
             });
     }
 
@@ -237,10 +368,23 @@
                 el('cfgDiscEnabled').checked = !!d.enabled;
                 el('cfgIncludeManaged').checked = d.include_managed !== false;
                 el('cfgAllowPrivate').checked = !!d.allow_private;
+                el('cfgCheckRevocation').checked = d.check_revocation !== false;
                 el('cfgEndpoints').value = (d.endpoints || []).join('\n');
                 el('cfgCtEnabled').checked = !!c.enabled;
                 el('cfgCtIncludeManaged').checked = c.include_managed !== false;
                 el('cfgCtDomains').value = (c.domains || []).join('\n');
+                var g = cfg.domain_registration || {};
+                el('cfgRegEnabled').checked = !!g.enabled;
+                el('cfgRegIncludeInventory').checked = g.include_inventory !== false;
+                el('cfgRegExtra').value = (g.extra_domains || []).join('\n');
+                var h = cfg.domain_health || {};
+                el('cfgHealthEnabled').checked = !!h.enabled;
+                el('cfgHealthIncludeInventory').checked = h.include_inventory !== false;
+                el('cfgHealthMail').checked = h.check_mail !== false;
+                el('cfgHealthBlocklists').checked = h.check_blocklists !== false;
+                el('cfgHealthHeaders').checked = h.check_headers !== false;
+                el('cfgHealthWeakTls').checked = !!h.check_weak_tls;
+                el('cfgHealthExtra').value = (h.extra_domains || []).join('\n');
             })
             .catch(function () { /* viewer without config access — panel stays hidden */ });
     }
@@ -258,12 +402,27 @@
                 enabled: el('cfgDiscEnabled').checked,
                 include_managed: el('cfgIncludeManaged').checked,
                 allow_private: el('cfgAllowPrivate').checked,
+                check_revocation: el('cfgCheckRevocation').checked,
                 endpoints: lines('cfgEndpoints')
             },
             ct_monitoring: {
                 enabled: el('cfgCtEnabled').checked,
                 include_managed: el('cfgCtIncludeManaged').checked,
                 domains: lines('cfgCtDomains')
+            },
+            domain_registration: {
+                enabled: el('cfgRegEnabled').checked,
+                include_inventory: el('cfgRegIncludeInventory').checked,
+                extra_domains: lines('cfgRegExtra')
+            },
+            domain_health: {
+                enabled: el('cfgHealthEnabled').checked,
+                include_inventory: el('cfgHealthIncludeInventory').checked,
+                check_mail: el('cfgHealthMail').checked,
+                check_blocklists: el('cfgHealthBlocklists').checked,
+                check_headers: el('cfgHealthHeaders').checked,
+                check_weak_tls: el('cfgHealthWeakTls').checked,
+                extra_domains: lines('cfgHealthExtra')
             }
         };
         fetch('/api/inventory/config', {
@@ -285,7 +444,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning…';
         fetch('/api/inventory/scan', { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-            .then(function () { load(); })
+            .then(function () { load(); loadRegistrations(); loadDomainHealth(); })
             .catch(function () { /* keep current view */ })
             .then(function () { btn.disabled = false; btn.innerHTML = original; });
     }
@@ -332,6 +491,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         load();
         loadCryptoSummary();
+        loadRegistrations();
+        loadDomainHealth();
         gateAdminControls();
     });
 }());

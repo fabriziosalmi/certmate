@@ -1,0 +1,1020 @@
+{
+ "rdapConformance": [
+  "rdap_level_0",
+  "icann_rdap_technical_implementation_guide_1",
+  "icann_rdap_response_profile_1"
+ ],
+ "objectClassName": "domain",
+ "handle": "DOM000000181261-FRNIC",
+ "ldhName": "afnic.fr",
+ "status": [
+  "active"
+ ],
+ "whoisStatus": "ACTIVE",
+ "events": [
+  {
+   "eventAction": "registration",
+   "eventDate": "2001-12-10T23:00:00Z"
+  },
+  {
+   "eventAction": "expiration",
+   "eventDate": "2029-07-18T08:26:59Z"
+  },
+  {
+   "eventAction": "last changed",
+   "eventDate": "2026-06-05T06:59:15.743011Z"
+  },
+  {
+   "eventAction": "transfer",
+   "eventDate": "2017-07-18T08:26:59Z"
+  },
+  {
+   "eventAction": "last update of RDAP database",
+   "eventDate": "2026-09-22T16:33:57.179271394Z"
+  }
+ ],
+ "entities": [
+  {
+   "objectClassName": "entity",
+   "handle": "RAR939-FRNIC",
+   "publicIds": [
+    {
+     "type": "IANA Registrar ID",
+     "identifier": "9999"
+    }
+   ],
+   "status": [
+    "active"
+   ],
+   "port43": "whois.nic.fr",
+   "events": [
+    {
+     "eventAction": "registration",
+     "eventDate": "2014-07-29T15:35:33Z"
+    },
+    {
+     "eventAction": "last changed",
+     "eventDate": "2022-10-12T18:54:01.785057Z"
+    }
+   ],
+   "links": [
+    {
+     "href": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+     "value": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+     "rel": "self"
+    }
+   ],
+   "vcardArray": [
+    "vcard",
+    [
+     [
+      "version",
+      {},
+      "text",
+      "4.0"
+     ],
+     [
+      "fn",
+      {},
+      "text",
+      "Registry Operations"
+     ],
+     [
+      "tel",
+      {
+       "type": "voice"
+      },
+      "uri",
+      "tel:+33.139308300"
+     ],
+     [
+      "tel",
+      {
+       "type": "fax"
+      },
+      "uri",
+      "tel:+33.139308301"
+     ],
+     [
+      "email",
+      {},
+      "text",
+      "support@afnic.fr"
+     ],
+     [
+      "url",
+      {},
+      "uri",
+      "https://www.afnic.fr"
+     ],
+     [
+      "adr",
+      {
+       "cc": "FR"
+      },
+      "text",
+      [
+       "",
+       "",
+       [
+        "AFNIC",
+        "immeuble le Stephenson",
+        "1, rue Stephenson"
+       ],
+       "Montigny-Le-Bretonneux",
+       "",
+       "78180",
+       ""
+      ]
+     ]
+    ]
+   ],
+   "roles": [
+    "sponsor",
+    "registrar"
+   ],
+   "remarks": [
+    {
+     "type": "registrar restricted publication",
+     "description": [
+      "No"
+     ]
+    }
+   ]
+  },
+  {
+   "objectClassName": "entity",
+   "handle": "AFNI30-FRNIC",
+   "status": [
+    "associated",
+    "active"
+   ],
+   "events": [
+    {
+     "eventAction": "registration",
+     "eventDate": "2017-07-18T00:00:00Z"
+    },
+    {
+     "eventAction": "last changed",
+     "eventDate": "2024-04-11T13:45:52.051456Z"
+    }
+   ],
+   "links": [
+    {
+     "href": "https://rdap.nic.fr/entity/AFNI30-FRNIC",
+     "value": "https://rdap.nic.fr/entity/AFNI30-FRNIC",
+     "rel": "self"
+    }
+   ],
+   "vcardArray": [
+    "vcard",
+    [
+     [
+      "version",
+      {},
+      "text",
+      "4.0"
+     ],
+     [
+      "fn",
+      {},
+      "text",
+      "ASS FRANC NOMMAGE INTERNET EN COOP"
+     ],
+     [
+      "adr",
+      {
+       "cc": "FR"
+      },
+      "text",
+      [
+       "",
+       "",
+       [
+        "Association Française pour le Nommage Internet en Coopération",
+        "7, avenue du 8 mai 1945"
+       ],
+       "Guyancourt",
+       "",
+       "78280",
+       ""
+      ]
+     ],
+     [
+      "email",
+      {},
+      "text",
+      "contact@nic.fr"
+     ],
+     [
+      "tel",
+      {
+       "type": "voice"
+      },
+      "uri",
+      "tel:+33.139308300"
+     ],
+     [
+      "tel",
+      {
+       "type": "fax"
+      },
+      "uri",
+      "tel:+33.139308301"
+     ]
+    ]
+   ],
+   "roles": [
+    "administrative",
+    "registrant"
+   ],
+   "remarks": [
+    {
+     "type": "contact restricted publication",
+     "description": [
+      "NO"
+     ]
+    },
+    {
+     "type": "contact obsolete",
+     "description": [
+      "NO"
+     ]
+    },
+    {
+     "type": "contact type",
+     "description": [
+      "ORGANIZATION"
+     ]
+    },
+    {
+     "type": "reachable",
+     "description": [
+      "NO"
+     ]
+    },
+    {
+     "type": "eligibility status",
+     "description": [
+      "NotIdentified"
+     ]
+    },
+    {
+     "type": "registrar name",
+     "description": [
+      "Registry Operations"
+     ]
+    }
+   ]
+  },
+  {
+   "objectClassName": "entity",
+   "handle": "CTC7206429-FRNIC",
+   "status": [
+    "associated",
+    "active"
+   ],
+   "events": [
+    {
+     "eventAction": "registration",
+     "eventDate": "2026-06-05T06:48:25.888653Z"
+    }
+   ],
+   "links": [
+    {
+     "href": "https://rdap.nic.fr/entity/CTC7206429-FRNIC",
+     "value": "https://rdap.nic.fr/entity/CTC7206429-FRNIC",
+     "rel": "self"
+    }
+   ],
+   "vcardArray": [
+    "vcard",
+    [
+     [
+      "version",
+      {},
+      "text",
+      "4.0"
+     ],
+     [
+      "fn",
+      {},
+      "text",
+      "AFNIC"
+     ],
+     [
+      "org",
+      {},
+      "text",
+      "ASSOCIATION FRANÇAISE POUR LE NOMMAGE INTERNET EN COOPERATION"
+     ],
+     [
+      "adr",
+      {
+       "cc": "FR"
+      },
+      "text",
+      [
+       "",
+       "",
+       "7 Avenue du 8 mai 1945",
+       "Guyancourt",
+       "",
+       "78280",
+       ""
+      ]
+     ],
+     [
+      "email",
+      {},
+      "text",
+      "dnsops@afnic.fr"
+     ],
+     [
+      "tel",
+      {
+       "type": "voice"
+      },
+      "uri",
+      "tel:+33.139308300"
+     ],
+     [
+      "tel",
+      {
+       "type": "fax"
+      },
+      "uri",
+      "tel:+33.139308301"
+     ]
+    ]
+   ],
+   "roles": [
+    "technical"
+   ],
+   "remarks": [
+    {
+     "type": "contact restricted publication",
+     "description": [
+      "NO"
+     ]
+    },
+    {
+     "type": "contact obsolete",
+     "description": [
+      "NO"
+     ]
+    },
+    {
+     "type": "contact type",
+     "description": [
+      "ORGANIZATION"
+     ]
+    },
+    {
+     "type": "reach medium",
+     "description": [
+      "VOICE"
+     ]
+    },
+    {
+     "type": "reach date",
+     "description": [
+      "2026-06-05T06:48:25.888656Z"
+     ]
+    },
+    {
+     "type": "reach source",
+     "description": [
+      "REGISTRAR"
+     ]
+    },
+    {
+     "type": "reachable",
+     "description": [
+      "YES"
+     ]
+    },
+    {
+     "type": "eligibility status",
+     "description": [
+      "OK"
+     ]
+    },
+    {
+     "type": "eligibility source",
+     "description": [
+      "REGISTRAR"
+     ]
+    },
+    {
+     "type": "eligibility date",
+     "description": [
+      "2026-06-05T06:48:25.888656Z"
+     ]
+    },
+    {
+     "type": "registrar name",
+     "description": [
+      "Registry Operations"
+     ]
+    }
+   ]
+  }
+ ],
+ "nameservers": [
+  {
+   "objectClassName": "nameserver",
+   "handle": "HOST04-FRNIC",
+   "ldhName": "g.ext.nic.fr",
+   "status": [
+    "server update prohibited",
+    "server delete prohibited",
+    "associated"
+   ],
+   "ipAddresses": {
+    "v4": [
+     "194.0.36.1"
+    ],
+    "v6": [
+     "2001:678:4c::1"
+    ]
+   },
+   "entities": [
+    {
+     "objectClassName": "entity",
+     "handle": "RAR939-FRNIC",
+     "publicIds": [
+      {
+       "type": "IANA Registrar ID",
+       "identifier": "9999"
+      }
+     ],
+     "status": [
+      "active"
+     ],
+     "port43": "whois.nic.fr",
+     "events": [
+      {
+       "eventAction": "registration",
+       "eventDate": "2014-07-29T15:35:33Z"
+      },
+      {
+       "eventAction": "last changed",
+       "eventDate": "2022-10-12T18:54:01.785057Z"
+      }
+     ],
+     "links": [
+      {
+       "href": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "value": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "rel": "self"
+      }
+     ],
+     "vcardArray": [
+      "vcard",
+      [
+       [
+        "version",
+        {},
+        "text",
+        "4.0"
+       ],
+       [
+        "fn",
+        {},
+        "text",
+        "Registry Operations"
+       ],
+       [
+        "tel",
+        {
+         "type": "voice"
+        },
+        "uri",
+        "tel:+33.139308300"
+       ],
+       [
+        "tel",
+        {
+         "type": "fax"
+        },
+        "uri",
+        "tel:+33.139308301"
+       ],
+       [
+        "email",
+        {},
+        "text",
+        "support@afnic.fr"
+       ],
+       [
+        "url",
+        {},
+        "uri",
+        "https://www.afnic.fr"
+       ],
+       [
+        "adr",
+        {
+         "cc": "FR"
+        },
+        "text",
+        [
+         "",
+         "",
+         [
+          "AFNIC",
+          "immeuble le Stephenson",
+          "1, rue Stephenson"
+         ],
+         "Montigny-Le-Bretonneux",
+         "",
+         "78180",
+         ""
+        ]
+       ]
+      ]
+     ],
+     "roles": [
+      "sponsor",
+      "registrar"
+     ],
+     "remarks": [
+      {
+       "type": "registrar restricted publication",
+       "description": [
+        "No"
+       ]
+      }
+     ]
+    }
+   ],
+   "links": [
+    {
+     "href": "https://rdap.nic.fr/nameserver/g.ext.nic.fr",
+     "value": "https://rdap.nic.fr/nameserver/g.ext.nic.fr",
+     "rel": "self"
+    }
+   ],
+   "remarks": [
+    {
+     "title": "result set truncated due to authorization",
+     "description": [
+      "The list of results does not contain all results due to lack of authorization.",
+      "This may indicate to some clients that proper authorization will yield a longer result set."
+     ]
+    }
+   ]
+  },
+  {
+   "objectClassName": "nameserver",
+   "handle": "HOST05-FRNIC",
+   "ldhName": "ns1.nic.fr",
+   "status": [
+    "server update prohibited",
+    "server delete prohibited",
+    "associated"
+   ],
+   "ipAddresses": {
+    "v4": [
+     "192.134.4.1"
+    ],
+    "v6": [
+     "2001:67c:2218:2::4:1"
+    ]
+   },
+   "entities": [
+    {
+     "objectClassName": "entity",
+     "handle": "RAR939-FRNIC",
+     "publicIds": [
+      {
+       "type": "IANA Registrar ID",
+       "identifier": "9999"
+      }
+     ],
+     "status": [
+      "active"
+     ],
+     "port43": "whois.nic.fr",
+     "events": [
+      {
+       "eventAction": "registration",
+       "eventDate": "2014-07-29T15:35:33Z"
+      },
+      {
+       "eventAction": "last changed",
+       "eventDate": "2022-10-12T18:54:01.785057Z"
+      }
+     ],
+     "links": [
+      {
+       "href": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "value": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "rel": "self"
+      }
+     ],
+     "vcardArray": [
+      "vcard",
+      [
+       [
+        "version",
+        {},
+        "text",
+        "4.0"
+       ],
+       [
+        "fn",
+        {},
+        "text",
+        "Registry Operations"
+       ],
+       [
+        "tel",
+        {
+         "type": "voice"
+        },
+        "uri",
+        "tel:+33.139308300"
+       ],
+       [
+        "tel",
+        {
+         "type": "fax"
+        },
+        "uri",
+        "tel:+33.139308301"
+       ],
+       [
+        "email",
+        {},
+        "text",
+        "support@afnic.fr"
+       ],
+       [
+        "url",
+        {},
+        "uri",
+        "https://www.afnic.fr"
+       ],
+       [
+        "adr",
+        {
+         "cc": "FR"
+        },
+        "text",
+        [
+         "",
+         "",
+         [
+          "AFNIC",
+          "immeuble le Stephenson",
+          "1, rue Stephenson"
+         ],
+         "Montigny-Le-Bretonneux",
+         "",
+         "78180",
+         ""
+        ]
+       ]
+      ]
+     ],
+     "roles": [
+      "sponsor",
+      "registrar"
+     ],
+     "remarks": [
+      {
+       "type": "registrar restricted publication",
+       "description": [
+        "No"
+       ]
+      }
+     ]
+    }
+   ],
+   "links": [
+    {
+     "href": "https://rdap.nic.fr/nameserver/ns1.nic.fr",
+     "value": "https://rdap.nic.fr/nameserver/ns1.nic.fr",
+     "rel": "self"
+    }
+   ],
+   "remarks": [
+    {
+     "title": "result set truncated due to authorization",
+     "description": [
+      "The list of results does not contain all results due to lack of authorization.",
+      "This may indicate to some clients that proper authorization will yield a longer result set."
+     ]
+    }
+   ]
+  },
+  {
+   "objectClassName": "nameserver",
+   "handle": "HOST06-FRNIC",
+   "ldhName": "ns2.nic.fr",
+   "status": [
+    "server update prohibited",
+    "server delete prohibited",
+    "associated"
+   ],
+   "ipAddresses": {
+    "v4": [
+     "192.93.0.4"
+    ],
+    "v6": [
+     "2001:660:3005:1::1:2"
+    ]
+   },
+   "entities": [
+    {
+     "objectClassName": "entity",
+     "handle": "RAR939-FRNIC",
+     "publicIds": [
+      {
+       "type": "IANA Registrar ID",
+       "identifier": "9999"
+      }
+     ],
+     "status": [
+      "active"
+     ],
+     "port43": "whois.nic.fr",
+     "events": [
+      {
+       "eventAction": "registration",
+       "eventDate": "2014-07-29T15:35:33Z"
+      },
+      {
+       "eventAction": "last changed",
+       "eventDate": "2022-10-12T18:54:01.785057Z"
+      }
+     ],
+     "links": [
+      {
+       "href": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "value": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "rel": "self"
+      }
+     ],
+     "vcardArray": [
+      "vcard",
+      [
+       [
+        "version",
+        {},
+        "text",
+        "4.0"
+       ],
+       [
+        "fn",
+        {},
+        "text",
+        "Registry Operations"
+       ],
+       [
+        "tel",
+        {
+         "type": "voice"
+        },
+        "uri",
+        "tel:+33.139308300"
+       ],
+       [
+        "tel",
+        {
+         "type": "fax"
+        },
+        "uri",
+        "tel:+33.139308301"
+       ],
+       [
+        "email",
+        {},
+        "text",
+        "support@afnic.fr"
+       ],
+       [
+        "url",
+        {},
+        "uri",
+        "https://www.afnic.fr"
+       ],
+       [
+        "adr",
+        {
+         "cc": "FR"
+        },
+        "text",
+        [
+         "",
+         "",
+         [
+          "AFNIC",
+          "immeuble le Stephenson",
+          "1, rue Stephenson"
+         ],
+         "Montigny-Le-Bretonneux",
+         "",
+         "78180",
+         ""
+        ]
+       ]
+      ]
+     ],
+     "roles": [
+      "sponsor",
+      "registrar"
+     ],
+     "remarks": [
+      {
+       "type": "registrar restricted publication",
+       "description": [
+        "No"
+       ]
+      }
+     ]
+    }
+   ],
+   "links": [
+    {
+     "href": "https://rdap.nic.fr/nameserver/ns2.nic.fr",
+     "value": "https://rdap.nic.fr/nameserver/ns2.nic.fr",
+     "rel": "self"
+    }
+   ],
+   "remarks": [
+    {
+     "title": "result set truncated due to authorization",
+     "description": [
+      "The list of results does not contain all results due to lack of authorization.",
+      "This may indicate to some clients that proper authorization will yield a longer result set."
+     ]
+    }
+   ]
+  },
+  {
+   "objectClassName": "nameserver",
+   "handle": "HOST07-FRNIC",
+   "ldhName": "ns3.nic.fr",
+   "status": [
+    "server update prohibited",
+    "server delete prohibited",
+    "associated"
+   ],
+   "ipAddresses": {
+    "v4": [
+     "192.134.0.49"
+    ],
+    "v6": [
+     "2001:660:3006:1::1:1"
+    ]
+   },
+   "entities": [
+    {
+     "objectClassName": "entity",
+     "handle": "RAR939-FRNIC",
+     "publicIds": [
+      {
+       "type": "IANA Registrar ID",
+       "identifier": "9999"
+      }
+     ],
+     "status": [
+      "active"
+     ],
+     "port43": "whois.nic.fr",
+     "events": [
+      {
+       "eventAction": "registration",
+       "eventDate": "2014-07-29T15:35:33Z"
+      },
+      {
+       "eventAction": "last changed",
+       "eventDate": "2022-10-12T18:54:01.785057Z"
+      }
+     ],
+     "links": [
+      {
+       "href": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "value": "https://rdap.nic.fr/entity/RAR939-FRNIC",
+       "rel": "self"
+      }
+     ],
+     "vcardArray": [
+      "vcard",
+      [
+       [
+        "version",
+        {},
+        "text",
+        "4.0"
+       ],
+       [
+        "fn",
+        {},
+        "text",
+        "Registry Operations"
+       ],
+       [
+        "tel",
+        {
+         "type": "voice"
+        },
+        "uri",
+        "tel:+33.139308300"
+       ],
+       [
+        "tel",
+        {
+         "type": "fax"
+        },
+        "uri",
+        "tel:+33.139308301"
+       ],
+       [
+        "email",
+        {},
+        "text",
+        "support@afnic.fr"
+       ],
+       [
+        "url",
+        {},
+        "uri",
+        "https://www.afnic.fr"
+       ],
+       [
+        "adr",
+        {
+         "cc": "FR"
+        },
+        "text",
+        [
+         "",
+         "",
+         [
+          "AFNIC",
+          "immeuble le Stephenson",
+          "1, rue Stephenson"
+         ],
+         "Montigny-Le-Bretonneux",
+         "",
+         "78180",
+         ""
+        ]
+       ]
+      ]
+     ],
+     "roles": [
+      "sponsor",
+      "registrar"
+     ],
+     "remarks": [
+      {
+       "type": "registrar restricted publication",
+       "description": [
+        "No"
+       ]
+      }
+     ]
+    }
+   ],
+   "links": [
+    {
+     "href": "https://rdap.nic.fr/nameserver/ns3.nic.fr",
+     "value": "https://rdap.nic.fr/nameserver/ns3.nic.fr",
+     "rel": "self"
+    }
+   ],
+   "remarks": [
+    {
+     "title": "result set truncated due to authorization",
+     "description": [
+      "The list of results does not contain all results due to lack of authorization.",
+      "This may indicate to some clients that proper authorization will yield a longer result set."
+     ]
+    }
+   ]
+  }
+ ],
+ "secureDNS": {
+  "delegationSigned": true,
+  "dsData": [
+   {
+    "keyTag": 30098,
+    "algorithm": 13,
+    "digest": "dea3df8f5147ef21a6bc35f497be6369dad5c988ca6895317d1fe1fdfd24db1d",
+    "digestType": 2
+   }
+  ]
+ },
+ "links": [
+  {
+   "href": "https://rdap.nic.fr/domain/afnic.fr",
+   "value": "https://rdap.nic.fr/domain/afnic.fr",
+   "rel": "self"
+  }
+ ]
+}

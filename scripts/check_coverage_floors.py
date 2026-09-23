@@ -57,7 +57,13 @@ FLOORS = {
     # than 84 leaves room for a collector added without its own test to be a
     # review comment instead of a red gate.
     'modules/api/resources_health.py': 80,
-    'modules/api/resources_inventory.py': 80,
+    # 80 -> 85 on 2026-09-23, measured 87.7%. The domain-health resource
+    # arrived and took the module below 80, which is the gate working; what
+    # brought it back was tests through the app for the new endpoint's scope
+    # filter and 503, and for the four scan/response branches — two of them
+    # the registration feature's, never entered before — that "cannot happen"
+    # and so had never been run.
+    'modules/api/resources_inventory.py': 85,
     # Raised from 55 after covering the exception-to-status arms, which is
     # where this module's behaviour is: it is the entry point for every
     # create, renew and reissue, and a 500 where a 422 belongs sends an
@@ -111,6 +117,7 @@ FLOORS = {
     'modules/core/auth.py': 85,
     'modules/core/ca_manager.py': 70,
     'modules/core/cache.py': 60,
+    'modules/core/caa.py': 95,
     'modules/core/cert_adopt.py': 95,
     'modules/core/cert_discovery.py': 95,
     'modules/core/cert_inventory.py': 95,
@@ -137,8 +144,25 @@ FLOORS = {
     'modules/core/dns_strategies.py': 80,
     'modules/core/dns_zone_discovery.py': 95,
     'modules/core/domain_paths.py': 85,
+    # Measured at 91.4% when it arrived; what is left is transport glue that
+    # the network-marked test exercises against the real registries.
+    # 95 from a measured 100%: every check is a pure function over the answer
+    # it judges, and the two functions that would otherwise need a network —
+    # the dnspython lookups and the HSTS fetch — are tested against a scripted
+    # resolver and a scripted socket, because the distinction they encode
+    # ("could not ask" vs "asked, nothing there") is what every check rests on.
+    'modules/core/domain_health.py': 95,
+    # 95 from a measured 100%. The module is small and its only I/O is one
+    # socket and one in-memory handshake, both injected in the tests; the two
+    # that reach a real server are marked `network` and excluded here, so this
+    # figure is what CI actually measures.
+    'modules/core/weak_tls.py': 95,
+    'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
     'modules/core/factory.py': 80,
+    # Measured at 94.9%: what is left is the defensive parse of a stored
+    # expiry timestamp that the registration check writes in ISO form.
+    'modules/core/expiry_watch.py': 90,
     'modules/core/file_operations.py': 80,
     'modules/core/inventory_sources.py': 95,
     'modules/core/inventory_view.py': 95,
@@ -149,6 +173,13 @@ FLOORS = {
     'modules/core/oidc.py': 75,
     'modules/core/private_ca.py': 80,
     'modules/core/rate_limit.py': 70,
+    # 100% when it arrived: 32 statements of pure parsing, plus the decorator,
+    # with no I/O. A boolean this refuses is one a caller sent by mistake, so
+    # there is no honest reason for a branch of it to go unreached.
+    'modules/core/request_fields.py': 100,
+    # Measured at 90.1% when it arrived. What is left is defensive: an AIA
+    # payload in PEM or PKCS#7, an Ed25519 responder, a malformed CRL body.
+    'modules/core/revocation.py': 90,
     'modules/core/secret_refs.py': 95,
     'modules/core/settings.py': 80,
     'modules/core/shell.py': 75,

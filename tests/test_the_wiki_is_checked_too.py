@@ -95,3 +95,22 @@ def test_the_verbs_are_unioned_across_matching_rules():
         'verbs_for() no longer unions the verbs of every matching rule, so it '
         'will report correct documentation as wrong'
     )
+
+
+def test_a_wiki_placeholder_does_not_match_a_fixed_route_segment():
+    """A placeholder in the wiki stands for a value, not for a route's fixed
+    name. Matching both ways made `/api/{x}/create` look served because
+    `/api/certificates/create` is, which is exactly the kind of invented path
+    this checker exists to catch."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('check_wiki_endpoints', SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    table = {'/api/certificates/create': {'POST'}, '/api/certificates/<X>': {'GET'}}
+    # A worked example still resolves to the parameterised route...
+    assert module.verbs_for('/api/certificates/example.com', table) == (True, {'GET'})
+    # ...a wiki placeholder matches a route placeholder...
+    assert module.verbs_for('/api/certificates/<X>', table) == (True, {'GET'})
+    # ...and never a fixed segment it merely lines up with.
+    assert module.verbs_for('/api/<X>/create', table) == (False, set())

@@ -109,16 +109,33 @@ def _is_covered(route, documented):
     `/api/certificates/<X>/download`. A placeholder matches exactly one
     segment; letting it span several would make almost anything match and this
     file would prove nothing.
+
+    Only the ROUTE's placeholder may stand for a documented value, never the
+    other way round. It used to be symmetric, and then `/api/certificates/{domain}`
+    in docs/api.md "documented" every literal sibling of it: `check-dns-alias`,
+    `check-caa`, and anything else added under /api/certificates/ with a fixed
+    name. Four real endpoints sat undocumented behind that, green, until
+    test_a_documented_placeholder_does_not_cover_a_literal_route pinned it.
     """
     wanted = route.strip('/').split('/')
     for candidate in documented:
         parts = candidate.strip('/').split('/')
         if len(parts) != len(wanted):
             continue
-        if all(p == '<X>' or w == '<X>' or p == w
+        if all(w == '<X>' or p == w
                for p, w in zip(parts, wanted)):
             return True
     return False
+
+
+def test_a_documented_placeholder_does_not_cover_a_literal_route():
+    documented = {'/api/certificates/<X>', '/api/certificates/<X>/download'}
+    # A worked example still documents the parameterised route...
+    assert _is_covered('/api/certificates/<X>', {'/api/certificates/example.com'})
+    assert _is_covered('/api/certificates/<X>/download', documented)
+    # ...but a placeholder in the document says nothing about a fixed name.
+    assert not _is_covered('/api/certificates/check-dns-alias', documented)
+    assert not _is_covered('/api/certificates/<X>/deploy', {'/api/certificates/<X>/<X>'})
 
 
 def test_every_public_api_route_is_written_down(url_map, documented):

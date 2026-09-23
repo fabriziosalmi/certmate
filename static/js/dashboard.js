@@ -2161,6 +2161,78 @@
         });
     }
 
+    // CAA advice while the form is filled in. It only ever speaks up when a
+    // CAA record would make the chosen CA refuse: an allowed or unknown answer
+    // shows nothing, so the form does not nag about a lookup that merely
+    // failed. It is advice, never a gate — the submit button does not wait on
+    // it and the server does not consult it.
+    var caaCheckTimer = null;
+    var caaCheckSeq = 0;
+
+    function scheduleCaaCheck() {
+        if (caaCheckTimer) { clearTimeout(caaCheckTimer); }
+        caaCheckTimer = setTimeout(checkCaaFromForm, 700);
+    }
+
+    function hideCaaWarning() {
+        var target = document.getElementById('caa_warning');
+        if (target) {
+            target.classList.add('hidden');
+            target.innerHTML = '';
+        }
+    }
+
+    function checkCaaFromForm() {
+        var target = document.getElementById('caa_warning');
+        if (!target) return;
+        var requestedDomains = currentRequestedDomains();
+        if (!requestedDomains.length) { hideCaaWarning(); return; }
+        var caSelect = document.getElementById('ca_provider_select');
+        var challengeSelect = document.getElementById('challenge_type_select');
+        // A response to an older request must not overwrite a newer one:
+        // typing a domain fires several checks, and they can return out of order.
+        var seq = ++caaCheckSeq;
+
+        fetch('/api/certificates/check-caa', {
+            method: 'POST',
+            headers: API_HEADERS,
+            body: JSON.stringify({
+                domain: requestedDomains[0],
+                san_domains: requestedDomains.slice(1),
+                ca_provider: caSelect ? caSelect.value : '',
+                challenge_type: challengeSelect ? challengeSelect.value : ''
+            })
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (seq !== caaCheckSeq) return;
+                if (!response.ok || !result || result.status !== 'forbidden') {
+                    hideCaaWarning();
+                    return;
+                }
+                var rows = (result.domains || []).filter(function (d) {
+                    return d.status === 'forbidden';
+                }).map(function (d) {
+                    return '<li><code class="font-mono">' + escapeHtml(d.domain) + '</code>: '
+                        + escapeHtml(d.reason || '') + '</li>';
+                }).join('');
+                target.className = 'mt-2 rounded-md border border-warning-line bg-warning-surface p-3 text-xs text-warning-fg';
+                target.innerHTML = '<div class="font-semibold"><i class="fas fa-triangle-exclamation mr-1"></i>'
+                    + 'A CAA record will make this CA refuse</div>'
+                    + '<div class="mt-1">' + escapeHtml(result.message || '') + '</div>'
+                    + (result.suggested_record
+                        ? '<div class="mt-1"><code class="font-mono bg-surface-2 px-1 rounded">'
+                            + escapeHtml(result.suggested_record) + '</code>'
+                            + aliasCopyButtonHtml(result.suggested_record) + '</div>'
+                        : '')
+                    + (rows ? '<ul class="mt-1 ml-4 list-disc">' + rows + '</ul>' : '')
+                    + '<div class="mt-1 text-muted">CertMate checked from its own resolver; the CA\'s view decides. You can still submit.</div>';
+                target.classList.remove('hidden');
+            });
+        }).catch(function () {
+            if (seq === caaCheckSeq) hideCaaWarning();
+        });
+    }
+
     function checkDnsAliasForCertificate(domain) {
         var targetId = 'cert_dns_alias_check_result';
         var resultTarget = document.getElementById(targetId);
@@ -3222,6 +3294,12 @@
         document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
         document.getElementById('dns_alias_domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('check_dns_alias_button').addEventListener('click', checkDnsAliasFromForm);
+        ['domain', 'san_domains'].forEach(function (id) {
+            document.getElementById(id).addEventListener('input', scheduleCaaCheck);
+        });
+        ['wildcard-cert', 'ca_provider_select', 'challenge_type_select'].forEach(function (id) {
+            document.getElementById(id).addEventListener('change', scheduleCaaCheck);
+        });
         updateDnsAliasHelp();
 
         // Close modal on outside click

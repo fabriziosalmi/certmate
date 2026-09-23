@@ -229,8 +229,8 @@ def test_the_inventory_group_builds_from_a_minimal_context(api):
     resources = create_inventory_resources(api, {}, ctx)
 
     assert set(resources) == {
-        'InventoryList', 'InventoryRecord', 'InventoryConfig', 'InventoryScan',
-        'InventoryCryptoReport', 'InventoryAdopt'}
+        'InventoryList', 'InventoryRecord', 'InventoryConfig', 'InventoryScan', 'InventoryDomains',
+        'InventoryHealth', 'InventoryCryptoReport', 'InventoryAdopt'}
     for name, cls in resources.items():
         assert issubclass(cls, Resource), f'{name} is not a Resource'
 
@@ -514,7 +514,7 @@ FINAL_GROUPS = {
                     'CertificateRunDeploy'}),
     'discovery': ('modules.api.resources_discovery',
                   'create_discovery_resources',
-                  {'ZombieScan', 'CheckDNSAlias', 'CertificateDNSAliasCheck'}),
+                  {'ZombieScan', 'CheckDNSAlias', 'CheckCAA', 'ProbeEndpoint', 'CertificateDNSAliasCheck'}),
 }
 
 
