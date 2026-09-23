@@ -115,6 +115,18 @@
                                         <template x-if="keys[keyId].revoked">
                                             <span class="text-xs px-2 py-0.5 rounded-full bg-danger-surface text-danger-strong">revoked</span>
                                         </template>
+                                        <template x-if="keys[keyId].needs_review">
+                                            <span class="text-xs px-2 py-0.5 rounded-full bg-danger-surface text-danger-strong"
+                                                  title="Created while this instance was in setup mode, when every request was served as admin to anyone who could reach it. Nobody can vouch for who created it. Confirm it if you made it; revoke it otherwise.">
+                                                <i class="fas fa-triangle-exclamation mr-1"></i>created during setup: review
+                                            </span>
+                                        </template>
+                                        <template x-if="keys[keyId].created_during_setup && keys[keyId].setup_origin_confirmed_at">
+                                            <span class="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted"
+                                                  :title="'Created during setup; confirmed by ' + (keys[keyId].setup_origin_confirmed_by || '?') + ' on ' + new Date(keys[keyId].setup_origin_confirmed_at).toLocaleDateString()">
+                                                created during setup: confirmed
+                                            </span>
+                                        </template>
                                         <template x-if="keys[keyId].is_expired && !keys[keyId].revoked">
                                             <span class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">expired</span>
                                         </template>
@@ -142,6 +154,12 @@
                                     </div>
                                 </div>
                             </div>
+                            <template x-if="keys[keyId].needs_review">
+                                <button type="button" @click="confirmKey(keyId, keys[keyId].name)"
+                                        class="p-2 text-success-fg hover:text-green-800 dark:hover:text-green-300" title="Confirm: I created this key">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </template>
                             <template x-if="!keys[keyId].revoked">
                                 <button type="button" @click="revokeKey(keyId, keys[keyId].name)"
                                         class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" title="Revoke key">

@@ -1,4 +1,5 @@
 from flask import request, jsonify
+from modules.core.request_fields import json_booleans
 
 
 def register_backup_cache_routes(app, managers, require_web_auth,
@@ -18,6 +19,7 @@ def register_backup_cache_routes(app, managers, require_web_auth,
 
     @app.route('/api/web/backups/create', methods=['POST'])
     @auth_manager.require_role('admin')
+    @json_booleans(include_secrets=False)
     def create_backup_web():
         """Create a new backup.
 
@@ -29,7 +31,10 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         try:
             data = request.json or {}
             backup_reason = data.get('reason', 'manual')
-            include_secrets = bool(data.get('include_secrets', False))
+            # false means a share-safe masked archive, true a plaintext dump
+            # of every private key, so the decorator refuses anything that is
+            # not a JSON boolean before this runs.
+            include_secrets = request.json_booleans['include_secrets']
             settings_data = settings_manager.load_settings()
             filename = file_ops.create_unified_backup(
                 settings_data, backup_reason, include_secrets=include_secrets,

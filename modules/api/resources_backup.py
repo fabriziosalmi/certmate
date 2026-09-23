@@ -17,6 +17,7 @@ from flask_restx import Resource, fields
 
 import logging
 
+from ..core.request_fields import json_booleans
 from ..core.domain_paths import is_path_safe_segment
 from ..core.file_operations import RestoreIncompleteError
 from .resource_context import ApiContext
@@ -81,6 +82,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
             ),
         }))
         @ctx.auth.require_role('admin')
+        @json_booleans(include_secrets=False)
         def post(self):
             """Create a new backup (unified format recommended)"""
             try:
@@ -95,13 +97,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
                 # asked for masked and got the plaintext dump. Accept only a
                 # JSON boolean; anything else is refused rather than guessed,
                 # and the safe default (masked) applies only when it is absent.
-                raw_include = data.get('include_secrets', False)
-                if not isinstance(raw_include, bool):
-                    return {
-                        'error': 'include_secrets must be a JSON boolean '
-                                 '(true or false)'
-                    }, 400
-                include_secrets = raw_include
+                include_secrets = request.json_booleans['include_secrets']
 
                 created_backups = []
 

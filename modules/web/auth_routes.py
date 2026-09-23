@@ -1,5 +1,6 @@
 import logging
 from flask import render_template, request, jsonify, redirect, url_for
+from modules.core.request_fields import json_booleans
 
 
 logger = logging.getLogger(__name__)
@@ -159,13 +160,14 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/auth/config', methods=['POST'])
     @auth_manager.require_role('admin')
+    @json_booleans(local_auth_enabled=False)
     def api_auth_config_post():
         """Mutate auth configuration. Admin-only — defense-in-depth at the
         decorator level so the role check fires before any handler logic
         runs.
         """
         data = request.json or {}
-        enable = bool(data.get('local_auth_enabled', False))
+        enable = request.json_booleans['local_auth_enabled']
         if enable and not auth_manager.has_any_users():
             return jsonify({'error': 'Create admin first'}), 400
 

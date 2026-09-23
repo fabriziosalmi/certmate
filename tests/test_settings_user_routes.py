@@ -30,6 +30,11 @@ def wired():
 
     auth = MagicMock()
     auth.require_role = lambda role: (lambda fn: fn)
+    # A configured instance. In setup mode these routes only bootstrap the
+    # first admin (see tests/test_setup_mode_only_bootstraps.py), and a
+    # MagicMock answers every predicate truthy, which would put this harness
+    # in a state where user creation is refused.
+    auth.is_setup_mode.return_value = False
     audit = MagicMock()
 
     register_settings_routes(
