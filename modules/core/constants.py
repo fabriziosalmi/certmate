@@ -185,6 +185,13 @@ METADATA_SCHEMA_VERSION = 1
 # the switch now covers three checks over one request and a name that says
 # only one of them would be a lie about what turning it off stops.
 #
+# 2.11 for `weak_tls` on GET /api/inventory/health, and `check_weak_tls` in the
+# `domain_health` config. A new response field is a MINOR. It is the only check
+# that opens connections a host did not invite — two handshakes per name,
+# offering TLS 1.0 and 1.1 — so it is off by default and the field is absent
+# until an operator turns it on. `unknown` there means this build could not
+# make the offer, which is not the same as the host refusing it.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -194,7 +201,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.10'
+API_CONTRACT_VERSION = '2.11'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

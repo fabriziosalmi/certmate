@@ -107,10 +107,11 @@
                         <th class="text-left font-medium px-4 py-2">HSTS</th>
                         <th class="text-left font-medium px-4 py-2" title="X-Frame-Options or CSP frame-ancestors, X-Content-Type-Options, Content-Security-Policy">Headers</th>
                         <th class="text-left font-medium px-4 py-2" title="Whether the response names the software and version answering it">Disclosure</th>
+                        <th class="text-left font-medium px-4 py-2" title="Whether the host still accepts TLS 1.0 or 1.1, deprecated by RFC 8996">Old TLS</th>
                     </tr>
                 </thead>
                 <tbody id="domainHealthBody" class="divide-y divide-gray-100 dark:divide-white/5">
-                    <tr><td colspan="8" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
+                    <tr><td colspan="9" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -181,6 +182,9 @@
                         </label>
                         <label class="flex items-center gap-2 text-sm text-muted" title="One HEAD request per host: HSTS, the protective headers, and what the response discloses">
                             <input type="checkbox" id="cfgHealthHeaders" class="rounded border-border"> Response headers
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-muted" title="Two extra handshakes per host, offering TLS 1.0 and 1.1 to see whether they are accepted">
+                            <input type="checkbox" id="cfgHealthWeakTls" class="rounded border-border"> Old TLS versions
                         </label>
                     </div>
                     <label class="block text-xs text-muted mb-1">Extra names (one per line)</label>
