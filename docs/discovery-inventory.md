@@ -300,7 +300,7 @@ guess.
 **Scan now**. Registries rate-limit, and some answer a burst with a temporary
 ban, so a sweep:
 
-- asks at most 100 registries, one second apart;
+- makes at most 100 lookups per sweep, one second apart;
 - asks a domain again only when its answer is due: daily within 60 days of
   expiry, weekly otherwise, and after 6 hours when the last lookup failed.
 
@@ -382,9 +382,29 @@ wildcarding resolver — and is dropped for the opposite reason.
 
 What you see, then, is one of: *listed*, *not listed on N lists*, or *nobody
 answered*. If no list is usable the check is `unknown`. If some are and some
-are not, the result stands and still names the ones that did not answer. The
-fix is almost always to point CertMate at a resolver of your own rather than a
-public one.
+are not, the answer is downgraded to a **warning** — "not listed where it
+could be checked" — and names the ones that did not answer, because a partial
+sweep is not the clean bill of health a full one would be. The fix is almost
+always to point CertMate at a resolver of your own rather than a public one.
+
+One more thing the test points cannot tell you: they are `127.0.0.2` and
+`127.0.0.1`, so they prove a list answers about **IPv4** and say nothing about
+IPv6. Most DNSBLs either do not list IPv6 or use a separate zone for it, which
+would make an empty answer about an AAAA address indistinguishable from "this
+list does not serve IPv6". So IPv6 addresses are not asked about at all. They
+appear in `not_covered`, separately from `unanswered`, and the difference
+matters:
+
+| | means | changes the verdict |
+|---|---|---|
+| `unanswered` | a list refused, or a lookup failed — a hole in coverage of something we should have been able to check | yes: downgrades to `warning` |
+| `not_covered` | an IPv6 address, which these lists do not answer about at all | no |
+
+Most real domains are dual-stack. If the IPv6 address counted as an unanswered
+lookup, nearly every healthy domain would sit at a permanent warning, and a
+warning that is always on is one nobody reads. So a dual-stack domain whose
+IPv4 addresses are clean stays `ok` and says what it skipped; a domain that
+resolves **only** to IPv6 is `unknown`, because then nothing was asked at all.
 
 The same rule holds elsewhere: a TXT lookup that timed out is `unknown`, not
 "no SPF record"; a host that could not be reached over HTTPS is `unknown`, not
@@ -411,7 +431,8 @@ a check.
 ```
 
 **When it runs.** Daily at 06:30, between the registration check and the expiry
-warnings, and on **Scan now**. A name is asked again only once a day, so a
+warnings, and on **Scan now**. A name is asked again only once its last answer
+is 20 hours old, so a
 second scan the same morning costs nothing; at most four addresses per domain
 are checked against each list, because a name behind a CDN can answer with a
 dozen and each one costs a query per list.

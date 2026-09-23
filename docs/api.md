@@ -1144,8 +1144,10 @@ some TLDs are answered over WHOIS:
 **Endpoint**: `GET /api/inventory/health` — viewer, since API contract **2.9**
 
 The checks that are about the *name* rather than the certificate: SPF, DMARC
-and MX, the DNS blocklists, and the HSTS header the host serves. Worst first,
-so the answer opens on what is wrong; a scoped key sees only its own names.
+and MX, the DNS blocklists, the HSTS and protective headers the host serves,
+what its response discloses about the software behind it, and — when it is
+switched on — whether it still accepts TLS 1.0 or 1.1. Worst first, so the
+answer opens on what is wrong; a scoped key sees only its own names.
 
 ```json
 {
@@ -1161,8 +1163,9 @@ so the answer opens on what is wrong; a scoped key sees only its own names.
         "mx": {"status": "ok", "detail": "2 mail exchangers",
                "hosts": ["mx1.example.net", "mx2.example.net"]},
         "blocklists": {"status": "unknown",
-                       "detail": "no blocklist answered the query — a public resolver is usually the reason; point CertMate at a resolver of your own",
-                       "unanswered": ["zen.spamhaus.org (192.0.2.13): refused this resolver"]},
+                       "detail": "no blocklist answered usefully — the resolver CertMate uses is almost always the reason, because the large lists refuse public resolvers; point it at a resolver of your own",
+                       "unanswered": ["zen.spamhaus.org (192.0.2.13): refused this resolver"],
+                       "not_covered": []},
         "hsts": {"status": "ok", "detail": "max-age 31536000s",
                  "max_age": 31536000, "includes_subdomains": true, "preload": false},
         "security_headers": {"status": "warning",
@@ -1196,8 +1199,11 @@ that is not asked about your domains at all, and is named in `unanswered`.
 Point CertMate at a resolver of your own and the answers become real.
 
 `weak_tls` is present only when `check_weak_tls` is on: it is the one check
-that opens connections a host did not invite. Its `unknown` means this CertMate
-build could not offer the old version — not that the host refused it.
+that opens connections a host did not invite. Its `unknown` never means the
+host refused the old version — it means the host was not asked, for one of
+three reasons: this CertMate build could not offer that version, the host
+could not be reached, or the SSRF guard declined the target. `unasked` says
+which.
 
 Mail checks and blocklists run against the *registrable* domain, because DMARC
 falls back to the organisational domain; the three header checks run against

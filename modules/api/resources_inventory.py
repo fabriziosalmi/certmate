@@ -122,10 +122,12 @@ def _inventory_health_resource(api, ctx):
         def get(self):
             """What the name-level checks last found for each tracked name.
 
-            SPF, DMARC and MX, the blocklists, and the HSTS header the host
-            serves. A check that could not be completed reports ``unknown``,
-            which is not a pass: a blocklist that refused the query has said
-            nothing about the address. A scoped key sees only its own names.
+            SPF, DMARC and MX, the blocklists, the HSTS and protective headers
+            the host serves, what its response discloses, and — when it is
+            switched on — whether it still accepts TLS 1.0 or 1.1. A check
+            that could not be completed reports ``unknown``, which is not a
+            pass: a blocklist that refused the query has said nothing about
+            the address. A scoped key sees only its own names.
             """
             return _health_response(ctx)
 
@@ -237,11 +239,14 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
         def post(self):
-            """Update discovery and/or CT-log monitoring configuration.
+            """Update the discovery configuration.
 
-            Body may carry a ``discovery`` and/or ``ct_monitoring`` object; each
-            is validated and persisted by its manager (a bad endpoint spec is a
-            400). Returns the effective configuration after the update.
+            Body may carry a ``discovery``, ``ct_monitoring``,
+            ``domain_registration`` and/or ``domain_health`` object; each is
+            validated and persisted by its own manager, and anything it
+            refuses — a bad endpoint spec, a name no registry holds, an extra
+            name that is not a domain — is a 400. Returns the effective
+            configuration after the update.
             """
             discovery = ctx.managers.get('cert_discovery')
             ct_monitor = ctx.managers.get('ct_monitor')

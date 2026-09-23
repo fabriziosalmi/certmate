@@ -124,6 +124,14 @@ RECHECK_AFTER_HOURS = 20
 MAX_NAMES_PER_RUN = 200
 
 
+# `all` is a mechanism, and a mechanism is a whole token. Matching it as a bare
+# word made `v=spf1 include:all.example.net` look like a record that ends in
+# `all` — a dot is a word boundary — so a record with no all-mechanism at all
+# reported `ok`. The qualifier is optional and may be +, -, ~ or ?.
+_ALL_MECHANISM = re.compile(r'(?:^|\s)[-+~?]?all(?:\s|$)', re.IGNORECASE)
+_PLUS_ALL = re.compile(r'(?:^|\s)\+?all(?:\s|$)', re.IGNORECASE)
+
+
 def _result(status, detail, **extra):
     return dict({'status': status, 'detail': detail}, **extra)
 
@@ -144,10 +152,10 @@ def check_spf(domain, txt_records):
                        f'{len(spf)} v=spf1 records; receivers treat more than one as permerror',
                        record=spf[0])
     record = spf[0]
-    if re.search(r'\ball\b', record) is None:
+    if _ALL_MECHANISM.search(record) is None:
         return _result(WARNING, 'the record has no "all" mechanism, so it says nothing '
                                 'about senders it does not list', record=record)
-    if re.search(r'\+all\b', record):
+    if _PLUS_ALL.search(record):
         return _result(FAILING, '"+all" authorises every sender, which is the same as '
                                 'publishing no SPF at all', record=record)
     return _result(OK, 'published', record=record)
@@ -193,6 +201,13 @@ def rbl_query_name(ip):
     return '.'.join(reversed(address.packed.hex()))
 
 
+def _is_ipv6(address):
+    try:
+        return ipaddress.ip_address(address).version == 6
+    except ValueError:
+        return False
+
+
 def classify_rbl_answer(codes):
     """What a DNSBL's answer means.
 
@@ -230,7 +245,10 @@ def list_is_answering(rbl, lookup):
     if listed is None or classify_rbl_answer(listed) not in ('listed', 'policy'):
         return False
     clean = lookup(f'{RBL_SELFTEST_UNLISTED}.{rbl}')
-    return clean is None or classify_rbl_answer(clean) != 'listed'
+    # A negative control that did not come back proves nothing either: the
+    # point of it is to catch a list (or resolver) that answers everything,
+    # and an unanswered query cannot rule that out.
+    return clean is not None and classify_rbl_answer(clean) != 'listed'
 
 
 def usable_lists(lookup, lists=DEFAULT_RBLS, cache=None):
@@ -273,11 +291,30 @@ def check_blocklists(domain, addresses, lookup, cache=None):
     unanswered = [f'{rbl}: did not answer its own test point, so its answers '
                   f'about this domain would mean nothing' for rbl in unusable]
     listings = []
+
+    # The test points are 127.0.0.2 and 127.0.0.1, which say whether a list
+    # answers about **IPv4**. They say nothing about IPv6, and most DNSBLs
+    # either do not list IPv6 at all or use a separate zone for it — so an
+    # empty answer about an AAAA address is indistinguishable from "this list
+    # does not serve IPv6", which is the false-clean this module exists to
+    # prevent, one level below the refusal codes. Until there is a self-test
+    # that proves otherwise, an IPv6 address is not asked about.
+    #
+    # Kept apart from `unanswered` on purpose. A list that refused is a hole in
+    # coverage of something we should have been able to check; an IPv6 address
+    # is a boundary of what these lists answer about at all. Counting the
+    # second as the first would put nearly every healthy dual-stack domain —
+    # which is most of them — at a permanent warning, and a warning that is
+    # always on is one nobody reads.
+    not_covered = [f'{a}: IPv6, which these lists are not self-tested for'
+                   for a in addresses[:MAX_ADDRESSES] if _is_ipv6(a)]
     # Only answers that carry information count. A refusal is not a check that
     # came back clean, and counting it as one is the whole defect this module
     # was written to avoid.
     answered = 0
     for address in addresses[:MAX_ADDRESSES]:
+        if _is_ipv6(address):
+            continue
         try:
             reversed_name = rbl_query_name(address)
         except ValueError:
@@ -296,23 +333,30 @@ def check_blocklists(domain, addresses, lookup, cache=None):
                 listings.append({'address': address, 'list': rbl, 'codes': list(codes)})
             # 'policy' and 'not_listed' are both "no reputation finding here".
 
+    extra = {'unanswered': unanswered, 'not_covered': not_covered}
     if listings:
         where = ', '.join(sorted({entry['list'] for entry in listings}))
-        return _result(FAILING, f'listed on {where}', listings=listings,
-                       unanswered=unanswered)
+        return _result(FAILING, f'listed on {where}', listings=listings, **extra)
     if not answered:
+        if not_covered and not unanswered:
+            return _result(UNKNOWN,
+                           'this domain resolves only to IPv6, and the blocklists are '
+                           'self-tested for IPv4 only, so nothing was asked about it',
+                           **extra)
         return _result(UNKNOWN,
                        'no blocklist answered usefully — the resolver CertMate uses is '
                        'almost always the reason, because the large lists refuse public '
                        'resolvers; point it at a resolver of your own',
-                       unanswered=unanswered)
+                       **extra)
     if unanswered:
         return _result(WARNING,
                        f'not listed where it could be checked, but '
-                       f'{len(unanswered)} lookup(s) went unanswered',
-                       unanswered=unanswered)
-    return _result(OK, f'not listed on {len(lists)} blocklist'
-                       f'{"s" if len(lists) != 1 else ""}')
+                       f'{len(unanswered)} lookup(s) went unanswered', **extra)
+    detail = (f'not listed on {len(lists)} blocklist'
+              f'{"s" if len(lists) != 1 else ""}')
+    if not_covered:
+        detail += f'; {len(not_covered)} IPv6 address(es) not covered by them'
+    return _result(OK, detail, **extra)
 
 
 # --------------------------------------------------------------------------- #
@@ -505,15 +549,17 @@ def dns_lookups(timeout=DEFAULT_TIMEOUT_SECONDS):
         return [str(r.exchange).rstrip('.') for r in answers]
 
     def addresses(name):
-        found = []
+        found, failed = [], 0
         for rdtype in ('A', 'AAAA'):
             answers = query(name, rdtype)
             if answers is None:
-                if not found:
-                    return None
+                # Resolvers time out on AAAA alone often enough that one
+                # failure must not decide the answer; ask both, and only
+                # report "could not look" when neither came back.
+                failed += 1
                 continue
             found += [str(r) for r in answers]
-        return found
+        return None if failed == 2 else found
 
     def rbl(name):
         answers = query(name, 'A')
