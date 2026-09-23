@@ -184,4 +184,8 @@ def test_the_endpoint_really_does_refuse_over_existing_certificates(masked_archi
     with zipfile.ZipFile(archive) as zipf:
         refusal = restoring._refuse_keyless_restore_over_certificates(zipf)
     assert refusal, 'a masked archive is accepted over existing certificates'
-    assert 'already.example.com' in refusal
+    # Compared against the directory the test created rather than a repeated
+    # literal. It reads better, and it keeps CodeQL from reporting a
+    # host-shaped literal on the left of `in` as incomplete URL sanitisation —
+    # which it does, at high severity, and which blocks the merge.
+    assert existing.name in refusal
