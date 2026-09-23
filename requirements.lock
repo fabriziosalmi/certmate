@@ -27,8 +27,8 @@ azure-mgmt-dns==9.0.0
 bcrypt==5.0.0
 beautifulsoup4==4.15.0
 blinker==1.9.0
-boto3==1.43.93
-botocore==1.43.99
+boto3==1.43.98
+botocore==1.43.100
 certbot==2.10.0
 certbot-dns-arvancloud==0.1.0
 certbot-dns-azure==2.5.0
