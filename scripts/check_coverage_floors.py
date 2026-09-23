@@ -151,6 +151,11 @@ FLOORS = {
     # the dnspython lookups and the HSTS fetch — are tested against a scripted
     # resolver and a scripted socket, because the distinction they encode
     # ("could not ask" vs "asked, nothing there") is what every check rests on.
+    # 100, not the usual rounded-down value: 39 statements of parsing and
+    # precedence with no I/O beyond constructing a resolver object, and every
+    # branch is a way the setting can be got wrong. There is no honest reason
+    # for any of it to be unreached.
+    'modules/core/dns_resolver.py': 100,
     'modules/core/domain_health.py': 95,
     # 95 from a measured 100%. The module is small and its only I/O is one
     # socket and one in-memory handshake, both injected in the tests; the two

@@ -211,8 +211,10 @@ def create_discovery_resources(api, models, ctx: ApiContext) -> dict:
             from ..core import caa
             ca_manager = getattr(ctx.certificates, 'ca_manager', None)
             ca_name = ((getattr(ca_manager, 'ca_providers', {}) or {}).get(ca_provider) or {}).get('name')
+            from ..core.dns_resolver import configured_nameservers
             return caa.check(ca_provider, names, challenge_type=challenge_type,
-                             ca_name=ca_name), 200
+                             ca_name=ca_name,
+                             nameservers=configured_nameservers(settings)), 200
 
     class CertificateDNSAliasCheck(Resource):
         @api.doc(security='Bearer')

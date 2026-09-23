@@ -190,6 +190,9 @@
                     <label class="block text-xs text-muted mb-1">Extra names (one per line)</label>
                     <textarea id="cfgHealthExtra" rows="3" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.it&#10;shop.example.com"></textarea>
                     <p class="mt-1 text-xs text-muted">Mail and blocklist checks run on the registrable domain; HSTS on each host.</p>
+                    <label class="block text-xs text-muted mt-3 mb-1" title="Which nameservers CertMate asks for its own lookups. The large blocklists refuse queries that arrive through a public resolver.">DNS resolvers (one per line, addresses only)</label>
+                    <textarea id="cfgDnsResolvers" rows="2" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="10.0.0.53&#10;10.0.0.54:5353"></textarea>
+                    <p class="mt-1 text-xs text-muted">Empty uses the system resolver. A port may follow the address. Also settable with <code>CERTMATE_DNS_RESOLVERS</code>; what is saved here wins over it.</p>
                 </div>
             </div>
             <div class="px-6 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">

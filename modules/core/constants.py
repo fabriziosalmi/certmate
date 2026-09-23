@@ -192,6 +192,13 @@ METADATA_SCHEMA_VERSION = 1
 # until an operator turns it on. `unknown` there means this build could not
 # make the offer, which is not the same as the host refusing it.
 #
+# 2.12 for `dns_resolver` in the inventory configuration: which nameservers
+# this instance asks for its own lookups, used by the name-level checks and by
+# CAA. A new field on GET and POST /api/inventory/config, so a MINOR. It
+# exists because the blocklist check told operators to "point CertMate at a
+# resolver of your own" and there was no way to (#881) — advice for something
+# the product did not let you do.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -201,7 +208,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.11'
+API_CONTRACT_VERSION = '2.12'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

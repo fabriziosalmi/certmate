@@ -346,7 +346,8 @@ def check_blocklists(domain, addresses, lookup, cache=None):
         return _result(UNKNOWN,
                        'no blocklist answered usefully — the resolver CertMate uses is '
                        'almost always the reason, because the large lists refuse public '
-                       'resolvers; point it at a resolver of your own',
+                       'resolvers. Name one of your own under dns_resolver in the '
+                       'discovery configuration, or in CERTMATE_DNS_RESOLVERS',
                        **extra)
     if unanswered:
         return _result(WARNING,
@@ -511,18 +512,22 @@ def check_disclosure(served):
 # Live lookups
 # --------------------------------------------------------------------------- #
 
-def dns_lookups(timeout=DEFAULT_TIMEOUT_SECONDS):
+def dns_lookups(timeout=DEFAULT_TIMEOUT_SECONDS, nameservers=None):
     """Return ``(txt, mx, addresses, rbl)`` callables backed by dnspython.
 
     Each returns None when the lookup failed, and an empty list when the name
     exists with no such record — the difference between "could not ask" and
     "asked, nothing there", which every check above depends on.
+
+    *nameservers* replaces the system's, which is how an operator acts on the
+    advice a refused blocklist gives (see ``dns_resolver.py``).
     """
     import dns.exception
     import dns.resolver
 
-    resolver = dns.resolver.Resolver()
-    resolver.lifetime = timeout
+    from .dns_resolver import build
+
+    resolver = build(timeout, nameservers)
 
     def query(name, rdtype):
         try:
@@ -780,6 +785,17 @@ class DomainHealthManager:
         config.update(settings.get('domain_health') or {})
         return config
 
+    def _configured_lookups(self):
+        """Lookups through whichever nameservers this instance is set to use.
+
+        Built per sweep rather than held, so changing the setting takes effect
+        on the next run instead of on the next restart.
+        """
+        from .dns_resolver import configured_nameservers
+
+        settings = self.settings_manager.load_settings() or {}
+        return dns_lookups(nameservers=configured_nameservers(settings))
+
     def save_config(self, config):
         """Validate and persist. Raises ValueError on an unusable extra name."""
         extra = []
@@ -858,7 +874,7 @@ class DomainHealthManager:
         try:
             return check_name(
                 name,
-                lookups=self._lookups,
+                lookups=self._lookups or self._configured_lookups(),
                 headers_fetcher=self._headers_fetcher,
                 mail=config.get('check_mail', True),
                 blocklists=config.get('check_blocklists', True),

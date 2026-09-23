@@ -102,7 +102,7 @@ def _caa_never_asks_real_dns():
     """
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr("modules.core.caa.resolver_factory",
-                      lambda timeout: (lambda name: []))
+                      lambda timeout, nameservers=None: (lambda name: []))
         yield
 
 
