@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.34.0 (CertMate watches the name, not only the certificate)
+
+[Read the notes](docs/releases/v2.34.0.md)
+
 ## v2.33.0 (The client CA is yours, and four answers stop being reassuring)
 
 [Read the notes](docs/releases/v2.33.0.md)
