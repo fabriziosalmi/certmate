@@ -368,9 +368,25 @@ class CAManager:
             if not config.get('acme_url'):
                 return False, "Private CA requires ACME server URL"
             
-            # Validate URL format
+            # An ACME directory is fetched, and then an account key is
+            # bound to it and orders are placed against it. Over plain HTTP
+            # every part of that is readable and rewritable by anything on
+            # the path, so it is refused here rather than left to the
+            # operator to notice. `test_every_ca_url_is_https` already holds
+            # the built-in CAs to this; an account-configured URL is the
+            # same directory, reached the same way, and gets the same rule.
+            # RFC 3986: the scheme is case-insensitive, so `HTTP://` is
+            # plain HTTP and has to be refused as such rather than falling
+            # through to "malformed" — which is true but tells the operator
+            # the wrong thing to fix.
             acme_url = config.get('acme_url', '')
-            if not acme_url.startswith(('http://', 'https://')):
+            scheme = acme_url.split('://', 1)[0].lower() if '://' in acme_url else ''
+            if scheme == 'http':
+                return False, (
+                    "ACME server URL must use https. A directory fetched over "
+                    "plain HTTP cannot be trusted to be the one you meant."
+                )
+            if scheme != 'https':
                 return False, "Invalid ACME server URL format"
         
         elif ca_provider == 'letsencrypt':
