@@ -165,13 +165,20 @@ Imposta una CA predefinita per tutti i nuovi certificati. Puoi sovrascriverla pe
 3. Procedi con la creazione del certificato
 
 Se la CA scelta non ha una configurazione salvata (o l'account CA richiesto non
-esiste), l'emissione non fallisce: ripiega su Let's Encrypt (su Let's Encrypt
-staging se la richiesta era di staging) e registra un warning nel log. La
-colonna **CA** nella pagina Certificati indica con quale autorità è stato
-emesso ciascun certificato, così un ripiego si vede senza passare dal log; lo
-stesso valore è `ca_provider` nella risposta dell'API e nei metadati del
-certificato. I certificati emessi prima che CertMate registrasse la CA mostrano
-lì `—` invece di un'ipotesi.
+esiste), la richiesta viene **rifiutata**. Emettere da una CA diversa non
+sostituisce quella che hai chiesto: era possibile chiedere DigiCert e ricevere
+un certificato Let's Encrypt con un `201`, e chiedere a una CA privata un nome
+interno e vederlo pubblicato in un certificato pubblico. Il rifiuto nomina la
+CA che manca.
+
+Let's Encrypt fa eccezione, e solo perché i valori predefiniti di certbot
+*sono* la sua configurazione: una richiesta per lei riesce senza nulla di
+salvato, e una richiesta di staging resta su staging.
+
+La colonna **CA** nella pagina Certificati indica con quale autorità è stato
+emesso ciascun certificato; lo stesso valore è `ca_provider` nella risposta
+dell'API e nei metadati del certificato. I certificati emessi prima che
+CertMate registrasse la CA mostrano lì `—` invece di un'ipotesi.
 
 ### Tramite API
 

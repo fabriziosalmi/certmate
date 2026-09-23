@@ -105,7 +105,10 @@ def test_unknown_account_never_falls_back_to_lets_encrypt(accounts):
     class Issuer:
         ca_manager = CAManager(Settings(accounts))
 
-    with pytest.raises(ValueError, match='CA account not configured for sectigo'):
+    # Matched on the property, not the sentence. Sectigo carved itself out of
+    # a fallback that has since been removed for every provider, and the
+    # refusal it now gets is the shared one.
+    with pytest.raises(ValueError, match='(?i)not configured'):
         CertificateManager._resolve_ca(Issuer(), {}, 'sectigo', 'unknown', False)
 
 

@@ -212,24 +212,36 @@ def test_unconfigured_staging_ca_is_not_flipped_to_production(tmp_path):
     assert '--server' not in cmd
 
 
-def test_fallback_preserves_staging_for_unconfigured_other_ca(tmp_path):
-    """Regression (adversarial review): a legacy staging=True request with an
-    unconfigured non-LE provider used to be reset to production letsencrypt
-    by the fallback — issuing a trusted production cert (and burning real
-    rate limits) where a test was intended."""
+def test_an_unconfigured_other_ca_is_refused_not_substituted(tmp_path):
+    """This test used to assert the defect, and the history is worth keeping.
+
+    It was written under adversarial review to stop a legacy `staging=True`
+    request for an unconfigured non-LE provider being reset to PRODUCTION
+    Let's Encrypt — a trusted certificate, and real rate limits, where a test
+    was intended. It fixed the worse half of the fallback and left the
+    fallback: the request still succeeded, as `letsencrypt_staging`, from a CA
+    nobody asked for, and this file asserted that it did.
+
+    The fallback is gone (#876 item 2). A provider that is not configured is
+    refused, which subsumes the staging concern: the request does not become
+    production issuance because it does not become issuance at all.
+
+    The equivalent property for Let's Encrypt itself — where proceeding
+    without a saved config IS correct, and the staging entry must not silently
+    become the production one — is the test above this one.
+    """
     domain = 'app.example.duckdns.org'
     shell = _fake_issuance(MockShellExecutor(), tmp_path, domain)
     shell.set_next_result(returncode=0)
     ca_manager = _ca_manager({'ca_providers': {}})
     mgr = _cert_manager(tmp_path, shell, ca_manager=ca_manager)
 
-    result = _create(mgr, domain, ca_provider='zerossl', staging=True)
+    with pytest.raises(ValueError, match='zerossl'):
+        _create(mgr, domain, ca_provider='zerossl', staging=True)
 
-    assert result['success'] is True
-    assert result['ca_provider'] == 'letsencrypt_staging'
-    cmd = shell.commands_executed[0].split()
-    assert '--staging' in cmd
-    assert '--server' not in cmd
+    assert not shell.commands_executed, (
+        'certbot ran for a CA the instance cannot issue with'
+    )
 
 
 def test_configured_staging_ca_issues_against_staging_server(tmp_path):
