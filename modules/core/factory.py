@@ -812,8 +812,16 @@ def initialize_managers(container: AppContainer, app):
     expiry_watch = ExpiryWatch(settings_manager, certificate_manager,
                                cert_inventory, event_bus)
 
+    # Opt-in, and off until it is. docs/ca-providers.md offers the private CA
+    # for air-gapped systems, so an instance nobody asked to reach the
+    # internet must not reach it.
+    from .update_check import UpdateCheck
+    from modules import __version__ as _running_version
+    update_check = UpdateCheck(settings_manager, _running_version)
+
     container.managers = {
         'file_ops': file_ops,
+        'update_check': update_check,
         'settings': settings_manager,
         'auth': auth_manager,
         'certificates': certificate_manager,
