@@ -1252,6 +1252,27 @@ Each `results[]` entry is one hook or target run (`hook_name`, `exit_code`,
 `success`, `stdout`, `stderr`, ...), the same record `GET /api/deploy/history`
 keeps.
 
+#### Check what a domain is actually serving
+
+**Endpoint**: `GET /api/certificates/<domain>/deployment-status` — viewer
+
+Opens a TLS connection to the domain and compares the fingerprint of the
+certificate it serves against the one CertMate holds for it. This answers
+"did the new certificate reach the service", which issuance and renewal
+cannot: a certificate can renew perfectly and still not be the one a load
+balancer is presenting.
+
+The verdict is cached. Add `?refresh=1` to discard the cached answer and look
+again — the cache is also dropped automatically whenever the domain's
+certificate changes, so a renewal does not leave a stale badge behind.
+
+`404 CERTIFICATE_NOT_FOUND` when CertMate holds no certificate for the domain,
+`400` for a domain the path rejects. A scoped key sees only its own domains.
+
+Only what CertMate's own process can reach is reported here; a service that is
+reachable from a browser but not from the container answers as unreachable,
+which is what the endpoint below is for.
+
 #### Record browser-side reachability
 
 **Endpoint**: `POST /api/certificates/deployment-status/browser` — viewer
