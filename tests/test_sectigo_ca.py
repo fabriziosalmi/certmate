@@ -39,7 +39,13 @@ def test_metadata_and_validation(accounts):
     assert info['requires_eab'] is True
     assert info['supports_wildcard'] is True
     assert info['certificate_types'] == ['DV', 'OV']
-    assert 'sectigo.com' in CA_IDENTIFIERS['sectigo']
+    # `'sectigo.com' in <tuple>` is exact membership, but CodeQL reads any
+    # `in` against a host-looking literal as a URL substring check and reports
+    # it as a high-severity finding, which blocks the merge. Spelling the
+    # comparison out says the same thing to a reader and leaves nothing to
+    # dismiss — a dismissal is invisible to whoever reads this next.
+    assert any(identifier == 'sectigo.com'
+               for identifier in CA_IDENTIFIERS['sectigo'])
     assert manager.validate_ca_configuration('sectigo', accounts['production-ov'])[0]
     for missing, expected in [('acme_url', 'ACME Directory URL'),
                               ('eab_kid', 'EAB Key ID'), ('eab_hmac', 'HMAC Key')]:
