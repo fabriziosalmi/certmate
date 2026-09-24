@@ -1060,6 +1060,17 @@ class AuthManager:
                 return True
             return False
 
+    def invalidate_sessions_for_user(self, username):
+        """Public name for the same thing.
+
+        `update_user` and `delete_user` have called the private one since
+        they were written. The OIDC role sync needs it too — a demotion that
+        leaves the demoted session usable is not a demotion — and reaching
+        across modules for a leading underscore is how a private method
+        becomes an interface without anyone deciding that it is one.
+        """
+        return self._invalidate_sessions_for_user(username)
+
     def _invalidate_sessions_for_user(self, username):
         """Drop every in-memory session belonging to ``username``.
 

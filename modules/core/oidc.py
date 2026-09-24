@@ -547,7 +547,8 @@ class OIDCManager:
         # Captured outcome — written by the mutator, read after update()
         # returns so audit logging (which can be slow) happens OUTSIDE
         # the settings lock.
-        outcome: dict = {'username': None, 'error': None, 'audit': None}
+        outcome: dict = {'username': None, 'error': None, 'audit': None,
+                         'invalidate_sessions': None}
 
         def _mutate(settings):
             users = settings.setdefault('users', {})
@@ -595,6 +596,23 @@ class OIDCManager:
                             )
                         else:
                             users[username]['role'] = role
+                            # Live sessions carry the role they were minted
+                            # with (`create_session` snapshots it), so
+                            # writing the new one here changed what the user
+                            # table says and nothing about what their open
+                            # session can still do — a demoted admin stayed
+                            # an admin until it expired, for up to the
+                            # session lifetime. `update_user` has killed
+                            # sessions on a role change since it was
+                            # written; this is the same rule on the other
+                            # path.
+                            #
+                            # Safe to do here: the callback creates the new
+                            # session AFTER this returns, so the login in
+                            # progress is not the one being invalidated —
+                            # only the user's other sessions are, which is
+                            # what a demotion means.
+                            outcome['invalidate_sessions'] = username
                             outcome['audit'] = (
                                 'oidc_user_role_synced', username, 'success',
                                 {'issuer': iss, 'from': previous_role,
@@ -671,6 +689,14 @@ class OIDCManager:
         # concurrent first-time callbacks for distinct subjects observe
         # each other's writes via the freshly-loaded users dict.
         self.settings_manager.update(_mutate, reason='oidc_resolve_or_provision')
+
+        # Outside the settings lock, like the audit write below, and before
+        # the caller mints the new session — so the login in progress is
+        # untouched and the user's OTHER sessions stop carrying the role
+        # they were minted with.
+        if outcome.get('invalidate_sessions'):
+            self.auth_manager.invalidate_sessions_for_user(
+                outcome['invalidate_sessions'])
 
         if outcome['audit']:
             op, who, status, details = outcome['audit']
