@@ -51,6 +51,45 @@ def _submit(ctx, operation, domain, fn):
                         f'/api/certificates/jobs/{job_id}'), 202
 
 
+
+def _configuration_hint(error_msg: str):
+    """What an operator should go and fix, for a refused-before-certbot error.
+
+    Module level, not inside the closure: `create_lifecycle_resources` is one
+    of the budgeted functions and its ceiling only comes down, so a branch
+    added here would have to be paid for somewhere. Lifting both hint ladders
+    out pays for the one this file needed and leaves the ceiling lower than it
+    found it.
+    """
+    lowered = (error_msg or '').lower()
+    # The CA branch goes first: its refusal also says "not configured", and it
+    # used to collect the DNS hint — sending an operator whose CA is
+    # unconfigured to check their DNS credentials, which are fine. Reachable on
+    # every request for a CA this instance has no configuration for, now that
+    # issuance refuses instead of quietly using Let's Encrypt.
+    if 'ca provider' in lowered and 'not configured' in lowered:
+        return ('Configure that CA under Settings > Certificate Authority '
+                'providers, or request a CA that is already configured.')
+    if 'not configured' in lowered:
+        return ('Check your DNS provider settings and ensure credentials are '
+                'properly configured.')
+    if 'domain' in lowered and 'email' in lowered:
+        return 'Both domain and email are required. Configure email in settings.'
+    return None
+
+
+def _certbot_hint(error_msg: str) -> str:
+    """The same, for a failure certbot reported."""
+    lowered = (error_msg or '').lower()
+    if 'unauthorized' in lowered or 'auth' in lowered:
+        return 'DNS provider authentication failed. Verify your API credentials in settings.'
+    if 'timeout' in lowered:
+        return 'DNS propagation timed out. Try increasing DNS propagation time in settings.'
+    if 'rate limit' in lowered:
+        return "You've hit the certificate authority's rate limit. Wait before trying again."
+    return 'Check DNS provider credentials and ensure DNS records can be created.'
+
+
 def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
     """Build the lifecycle resources against *ctx*."""
 
@@ -157,11 +196,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
             except ValueError as e:
                 # Validation / configuration errors raised by the service.
                 error_msg = str(e)
-                hint = None
-                if 'not configured' in error_msg.lower():
-                    hint = 'Check your DNS provider settings and ensure credentials are properly configured.'
-                elif 'domain' in error_msg.lower() and 'email' in error_msg.lower():
-                    hint = 'Both domain and email are required. Configure email in settings.'
+                hint = _configuration_hint(error_msg)
                 return {
                     'code': 'CERTIFICATE_CREATION_FAILED',
                     'error': error_msg,
@@ -172,13 +207,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
             except RuntimeError as e:
                 # Certbot execution errors
                 error_msg = str(e)
-                hint = 'Check DNS provider credentials and ensure DNS records can be created.'
-                if 'unauthorized' in error_msg.lower() or 'auth' in error_msg.lower():
-                    hint = 'DNS provider authentication failed. Verify your API credentials in settings.'
-                elif 'timeout' in error_msg.lower():
-                    hint = 'DNS propagation timed out. Try increasing DNS propagation time in settings.'
-                elif 'rate limit' in error_msg.lower():
-                    hint = "You've hit the certificate authority's rate limit. Wait before trying again."
+                hint = _certbot_hint(error_msg)
                 return {
                     'code': 'CERTIFICATE_CREATION_FAILED',
                     'error': f'Certificate creation failed: {error_msg}',

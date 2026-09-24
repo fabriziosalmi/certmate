@@ -194,13 +194,19 @@ Set a default CA for all new certificates. Override it per-certificate during cr
 3. Proceed with certificate creation
 
 If the chosen CA has no saved configuration (or the requested CA account does
-not exist), most providers fall back to Let's Encrypt (to Let's Encrypt staging
-when the request was a staging one) and log a warning. Sectigo fails closed
-instead: an unknown account or a missing https directory URL cannot silently
-issue from another CA. The **CA** column on the Certificates page names the
-authority each certificate was issued with, so a fallback is visible without
-going through a log; the same value is `ca_provider` in the API response and in
-the certificate's metadata. Certificates issued before CertMate recorded the CA
+not exist), the request is **refused**. Issuing from a different CA is not a
+substitute for the one you asked for: it was possible to ask for DigiCert and
+receive a Let's Encrypt certificate with a `201`, and to ask a private CA for
+an internal name and have that name published in a public certificate. The
+refusal names the CA that is missing.
+
+Let's Encrypt is the exception, and only because certbot's defaults are its
+configuration: a request for it succeeds with nothing saved, and a staging
+request stays on staging.
+
+The **CA** column on the Certificates page names the authority each certificate
+was issued with; the same value is `ca_provider` in the API response and in the
+certificate's metadata. Certificates issued before CertMate recorded the CA
 show `—` there rather than a guess.
 
 ### Via API
