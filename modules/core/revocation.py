@@ -112,7 +112,7 @@ def fetch_url(url, *, timeout, max_bytes, allow_private, body=None,
     a body over *max_bytes*.
     """
     # Imported here, not at module level: cert_probe imports this module.
-    from .cert_probe import _resolve_and_guard
+    from .cert_probe import _resolve_and_guard, ip_is_blocked, proxy_for
 
     parts = urlsplit(url)
     if parts.scheme != 'http':
@@ -139,10 +139,25 @@ def fetch_url(url, *, timeout, max_bytes, allow_private, body=None,
     if content_type:
         headers['Content-Type'] = content_type
 
-    # Passing the port explicitly stops http.client from parsing a port out of
-    # an IPv6 literal; the Host header carries the original name, so the
-    # connection is pinned to the address the guard validated.
-    conn = http.client.HTTPConnection(connect_ip, port, timeout=timeout)
+    # OCSP and CRL endpoints are plain http, so the variable that carries them
+    # is HTTP_PROXY, and the wire form is an absolute request line rather than
+    # a CONNECT tunnel. Same rule as the TLS probe otherwise: a non-global
+    # address is dialled directly, because no outbound proxy serves one.
+    #
+    # Without this the probe behind a proxy completed its handshake and then
+    # reported `unavailable` for every revocation answer — checked and
+    # unknown, which reads as an outage rather than as a missing proxy.
+    proxy = proxy_for(host, 'http') if ip_is_blocked(connect_ip) is None else None
+    if proxy:
+        proxy_host, proxy_port, proxy_headers = proxy
+        headers.update(proxy_headers)
+        conn = http.client.HTTPConnection(proxy_host, proxy_port, timeout=timeout)
+        path = url
+    else:
+        # Passing the port explicitly stops http.client from parsing a port
+        # out of an IPv6 literal; the Host header carries the original name,
+        # so the connection is pinned to the address the guard validated.
+        conn = http.client.HTTPConnection(connect_ip, port, timeout=timeout)
     try:
         conn.request('POST' if body is not None else 'GET', path,
                      body=body, headers=headers)

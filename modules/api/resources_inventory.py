@@ -20,7 +20,7 @@ from ..core.audit_context import audit_context_from_request
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import DomainOperationInProgress
 from ..core.inventory_view import build_inventory_view, build_registrations_view
-from ..core.utils import utc_now_iso
+from ..core.utils import ALREADY_RUNNING, utc_now_iso
 from .resource_context import (
     ApiContext,
     check_domain_scope,
@@ -91,6 +91,33 @@ def _scan_registrations(registration, result):
     except Exception as e:
         logger.error(f"Domain registration check failed: {e}")
         result['domain_registration'] = {'error': 'domain registration check failed'}
+
+
+def _already_running(result):
+    """The scan legs that declined because one was already in flight.
+
+    Read off the same `reason` the sweeps already use for `disabled` and
+    `no_endpoints`, so this endpoint learns nothing new about them: a sweep
+    that grows a fifth leg is covered by having said `already_running`.
+    """
+    return sorted(name for name, leg in result.items()
+                  if isinstance(leg, dict) and leg.get('reason') == ALREADY_RUNNING)
+
+
+def _scan_answer(result):
+    """The scan's answer: the summaries, or 409 when a leg was already busy.
+
+    Out here rather than in the route because `create_inventory_resources` has
+    a complexity ceiling that only ever comes down, and a branch inside the
+    closure spends from it.
+    """
+    busy = _already_running(result)
+    if not busy:
+        return result
+    result['error'] = ('A scan is already running (' + ', '.join(busy) +
+                       '); retry once it completes')
+    result['code'] = 'SCAN_IN_PROGRESS'
+    return result, 409
 
 
 def _scan_domain_health(health, result):
@@ -295,7 +322,12 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
         @ctx.auth.require_role('admin')
         def post(self):
             """Run a discovery sweep and a CT-log poll now, returning their
-            summaries. Both are failure-isolated and no-ops when disabled."""
+            summaries. Both are failure-isolated and no-ops when disabled.
+
+            Answers 409 when any leg declined because one was already
+            running — the summaries are still returned, so the caller can see
+            which parts did run and which have to be asked for again.
+            """
             discovery = ctx.managers.get('cert_discovery')
             ct_monitor = ctx.managers.get('ct_monitor')
             if discovery is None or ct_monitor is None:
@@ -314,7 +346,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             # Last, so it sees what discovery and the CT poll just added.
             _scan_registrations(ctx.managers.get('domain_registration'), result)
             _scan_domain_health(ctx.managers.get('domain_health'), result)
-            return result
+            return _scan_answer(result)
 
     InventoryDomains = _inventory_domains_resource(api, ctx)
     InventoryHealth = _inventory_health_resource(api, ctx)

@@ -46,10 +46,12 @@ import ipaddress
 import json
 import logging
 import re
-import socket
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from .utils import exclusive_run
 
 logger = logging.getLogger(__name__)
 
@@ -610,7 +612,7 @@ def _one_response(host, *, timeout, allow_private):
     import http.client
     import ssl
 
-    from .cert_probe import _resolve_and_guard
+    from .cert_probe import _resolve_and_guard, open_probe_transport
 
     if any(c in host for c in '\r\n \t'):
         # Never reachable through the inventory, which holds validated names,
@@ -628,10 +630,11 @@ def _one_response(host, *, timeout, allow_private):
                f'User-Agent: CertMate-domain-health\r\nConnection: close\r\n\r\n')
     try:
         # Connect to the address the guard validated, with SNI = the name, so
-        # a DNS rebind between check and handshake changes nothing.
-        with socket.socket(family, socket.SOCK_STREAM) as raw:
-            raw.settimeout(timeout)
-            raw.connect((connect_ip, 443))
+        # a DNS rebind between check and handshake changes nothing — or
+        # tunnel through the outbound proxy where one applies, which is the
+        # only way this check runs at all on a host that has no direct egress.
+        raw, closer, _via = open_probe_transport(host, 443, family, connect_ip, timeout)
+        try:
             with context.wrap_socket(raw, server_hostname=host) as tls:
                 tls.sendall(request.encode('ascii'))
                 response = http.client.HTTPResponse(tls, method='HEAD')
@@ -640,6 +643,8 @@ def _one_response(host, *, timeout, allow_private):
                     return response.status, dict(response.getheaders())
                 finally:
                     response.close()
+        finally:
+            closer()
     except (OSError, ssl.SSLError, http.client.HTTPException,
             ValueError, TypeError, UnicodeError) as e:
         logger.info("Header check could not reach %s: %s", host, e.__class__.__name__)
@@ -800,6 +805,11 @@ class DomainHealthManager:
         self._headers_fetcher = headers_fetcher
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._sleep = sleep
+        # One sweep at a time. Whether a blocklist answers us at all is
+        # decided once per sweep and shared across names; two sweeps mean two
+        # sets of queries to lists that refuse a resolver for asking too
+        # often — the exact failure this module is built to avoid reporting.
+        self._check_lock = threading.Lock()
 
     def get_config(self):
         settings = self.settings_manager.load_settings() or {}
@@ -913,7 +923,18 @@ class DomainHealthManager:
                                               f'{e.__class__.__name__}')}
 
     def run_check(self, *, force=False, max_names=MAX_NAMES_PER_RUN):
-        """Check every tracked name that is due. Returns a summary."""
+        """Check every tracked name that is due. Returns a summary.
+
+        A second, overlapping call is declined with ``reason:
+        'already_running'`` rather than run beside the first.
+        """
+        return exclusive_run(
+            self._check_lock,
+            lambda: self._check(force=force, max_names=max_names),
+            label='Domain health sweep', extra={'results': []})
+
+    def _check(self, *, force, max_names):
+        """One sweep, with the caller holding :attr:`_check_lock`."""
         config = self.get_config()
         if not config.get('enabled') and not force:
             return {'skipped': True, 'reason': 'disabled', 'results': []}

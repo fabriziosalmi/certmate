@@ -26,6 +26,13 @@ Safety:
   ``CERTMATE_PROBE_ALLOW_PRIVATE``). The validated IP is then pinned for the
   connection with SNI = the original hostname, so a DNS rebind between the
   guard check and the handshake cannot redirect the probe to an internal host.
+
+  The pinning is the one part an outbound proxy takes away: through a CONNECT
+  tunnel the proxy resolves the name itself and there is no address to pin.
+  The guard still runs and still refuses — it decides whether the connection
+  is attempted at all — and a target that resolves to a non-global address is
+  never tunnelled, so the case the pinning protects stays on the direct path.
+  See :func:`open_probe_transport`.
 * The probe is **failure-isolated**: every connection/parse error is caught and
   reported as a status, never raised, so an inventory sweep over many hosts can
   never be stalled or aborted by one bad target.
@@ -34,11 +41,15 @@ No new dependencies: only the standard library plus ``cryptography`` (already a
 CertMate dependency).
 """
 
+import base64
+import http.client
 import ipaddress
 import logging
 import os
 import socket
 import ssl
+import urllib.parse
+import urllib.request
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -214,6 +225,105 @@ def _resolve_and_guard(host, port, allow_private):
 
     family, connect_ip = first_allowed
     return family, connect_ip, None
+
+
+def proxy_for(host, scheme='https'):
+    """Return ``(proxy_host, proxy_port, headers)`` for reaching *host* over
+    *scheme*, or None when no proxy applies.
+
+    Honours the standard ``HTTPS_PROXY`` / ``HTTP_PROXY`` environment
+    variables and the ``NO_PROXY`` bypass list, through urllib, so CertMate
+    reads the same configuration as every other tool on the host.
+
+    A raw socket ignores those variables entirely. That is why an instance
+    behind an outbound proxy could not probe anything: the deployment-status
+    probe was taught to tunnel (#326) but the *inventory* probe, the weak-TLS
+    check and the header check each opened their own socket and could only
+    ever report `unreachable`.
+    """
+    proxy = urllib.request.getproxies().get(scheme)
+    if not proxy or urllib.request.proxy_bypass(host):
+        return None
+    parts = urllib.parse.urlsplit(proxy if '://' in proxy else 'http://' + proxy)
+    if not parts.hostname:
+        return None
+    headers = {}
+    if parts.username:
+        raw = (f'{urllib.parse.unquote(parts.username)}:'
+               f"{urllib.parse.unquote(parts.password or '')}")
+        token = base64.b64encode(raw.encode()).decode()
+        headers['Proxy-Authorization'] = f'Basic {token}'
+    return parts.hostname, parts.port or 8080, headers
+
+
+def open_probe_transport(host, port, family, connect_ip, timeout):
+    """Open the TCP leg to *host*:*port*. Returns ``(sock, closer, via)``.
+
+    The caller has already resolved *host* and run it past the SSRF guard;
+    this decides only *how* to reach it. The order matters:
+
+    1. **A non-global address is dialled directly**, whatever the environment
+       says. An operator who monitors ``10.0.0.5`` with ``allow_private`` has
+       a target no outbound proxy can reach, and routing it through one would
+       break a probe that works today. :func:`ip_is_blocked` is asked, rather
+       than a second spelling of "is this public", so the two answers cannot
+       drift apart.
+    2. **Otherwise a proxy, if one applies**, via HTTP CONNECT: the TLS
+       handshake then runs over the tunnel, so the peer certificate read at
+       the other end is still the real one.
+    3. **Otherwise the pinned address**, as before.
+
+    Through a tunnel there is no address to pin — the proxy does its own
+    resolution — so the rebind defence of connecting to the validated IP is
+    unavailable there. The guard itself still ran, and still refused: what the
+    caller resolved is what decided whether this connection happens at all.
+
+    *via* names the proxy (``host:port``) when one was used, else None, so a
+    failure can say where it was dialled from.
+    """
+    if ip_is_blocked(connect_ip) is None:
+        proxy = proxy_for(host, 'https')
+    else:
+        proxy = None
+
+    if proxy is None:
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            sock.connect((connect_ip, port))
+        except (OSError, ValueError):
+            # Closed here, not left to the garbage collector: a sweep over
+            # many unreachable hosts would otherwise hold one descriptor per
+            # failure for as long as the cycle detector takes to notice.
+            sock.close()
+            raise
+        return sock, sock.close, None
+
+    proxy_host, proxy_port, proxy_headers = proxy
+    conn = http.client.HTTPConnection(proxy_host, proxy_port, timeout=timeout)
+    try:
+        conn.set_tunnel(host, port, headers=proxy_headers)
+        conn.connect()
+    except socket.timeout:
+        # Re-raised as itself: the callers classify a timeout apart from a
+        # refusal, and wrapping it would relabel a slow proxy as a broken one.
+        conn.close()
+        raise
+    except (OSError, http.client.HTTPException) as e:
+        # HTTPException is not an OSError, so without this arm a malformed
+        # proxy answer would escape every caller's except clause — and all
+        # three callers promise never to raise. The proxy is named because
+        # "connection refused" on its own sends an operator looking at the
+        # wrong host.
+        conn.close()
+        raise ConnectionError(f'via proxy {proxy_host}:{proxy_port}: {e}') from e
+    conn.sock.settimeout(timeout)
+    return conn.sock, conn.close, f'{proxy_host}:{proxy_port}'
+
+
+def _detail(message, via):
+    """A failure message that says whether it went through a proxy."""
+    return f'{message} (via proxy {via})' if via else message
 
 
 def _public_key_info(cert):
@@ -538,21 +648,27 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
     context.verify_mode = ssl.CERT_NONE
     context.minimum_version = ssl.TLSVersion.TLSv1_2
 
+    via = None
     try:
         # Connect to the validated IP with SNI = the requested name, defeating
-        # a DNS rebind between the guard check and the handshake.
-        with socket.socket(family, socket.SOCK_STREAM) as raw:
-            raw.settimeout(timeout)
-            raw.connect((connect_ip, port))
+        # a DNS rebind between the guard check and the handshake — or, where
+        # an outbound proxy applies, tunnel through it and run the same
+        # handshake over the tunnel.
+        raw, closer, via = open_probe_transport(host, port, family, connect_ip, timeout)
+        try:
             with context.wrap_socket(raw, server_hostname=sni) as tls_sock:
                 cert_bytes = tls_sock.getpeercert(binary_form=True)
                 chain_der = _served_chain_der(tls_sock)
+        finally:
+            closer()
     except socket.timeout as e:
-        return _unreachable_result(host, port, connect_ip, ERR_TIMEOUT, str(e) or 'timed out')
+        return _unreachable_result(host, port, connect_ip, ERR_TIMEOUT,
+                                   _detail(str(e) or 'timed out', via))
     except ssl.SSLError as e:
-        return _unreachable_result(host, port, connect_ip, ERR_TLS, str(e))
+        return _unreachable_result(host, port, connect_ip, ERR_TLS, _detail(str(e), via))
     except (ConnectionError, OSError) as e:
-        return _unreachable_result(host, port, connect_ip, ERR_CONNECTION, str(e))
+        return _unreachable_result(host, port, connect_ip, ERR_CONNECTION,
+                                   _detail(str(e), via))
     except (ValueError, TypeError) as e:
         # An invalid SNI / server_name (empty or over-long label, embedded NUL)
         # makes wrap_socket raise ValueError/UnicodeError/TypeError — none are

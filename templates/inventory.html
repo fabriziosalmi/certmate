@@ -12,6 +12,10 @@
                 <span class="text-gray-700 dark:text-gray-200 font-medium">Inventory</span>
             </nav>
             <div class="flex items-center gap-2 flex-wrap">
+                <!-- A scan that was declined because one is already running has
+                     to say so here: the button finishes either way, and an
+                     unexplained no-op reads as a broken button. -->
+                <span id="scanMsg" class="text-xs text-muted" role="status"></span>
                 <button type="button" id="scanNowBtn" onclick="InventoryPage.runScan()"
                         class="hidden px-2.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"
                         title="Run a discovery sweep and CT-log poll now">

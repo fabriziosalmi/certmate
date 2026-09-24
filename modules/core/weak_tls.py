@@ -28,7 +28,6 @@ demonstrably make the offer *and* the host declined it.
 """
 
 import logging
-import socket
 import ssl
 
 # One direction only: this module knows the vocabulary of answers, and
@@ -120,7 +119,7 @@ def probe(host, version_name, *, timeout=DEFAULT_TIMEOUT_SECONDS,
     the connection, are both declining, but a connection that never opened has
     declined nothing.
     """
-    from .cert_probe import _resolve_and_guard
+    from .cert_probe import _resolve_and_guard, open_probe_transport
 
     try:
         context = _context(version_name)
@@ -133,16 +132,17 @@ def probe(host, version_name, *, timeout=DEFAULT_TIMEOUT_SECONDS,
         return UNAVAILABLE
 
     try:
-        raw = socket.socket(family, socket.SOCK_STREAM)
-    except OSError:
+        # Through an outbound proxy where one applies: the CONNECT tunnel
+        # carries whatever TLS version is offered over it, so the answer this
+        # probe reports is still the host's own. Without it, every host looked
+        # UNAVAILABLE from behind a proxy — which reads as "we could not ask",
+        # and is right, but for a reason the operator could not see.
+        raw, closer, _via = open_probe_transport(host, port, family, connect_ip,
+                                                 timeout)
+    except (OSError, ValueError) as e:
+        logger.info("Weak-TLS probe could not reach %s: %s", host, e.__class__.__name__)
         return UNAVAILABLE
     try:
-        raw.settimeout(timeout)
-        try:
-            raw.connect((connect_ip, port))
-        except OSError as e:
-            logger.info("Weak-TLS probe could not reach %s: %s", host, e.__class__.__name__)
-            return UNAVAILABLE
         # Past this point the host is there and answering, so anything other
         # than a completed handshake is the host declining the version.
         try:
@@ -159,7 +159,7 @@ def probe(host, version_name, *, timeout=DEFAULT_TIMEOUT_SECONDS,
             return REFUSED
     finally:
         try:
-            raw.close()
+            closer()
         except OSError:
             pass
 

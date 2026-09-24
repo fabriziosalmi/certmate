@@ -24,6 +24,37 @@ import requests
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="session", autouse=True)
+def _no_inherited_proxy():
+    """No test inherits the developer's outbound proxy.
+
+    The TLS probes honour `HTTPS_PROXY`/`NO_PROXY` through `urllib`, and
+    `urllib.request.getproxies()` is `getproxies_environment() or
+    getproxies_macosx_sysconf()`: on a Mac with a system proxy configured, an
+    EMPTY environment makes urllib fall through to System Settings, and a
+    probe test that expects a direct connection quietly takes the tunnel.
+
+    Clearing the variables is therefore not enough. Setting `no_proxy` is,
+    and for a reason worth writing down: `getproxies_environment()` collects
+    every variable whose name ends in `_proxy`, `no_proxy` included, so the
+    dict is non-empty and the macOS fallback is never reached — while
+    `proxies.get('https')` is still None. One variable, deterministic on
+    every platform.
+
+    A test that wants a proxy removes `no_proxy` and sets `https_proxy`
+    itself; `proxy_bypass` reads the same environment, so leaving `no_proxy`
+    in place would bypass the proxy it just configured.
+    """
+    saved = {name: value for name, value in os.environ.items()
+             if name.lower().endswith('_proxy')}
+    for name in saved:
+        del os.environ[name]
+    os.environ['no_proxy'] = '*'
+    yield
+    os.environ.pop('no_proxy', None)
+    os.environ.update(saved)
+
+
+@pytest.fixture(scope="session", autouse=True)
 def _isolate_runtime_dirs(tmp_path_factory):
     """Keep `create_app()` out of the checkout's real runtime directories.
 
