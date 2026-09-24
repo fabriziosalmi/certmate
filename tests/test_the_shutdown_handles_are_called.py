@@ -268,8 +268,11 @@ def test_a_container_with_nothing_running_is_not_an_error():
         managers = None
         request_watchdog = None
 
+    # `checkpoint` joined the summary when the audit chain started being
+    # sealed on a clean stop (#876 item 10). None here means there was no
+    # audit manager to seal, which is what a bare container has.
     assert factory.stop_background_work(_Bare()) == {
-        'scheduler': None, 'issuance': [], 'undelivered': 0}
+        'scheduler': None, 'issuance': [], 'undelivered': 0, 'checkpoint': None}
 
 
 # --- it is actually wired -------------------------------------------------

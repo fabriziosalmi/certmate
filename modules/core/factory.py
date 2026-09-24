@@ -1949,7 +1949,8 @@ def stop_background_work(container: AppContainer) -> dict:
     Idempotent: `python app.py` calls this on Ctrl-C and atexit calls it again
     on the way out, and under gunicorn only atexit does.
     """
-    summary = {'scheduler': None, 'issuance': [], 'undelivered': 0}
+    summary = {'scheduler': None, 'issuance': [], 'undelivered': 0,
+               'checkpoint': None}
     if container.shutdown_complete:
         return summary
     container.shutdown_complete = True
@@ -1997,6 +1998,32 @@ def stop_background_work(container: AppContainer) -> dict:
             summary['undelivered'] = bus.stop() or 0
         except Exception as e:
             logger.warning(f"Event bus did not stop cleanly: {e}")
+
+    # Seal the tail, last of all. A signed checkpoint is written every
+    # `checkpoint_interval` entries, and nothing called it on the way out — so
+    # the entries since the last one stayed unsealed, and anyone who could
+    # write the file could drop them without the verification noticing.
+    # `docs/compliance.md` lists that as a known limit.
+    #
+    # After the bus, deliberately: draining it dispatches handlers, and some of
+    # them append audit entries. Sealing before that would sign a head that is
+    # about to move and leave the newest entries — the ones written while
+    # shutting down — outside the checkpoint this exists to create.
+    #
+    # It narrows the window rather than closing it. A crash or a SIGKILL still
+    # leaves a tail, and an operator who holds the signing key can still
+    # re-sign over a rewritten chain. Clean stops are the common case, and this
+    # is what makes them prove something.
+    audit = managers.get('audit')
+    if audit is not None:
+        try:
+            checkpoint = audit.write_checkpoint()
+            # None is a legitimate answer: no signer, or an empty chain. Told
+            # apart from a failure, which logs.
+            summary['checkpoint'] = checkpoint.get('seq') if checkpoint else None
+        except Exception as e:
+            summary['checkpoint'] = None
+            logger.warning(f"Audit chain was not sealed on shutdown: {e}")
 
     return summary
 
