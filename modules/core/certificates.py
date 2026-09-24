@@ -3690,7 +3690,8 @@ class CertificateManager:
             # sweep "did not consider" when it considered none would be noise.
             return {'checked': 0, 'renewed': 0, 'failed': 0,
                     'skipped_disabled': 0, 'skipped_invalid': 0,
-                    'skipped_not_due': 0, 'unmanaged': 0, 'reregistered': 0,
+                    'skipped_not_due': 0, 'skipped_busy': 0,
+                    'unmanaged': 0, 'reregistered': 0,
                     'auto_renew_disabled': True}
 
         # Migrate settings format if needed
@@ -3701,7 +3702,8 @@ class CertificateManager:
 
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
                    'skipped_disabled': 0, 'skipped_invalid': 0,
-                   'skipped_not_due': 0, 'unmanaged': 0, 'reregistered': 0}
+                   'skipped_not_due': 0, 'skipped_busy': 0,
+                   'unmanaged': 0, 'reregistered': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -3798,13 +3800,13 @@ class CertificateManager:
         self._mark_sweep_finished(summary, duration)
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
-            "%d failed, %d disabled, %d invalid, %d not-due, %d unmanaged, "
-            "%d re-registered",
+            "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
+            "%d unmanaged, %d re-registered",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
-            summary['skipped_not_due'], summary['unmanaged'],
-            summary['reregistered'],
+            summary['skipped_not_due'], summary['skipped_busy'],
+            summary['unmanaged'], summary['reregistered'],
         )
         return summary
 
@@ -3848,6 +3850,19 @@ class CertificateManager:
             # it itself.
             self._publish_renewed_event(domain)
             return True
+        except DomainOperationInProgress:
+            # Not a failure — "try again in a minute". The lock is held by a
+            # manual renewal, a reissue or the previous sweep still running,
+            # and the next sweep will pick the domain up. Counting it as
+            # failed drove a failure metric, an audit failure entry and a
+            # certificate_failed notification, so an operator got paged for
+            # a queue. Every request-facing caller already distinguishes it:
+            # they answer 409.
+            summary['skipped_busy'] += 1
+            logger.info(
+                "Skipping %s this sweep: an operation is already in "
+                "progress. The next sweep will retry.", domain)
+            return False
         except Exception as e:
             summary['failed'] += 1
             logger.error(f"Failed to renew certificate for {domain}: {e}")
