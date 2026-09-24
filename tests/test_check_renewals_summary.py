@@ -57,6 +57,10 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         'skipped_disabled': 1,  # disabled.com
         'skipped_invalid': 3,   # empty, dict-without-domain, int
         'skipped_not_due': 0,   # certbot didn't report any "not yet due" no-op
+        # `skipped_busy`: a domain whose lock was held this sweep. It used
+        # to land in `failed`, which drove a failure metric, an audit failure
+        # and a notification — an operator paged for a queue.
+        'skipped_busy': 0,
         # Zero because this instance has no certificate directories at all —
         # every domain here is a settings entry with nothing on disk behind it.
         # A certificate present on disk that no entry names is counted here and
