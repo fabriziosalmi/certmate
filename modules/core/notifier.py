@@ -200,7 +200,9 @@ def google_chat_card(event, title, message, details=None, *, certmate_url=None):
         sections.append({'header': 'Details', 'widgets': widgets})
     if certmate_url:
         buttons = []
-        domain = details.get('domain') if isinstance(details, dict) else None
+        domain = None
+        if isinstance(details, dict):
+            domain = details.get('domain')
         if event.startswith('certificate_') and isinstance(domain, str) and domain:
             buttons.append({'text': 'View certificate', 'onClick': {'openLink': {
                 'url': f'{certmate_url}/?cert={quote(domain, safe="")}'}}})
