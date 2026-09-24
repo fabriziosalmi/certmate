@@ -1,6 +1,6 @@
 # CertMate Certificados de Cliente - Guía de uso
 
-<!-- CERTMATE-TRANSLATED-FROM 809425d238cebfed -->
+<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
 
 ## Descripción general
 
@@ -383,6 +383,47 @@ Usage Type: mobile-app
 - **Comprobación**: Diariamente a las 3 AM
 - **Umbral**: 30 días antes de la expiración
 - **Acción**: Renovación automática si está activada
+
+### Cuando la CA no coincide con el umbral (ARI)
+
+El umbral de 30 dias es la opinion de CertMate, y es la misma para cada
+certificado y cada CA. Desde la [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
+una CA puede publicar la suya, por certificado: un endpoint `renewalInfo` que
+responde con una ventana durante la cual quiere que ese certificado se
+sustituya. Let's Encrypt ofrece uno en produccion; step-ca tambien, para una
+CA privada.
+
+El barrido de renovacion TLS lo pregunta. Para cada certificado que el umbral
+**no** ha declarado ya vencido, CertMate obtiene la ventana de la CA y renueva
+de inmediato si esa ventana lo indica. Asi es como una instancia se entera de
+una sustitucion masiva — una emision incorrecta, un intermedio comprometido,
+una resolucion del CA/Browser Forum — dias antes de que llegue la revocacion,
+en lugar de cuando el certificado deja de funcionar.
+
+**Solo puede adelantar una renovacion.** Su umbral sigue siendo la red de
+seguridad: una CA caida, lenta o equivocada no puede retrasar una renovacion
+que habria ocurrido de todos modos. Cada ausencia — una CA que no publica
+`renewalInfo`, un endpoint inalcanzable, una respuesta malformada, un
+certificado autofirmado sin Authority Key Identifier con el que nombrarlo —
+vuelve al umbral.
+
+Dentro de la ventana CertMate elige un punto, derivado del identificador del
+propio certificado, de modo que la eleccion sea la misma en cada barrido y dos
+certificados no caigan en el mismo instante. Para eso existe la ventana: una
+CA no quiere que todos sus clientes renueven a la vez.
+
+El resumen del barrido los cuenta como `ari_advanced`, para que una renovacion
+que su configuracion no explica sea atribuible.
+
+Ponga `"ari_enabled": false` en `settings.json` para desactivarlo; esta activo
+por defecto y cuesta una GET no autenticada por certificado y barrido, mas una
+por CA y hora para el directory.
+
+Todavia no hecho, y deliberadamente: dejar que ARI **aplace** una renovacion
+mas alla de su umbral. Esa es la mitad que importa para los certificados de
+corta duracion, donde una regla fija de 30 dias no tiene sentido frente a un
+certificado de 6 dias — llegara con el soporte de perfiles que esos
+certificados necesitan.
 
 ### Activar la renovación automática
 

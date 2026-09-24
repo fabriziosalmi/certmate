@@ -3700,7 +3700,7 @@ class CertificateManager:
             return {'checked': 0, 'renewed': 0, 'failed': 0,
                     'skipped_disabled': 0, 'skipped_invalid': 0,
                     'skipped_not_due': 0, 'skipped_busy': 0,
-                    'unmanaged': 0, 'reregistered': 0,
+                    'unmanaged': 0, 'reregistered': 0, 'ari_advanced': 0,
                     'auto_renew_disabled': True}
 
         # Migrate settings format if needed
@@ -3712,7 +3712,10 @@ class CertificateManager:
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
                    'skipped_disabled': 0, 'skipped_invalid': 0,
                    'skipped_not_due': 0, 'skipped_busy': 0,
-                   'unmanaged': 0, 'reregistered': 0}
+                   'unmanaged': 0, 'reregistered': 0,
+                   # Renewals the CA's window brought forward, which the
+                   # configured threshold would not have started tonight.
+                   'ari_advanced': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -3834,8 +3837,20 @@ class CertificateManager:
         settings. `skipped_not_due` is not that: certbot said no.
         """
         cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
-        if not (cert_info and cert_info.get('needs_renewal')):
+        if not cert_info:
             return False
+        if not cert_info.get('needs_renewal'):
+            # The threshold said no. Ask the CA, which may know something the
+            # threshold cannot: a batch replacement, a compromised
+            # intermediate, a ruling that shortens everything it issued. ARI
+            # can only bring a renewal FORWARD here — see modules/core/ari.py
+            # for why the other direction waits on #395.
+            if not self._ari_says_renew(domain, cert_info, settings):
+                return False
+            summary['ari_advanced'] += 1
+            logger.info("%s is not due by the configured threshold, but its CA "
+                        "says its renewal window has opened; renewing now.",
+                        domain)
 
         logger.info(f"Renewing certificate for {domain}")
         renew_started = time.time()
@@ -3882,6 +3897,78 @@ class CertificateManager:
             # channels stay silent while the cert marches to expiry.
             self._publish_failed_event(domain, e)
             return False
+
+    def _renewal_info_client(self):
+        """The ARI client, built once and kept for its directory cache.
+
+        One HTTP GET per CA per hour rather than one per certificate per
+        sweep: a fifty-domain estate on one CA asks for the directory once.
+        """
+        client = getattr(self, '_ari_client', None)
+        if client is None:
+            from .ari import RenewalInfoClient
+            client = RenewalInfoClient()
+            self._ari_client = client
+        return client
+
+    def _acme_directory_url(self, cert_info):
+        """The ACME directory this certificate was issued from, or None.
+
+        Asked of `ca_manager` rather than mapped here, so a provider whose
+        directory is regional or account-specific (DigiCert's mPKI, a private
+        CA) resolves the same way it does at issuance.
+        """
+        if self.ca_manager is None:
+            return None
+        ca_provider = cert_info.get('ca_provider') or 'letsencrypt'
+        account_config = None
+        try:
+            account_config, _ = self.ca_manager.get_ca_config(
+                ca_provider, cert_info.get('account_id'))
+        except ValueError:
+            # Let's Encrypt needs no saved configuration — certbot's defaults
+            # are the configuration — so an absent account is not an error
+            # here any more than it is at issuance.
+            account_config = None
+        try:
+            return self.ca_manager.get_acme_server_url(
+                ca_provider,
+                staging=ca_provider.endswith('_staging'),
+                account_config=account_config)
+        except ValueError as e:
+            logger.info("No ACME directory for %s: %s", ca_provider, e)
+            return None
+
+    def _ari_says_renew(self, domain, cert_info, settings, now=None):
+        """Has the CA's renewal window for this certificate opened? (#393)
+
+        False for every absence — ARI switched off, no CA manager, a CA that
+        does not publish `renewalInfo`, an unreadable certificate, a request
+        that failed. That asymmetry is the safety property: this can only
+        make a renewal happen sooner than the configured threshold would, so
+        a CA that is down or wrong cannot push a certificate towards expiry.
+
+        `ari_enabled: false` in settings.json turns it off. It is on by
+        default because the answer is strictly better than a fixed number
+        and costs one unauthenticated GET per certificate per sweep.
+        """
+        if not settings.get('ari_enabled', True):
+            return False
+        directory_url = self._acme_directory_url(cert_info)
+        if not directory_url:
+            return False
+        try:
+            from .ari import certificate_id
+
+            raw = (self.cert_dir / domain / 'cert.pem').read_bytes()
+            cert_id = certificate_id(x509.load_pem_x509_certificate(raw))
+        except (OSError, ValueError) as e:
+            # A self-signed certificate with no Authority Key Identifier
+            # cannot be named in ARI at all; so can an unreadable file.
+            logger.info("Cannot build an ARI identifier for %s: %s", domain, e)
+            return False
+        return self._renewal_info_client().says_renew_now(
+            directory_url, cert_id, now)
 
     def _sweep_unregistered(self, domain, settings, summary):
         """A certificate on disk that no settings entry names (#792).

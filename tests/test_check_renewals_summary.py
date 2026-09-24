@@ -70,6 +70,13 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         # whose metadata says how it was issued, and writes it back into
         # settings. Nothing on disk here, so nothing to take on.
         'reregistered': 0,
+        # Renewals the CA's own window brought forward, which the configured
+        # threshold would not have started (#393). Zero here: `fresh.com` is
+        # not due, and the stubbed CA manager answers no directory, so ARI is
+        # never consulted. The count is in the shape rather than added when
+        # it happens, so a caller reading the summary does not have to know
+        # which path produced the dict.
+        'ari_advanced': 0,
     }
     # The sweep also reports its own shape now — how long it took and how many
     # entries it looked at — so an instance that is slowly outgrowing its

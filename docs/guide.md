@@ -382,6 +382,43 @@ Usage Type: mobile-app
 - **Threshold**: 30 days before expiry
 - **Action**: Automatic renewal if enabled
 
+### When the CA disagrees with the threshold (ARI)
+
+The 30-day threshold is CertMate's opinion, and it is the same opinion for
+every certificate and every CA. Since [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
+a CA can publish its own, per certificate: a `renewalInfo` endpoint answering a
+window during which it wants that certificate replaced. Let's Encrypt serves
+one in production; so does step-ca, for a private CA.
+
+The TLS renewal sweep asks. For every certificate the threshold has **not**
+already called due, CertMate fetches the CA's window and renews now if that
+window says so. This is how an instance learns about a batch replacement — a
+mis-issuance, a compromised intermediate, a CA/Browser Forum ruling — days
+before the revocation lands, instead of when the certificate stops working.
+
+**It can only bring a renewal forward.** Your threshold stays the backstop, so
+a CA that is down, slow or wrong cannot delay a renewal that would otherwise
+have happened. Every absence — a CA that publishes no `renewalInfo`, an
+unreachable endpoint, a malformed answer, a self-signed certificate with no
+Authority Key Identifier to name it by — falls back to the threshold.
+
+Within the window CertMate picks one point, derived from the certificate's own
+identifier, so the choice is the same on every sweep and two certificates do
+not land on the same instant. That is what the window is for: a CA does not
+want all of its clients renewing at once.
+
+The sweep summary counts these as `ari_advanced`, so a renewal your
+configuration does not explain is attributable.
+
+Set `"ari_enabled": false` in `settings.json` to turn it off; it is on by
+default and costs one unauthenticated GET per certificate per sweep, plus one
+per CA per hour for the directory.
+
+Not yet done, and deliberately: letting ARI *defer* a renewal past your
+threshold. That is the half that matters for short-lived certificates, where a
+fixed 30-day rule is meaningless against a 6-day certificate — it arrives with
+the profile support those certificates need.
+
 ### Enabling Auto-Renewal
 
 Auto-renewal is enabled by default. To check status:
