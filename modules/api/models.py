@@ -338,6 +338,15 @@ def create_api_models(api):
         'challenge_type': fields.String(description='Omit to keep the value the certificate was issued with'),
         'domain_alias': fields.String(description='Omit to keep the current alias; pass "" to clear it'),
         'alias_dns_provider': fields.String(description='Provider managing the alias zone when it differs from dns_provider. Omit to keep the issued value'),
+        'csr': fields.String(
+            description=(
+                "PEM certificate signing request, to rotate the key of a "
+                "CSR-only certificate without deleting it first (#876). The "
+                "certificate covers the names inside the CSR, so san_domains "
+                "and the key options must be omitted; SANs inherited from the "
+                "current certificate are replaced rather than added to. Same "
+                "field name and same rules as on create."
+            )),
         'key_type': fields.String(
             description='Omit to keep the existing key shape (no key flags are '
                         'sent and certbot preserves the lineage key). Set to '

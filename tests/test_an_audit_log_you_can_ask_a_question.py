@@ -154,6 +154,23 @@ def test_both_readers_share_one_parser():
     )
 
 
+def test_the_page_explains_what_an_empty_answer_means():
+    """The table in docs/api.md is the whole point of `complete` reaching a
+    caller. A page that documented the filter and not the flag would leave
+    "no results" ambiguous, which is the state this replaced."""
+    import pathlib as _pathlib
+
+    page = (_pathlib.Path(__file__).resolve().parent.parent / 'docs' /
+            'api.md').read_text(encoding='utf-8')
+    section = page[page.index('### Reading the audit log over the API'):]
+    section = section[:section.index('### ', 3)]
+    assert 'complete' in section
+    assert 'not' in section and 'there are none' in section, (
+        'the page no longer distinguishes an empty result from an unreadable '
+        'log, which is the distinction the flag exists for'
+    )
+
+
 def test_the_newest_match_is_first_from_the_callers_point_of_view(audit):
     """`get_recent_entries` documents "newest first" and the activity page
     renders in that order; a search that came back oldest-first would put the

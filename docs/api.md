@@ -1756,6 +1756,32 @@ key with `is_agent: true` (a checkbox on Settings → API Keys, or `is_agent` in
 `GET /api/activity?limit=N` returns the most recent entries (admin/viewer,
 bounded to 500).
 
+It can also be **narrowed**, by any of `operation`, `resource_type`,
+`resource_id`, `user` and `status`:
+
+```bash
+# Which users were created while the instance was still in setup mode?
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://certmate.local/api/activity?operation=create&resource_type=user&user=setup_user"
+```
+
+A filter is **not** applied to the tail an unfiltered call would return. The
+search walks backwards until it has `limit` matches or reaches the start of the
+log, because "matches among the last hundred" would answer "there are none" for
+anything older.
+
+The response carries `complete` for exactly that reason:
+
+| `complete` | entries | means |
+|---|---|---|
+| `true` | empty | there are none — safe to act on |
+| `true` | some | all of them, and there are no more |
+| `false` | some | it stopped at `limit`; older matches exist |
+| `false` | empty | it could not read the log — **not** "there are none" |
+
+An unfiltered call always reports `complete: true`: the last `limit` entries
+*are* the whole answer to "what happened recently".
+
 ### Tamper-evidence (hash chain)
 
 Alongside the human-readable log, every entry is appended to a tamper-evident
