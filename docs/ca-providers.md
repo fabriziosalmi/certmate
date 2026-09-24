@@ -66,6 +66,9 @@ Converting a staging certificate to production requires a reissue with the produ
 
 **Configuration Requirements:**
 - **ACME Directory URL**: `https://one.digicert.com/mpki/api/v1/acme/v2/directory`
+  — the default, and **regional**. An account outside the default region has
+  its own directory URL, shown in CertCentral; enter it here and issuance uses
+  it. Leave it as the default and the default is used. It must be `https`.
 - **EAB Key ID**: Provided by DigiCert
 - **EAB HMAC Key**: Provided by DigiCert
 - **Email**: ACME account contact (see [Account email](#account-email))

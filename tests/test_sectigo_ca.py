@@ -90,10 +90,21 @@ def test_missing_directory_fails_closed_and_existing_ca_urls_unchanged(accounts)
     with pytest.raises(ValueError, match='(?i)must use https'):
         manager.get_acme_server_url('sectigo', staging=True, account_config={
             **accounts['production-ov'], 'staging_url': 'http://acme.sectigo.com/v2/OV'})
-    for provider in ('letsencrypt', 'digicert', 'actalis', 'zerossl', 'google'):
+    # DigiCert is not in this list any more, and that is a decision rather
+    # than an omission. Its mPKI directory is regional, its settings form
+    # collects the URL and its registry entry now declares
+    # `accepts_account_directory`, so an account's own directory wins — see
+    # tests/test_a_directory_the_form_collects_is_used.py (#876 item 1).
+    # Passing a *Sectigo* account to it was synthetic anyway; a DigiCert
+    # request carries a DigiCert account.
+    for provider in ('letsencrypt', 'actalis', 'zerossl', 'google'):
         info = manager.ca_providers[provider]
         assert manager.get_acme_server_url(provider, account_config=accounts['production-ov']) == info['production_url']
         assert manager.get_acme_server_url(provider, staging=True, account_config=accounts['production-ov']) == info['staging_url']
+    # DigiCert with an account that names no directory still gets the pinned
+    # one, which is the half of the old assertion that still holds.
+    digicert = manager.ca_providers['digicert']
+    assert manager.get_acme_server_url('digicert', account_config={}) == digicert['production_url']
     assert manager.get_acme_server_url('private_ca', account_config=accounts['production-ov']) == accounts['production-ov']['acme_url']
     assert not manager.validate_ca_configuration('private_ca', {
         'acme_url': 'http://internal-ca.example.com/directory'})[0]

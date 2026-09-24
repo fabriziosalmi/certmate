@@ -89,6 +89,11 @@ class CAManager:
                 # default region has its own directory URL, shown in
                 # CertCentral. Operators override it per certificate via
                 # `acme_url`; this is the default, not the only value.
+                # Declared, not implied: `get_acme_server_url` reads this to
+                # decide whether an account's own directory wins over the
+                # pinned one. Without it the comment above promised an
+                # override the code did not perform.
+                'accepts_account_directory': True,
                 'production_url': 'https://one.digicert.com/mpki/api/v1/acme/v2/directory',
                 # DigiCert publishes no public ACME staging directory. Pointing
                 # this at an invented `/staging` path is what produced the dead
@@ -229,21 +234,41 @@ class CAManager:
         
         ca_info = self.ca_providers[ca_provider]
         
-        if ca_provider == 'private_ca' or ca_info.get('requires_acme_url'):
-            if staging and (account_config or {}).get('staging_url'):
-                url = account_config['staging_url']
-            else:
-                url = (account_config or {}).get('acme_url')
-            if not url:
-                raise ValueError(f"{ca_info['name']} ACME URL not configured")
+        account = account_config or {}
+        # Three kinds of provider, and the difference is declared in the
+        # registry rather than inferred here:
+        #
+        #   requires  - the directory only exists in the account (private_ca,
+        #               and anything with requires_acme_url). No pinned URL to
+        #               fall back to, so a missing one is an error.
+        #   accepts   - a pinned default the account may override. DigiCert's
+        #               mPKI directory is REGIONAL: an account outside the
+        #               default region has its own URL, shown in CertCentral.
+        #   pinned    - a single public directory (ZeroSSL, Google, SSL.com,
+        #               Actalis). Their settings forms do not collect a URL.
+        #
+        # The middle kind is what was missing. The registry entry for DigiCert
+        # said "Operators override it per certificate via `acme_url`; this is
+        # the default, not the only value", the settings form collected the
+        # field and the connection test required it — and this function
+        # returned the pinned URL anyway, so a customer outside the default
+        # region was silently sent to the wrong endpoint. Two comments in one
+        # file, disagreeing, with the code implementing the other one.
+        requires = ca_provider == 'private_ca' or ca_info.get('requires_acme_url')
+        may_override = requires or ca_info.get('accepts_account_directory')
+
+        url = None
+        if may_override:
+            url = (account.get('staging_url') if staging and account.get('staging_url')
+                   else account.get('acme_url'))
+        if url:
             refusal = acme_directory_refusal(
                 url, f"{ca_info['name']} ACME Directory URL")
             if refusal:
                 raise ValueError(refusal)
             return url
-
-        # Other public CAs retain their pinned directory, even if an account
-        # contains an acme_url (as with the existing DigiCert settings form).
+        if requires:
+            raise ValueError(f"{ca_info['name']} ACME URL not configured")
         return ca_info['staging_url' if staging else 'production_url']
     
     def requires_eab(self, ca_provider: str) -> bool:

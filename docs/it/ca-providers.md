@@ -68,6 +68,10 @@ Lo staging e una voce di Certificate Authority separata (dalla v2.12.0), non un 
 
 **Requisiti di configurazione:**
 - **URL directory ACME**: `https://one.digicert.com/mpki/api/v1/acme/v2/directory`
+  — è il valore predefinito, ed è **regionale**. Un account fuori dalla regione
+  predefinita ha un proprio URL di directory, mostrato in CertCentral: inseriscilo
+  qui e l'emissione lo usa. Lasciato com'è, viene usato il predefinito. Deve
+  essere `https`.
 - **EAB Key ID**: Fornito da DigiCert
 - **EAB HMAC Key**: Fornita da DigiCert
 - **Email**: Contatto dell'account ACME (vedi [Email dell'account](#email-dellaccount))
