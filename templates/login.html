@@ -155,13 +155,32 @@
             try {
                 var raw = new URLSearchParams(window.location.search).get('next');
                 if (!raw || typeof raw !== 'string') return '/';
-                // Must be a same-origin absolute path. Reject protocol-relative
-                // ("//host") AND backslash variants ("/\host", "\\host") that
-                // browsers normalize to "//host" and would bounce the user to an
-                // external origin after login.
-                if (!raw.startsWith('/')) return '/';
-                if (raw.length > 1 && (raw[1] === '/' || raw[1] === '\\')) return '/';
-                return raw;
+                // Resolve it and compare origins, rather than inspecting the
+                // first two characters.
+                //
+                // The character test was blind to anything a browser strips
+                // while parsing. `/<TAB>/evil.example/` has '/' at [0] and a
+                // tab at [1], so neither branch fired; the parser then removed
+                // the tab and what remained was `//evil.example/`. Measured
+                // against the real URL parser, that landed on
+                // https://evil.example — a cross-origin bounce, carrying
+                // whatever the login flow put in the fragment or query.
+                // Newline and carriage return behave the same way, and the
+                // list of characters browsers strip is not ours to keep up
+                // with.
+                //
+                // The server-side twin in modules/web/oidc_routes.py has
+                // always been safe here for the same inputs, because
+                // urlparse strips those characters BEFORE the netloc check.
+                // This makes the two agree.
+                var resolved;
+                try {
+                    resolved = new URL(raw, window.location.origin);
+                } catch (e) {
+                    return '/';
+                }
+                if (resolved.origin !== window.location.origin) return '/';
+                return resolved.pathname + resolved.search + resolved.hash;
             } catch (e) { return '/'; }
         }
 
