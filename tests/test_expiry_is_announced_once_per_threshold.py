@@ -316,16 +316,26 @@ def test_an_event_nobody_can_silence_must_be_renderable():
 
 def test_every_event_the_settings_ui_offers_can_be_rendered():
     """A filter chip for an event that cannot be rendered is a switch wired to
-    nothing — which is what certificate_expiring was."""
+    nothing — which is what certificate_expiring was.
+
+    The list moved. It used to be two hardcoded arrays in
+    `settings_notifications.html`, both missing `certificate_deployed` in the
+    same way (#876 item 7); both checkbox rows now read `notifiableEvents`
+    from the Alpine component, so there is one copy. This reads it there.
+
+    The guard below is why that move did not go unnoticed: emptied of its
+    literal, the template made this control cover nothing, and it said so
+    rather than passing.
+    """
     import re
-    page = (
+    component = (
         __import__('pathlib').Path(__file__).resolve().parent.parent
-        / 'templates' / 'partials' / 'settings_notifications.html'
+        / 'static' / 'js' / 'settings-notifications.js'
     ).read_text(encoding='utf-8')
-    offered = set()
-    for match in re.finditer(r"x-for=\"evt in \[([^\]]+)\]", page):
-        offered.update(name.strip().strip("'") for name in match.group(1).split(','))
-    assert offered, 'the event chips are gone; this control no longer checks anything'
+    match = re.search(r'notifiableEvents:\s*\[(.*?)\]', component, re.S)
+    assert match, 'notifiableEvents is gone; this control no longer checks anything'
+    offered = set(re.findall(r"'([a-z_]+)'", match.group(1)))
+    assert offered, 'the event list is empty; this control no longer checks anything'
     assert offered <= set(_EVENT_TITLES), sorted(offered - set(_EVENT_TITLES))
 
 
