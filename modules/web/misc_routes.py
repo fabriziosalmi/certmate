@@ -550,7 +550,19 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         event_bus = managers.get('events')
         if event_bus is None:
             return jsonify({'error': 'Event bus not available'}), 503
-        q = event_bus.subscribe()
+        # The cap is a real answer, not a failure: each live stream holds a
+        # gunicorn thread, and the product runs a single worker with eight of
+        # them. 503 with Retry-After tells the browser to come back rather
+        # than pretending to accept a connection the server cannot serve
+        # alongside its ordinary work.
+        from modules.core.events import TooManyStreams
+        try:
+            q = event_bus.subscribe()
+        except TooManyStreams:
+            return jsonify({
+                'error': 'Too many live event streams on this instance',
+                'hint': 'Close another CertMate tab, or retry shortly.',
+            }), 503, {'Retry-After': '30'}
         return Response(
             stream_with_context(event_bus.stream(q)),
             mimetype='text/event-stream',

@@ -231,6 +231,14 @@ class CTMonitorManager:
             cap = 100
 
         new_count = known_count = 0
+        # What the cap actually bounds. It used to be `new_count`, which only
+        # advances when `_ingest_new` SUCCEEDS — while the crt.sh DER fetch
+        # inside it happens either way. A run whose every fetch failed
+        # therefore issued one request per unknown entry with no ceiling at
+        # all: measured, 1000 requests against a cap of 5, reported as
+        # `truncated: False`. The 2s min_request_interval throttles the rate
+        # and bounds nothing.
+        fetched = 0
         errors = []
         truncated = False
 
@@ -256,9 +264,10 @@ class CTMonitorManager:
                         known_count += 1
                         continue
                     # Unknown certificate: fetch its DER for the true fingerprint.
-                    if new_count >= cap:
+                    if fetched >= cap:
                         truncated = True
                         continue
+                    fetched += 1
                     if self._ingest_new(client, entry, now):
                         new_count += 1
                 except Exception as e:
@@ -267,8 +276,9 @@ class CTMonitorManager:
 
             if truncated:
                 logger.warning(
-                    "CT-log poll hit the per-run cap of %d new certificates; "
-                    "remaining new certs will be picked up on the next run.", cap,
+                    "CT-log poll hit the per-run cap of %d crt.sh lookups "
+                    "(%d ingested); the rest will be picked up on the next "
+                    "run.", cap, new_count,
                 )
                 break
 

@@ -30,6 +30,31 @@ def _nothing():
 # may take up to MAX_TIMEOUT (300s), so one worker would serialise a burst of
 # renewals behind the slowest target. Four is a working default; the ceiling is
 # what matters, not the number.
+# How many live SSE streams the instance will hold open at once.
+#
+# Each one occupies a gunicorn thread for as long as the browser tab is open,
+# and the product ships with `--workers 1 --threads 8` (Dockerfile,
+# certmate.service) — the Dockerfile comment even says "SSE holds 1 thread per
+# browser tab; 4 was too few". So nine tabs left nothing to answer an ordinary
+# request with, and the instance stopped responding without anything being
+# wrong. Four leaves half the pool for the rest of the product. Override with
+# CERTMATE_EVENT_MAX_STREAMS.
+DEFAULT_MAX_STREAMS = 4
+
+# How long one stream is held before it is closed and the browser reconnects.
+#
+# EventSource reconnects on its own after a few seconds, so this is invisible
+# to the user and bounds what a forgotten tab can hold: without it a stream
+# lived exactly as long as the tab, and a cap alone would have meant the first
+# four tabs of the morning owning the pool until someone closed them.
+# Override with CERTMATE_EVENT_STREAM_SECONDS.
+DEFAULT_STREAM_SECONDS = 900.0
+
+
+class TooManyStreams(RuntimeError):
+    """Raised by :meth:`EventBus.subscribe` when the cap is reached."""
+
+
 DEFAULT_DISPATCH_WORKERS = 4
 
 # Log when the backlog passes this, so "the listeners cannot keep up" is a line
@@ -83,11 +108,29 @@ class EventBus:
         self._work = queue.Queue()
         self._workers = []
         self._worker_count = self._resolve_worker_count(workers)
+        self._max_streams = self._resolve_bounded(
+            'CERTMATE_EVENT_MAX_STREAMS', DEFAULT_MAX_STREAMS, 1, 64)
+        self._stream_seconds = self._resolve_bounded(
+            'CERTMATE_EVENT_STREAM_SECONDS', DEFAULT_STREAM_SECONDS, 30, 86400,
+            cast=float)
         self._backlog_warned = False
         # Set by stop(). A publish after it is refused rather than queued: the
         # process is going away, and accepting work nobody will run would put
         # it in the undelivered report of a bus that had already reported.
         self._stopping = False
+
+    @staticmethod
+    def _resolve_bounded(env_name, default, low, high, cast=int):
+        """An env-tunable number, clamped, falling back on anything unreadable.
+
+        Same shape as `_resolve_worker_count` below, which was written first
+        and only ever needed one. A typo in a limit should not take the
+        feature out.
+        """
+        try:
+            return max(low, min(high, cast(os.environ.get(env_name, default))))
+        except (TypeError, ValueError):
+            return default
 
     @staticmethod
     def _resolve_worker_count(workers) -> int:
@@ -211,11 +254,22 @@ class EventBus:
         return self._work.qsize()
 
     def subscribe(self) -> queue.Queue:
-        """Create a new subscriber queue."""
-        q = queue.Queue(maxsize=50)
+        """Create a new subscriber queue, or refuse.
+
+        The list was unbounded: 20,000 subscribers registered in 0.08s with
+        no complaint, and each live one holds a gunicorn thread. Raising
+        :class:`TooManyStreams` lets the route answer 503 — "come back", not
+        "something broke" — rather than accepting a connection the server
+        cannot serve alongside its ordinary work.
+        """
         with self._lock:
+            if len(self._subscribers) >= self._max_streams:
+                raise TooManyStreams(
+                    f'{len(self._subscribers)} live event streams, which is '
+                    f'the configured maximum')
+            q = queue.Queue(maxsize=50)
             self._subscribers.append(q)
-        return q
+            return q
 
     def unsubscribe(self, q: queue.Queue) -> None:
         """Remove a subscriber queue."""
@@ -296,13 +350,24 @@ class EventBus:
         Generator that yields SSE-formatted events from a subscriber queue.
         Use with Flask's Response(stream_with_context(...)).
         """
+        # A deadline, because `while True` meant "as long as the tab is
+        # open" and each stream holds a gunicorn thread. EventSource
+        # reconnects on its own after a few seconds, so ending the response
+        # is invisible to the user and gives the thread back.
+        deadline = time.monotonic() + self._stream_seconds
         try:
             # Send initial keepalive
             yield f': connected\n\n'
 
             while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    # A comment, not an error: the browser reconnects and
+                    # the operator sees nothing.
+                    yield ': reconnect\n\n'
+                    return
                 try:
-                    msg = q.get(timeout=30)
+                    msg = q.get(timeout=min(30, remaining))
                     event_type = msg.get('event', 'message')
                     payload = json.dumps(msg.get('data', {}))
                     yield f'event: {event_type}\ndata: {payload}\n\n'
