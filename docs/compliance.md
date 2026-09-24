@@ -47,8 +47,13 @@ operate certificates on a schedule.
   leave the process (a token in a detail field is redacted), and the sink is
   failure-isolated with a short timeout, like the hash chain: a dead collector
   never blocks or breaks a certificate operation. Lifecycle coverage includes
-  create / renew / deploy / revoke. The scheduled summary digest is not an
-  audit entry and is not sent through the sink.
+  create / renew / deploy / revoke, and the scheduled summary digest: it is an
+  audit entry, so it reaches the sink like any other. What it records is the
+  outcome, how many recipients it was for, and the counts it reported — **not
+  the recipients themselves**, who are personal data this chain cannot take
+  back out afterwards. A digest skipped because notifications or SMTP are off
+  writes nothing: the settings answer that, and a weekly entry saying so would
+  grow the chain forever to say nothing.
 
 ## Regime mapping
 
