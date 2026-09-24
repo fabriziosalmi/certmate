@@ -39,6 +39,15 @@ def register_backup_cache_routes(app, managers, require_web_auth,
             filename = file_ops.create_unified_backup(
                 settings_data, backup_reason, include_secrets=include_secrets,
             )
+            # `create_unified_backup` returns None on failure — a directory
+            # that is not writable, a full disk — and this answered
+            # 200 {"message": "Backup created", "filename": null} anyway.
+            # An operator taking a backup before something risky got a green
+            # toast and no file, which is the one moment that answer must be
+            # true. The RESTX twin has always answered 500 here; the
+            # pre-restore path refuses to continue at all.
+            if not filename:
+                return jsonify({'error': 'Failed to create backup'}), 500
             return jsonify({
                 'message': 'Backup created',
                 'filename': filename,
