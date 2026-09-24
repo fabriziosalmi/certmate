@@ -174,6 +174,39 @@ def _unmasked_test_config(settings_manager, channel_type, config):
     return _deep_merge_dict(existing, stripped)
 
 
+def _event_stream_response(event_bus):
+    """The SSE response, or a refusal.
+
+    Lifted out of `register_misc_routes`, whose complexity is pinned by
+    scripts/check_complexity_budget.py at a ceiling that only comes down —
+    and the cap's two branches are two more against it.
+
+    Past the cap the answer is 503 with Retry-After, not an error page: each
+    live stream holds one of the eight gunicorn threads this product runs
+    with, so refusing is "come back", not "something broke". Accepting a
+    connection the server cannot serve alongside its ordinary work is how
+    nine open tabs made an instance stop responding with nothing wrong.
+    """
+    from flask import Response, stream_with_context
+
+    from modules.core.events import TooManyStreams
+
+    if event_bus is None:
+        return jsonify({'error': 'Event bus not available'}), 503
+    try:
+        q = event_bus.subscribe()
+    except TooManyStreams:
+        return jsonify({
+            'error': 'Too many live event streams on this instance',
+            'hint': 'Close another CertMate tab, or retry shortly.',
+        }), 503, {'Retry-After': '30'}
+    return Response(
+        stream_with_context(event_bus.stream(q)),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
 def _activity_page(audit_logger, limit, query):
     """The activity response, filtered or not.
 
@@ -546,28 +579,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         a role like every other one, and a second such surface will not copy
         the logic.
         """
-        from flask import Response, stream_with_context
-        event_bus = managers.get('events')
-        if event_bus is None:
-            return jsonify({'error': 'Event bus not available'}), 503
-        # The cap is a real answer, not a failure: each live stream holds a
-        # gunicorn thread, and the product runs a single worker with eight of
-        # them. 503 with Retry-After tells the browser to come back rather
-        # than pretending to accept a connection the server cannot serve
-        # alongside its ordinary work.
-        from modules.core.events import TooManyStreams
-        try:
-            q = event_bus.subscribe()
-        except TooManyStreams:
-            return jsonify({
-                'error': 'Too many live event streams on this instance',
-                'hint': 'Close another CertMate tab, or retry shortly.',
-            }), 503, {'Retry-After': '30'}
-        return Response(
-            stream_with_context(event_bus.stream(q)),
-            mimetype='text/event-stream',
-            headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
-        )
+        return _event_stream_response(managers.get('events'))
 
     @app.route('/api/web/logs/stream')
     @auth_manager.require_role('admin')
