@@ -77,7 +77,12 @@ def _reachable(url, path):
 def s3(tmp_path):
     if not S3_ENDPOINT:
         pytest.skip("CERTMATE_TEST_S3_ENDPOINT not set")
-    _reachable(S3_ENDPOINT, "/minio/health/live")
+    # The root, not a vendor's health path. This used to ask
+    # /minio/health/live, which named a server the CI no longer runs — and
+    # `_reachable` accepts any HTTP answer, so it kept working by accident
+    # while describing something that was not there. The root answers 403
+    # without credentials on every S3 implementation, which is an answer.
+    _reachable(S3_ENDPOINT, "/")
     import boto3
 
     bucket = "certmate-live-test"
