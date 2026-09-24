@@ -312,3 +312,85 @@ def test_the_form_covers_every_configurable_key():
                and f'cfg.{key}' not in panel and f'cfg.{key}' not in script]
 
     assert not missing, f'no control for: {sorted(missing)}'
+
+
+# --- a demotion that leaves the session usable is not a demotion ---------
+#
+# `create_session` snapshots the role at mint time, so writing the new role
+# into the user table changed what the table says and nothing about what the
+# user's open session could still do. A demoted admin stayed an admin until
+# the session expired — up to the full session lifetime, on every device
+# they were already signed in on.
+#
+# `update_user` has killed sessions on a role change since it was written
+# ("the user re-authenticates under the new role, or is blocked"). This is
+# the same rule on the other path.
+
+def test_an_idp_demotion_ends_the_sessions_it_demotes(oidc, settings_manager):
+    """THE regression."""
+    _enable_oidc(settings_manager)
+    _seed_sole_sso_admin(settings_manager)
+    settings_manager.update(
+        lambda s: s['users'].__setitem__('root', {
+            'password_hash': 'x', 'role': 'admin', 'enabled': True}),
+        'second_admin')
+    auth = oidc.auth_manager
+
+    session_id = auth.create_session('alice', source='oidc')
+    assert auth.validate_session(session_id)['role'] == 'admin'
+
+    oidc.resolve_or_provision_user(
+        _claims(username='alice', email='alice@example.com', groups=['eng']))
+
+    assert _users(settings_manager)['alice']['role'] == 'operator'
+    assert auth.validate_session(session_id) is None, (
+        'the demoted session still validates, so the old role survives the '
+        'demotion for as long as the session does')
+
+
+def test_a_login_that_changes_nothing_keeps_the_session(oidc, settings_manager):
+    """CONTROL. Sessions must survive an ordinary login — invalidating on
+    every sync would sign the user out of their other devices each time they
+    authenticated, which is not a security property, it is a bug."""
+    _enable_oidc(settings_manager)
+    _seed_sole_sso_admin(settings_manager)
+    auth = oidc.auth_manager
+
+    session_id = auth.create_session('alice', source='oidc')
+    oidc.resolve_or_provision_user(
+        _claims(username='alice', email='alice@example.com',
+                groups=['eng-admins']))
+
+    assert auth.validate_session(session_id) is not None
+
+
+def test_a_refused_demotion_keeps_the_session_too(oidc, settings_manager):
+    """CONTROL on the interaction with the last-admin guard: if the
+    demotion is refused, the role did not change, so there is nothing to
+    invalidate. Killing sessions there would log out the only admin over a
+    change that did not happen."""
+    _enable_oidc(settings_manager)
+    _seed_sole_sso_admin(settings_manager)
+    auth = oidc.auth_manager
+
+    session_id = auth.create_session('alice', source='oidc')
+    oidc.resolve_or_provision_user(
+        _claims(username='alice', email='alice@example.com', groups=['eng']))
+
+    assert _users(settings_manager)['alice']['role'] == 'admin'
+    assert auth.validate_session(session_id) is not None
+
+
+def test_both_paths_end_sessions_through_the_same_call():
+    """`update_user` reached for the private name because it lives in the
+    same class. Crossing modules for a leading underscore is how a private
+    method becomes an interface without anyone deciding that it is one."""
+    import inspect
+
+    from modules.core import oidc as oidc_module
+    from modules.core.auth import AuthManager
+
+    assert hasattr(AuthManager, 'invalidate_sessions_for_user')
+    source = inspect.getsource(oidc_module)
+    assert 'invalidate_sessions_for_user(' in source
+    assert '_invalidate_sessions_for_user(' not in source

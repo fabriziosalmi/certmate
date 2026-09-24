@@ -15,6 +15,7 @@ call site untouched — a test that still runs and no longer tests anything.
 """
 import base64
 from ..core.constants import PROBE_PROTOCOLS
+from ..core.cert_probe import _resolve_and_guard, deployment_target_refusal
 import http.client
 import logging
 import os
@@ -131,6 +132,41 @@ def _https_proxy_for(host):
         headers['Proxy-Authorization'] = f'Basic {token}'
     return parts.hostname, parts.port or 8080, headers
 
+def _open_probe_socket(host, port, timeout):
+    """A TCP connection to *host*, honouring the proxy and the SSRF policy.
+
+    One place, because the two legs had drifted apart: the direct-TLS path
+    tunnelled through HTTPS_PROXY and the SMTP-STARTTLS path opened a raw
+    socket, so on a host that requires an outbound proxy the first worked and
+    the second could not connect at all. Neither checked where it was going.
+
+    With a proxy, the proxy is the egress control and does its own
+    resolution — there is no address to pin, so the guard cannot apply and
+    does not pretend to. Without one, the name is resolved ONCE, checked, and
+    the connection is made to that same address, so a name cannot answer with
+    a permitted address here and a different one at connect time.
+
+    Returns ``(socket, closer)``: the caller wraps the socket in TLS and then
+    calls the closer.
+    """
+    proxy = _https_proxy_for(host)
+    if proxy:
+        proxy_host, proxy_port, proxy_headers = proxy
+        conn = http.client.HTTPConnection(proxy_host, proxy_port, timeout=timeout)
+        conn.set_tunnel(host, port, headers=proxy_headers)
+        conn.connect()
+        return conn.sock, conn.close
+
+    family, connect_ip, refusal = _resolve_and_guard(host, port, allow_private=True)
+    if refusal:
+        raise ConnectionError(refusal)
+    refusal = deployment_target_refusal(connect_ip)
+    if refusal:
+        raise ConnectionError(f'{host} resolves to {refusal}')
+    sock = socket.create_connection((connect_ip, port), timeout=timeout)
+    return sock, sock.close
+
+
 def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None,
                            probe_host=None):
     """Return the live TLS certificate for a domain, if reachable.
@@ -185,21 +221,12 @@ def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None,
             # host isn't in NO_PROXY) tunnel the TCP leg through the proxy with
             # HTTP CONNECT, then run the TLS handshake over that tunnel so we
             # still read the real peer certificate (#326).
-            proxy = _https_proxy_for(host)
-            if proxy:
-                proxy_host, proxy_port, proxy_headers = proxy
-                conn = http.client.HTTPConnection(proxy_host, proxy_port, timeout=timeout)
-                try:
-                    conn.set_tunnel(host, port, headers=proxy_headers)
-                    conn.connect()
-                    with context.wrap_socket(conn.sock, server_hostname=host) as tls_sock:
-                        cert_bytes = tls_sock.getpeercert(binary_form=True)
-                finally:
-                    conn.close()
-            else:
-                with socket.create_connection((host, port), timeout=timeout) as raw_sock:
-                    with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
-                        cert_bytes = tls_sock.getpeercert(binary_form=True)
+            raw_sock, closer = _open_probe_socket(host, port, timeout)
+            try:
+                with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
+                    cert_bytes = tls_sock.getpeercert(binary_form=True)
+            finally:
+                closer()
 
         return {
             'reachable': True,
@@ -228,7 +255,12 @@ def _probe_smtp_starttls(host, port, context, timeout):
     """
 
     recv_timeout = max(1.0, timeout * 0.5)
-    with socket.create_connection((host, port), timeout=timeout) as raw_sock:
+    # Through the same opener as the direct-TLS leg. This used to be a raw
+    # `socket.create_connection`, so an instance behind an outbound proxy
+    # could probe an HTTPS endpoint and not an SMTP one — the fix for #326
+    # reached one of the two.
+    raw_sock, closer = _open_probe_socket(host, port, timeout)
+    try:
         raw_sock.settimeout(recv_timeout)
         f = raw_sock.makefile('rwb')
 
@@ -254,6 +286,9 @@ def _probe_smtp_starttls(host, port, context, timeout):
         # Upgrade to TLS
         tls_sock = context.wrap_socket(raw_sock, server_hostname=host)
         return tls_sock.getpeercert(binary_form=True)
+    finally:
+        closer()
+
 
 def _consume_smtp_multiline(f):
     """Read SMTP multi-line response until a line starting with a digit

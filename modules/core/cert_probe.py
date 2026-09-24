@@ -142,6 +142,46 @@ def ip_is_blocked(ip_str):
     return None
 
 
+def deployment_target_refusal(ip_str):
+    """A reason *ip_str* is not a deployment target, or None.
+
+    A narrower policy than :func:`ip_is_blocked`, and deliberately so. That
+    one answers "is this a safe PUBLIC endpoint to probe", which is right for
+    discovery and wrong here: the deployment-status probe exists to check the
+    operator's OWN servers, and those are routinely `10.0.0.5`, an internal
+    IIS, or loopback behind a reverse proxy. Refusing private addresses would
+    not harden that feature, it would delete it.
+
+    What is refused is what is never a server an operator deploys a
+    certificate to:
+
+    * **link-local** (169.254.0.0/16, fe80::/10) — the cloud metadata
+      endpoints live here, and nothing serves TLS on them;
+    * **multicast** — not an endpoint;
+    * **unspecified** (0.0.0.0, ::) — means "any", not a host.
+
+    Loopback and private addresses are allowed, because they are the point.
+    The value of applying this at all is as much in the *resolution*: the
+    caller connects to the address that was checked, so a name cannot resolve
+    to one thing here and another at connect time.
+    """
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return f'unparseable address {ip_str!r}'
+
+    mapped = getattr(ip, 'ipv4_mapped', None)
+    if mapped is not None:
+        ip = mapped
+
+    for label, hit in (('link-local', ip.is_link_local),
+                       ('multicast', ip.is_multicast),
+                       ('unspecified', ip.is_unspecified)):
+        if hit:
+            return f'{label} address {ip} is not a deployment target'
+    return None
+
+
 def _resolve_and_guard(host, port, allow_private):
     """Resolve *host* and enforce the SSRF guard.
 
