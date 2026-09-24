@@ -22,7 +22,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
     # the container, the fallback keeps standalone route tests working.
     cert_service = managers.get('cert_service') or CertificateService(
         certificate_manager, settings_manager, auth_manager,
-        audit_logger=audit_logger,
+        audit_logger=audit_logger, event_bus=managers.get('events'),
     )
 
     # NOTE: only the /api/web/... path is registered here. The bare

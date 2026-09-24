@@ -219,15 +219,6 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     audit_ctx=audit_ctx,
                 )
 
-                event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus:
-                    event_bus.publish('certificate_created', {
-                        'domain': domain,
-                        'san_domains': san_domains,
-                        'dns_provider': result.get('dns_provider'),
-                        'ca_provider': result.get('ca_provider')
-                    })
-
                 return {
                     'message': f'Certificate created successfully for {domain}',
                     'domain': domain,
@@ -303,10 +294,6 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 # REST contract for older manager results without the flag.
                 renewed = bool(result.get('renewed', True))
 
-                event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus and renewed:
-                    event_bus.publish('certificate_renewed', {'domain': domain})
-
                 return {
                     'message': (f'Certificate renewed successfully for {domain}'
                                 if renewed
@@ -333,18 +320,12 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 logger.error("Certificate renewal failed for %s: %s",
                              domain.replace('\n', ' ').replace('\r', ' '),
                              str(e).replace('\n', ' ').replace('\r', ' '))
-                event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus:
-                    event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 message, code = classify_renewal_error(str(e))
                 return {'error': message, 'code': code}, 422
             except Exception as e:
                 logger.error("Certificate renewal failed for %s: %s",
                              domain.replace('\n', ' ').replace('\r', ' '),
                              str(e).replace('\n', ' ').replace('\r', ' '))
-                event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus:
-                    event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {'error': 'Certificate renewal failed', 'code': 'CERTIFICATE_RENEWAL_ERROR'}, 500
 
     class CertificateReissue(Resource):

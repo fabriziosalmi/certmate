@@ -523,6 +523,46 @@ class ClientCertificateManager:
             return False, "An internal error occurred while revoking the certificate"
 
     @staticmethod
+    def _effective_renewal_threshold(cert_metadata: Dict[str, Any]) -> Optional[int]:
+        """Days-before-expiry at which this certificate is due, or None.
+
+        `renewal_threshold_days` is written as 30 at creation and never
+        reconsidered against the certificate's own validity. A certificate
+        whose validity is at or below the threshold is therefore born inside
+        its own renewal window — and so is its replacement, because
+        `_inherited_days_valid` reuses the same validity. Measured before
+        this: a 10-day client certificate renewed on EVERY sweep, seven runs
+        producing seven renewals and eight CA-signed keys on disk, for ever.
+
+        The threshold is clamped to a third of the validity, which leaves a
+        replacement two thirds of its life before it is due again. The
+        configured value still wins when it already leaves room, so a 365-day
+        certificate keeps its 30 days unchanged.
+
+        None means the validity is too short for a daily sweep to manage at
+        all — under three days, a third rounds to zero and any threshold
+        would make the replacement due the moment it exists. That is a
+        configuration the scheduler cannot honour, and saying so is better
+        than issuing a certificate a night.
+        """
+        configured = cert_metadata.get("renewal_threshold_days", 30)
+        if isinstance(configured, bool):
+            # bool is an int subclass, so `int(True)` is 1 — a threshold of
+            # one day, silently, from a value that means nothing. The sibling
+            # `_inherited_days_valid` guards the same way for the same
+            # reason; this one did not until a test asked.
+            configured = 30
+        try:
+            configured = int(configured)
+        except (TypeError, ValueError):
+            configured = 30
+        days_valid = ClientCertificateManager._inherited_days_valid(cert_metadata)
+        headroom = days_valid // 3
+        if headroom < 1:
+            return None
+        return max(1, min(configured, headroom))
+
+    @staticmethod
     def _inherited_days_valid(old_metadata: Dict[str, Any], default: int = 365) -> int:
         """The validity a renewal should reuse (#422).
 
@@ -775,7 +815,17 @@ class ClientCertificateManager:
                     continue
 
                 # Check expiration date
-                threshold_days = cert_metadata.get("renewal_threshold_days", 30)
+                threshold_days = self._effective_renewal_threshold(cert_metadata)
+                if threshold_days is None:
+                    logger.warning(
+                        "Client certificate %s has a %s-day validity, too "
+                        "short for the nightly renewal sweep to manage: any "
+                        "replacement would be due the moment it is issued. "
+                        "Renew it out of band, or issue it with a longer "
+                        "validity.",
+                        cert_metadata.get("identifier"),
+                        self._inherited_days_valid(cert_metadata))
+                    continue
                 renewal_date = expires_at - timedelta(days=threshold_days)
 
                 if utc_now() >= renewal_date:

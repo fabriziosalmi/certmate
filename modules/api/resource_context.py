@@ -76,6 +76,7 @@ def build_context(managers) -> ApiContext:
     # 'cert_service'/'events') keep working.
     cert_service = managers.get('cert_service') or CertificateService(
         certificates, settings, auth, audit_logger=audit,
+        event_bus=managers.get('events'),
     )
 
     return ApiContext(

@@ -1131,6 +1131,7 @@ class FileOperations:
                         from .settings import (
                             _strip_masked_values,
                             _deep_merge_dict,
+                            _restore_masked_list_secrets_deep,
                             _DEEP_MERGE_SETTINGS_KEYS,
                         )
                         cleaned_payload = _strip_masked_values(settings_data)
@@ -1155,6 +1156,22 @@ class FileOperations:
                                     merged[key] = _deep_merge_dict(existing[key], value)
                                 else:
                                     merged[key] = value
+                            # `_strip_masked_values` recurses into dicts and
+                            # returns lists untouched, so a secret masked
+                            # inside a list-of-dicts — a Kubernetes deploy
+                            # target's token, a webhook's URL — survived the
+                            # strip as the literal sentinel and was written
+                            # over the real on-disk value. Restoring a
+                            # share-safe backup DESTROYED the credential it
+                            # was meant to leave alone, and answered success.
+                            #
+                            # The generic settings POST path already solves
+                            # this with the same helper (settings.py). It is
+                            # applied here over the whole merged tree rather
+                            # than per key, because `deploy_hooks` is not in
+                            # _DEEP_MERGE_SETTINGS_KEYS and so never reaches
+                            # the branch above.
+                            _restore_masked_list_secrets_deep(existing, merged)
                             settings_data_to_write = merged
                         else:
                             settings_data_to_write = cleaned_payload
