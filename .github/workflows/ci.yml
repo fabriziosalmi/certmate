@@ -614,44 +614,67 @@ jobs:
         pip install -r requirements-vault-storage.txt
 
     # Started here rather than under `services:` because a service container
-    # cannot be given a command, and MinIO's image does nothing without
-    # `server /data` — the first attempt failed with "Failed to initialize
-    # container minio". Starting them in a step also lets the readiness wait be
-    # explicit instead of trusting a health-check guess.
-    - name: Start MinIO and Vault
+    # cannot be given a command, and the readiness wait below wants to be
+    # explicit rather than a health-check guess.
+    - name: Start the S3 server and Vault
       run: |
         set -euo pipefail
-        # quay.io, not Docker Hub. docker.io/minio/minio stopped serving
-        # anonymous pulls, so every run failed at this line with "pull access
-        # denied for minio/minio, repository does not exist or may require
-        # docker login", which reads like a typo and is not one: the tag and
-        # the digest both answer `unauthorized: authentication required`,
-        # while hashicorp/vault on the next line still pulls fine.
+        # Scality CloudServer, not MinIO. minio/minio now answers
+        # `unauthorized` to an anonymous pull on Docker Hub AND on quay.io,
+        # for every tag and for the digest that was pinned here — the quay
+        # move above bought about five weeks. Both registries were asked
+        # directly for the manifest and both returned 401, with a control
+        # pull from quay.io succeeding, so this is the image and not the
+        # network.
         #
-        # The digest is unchanged. quay.io/minio/minio serves the same
-        # manifest, sha256:14cea493..., so this swaps the registry and not the
-        # image: same bytes, verified by asking both registries for the digest
-        # of :latest and getting the one already pinned here.
-        docker run -d --name minio -p 19000:9000 \
-          -e MINIO_ROOT_USER=certmate -e MINIO_ROOT_PASSWORD=certmate123 \
-          quay.io/minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
-          server /data
+        # Which makes the comment this job used to carry — "these are local
+        # containers, so nobody else's outage can turn it red" — the thing
+        # that was actually wrong. A container is local; the registry it
+        # comes from is not.
+        #
+        # CloudServer was chosen over the lighter S3 fakes for one reason:
+        # test_s3_bad_credentials_are_not_reported_as_a_missing_certificate
+        # needs a server that VERIFIES the signature. localstack and
+        # adobe/s3mock accept any credential, so that test would have passed
+        # by accepting the wrong password — the exact shape of defect this
+        # suite exists to catch. Measured: a deliberate wrong secret gets
+        # SignatureDoesNotMatch, the right one gets a bucket listing.
+        #
+        # S3BACKEND=mem keeps it in memory; nothing here outlives the job.
+        docker run -d --name s3 -p 19000:8000 \
+          -e S3BACKEND=mem \
+          -e SCALITY_ACCESS_KEY_ID=certmate \
+          -e SCALITY_SECRET_ACCESS_KEY=certmate123 \
+          -e REMOTE_MANAGEMENT_DISABLE=1 \
+          zenko/cloudserver:latest@sha256:b53e57829cf7df357323e60a19c9f98d2218f1b7ccb1d7cea5761a5a227a9ee3
         docker run -d --name vault -p 18200:8200 --cap-add IPC_LOCK \
           -e VAULT_DEV_ROOT_TOKEN_ID=certmate-root \
           -e VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200 \
           hashicorp/vault:latest@sha256:5be49781ecf78bfe775c5309c6a4d9f4e9e040b6c885c99eb2b12fb69855e1a2
-        for i in $(seq 1 30); do
-          curl -fsS http://localhost:19000/minio/health/live >/dev/null 2>&1 \
+        # Readiness by doing the thing, not by asking a health endpoint:
+        # CloudServer's /_/healthcheck is IP-restricted and answers 403 even
+        # when the server is perfectly well, so a `curl -f` against it would
+        # loop until the timeout on a healthy container. A successful
+        # list_buckets proves the port answers AND that the credentials the
+        # suite uses are the ones the server accepts.
+        for i in $(seq 1 60); do
+          python - <<'READY' >/dev/null 2>&1 \
             && curl -fsS http://localhost:18200/v1/sys/health >/dev/null 2>&1 \
             && { echo "both up after ${i}s"; exit 0; }
+        import boto3
+        boto3.client('s3', endpoint_url='http://localhost:19000',
+                     aws_access_key_id='certmate',
+                     aws_secret_access_key='certmate123',
+                     region_name='us-east-1').list_buckets()
+        READY
           sleep 1
         done
-        echo "::error::MinIO or Vault never became ready"
-        docker logs minio 2>&1 | tail -20
+        echo "::error::the S3 server or Vault never became ready"
+        docker logs s3 2>&1 | tail -20
         docker logs vault 2>&1 | tail -20
         exit 1
 
-    - name: Exercise the storage backends against MinIO and Vault
+    - name: Exercise the storage backends against S3 and Vault
       env:
         CERTMATE_TEST_S3_ENDPOINT: http://localhost:19000
         CERTMATE_TEST_VAULT_ADDR: http://localhost:18200

@@ -65,13 +65,29 @@ def test_two_hundred_events_do_not_start_two_hundred_threads():
 
     Holding every listener open makes the peak observable, which is the number
     the finding is actually about.
+
+    The counter was wrong too, and in a way that only showed under load
+    (#905). `threading.active_count()` is process-global: any other test that
+    started or stopped a thread between the baseline and the measurement
+    landed in the delta, so the number was about the whole process. Measured:
+    three unrelated threads alive in the window pushed a correct bus from 4 to
+    7, over a ceiling of 5 — a red on code that is right, which is the worst
+    way for a test about concurrency to be wrong.
+
+    Counting the threads that actually RUN the listener answers the same
+    question and cannot be polluted: a thread-per-event dispatch delivers 200
+    events on 200 distinct threads whatever else the process is doing.
     """
     release = threading.Event()
-    before = threading.active_count()
     bus = EventBus(workers=4)
     seen = []
+    dispatchers = set()
 
     def listener(event, data):
+        # The thread that is RUNNING this listener. That is the quantity the
+        # finding is about, and it is answerable without reading anything
+        # global.
+        dispatchers.add(threading.current_thread().ident)
         release.wait(20)
         seen.append(data)
 
@@ -80,13 +96,19 @@ def test_two_hundred_events_do_not_start_two_hundred_threads():
         for i in range(200):
             bus.publish('certificate_renewed', {'domain': f'd{i}.example.com'})
 
-        # Every listener is blocked, so whatever threads exist now are the
+        # Every listener is blocked, so whatever is dispatching now is the
         # peak. Give the pool a moment to be fully occupied.
         time.sleep(0.3)
-        peak = threading.active_count() - before
-        assert peak <= 4 + 1, (
-            f'{peak} threads for 200 outstanding events; the dispatch is not '
-            f'bounded'
+        assert len(dispatchers) <= 4, (
+            f'{len(dispatchers)} distinct threads delivered 200 outstanding '
+            f'events; the dispatch is not bounded'
+        )
+        # CONTROL. `<= 4` is also true of 1, and of 0 — which is what a bus
+        # that delivered nothing would report. Requiring the pool to be
+        # fully occupied proves the measurement can see more than one thread,
+        # so the assertion above is a ceiling and not an artefact.
+        assert len(dispatchers) == 4, (
+            f'only {len(dispatchers)} of 4 workers ever ran the listener'
         )
     finally:
         release.set()
@@ -109,12 +131,19 @@ def test_the_worker_count_is_configurable_and_clamped(monkeypatch):
 
 def test_a_bus_with_no_listeners_starts_no_threads():
     """Most of the test suite builds one of these. A pool that materialises
-    on construction would put four idle threads behind every app."""
-    before = threading.active_count()
+    on construction would put four idle threads behind every app.
+
+    Asked of this bus, not of the process: the same global counter that made
+    the ceiling test flaky (#905) is read here too, over a narrower window.
+    A narrower window is still a window.
+    """
     bus = EventBus()
     for i in range(10):
         bus.publish('certificate_created', {'domain': f'd{i}.example.com'})
-    assert threading.active_count() == before
+
+    assert bus._workers == [], f'{len(bus._workers)} workers with no listeners'
+    alive = [worker for worker in bus._workers if worker.is_alive()]
+    assert alive == []
 
 
 # --- the publisher never blocks -----------------------------------------
