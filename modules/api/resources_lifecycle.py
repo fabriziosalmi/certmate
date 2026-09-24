@@ -115,11 +115,29 @@ def _certbot_hint(error_msg: str) -> str:
     return 'Check DNS provider credentials and ensure DNS records can be created.'
 
 
+#: The reissue path's own prefix. A reissue runs the create machinery, so the
+#: message it catches has often been prefixed already.
+_REISSUE_PREFIX = 'Certificate reissue failed: '
+
+
+def _prefixed(prefix: str, error_msg: str) -> str:
+    """*error_msg* under *prefix*, said once.
+
+    A reissue failing inside issuance produced "Certificate reissue failed:
+    Certificate creation failed: ...". Either prefix already present is
+    enough: the second one adds a stutter, not information.
+    """
+    if error_msg.startswith(prefix):
+        return error_msg
+    if prefix == _REISSUE_PREFIX and error_msg.startswith(_CREATION_PREFIX):
+        return prefix + error_msg[len(_CREATION_PREFIX):]
+    return prefix + error_msg
+
+
 def _creation_failure(error_msg: str):
     """The error body for a certbot failure, prefixed exactly once."""
-    message = (error_msg if error_msg.startswith(_CREATION_PREFIX)
-               else _CREATION_PREFIX + error_msg)
-    return {'code': 'CERTIFICATE_CREATION_FAILED', 'error': message,
+    return {'code': 'CERTIFICATE_CREATION_FAILED',
+            'error': _prefixed(_CREATION_PREFIX, error_msg),
             'hint': _certbot_hint(error_msg)}
 
 
@@ -398,15 +416,19 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
             except RuntimeError as e:
                 error_msg = str(e)
-                hint = 'Check DNS provider credentials and ensure DNS records can be created.'
-                if 'rate limit' in error_msg.lower():
-                    hint = "You've hit the certificate authority's rate limit. Wait before trying again."
+                # Both were fixed on create and left here (#900 again): the
+                # substring `rate limit` matches none of the markers a CA
+                # sends, so a real rate limit arrived as a DNS credentials
+                # problem; and the create path already prefixes its message,
+                # so a reissue that failed during issuance read "Certificate
+                # reissue failed: Certificate creation failed: ...".
+                hint = _certbot_hint(error_msg)
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': error_msg})
                 return {
                     'code': 'CERTIFICATE_REISSUE_FAILED',
-                    'error': f'Certificate reissue failed: {error_msg}',
+                    'error': _prefixed(_REISSUE_PREFIX, error_msg),
                     'hint': hint + ' The previous certificate is still in place.'
                 }, 422
             except Exception as e:

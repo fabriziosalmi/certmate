@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 
 
 def _register_update_check(app, managers, auth_manager):
-    """Mount GET /api/web/update-check.
+    """Mount GET and POST /api/web/update-check.
 
     Outside register_misc_routes so the closure's complexity budget — a
     ceiling that only ever comes down — pays nothing for it.
@@ -81,15 +81,56 @@ def _register_update_check(app, managers, auth_manager):
     and those harnesses pass None for it, so using it turns every /health test
     in test_scheduler_status_health.py into a TypeError at import.
     """
+    # `require_role`, not `require_session_role`: its neighbour
+    # `/api/web/settings` takes a bearer token, and an instance provisioned
+    # over the API could otherwise read and write every other setting and not
+    # this one — the same "no way to turn it on" one layer down. Sessions are
+    # accepted too, which is what the footer uses.
     @app.route('/api/web/update-check', methods=['GET'])
-    @auth_manager.require_session_role('viewer')
+    @auth_manager.require_role('viewer')
     def api_web_update_check():
         """What the footer asks. Answers `disabled` unless switched on, and
         never blocks the page: the footer renders without it."""
         checker = managers.get('update_check')
         if checker is None:
             return jsonify({'status': 'disabled', 'running': None, 'latest': None})
-        return jsonify(checker.status())
+        return jsonify(dict(checker.status(), enabled=checker.get_config().get('enabled', False)))
+
+    @app.route('/api/web/update-check', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def api_web_update_check_set():
+        """Turn the update check on or off.
+
+        It shipped without this. `UpdateCheck.save_config` existed, nothing
+        called it, and the only route was the GET above — so the feature was
+        off by default, which is the contract, and there was no supported way
+        to turn it on short of editing settings.json by hand. An opt-in with
+        no way to opt in is not an opt-in.
+
+        Admin, not viewer: this decides whether the instance reaches the
+        internet, which is the promise `docs/ca-providers.md` makes to
+        air-gapped deployments and not something a read-only account should be
+        able to change.
+        """
+        checker = managers.get('update_check')
+        if checker is None:
+            return jsonify({'error': 'Update check is not available',
+                            'code': 'UPDATE_CHECK_UNAVAILABLE'}), 503
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data.get('enabled'), bool):
+            return jsonify({'error': 'Body must be {"enabled": true|false}',
+                            'code': 'INVALID_REQUEST'}), 400
+        saved = checker.save_config(data)
+        audit_logger = managers.get('audit')
+        if audit_logger:
+            user = getattr(request, 'current_user', {}) or {}
+            audit_logger.log_operation(
+                operation='update', resource_type='setting',
+                resource_id='update_check', status='success',
+                details={'enabled': saved['enabled']},
+                user=user.get('username'), ip_address=request.remote_addr,
+            )
+        return jsonify(saved)
 
 
 def _activity_page(audit_logger, limit, query):

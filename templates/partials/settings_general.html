@@ -47,6 +47,29 @@
                                 </p>
                             </div>
                             
+                            <!-- Update check (#855). Off by default and it stays
+                                 off until someone here says otherwise: an
+                                 instance that was never asked to reach the
+                                 internet must not, which is the promise
+                                 docs/ca-providers.md makes to air-gapped
+                                 deployments. This control shipped missing, so
+                                 the only way to turn it on was to edit
+                                 settings.json by hand. -->
+                            <div>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="update_check_enabled"
+                                           name="update_check_enabled"
+                                           class="rounded border-border text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
+                                    <span class="ml-2 text-sm text-label">Check GitHub for new CertMate releases</span>
+                                </label>
+                                <p class="mt-1 text-xs text-muted">
+                                    Off by default. When on, this instance contacts
+                                    api.github.com once a day and the footer says when a
+                                    newer release exists. A check that cannot reach GitHub
+                                    reports <em>unknown</em>, never &ldquo;up to date&rdquo;.
+                                </p>
+                            </div>
+
                             <!-- Renewal Threshold Setting -->
                             <div>
                                 <label class="block text-xs font-medium text-muted mb-2">

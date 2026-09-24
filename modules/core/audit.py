@@ -300,9 +300,17 @@ class AuditLogger:
     def write_checkpoint(self) -> Optional[Dict[str, Any]]:
         """Sign the current chain head and append it to the checkpoint file.
         No-op (returns None) without a signer or with an empty chain. Best-effort:
-        a checkpoint failure never breaks audit logging. The only caller today is
-        the every-`checkpoint_interval`-entries path in the append; nothing calls
-        it on shutdown, so entries after the last checkpoint stay unsealed."""
+        a checkpoint failure never breaks audit logging.
+
+        Two callers: the every-`checkpoint_interval`-entries path in the
+        append, and `stop_background_work` on a clean shutdown, which seals
+        whatever arrived since the last one. This docstring used to say
+        nothing called it on shutdown — it was accurate, then the caller was
+        added and the sentence was not, which is the shape of defect the
+        release that added the caller spent its time removing.
+
+        A crash or a SIGKILL still leaves a tail: work that must never delay a
+        kill must not run on one. `docs/compliance.md` says so."""
         if self._signer is None or not getattr(self._signer, 'available', False):
             return None
         try:
