@@ -54,7 +54,7 @@ BUDGET = {
     # The twelve route-registration closures.
     'modules/web/settings_routes.py::register_settings_routes': 115,
     'modules/web/misc_routes.py::register_misc_routes': 104,
-    'modules/api/client_certificates.py::create_client_certificate_resources': 89,
+    'modules/api/client_certificates.py::create_client_certificate_resources': 82,
     'modules/api/resources_storage.py::create_storage_resources': 68,
     'modules/api/resources_lifecycle.py::create_lifecycle_resources': 54,
     'modules/web/cert_routes.py::register_cert_routes': 60,

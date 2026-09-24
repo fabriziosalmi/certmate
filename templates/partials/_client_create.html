@@ -68,10 +68,26 @@
     </div>
     <div class="flex items-center space-x-2">
         <input type="checkbox" id="generateKey" name="generateKey" checked
+               onchange="document.getElementById('csrBlock').classList.toggle('hidden', this.checked)"
                class="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-2 focus:ring-primary">
         <label for="generateKey" class="text-sm text-label">
             <i class="fas fa-lock mr-1"></i>Generate private key (recommended)
         </label>
+    </div>
+    <!-- Unticking the box above posts generate_key:false, which needs a CSR.
+         There was nowhere to put one, so the box could only ever produce
+         "Error creating certificate". -->
+    <div id="csrBlock" class="hidden">
+        <label for="csrPem" class="block text-sm font-medium text-label mb-1">
+            Certificate signing request (PEM)
+        </label>
+        <textarea id="csrPem" name="csrPem" rows="6" spellcheck="false"
+                  placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+                  class="w-full px-4 py-2 font-mono text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary"></textarea>
+        <p class="mt-1 text-xs text-muted">
+            The device that generated the key keeps it — CertMate signs the
+            request and never sees the private key.
+        </p>
     </div>
     <button type="submit" class="w-full bg-primary hover:bg-secondary text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center">
         <i class="fas fa-check-circle mr-2"></i> Create Certificate

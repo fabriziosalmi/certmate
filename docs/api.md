@@ -339,6 +339,8 @@ start, and its subject comes from `client_ca_subject` in settings:
 }
 ```
 
+Send it with `POST /api/settings` like any other settings key.
+
 `country` is an ISO 3166-1 alpha-2 code and anything else is refused before a
 key is written. A field left empty is omitted from the subject rather than
 written as an empty attribute; `common_name` falls back to `CertMate CA`. An

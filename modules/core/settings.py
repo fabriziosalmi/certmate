@@ -77,6 +77,14 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     # Empty/unset disables the export. Masked on GET and preserved on POST by
     # the generic secret machinery (name matches the secret regex).
     'pfx_password',
+    # Subject of the private CA that signs client certificates. docs/api.md
+    # has said since contract 2.3 that it "comes from client_ca_subject in
+    # settings", and the key was not on this list — so the documented POST
+    # answered 400 "Unknown fields in payload" and the only way to set it was
+    # to hand-edit settings.json. Pure config: factory.py reads it when the
+    # CA is generated, which is also why writing it later has no effect until
+    # POST /api/client-certs/ca/reset.
+    'client_ca_subject',
 })
 
 # Keys whose mutation via the bulk settings endpoint would create a privilege

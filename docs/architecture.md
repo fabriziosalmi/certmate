@@ -506,7 +506,7 @@ data/certs/client/
  "locality": "San Francisco",
  "serial_number": "12345678901234567890",
  "key_usage": ["digitalSignature", "keyEncipherment"],
- "extended_key_usage": ["serverAuth", "clientAuth"],
+ "extended_key_usage": ["clientAuth"],
  "created_at": "2024-10-30T18:00:00Z",
  "expires_at": "2025-10-30T18:00:00Z",
  "cert_usage": "api-mtls",
