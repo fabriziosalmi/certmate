@@ -219,10 +219,16 @@ def test_the_counter_and_the_parser_use_one_marker():
 
     from modules.core import audit
 
-    source = inspect.getsource(audit.AuditLogger.get_recent_entries)
+    # Two functions now: the byte scan stayed in get_recent_entries and the
+    # text parse moved to _parse_entries, which the filtered search shares so
+    # the two readers cannot disagree about what an entry is. The property is
+    # the same — one marker, two spellings of it derived from each other — and
+    # it is read across both rather than inside one.
+    source = '\n'.join(inspect.getsource(fn) for fn in (
+        audit.AuditLogger.get_recent_entries, audit.AuditLogger._parse_entries))
 
     assert source.count('_ENTRY_MARKER') >= 2
     assert " - INFO - " not in source, (
-        'the marker is spelled out again inside the function, so the byte '
+        'the marker is spelled out again inside the reader, so the byte '
         'scan and the text parse can drift apart')
     assert audit._ENTRY_MARKER == audit._ENTRY_MARKER_TEXT.encode('utf-8')

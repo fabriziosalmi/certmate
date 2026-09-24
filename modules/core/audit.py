@@ -981,6 +981,107 @@ class AuditLogger:
             ip_address=ip_address,
         )
 
+    #: Fields of an audit entry a caller may narrow on. Declared rather than
+    #: accepting arbitrary keys: a filter on a field that does not exist would
+    #: match nothing and read as "there is none of that", which is the exact
+    #: answer this method exists to stop giving wrongly.
+    SEARCHABLE_FIELDS = ('operation', 'resource_type', 'resource_id',
+                         'user', 'status')
+
+    def search_entries(self, limit: int = 100, **filters) -> Dict[str, Any]:
+        """Recent entries matching *filters*, newest first, and whether the
+        search reached the beginning of the log.
+
+        ``get_recent_entries`` reads a tail and stops once it has `limit`
+        ENTRIES. Filtering its result would mean "matches among the last
+        hundred", so asking an instance with history about its bootstrap —
+        the thing `docs/compliance.md` tells operators to go and look for —
+        would return nothing and read as "there were none". A filter that can
+        only answer about the tail is worse than no filter.
+
+        So the stop condition counts MATCHES. Worst case it walks the whole
+        file, which is the correct cost when the matches are old or absent,
+        and ``complete`` says which of those happened: True means the scan
+        reached the start, so an empty result means there are none. False
+        means it stopped at `limit` matches and there may be older ones.
+
+        Unknown filter keys raise rather than being ignored: a typo that
+        silently matched everything would be a worse answer than an error.
+        """
+        for key in filters:
+            if key not in self.SEARCHABLE_FIELDS:
+                raise ValueError(
+                    f'Unknown filter {key!r}; audit entries can be narrowed '
+                    f'by {", ".join(self.SEARCHABLE_FIELDS)}')
+        wanted = {k: v for k, v in filters.items() if v not in (None, '')}
+
+        def matches(entry):
+            return all(entry.get(k) == v for k, v in wanted.items())
+
+        if limit <= 0:
+            return {'entries': [], 'complete': True}
+
+        found, complete = [], True
+        try:
+            if not self.audit_log_file.exists():
+                return {'entries': [], 'complete': True}
+            file_size = self.audit_log_file.stat().st_size
+            if file_size == 0:
+                return {'entries': [], 'complete': True}
+
+            block_size = 8192
+            blocks = []
+            remaining = file_size
+            with open(self.audit_log_file, 'rb') as f:
+                while remaining > 0:
+                    read_size = min(block_size, remaining)
+                    remaining -= read_size
+                    f.seek(remaining)
+                    blocks.append(f.read(read_size))
+
+                    # Re-parsed each round rather than incrementally: a marker
+                    # straddling a block boundary is only whole once the block
+                    # before it has been read, and an entry counted as half a
+                    # line is the kind of off-by-one that makes a search stop
+                    # one entry early and call itself complete.
+                    found = self._parse_entries(
+                        b''.join(reversed(blocks)), partial_first=remaining > 0)
+                    found = [e for e in found if matches(e)]
+                    if len(found) >= limit:
+                        complete = False
+                        break
+        except (OSError, ValueError) as e:
+            logger.error(f"Failed to search audit log: {e}")
+            # Not an empty result: "I could not look" and "there are none" are
+            # different answers, and only one of them is safe to act on.
+            return {'entries': [], 'complete': False, 'error': str(e)}
+
+        return {'entries': found[-limit:], 'complete': complete}
+
+    @staticmethod
+    def _parse_entries(raw: bytes, partial_first: bool) -> list:
+        """Audit entries out of a chunk of the log, oldest first.
+
+        Shared with get_recent_entries so the two readers cannot disagree
+        about what counts as an entry — which they would, since one of them
+        is the one people change.
+        """
+        raw_lines = raw.splitlines()
+        if partial_first and raw_lines:
+            # Read did not start at the beginning of the file, so the first
+            # line is probably half of one.
+            raw_lines = raw_lines[1:]
+        entries = []
+        for line in raw_lines:
+            try:
+                text = line.decode('utf-8', errors='replace')
+                if _ENTRY_MARKER_TEXT not in text:
+                    continue
+                entries.append(json.loads(text.split(_ENTRY_MARKER_TEXT, 1)[1].strip()))
+            except (UnicodeDecodeError, json.JSONDecodeError, IndexError):
+                continue
+        return entries
+
     def get_recent_entries(self, limit: int = 100) -> list:
         """
         Get recent audit log entries.
@@ -1035,27 +1136,13 @@ class AuditLogger:
                     # is missed and costs one extra block, never an entry.
                     found += block.count(_ENTRY_MARKER)
 
-            raw_lines = b''.join(reversed(blocks)).splitlines()
-
-            # If we did not read from the start of the file, the first line can be partial.
-            if remaining > 0 and raw_lines:
-                raw_lines = raw_lines[1:]
-
             # Parse first, then take the last `limit` ENTRIES. Slicing the
             # raw lines instead meant `limit` LINES, so anything in the tail
             # that is not an entry — a traceback, a non-INFO line — came out
             # of the caller's allowance: a tail with two noise lines per entry
             # returned 33 rows for a request of 100, with nothing to say why.
-            entries = []
-            for line in raw_lines:
-                try:
-                    raw = line.decode('utf-8', errors='replace')
-                    if _ENTRY_MARKER_TEXT not in raw:
-                        continue
-                    json_str = raw.split(_ENTRY_MARKER_TEXT, 1)[1].strip()
-                    entries.append(json.loads(json_str))
-                except (UnicodeDecodeError, json.JSONDecodeError, IndexError):
-                    continue
+            entries = self._parse_entries(
+                b''.join(reversed(blocks)), partial_first=remaining > 0)
 
             return entries[-limit:]
 

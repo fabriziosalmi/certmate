@@ -207,6 +207,17 @@ METADATA_SCHEMA_VERSION = 1
 # create, with no certificate in between, on the feature people choose
 # precisely because they keep the private key elsewhere (#876 item 6).
 #
+# 2.14 for filters on GET /api/activity — `operation`, `resource_type`,
+# `resource_id`, `user`, `status` — and the `complete` field on its response.
+# Optional query parameters and a new response field, so a MINOR.
+#
+# `complete` is the part worth reading twice. The search walks back until it
+# has `limit` MATCHES rather than filtering a tail, because "matches among the
+# last hundred" would answer "there are none" for anything older — including
+# the bootstrap entries docs/compliance.md sends operators to look for. False
+# means it stopped early or could not read the log; only `complete: true` with
+# an empty result means there are none.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -216,7 +227,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.13'
+API_CONTRACT_VERSION = '2.14'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

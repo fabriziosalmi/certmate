@@ -92,6 +92,37 @@ def _register_update_check(app, managers, auth_manager):
         return jsonify(checker.status())
 
 
+def _activity_page(audit_logger, limit, query):
+    """The activity response, filtered or not.
+
+    Module level because `register_misc_routes` is one of the budgeted
+    functions and its ceiling only comes down — a branch added inside the
+    closure has to be paid for somewhere, and this reads better out here
+    anyway.
+    """
+    filters = {field: query.get(field)
+               for field in audit_logger.SEARCHABLE_FIELDS
+               if query.get(field)}
+    if not filters:
+        logs = audit_logger.get_recent_entries(limit=limit)
+        # Unfiltered, `limit` entries from the end IS the whole answer to
+        # "what happened recently", so there is nothing for `complete` to
+        # warn about.
+        return {'entries': logs, 'count': len(logs), 'limit': limit,
+                'complete': True}
+    found = audit_logger.search_entries(limit=limit, **filters)
+    return {
+        'entries': found['entries'],
+        'count': len(found['entries']),
+        'limit': limit,
+        'filters': filters,
+        # False means the search stopped at `limit` matches and older ones
+        # exist, or it could not read the log. The distinction matters most
+        # when the answer is empty: complete + empty means there are none,
+        # and that is the only one of the two it is safe to act on.
+        'complete': found['complete'],
+    }
+
 def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
     _register_update_check(app, managers, auth_manager)
@@ -105,10 +136,21 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
         Honors ``?limit=N`` from the query string, bounded to [1, 500]
         so the client can implement Load-more pagination without hitting
-        an unbounded read on a large audit log. Response is shaped as
-        ``{entries, count, limit}`` so the client can decide whether to
-        offer a "Load more" affordance (entries.length >= limit
-        ⇒ there may be more).
+        an unbounded read on a large audit log.
+
+        Also honors a filter on any of ``operation``, ``resource_type``,
+        ``resource_id``, ``user`` and ``status``. A filter is NOT applied to
+        the tail this would otherwise return: it searches backwards until it
+        has `limit` matches or reaches the start of the log, because "matches
+        among the last hundred" would answer "there are none" for anything
+        older — including the bootstrap entries `docs/compliance.md` sends
+        operators to look for.
+
+        Response: ``{entries, count, limit, complete}``, plus ``filters`` when
+        one was given. ``complete`` is False only when the search stopped at
+        `limit` matches, so an empty result with ``complete: true`` means
+        there are none, and an empty result with ``complete: false`` means
+        the search gave up first.
         """
         try:
             raw_limit = request.args.get('limit', 100)
@@ -118,13 +160,8 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                 limit = 100
             limit = max(1, min(limit, 500))
 
-            audit_logger = managers['audit']
-            logs = audit_logger.get_recent_entries(limit=limit)
-            return jsonify({
-                'entries': logs,
-                'count': len(logs),
-                'limit': limit,
-            })
+            return jsonify(_activity_page(managers['audit'], limit,
+                                          request.args))
         except Exception as e:
             logger.error(f"Activity API error: {e}")
             return jsonify({'error': 'Failed to fetch activity'}), 500
