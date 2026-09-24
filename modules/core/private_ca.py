@@ -21,6 +21,12 @@ from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
 
+# How far back notBefore is stamped. A certificate valid from exactly "now" is
+# rejected as not-yet-valid by any relying party whose clock runs even a second
+# fast, and client certificates are typically used the instant they are issued.
+# Five minutes is what public CAs allow for the same reason.
+CLOCK_SKEW = timedelta(minutes=5)
+
 
 # Map persisted revocation-reason strings (see ClientCertificateManager
 # metadata `reason_revoked`, which is free-form and may be camelCase from the
@@ -341,9 +347,12 @@ class PrivateCAGenerator:
             cert_builder = cert_builder.public_key(private_key.public_key())
             cert_builder = cert_builder.serial_number(x509.random_serial_number())
 
-            # Validity: 10 years for CA
-            not_valid_before = datetime.now(timezone.utc)
-            not_valid_after = not_valid_before + timedelta(days=3650)
+            # Validity: 10 years for CA. Backdated like the leaves it
+            # signs — a CA that is not yet valid invalidates the whole chain,
+            # so this is the one that matters most on a fresh install.
+            not_valid_before = datetime.now(timezone.utc) - CLOCK_SKEW
+            not_valid_after = (datetime.now(timezone.utc)
+                               + timedelta(days=3650))
             cert_builder = cert_builder.not_valid_before(not_valid_before)
             cert_builder = cert_builder.not_valid_after(not_valid_after)
 
@@ -672,9 +681,15 @@ class PrivateCAGenerator:
             cert_builder = cert_builder.public_key(csr.public_key())
             cert_builder = cert_builder.serial_number(x509.random_serial_number())
 
-            # Validity
-            not_valid_before = datetime.now(timezone.utc)
-            not_valid_after = not_valid_before + timedelta(days=days_valid)
+            # Validity. Backdated by CLOCK_SKEW: a certificate stamped
+            # notBefore=now is not yet valid to any relying party whose clock
+            # is a second fast, and a client certificate is routinely used
+            # the moment it is issued. Public CAs backdate for the same
+            # reason. The window only widens, so nothing that accepted a
+            # certificate before stops accepting one.
+            not_valid_before = datetime.now(timezone.utc) - CLOCK_SKEW
+            not_valid_after = (datetime.now(timezone.utc)
+                               + timedelta(days=days_valid))
             cert_builder = cert_builder.not_valid_before(not_valid_before)
             cert_builder = cert_builder.not_valid_after(not_valid_after)
 

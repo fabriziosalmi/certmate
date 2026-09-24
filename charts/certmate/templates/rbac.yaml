@@ -1,0 +1,45 @@
+{{- /*
+Opt-in RBAC for the in-cluster deploy target.
+
+modules/core/deploy_targets.py reads the pod's ServiceAccount token, CA and
+namespace and then issues a server-side apply:
+
+    PATCH /api/v1/namespaces/{ns}/secrets/{name}?fieldManager=certmate&force=true
+    Content-Type: application/apply-patch+yaml
+
+Server-side apply to a Secret that does not exist yet is authorized as a
+create, and the apply itself as a patch — so those two verbs, and no more.
+`get` is deliberately absent: that code path never reads a Secret back, and a
+CertMate compromise should not be able to read every Secret in the namespace.
+*/ -}}
+{{- if and .Values.serviceAccount.create .Values.serviceAccount.rbac.create }}
+{{- $namespaces := .Values.serviceAccount.rbac.namespaces | default (list .Release.Namespace) }}
+{{- range $namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "certmate.serviceAccountName" $ }}-secrets
+  namespace: {{ . }}
+  labels: {{- include "certmate.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "certmate.serviceAccountName" $ }}-secrets
+  namespace: {{ . }}
+  labels: {{- include "certmate.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "certmate.serviceAccountName" $ }}-secrets
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "certmate.serviceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

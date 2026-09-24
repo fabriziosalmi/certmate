@@ -23,6 +23,15 @@ from .constants import MIN_CERTIFICATE_VALIDITY_DAYS, MAX_CERTIFICATE_VALIDITY_D
 
 logger = logging.getLogger(__name__)
 
+# The subject's country and state when the caller names neither. These were
+# hardcoded at the CSR call, so every client identity CertMate has ever issued
+# says C=CH, ST=Switzerland regardless of who ran it. They are the defaults
+# rather than "omit when unset" deliberately: changing the subject DN of newly
+# issued certificates would stop the new cohort matching an mTLS allowlist or
+# per-DN authorization rule that the old cohort matches.
+DEFAULT_COUNTRY = "CH"
+DEFAULT_STATE = "Switzerland"
+
 
 # Characters allowed verbatim in the on-disk identifier slug. Anything else
 # (path separators, NUL, unicode, ...) is collapsed to '-'; runs of '.' are
@@ -161,6 +170,8 @@ class ClientCertificateManager:
         days_valid: int = 365,
         generate_key: bool = True,
         csr_pem: Optional[bytes] = None,
+        country: str = DEFAULT_COUNTRY,
+        state: str = DEFAULT_STATE,
         notes: str = ""
     ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
         """
@@ -213,13 +224,19 @@ class ClientCertificateManager:
             # Handle CSR or generate CSR + key
             if generate_key:
                 # Generate CSR and private key
+                # C and ST used to be the literals "CH" and "Switzerland",
+                # with no way to change them: every client identity CertMate
+                # issued, for every operator anywhere, claimed to be Swiss.
+                # The defaults keep those values so no existing mTLS rule
+                # that matches on the subject stops matching after an
+                # upgrade — but they are now the caller's to set.
                 csr_pem, key_pem, error = CSRHandler.create_csr(
                     common_name=common_name,
                     organization=organization,
                     organizational_unit=organizational_unit,
                     email=email,
-                    country="CH",
-                    state="Switzerland"
+                    country=country or DEFAULT_COUNTRY,
+                    state=state or DEFAULT_STATE
                 )
 
                 if error:

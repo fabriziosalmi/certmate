@@ -29,7 +29,8 @@ import urllib.request
 from pathlib import Path
 from cryptography import x509
 from .shell import ShellExecutor
-from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
+from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir,
+                             check_certbot_plugin_installed, clamp_propagation_seconds)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS)
 from .inventory_sources import collect_domain_sources
@@ -179,11 +180,10 @@ def _propagation_seconds(settings, dns_provider, strategy):
         propagation_map = {}
 
     default_seconds = strategy.default_propagation_seconds
-    try:
-        seconds = int(propagation_map.get(dns_provider, default_seconds))
-    except (ValueError, TypeError):
-        seconds = default_seconds
-    return max(1, min(3600, seconds))
+    # The bound lives in dns_strategies now, because the account-level field
+    # needs the same one and was exported unbounded.
+    return clamp_propagation_seconds(
+        propagation_map.get(dns_provider, default_seconds), default_seconds)
 
 
 class _LazySettings:
@@ -1619,13 +1619,31 @@ class CertificateManager:
         return f"_acme-challenge.{normalized}" if normalized else ''
 
     @classmethod
-    def build_dns_alias_expectations(cls, domain, domain_alias, san_domains=None):
-        """Build expected DNS-01 CNAME records for an alias-mode certificate."""
+    def build_dns_alias_expectations(cls, domain, domain_alias,
+                                     san_domains=None, alias_provider=None):
+        """Build expected DNS-01 CNAME records for an alias-mode certificate.
+
+        Two delegation shapes, and they want different records.
+
+        The certbot-style alias documented in docs/dns-providers.md points
+        ``_acme-challenge.<domain>`` at ``_acme-challenge.<alias>``: the
+        challenge is published *under* the alias name.
+
+        acme-dns does not work that way. ``dns_alias_hook._acme_dns_change``
+        POSTs the TXT to the acme-dns ``subdomain`` itself and requires
+        ``domain_alias == subdomain``, so the operator's CNAME points at the
+        bare subdomain and acme-dns answers there. Prefixing it produced a
+        `mismatch` verdict for a delegation that was exactly right — the
+        record acme-dns itself tells you to publish.
+        """
         alias = cls._normalize_dns_name(domain_alias).removeprefix('_acme-challenge.')
         if not domain or not alias:
             return []
 
-        expected_target = f"_acme-challenge.{alias}"
+        if (alias_provider or '').strip().lower() in ('acme-dns', 'acme_dns'):
+            expected_target = alias
+        else:
+            expected_target = f"_acme-challenge.{alias}"
         challenge_names = []
         for candidate in [domain] + list(san_domains or []):
             challenge_name = cls._dns01_challenge_name(candidate)
@@ -1644,8 +1662,49 @@ class CertificateManager:
     def _normalize_cname_target(value):
         return (value or '').strip().lower().rstrip('.')
 
+    def _resolve_cname(self, source):
+        """The CNAME at *source*, through whichever resolver is configured.
+
+        `dns_resolver` exists so an instance can be told which resolver to
+        trust — a split-horizon view, or a network where the public internet
+        is not reachable at all. Every other lookup honours it: caa.check,
+        domain_health, the inventory scan, and `CheckCAA` in the very same
+        API module. This one went to Cloudflare's DoH endpoint regardless, so
+        on a split-horizon instance a delegation that exists internally was
+        reported `missing`, and on an air-gapped one the check could only
+        ever fail.
+
+        With no nameservers configured the DoH path below is unchanged, so
+        an instance that configures nothing behaves exactly as before.
+        """
+        from .dns_resolver import configured_nameservers
+
+        settings = (self.settings_manager.load_settings()
+                    if self.settings_manager else {})
+        nameservers = configured_nameservers(settings)
+        if nameservers:
+            return self._resolve_cname_via(source, nameservers)
+        return self._resolve_cname_doh(source)
+
+    @staticmethod
+    def _resolve_cname_via(source, nameservers):
+        """Ask the configured nameservers directly, as caa.check does."""
+        import dns.exception
+        import dns.resolver
+
+        from .dns_resolver import build
+
+        resolver = build(nameservers=nameservers)
+        try:
+            answer = resolver.resolve(source, 'CNAME')
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            return []
+        except dns.exception.DNSException as e:
+            raise RuntimeError(f'DNS query failed: {e}') from e
+        return [str(rdata.target).strip() for rdata in answer]
+
     @classmethod
-    def _resolve_cname(cls, source):
+    def _resolve_cname_doh(cls, source):
         query = urllib.parse.urlencode({'name': source, 'type': 'CNAME'})
         # Hardcoded https URL (Cloudflare's DNS-over-HTTPS endpoint). Bandit
         # B310 fires defensively on urlopen, but the scheme + host are both
@@ -1669,10 +1728,12 @@ class CertificateManager:
             if answer.get('type') == 5 and answer.get('data')
         ]
 
-    def check_dns_alias_records(self, domain, domain_alias, san_domains=None):
+    def check_dns_alias_records(self, domain, domain_alias, san_domains=None,
+                                alias_provider=None):
         """Check that DNS-01 alias CNAMEs exist for a requested certificate."""
         checks = []
-        for expectation in self.build_dns_alias_expectations(domain, domain_alias, san_domains):
+        for expectation in self.build_dns_alias_expectations(
+                domain, domain_alias, san_domains, alias_provider=alias_provider):
             source = expectation['source']
             expected_target = self._normalize_cname_target(expectation['expected_target'])
             found_targets = []
@@ -2717,7 +2778,12 @@ class CertificateManager:
             staging: Use staging environment for testing
             ca_provider: Certificate Authority provider (letsencrypt, digicert, private_ca)
             ca_account_id: Specific CA account ID to use
-            domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
+            domain_alias: Optional domain alias for DNS validation — the
+                delegation TARGET, without the challenge label
+                (e.g. 'validation.example.org'). CertMate adds the
+                `_acme-challenge.` prefix itself; passing it here is
+                rejected by validate_domain, which has no underscore in its
+                label pattern.
             alias_dns_provider: Provider managing the ALIAS zone when it
                 differs from dns_provider (set via PATCH, issue #129, and
                 honoured by renewals). The alias challenge hook runs with

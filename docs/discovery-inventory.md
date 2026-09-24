@@ -63,7 +63,11 @@ full structured metadata:
 - Full **issuer DN**
 - **Public-key** algorithm + size/curve (RSA / ECDSA / Ed25519 / Ed448 / DSA)
 - **Signature** algorithm
-- The served chain where the peer sends one
+- The served chain where the peer sends one **and the runtime can hand it
+  over** — the one in the image cannot, so there `chain` is the leaf alone and
+  `chain_available` is `false`. Read that field before concluding anything
+  from a one-entry chain: a server that omits its intermediate looks
+  identical.
 
 It intentionally does **not** validate PKI trust, so it still fully describes an
 expired, self-signed, or hostname-mismatched certificate — a `validation` block

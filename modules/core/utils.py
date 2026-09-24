@@ -190,6 +190,16 @@ def validate_domain(domain: str) -> Tuple[bool, str]:
         except Exception:
             return False, "Invalid URL format provided."
             
+    # A single trailing dot is the root-anchored FQDN form: what `dig +short`
+    # prints, and what this project's own CNAME examples are written with
+    # (docs/dns-providers.md). Everything downstream already strips it —
+    # certificates.py and dns_alias_hook.py both rstrip('.') — and only this
+    # function refused it, so an operator pasting a record straight out of a
+    # zone file got "Domain labels cannot be empty". Exactly one dot: a name
+    # ending in '..' stays malformed and is caught below.
+    if domain.endswith('.') and not domain.endswith('..'):
+        domain = domain[:-1]
+
     domain_to_validate = domain[2:] if domain.startswith('*.') else domain
 
     if len(domain_to_validate) > 253 or '..' in domain_to_validate:
@@ -1069,7 +1079,13 @@ def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -
     # then confirm every path we touch resolves inside domain_dir. The
     # ZIP-slip guard in the restore path is the first line of defence; this is
     # the second, and it makes the helper safe for any future caller.
-    if not validate_domain(domain):
+    # Unpacked. `validate_domain` returns (ok, normalized_or_reason), and a
+    # two-element tuple is always truthy, so `if not validate_domain(domain)`
+    # could not fire for any input — the shape check described above has
+    # never run. The containment check below (`_inside`) is the one that has
+    # been doing the work; this restores the first of the two.
+    shape_ok, _ = validate_domain(domain)
+    if not shape_ok:
         return False
 
     domain_dir = Path(domain_dir)

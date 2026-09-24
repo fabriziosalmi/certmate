@@ -560,8 +560,18 @@ class Notifier:
                 logger.debug(f"SMTP retry {attempt + 2}/{max_retries}")
 
         duration_ms = int(time.time() * 1000) - start_ms
+        # `delivery_log_url` reduces a URL to scheme+host+port and answers
+        # "(unparseable)" for anything with no scheme — which a bare mail host
+        # has none of, so every SMTP delivery recorded "(unparseable)" and the
+        # log could not say which server a message went to. Spelled as a URL
+        # here, where the port is known, rather than loosening the helper:
+        # the helper's strictness is what keeps a credential out of the log.
+        host = str(cfg.get('host', '') or '').strip()
+        port = cfg.get('port')
+        smtp_url = f"smtp://{host}:{port}" if host and port else (
+            f"smtp://{host}" if host else '')
         self._log_delivery(
-            {'name': 'smtp', 'type': 'smtp', 'url': cfg.get('host', '')},
+            {'name': 'smtp', 'type': 'smtp', 'url': smtp_url},
             event, result, attempts, duration_ms,
         )
         return result

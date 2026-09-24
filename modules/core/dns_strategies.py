@@ -22,6 +22,32 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 
+# A DNS-01 propagation wait, bounded. One second is the shortest wait that
+# means anything; one hour is longer than any real zone takes, and an
+# issuance holds the domain lock for the whole of it.
+MIN_PROPAGATION_SECONDS = 1
+MAX_PROPAGATION_SECONDS = 3600
+
+
+def clamp_propagation_seconds(value, default):
+    """Bound *value* to the propagation range, falling back to *default*.
+
+    The global setting has been clamped since #666 "so a typo cannot make an
+    issuance hang". The account-level field — the one this project's own
+    custom-script example reads as `${CERTMATE_DNS_PROPAGATION_SECONDS:-60}`
+    — was exported with `str(propagation)` and no bound at all, and it is
+    never validated on save either. A typo'd `99999` therefore slept for 27
+    hours holding the domain lock, a negative value made `sleep -5` fail the
+    hook under `set -eu`, and a non-numeric value reached the shell verbatim.
+    """
+    try:
+        seconds = int(value)
+    except (ValueError, TypeError):
+        logger.debug("propagation_seconds %r is not a number; using %s",
+                     value, default)
+        return default
+    return max(MIN_PROPAGATION_SECONDS, min(MAX_PROPAGATION_SECONDS, seconds))
+
 
 def check_certbot_plugin_installed(plugin_name: str) -> bool:
     """Check if a certbot plugin is installed and registered.
@@ -642,7 +668,9 @@ class CustomScriptStrategy(DNSProviderStrategy):
         # polling their DNS API: surfaces the account-level setting.
         propagation = config_data.get('propagation_seconds')
         if propagation:
-            env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(propagation)
+            env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(
+                clamp_propagation_seconds(propagation,
+                                          self.default_propagation_seconds))
 
 def acme_webroot_dir() -> Path:
     """Absolute filesystem root for HTTP-01 webroot challenges.
@@ -715,7 +743,9 @@ class SolidServerStrategy(DNSProviderStrategy):
         env['SOLIDSERVER_DNS_NAME'] = config_data.get('dns_name', '')
         env['SOLIDSERVER_DNSVIEW_NAME'] = config_data.get('dnsview_name', '')
         if config_data.get('propagation_seconds'):
-            env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(config_data.get('propagation_seconds'))
+            env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(
+                clamp_propagation_seconds(config_data['propagation_seconds'],
+                                          self.default_propagation_seconds))
 
 
 class DNSStrategyFactory:

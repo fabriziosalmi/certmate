@@ -8,13 +8,14 @@ for CertMate's Prometheus endpoint (`GET /metrics`).
 | File | What it is |
 | --- | --- |
 | `grafana-dashboard.json` | Grafana dashboard (11 panels) — certificate inventory, days-until-expiry, status & provider breakdowns, cache, uptime, version |
-| `prometheus-alerts.yml` | Prometheus alerting rules (4) — expiring soon/critical, expired, scrape-down |
+| `prometheus-alerts.yml` | Prometheus alerting rules (8) — expiring soon/critical, expired, scrape-down, renewals failing, issuance failing, ACME rate-limited, ACME errors |
 | `prometheus-scrape.example.yml` | Example authenticated scrape job |
 
 ## Scrape setup
 
-`/metrics` requires the **admin** role. Create a dedicated admin-scoped API
-token (Settings > API Keys) and present it as a Bearer credential — see
+`/metrics` requires the **viewer** role — it is a read-only scrape target, so
+a scraper does not need an admin credential. Create a dedicated viewer-scoped
+API token (Settings > API Keys) and present it as a Bearer credential — see
 `prometheus-scrape.example.yml`. Then load the alert rules:
 
 ```yaml
@@ -32,7 +33,9 @@ your Prometheus datasource when prompted. The dashboard is keyed by uid
 ## Metric coverage
 
 The dashboard and alerts use **only metrics the `/metrics` endpoint actually
-populates** — the certificate inventory gauges, refreshed on every scrape:
+populates** — the certificate inventory gauges, recollected at most once
+every 30 seconds (`CertMateMetricsCollector.collection_interval`), so a
+scrape interval below that returns the previous pass's values:
 `certmate_domains_total`, `certmate_certificates_total`,
 `certmate_certificates_by_status` (`valid`, `expiring_soon`, `expired`,
 `missing`), `certmate_certificates_by_provider`,

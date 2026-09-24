@@ -236,3 +236,51 @@ def test_the_delivery_log_is_not_carried_into_a_backup():
     source = (repo / 'modules' / 'core' / 'file_operations.py').read_text(
         encoding='utf-8')
     assert 'webhook_deliveries' not in source
+
+
+# --- and it must still say WHERE the message went ------------------------
+
+def test_an_smtp_delivery_records_a_server_it_can_name():
+    """`delivery_log_url` answers "(unparseable)" for anything with no
+    scheme, and the SMTP call site passed `cfg['host']` — a bare hostname.
+    So every SMTP row in the delivery log said "(unparseable)" and the log
+    could not answer the one question it exists for: which server did this
+    go to. Found by the certmate-website session.
+
+    The call site spells a URL; the helper's strictness is what keeps a
+    credential out of the log, so it is not the part to loosen.
+    """
+    from modules.core.notifier import delivery_log_url
+
+    assert delivery_log_url('smtp.example.com') == DELIVERY_URL_UNPARSEABLE
+    assert delivery_log_url('smtp://smtp.example.com:587') == \
+        'smtp://smtp.example.com:587'
+
+
+def test_the_smtp_call_site_does_not_pass_a_bare_host():
+    """Asserted on the call, not the text: the first version of a check like
+    this in another file matched a comment quoting the old expression."""
+    import ast
+    import inspect
+
+    from modules.core.notifier import Notifier
+
+    source = inspect.getsource(Notifier._send_email_with_retry)
+    calls = [ast.unparse(node) for node in ast.walk(ast.parse(source.strip()))
+             if isinstance(node, ast.Call)]
+    log_calls = [c for c in calls if '_log_delivery' in c]
+
+    assert log_calls, 'the SMTP path no longer logs a delivery'
+    for call in log_calls:
+        assert "'url': cfg.get('host'" not in call, (
+            f'the bare host is back: {call}'
+        )
+
+
+def test_a_credential_in_the_smtp_url_is_still_dropped():
+    """CONTROL. Spelling a URL at the call site must not become a way to
+    write `user:password@` into the log."""
+    from modules.core.notifier import delivery_log_url
+
+    assert delivery_log_url('smtp://mailer:hunter2@smtp.example.com:587') == \
+        'smtp://smtp.example.com:587'

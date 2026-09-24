@@ -241,3 +241,94 @@ class TestBackupPlacement:
         """CONTROL: a CronJob nobody configured would run an image nobody
         chose, on a schedule nobody set."""
         assert "kind: CronJob" not in self._template().stdout
+
+
+# --- two chart defects from the certmate-website session -----------------
+#
+# The backup CronJob's comment said the volume is read "ReadOnlyMany", and no
+# ReadOnlyMany appears anywhere in the chart: both claims render
+# ReadWriteOnce. The comment was describing the read-only MOUNT, which is a
+# different thing — a mount flag does not let a second node attach an RWO
+# volume. With separateClaim false the CronJob mounts the SAME claim the app
+# pod holds, so a Job pod scheduled on another node sits in
+# ContainerCreating, and concurrencyPolicy: Forbid means the backup never
+# happens. It had no nodeSelector, affinity or tolerations to fix that with.
+#
+# And serviceAccount.create produced a ServiceAccount with no permissions at
+# all, while the in-cluster deploy target server-side-applies a Secret with
+# that account's token — 403 on every renewal.
+
+def test_the_chart_does_not_set_an_access_mode_it_never_renders():
+    """Checked on the ASSIGNMENTS, not on the prose. The first version of
+    this read the whole file and failed on the comment that explains the
+    defect — the same "prose mistaken for code" this project keeps hitting.
+    """
+    import re
+
+    values = _read("values.yaml")
+    assigned = re.findall(r"^\s*accessMode:\s*(\S+)", values, re.M)
+
+    assert assigned, "no accessMode is set — this test is reading nothing"
+    assert "ReadOnlyMany" not in assigned, (
+        f"the chart sets an access mode it cannot honour: {assigned}")
+
+
+def test_the_backup_job_can_be_pinned_to_the_volumes_node():
+    cronjob = _read("templates/offsite-backup-cronjob.yaml")
+
+    for key in ("nodeSelector", "affinity", "tolerations"):
+        assert f"offsite.{key}" in cronjob, (
+            f"the backup CronJob cannot be given {key}, so on the default "
+            f"ReadWriteOnce claim it can be scheduled where the volume is not")
+
+
+@pytest.mark.skipif(shutil.which("helm") is None, reason="helm is not installed")
+class TestRenderRBACAndScheduling:
+    def _template(self, *args):
+        return subprocess.run(
+            ["helm", "template", "t", str(CHART), *args],
+            capture_output=True, text=True,
+        )
+
+    def test_no_rbac_by_default(self):
+        """An instance that does not use the in-cluster target has no
+        business holding write access to Secrets."""
+        res = self._template()
+        assert res.returncode == 0, res.stderr
+        assert "kind: Role" not in res.stdout
+
+    def test_the_in_cluster_target_can_be_given_exactly_what_it_needs(self):
+        res = self._template("--set", "serviceAccount.rbac.create=true")
+        assert res.returncode == 0, res.stderr
+        assert "kind: Role" in res.stdout
+        assert "kind: RoleBinding" in res.stdout
+        assert 'verbs: ["create", "patch"]' in res.stdout
+
+    def test_it_is_not_given_read_access_to_every_secret(self):
+        """CONTROL. deploy_targets.py never reads a Secret back, so `get`
+        would be a permission granted for nothing — and a CertMate
+        compromise would inherit it."""
+        res = self._template("--set", "serviceAccount.rbac.create=true")
+        assert '"get"' not in res.stdout
+        assert '"list"' not in res.stdout
+
+    def test_the_role_can_cover_the_namespaces_it_deploys_to(self):
+        res = self._template("--set", "serviceAccount.rbac.create=true",
+                             "--set", "serviceAccount.rbac.namespaces={prod,staging}")
+        assert res.returncode == 0, res.stderr
+        roles = [line for line in res.stdout.splitlines() if line == "kind: Role"]
+        assert len(roles) == 2, f"expected one Role per namespace, got {len(roles)}"
+        assert "namespace: prod" in res.stdout
+        assert "namespace: staging" in res.stdout
+
+    def test_the_backup_job_takes_the_affinity_it_is_given(self):
+        res = self._template(
+            "--set", "persistence.backups.offsite.enabled=true",
+            "--set-json",
+            'persistence.backups.offsite.affinity={"podAffinity":'
+            '{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":'
+            '{"matchLabels":{"app.kubernetes.io/name":"certmate"}},'
+            '"topologyKey":"kubernetes.io/hostname"}]}}')
+        assert res.returncode == 0, res.stderr
+        assert "podAffinity" in res.stdout
+        assert "topologyKey: kubernetes.io/hostname" in res.stdout

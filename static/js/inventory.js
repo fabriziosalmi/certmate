@@ -49,8 +49,18 @@
                 'Not revoked — verified ' + (rev.method || '').toUpperCase() + ' answer, ' + (rev.checked_at || '')],
             unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation unknown',
                 rev.error || 'The responder does not know this certificate'],
-            unavailable: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation not checked',
-                rev.error || 'No verified answer could be obtained']
+            // "not checked" was wrong: `unavailable` is what the checker
+            // returns when it DID ask and got nothing it could trust — an
+            // unreachable responder, a signature that did not verify, a
+            // stale response. Saying it was not checked hides a failure
+            // behind a shrug. The reason is in the tooltip either way.
+            unavailable: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation unverified',
+                rev.error || 'No verified answer could be obtained'],
+            // revocation.py returns five statuses. This map had four, so a
+            // self-signed certificate fell through `map[rev.status]` and the
+            // cell rendered empty — indistinguishable from "never checked".
+            not_applicable: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Self-signed',
+                'Self-signed, so there is no issuer that could revoke it']
         };
         var m = map[rev.status];
         if (!m) { return ''; }

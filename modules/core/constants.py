@@ -228,6 +228,38 @@ METADATA_SCHEMA_VERSION = 1
 # /api/web/settings — an instance provisioned over the API could otherwise
 # write every other setting and not this one.
 #
+# 2.16 for the additions in the peer-review sweep. All MINOR — a caller that
+# ignores every one of them is unaffected:
+#
+#   GET /api/client-certs/ca              the CA certificate a relying party
+#                                         has to trust. Two comments in
+#                                         private_ca.py justified the 0600
+#                                         file mode by saying it "is served
+#                                         over HTTP by certmate", and nothing
+#                                         served it: the only /ca route was
+#                                         POST /ca/reset.
+#   csr, country, state                   new optional fields on
+#                                         POST /api/client-certs/create.
+#                                         `generate_key: false` needed a CSR
+#                                         and had nowhere to put one, so it
+#                                         could only ever 400; C and ST were
+#                                         the literals "CH"/"Switzerland" for
+#                                         every operator. Both default to what
+#                                         was issued before.
+#   alias_dns_provider                    new optional field on
+#                                         POST /api/certificates/create. PATCH
+#                                         and reissue have always read it;
+#                                         create accepted it in the body and
+#                                         dropped it.
+#   client_ca_subject                     now accepted by POST /api/settings,
+#                                         which docs/api.md has told operators
+#                                         to use since contract 2.3.
+#   chain_available                       new field on the probe/discovery
+#                                         response: false when the runtime
+#                                         cannot read the served chain, so a
+#                                         leaf-only result is not read as "no
+#                                         intermediate served".
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -237,7 +269,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.15'
+API_CONTRACT_VERSION = '2.16'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

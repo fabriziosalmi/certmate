@@ -77,11 +77,31 @@ persistence:
     # opinionated about the destination: `image` and `command` are yours.
     #
     # The example below is what most people want — rclone to object storage,
-    # with the remote's credentials in a Secret you create. It reads the
-    # backup volume ReadOnlyMany, so it cannot corrupt what it is copying.
+    # with the remote's credentials in a Secret you create. It mounts the
+    # backup volume read-only, so it cannot corrupt what it is copying.
+    #
+    # Read-only MOUNT, not ReadOnlyMany: the claim is ReadWriteOnce (see
+    # accessMode above, and the main claim's), so the volume can only be
+    # attached to one node. With separateClaim false this CronJob mounts the
+    # SAME claim as the running app pod, already attached to the app's node —
+    # a Job pod scheduled anywhere else fails to attach it, sits in
+    # ContainerCreating, and `concurrencyPolicy: Forbid` means the backup
+    # simply never happens. Set `offsite.affinity` (below) to co-schedule it
+    # with the CertMate pod, or move to a ReadWriteMany storage class.
+    #
+    # The chart said "ReadOnlyMany" here and rendered ReadWriteOnce.
     offsite:
       enabled: false
       schedule: "17 3 * * *"
+      # Where the Job may run. With a ReadWriteOnce claim it MUST land on the
+      # node holding the volume; the app pod is the thing that holds it, so
+      # pod affinity on the CertMate selector is the answer. Empty by default
+      # because a ReadWriteMany setup does not need it — but on the default
+      # RWO setup, leaving all three empty is how the backup silently never
+      # runs.
+      nodeSelector: {}
+      affinity: {}
+      tolerations: {}
       image: rclone/rclone:1.71.2
       # Everything after `--` is passed to the image's entrypoint.
       command: []
@@ -158,6 +178,20 @@ serviceAccount:
   create: true
   name: ""
   annotations: {}
+
+  # RBAC for the in-cluster deploy target (docs/deploy-hooks.md). That target
+  # reads this ServiceAccount's token and server-side-applies a
+  # kubernetes.io/tls Secret, which needs `create` and `patch` on secrets in
+  # the namespaces it writes to. The chart shipped a ServiceAccount with no
+  # permissions at all, so the apply returned 403 on every renewal and the
+  # only working setup was a hand-made token from outside the chart.
+  #
+  # Off by default: an instance that does not use the in-cluster target has
+  # no business holding write access to Secrets.
+  rbac:
+    create: false
+    # Namespaces the Role is created in. Empty means the release namespace.
+    namespaces: []
 
 nodeSelector: {}
 tolerations: []

@@ -561,17 +561,21 @@ sudo chown -R certmate:certmate /opt/certmate
 Set up the application in `/opt/certmate`:
 
 ```bash
-# If not already done, clone the repository
-git clone https://github.com/fabriziosalmi/certmate.git
-sudo mv certmate /opt/
+# Clone straight into the path. `useradd --create-home` above populated
+# /opt/certmate from /etc/skel, so it is not empty and `mv certmate /opt/`
+# fails with "Directory not empty" — leaving the next steps to run in a
+# directory with no application in it.
+sudo -u certmate git clone https://github.com/fabriziosalmi/certmate.git /opt/certmate
 cd /opt/certmate
 
 # Create Python virtual environment
 sudo -u certmate python3 -m venv venv
 sudo -u certmate ./venv/bin/pip install -r requirements.txt
 
-# Create necessary directories
-sudo -u certmate mkdir -p certificates data
+# Create necessary directories. All four: the startup writeability probe
+# in modules/core/factory.py checks certificates, data, backups AND logs,
+# and raises at boot if any of them is not writable.
+sudo -u certmate mkdir -p certificates data backups logs
 ```
 
 ### 3. Configure Environment Variables
@@ -580,18 +584,22 @@ Create environment file for the service:
 
 ```bash
 # Create environment file
-sudo tee /opt/certmate/.env > /dev/null <<EOF
+# The unit reads /etc/certmate/certmate.env (see certmate.service), not a
+# .env in the application directory.
+sudo install -d -m 750 /etc/certmate
+sudo tee /etc/certmate/certmate.env > /dev/null <<EOF
 # SECURITY: Change this token!
 API_BEARER_TOKEN=your_super_secure_api_token_here_change_this
-
-# Optional: Set the port (the bind address is not configurable here —
-# publish the container on 127.0.0.1 if you want loopback only)
-PORT=8000
 EOF
 
+# PORT has no effect here: the port is the literal in the unit's ExecStart
+# (--bind 0.0.0.0:8000), and nothing in the application reads PORT under
+# gunicorn. To change it, edit ExecStart. PORT is honoured only by the
+# container image.
+
 # Set proper permissions
-sudo chown certmate:certmate /opt/certmate/.env
-sudo chmod 600 /opt/certmate/.env
+sudo chown root:certmate /etc/certmate/certmate.env
+sudo chmod 640 /etc/certmate/certmate.env
 ```
 
 ### 4. Install systemd Service
@@ -664,17 +672,17 @@ sudo chown -R certmate:certmate /opt/certmate
 
 # Set directory permissions
 sudo chmod 755 /opt/certmate
-sudo chmod 750 /opt/certmate/certificates /opt/certmate/data
+sudo chmod 750 /opt/certmate/certificates /opt/certmate/data /opt/certmate/backups /opt/certmate/logs
 
 # Set file permissions
 sudo chmod 644 /opt/certmate/*.py /opt/certmate/*.md
-sudo chmod 600 /opt/certmate/.env
+sudo chmod 640 /etc/certmate/certmate.env
 sudo chmod 755 /opt/certmate/venv/bin/*
 ```
 
 ### Security Notes
 
-- **API Bearer Token**: Always change the default API bearer token in `/opt/certmate/.env`
+- **API Bearer Token**: Always change the default API bearer token in `/etc/certmate/certmate.env`
 - **File Permissions**: The service runs with restricted permissions and limited filesystem access
 - **Network Access**: The service binds to `0.0.0.0:8000` by default - consider using a reverse proxy for production
 - **Environment File**: The `.env` file contains sensitive data and should be readable only by the `certmate` user
@@ -688,7 +696,7 @@ If the service fails to start:
 2. **View logs**: `sudo journalctl -u certmate --lines=100`
 3. **Verify permissions**: Ensure the `certmate` user can read all necessary files
 4. **Test manually**: `sudo -u certmate /opt/certmate/venv/bin/python /opt/certmate/app.py`
-5. **Check dependencies**: `sudo -u certmate /opt/certmate/venv/bin/python validate_dependencies.py`
+5. **Check dependencies**: `sudo -u certmate /opt/certmate/venv/bin/certbot --version` — the ACME client is the dependency that breaks first when the pins drift.
 
 For more detailed installation instructions, see the [Installation Guide](docs/installation.md).
 
@@ -740,7 +748,7 @@ For a Keycloak realm that exposes a `groups` claim, the configuration block in `
 ### Provisioning and linking
 
 - **Just-in-time provisioning** (`auto_create_users`) creates a CertMate user row on first login. The row has an empty password hash so JIT-provisioned SSO accounts cannot fall back to local login.
-- **Email linking** (`link_by_email`) detects collisions with existing local users and merges identities — the user keeps their existing role and **their existing password hash**, so a local-then-linked account can still log in either way during a rollout. Disable `link_by_email` if you want JIT-only provisioning with no local-password fallback.
+- **Email linking** (`link_by_email`) detects collisions with existing local users and merges identities — the user keeps **their existing password hash**, so a local-then-linked account can still log in either way during a rollout. Their role is preserved at the moment of linking, and from the *next* login onwards it is governed by `sync_role_on_login` like anyone else's (see below): with the default `true`, a linked local admin whose IdP groups map to `viewer` becomes a viewer on their second login. Disable `link_by_email` if you want JIT-only provisioning with no local-password fallback.
 - Subject (`sub` + `iss`) lookup always wins over email matching, so an already-linked SSO user is never accidentally re-merged when their IdP email changes.
 - **Role sync** (`sync_role_on_login`, default `true`) re-derives the role from the current claims on every login, so removing someone from an admin group in the IdP demotes them in CertMate too. Set it to `false` when the IdP only authenticates and roles are managed inside CertMate — an admin promoting someone by hand then survives their next login.
 - A **disabled** CertMate user is refused at SSO login exactly as at local login: disabling an account locks it out regardless of how it authenticates.
@@ -908,7 +916,7 @@ log() {
 }
 
 create_backup() {
- if [[-d "$CERT_DIR" ]]; then
+ if [[ -d "$CERT_DIR" ]]; then
  log "Creating backup of existing certificates"
  mkdir -p "$BACKUP_DIR"
  cp -r "$CERT_DIR"/* "$BACKUP_DIR/" || true
@@ -2106,25 +2114,19 @@ curl -H "Authorization: Bearer your_token" \
 ```
 
 #### Prometheus Metrics Integration
-```python
-# Add to app.py for Prometheus monitoring
-from prometheus_client import Counter, Histogram, generate_latest
 
-# Metrics
-certificate_requests = Counter('certmate_certificate_requests_total', 
- 'Total certificate requests', ['domain', 'status'])
-certificate_expiry = Histogram('certmate_certificate_expiry_days',
- 'Days until certificate expiry', ['domain'])
-
-@app.route('/metrics')
-def metrics():
- return generate_latest()
-```
+Nothing to add: `/metrics` is already a registered route
+([`modules/web/misc_routes.py`](modules/web/misc_routes.py)), and the metrics
+themselves are declared in
+[`modules/core/metrics.py`](modules/core/metrics.py). This section used to
+show a snippet headed "Add to app.py", which would have registered a second,
+unauthenticated `/metrics` on top of the real one.
 
 A ready-to-import **Grafana dashboard**, **Prometheus alert rules**, and an
 authenticated **scrape config** ship in [`monitoring/`](monitoring/) — see
 [monitoring/README.md](monitoring/README.md). The `/metrics` endpoint requires
-the admin role, so scrape it with an admin-scoped API token (Bearer).
+the viewer role, so scrape it with a viewer-scoped API token (Bearer) — a
+scraper reads, so it does not need admin.
 
 #### Log Aggregation
 ```yaml

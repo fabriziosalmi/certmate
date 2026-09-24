@@ -26,7 +26,7 @@ if [ $? -eq 0 ]; then
     # Run with coverage if requested
     if [ "$1" = "--coverage" ]; then
         echo "📊 Generating coverage report..."
-        pytest --cov=. --cov-report=term-missing --cov-report=html -m "$MARKERS"
+        pytest --cov=modules --cov-report=term-missing --cov-report=html -m "$MARKERS"
         echo "Coverage report saved to htmlcov/index.html"
     fi
 else

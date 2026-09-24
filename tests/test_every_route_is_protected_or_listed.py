@@ -50,6 +50,13 @@ PUBLIC_ROUTES = {
     '/api/ocsp/status/<int:serial_number>':
         'OCSP status is queried by TLS clients validating a certificate this '
         'instance issued. Same reason as the CRL.',
+    '/api/client-certs/ca':
+        'The CA certificate a relying party must trust to verify the client '
+        'certificates this instance issues. Same reason as the CRL next to '
+        'it: the parties that need it have no account here, and it is a '
+        'public certificate — withholding it protects nothing and only '
+        'pushes operators to extract it from the PKCS#12 bundle, which '
+        'carries a private key. The private key is served by nothing.',
 
     # --- getting in ----------------------------------------------------
     '/login':

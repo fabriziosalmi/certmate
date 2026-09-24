@@ -309,6 +309,13 @@
             generate_key: document.getElementById('generateKey').checked,
             notes: document.getElementById('notes').value
         };
+        if (!data.generate_key) {
+            data.csr = (document.getElementById('csrPem').value || '').trim();
+            if (!data.csr) {
+                CertMate.toast('Paste a CSR, or tick "Generate private key".', 'error');
+                return;
+            }
+        }
 
         fetch('/api/client-certs/create', {
             method: 'POST',

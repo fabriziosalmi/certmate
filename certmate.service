@@ -9,7 +9,13 @@ Type=simple
 User=certmate
 Group=certmate
 WorkingDirectory=/opt/certmate
-Environment=PATH=/opt/certmate/venv/bin
+# The venv FIRST, so gunicorn/certbot are the pinned ones — then the system
+# paths. Setting PATH here REPLACES systemd's default, and with only the venv
+# on it a deployment hook cannot even start: hooks run as ['sh', '-c', ...],
+# `sh` lives in /bin, and the lookup raised FileNotFoundError before the
+# command was reached. Nothing in a hook (curl, openssl, systemctl, ssh)
+# resolved either.
+Environment=PATH=/opt/certmate/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Worker timeout. DNS-01 issuance waits on propagation and routinely runs for
 # minutes; gunicorn's default is 30s, which reaps the worker mid-certbot and
 # fails the issuance for no reason the operator can see. The container image

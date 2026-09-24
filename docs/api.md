@@ -339,6 +339,8 @@ start, and its subject comes from `client_ca_subject` in settings:
 }
 ```
 
+Send it with `POST /api/settings` like any other settings key.
+
 `country` is an ISO 3166-1 alpha-2 code and anything else is refused before a
 key is written. A field left empty is omitted from the subject rather than
 written as an empty attribute; `common_name` falls back to `CertMate CA`. An
@@ -742,7 +744,36 @@ curl http://localhost:8000/api/ocsp/status/12345678 \
 
 ---
 
-#### 10. CRL Distribution
+#### 10. CA Certificate
+
+**Endpoint**: `GET /api/client-certs/ca`, since API contract **2.16**
+
+Download the CA certificate that signs this instance's client certificates —
+the one a relying party has to trust in order to verify them.
+
+Public, like the CRL below: the servers that need it have no account here,
+and it is a public certificate. The CA's private key is served by nothing.
+
+Before 2.16 there was no way to fetch it. `POST /api/client-certs/ca/reset`
+was the only `/ca` route, and the only copy of the CA an operator could
+obtain came inside the PKCS#12 bundle — which needs operator rights, a
+configured `pfx_password`, and ships a private key alongside it.
+
+**Response**: `ca.crt` as a PEM attachment, or `404` when no CA has been
+generated yet.
+
+**Example**:
+```bash
+curl http://localhost:8000/api/client-certs/ca -o ca.crt
+
+# and, on the server that verifies the client certificates:
+#   ssl_client_certificate /etc/nginx/ca.crt;   # nginx
+#   SSLCACertificateFile   /etc/apache2/ca.crt; # apache
+```
+
+---
+
+#### 11. CRL Distribution
 
 **Endpoint**: `GET /api/crl/download/<format_type>`
 
@@ -788,7 +819,7 @@ curl http://localhost:8000/api/crl/download/info \
 
 ---
 
-#### 11. Download Domain Certificate Files
+#### 12. Download Domain Certificate Files
 
 **Endpoint**: `GET /api/certificates/<domain>/download`
 
@@ -838,7 +869,7 @@ curl "http://localhost:8000/api/certificates/example.com/download?format=json" \
 
 ---
 
-#### 12. Reissue Domain Certificate (edit configuration)
+#### 13. Reissue Domain Certificate (edit configuration)
 
 **Endpoint**: `POST /api/certificates/<domain>/reissue`
 

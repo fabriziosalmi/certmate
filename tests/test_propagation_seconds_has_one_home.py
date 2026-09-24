@@ -107,3 +107,84 @@ def test_neither_path_computes_it_inline_any_more():
             f'{method.__qualname__} reads the propagation setting directly '
             f'again; it belongs to _propagation_seconds'
         )
+
+
+# --- the second home, found by the certmate-website session ---------------
+#
+# The file above was written about the GLOBAL setting, and it was right about
+# it. The per-account `propagation_seconds` field had its own export, in
+# dns_strategies, with no bound at all:
+#
+#     env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(propagation)
+#
+# Two strategies did it, and that variable is exactly what this project's own
+# custom-script example sleeps on. So the clamp "so a typo cannot make an
+# issuance hang" (#666) covered one of the two ways to set the number.
+
+@pytest.mark.parametrize('value,expected', [
+    (99999, 3600),          # 27 hours, holding the domain lock
+    (-5, 1),                # `sleep -5` fails the hook under `set -eu`
+    ('300', 300),           # a string of digits is still a number
+    (300, 300),
+    ('99999; rm -rf /', 120),   # not a number: the default, not the shell
+    ('abc', 120),
+    (None, 120),
+])
+def test_an_account_level_value_is_bounded(value, expected):
+    from modules.core.dns_strategies import clamp_propagation_seconds
+
+    assert clamp_propagation_seconds(value, 120) == expected
+
+
+def test_the_account_path_exports_the_bounded_value():
+    """THE regression, at the call site: the env var the hook reads."""
+    from modules.core.dns_strategies import DNSStrategyFactory
+
+    strategy = DNSStrategyFactory.get_strategy('custom-script')
+    env = {}
+    strategy.prepare_environment(env, {'propagation_seconds': 99999,
+                                       'script': '/bin/true'})
+
+    assert env['CERTMATE_DNS_PROPAGATION_SECONDS'] == '3600'
+
+
+def test_no_strategy_exports_it_unbounded():
+    """The two that did were found by reading; this is what finds a third.
+
+    AST, not a regex: the first version of this matched to end-of-line and
+    the fixed expression wraps, so it read `str(` and failed on correct code.
+    """
+    import ast
+    import inspect
+
+    from modules.core import dns_strategies
+
+    tree = ast.parse(inspect.getsource(dns_strategies))
+    exports = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if (isinstance(target, ast.Subscript)
+                    and isinstance(target.slice, ast.Constant)
+                    and target.slice.value == 'CERTMATE_DNS_PROPAGATION_SECONDS'):
+                exports.append(ast.unparse(node.value))
+
+    assert exports, 'nothing exports the variable — this test is reading nothing'
+    for expression in exports:
+        assert 'clamp_propagation_seconds' in expression, (
+            f'exported without the clamp: {expression}'
+        )
+
+
+def test_the_global_path_shares_the_same_bound():
+    """One home means one home: the global clamp is the shared helper now,
+    not a second `max(1, min(3600, ...))` that happens to agree today."""
+    import inspect
+
+    from modules.core import certificates
+
+    source = inspect.getsource(certificates._propagation_seconds)
+
+    assert 'clamp_propagation_seconds' in source
+    assert 'min(3600' not in source

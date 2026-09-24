@@ -192,6 +192,38 @@
                         </label>
                     </div>
 
+                    <!-- Two settings the API has always accepted and the form
+                         never showed. One of them is the account-takeover gate
+                         described in modules/core/oidc.py: leaving it reachable
+                         only by curl meant an operator could not see, let alone
+                         change, the thing protecting them. -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="flex items-start space-x-2">
+                            <input type="checkbox" x-model="cfg.require_verified_email"
+                                   class="mt-1 h-4 w-4 text-primary focus:ring-primary border-border rounded">
+                            <span class="text-sm font-medium text-label">
+                                Require a verified email before linking
+                                <span class="block text-xs text-muted font-normal">
+                                    Off means an IdP account claiming an
+                                    existing user's address inherits that
+                                    user's role. Leave on unless the IdP
+                                    verifies addresses itself.
+                                </span>
+                            </span>
+                        </label>
+                        <label class="flex items-start space-x-2">
+                            <input type="checkbox" x-model="cfg.sync_role_on_login"
+                                   class="mt-1 h-4 w-4 text-primary focus:ring-primary border-border rounded">
+                            <span class="text-sm font-medium text-label">
+                                Re-derive the role from claims on every login
+                                <span class="block text-xs text-muted font-normal">
+                                    Off when roles are managed inside CertMate
+                                    and the IdP only authenticates.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
                     <!-- Post-logout redirect -->
                     <div>
                         <label class="block text-xs text-muted mb-1">Post-logout redirect URI (optional)</label>

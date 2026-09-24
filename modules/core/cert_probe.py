@@ -432,6 +432,7 @@ def _blocked_result(host, port, reason):
         'certificate': None,
         'validation': None,
         'chain': [],
+        'chain_available': False,
         'revocation': None,
     }
 
@@ -447,6 +448,7 @@ def _unreachable_result(host, port, connect_ip, error_class, error):
         'certificate': None,
         'validation': None,
         'chain': [],
+        'chain_available': False,
         'revocation': None,
     }
 
@@ -531,7 +533,16 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
     # get_unverified_chain() is only available on Python 3.13+, so on older
     # interpreters (or when the peer sends no chain) fall back to the leaf
     # certificate alone — the chain always names at least the served cert.
+    #
+    # That fallback is reported, not just applied. The container image is
+    # 3.12 (Dockerfile), so `chain` there is ALWAYS one entry, and a
+    # one-entry chain is exactly what a server that omits its intermediate
+    # looks like. A caller reading it as "no intermediate served" — which is
+    # what a discovery report is for — would be wrong on every host, on the
+    # runtime CertMate actually ships. `chain_available` says which of the
+    # two it is.
     chain = _served_chain(chain_der)
+    chain_available = bool(chain)
     if not chain:
         try:
             chain = [_chain_entry(_load_certificate(cert_bytes))]
@@ -554,6 +565,7 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
         'certificate': parsed['certificate'],
         'validation': parsed['validation'],
         'chain': chain,
+        'chain_available': chain_available,
         'revocation': revocation,
         'probed_at': utc_now_iso(),
     }

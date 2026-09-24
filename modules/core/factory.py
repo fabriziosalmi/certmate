@@ -1366,6 +1366,7 @@ def setup_api(container: AppContainer, app):
     ns_client_certs.add_resource(api_resources['ClientCertificateRenew'], '/<string:identifier>/renew')
     ns_client_certs.add_resource(api_resources['ClientCertificateStatistics'], '/stats')
     ns_client_certs.add_resource(api_resources['ClientCertificateBatch'], '/batch')
+    ns_client_certs.add_resource(api_resources['ClientCertificateAuthorityCert'], '/ca')
     ns_client_certs.add_resource(api_resources['ClientCertificateAuthorityReset'], '/ca/reset')
 
     ns_ocsp.add_resource(api_resources['OCSPStatus'], '/status/<int:serial_number>')

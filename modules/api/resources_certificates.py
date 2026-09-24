@@ -216,18 +216,29 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                              'deployment_host is required',
                 }, 400
 
+            # Both checks below run against the account the certificate will
+            # actually RENEW with, not the one this request happens to
+            # mention. `update_config` writes only truthy keys, so a PATCH
+            # that names no account_id leaves the stored one in place — and
+            # validating against None passed for a provider configured under
+            # the default account while renewal looked it up under the stored
+            # 'prod' and failed. That is exactly the renew-time surprise
+            # these checks were added to prevent.
+            stored = ctx.cert_service.read_metadata(domain) or {}
+            effective_account_id = new_account_id or stored.get('account_id')
+
             # Validate the new provider has credentials configured
             if new_dns_provider:
                 settings = ctx.settings.load_settings()
                 dns_config, _ = ctx.dns.get_dns_provider_account_config(
                     new_dns_provider,
-                    new_account_id,
+                    effective_account_id,
                     settings,
                 )
                 if not dns_config:
                     return {
                         'error': f"DNS provider '{new_dns_provider}' account "
-                                 f"'{new_account_id or 'default'}' is not configured",
+                                 f"'{effective_account_id or 'default'}' is not configured",
                         'hint': 'Configure the DNS provider credentials in Settings first.'
                     }, 400
 
@@ -238,7 +249,7 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                 settings = ctx.settings.load_settings()
                 alias_config, _ = ctx.dns.get_dns_provider_account_config(
                     new_alias_dns_provider,
-                    new_account_id,
+                    effective_account_id,
                     settings,
                 )
                 if not alias_config:

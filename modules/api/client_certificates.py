@@ -1,5 +1,6 @@
 import logging
 from flask import abort as flask_abort, request, send_file, Response
+from ..core.client_certificates import DEFAULT_COUNTRY, DEFAULT_STATE
 from ..core.domain_paths import IDENTIFIER_RE, is_path_safe_segment
 from werkzeug.exceptions import HTTPException
 from flask_restx import Resource, fields
@@ -92,6 +93,14 @@ def create_client_certificate_models(api):
         'cert_usage': fields.String(description='Usage type'),
         'days_valid': fields.Integer(description='Days until expiration'),
         'generate_key': fields.Boolean(description='Generate private key'),
+        'csr': fields.String(
+            description=('PEM certificate signing request. Required when '
+                         'generate_key is false — the device that made the '
+                         'key keeps it and CertMate never sees it.')),
+        'country': fields.String(
+            description='Subject country (2 letters). Default: CH'),
+        'state': fields.String(
+            description='Subject state or province. Default: Switzerland'),
         'notes': fields.String(description='Additional notes')
     })
 
@@ -104,6 +113,122 @@ def create_client_certificate_models(api):
         'client_cert_request': client_cert_request_model,
         'client_cert_revoke': client_cert_revoke_model
     }
+
+
+def _client_cert_create_params(data):
+    """Validate a client-certificate create payload into manager kwargs.
+
+    Lifted out of `create_client_certificate_resources`, whose complexity is
+    pinned by scripts/check_complexity_budget.py at a ceiling that only comes
+    down — and every field validated here is a branch that was counting
+    against it.
+    """
+    common_name = data.get('common_name', '')
+    if not common_name or len(common_name) > 64:
+        abort(400, "common_name must be between 1 and 64 characters")
+    email = data.get('email', '')
+    if len(email) > 254:
+        abort(400, "email must be 254 characters or less")
+    organization = data.get('organization', 'CertMate')
+    if len(organization) > 64:
+        abort(400, "organization must be 64 characters or less")
+    organizational_unit = data.get('organizational_unit', 'Users')
+    if len(organizational_unit) > 64:
+        abort(400, "organizational_unit must be 64 characters or less")
+    try:
+        days_valid = int(data.get('days_valid', 365))
+    except (TypeError, ValueError):
+        abort(400, "days_valid must be an integer")
+    if days_valid < 1 or days_valid > 3650:
+        abort(400, "days_valid must be between 1 and 3650")
+    country = data.get('country', '') or DEFAULT_COUNTRY
+    if len(country) > 2:
+        abort(400, "country must be a 2-letter code")
+    state = data.get('state', '') or DEFAULT_STATE
+    if len(state) > 128:
+        abort(400, "state must be 128 characters or less")
+
+    # The core has taken `csr_pem` since #599; the request model had no field
+    # for it, so `generate_key: false` could only ever fail — while the UI's
+    # "generate private key" checkbox posts exactly that when unticked. The
+    # error was "CSR required when generate_key=False" for a request that had
+    # no way to carry one.
+    generate_key = data.get('generate_key', True)
+    csr = data.get('csr') or data.get('csr_pem')
+    if not generate_key and not csr:
+        abort(400, "csr is required when generate_key is false")
+
+    return {
+        'common_name': common_name,
+        'email': email,
+        'organization': organization,
+        'organizational_unit': organizational_unit,
+        'cert_usage': data.get('cert_usage', 'api-mtls'),
+        'days_valid': days_valid,
+        'generate_key': generate_key,
+        'csr_pem': csr.encode('utf-8') if isinstance(csr, str) else csr,
+        'country': country,
+        'state': state,
+        'notes': data.get('notes', ''),
+    }
+
+
+def _build_ca_cert_resource(client_cert_manager):
+    """The CA-certificate download, built outside the big closure.
+
+    Same reason as _build_ca_reset_resource below: adding one more class
+    inside create_client_certificate_resources raises its complexity past the
+    number scripts/check_complexity_budget.py pins, and that number only ever
+    comes down.
+    """
+
+    class ClientCertificateAuthorityCert(Resource):
+        """Serve the CA certificate a relying party has to trust.
+
+        Two comments in private_ca.py explain the 0600 file mode by saying
+        the CA cert "is served over HTTP by certmate, not read off disk by
+        other local users" — and nothing served it. `get_ca_cert_pem` and
+        `export_ca_cert` had no callers outside tests, and the only /ca route
+        in the whole url_map was POST /ca/reset.
+
+        So a server that had to verify client certificates could not obtain
+        the CA except out of the PKCS#12 bundle, which needs operator rights
+        and a configured password and ships a private key with it.
+
+        Public, like the CRL next door: this is the certificate every relying
+        party is meant to have, and withholding it protects nothing.
+        """
+
+        def get(self):
+            """Download the client-certificate CA certificate (PEM)."""
+            try:
+                if not client_cert_manager:
+                    abort(503, "Client certificate manager not available")
+                ca_pem = client_cert_manager.private_ca.get_ca_cert_pem()
+                if not ca_pem:
+                    abort(404, "No CA certificate available")
+                if isinstance(ca_pem, str):
+                    ca_pem = ca_pem.encode('utf-8')
+                return Response(
+                    ca_pem,
+                    mimetype='application/x-pem-file',
+                    headers={'Content-Disposition': 'attachment; filename=ca.crt'}
+                )
+            except HTTPException:
+                raise
+            except OSError as e:
+                # `get_ca_cert_pem` checks the path exists and then reads it,
+                # so the only failure it can hand back is the read: a
+                # permission problem, a truncated volume, a mount that went
+                # away between the two. Narrow rather than broad, because
+                # this is one file read and the budget in
+                # scripts/check_exception_budget.py is a ratchet — a `except
+                # Exception` here would raise the pinned count for the sake
+                # of a call that cannot raise anything else.
+                logger.error("Error serving CA certificate: %s", e)
+                abort(500, "Failed to serve CA certificate")
+
+    return ClientCertificateAuthorityCert
 
 
 def _build_ca_reset_resource(auth_manager, client_cert_manager, crl_manager):
@@ -239,41 +364,9 @@ def create_client_certificate_resources(api, managers):
                 if not data or 'common_name' not in data:
                     abort(400, "common_name is required")
 
-                # Get parameters with length validation
-                common_name = data.get('common_name', '')
-                if not common_name or len(common_name) > 64:
-                    abort(400, "common_name must be between 1 and 64 characters")
-                email = data.get('email', '')
-                if len(email) > 254:
-                    abort(400, "email must be 254 characters or less")
-                organization = data.get('organization', 'CertMate')
-                if len(organization) > 64:
-                    abort(400, "organization must be 64 characters or less")
-                organizational_unit = data.get('organizational_unit', 'Users')
-                if len(organizational_unit) > 64:
-                    abort(400, "organizational_unit must be 64 characters or less")
-                cert_usage = data.get('cert_usage', 'api-mtls')
-                days_valid = data.get('days_valid', 365)
-                try:
-                    days_valid = int(days_valid)
-                except (TypeError, ValueError):
-                    abort(400, "days_valid must be an integer")
-                if days_valid < 1 or days_valid > 3650:
-                    abort(400, "days_valid must be between 1 and 3650")
-                generate_key = data.get('generate_key', True)
-                notes = data.get('notes', '')
-
                 # Create certificate
                 success, error, cert_data = client_cert_manager.create_client_certificate(
-                    common_name=common_name,
-                    email=email,
-                    organization=organization,
-                    organizational_unit=organizational_unit,
-                    cert_usage=cert_usage,
-                    days_valid=days_valid,
-                    generate_key=generate_key,
-                    notes=notes
-                )
+                    **_client_cert_create_params(data))
 
                 if not success:
                     abort(400, f"Failed to create certificate: {error}")
@@ -543,6 +636,12 @@ def create_client_certificate_resources(api, managers):
                             common_name=cert_data.get('common_name', ''),
                             email=cert_data.get('email', ''),
                             organization=cert_data.get('organization', 'CertMate'),
+                            # Parsed out of the CSV column and then dropped:
+                            # every row's OU fell back to "Users" while every
+                            # other column came through, silently, for the
+                            # whole batch.
+                            organizational_unit=cert_data.get(
+                                'organizational_unit', 'Users'),
                             cert_usage=cert_data.get('cert_usage', 'api-mtls'),
                             days_valid=batch_days,
                             generate_key=True,
@@ -668,6 +767,7 @@ def create_client_certificate_resources(api, managers):
                 logger.error(f"Error getting CRL: {str(e)}")
                 abort(500, "Failed to get CRL")
 
+    ClientCertificateAuthorityCert = _build_ca_cert_resource(client_cert_manager)
     ClientCertificateAuthorityReset = _build_ca_reset_resource(
         auth_manager, client_cert_manager, crl_manager)
 
@@ -681,6 +781,7 @@ def create_client_certificate_resources(api, managers):
         'ClientCertificateRenew': ClientCertificateRenew,
         'ClientCertificateStatistics': ClientCertificateStatistics,
         'ClientCertificateBatch': ClientCertificateBatch,
+        'ClientCertificateAuthorityCert': ClientCertificateAuthorityCert,
         'ClientCertificateAuthorityReset': ClientCertificateAuthorityReset,
         'OCSPStatus': OCSPStatus,
         'CRLDistribution': CRLDistribution,

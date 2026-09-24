@@ -133,6 +133,47 @@ def _register_update_check(app, managers, auth_manager):
         return jsonify(saved)
 
 
+def _unmasked_test_config(settings_manager, channel_type, config):
+    """Fill a test payload's masked fields from what is stored.
+
+    The save path strips the `'********'` sentinel and merges against the
+    on-disk block, so a GET→edit→POST round-trip keeps the real secret. The
+    test path did neither: it handed `data['config']` straight to
+    `test_channel`, and the UI feeds it exactly what the masked GET returned.
+    So pressing Test on a channel that was saved and never re-typed sent
+    `password='********'` to the SMTP server, or `url='********'` to the
+    webhook sender — which answers "Webhook URL must use http or https
+    scheme". The toast reported a correctly configured channel as broken, and
+    the only way to make Test pass was to re-type the secret, which is the
+    one thing masking exists to avoid.
+
+    Same helpers as the save path, so the two cannot drift.
+    """
+    from modules.core.settings import (
+        _deep_merge_dict, _restore_masked_list_secrets, _strip_masked_values,
+    )
+
+    if settings_manager is None or not isinstance(config, dict):
+        return config
+
+    stored = settings_manager.load_settings().get('notifications') or {}
+    channels = stored.get('channels')
+    channels = channels if isinstance(channels, dict) else {}
+
+    if channel_type == 'webhook':
+        # Webhooks live in a list and are matched by identity, never by
+        # position — the same rule, and the same helper, the save path uses.
+        candidate = dict(config)
+        _restore_masked_list_secrets(channels.get('webhooks'), [candidate])
+        return candidate
+
+    existing = channels.get(channel_type)
+    stripped = _strip_masked_values(config)
+    if not isinstance(existing, dict) or not isinstance(stripped, dict):
+        return stripped
+    return _deep_merge_dict(existing, stripped)
+
+
 def _activity_page(audit_logger, limit, query):
     """The activity response, filtered or not.
 
@@ -725,6 +766,8 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             if not isinstance(config, dict):
                 return jsonify({'error': 'config must be a JSON object'}), 400
 
+            config = _unmasked_test_config(
+                managers.get('settings'), channel_type, config)
             result = notifier.test_channel(channel_type, config)
             # test_channel returns {error: ...} or {success: True, status: ...}
             success = 'error' not in result
