@@ -424,6 +424,12 @@ The optional cleanup hook runs after validation to remove the record.
 
 Worked example for OCI DNS (covers [#285](https://github.com/fabriziosalmi/certmate/issues/285)). Note that a certificate covering both `example.com` and `*.example.com` produces TWO validation challenges on the same `_acme-challenge.example.com` name, and certbot runs all auth hooks before validating — so the hook must APPEND to the TXT rrset, never replace it (a plain `rrset update` would wipe the first token with the second):
 
+This example calls the `oci` CLI, which the stock CertMate image does **not**
+ship — the runtime stage installs `bash`, `curl` and `tini` and nothing else.
+Provide it yourself: add a layer on top of the image, or bind-mount the
+binary and its config into the container. The hook runs inside CertMate, so
+the CLI has to be on CertMate's PATH, not on the host's.
+
 ```bash
 #!/bin/sh
 # /usr/local/bin/certmate-dns-auth.sh
@@ -455,9 +461,12 @@ sleep "${CERTMATE_DNS_PROPAGATION_SECONDS:-60}"
 Requirements and trust model:
 
 - Paths must be **absolute**, the files must exist, be **executable**,
-  must not be world-writable, and must not contain whitespace or shell
-  metacharacters (certbot executes hooks through the shell). Validated at
-  issuance and by the test-provider API endpoint
+  must not be world- **or group-** writable (`chmod 755` or stricter), and
+  must not contain whitespace or shell metacharacters (certbot executes
+  hooks through the shell). A `chmod 775` hook — an ordinary mode for a
+  script owned by a deploy group — is refused: anyone in that group could
+  rewrite what CertMate is about to execute. Validated at issuance and by
+  the test-provider API endpoint
   (`POST /api/web/certificates/test-provider`)
 - Scripts run with CertMate's privileges — same trust model as deploy
   hooks: only admins can configure them, treat them as part of your

@@ -99,7 +99,7 @@ test-watch: $(VENV)/bin/activate
 # ── Code Quality ───────────────────────────────────────────────────────
 
 lint: $(VENV)/bin/activate
-	$(VENV)/bin/flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714 --show-source --statistics
+	$(VENV)/bin/flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714,F401,F841,E722 --show-source --statistics
 	$(VENV)/bin/flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
 format: $(VENV)/bin/activate

@@ -1,6 +1,6 @@
 # DNS-Anbieter
 
-<!-- CERTMATE-TRANSLATED-FROM 3a8b12ad29555929 -->
+<!-- CERTMATE-TRANSLATED-FROM 9b103696fbd47ac1 -->
 
 CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt DNS-01-Challenges über individuelle certbot-Plugins. Die vollständige Liste befindet sich in der nachstehenden Tabelle.
 
@@ -392,6 +392,13 @@ certbot ruft den Auth-Hook einmal pro Validierungs-Challenge mit der standardmä
 
 Praxisbeispiel für OCI DNS (behandelt [#285](https://github.com/fabriziosalmi/certmate/issues/285)). Beachten Sie: Ein Zertifikat, das sowohl `example.com` als auch `*.example.com` abdeckt, erzeugt ZWEI Validierungs-Challenges auf demselben Namen `_acme-challenge.example.com`; certbot führt alle Auth-Hooks aus, bevor es validiert — der Hook muss daher zum TXT-Rrset HINZUFÜGEN und es niemals ersetzen (ein einfaches `rrset update` würde den ersten Token mit dem zweiten überschreiben):
 
+Dieses Beispiel ruft die `oci`-CLI auf, die das Standard-Image von CertMate
+**nicht** mitbringt — die Runtime-Stufe installiert `bash`, `curl` und `tini`
+und sonst nichts. Stellen Sie sie selbst bereit: ein Layer über dem Image,
+oder die Binärdatei samt Konfiguration in den Container gemountet. Der Hook
+läuft innerhalb von CertMate, die CLI muss also in CertMates PATH liegen,
+nicht im PATH des Hosts.
+
 ```bash
 #!/bin/sh
 # /usr/local/bin/certmate-dns-auth.sh
@@ -422,7 +429,7 @@ sleep "${CERTMATE_DNS_PROPAGATION_SECONDS:-60}"
 
 Voraussetzungen und Vertrauensmodell:
 
-- Pfade müssen **absolut** sein, die Dateien müssen vorhanden und **ausführbar** sein, dürfen nicht world-writable sein und dürfen keine Leerzeichen oder Shell-Metazeichen enthalten (certbot führt Hooks über die Shell aus). Die Prüfung erfolgt bei der Ausstellung und über den Test-Provider-API-Endpoint (`POST /api/web/certificates/test-provider`)
+- Pfade müssen **absolut** sein, die Dateien müssen vorhanden und **ausführbar** sein, dürfen weder world- **noch gruppenschreibbar** sein (`chmod 755` oder strenger) und dürfen keine Leerzeichen oder Shell-Metazeichen enthalten (certbot führt Hooks über die Shell aus). Ein Hook mit `chmod 775` — ein üblicher Modus für ein Skript, das einer Deploy-Gruppe gehört — wird abgelehnt: jedes Mitglied dieser Gruppe könnte umschreiben, was CertMate gleich ausführt. Die Prüfung erfolgt bei der Ausstellung und über den Test-Provider-API-Endpoint (`POST /api/web/certificates/test-provider`)
 - Skripte laufen mit den Berechtigungen von CertMate — dasselbe Vertrauensmodell wie bei deploy hooks: nur Administratoren können sie konfigurieren; behandeln Sie sie als Teil Ihres Deployments
 - Die anbieterspezifische Einstellung `dns_propagation_seconds` wird den Skripten als `CERTMATE_DNS_PROPAGATION_SECONDS` exportiert (ein `propagation_seconds`-Feld auf Kontoebene überschreibt diesen Wert)
 - Verlängerungen spielen die Hook-Pfade aus der certbot-Verlängerungskonfiguration erneut ab: halten Sie die Skripte unter einem stabilen Pfad (wenn Sie sie verschieben, stellen Sie das Zertifikat neu aus)

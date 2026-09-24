@@ -13,8 +13,10 @@ source .venv/bin/activate
 # Install test dependencies
 pip install -r requirements-test.txt
 
-# Run all tests
-pytest
+# Run all tests. The marker expression is not optional: a bare `pytest`
+# also runs the Playwright `ui` suite in this process and the `network`
+# tests against live CAs. CONTRIBUTING.md explains why.
+pytest -m "not ui and not network"
 
 # Run tests with coverage
 pytest --cov=. --cov-report=html
@@ -47,8 +49,10 @@ Root directory:
 ### Common Commands
 
 ```bash
-# Run all tests
-pytest
+# Run all tests. The marker expression is not optional: a bare `pytest`
+# also runs the Playwright `ui` suite in this process and the `network`
+# tests against live CAs. CONTRIBUTING.md explains why.
+pytest -m "not ui and not network"
 
 # Run with verbose output
 pytest -v
@@ -158,9 +162,11 @@ pytest -m "not ui"
 pytest -m "not ui and not e2e" -q
 ```
 
-CI runs `pytest -m "not ui"` on Python 3.12 with a coverage floor; the UI
-suite runs in its own workflow, and the real-certificate end-to-end gate runs
-against Let's Encrypt staging before a release.
+CI runs `pytest -m "not ui and not network"` with a coverage floor; the UI
+suite runs in its own workflow, the CA-reachability checks run on a weekly
+schedule (as a required check they would turn every PR red on someone else's
+outage), and the real-certificate end-to-end gate runs against Let's Encrypt
+staging before a release.
 
 ### Tested Endpoints
 
@@ -254,8 +260,8 @@ There is no pre-commit configuration in this repository; run the same gates CI
 runs:
 
 ```bash
-make lint                # flake8, failing set only
-pytest -m "not ui" -q    # what CI runs
+make lint                              # flake8, failing set only
+pytest -m "not ui and not network" -q  # what CI runs
 ```
 
 A release runs considerably more — see `scripts/release.sh`, which gates on

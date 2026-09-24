@@ -1,6 +1,6 @@
 # Guide de test
 
-<!-- CERTMATE-TRANSLATED-FROM 7bb2c3112ef81e62 -->
+<!-- CERTMATE-TRANSLATED-FROM 46e5abd7dddb3f1c -->
 
 Ce guide couvre le framework de test de CertMate, incluant les tests unitaires, les tests d'intégration et la validation des endpoints API.
 
@@ -15,8 +15,10 @@ source .venv/bin/activate
 # Installer les dépendances de test
 pip install -r requirements-test.txt
 
-# Exécuter tous les tests
-pytest
+# Exécuter tous les tests. L'expression de marqueurs n'est pas optionnelle :
+# un `pytest` nu exécute aussi la suite Playwright `ui` dans ce processus
+# et les tests `network` contre de vraies AC.
+pytest -m "not ui and not network"
 
 # Exécuter les tests avec couverture
 pytest --cov=. --cov-report=html
@@ -49,8 +51,10 @@ Répertoire racine :
 ### Commandes courantes
 
 ```bash
-# Exécuter tous les tests
-pytest
+# Exécuter tous les tests. L'expression de marqueurs n'est pas optionnelle :
+# un `pytest` nu exécute aussi la suite Playwright `ui` dans ce processus
+# et les tests `network` contre de vraies AC.
+pytest -m "not ui and not network"
 
 # Exécuter avec sortie verbose
 pytest -v

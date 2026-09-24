@@ -1,6 +1,6 @@
 # Proveedores DNS
 
-<!-- CERTMATE-TRANSLATED-FROM 3a8b12ad29555929 -->
+<!-- CERTMATE-TRANSLATED-FROM 9b103696fbd47ac1 -->
 
 CertMate soporta una amplia gama de proveedores DNS para los desafíos Let's Encrypt DNS-01 mediante plugins de certbot individuales. La lista completa se encuentra en la tabla a continuación.
 
@@ -392,6 +392,12 @@ certbot invoca el auth hook una vez por cada desafío de validación con el ento
 
 Ejemplo para OCI DNS (cubre [#285](https://github.com/fabriziosalmi/certmate/issues/285)). Ten en cuenta que un certificado que cubra tanto `example.com` como `*.example.com` produce DOS desafíos de validación sobre el mismo nombre `_acme-challenge.example.com`, y certbot ejecuta todos los auth hooks antes de validar — por tanto, el hook debe AÑADIR al rrset TXT, nunca reemplazarlo (una actualización simple del rrset eliminaría el primer token con el segundo):
 
+Este ejemplo llama a la CLI `oci`, que la imagen estándar de CertMate **no**
+incluye: la etapa de runtime instala `bash`, `curl` y `tini` y nada más.
+Proporciónala tú: una capa sobre la imagen, o el binario y su configuración
+montados en el contenedor. El hook se ejecuta dentro de CertMate, así que la
+CLI debe estar en el PATH de CertMate, no en el del host.
+
 ```bash
 #!/bin/sh
 # /usr/local/bin/certmate-dns-auth.sh
@@ -422,7 +428,7 @@ sleep "${CERTMATE_DNS_PROPAGATION_SECONDS:-60}"
 
 Requisitos y modelo de confianza:
 
-- Las rutas deben ser **absolutas**, los archivos deben existir, ser **ejecutables**, no tener permisos de escritura para todos los usuarios, y no contener espacios ni metacaracteres de shell (certbot ejecuta los hooks a través del shell). Se validan en el momento de la emisión y mediante el endpoint API de prueba (`POST /api/web/certificates/test-provider`)
+- Las rutas deben ser **absolutas**, los archivos deben existir, ser **ejecutables**, no tener permisos de escritura para todos los usuarios **ni para el grupo** (`chmod 755` o más estricto), y no contener espacios ni metacaracteres de shell (certbot ejecuta los hooks a través del shell). Un hook con `chmod 775` — un modo corriente para un script propiedad de un grupo de despliegue — se rechaza: cualquier miembro de ese grupo podría reescribir lo que CertMate está a punto de ejecutar. Se validan en el momento de la emisión y mediante el endpoint API de prueba (`POST /api/web/certificates/test-provider`)
 - Los scripts se ejecutan con los privilegios de CertMate — el mismo modelo de confianza que los deploy hooks: solo los administradores pueden configurarlos; tratalos como parte de tu despliegue
 - El ajuste `dns_propagation_seconds` por proveedor se exporta a los scripts como `CERTMATE_DNS_PROPAGATION_SECONDS` (un campo `propagation_seconds` a nivel de cuenta tiene prioridad sobre él)
 - Las renovaciones replican las rutas de los hooks desde la configuración de renovación de certbot: mantén los scripts en una ruta estable (si los mueves, vuelve a emitir el certificado)

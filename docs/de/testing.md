@@ -1,6 +1,6 @@
 # Testhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM 7bb2c3112ef81e62 -->
+<!-- CERTMATE-TRANSLATED-FROM 46e5abd7dddb3f1c -->
 
 Dieses Handbuch beschreibt das Test-Framework von CertMate, einschließlich Unit-Tests, Integrationstests und der Validierung von API-Endpoints.
 
@@ -15,8 +15,10 @@ source .venv/bin/activate
 # Testabhängigkeiten installieren
 pip install -r requirements-test.txt
 
-# Alle Tests ausführen
-pytest
+# Alle Tests ausführen. Der Marker-Ausdruck ist nicht optional: ein blosses
+# `pytest` führt auch die Playwright-`ui`-Suite in diesem Prozess aus und
+# die `network`-Tests gegen echte CAs.
+pytest -m "not ui and not network"
 
 # Tests mit Coverage ausführen
 pytest --cov=. --cov-report=html
@@ -49,8 +51,10 @@ Stammverzeichnis:
 ### Häufige Befehle
 
 ```bash
-# Alle Tests ausführen
-pytest
+# Alle Tests ausführen. Der Marker-Ausdruck ist nicht optional: ein blosses
+# `pytest` führt auch die Playwright-`ui`-Suite in diesem Prozess aus und
+# die `network`-Tests gegen echte CAs.
+pytest -m "not ui and not network"
 
 # Mit ausführlicher Ausgabe ausführen
 pytest -v

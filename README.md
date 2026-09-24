@@ -561,17 +561,21 @@ sudo chown -R certmate:certmate /opt/certmate
 Set up the application in `/opt/certmate`:
 
 ```bash
-# If not already done, clone the repository
-git clone https://github.com/fabriziosalmi/certmate.git
-sudo mv certmate /opt/
+# Clone straight into the path. `useradd --create-home` above populated
+# /opt/certmate from /etc/skel, so it is not empty and `mv certmate /opt/`
+# fails with "Directory not empty" — leaving the next steps to run in a
+# directory with no application in it.
+sudo -u certmate git clone https://github.com/fabriziosalmi/certmate.git /opt/certmate
 cd /opt/certmate
 
 # Create Python virtual environment
 sudo -u certmate python3 -m venv venv
 sudo -u certmate ./venv/bin/pip install -r requirements.txt
 
-# Create necessary directories
-sudo -u certmate mkdir -p certificates data
+# Create necessary directories. All four: the startup writeability probe
+# in modules/core/factory.py checks certificates, data, backups AND logs,
+# and raises at boot if any of them is not writable.
+sudo -u certmate mkdir -p certificates data backups logs
 ```
 
 ### 3. Configure Environment Variables
@@ -580,18 +584,22 @@ Create environment file for the service:
 
 ```bash
 # Create environment file
-sudo tee /opt/certmate/.env > /dev/null <<EOF
+# The unit reads /etc/certmate/certmate.env (see certmate.service), not a
+# .env in the application directory.
+sudo install -d -m 750 /etc/certmate
+sudo tee /etc/certmate/certmate.env > /dev/null <<EOF
 # SECURITY: Change this token!
 API_BEARER_TOKEN=your_super_secure_api_token_here_change_this
-
-# Optional: Set the port (the bind address is not configurable here —
-# publish the container on 127.0.0.1 if you want loopback only)
-PORT=8000
 EOF
 
+# PORT has no effect here: the port is the literal in the unit's ExecStart
+# (--bind 0.0.0.0:8000), and nothing in the application reads PORT under
+# gunicorn. To change it, edit ExecStart. PORT is honoured only by the
+# container image.
+
 # Set proper permissions
-sudo chown certmate:certmate /opt/certmate/.env
-sudo chmod 600 /opt/certmate/.env
+sudo chown root:certmate /etc/certmate/certmate.env
+sudo chmod 640 /etc/certmate/certmate.env
 ```
 
 ### 4. Install systemd Service
@@ -664,17 +672,17 @@ sudo chown -R certmate:certmate /opt/certmate
 
 # Set directory permissions
 sudo chmod 755 /opt/certmate
-sudo chmod 750 /opt/certmate/certificates /opt/certmate/data
+sudo chmod 750 /opt/certmate/certificates /opt/certmate/data /opt/certmate/backups /opt/certmate/logs
 
 # Set file permissions
 sudo chmod 644 /opt/certmate/*.py /opt/certmate/*.md
-sudo chmod 600 /opt/certmate/.env
+sudo chmod 640 /etc/certmate/certmate.env
 sudo chmod 755 /opt/certmate/venv/bin/*
 ```
 
 ### Security Notes
 
-- **API Bearer Token**: Always change the default API bearer token in `/opt/certmate/.env`
+- **API Bearer Token**: Always change the default API bearer token in `/etc/certmate/certmate.env`
 - **File Permissions**: The service runs with restricted permissions and limited filesystem access
 - **Network Access**: The service binds to `0.0.0.0:8000` by default - consider using a reverse proxy for production
 - **Environment File**: The `.env` file contains sensitive data and should be readable only by the `certmate` user
@@ -688,7 +696,7 @@ If the service fails to start:
 2. **View logs**: `sudo journalctl -u certmate --lines=100`
 3. **Verify permissions**: Ensure the `certmate` user can read all necessary files
 4. **Test manually**: `sudo -u certmate /opt/certmate/venv/bin/python /opt/certmate/app.py`
-5. **Check dependencies**: `sudo -u certmate /opt/certmate/venv/bin/python validate_dependencies.py`
+5. **Check dependencies**: `sudo -u certmate /opt/certmate/venv/bin/certbot --version` — the ACME client is the dependency that breaks first when the pins drift.
 
 For more detailed installation instructions, see the [Installation Guide](docs/installation.md).
 
@@ -908,7 +916,7 @@ log() {
 }
 
 create_backup() {
- if [[-d "$CERT_DIR" ]]; then
+ if [[ -d "$CERT_DIR" ]]; then
  log "Creating backup of existing certificates"
  mkdir -p "$BACKUP_DIR"
  cp -r "$CERT_DIR"/* "$BACKUP_DIR/" || true
