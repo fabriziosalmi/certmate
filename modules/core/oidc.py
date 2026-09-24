@@ -33,7 +33,7 @@ from urllib.parse import urlparse, urlencode
 
 from flask import session as flask_session
 
-from .auth import validate_username
+from .auth import active_admin_count, validate_username
 from .secret_refs import SecretReferenceError, resolve_field
 from .settings import _strip_masked_values
 from .utils import utc_now
@@ -576,11 +576,30 @@ class OIDCManager:
                 if cfg.get('sync_role_on_login', True):
                     previous_role = users[username].get('role')
                     if role != previous_role:
-                        users[username]['role'] = role
-                        outcome['audit'] = (
-                            'oidc_user_role_synced', username, 'success',
-                            {'issuer': iss, 'from': previous_role, 'to': role},
-                        )
+                        # The same lockout guard update_user applies to a
+                        # demotion. Without it an IdP group edit — or a typo
+                        # in role_mappings — could take the last admin out of
+                        # the admin role, and an SSO-provisioned row has an
+                        # empty password_hash, so no local login remained to
+                        # put it back. The login still succeeds; only the
+                        # demotion is refused, and the refusal is audited so
+                        # it is not a silent disagreement with the IdP.
+                        demoting = previous_role == 'admin' and role != 'admin'
+                        if demoting and active_admin_count(users) <= 1:
+                            outcome['audit'] = (
+                                'oidc_user_role_sync_refused', username,
+                                'failure',
+                                {'issuer': iss, 'from': previous_role,
+                                 'to': role,
+                                 'reason': 'last active admin'},
+                            )
+                        else:
+                            users[username]['role'] = role
+                            outcome['audit'] = (
+                                'oidc_user_role_synced', username, 'success',
+                                {'issuer': iss, 'from': previous_role,
+                                 'to': role},
+                            )
                 users[username]['last_login'] = utc_now().isoformat()
                 outcome['username'] = username
                 return
@@ -711,9 +730,11 @@ class OIDCManager:
         """Sanitize and uniquify a candidate username.
 
         IdP-provided values may contain characters CertMate's existing
-        admin UI doesn't render well (spaces, ``@`` from email
-        fallbacks). Keep alphanumerics, dot, dash, underscore; replace
-        the rest with ``_``. Append numeric suffix on collision.
+        admin UI doesn't render well — a space, most punctuation. Keep
+        alphanumerics, dot, dash, underscore and ``@``; replace the rest
+        with ``_``. ``@`` is kept deliberately: an email fallback is a
+        perfectly good username and rewriting it to ``alice_corp.example``
+        makes it unrecognisable. Append a numeric suffix on collision.
         """
         if not candidate:
             candidate = 'oidc_user'

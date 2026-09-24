@@ -86,10 +86,12 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
     def api_logout():
         """Logout endpoint.
 
-        For OIDC-minted sessions where a post_logout_redirect_uri is
-        configured, returns ``oidc_logout_url`` so the frontend can
-        follow the IdP's end-session flow (single-logout). Local
-        sessions get the original no-frills response — unchanged.
+        For OIDC-minted sessions, returns ``oidc_logout_url`` whenever the
+        IdP publishes an ``end_session_endpoint``, so the frontend can follow
+        the IdP's end-session flow (single-logout). A configured
+        ``post_logout_redirect_uri`` is added to that URL when present and
+        simply omitted when not — it is not what decides whether the URL is
+        returned. Local sessions get the original no-frills response.
         """
         session_id = request.cookies.get('certmate_session')
         oidc_logout_url = None
