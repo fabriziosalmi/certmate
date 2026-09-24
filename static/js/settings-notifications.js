@@ -14,6 +14,28 @@
                     webhooks: []
                 }
             },
+            // Every event an operator can filter on, in one place. The two
+            // checkbox rows in the template used to carry their own copy of
+            // this list, and both copies were missing `certificate_deployed`
+            // — an event the system publishes and `_EVENT_TITLES` names, so
+            // ticking any box silently excluded it and nothing said so.
+            //
+            // `deploy_hook_failed` and `certificate_deploy_incomplete` are
+            // deliberately absent: the notifier's _ALWAYS_NOTIFY_EVENTS sends
+            // them whatever is selected, so a checkbox would imply a choice
+            // that does not exist.
+            //
+            // tests/test_every_filterable_event_is_selectable.py compares this
+            // against the backend's own two sets.
+            notifiableEvents: [
+                'certificate_created',
+                'certificate_renewed',
+                'certificate_deployed',
+                'certificate_expiring',
+                'certificate_revoked',
+                'certificate_failed',
+                'domain_expiring'
+            ],
             showSmtp: false,
             showWebhooks: false,
             showDeliveries: false,
