@@ -94,7 +94,12 @@ class TestDashboardUI:
         browser_page.wait_for_load_state("networkidle")
         expect(browser_page.locator("text=Welcome to CertMate").first).to_be_visible()
 
-    @pytest.mark.xfail(reason="Pre-existing: fixture auth + Alpine.js x-show timing", strict=False)
+    # The xfail is gone. It said "Pre-existing: fixture auth + Alpine.js
+    # x-show timing" and was non-strict, so its result was ignored either way
+    # — and the test had stopped failing. Measured before removing it: five
+    # local runs, all XPASS, and the CI ui job reports XPASS too. A test whose
+    # outcome nobody reads is not guarding the form it names; if this starts
+    # failing again the reason is worth seeing rather than absorbing.
     def test_create_cert_form_exists(self, browser_page):
         browser_page.goto(BASE_URL)
         domain_input = browser_page.locator("#domain")
