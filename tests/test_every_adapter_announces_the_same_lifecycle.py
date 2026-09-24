@@ -213,3 +213,20 @@ def test_every_construction_of_the_service_gets_a_bus():
         for call in calls:
             assert 'event_bus' in call, (
                 f'{relative} builds a CertificateService with no bus: {call}')
+
+
+def test_the_real_app_wires_a_bus_into_the_service(instance):
+    """`event_bus=managers.get('events')` is None-safe by design, which means
+    a managers dict missing that key disables every lifecycle event in
+    silence. Asserting the keyword is passed is not enough — this asserts the
+    instance the factory builds actually has one.
+
+    Found by the full suite: a test that built its managers without 'events'
+    went red here, and it was right to. In production factory.py sets it.
+    """
+    _, container = instance
+    service = container.managers['cert_service']
+
+    assert service._events is not None, (
+        'the composition root built a CertificateService with no event bus, '
+        'so no deploy hook, webhook or notification would ever fire')

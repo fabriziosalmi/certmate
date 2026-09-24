@@ -633,15 +633,24 @@ def _build_api_app(tmp_path, renew_result):
         'email': 'ops@example.com', 'dns_provider': 'cloudflare',
         'default_ca': 'letsencrypt', 'challenge_type': 'dns-01'}
 
+    # The bus goes in `managers['events']`, which is where factory.py puts
+    # it and where CertificateService now reads it. The lifecycle publish
+    # used to live in the route and read app.config['EVENT_BUS']; it moved
+    # into the service so that a renewal started from the dashboard emits it
+    # too — the /api/web/... routes call the service directly and fired
+    # nothing. Both are set here, to the same object, so the assertions below
+    # hold wherever the publish happens to be read from.
+    bus = MagicMock()
     managers = {
         'auth': auth, 'settings': settings, 'certificates': certs,
         'file_ops': MagicMock(cert_dir=Path(tmp_path)), 'cache': MagicMock(),
         'dns': MagicMock(), 'audit': None, 'cert_executor': None,
+        'events': bus,
     }
 
     app = Flask(__name__)
     app.config['TESTING'] = True
-    app.config['EVENT_BUS'] = MagicMock()
+    app.config['EVENT_BUS'] = bus
     api = Api(app, prefix='/api')
     models = create_api_models(api)
     resources = create_api_resources(api, models, managers)
