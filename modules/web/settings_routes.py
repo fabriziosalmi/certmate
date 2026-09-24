@@ -166,9 +166,20 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             # to any viewer through this settings view. Strip them for anyone
             # who is not an admin (kept for admin so the settings UI is
             # unchanged for the role that already reads them elsewhere).
+            #
+            # `deploy_hooks` belongs on that list for the same reason, and
+            # more sharply. A hook is a shell command an admin typed, and
+            # the settings route two hundred lines down refuses to LOG those
+            # commands precisely because they carry credentials — a reload
+            # with an API key in a header, an scp with a token in the URL.
+            # `mask_secrets_in_settings` masks by FIELD NAME, and `command`
+            # is not a secret-sounding name, so the whole command came back
+            # verbatim to any viewer. Its editor is admin-only and reads
+            # /api/deploy/config, so nothing in the product loses a field.
             if (user.get('role') != 'admin'):
                 masked.pop('users', None)
                 masked.pop('api_keys', None)
+                masked.pop('deploy_hooks', None)
 
             response = jsonify(masked)
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
