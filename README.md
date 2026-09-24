@@ -192,7 +192,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Backward Compatibility** - Existing installations continue working without changes
 
 ### **Notifications & Automation**
-- **Multi-Channel Notifications** - Email (SMTP), Slack, Discord, Telegram, ntfy, Gotify, and generic webhooks
+- **Multi-Channel Notifications** - Email (SMTP), Slack, Discord, Google Chat, Telegram, ntfy, Gotify, and generic webhooks
 - **Webhook HMAC Signatures** - SHA-256 signed payloads for secure webhook verification
 - **Deploy Hooks** - Post-issuance shell commands to reload Nginx/Apache or run custom scripts
 - **Expiry Warnings** - `certificate_expiring` at 14/7/3/1 days (at the renewal threshold when auto-renew is off), and `domain_expiring` for the domain registration itself at 60/30/14/7/1 days. Each threshold is announced once per expiry date
