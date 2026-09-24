@@ -8,6 +8,7 @@ import datetime
 import json
 import logging
 import os
+import tempfile
 import subprocess
 import threading
 import time
@@ -747,14 +748,38 @@ class DeployManager:
             if not safe:
                 raise ValueError(f"Command blocked at runtime: {reason}")
 
-            proc = self.shell_executor.run(
-                ['sh', '-c', command],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=deploy_env,
-            )
+            # Files, not pipes, and the difference is the whole point.
+            #
+            # `capture_output=True` makes subprocess wait for EOF on the
+            # pipes, and a hook that backgrounds anything hands those pipes
+            # to the grandchild. So `curl ... &` — the direct child exits at
+            # once — was reported as "timeout after Ns", and the operator
+            # could not work around it either: `_is_command_safe` refuses
+            # `>/dev/null`, so the stdio cannot be detached by hand.
+            #
+            # With real files there is no pipe, so subprocess waits on the
+            # PROCESS. Measured, 2s timeout: `sleep 6 &` timed out with pipes
+            # and exited in 0.01s with files, still capturing what the hook
+            # printed before backgrounding. `sleep 6` — genuinely slow, not
+            # detached — still times out both ways, which is the control:
+            # this must not remove the timeout, only stop it firing on a
+            # process that has already exited.
+            with tempfile.TemporaryFile() as out_file, \
+                    tempfile.TemporaryFile() as err_file:
+                proc = self.shell_executor.run(
+                    ['sh', '-c', command],
+                    check=False,
+                    capture_output=False,
+                    text=False,
+                    timeout=timeout,
+                    env=deploy_env,
+                    stdout=out_file,
+                    stderr=err_file,
+                )
+                out_file.seek(0)
+                err_file.seek(0)
+                captured_out = out_file.read().decode('utf-8', 'replace')
+                captured_err = err_file.read().decode('utf-8', 'replace')
             result['exit_code'] = proc.returncode
             # Redact secret patterns HERE, at the single point where hook
             # output enters the result dict: everything downstream (history
@@ -762,8 +787,8 @@ class DeployManager:
             # a hook that echoes a token or key would otherwise persist it
             # forever. Sanitize before truncating so a PEM block cut by the
             # size cap cannot dodge the pattern match.
-            result['stdout'] = sanitize_text(proc.stdout or '')[:4096]
-            result['stderr'] = sanitize_text(proc.stderr or '')[:4096]
+            result['stdout'] = sanitize_text(captured_out)[:4096]
+            result['stderr'] = sanitize_text(captured_err)[:4096]
             result['success'] = proc.returncode == 0
             if proc.returncode != 0:
                 stderr_snippet = result['stderr'].strip()[:200]
@@ -1212,7 +1237,28 @@ class DeployManager:
             logger.warning("Deploy hook '%s' command rejected: %s", hook_label, reason)
             return False, f"hook '{hook_label}' command {reason}"
 
-        hook['timeout'] = min(max(int(hook.get('timeout', DEFAULT_TIMEOUT)), 1), MAX_TIMEOUT)
+        # Absence and error are different answers, and this conflated them by
+        # raising on both. `int(None)` is a TypeError, `int("abc")` a
+        # ValueError, and neither was caught — so the whole save came back as
+        # an opaque 500 from the route's blanket handler. The shipped UI
+        # triggers it: `x-model.number` on an empty Timeout box makes Alpine
+        # emit `null`, so clearing a field and pressing Save was a 500.
+        #
+        # A cleared field is a preference not stated: take the default, as
+        # `on_events` and `enabled` below do for the same reason. A value
+        # that is PRESENT and not a number is a mistake, and saying so beats
+        # silently running with 30 seconds the operator never chose — the
+        # same distinction save_config now draws for `enabled`.
+        raw_timeout = hook.get('timeout')
+        if raw_timeout is None or raw_timeout == '':
+            raw_timeout = DEFAULT_TIMEOUT
+        if isinstance(raw_timeout, bool) or not isinstance(raw_timeout, (int, float, str)):
+            return False, f"hook '{hook_label}' timeout must be a number"
+        try:
+            timeout_seconds = int(raw_timeout)
+        except (TypeError, ValueError):
+            return False, f"hook '{hook_label}' timeout must be a number"
+        hook['timeout'] = min(max(timeout_seconds, 1), MAX_TIMEOUT)
         if not isinstance(hook.get('on_events'), list):
             hook['on_events'] = list(DEFAULT_ON_EVENTS)
         if not isinstance(hook.get('enabled'), bool):

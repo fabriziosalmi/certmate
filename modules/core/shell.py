@@ -77,6 +77,29 @@ class MockShellExecutor(ShellExecutor):
             'should_timeout': should_timeout
         })
         
+    @staticmethod
+    def _honour_output_files(kwargs, stdout: str, stderr: str) -> None:
+        """Write the canned output where the caller asked for it.
+
+        A caller that passes `stdout=<file>` gets a real process writing to
+        that file, and reads it back afterwards — the deploy-hook runner does
+        exactly this, so that a hook which backgrounds something is not
+        reported as a timeout. A double that answers only through the
+        returned object does not stand in for that, and three tests went red
+        holding output the code no longer looks at. A double that does not
+        honour the contract it replaces hides whatever depends on the
+        contract.
+        """
+        for key, text in (('stdout', stdout), ('stderr', stderr)):
+            target = kwargs.get(key)
+            if target is None or not hasattr(target, 'write'):
+                continue
+            payload = text or ''
+            try:
+                target.write(payload.encode('utf-8'))
+            except TypeError:          # opened in text mode
+                target.write(payload)
+
     def run(self, cmd: List[str], **kwargs) -> subprocess.CompletedProcess:
         cmd_str = " ".join(cmd)
         self.commands_executed.append(cmd_str)
@@ -89,6 +112,8 @@ class MockShellExecutor(ShellExecutor):
             response = self.response_queue.pop(0)
             if response['should_timeout']:
                 raise subprocess.TimeoutExpired(cmd, kwargs.get('timeout', 0))
+            self._honour_output_files(kwargs, response['stdout'],
+                                      response['stderr'])
             return subprocess.CompletedProcess(
                 cmd, 
                 response['returncode'], 
@@ -100,7 +125,9 @@ class MockShellExecutor(ShellExecutor):
         for k, v in self.responses.items():
             if k in cmd_str:
                 returncode, stdout, stderr = v
+                self._honour_output_files(kwargs, stdout, stderr)
                 return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
-                
+
         # Default success
+        self._honour_output_files(kwargs, "", "")
         return subprocess.CompletedProcess(cmd, 0, "", "")
