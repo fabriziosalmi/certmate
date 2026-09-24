@@ -3935,8 +3935,19 @@ class CertificateManager:
                 ca_provider,
                 staging=ca_provider.endswith('_staging'),
                 account_config=account_config)
-        except ValueError as e:
-            logger.info("No ACME directory for %s: %s", ca_provider, e)
+        except ValueError:
+            # The reason is deliberately not logged. `account_config` carries
+            # the account's credentials — EAB keys among them — and it is an
+            # argument to the call that raised, so anything derived from that
+            # exception is one refactor away from being derived from them.
+            # Today's messages name the provider and nothing else, which
+            # CodeQL cannot see and which the next edit could change.
+            #
+            # Nothing is lost: an operator learns which CA has no usable
+            # directory here, and *why* where they configure it — the
+            # settings validation and issuance both report the full refusal.
+            logger.info("No usable ACME directory for %s; skipping ARI for "
+                        "its certificates", ca_provider)
             return None
 
     def _ari_says_renew(self, domain, cert_info, settings, now=None):
