@@ -228,7 +228,15 @@ Generated {digest['generated_at']} by CertMate
             operation='send', resource_type='digest', resource_id='weekly',
             status=status,
             details={'recipients': recipients,
-                     'certificates': (digest or {}).get('certificates'),
+                     # The keys `build_digest` actually returns. This read
+                     # `certificates`, which it has never returned — the
+                     # server figures are under `server_certs` — so every
+                     # entry recorded null, in a chain that cannot be
+                     # rewritten. The test did not catch it because its fake
+                     # build_digest returned the shape the code expected
+                     # rather than the shape the real one produces.
+                     'server_certs': (digest or {}).get('server_certs'),
+                     'client_certs': (digest or {}).get('client_certs'),
                      'activity': (digest or {}).get('activity')},
             user='system', ip_address='local',
             error=error,
