@@ -33,25 +33,72 @@ pytestmark = [pytest.mark.unit]
 
 # --- the backup that was not taken ---------------------------------------
 
-def test_a_backup_that_did_not_happen_is_not_a_success():
-    """THE regression. `create_unified_backup` answering None must not come
-    back as 200 with a null filename."""
-    import ast
-    import inspect
-    import pathlib
+@pytest.fixture(scope='module')
+def instance(tmp_path_factory):
+    """A real app, so the route is driven rather than read."""
+    import os
+    import secrets
 
-    repo = pathlib.Path(__file__).resolve().parent.parent
-    source = (repo / 'modules' / 'web' / 'backup_cache_routes.py').read_text(
-        encoding='utf-8')
+    tmp = tmp_path_factory.mktemp('answers')
+    token = secrets.token_urlsafe(32)
+    with pytest.MonkeyPatch.context() as patch:
+        for var, sub in (('CERTMATE_CERT_DIR', 'certs'),
+                         ('CERTMATE_DATA_DIR', 'data'),
+                         ('CERTMATE_BACKUP_DIR', 'backups'),
+                         ('CERTMATE_LOGS_DIR', 'logs')):
+            (tmp / sub).mkdir(exist_ok=True)
+            patch.setenv(var, str(tmp / sub))
+        patch.setenv('FLASK_ENV', 'testing')
+        patch.setenv('TESTING', 'true')
+        patch.setenv('API_BEARER_TOKEN', token)
+        os.environ['API_BEARER_TOKEN'] = token
+        from modules.core.factory import create_app
+        app, container = create_app()
+        yield app, container, token
 
-    assert 'if not filename:' in source
-    assert "'Failed to create backup'" in source
-    # And the claim is only made after the check.
-    claim = source.index("'message': 'Backup created'")
-    guard = source.index('if not filename:')
-    assert guard < claim, 'the success message is built before the check'
-    assert ast.parse(source)  # the file still parses after the edit
-    assert inspect  # keeps the import honest
+
+def test_a_backup_that_did_not_happen_is_not_a_success(instance, monkeypatch):
+    """THE regression, driven through the route.
+
+    The first version of this asserted on the SOURCE — that the guard was
+    written — which is not the same claim and left the new branch with no
+    coverage at all. The per-module floor said so, and it was right: a
+    branch nothing executes is a branch nothing has checked.
+    """
+    app, container, token = instance
+    headers = {'Authorization': f'Bearer {token}', 'Origin': 'http://localhost'}
+
+    monkeypatch.setattr(container.managers['file_ops'],
+                        'create_unified_backup', lambda *a, **k: None)
+    response = app.test_client().post('/api/web/backups/create',
+                                      json={'include_secrets': False},
+                                      headers=headers)
+
+    assert response.status_code == 500, response.get_data(as_text=True)
+    body = response.get_json()
+    assert body.get('error')
+    assert 'filename' not in body, (
+        'the response still carries a filename field for a backup that was '
+        'never written')
+
+
+def test_a_backup_that_did_happen_still_reports_it(instance, monkeypatch):
+    """CONTROL. A route that answered 500 unconditionally would satisfy the
+    test above and break the feature."""
+    app, container, token = instance
+    headers = {'Authorization': f'Bearer {token}', 'Origin': 'http://localhost'}
+
+    monkeypatch.setattr(container.managers['file_ops'],
+                        'create_unified_backup',
+                        lambda *a, **k: 'backup_20260924_real.zip')
+    response = app.test_client().post('/api/web/backups/create',
+                                      json={'include_secrets': False},
+                                      headers=headers)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['filename'] == 'backup_20260924_real.zip'
+    assert body['secrets_masked'] is True
 
 
 def test_every_caller_of_the_backup_checks_its_answer():
@@ -144,9 +191,18 @@ def test_an_event_still_reaches_a_live_stream():
     second = next(stream)
     stream.close()
 
+    # Parsed, not searched. A hostname tested with `in` against a larger
+    # string says nothing about WHERE it matched, which is what CodeQL's
+    # incomplete-url-substring rule is about — and it is right about the
+    # pattern even in a test. Splitting the SSE frame is also the stricter
+    # assertion: it pins the event name and the payload separately.
+    import json as _json
+
+    lines = dict(line.split(': ', 1) for line in second.strip().split('\n'))
+
     assert first.startswith(': connected')
-    assert 'certificate_renewed' in second
-    assert 'a.example.com' in second
+    assert lines['event'] == 'certificate_renewed'
+    assert _json.loads(lines['data']) == {'domain': 'a.example.com'}
 
 
 def test_the_limits_are_tunable_and_clamped(monkeypatch):
