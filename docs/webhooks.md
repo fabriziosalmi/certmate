@@ -69,6 +69,35 @@ Most receivers want their own shape. A **payload template** is JSON text with
 | `{{domain}}` | the certificate domain (shortcut for `details.domain`) |
 | `{{details}}` | the whole event payload as a JSON object |
 | `{{details.<field>}}` | one field of it — `details.error`, `details.days_until_expiry`, `details.expires_at`, `details.hook_name`… |
+| `{{cert}}` | the leaf certificate, PEM |
+| `{{fullchain}}` | the leaf certificate plus its chain, PEM |
+
+### Sending the certificate itself
+
+`{{cert}}` and `{{fullchain}}` are different from the rest: every other
+placeholder comes out of the event, and these two are read from disk when the
+delivery happens. That is deliberate — an event travels to every subscriber,
+and a certificate has no business being handed to listeners that did not ask
+for one. Nothing is read unless the template being rendered names it.
+
+They let a webhook *deliver* a renewal rather than announce it:
+
+```json
+{"domain": "{{domain}}", "chain": "{{fullchain}}", "renewed_at": "{{timestamp}}"}
+```
+
+Both render **empty** when the event names no domain, or names one this
+instance does not hold — a `test` delivery included, since it is about no
+certificate. A certificate and its chain are public material: they are what
+the server presents in every handshake, so this sends nothing an observer
+could not already collect.
+
+**The private key is not a placeholder.** `{{privkey}}` renders as an unknown
+name, and the key file is never opened. Whether the key should travel in the
+same request as the certificate — and under which conditions — is the open
+question in [#218](https://github.com/fabriziosalmi/certmate/issues/218). To
+deliver a key today, use a deploy hook, which runs on the machine that needs
+it and never puts the key in a request body.
 
 Two rules keep a template valid JSON whatever the values are:
 

@@ -259,6 +259,15 @@ METADATA_SCHEMA_VERSION = 1
 #                                         cannot read the served chain, so a
 #                                         leaf-only result is not read as "no
 #                                         intermediate served".
+#   {{cert}} / {{fullchain}}        two new webhook payload-template
+#                                   placeholders, carrying the leaf
+#                                   certificate and the chain (#218). They
+#                                   also appear in the `variables` list the
+#                                   webhook Preview endpoint returns, which
+#                                   is where the interface builds its chips
+#                                   from. A caller that does not use them
+#                                   renders exactly what it rendered before.
+#
 #   POST /api/inventory/scan 409    a scan that arrives while one is already
 #                                   running is declined instead of started
 #                                   beside it. Counted as a MINOR because the
@@ -282,7 +291,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.17'
+API_CONTRACT_VERSION = '2.18'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

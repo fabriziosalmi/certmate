@@ -738,7 +738,8 @@ def initialize_managers(container: AppContainer, app):
     rate_limit_config = RateLimitConfig(settings_manager=settings_manager)
     rate_limiter = SimpleRateLimiter(rate_limit_config)
 
-    notifier = Notifier(settings_manager, data_dir=str(container.data_dir))
+    notifier = Notifier(settings_manager, data_dir=str(container.data_dir),
+                        cert_dir=str(container.cert_dir))
     event_bus = EventBus()
 
     def _on_event(event, data):
