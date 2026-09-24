@@ -216,8 +216,16 @@ def _build_ca_cert_resource(client_cert_manager):
                 )
             except HTTPException:
                 raise
-            except Exception as e:
-                logger.error(f"Error serving CA certificate: {str(e)}")
+            except OSError as e:
+                # `get_ca_cert_pem` checks the path exists and then reads it,
+                # so the only failure it can hand back is the read: a
+                # permission problem, a truncated volume, a mount that went
+                # away between the two. Narrow rather than broad, because
+                # this is one file read and the budget in
+                # scripts/check_exception_budget.py is a ratchet — a `except
+                # Exception` here would raise the pinned count for the sake
+                # of a call that cannot raise anything else.
+                logger.error("Error serving CA certificate: %s", e)
                 abort(500, "Failed to serve CA certificate")
 
     return ClientCertificateAuthorityCert
