@@ -78,10 +78,19 @@ def _digest_manager(audit, config, monkeypatch, sendmail=None):
     manager.audit_logger = audit
     manager.notifier = _Notifier(config)
     manager.settings_manager = None
-    monkeypatch.setattr(manager, 'build_digest', lambda: {
-        'certificates': {'total': 3, 'active': 2, 'revoked': 1},
-        'activity': {'created': 1, 'renewed': 4, 'failed': 0},
-    })
+    # The REAL build_digest, with its three inputs stubbed. The first version
+    # of this replaced build_digest itself and returned `{'certificates': ...,
+    # 'activity': ...}` — a shape it has never produced; the server figures are
+    # under `server_certs`. So the record read a key that does not exist,
+    # stored null in a chain that cannot be rewritten, and this file agreed
+    # with it, because both sides were my assumption rather than the code.
+    monkeypatch.setattr(manager, '_get_server_cert_stats',
+                        lambda: {'total': 3, 'valid': 2, 'expiring_soon': 1,
+                                 'expired': 0, 'expiring_domains': []})
+    monkeypatch.setattr(manager, '_get_client_cert_stats',
+                        lambda: {'total': 5, 'active': 4, 'revoked': 1})
+    monkeypatch.setattr(manager, '_get_weekly_activity',
+                        lambda: {'created': 1, 'renewed': 4, 'failed': 0})
     monkeypatch.setattr(manager, '_format_text', lambda d: 'text')
     monkeypatch.setattr(manager, '_format_html', lambda d: '<p>html</p>')
     return manager
@@ -116,7 +125,8 @@ def test_the_record_carries_the_numbers_the_digest_reported(monkeypatch):
 
     details = audit.entries[0]['details']
     assert details['recipients'] == 2
-    assert details['certificates'] == {'total': 3, 'active': 2, 'revoked': 1}
+    assert details['server_certs']['total'] == 3
+    assert details['client_certs']['total'] == 5
     assert details['activity'] == {'created': 1, 'renewed': 4, 'failed': 0}
 
 
@@ -221,6 +231,31 @@ def test_the_page_no_longer_says_the_digest_is_outside_the_record(page, claim):
     assert 'is not an\n  audit entry' not in text
     assert 'non è una voce di audit' not in text
     assert claim in text
+
+
+def test_the_record_reads_only_keys_the_digest_produces():
+    """The guard that was missing, and the reason this file was wrong.
+
+    `_record` read `certificates`; `build_digest` returns `server_certs`. Both
+    the code and its test used the same invented name, so the test agreed with
+    the defect. Comparing the two functions — rather than a fixture against a
+    fixture — is what makes that impossible to repeat.
+    """
+    import inspect
+    import re
+
+    from modules.core.digest import WeeklyDigest
+
+    produced = set(re.findall(r"'(\w+)':",
+                              inspect.getsource(WeeklyDigest.build_digest)))
+    read = set(re.findall(r"'(\w+)': \(digest or \{\}\)",
+                          inspect.getsource(WeeklyDigest._record)))
+
+    assert read, 'the record no longer reads the digest at all'
+    assert read <= produced, (
+        f'_record reads {sorted(read - produced)}, which build_digest does '
+        f'not return — the entry would store null for it'
+    )
 
 
 def test_the_siem_gets_it_because_the_chain_does():
