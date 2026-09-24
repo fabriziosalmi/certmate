@@ -14,6 +14,7 @@ import tempfile
 
 from flask_restx import Resource
 
+from ..core.ca_manager import acme_directory_refusal
 from .resource_context import ApiContext
 
 logger = logging.getLogger(__name__)
@@ -164,11 +165,26 @@ def create_ca_resources(api, models, ctx: ApiContext) -> dict:
                                 'ca_provider': ca_provider
                             }
 
-                        # Basic URL validation
-                        if not (acme_url.startswith('http://') or acme_url.startswith('https://')):
+                        # The same rule issuance applies, and applied BEFORE
+                        # the fetch below. This used to accept `http://` and
+                        # then go and get it: the test answered "ACME endpoint
+                        # appears valid" for a directory that
+                        # validate_ca_configuration refuses, so an operator saw
+                        # green, saved, and had every issuance fail — and the
+                        # test itself fetched the directory in cleartext to
+                        # say so.
+                        #
+                        # The asymmetry is ours: the https rule arrived in
+                        # validate_ca_configuration and this branch kept the
+                        # startswith check it had before that. Routed through
+                        # the one helper now, so there is no second place for
+                        # the rule to be out of date.
+                        refusal = acme_directory_refusal(
+                            acme_url, 'ACME server URL')
+                        if refusal:
                             return {
                                 'success': False,
-                                'message': 'ACME URL must be a valid HTTP/HTTPS URL',
+                                'message': refusal,
                                 'ca_provider': ca_provider
                             }
 

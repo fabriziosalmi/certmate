@@ -221,12 +221,20 @@ def test_private_ca_names_the_missing_field(endpoint, missing, expected):
     assert expected in body['message'].lower()
 
 
-def test_private_ca_requires_an_http_url(endpoint):
-    """A bare hostname would be handed straight to requests and fail obscurely."""
+def test_private_ca_requires_a_url_it_can_use(endpoint):
+    """A bare hostname would be handed straight to requests and fail obscurely.
+
+    The assertion is on the property, not the wording. It used to require the
+    word "http" in the message, which was the old branch's
+    `startswith('http://') or startswith('https://')` speaking. That branch now
+    goes through `acme_directory_refusal`, the same rule issuance applies, and
+    a bare hostname is reported as a malformed URL rather than as a missing
+    scheme — which is what it is.
+    """
     body = _body(_post(endpoint, {'ca_provider': 'private_ca', 'config': {
         **PRIVATE_OK, 'acme_url': 'ca.internal/acme/directory'}}))
     assert body['success'] is False
-    assert 'http' in body['message'].lower()
+    assert 'format' in body['message'].lower(), body['message']
 
 
 def test_private_ca_rejects_a_ca_cert_that_is_not_pem(endpoint):
