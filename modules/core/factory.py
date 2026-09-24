@@ -781,7 +781,7 @@ def initialize_managers(container: AppContainer, app):
     from .cert_service import CertificateService
     cert_service = CertificateService(
         certificate_manager, settings_manager, auth_manager,
-        audit_logger=audit_logger,
+        audit_logger=audit_logger, event_bus=event_bus,
     )
     from .cert_jobs import IssuanceExecutor
     cert_executor = IssuanceExecutor(app, event_bus=event_bus)

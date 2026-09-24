@@ -63,11 +63,32 @@ class CertificateService:
     """Owns create/renew orchestration on top of ``CertificateManager``."""
 
     def __init__(self, certificate_manager, settings_manager, auth_manager,
-                 audit_logger=None):
+                 audit_logger=None, event_bus=None):
         self._certs = certificate_manager
         self._settings = settings_manager
         self._auth = auth_manager
         self._audit = audit_logger
+        # The lifecycle events used to be published by the RESTX resources and
+        # by nothing else, so a certificate created or renewed through the
+        # dashboard fired no deploy hook and no webhook — the `/api/web/...`
+        # routes call this service directly. Measured before this: the RESTX
+        # create emitted `certificate_created`, its web twin emitted nothing.
+        #
+        # Publishing here puts it where every adapter passes: web, RESTX and
+        # the async IssuanceExecutor. `None` keeps the service usable in the
+        # tests and tools that build it without a bus.
+        self._events = event_bus
+
+    def _publish(self, event, payload):
+        """Announce a lifecycle event, if this instance has a bus.
+
+        Deliberately swallowing nothing: `EventBus.publish` queues and
+        returns, so a slow or failing listener cannot reach here. A bus that
+        raises is a defect worth seeing rather than hiding behind issuance
+        that already succeeded.
+        """
+        if self._events is not None:
+            self._events.publish(event, payload)
 
     def _enforce_scope(self, domain, operation, user, ip_address):
         """Raise :class:`DomainOutOfScope` (after an audit entry) when *user*
@@ -318,6 +339,12 @@ class CertificateService:
             'ca_provider': prepared.get('ca_provider'),
             'challenge_type': prepared.get('challenge_type'),
             'san_count': len(prepared.get('san_domains') or []),
+        })
+        self._publish('certificate_created', {
+            'domain': domain,
+            'san_domains': prepared.get('san_domains') or [],
+            'dns_provider': result.get('dns_provider'),
+            'ca_provider': result.get('ca_provider'),
         })
         return result
 
@@ -713,9 +740,23 @@ class CertificateService:
             result = self._certs.renew_certificate(domain, force=force)
         except Exception as e:
             self._audit_emit(audit_ctx, 'renew', domain, 'failure', error=e)
+            # Not every refusal is a certificate failure. A busy domain is
+            # "try again in a minute" and a missing certificate is a 404 —
+            # publishing `certificate_failed` for either would page someone
+            # for a queue. Only what the CA or the configuration refused,
+            # and what broke inside CertMate, is an event.
+            from .certificates import DomainOperationInProgress
+            if not isinstance(e, (DomainOperationInProgress, FileNotFoundError)):
+                self._publish('certificate_failed',
+                              {'domain': domain, 'error': str(e)})
             raise
         self._audit_emit(audit_ctx, 'renew', domain, 'success',
                          details={'force': bool(force)})
+        # renewed=False is certbot's "not yet due" no-op: nothing was
+        # replaced, so deploy hooks must not fire. Default True keeps the
+        # behaviour for older manager results without the flag.
+        if bool(result.get('renewed', True)):
+            self._publish('certificate_renewed', {'domain': domain})
         return result
 
 

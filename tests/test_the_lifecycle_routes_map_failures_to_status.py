@@ -147,18 +147,45 @@ def test_a_domain_that_is_busy_publishes_no_failure_event(client, service):
     assert not bus.publish.called
 
 
-def test_a_real_renewal_failure_does_publish_one(client, service, app_and_service):
+def test_a_real_renewal_failure_does_publish_one():
     """CONTROL for the above: the event must still fire when the renewal
-    genuinely failed, or the notifier goes quiet on the case it exists for."""
-    app, _ = app_and_service
-    bus = MagicMock()
-    app.config['EVENT_BUS'] = bus
-    service.renew.side_effect = RuntimeError('certbot exited 1')
+    genuinely failed, or the notifier goes quiet on the case it exists for.
 
-    _renew(client)
+    Asked of the SERVICE, not the route. The publish moved into
+    `CertificateService.issue_renew` so that a renewal started from the
+    dashboard emits it too — the `/api/web/...` routes call the service
+    directly and used to fire nothing. A route-level version of this test
+    would mock the service, and so would mock the very thing that publishes.
 
+    That move also made the pair above load-bearing in a way it was not
+    before: `DomainOperationInProgress` is raised inside `renew_certificate`,
+    so a blanket publish in the service would have emitted
+    `certificate_failed` for a 409. The mocked route tests could not see it.
+    """
+    from modules.core.certificates import DomainOperationInProgress
+    from modules.core.cert_service import CertificateService
+
+    def _service(raising):
+        certs = MagicMock()
+        certs.renew_certificate.side_effect = raising
+        bus = MagicMock()
+        return CertificateService(certs, MagicMock(), MagicMock(),
+                                  event_bus=bus), bus
+
+    service, bus = _service(RuntimeError('certbot exited 1'))
+    with pytest.raises(RuntimeError):
+        service.issue_renew({'domain': 'example.com', '_audit_ctx': None})
     assert bus.publish.called
     assert bus.publish.call_args.args[0] == 'certificate_failed'
+
+    for refusal in (DomainOperationInProgress('example.com'),
+                    FileNotFoundError('no certificate here')):
+        service, bus = _service(refusal)
+        with pytest.raises(type(refusal)):
+            service.issue_renew({'domain': 'example.com', '_audit_ctx': None})
+        assert not bus.publish.called, (
+            f'{type(refusal).__name__} published a certificate_failed event; '
+            f'a busy domain and a missing certificate are not failures')
 
 
 # --- create --------------------------------------------------------------
