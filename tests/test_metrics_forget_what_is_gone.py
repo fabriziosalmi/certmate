@@ -17,6 +17,8 @@ simply stops being collected, so its series freezes instead of disappearing.
 while expiring pins a low value and alerts for ever, and one deleted while
 healthy hides its own disappearance behind a stale `valid`.
 """
+import re
+
 import pytest
 
 from modules.core import metrics as M
@@ -34,6 +36,25 @@ CERT_DIR = None
 def _series(text, name):
     return sorted(line for line in text.splitlines()
                   if line.startswith(name + '{'))
+
+
+def _domains(text, name='certmate_certificate_expiry_days'):
+    """The `domain` label values currently exported for *name*.
+
+    Parsed, not searched. `'gone.example.com' in rendered_text` is what this
+    used to do, and CodeQL reads a hostname tested with `in` against a larger
+    string as an incomplete URL check — correctly, as a pattern: a substring
+    match says nothing about WHERE it matched. Comparing label values as a
+    set says exactly what is meant and is a stricter assertion besides.
+    """
+    found = set()
+    for line in text.splitlines():
+        if not line.startswith(name + '{'):
+            continue
+        match = re.search(r'domain="([^"]*)"', line)
+        if match:
+            found.add(match.group(1))
+    return found
 
 
 @pytest.fixture
@@ -112,10 +133,7 @@ def test_a_deleted_certificate_stops_being_reported(collector):
     only_a = _context(['a.example.com'], {'a.example.com': _info(40)})
     collector._collect_certificate_metrics(only_a)
 
-    remaining = _series(_render(), 'certmate_certificate_expiry_days')
-    assert len(remaining) == 1
-    assert 'a.example.com' in remaining[0]
-    assert 'b.example.com' not in _render()
+    assert _domains(_render()) == {'a.example.com'}
 
 
 def test_the_survivor_keeps_its_value(collector):
@@ -140,11 +158,17 @@ def test_all_three_per_domain_gauges_are_forgotten(collector):
         _context(['gone.example.com'],
                  {'gone.example.com': dict(_info(10), renewed_at='2026-01-01T00:00:00Z')}))
 
-    assert 'gone.example.com' in _render()
+    for metric in ('certmate_certificate_expiry_days',
+                   'certmate_certificate_next_renewal_timestamp',
+                   'certmate_certificate_last_renewal_timestamp'):
+        assert _domains(_render(), metric) == {'gone.example.com'}
 
     collector._collect_certificate_metrics(_context([], {}))
 
-    assert 'gone.example.com' not in _render()
+    for metric in ('certmate_certificate_expiry_days',
+                   'certmate_certificate_next_renewal_timestamp',
+                   'certmate_certificate_last_renewal_timestamp'):
+        assert _domains(_render(), metric) == set()
 
 
 def test_a_collection_that_finds_nothing_does_not_wipe_a_live_registry(collector):
@@ -158,5 +182,4 @@ def test_a_collection_that_finds_nothing_does_not_wipe_a_live_registry(collector
 
     collector._collect_certificate_metrics(_context([], {}))
 
-    assert 'other.example.com' in _render()
-    assert 'a.example.com' not in _render()
+    assert _domains(_render()) == {'other.example.com'}

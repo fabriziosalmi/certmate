@@ -96,12 +96,21 @@ def test_an_instance_that_configures_nothing_behaves_as_before():
     """CONTROL. The DoH path is the fallback, not a removal — an instance
     with no nameservers configured must not change behaviour."""
     import inspect
+    import re
+    from urllib.parse import urlsplit
 
     source = inspect.getsource(CertificateManager._resolve_cname)
     doh = inspect.getsource(CertificateManager._resolve_cname_doh)
 
     assert '_resolve_cname_doh' in source
-    assert 'cloudflare-dns.com' in doh
+    # The URL is extracted and its host compared, rather than searched for as
+    # a substring. A hostname tested with `in` against a larger string says
+    # nothing about where it matched — which is exactly what CodeQL's
+    # incomplete-url-substring-sanitization rule is about, and it is right
+    # about the pattern even in a test.
+    urls = re.findall(r"f?'(https://[^']+)'", doh)
+    assert urls, 'no URL literal found in the fallback — this reads nothing'
+    assert urlsplit(urls[0]).hostname == 'cloudflare-dns.com'
 
 
 # --- 4. the docstring example is a value the API accepts ------------------
