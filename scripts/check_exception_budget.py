@@ -119,7 +119,23 @@ GENERAL_LIMIT = 10
 #                                        which is what
 #                                        test_a_failed_name_is_recorded_as_
 #                                        unknown_not_as_passing pins.
-TOTAL_LIMIT = 430
+# 430 -> 431 on 2026-09-24, for sealing the audit chain on a clean shutdown
+# (#876 item 10). LOGS.
+#
+#   modules/core/factory.py   stop_background_work's new checkpoint step. It
+#                             could have been narrowed: write_checkpoint
+#                             catches Exception itself and returns None, so in
+#                             practice only a manager without the method can
+#                             escape it. It is broad anyway, because the
+#                             contract of that function is that NOTHING escapes
+#                             it — every other step in it (scheduler, issuance
+#                             executor, event bus) is broad for the same
+#                             reason, and an audit checkpoint must never be why
+#                             a container fails to stop. Narrowing this one to
+#                             AttributeError would make it the single step that
+#                             can take the process down, which is a worse
+#                             answer than a number going up by one.
+TOTAL_LIMIT = 431
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
@@ -145,7 +161,7 @@ BUDGET = {
     'modules/web/misc_routes.py': 16,
     'modules/api/resources_health.py': 15,
     'modules/core/auth.py': 13,
-    'modules/core/factory.py': 13,
+    'modules/core/factory.py': 14,
     'modules/web/settings_routes.py': 13,
     'modules/api/client_certificates.py': 13,
     'modules/core/client_certificates.py': 12,

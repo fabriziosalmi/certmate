@@ -202,6 +202,40 @@ Generated {digest['generated_at']} by CertMate
 </p>
 </div>'''
 
+    def _record(self, status, digest, recipients, error=None):
+        """Put the send in the audit chain — and therefore in the SIEM.
+
+        The digest READ the audit log and never wrote to it, so "was the
+        weekly report produced and sent" had no answer in the record. The
+        SIEM sink streams each audit entry (#474), so one absence caused
+        both: fixing the entry fixes the stream.
+
+        What it records is deliberately narrow. **Not the recipients.** They
+        are personal data, and this chain is append-only and tamper-evident
+        by construction — there is no supported way to take them back out.
+        The count answers "did it go to the people it should" well enough to
+        notice a list that emptied itself.
+
+        No try/except around the call, deliberately. `log_operation` catches
+        everything itself and logs — audit writes are best-effort by design and
+        never block the operation they describe — so wrapping it again would
+        add a broad handler that cannot fire, and a budget entry defending
+        against nothing.
+        """
+        if self.audit_logger is None:
+            return
+        self.audit_logger.log_operation(
+            operation='send', resource_type='digest', resource_id='weekly',
+            status=status,
+            details={'recipients': recipients,
+                     'certificates': (digest or {}).get('certificates'),
+                     'activity': (digest or {}).get('activity')},
+            user='system', ip_address='local',
+            error=error,
+            actor={'kind': 'system', 'label': 'scheduler'},
+            trigger={'cause': 'schedule'},
+        )
+
     def send(self) -> Dict[str, Any]:
         """Build and send the weekly digest email.
 
@@ -254,6 +288,7 @@ Generated {digest['generated_at']} by CertMate
                     server.login(username, password)
                 server.sendmail(from_addr, to_addrs, msg.as_string())
                 logger.info("Weekly digest email sent successfully")
+                self._record('success', digest, len(to_addrs))
                 return {'success': True}
             finally:
                 try:
@@ -266,4 +301,8 @@ Generated {digest['generated_at']} by CertMate
 
         except Exception as e:
             logger.error(f"Weekly digest email failed: {e}")
+            # A digest that did not go out is the case an auditor cares about
+            # most, so the failure is recorded as deliberately as the success.
+            self._record('failed', digest, len(smtp_cfg.get('to_addresses') or []),
+                         error=str(e))
             return {'error': str(e)}

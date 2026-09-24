@@ -47,8 +47,13 @@ operate certificates on a schedule.
   leave the process (a token in a detail field is redacted), and the sink is
   failure-isolated with a short timeout, like the hash chain: a dead collector
   never blocks or breaks a certificate operation. Lifecycle coverage includes
-  create / renew / deploy / revoke. The scheduled summary digest is not an
-  audit entry and is not sent through the sink.
+  create / renew / deploy / revoke, and the scheduled summary digest: it is an
+  audit entry, so it reaches the sink like any other. What it records is the
+  outcome, how many recipients it was for, and the counts it reported — **not
+  the recipients themselves**, who are personal data this chain cannot take
+  back out afterwards. A digest skipped because notifications or SMTP are off
+  writes nothing: the settings answer that, and a weekly entry saying so would
+  grow the chain forever to say nothing.
 
 ## Regime mapping
 
@@ -106,12 +111,16 @@ operate certificates on a schedule.
   consistent chain. `GET /api/audit/verify` now cross-checks the chain against
   the newest signed checkpoint that verifies under the instance key, so any
   truncation, rewind, or rewrite **at or below** that checkpoint fails
-  verification — the previously write-only checkpoints are now read back. Two
-  gaps remain: (a) entries written **after** the last checkpoint can still be
-  dropped undetected until the next checkpoint seals them, and (b) an operator
-  who holds the signing key can re-sign a fresh checkpoint over a rewritten
-  chain. Keep successive signed exports, or wait for opt-in external anchoring,
-  if you need to close those.
+  verification — the previously write-only checkpoints are now read back. The
+  tail is **sealed on a clean shutdown**: whatever was written since the last
+  checkpoint is signed on the way out, so a container that stops normally
+  leaves nothing unattested. Two gaps remain: (a) a **crash**, a `SIGKILL` or a
+  power loss stops before that, and the entries since the last checkpoint can
+  then still be dropped undetected until the next one seals them — narrowed
+  from "every stop" to "an unclean stop", not closed; and (b) an operator who
+  holds the signing key can re-sign a fresh checkpoint over a rewritten chain.
+  Keep successive signed exports, or wait for opt-in external anchoring, if you
+  need to close those.
 - **The agent-session header is a claim.** It is recorded for correlation but is
   client-supplied; the trustworthy identity is the authenticated API key.
 - **Bootstrap actions are attributed to `setup_user`.** Until setup is complete
