@@ -218,6 +218,16 @@ METADATA_SCHEMA_VERSION = 1
 # means it stopped early or could not read the log; only `complete: true` with
 # an empty result means there are none.
 #
+# 2.15 for POST /api/web/update-check and `enabled` on its GET response. A new
+# endpoint and a new response field, so a MINOR.
+#
+# It exists because 2.13's update check shipped with no way to turn it on:
+# `UpdateCheck.save_config` was there, nothing called it, and the only route
+# was the GET the footer asks. Off by default is the contract; no way to opt in
+# is not an opt-in. Both verbs take a bearer token like their neighbour
+# /api/web/settings — an instance provisioned over the API could otherwise
+# write every other setting and not this one.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -227,7 +237,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.14'
+API_CONTRACT_VERSION = '2.15'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

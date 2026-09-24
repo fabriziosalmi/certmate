@@ -709,6 +709,60 @@
                 }
             }
 
+            // The update check has its own endpoint rather than riding in the
+            // settings payload: it decides whether this instance reaches the
+            // internet at all, it is admin-only for that reason, and it is
+            // audited on change. Read here so the box shows the real state
+            // instead of defaulting to unticked on every load.
+            // The update check has its own endpoint rather than riding in the
+            // settings payload: it decides whether this instance reaches the
+            // internet at all, it is admin-only for that reason, and it is
+            // audited on change.
+            //
+            // It also saves on CHANGE rather than with the form. Riding on
+            // "Save Settings" coupled it to validation that has nothing to do
+            // with it — measured in a browser: on an instance without an email
+            // yet, saveSettings returns at "Email address is required" before
+            // any request, so ticking the box and pressing Save did nothing
+            // and said nothing about why.
+            {
+                var updateField = document.getElementById('update_check_enabled');
+                if (updateField) {
+                    fetch('/api/web/update-check', { credentials: 'same-origin' })
+                        .then(function (r) { return r.ok ? r.json() : null; })
+                        .then(function (d) { if (d) { updateField.checked = d.enabled === true; } })
+                        .catch(function () { /* leave it unticked; the server is the source of truth */ });
+
+                    if (!updateField.dataset.wired) {
+                        updateField.dataset.wired = '1';
+                        updateField.addEventListener('change', function () {
+                            var wanted = updateField.checked;
+                            fetch('/api/web/update-check', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ enabled: wanted })
+                            }).then(function (r) {
+                                if (r.ok) {
+                                    showMessage(wanted
+                                        ? 'Update check enabled'
+                                        : 'Update check disabled', 'success');
+                                    return;
+                                }
+                                // Put the box back: a control that stays where
+                                // it was clicked while the server disagrees is
+                                // the worst of both.
+                                updateField.checked = !wanted;
+                                showMessage('Could not change the update check', 'error');
+                            }).catch(function () {
+                                updateField.checked = !wanted;
+                                showMessage('Could not change the update check', 'error');
+                            });
+                        });
+                    }
+                }
+            }
+
             if (data.renewal_threshold_days !== undefined) {
                 var thresholdField = document.getElementById('renewal_threshold_days');
                 if (thresholdField) {

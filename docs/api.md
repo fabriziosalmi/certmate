@@ -1776,7 +1776,7 @@ The response carries `complete` for exactly that reason:
 |---|---|---|
 | `true` | empty | there are none — safe to act on |
 | `true` | some | all of them, and there are no more |
-| `false` | some | it stopped at `limit`; older matches exist |
+| `false` | some | it stopped at `limit`; there may be older matches |
 | `false` | empty | it could not read the log — **not** "there are none" |
 
 An unfiltered call always reports `complete: true`: the last `limit` entries

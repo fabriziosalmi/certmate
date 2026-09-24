@@ -2015,8 +2015,16 @@ class StorageManager:
     #: compares against it rather than just checking for a value.
     DEFAULT_LOCAL_CERT_DIRNAME = 'certificates'
 
-    def _local_cert_dir(self, storage_config):
+    def local_cert_dir(self, storage_config):
         """Where the local backend writes.
+
+        Public because it is the answer to "which directory", and three more
+        places were deriving it themselves: the storage info endpoint and the
+        test/migrate backends in `modules/api/resources_storage.py` each had
+        their own `Path(config.get('cert_dir', 'certificates'))`. #895 fixed
+        the manager and left those, so with CERTMATE_CERT_DIR set a migrate
+        from local read a relative ./certificates while issuance used the
+        volume.
 
         `CERTMATE_CERT_DIR` moved `CertificateManager` and left this behind,
         so an instance pointed at a volume kept a second tree under its
@@ -2127,7 +2135,7 @@ class StorageManager:
 
             if backend_type == 'local_filesystem':
                 # Default local filesystem backend
-                cert_dir = self._local_cert_dir(storage_config)
+                cert_dir = self.local_cert_dir(storage_config)
                 self._backend = LocalFileSystemBackend(cert_dir)
                 
             elif backend_type == 'azure_keyvault':

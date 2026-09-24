@@ -17,6 +17,35 @@ from .resource_context import ApiContext
 logger = logging.getLogger(__name__)
 
 
+def _local_dir(ctx, config):
+    """Where a local_filesystem backend built here should write.
+
+    Asks the storage manager, which is where the rule lives, rather than
+    re-deriving `Path(config.get('cert_dir', 'certificates'))` — the relative
+    path that #895 removed from the manager and left in three places here. A
+    migrate that reads `./certificates` while issuance writes to the volume
+    copies nothing and reports success.
+    """
+    manager = ctx.managers.get('storage')
+    if manager is not None:
+        return manager.local_cert_dir(config or {})
+    return Path((config or {}).get('cert_dir') or 'certificates')
+
+def _local_storage_update(data):
+    """The local_filesystem part of a storage settings save.
+
+    `cert_dir` is written only when the caller named one. Defaulting to the
+    literal `'certificates'` here is how every settings.json came to carry it
+    whether or not anybody chose it — which is what forces `local_cert_dir` to
+    read that exact string as "unset". A caller who names nothing leaves the
+    field alone and follows CERTMATE_CERT_DIR.
+
+    Module level for the same reason as `_local_dir`: `create_storage_resources`
+    is budgeted and its ceiling only comes down.
+    """
+    chosen = (data.get('cert_dir') or '').strip()
+    return {'cert_dir': chosen} if chosen else {}
+
 def create_storage_resources(api, models, ctx: ApiContext) -> dict:
     """Build the storage-backend resources against *ctx*."""
 
@@ -46,7 +75,12 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                     ],
                     'configuration': {
                         'backend': storage_config.get('backend', 'local_filesystem'),
-                        'cert_dir': storage_config.get('cert_dir', 'certificates')
+                        # The directory in USE, not the raw setting. It
+                        # reported 'certificates' while the backend wrote to
+                        # wherever CERTMATE_CERT_DIR pointed, so the one
+                        # endpoint an operator asks "where are my certificates"
+                        # answered with the string in the file.
+                        'cert_dir': str(storage_manager.local_cert_dir(storage_config))
                     }
                 }
             except Exception as e:
@@ -84,7 +118,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                 from ..core.settings import _strip_masked_values
                 storage_update = {'backend': backend_type}
                 if backend_type == 'local_filesystem':
-                    storage_update['cert_dir'] = data.get('cert_dir', 'certificates')
+                    storage_update.update(_local_storage_update(data))
                 elif backend_type == 'azure_keyvault':
                     storage_update['azure_keyvault'] = data.get('azure_keyvault', {})
                 elif backend_type == 'aws_secrets_manager':
@@ -173,7 +207,8 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                 # Test connection based on backend type
                 try:
                     if backend_type == 'local_filesystem':
-                        test_backend = LocalFileSystemBackend(Path(config.get('cert_dir', 'certificates')))
+                        test_backend = LocalFileSystemBackend(
+                            _local_dir(ctx, config))
 
                     elif backend_type == 'azure_keyvault':
                         test_backend = AzureKeyVaultBackend(config)
@@ -274,8 +309,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
 
             def _build_backend(backend_type, config):
                 if backend_type == 'local_filesystem':
-                    return LocalFileSystemBackend(
-                        Path(config.get('cert_dir', 'certificates')))
+                    return LocalFileSystemBackend(_local_dir(ctx, config))
                 return backend_classes[backend_type](config)
 
             try:
