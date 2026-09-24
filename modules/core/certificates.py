@@ -3946,8 +3946,17 @@ class CertificateManager:
             # Nothing is lost: an operator learns which CA has no usable
             # directory here, and *why* where they configure it — the
             # settings validation and issuance both report the full refusal.
-            logger.info("No usable ACME directory for %s; skipping ARI for "
-                        "its certificates", ca_provider)
+            # Nor the provider name, and for a second reason: CodeQL's
+            # clear-text-logging rule is field-insensitive on a dict, so
+            # anything read out of `cert_info` is treated as the secrets that
+            # dict also holds. `cert_service.py` met the same rule and took
+            # the same way out. The certificate this line is about is named
+            # by the sweep's own per-domain lines, which share this line's
+            # correlation id — and a CA with no usable directory is a
+            # configuration fact, identical for every certificate it issued,
+            # that the settings page reports once instead of nightly.
+            logger.info("Skipping ARI for this certificate: its CA has no "
+                        "usable ACME directory")
             return None
 
     def _ari_says_renew(self, domain, cert_info, settings, now=None):
