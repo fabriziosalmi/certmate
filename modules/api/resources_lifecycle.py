@@ -78,16 +78,49 @@ def _configuration_hint(error_msg: str):
     return None
 
 
+#: Prepended by the create path already (`certificates.py`), so the API must
+#: not prepend it again — the error read "Certificate creation failed:
+#: Certificate creation failed: ..." for every certbot failure.
+_CREATION_PREFIX = 'Certificate creation failed: '
+
+
 def _certbot_hint(error_msg: str) -> str:
-    """The same, for a failure certbot reported."""
+    """The same, for a failure certbot reported.
+
+    Rate limits are tested first, and with `is_acme_rate_limit` rather than
+    the substring `rate limit`. The substring matched none of the markers the
+    CA actually sends: `urn:ietf:params:acme:error:rateLimited` has no space
+    in it, and `too many certificates already issued` does not contain the
+    words at all. Measured before this, on real refusals:
+
+        rateLimited: too many certificates -> "Check DNS provider credentials"
+        too many certificates (5) issued   -> "Check DNS provider credentials"
+        too many failed authorizations     -> "DNS provider authentication
+                                               failed. Verify your API
+                                               credentials in settings."
+
+    The third is the one that decided the order. It contains "auth", so it
+    reached the authentication branch and told an operator to go and rotate
+    credentials that were working, about a refusal that retrying makes worse.
+    """
+    from ..core.utils import is_acme_rate_limit
+
+    if is_acme_rate_limit(error_msg):
+        return "You've hit the certificate authority's rate limit. Wait before trying again."
     lowered = (error_msg or '').lower()
     if 'unauthorized' in lowered or 'auth' in lowered:
         return 'DNS provider authentication failed. Verify your API credentials in settings.'
     if 'timeout' in lowered:
         return 'DNS propagation timed out. Try increasing DNS propagation time in settings.'
-    if 'rate limit' in lowered:
-        return "You've hit the certificate authority's rate limit. Wait before trying again."
     return 'Check DNS provider credentials and ensure DNS records can be created.'
+
+
+def _creation_failure(error_msg: str):
+    """The error body for a certbot failure, prefixed exactly once."""
+    message = (error_msg if error_msg.startswith(_CREATION_PREFIX)
+               else _CREATION_PREFIX + error_msg)
+    return {'code': 'CERTIFICATE_CREATION_FAILED', 'error': message,
+            'hint': _certbot_hint(error_msg)}
 
 
 def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
@@ -206,13 +239,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
             except RuntimeError as e:
                 # Certbot execution errors
-                error_msg = str(e)
-                hint = _certbot_hint(error_msg)
-                return {
-                    'code': 'CERTIFICATE_CREATION_FAILED',
-                    'error': f'Certificate creation failed: {error_msg}',
-                    'hint': hint
-                }, 422
+                return _creation_failure(str(e)), 422
             except Exception as e:
                 logger.error(f"Certificate creation failed: {str(e)}")
                 return {

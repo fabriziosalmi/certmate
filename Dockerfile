@@ -273,8 +273,16 @@ USER certmate
 # Expose port (documents the default; actual port is controlled by $PORT)
 EXPOSE 8000
 
-# Health check uses $PORT so it works when the port is overridden
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check uses $PORT so it works when the port is overridden.
+#
+# start-period is 40s to match docker-compose.yml, which has said 40s since it
+# was written while this said 5s. Measured: a container reaches its first
+# healthy /health in about 7 seconds on a warm host, so 5s was already shorter
+# than a normal boot — and a shorter start-period buys nothing, it only makes
+# a failing check start counting against --retries sooner. The margin is for
+# the runs that are not warm: a cold image, a settings migration, a slow
+# volume.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Use tini as init process for proper signal handling and zombie reaping
