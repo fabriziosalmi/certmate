@@ -112,6 +112,11 @@
                                                @change="toggleEvent(hook, 'renewed')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on renewed">
                                         <span>Renewed</span>
                                     </label>
+                                    <label class="flex items-center gap-1 text-muted">
+                                        <input type="checkbox" :checked="hook.on_events && hook.on_events.indexOf('revoked') !== -1"
+                                               @change="toggleEvent(hook, 'revoked')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on revoked">
+                                        <span>Revoked</span>
+                                    </label>
                                 </div>
                                 <!-- Maintenance window (#632). Absent means "deploy immediately",
                                      which is what every hook did before this existed. -->
@@ -232,6 +237,11 @@
                                                 <input type="checkbox" :checked="hook.on_events && hook.on_events.indexOf('renewed') !== -1"
                                                        @change="toggleEvent(hook, 'renewed')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on renewed">
                                                 <span>Renewed</span>
+                                            </label>
+                                            <label class="flex items-center gap-1 text-muted">
+                                                <input type="checkbox" :checked="hook.on_events && hook.on_events.indexOf('revoked') !== -1"
+                                                       @change="toggleEvent(hook, 'revoked')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on revoked">
+                                                <span>Revoked</span>
                                             </label>
                                         </div>
                                         <!-- Maintenance window (#632). Absent means "deploy immediately",
