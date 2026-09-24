@@ -29,7 +29,8 @@ import urllib.request
 from pathlib import Path
 from cryptography import x509
 from .shell import ShellExecutor
-from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
+from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir,
+                             check_certbot_plugin_installed, clamp_propagation_seconds)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS)
 from .inventory_sources import collect_domain_sources
@@ -179,11 +180,10 @@ def _propagation_seconds(settings, dns_provider, strategy):
         propagation_map = {}
 
     default_seconds = strategy.default_propagation_seconds
-    try:
-        seconds = int(propagation_map.get(dns_provider, default_seconds))
-    except (ValueError, TypeError):
-        seconds = default_seconds
-    return max(1, min(3600, seconds))
+    # The bound lives in dns_strategies now, because the account-level field
+    # needs the same one and was exported unbounded.
+    return clamp_propagation_seconds(
+        propagation_map.get(dns_provider, default_seconds), default_seconds)
 
 
 class _LazySettings:

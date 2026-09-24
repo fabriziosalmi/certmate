@@ -1001,8 +1001,15 @@ class DeployManager:
         """
         if not isinstance(config, dict):
             return False, "Configuration must be an object"
-        if not isinstance(config.get('enabled'), bool):
-            config['enabled'] = False
+        # `enabled` obeys the same rule as every other key, which it did not.
+        # `config.get('enabled')` is None for an absent key, None is not a
+        # bool, so the coercion below rewrote it to False and the merge then
+        # applied it: POST {"targets": [...]} — the very call
+        # docs/deploy-hooks.md tells an API client to make, since targets have
+        # no UI editor — turned off every hook and every target while leaving
+        # them listed. It returned success.
+        if 'enabled' in config and not isinstance(config['enabled'], bool):
+            return False, "enabled must be true or false"
 
         ok, err = self._validate_deploy_config(config)
         if not ok:
