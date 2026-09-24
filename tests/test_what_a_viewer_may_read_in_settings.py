@@ -92,17 +92,53 @@ def _settings(app, container, role, path='/api/web/settings'):
 
 # --- the regression -------------------------------------------------------
 
-@pytest.mark.parametrize('path', ['/api/settings', '/api/web/settings'])
-def test_a_viewer_does_not_read_hook_commands(instance, path):
-    """THE regression, on both addresses the handler answers."""
+def test_a_viewer_does_not_read_hook_commands(instance):
+    """THE regression, at the address that had it.
+
+    `/api/web/settings` is answered by the web handler, which returns the
+    whole settings tree and removes a few keys — a DENYLIST. That is why
+    this kept happening: every subtree added since is included by default,
+    and only the ones somebody remembered are taken out.
+    """
     app, container = instance
 
-    body = _settings(app, container, 'viewer', path)
+    body = _settings(app, container, 'viewer', '/api/web/settings')
 
     assert 'SUPERSECRET123' not in str(body), (
         'a viewer read a deploy hook command, which the project refuses to '
         'even write to the audit log')
     assert 'deploy_hooks' not in body
+
+
+def test_the_other_address_is_safe_by_construction(instance):
+    """`/api/settings` GET is registered twice and the flask-restx resource
+    wins, so it is NOT the handler above. It marshals through an explicit
+    model — an ALLOWLIST — so `deploy_hooks` was never in its output and
+    could not have been.
+
+    Recorded because it is the more interesting half: the mutation that
+    removed the fix left this address green, which is the right answer for
+    the wrong-looking reason. Two addresses, two handlers, two opposite
+    safety models.
+    """
+    app, container = instance
+
+    body = _settings(app, container, 'viewer', '/api/settings')
+
+    assert 'deploy_hooks' not in body
+    assert 'SUPERSECRET123' not in str(body)
+
+    from flask import Flask
+    from flask_restx import Api
+
+    from modules.api.models import create_api_models
+
+    models = create_api_models(Api(Flask('model-probe')))
+    declared = set(models['settings_model'].keys())
+
+    assert declared, 'the settings model declares nothing — this reads nothing'
+    assert 'deploy_hooks' not in declared
+    assert 'users' not in declared and 'api_keys' not in declared
 
 
 def test_an_operator_does_not_either(instance):
