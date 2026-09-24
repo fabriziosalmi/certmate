@@ -97,10 +97,20 @@ except Exception as e:
 # METRICS DEFINITIONS
 # =============================================
 
-# Application info
-certmate_info = Info(
-    'certmate_build_info', 
-    'CertMate application build information',
+# Application info.
+#
+# This used to be Info('certmate_build_info', ..., ['version',
+# 'python_version']). An Info metric declared WITH labelnames is a family:
+# calling .info() on the parent raises AttributeError on every version of
+# prometheus_client (0.21 and the pinned 0.26 both), and the caller swallowed
+# it and built this Gauge in the handler instead. So the Gauge was always the
+# only metric that carried a value, while /metrics exported a permanently
+# sample-less `certmate_build_info_info` HELP/TYPE stanza. The dashboard
+# (monitoring/grafana-dashboard.json) and the docs already query
+# certmate_version_info — the working one is now the only one.
+application_version = Gauge(
+    'certmate_version_info',
+    'CertMate version information',
     ['version', 'python_version']
 )
 
@@ -302,7 +312,17 @@ class CertMateMetricsCollector:
         self.start_time = time.time()
         self.last_collection = 0
         self.collection_interval = 30  # Collect metrics every 30 seconds
-        
+        # (domain, dns_provider) pairs that got a sample on the previous
+        # pass. A Gauge keeps its last value forever, so a certificate that
+        # is deleted stops being collected and its series FREEZES instead of
+        # disappearing: prometheus-alerts.yml alerts on
+        # `min by (domain) (certmate_certificate_expiry_days)`, so a
+        # certificate deleted while expiring pins a low value and fires for
+        # ever, and one deleted while healthy hides its own disappearance
+        # behind a stale `valid`. Tracked here rather than read back off the
+        # Gauge, whose label index is private API.
+        self._certificate_series = set()
+
         # Set application info
         if PROMETHEUS_AVAILABLE:
             import sys
@@ -310,26 +330,17 @@ class CertMateMetricsCollector:
                 from app import __version__
             except ImportError:
                 __version__ = 'unknown'
-            try:
-                # Try the newer way first
-                certmate_info.info({
-                    'version': __version__,
-                    'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-                })
-            except AttributeError as e:
-                # Fall back to older prometheus_client API or use Gauge
-                logger.debug(f"Info metric not supported in this prometheus_client version: {e}")
-                try:
-                    global application_version
-                    application_version = Gauge('certmate_version_info', 'CertMate version information', ['version', 'python_version'])
-                    application_version.labels(
-                        version=__version__,
-                        python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-                    ).set(1)
-                except Exception as fallback_error:
-                    logger.debug(f"Could not set version metric: {fallback_error}")
-            except Exception as e:
-                logger.debug(f"Could not set application info metric: {e}")
+            # One call, no fallback cascade. The three handlers that used to
+            # be here existed to survive an AttributeError that fired every
+            # single time, on every supported prometheus_client — they were
+            # not defending against a version difference, they WERE the code
+            # path. Labelling a Gauge cannot raise for a reason worth hiding.
+            application_version.labels(
+                version=__version__,
+                python_version=f"{sys.version_info.major}."
+                               f"{sys.version_info.minor}."
+                               f"{sys.version_info.micro}"
+            ).set(1)
     
     def should_collect(self) -> bool:
         """Check if it's time to collect metrics."""
@@ -405,6 +416,7 @@ class CertMateMetricsCollector:
             
             # Process all domains (from settings and disk)
             all_domains = set()
+            seen_series = set()
             
             # Add domains from settings
             for domain_config in domains:
@@ -425,7 +437,8 @@ class CertMateMetricsCollector:
                     continue
                 
                 dns_provider = cert_info.get('dns_provider', 'unknown')
-                
+                seen_series.add((domain, dns_provider))
+
                 # Count by provider
                 provider_counts[dns_provider] = provider_counts.get(dns_provider, 0) + 1
                 
@@ -486,6 +499,21 @@ class CertMateMetricsCollector:
                 else:
                     status_counts['missing'] += 1
             
+            # Forget the certificates that are gone. Without this a deleted
+            # domain's last reading stays in /metrics for the lifetime of the
+            # process, and Prometheus cannot tell a frozen series from a live
+            # one. Only series this collector created are removed, so a pass
+            # that fails early (settings unreadable, say) cannot wipe the
+            # registry — it just leaves the previous set in place.
+            for stale in self._certificate_series - seen_series:
+                for gauge in (certificate_expiry_days, certificate_next_renewal,
+                              certificate_last_renewal):
+                    try:
+                        gauge.remove(*stale)
+                    except KeyError:
+                        pass
+            self._certificate_series = seen_series
+
             # Set aggregate metrics
             total_certificates.set(cert_count)
             

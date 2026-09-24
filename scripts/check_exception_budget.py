@@ -135,7 +135,21 @@ GENERAL_LIMIT = 10
 #                             AttributeError would make it the single step that
 #                             can take the process down, which is a worse
 #                             answer than a number going up by one.
-TOTAL_LIMIT = 431
+# 431 -> 429 on 2026-09-24, removing the prometheus Info fallback cascade.
+#
+#   modules/core/metrics.py   Three handlers around `certmate_info.info()`:
+#                             an `except AttributeError` that built a Gauge
+#                             instead, an `except Exception` inside it, and a
+#                             trailing `except Exception`. The AttributeError
+#                             fired on EVERY call, on every prometheus_client
+#                             this project has pinned, because an Info with
+#                             labelnames is a family and `.info()` on the
+#                             parent is not a thing. So the handler was not a
+#                             fallback for an older library — it was the only
+#                             path that ever ran, and the "try" half had never
+#                             worked in any release. Declaring the Gauge
+#                             directly leaves one call that cannot raise.
+TOTAL_LIMIT = 429
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is

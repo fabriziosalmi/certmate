@@ -2106,25 +2106,19 @@ curl -H "Authorization: Bearer your_token" \
 ```
 
 #### Prometheus Metrics Integration
-```python
-# Add to app.py for Prometheus monitoring
-from prometheus_client import Counter, Histogram, generate_latest
 
-# Metrics
-certificate_requests = Counter('certmate_certificate_requests_total', 
- 'Total certificate requests', ['domain', 'status'])
-certificate_expiry = Histogram('certmate_certificate_expiry_days',
- 'Days until certificate expiry', ['domain'])
-
-@app.route('/metrics')
-def metrics():
- return generate_latest()
-```
+Nothing to add: `/metrics` is already a registered route
+([`modules/web/misc_routes.py`](modules/web/misc_routes.py)), and the metrics
+themselves are declared in
+[`modules/core/metrics.py`](modules/core/metrics.py). This section used to
+show a snippet headed "Add to app.py", which would have registered a second,
+unauthenticated `/metrics` on top of the real one.
 
 A ready-to-import **Grafana dashboard**, **Prometheus alert rules**, and an
 authenticated **scrape config** ship in [`monitoring/`](monitoring/) — see
 [monitoring/README.md](monitoring/README.md). The `/metrics` endpoint requires
-the admin role, so scrape it with an admin-scoped API token (Bearer).
+the viewer role, so scrape it with a viewer-scoped API token (Bearer) — a
+scraper reads, so it does not need admin.
 
 #### Log Aggregation
 ```yaml
