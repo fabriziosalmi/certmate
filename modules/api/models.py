@@ -289,6 +289,10 @@ def create_api_models(api):
                                            'actalis', 'sectigo', 'private_ca']),
         'ca_account_id': fields.String(description='CA provider account ID (optional)'),
         'domain_alias': fields.String(description='Optional domain alias for DNS validation'),
+        'alias_dns_provider': fields.String(
+            description=('DNS provider that hosts the alias zone, when it is '
+                         'not the one hosting the primary. Ignored without '
+                         'domain_alias.')),
         'key_type': fields.String(
             description=(
                 "Optional override of the global default key type. Omit to "

@@ -167,10 +167,16 @@ def create_discovery_resources(api, models, ctx: ApiContext) -> dict:
                     if scope_err:
                         return scope_err
 
+            # Which record to expect depends on who publishes it: acme-dns
+            # answers at the bare subdomain, a certbot-style alias under
+            # `_acme-challenge.<alias>`. Falls back to the certificate's own
+            # provider when no separate alias provider is named.
             return ctx.certificates.check_dns_alias_records(
                 domain,
                 domain_alias,
                 san_domains=san_domains,
+                alias_provider=(data.get('alias_dns_provider')
+                                or data.get('dns_provider')),
             ), 200
 
     class CheckCAA(Resource):
@@ -240,6 +246,8 @@ def create_discovery_resources(api, models, ctx: ApiContext) -> dict:
                 domain,
                 domain_alias,
                 san_domains=cert_info.get('san_domains') or [],
+                alias_provider=(cert_info.get('alias_dns_provider')
+                                or cert_info.get('dns_provider')),
             ), 200
 
     return {

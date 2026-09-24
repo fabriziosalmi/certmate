@@ -124,9 +124,9 @@ class CertificateService:
 
     def create(self, *, domain, san_domains=None, dns_provider=None,
                account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
-               domain_alias=None, key_type=None, key_size=None,
-               elliptic_curve=None, user=None, ip_address=None, audit_ctx=None,
-               csr_pem=None):
+               domain_alias=None, alias_dns_provider=None, key_type=None,
+               key_size=None, elliptic_curve=None, user=None, ip_address=None,
+               audit_ctx=None, csr_pem=None):
         """Validate, scope-check, resolve defaults, issue, and persist a new
         certificate; returns the ``CertificateManager.create_certificate``
         result dict. Raises ``ValueError`` (bad input / missing config),
@@ -147,6 +147,7 @@ class CertificateService:
             domain=domain, san_domains=san_domains, dns_provider=dns_provider,
             account_id=account_id, ca_provider=ca_provider, ca_account_id=ca_account_id,
             challenge_type=challenge_type, domain_alias=domain_alias,
+            alias_dns_provider=alias_dns_provider,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             user=user, ip_address=ip_address, audit_ctx=audit_ctx,
             csr_pem=csr_pem,
@@ -154,7 +155,8 @@ class CertificateService:
 
     def prepare_create(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
-                        domain_alias=None, key_type=None, key_size=None,
+                        domain_alias=None, alias_dns_provider=None,
+                        key_type=None, key_size=None,
                         elliptic_curve=None, user=None, ip_address=None,
                         audit_ctx=None, csr_pem=None):
         """Validate, authorize and resolve a create request WITHOUT side
@@ -188,6 +190,13 @@ class CertificateService:
             if not ok:
                 raise ValueError(f'Invalid domain_alias: {normalized_alias}')
             domain_alias = normalized_alias
+        # The alias zone may live with a different provider than the primary
+        # (#129). PATCH and reissue have always read this; create accepted it
+        # in the request body, answered 201, and dropped it — so the only way
+        # to create an alias certificate with a separate alias provider was
+        # to create it wrong and then PATCH it.
+        if not domain_alias:
+            alias_dns_provider = None
         if san_domains and not isinstance(san_domains, list):
             raise ValueError('Invalid san_domains format')
         if san_domains and len(san_domains) > MAX_SAN_DOMAINS:
@@ -254,6 +263,7 @@ class CertificateService:
             'ca_provider': ca_provider,
             'ca_account_id': ca_account_id,
             'domain_alias': domain_alias,
+            'alias_dns_provider': alias_dns_provider,
             'san_domains': san_domains,
             'challenge_type': challenge_type,
             'key_type': key_type,
@@ -284,6 +294,7 @@ class CertificateService:
                 ca_provider=prepared['ca_provider'],
                 ca_account_id=prepared.get('ca_account_id'),
                 domain_alias=prepared['domain_alias'],
+                alias_dns_provider=prepared.get('alias_dns_provider'),
                 san_domains=prepared['san_domains'],
                 challenge_type=prepared['challenge_type'],
                 key_type=prepared['key_type'],
