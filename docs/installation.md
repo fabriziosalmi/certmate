@@ -328,11 +328,24 @@ to the internet.
 
 CertMate's HTTP(S) clients (`requests`, `certbot`, webhook delivery via
 `urllib`, `boto3`) honor the standard `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
-environment variables, so no code changes are needed. **SMTP is the
-exception:** email notifications use `smtplib`, which opens a direct TCP
-connection and does **not** consult the HTTP-proxy variables. On a locked-down
-egress network, allow your SMTP relay's `host:port` directly (a firewall /
-NetworkPolicy rule), or use a webhook notification channel instead of email.
+environment variables, so no code changes are needed. The TLS probes do too:
+the deployment-status check, the inventory sweep, the `POST /api/probe`
+endpoint, the HSTS/header check and the TLS 1.0/1.1 check all tunnel their TCP
+leg with HTTP CONNECT, and the OCSP/CRL revocation fetch — plain HTTP — goes
+through `HTTP_PROXY`. A target that resolves to a private or loopback address
+is always dialled directly, since no outbound proxy serves one.
+
+**Two things do not go through the proxy:**
+
+- **SMTP.** Email notifications use `smtplib`, which opens a direct TCP
+  connection and does **not** consult the HTTP-proxy variables. Allow your
+  SMTP relay's `host:port` directly (a firewall / NetworkPolicy rule), or use
+  a webhook notification channel instead of email.
+- **WHOIS.** The registration-expiry check falls back to WHOIS on port 43 for
+  TLDs with no RDAP, and an HTTP proxy cannot carry that protocol. RDAP —
+  which is HTTPS, and is what most TLDs answer — does go through the proxy.
+  Allow port 43 to the registries you need, or leave those TLDs reporting
+  `unavailable`.
 
 Example with [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager),
 a self-hosted Squid-based forward proxy with a WAF, a DNS sinkhole, and — since

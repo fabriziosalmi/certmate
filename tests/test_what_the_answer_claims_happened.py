@@ -23,6 +23,7 @@ fetch failed issued **1000 requests** and reported `truncated: False`. After:
 5 requests, whether the fetches succeed or fail.
 """
 import logging
+import threading
 import time
 from unittest.mock import MagicMock
 
@@ -239,6 +240,10 @@ def _poll_with(ingest_result, cap=5, entries=500):
     from modules.core.ct_monitor import CTMonitorManager
 
     manager = CTMonitorManager.__new__(CTMonitorManager)
+    # __new__ skips __init__, so every attribute the poll reads has to be set
+    # here — including the lock that stops two polls overlapping. Without it
+    # this raises AttributeError before the cap is ever exercised.
+    manager._poll_lock = threading.Lock()
     manager.inventory = MagicMock()
     manager.inventory.find_by_serial.return_value = None
     manager.settings_manager = MagicMock()

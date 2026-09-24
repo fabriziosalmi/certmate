@@ -259,6 +259,19 @@ METADATA_SCHEMA_VERSION = 1
 #                                         cannot read the served chain, so a
 #                                         leaf-only result is not read as "no
 #                                         intermediate served".
+#   POST /api/inventory/scan 409    a scan that arrives while one is already
+#                                   running is declined instead of started
+#                                   beside it. Counted as a MINOR because the
+#                                   endpoint did not previously recognise that
+#                                   condition at all — it ran a second sweep
+#                                   and answered 200 for it. A caller that
+#                                   does not fire overlapping scans sees no
+#                                   change; one that does now gets told, and
+#                                   the body still carries every leg's
+#                                   summary. Recorded here because the rule
+#                                   below can also be read as "a status code
+#                                   changed", and a reader should be able to
+#                                   disagree having seen the reasoning.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -269,7 +282,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.16'
+API_CONTRACT_VERSION = '2.17'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

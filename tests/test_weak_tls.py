@@ -207,7 +207,7 @@ def test_checking_the_capability_opens_no_socket(monkeypatch):
     def forbidden(*a, **k):
         raise AssertionError('can_offer must not touch the network')
 
-    monkeypatch.setattr(wt.socket, 'socket', forbidden)
+    monkeypatch.setattr('modules.core.cert_probe.socket.socket', forbidden)
     monkeypatch.setattr(socket, 'create_connection', forbidden)
     assert wt.can_offer('TLSv1') is True
 
@@ -239,7 +239,12 @@ def scripted(monkeypatch):
              'sni': []}
     monkeypatch.setattr('modules.core.cert_probe._resolve_and_guard',
                         lambda host, port, allow_private: state['guard'])
-    monkeypatch.setattr(wt.socket, 'socket', lambda f, t: state['socket'])
+    # Patched where the socket is now OPENED. The connect leg moved to
+    # `cert_probe.open_probe_transport` when the probes were taught to tunnel
+    # through an outbound proxy, and patching `wt.socket` after that is
+    # patching a name the module no longer has.
+    monkeypatch.setattr('modules.core.cert_probe.socket.socket',
+                        lambda f, t: state['socket'])
 
     def wrap_socket(self, sock, server_hostname=None):
         state['sni'].append(server_hostname)
@@ -400,7 +405,7 @@ def test_a_socket_that_cannot_even_be_created_is_unavailable(scripted, monkeypat
     def refuse(family, type_):
         raise OSError('too many open files')
 
-    monkeypatch.setattr(wt.socket, 'socket', refuse)
+    monkeypatch.setattr('modules.core.cert_probe.socket.socket', refuse)
     assert wt.probe('example.com', 'TLSv1') == wt.UNAVAILABLE
 
 

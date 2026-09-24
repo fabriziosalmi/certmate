@@ -28,12 +28,14 @@ Two practical constraints shape the design:
 
 import json
 import logging
+import threading
 from .domain_entries import entry_domain
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
 from .cert_probe import parse_certificate
+from .utils import exclusive_run
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +161,12 @@ class CTMonitorManager:
         self.settings_manager = settings_manager
         self.inventory = inventory
         self._client = client  # lazily built from config on first poll if None
+        # One poll at a time. crt.sh is a shared, rate-limited service and the
+        # client's `min_request_interval` paces ONE caller: two polls running
+        # side by side halve the interval it thinks it is honouring. The Scan
+        # endpoint went straight past the scheduler's process lock, so that
+        # was two clicks away.
+        self._poll_lock = threading.Lock()
 
     def get_config(self):
         settings = self.settings_manager.load_settings()
@@ -202,8 +210,17 @@ class CTMonitorManager:
         """Poll crt.sh for the configured/managed domains. Never raises.
 
         Returns a summary dict with counts of new / known certs, per-domain
-        errors, and whether the per-run cap truncated ingestion.
+        errors, and whether the per-run cap truncated ingestion. A poll that
+        arrives while one is running is declined with ``{'skipped': True,
+        'reason': 'already_running'}`` — the same vocabulary as disabled and
+        no-domains, so a caller that already reads ``reason`` needs nothing
+        new.
         """
+        return exclusive_run(self._poll_lock, lambda: self._poll(now),
+                             label='CT-log poll')
+
+    def _poll(self, now):
+        """One poll, with the caller holding :attr:`_poll_lock`."""
         settings = self.settings_manager.load_settings()
         config = dict(DEFAULT_CT_CONFIG)
         config.update(settings.get('ct_monitoring') or {})

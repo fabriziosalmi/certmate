@@ -47,7 +47,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from .utils import utc_now_iso
+from .utils import exclusive_run, utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -549,6 +549,10 @@ class DomainRegistrationManager:
         self.client = client or RegistrationClient(inventory.inventory_dir)
         self._sleep = sleep
         self._now = now or (lambda: datetime.now(timezone.utc))
+        # One check at a time: registries rate-limit, and two sweeps pacing
+        # themselves by LOOKUP_INTERVAL_SECONDS independently ask twice as
+        # fast as either one believes it is asking.
+        self._check_lock = threading.Lock()
 
     def get_config(self):
         settings = self.settings_manager.load_settings() or {}
@@ -612,7 +616,17 @@ class DomainRegistrationManager:
         sweep. Anything else — the settings or the inventory unreadable — is
         left to the caller: the scheduler wrapper logs it and records the run,
         the scan endpoint reports it.
+
+        A second, overlapping call is declined with ``reason:
+        'already_running'`` rather than run beside the first.
         """
+        return exclusive_run(
+            self._check_lock,
+            lambda: self._check(force=force, max_lookups=max_lookups),
+            label='Domain registration check', extra={'results': []})
+
+    def _check(self, *, force, max_lookups):
+        """One check, with the caller holding :attr:`_check_lock`."""
         config = self.get_config()
         if not config.get('enabled') and not force:
             return {'skipped': True, 'reason': 'disabled', 'results': []}

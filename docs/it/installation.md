@@ -1,6 +1,6 @@
 # Guida all'installazione
 
-<!-- CERTMATE-TRANSLATED-FROM b288912f631e6321 -->
+<!-- CERTMATE-TRANSLATED-FROM 90ab677cefc5616f -->
 
 Questa guida illustra tutti i metodi di installazione e deploy di CertMate.
 
@@ -386,7 +386,12 @@ python app.py
 
 CertMate stabilisce connessioni in uscita verso le autorità di certificazione ACME, le API dei provider DNS, lo storage a oggetti e i webhook di notifica via HTTP(S), nonché SMTP per le notifiche email. È possibile confinare e verificare il traffico **HTTP(S)** instradandolo attraverso un **forward proxy** e negando a CertMate qualsiasi altra route verso internet.
 
-I client HTTP(S) di CertMate (`requests`, `certbot`, consegna webhook via `urllib`, `boto3`) rispettano le variabili d'ambiente standard `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, quindi non è necessaria alcuna modifica al codice. **SMTP è l'eccezione:** le notifiche email usano `smtplib`, che apre una connessione TCP diretta e **non** consulta le variabili del proxy HTTP. Su una rete egress chiusa, consentire direttamente l'`host:port` del proprio relay SMTP (regola firewall / NetworkPolicy), oppure usare un canale di notifica webhook al posto dell'email.
+I client HTTP(S) di CertMate (`requests`, `certbot`, consegna webhook via `urllib`, `boto3`) rispettano le variabili d'ambiente standard `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, quindi non è necessaria alcuna modifica al codice. Lo fanno anche le sonde TLS: il controllo dello stato di deploy, la scansione dell'inventario, l'endpoint `POST /api/probe`, il controllo degli header HSTS e quello su TLS 1.0/1.1 incanalano tutti il proprio segmento TCP con HTTP CONNECT, e il recupero OCSP/CRL per la revoca — che è HTTP in chiaro — passa da `HTTP_PROXY`. Un bersaglio che risolve a un indirizzo privato o di loopback viene sempre contattato direttamente, perché nessun proxy in uscita lo serve.
+
+**Due cose non passano dal proxy:**
+
+- **SMTP.** Le notifiche email usano `smtplib`, che apre una connessione TCP diretta e **non** consulta le variabili del proxy HTTP. Consentire direttamente l'`host:port` del proprio relay SMTP (regola firewall / NetworkPolicy), oppure usare un canale di notifica webhook al posto dell'email.
+- **WHOIS.** Il controllo della scadenza di registrazione ripiega su WHOIS sulla porta 43 per i TLD senza RDAP, e un proxy HTTP non può trasportare quel protocollo. RDAP — che è HTTPS, ed è ciò che risponde per la maggior parte dei TLD — passa invece dal proxy. Consentire la porta 43 verso i registri necessari, oppure lasciare che quei TLD riportino `unavailable`.
 
 Esempio con [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager), un forward proxy self-hosted basato su Squid con WAF, DNS sinkhole e — dalla v3.9.0 — una **allowlist egress default-deny** nativa (solo le destinazioni esplicitamente approvate sono raggiungibili; tutto il resto viene rifiutato):
 

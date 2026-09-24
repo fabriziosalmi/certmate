@@ -451,13 +451,31 @@
 
     function runScan() {
         var btn = el('scanNowBtn');
+        var msg = el('scanMsg');
         var original = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning…';
+        if (msg) { msg.textContent = ''; msg.className = 'text-xs text-muted'; }
         fetch('/api/inventory/scan', { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
-            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-            .then(function () { load(); loadRegistrations(); loadDomainHealth(); })
-            .catch(function () { /* keep current view */ })
+            .then(function (r) {
+                // 409 carries a body: a scan was already running and this one
+                // did not happen. Reloading the tables would show the other
+                // run's partial state as though it were the answer to THIS
+                // click, so say what happened instead.
+                return r.json().then(function (body) { return { ok: r.ok, status: r.status, body: body }; },
+                                     function () { return { ok: r.ok, status: r.status, body: {} }; });
+            })
+            .then(function (res) {
+                if (res.ok) { load(); loadRegistrations(); loadDomainHealth(); return; }
+                if (!msg) { return; }
+                msg.textContent = res.status === 409
+                    ? (res.body.error || 'A scan is already running.')
+                    : 'Scan failed.';
+                msg.className = 'text-xs text-danger-fg';
+            })
+            .catch(function () {
+                if (msg) { msg.textContent = 'Scan failed.'; msg.className = 'text-xs text-danger-fg'; }
+            })
             .then(function () { btn.disabled = false; btn.innerHTML = original; });
     }
 

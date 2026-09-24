@@ -13,17 +13,16 @@ A test that stubs the probe must patch it in the module that CALLS it.
 Patching a name re-exported somewhere else rebinds that copy and leaves the
 call site untouched — a test that still runs and no longer tests anything.
 """
-import base64
 from ..core.constants import PROBE_PROTOCOLS
-from ..core.cert_probe import _resolve_and_guard, deployment_target_refusal
+from ..core.cert_probe import (
+    _resolve_and_guard, deployment_target_refusal, proxy_for,
+)
 import http.client
 import logging
 import os
 import socket
 import ssl
 import time
-import urllib.parse
-import urllib.request
 
 logger = logging.getLogger(__name__)
 
@@ -113,24 +112,12 @@ _PROBE_PROTOCOLS = PROBE_PROTOCOLS
 def _https_proxy_for(host):
     """Return (proxy_host, proxy_port, auth_headers) for tunneling to *host*.
 
-    Honours the standard HTTPS_PROXY/https_proxy env vars and the NO_PROXY
-    bypass list (via urllib). Returns None when no proxy applies, so the probe
-    falls back to a direct connection. A raw socket ignores these env vars, so
-    without this CertMate cannot reach external targets on a machine that
-    requires an outbound HTTP proxy (#326).
+    One line, because the rule moved to `core.cert_probe.proxy_for` when the
+    inventory probe, the weak-TLS check and the header check needed the same
+    answer. It stays reachable under this name: `resources.py` re-exports it
+    and the #326 tests import it from there.
     """
-    proxy = urllib.request.getproxies().get('https')
-    if not proxy or urllib.request.proxy_bypass(host):
-        return None
-    parts = urllib.parse.urlsplit(proxy if '://' in proxy else 'http://' + proxy)
-    if not parts.hostname:
-        return None
-    headers = {}
-    if parts.username:
-        raw = f"{urllib.parse.unquote(parts.username)}:{urllib.parse.unquote(parts.password or '')}"
-        token = base64.b64encode(raw.encode()).decode()
-        headers['Proxy-Authorization'] = f'Basic {token}'
-    return parts.hostname, parts.port or 8080, headers
+    return proxy_for(host, 'https')
 
 def _open_probe_socket(host, port, timeout):
     """A TCP connection to *host*, honouring the proxy and the SSRF policy.
