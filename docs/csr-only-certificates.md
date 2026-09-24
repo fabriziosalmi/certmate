@@ -20,7 +20,8 @@ private key never leaves the device, and CertMate never stores one.**
 4. CertMate stores `cert.pem`, `chain.pem`, `fullchain.pem` and the CSR itself —
    and no `privkey.pem`.
 5. At renewal, CertMate re-submits the **stored CSR** to the CA.
-6. If the device rotates its key, submit the new CSR the same way.
+6. If the device rotates its key, submit the new CSR to the **reissue**
+   endpoint — see [Key rotation](#key-rotation).
 
 ## Issuing
 
@@ -111,9 +112,29 @@ Two consequences worth knowing:
 
 ## Key rotation
 
-Submit the new CSR the same way, with the same `domain`. The stored CSR and the
-`csr_fingerprint` in metadata are replaced, and subsequent renewals use the new
-one.
+Submit the new CSR to **reissue**, with the same `domain`:
+
+```bash
+curl -X POST https://certmate.local/api/certificates/device.example.com/reissue \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg csr "$(cat device-new.csr)" '{csr: $csr}')"
+```
+
+The stored CSR and the `csr_fingerprint` in metadata are replaced, and
+subsequent renewals use the new one. The old certificate keeps being served
+until the CA answers, so there is no window without one.
+
+Not `create`: that refuses a domain which already has a certificate, with
+`409 CERTIFICATE_ALREADY_EXISTS`. This page used to say "the same way", which
+read as create and left delete-then-create as the only path — a gap with no
+certificate at all, on the feature you are using precisely because the key
+matters (#876).
+
+The same rules as on create apply: the certificate covers the names inside the
+CSR, so `san_domains` and the key options must be omitted. SANs the current
+certificate has are **replaced** by the CSR's names rather than added to
+them.
 
 ## Deploy hooks
 

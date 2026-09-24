@@ -199,6 +199,14 @@ METADATA_SCHEMA_VERSION = 1
 # resolver of your own" and there was no way to (#881) — advice for something
 # the product did not let you do.
 #
+# 2.13 for `csr` on POST /api/certificates/<domain>/reissue: a new OPTIONAL
+# request field, so a MINOR. It exists because the documented way to rotate a
+# CSR-only certificate's key — submit the new CSR the same way, same domain —
+# did not work: create answers 409 for a domain that already has one and
+# points at reissue, and reissue took no CSR. The only path was delete then
+# create, with no certificate in between, on the feature people choose
+# precisely because they keep the private key elsewhere (#876 item 6).
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -208,7 +216,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.12'
+API_CONTRACT_VERSION = '2.13'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
