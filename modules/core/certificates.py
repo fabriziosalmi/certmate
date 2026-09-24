@@ -3604,6 +3604,15 @@ class CertificateManager:
             # releasing the domain lock and cleaning up credential files.
             logger.error(f"Certificate renewal timed out for {domain}")
             raise RuntimeError("Certificate renewal timed out")
+        except (FileNotFoundError, DomainOperationInProgress):
+            # These already say what they mean, and the routes map them to
+            # 404 and 409. Re-wrapping them as RuntimeError turned both into
+            # a 422 "renewal failed" — so the `except FileNotFoundError` arm
+            # in resources_lifecycle.py was dead code, and an operator asking
+            # to renew a certificate that is not there was told the CA had
+            # refused. Measured on a real manager: RuntimeError("Exception:
+            # No certificate found for domain: ...").
+            raise
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")

@@ -169,13 +169,18 @@ class TestLockWaitGracePeriod:
 
     def test_renew_waits_for_release_then_proceeds(self, tmp_path, monkeypatch):
         """Same shape as the create wait test, for renew_certificate. With no
-        cert staged, the first thing renew does after acquiring the lock is the
-        existence check, which raises 'No certificate found...'. renew's broad
-        try/except re-wraps that as a plain RuntimeError (the lock acquire sits
-        BEFORE the try, so a DomainOperationInProgress would never be wrapped).
-        Getting a RuntimeError carrying 'No certificate found' — and crucially
-        NOT a DomainOperationInProgress — proves renew waited for the release
-        and got past the barrier into its normal flow."""
+        cert staged, the first thing renew does after acquiring the lock is
+        the existence check, which raises FileNotFoundError('No certificate
+        found...'). Getting that — and crucially NOT a
+        DomainOperationInProgress — proves renew waited for the release and
+        got past the barrier into its normal flow.
+
+        This used to expect a plain RuntimeError, because renew's catch-all
+        re-wrapped every exception including this one. That wrapping made the
+        route's `except FileNotFoundError` arm dead code and answered 422 for
+        a certificate that is simply not there, so FileNotFoundError passes
+        through now. What this test measures — the wait, not the wrapping —
+        is unchanged; it was pinning the wrapping in passing."""
         monkeypatch.setenv("CERTMATE_DOMAIN_LOCK_TIMEOUT", "2")
         mgr = _make_manager(tmp_path)
         domain = "renewwait.example.com"
@@ -192,7 +197,7 @@ class TestLockWaitGracePeriod:
         releaser = threading.Thread(target=_release_after_delay)
         releaser.start()
         try:
-            with pytest.raises(RuntimeError) as exc:
+            with pytest.raises(FileNotFoundError) as exc:
                 mgr.renew_certificate(domain)
             assert not isinstance(exc.value, DomainOperationInProgress)
             assert "No certificate found" in str(exc.value)
