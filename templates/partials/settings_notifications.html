@@ -102,7 +102,17 @@
                                     <button type="button" @click="config.channels.webhooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 text-sm"><i class="fas fa-trash"></i></button>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div class="sm:col-span-2" x-show="wh.type !== 'telegram'"><input type="url" x-model="wh.url" :placeholder="wh.type === 'google_chat' ? 'https://chat.googleapis.com/v1/spaces/.../messages?key=...&amp;token=...' : (wh.type === 'ntfy' ? 'https://ntfy.sh/your-topic' : (wh.type === 'gotify' ? 'https://gotify.example.com' : 'https://hooks.slack.com/...'))" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    <div class="sm:col-span-2" x-show="wh.type !== 'telegram'">
+                                        <!-- `type` is bound, not fixed: while the field holds the
+                                             mask it does not hold a URL, and claiming otherwise makes
+                                             the browser mark a correctly-saved webhook invalid. The
+                                             moment the operator types, the value stops being the mask
+                                             and url validation comes back. -->
+                                        <input :type="wh.url === MASK ? 'text' : 'url'" x-model="wh.url" aria-label="Webhook URL" :placeholder="wh.type === 'google_chat' ? 'https://chat.googleapis.com/v1/spaces/.../messages?key=...&amp;token=...' : (wh.type === 'ntfy' ? 'https://ntfy.sh/your-topic' : (wh.type === 'gotify' ? 'https://gotify.example.com' : 'https://hooks.slack.com/...'))" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input">
+                                        <p x-show="wh.url === MASK &amp;&amp; wh.url_hint" class="mt-1 text-xs text-muted">
+                                            Saved: <span class="font-mono" x-text="wh.url_hint"></span> &mdash; the rest is hidden because the URL is the credential. Re-enter the whole URL to change it.
+                                        </p>
+                                    </div>
                                     <div>
                                         <select x-model="wh.type" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input">
                                             <option value="generic">Generic</option>

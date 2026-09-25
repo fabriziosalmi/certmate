@@ -182,6 +182,53 @@ def _webhook_config_for_save(settings_manager, webhook):
     return webhook
 
 
+def _with_webhook_url_hints(raw, masked):
+    """Add each webhook's `url_hint` to an already-masked notifications config.
+
+    #944: the URL is masked because it is the credential, which left the
+    settings page showing a name and `********` — no way to tell which receiver
+    a webhook points at, or to spot a wrong host, without re-typing it from
+    memory. The hint is origin-only (see `webhook_url_hint`), derived on read
+    and never stored.
+
+    Read from `raw`, written into `masked`, matched by POSITION and not by
+    identity: these are the same list in the same order, one a deep-copied mask
+    of the other, so position is exact here — unlike on the save path, where the
+    list has been through the operator and position is the one thing that must
+    not be trusted (see `_restore_masked_list_secrets`).
+
+    Derived, so `_strip_derived_webhook_fields` drops it again on save: a field
+    the server invented must never come back as configuration.
+    """
+    from modules.core.notifier import webhook_url_hint
+
+    raw_whs = (((raw or {}).get('channels') or {}).get('webhooks')) or []
+    out_whs = (((masked or {}).get('channels') or {}).get('webhooks')) or []
+    if not isinstance(raw_whs, list) or not isinstance(out_whs, list):
+        return masked
+    for source, target in zip(raw_whs, out_whs):
+        if isinstance(source, dict) and isinstance(target, dict):
+            target['url_hint'] = webhook_url_hint(source.get('url', ''))
+    return masked
+
+
+def _strip_derived_webhook_fields(data):
+    """Remove server-derived webhook fields from a submitted config.
+
+    `url_hint` is computed on GET and the UI round-trips the GET response, so
+    without this it would be written to settings.json as though the operator had
+    configured it — a stored copy of a derived value, stale the moment the URL
+    changes, and one more thing for a backup to carry.
+    """
+    whs = (((data or {}).get('channels') or {}).get('webhooks'))
+    if not isinstance(whs, list):
+        return data
+    for wh in whs:
+        if isinstance(wh, dict):
+            wh.pop('url_hint', None)
+    return data
+
+
 def _event_stream_response(event_bus):
     """The SSE response, or a refusal.
 
@@ -692,7 +739,8 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                 # for the same subtree.
                 from modules.core.settings import mask_secrets_in_settings
                 raw = notifier._get_config() or {}
-                return jsonify(mask_secrets_in_settings(raw))
+                return jsonify(_with_webhook_url_hints(raw,
+                                                       mask_secrets_in_settings(raw)))
             except Exception as e:
                 logger.error(f"Failed to read notifications config: {e}")
                 return jsonify({'error': 'Failed to read notifications config'}), 500
@@ -701,6 +749,9 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             data = request.json or {}
             if not isinstance(data, dict):
                 return jsonify({'error': 'Body must be a JSON object'}), 400
+            # `url_hint` is derived on GET and the UI echoes the GET response
+            # back, so it must not survive into the stored config.
+            _strip_derived_webhook_fields(data)
 
             # Audit H4 (May 2026): the prior `s['notifications'] = data`
             # wholesale-replaced the subtree. The UI round-trips a GET

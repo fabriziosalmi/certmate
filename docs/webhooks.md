@@ -59,7 +59,8 @@ dashboard's certificate detail panel (`/?cert=<domain>`). No separate text
 message is sent.
 It uses the same event filters, delivery attempts and delivery log as other
 webhooks. Google Chat webhook URLs contain `key` and `token` query parameters:
-the entire URL is masked when settings are read back, preserved on an
+the entire URL is masked when settings are read back — with
+`https://chat.googleapis.com/…?…` shown beside it as above — preserved on an
 unrelated save, and reduced to `https://chat.googleapis.com` in delivery logs.
 Only HTTPS incoming webhook URLs at `chat.googleapis.com` are accepted for
 this channel. Invalid Google Chat destinations (or an invalid optional
@@ -167,6 +168,22 @@ custom header are masked as `********`, and preserved unchanged when the form
 is saved without retyping them. Preview masks less: it shows the URL, and
 masks only headers whose name contains `authorization`, `key`, `token`,
 `secret` or `cookie`.
+
+Next to the masked URL the settings page shows the **origin** of the saved one
+— `https://hooks.slack.com/…`, `https://gotify.example.com:8443/…?…` — so you
+can tell which receiver a webhook points at and spot a wrong host or port
+without re-typing it. The markers say only that a path and/or a query exist;
+none of their content is shown, because the secret sits in a different place
+for each receiver (the last path segment for Slack and Discord, the topic in
+the first segment for ntfy, a query parameter for Gotify and Google Chat), and
+any userinfo in the URL is dropped. It is enough to recognise the destination
+and not enough to use it. Changing the URL means entering the whole of it.
+
+This origin appears only in `GET /api/notifications/config`, which requires the
+**admin** role and where the same origin is already readable for every delivery
+through `GET /api/webhooks/deliveries`. `GET /api/settings`, which the
+**viewer** role may read, and the share-safe backup ZIP both keep masking the
+URL whole and carry no origin.
 
 The delivery log records the webhook's name and type, the **origin** of its
 URL, the event, the HTTP status, the number of attempts, the error and the
