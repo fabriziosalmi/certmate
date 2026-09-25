@@ -26,6 +26,7 @@ them would lose it.
    says there may be.
 """
 import pathlib
+import re
 import secrets
 
 import pytest
@@ -181,23 +182,63 @@ def test_the_checkpoint_docstring_knows_about_its_second_caller():
     )
 
 
+_NUMBER_WORDS = {1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
+                 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'}
+
+
+# The claim shape that drifted: "the settings page offers six events".
+# Not every "N events" is a count of the offered list — a comment saying "the
+# two events above" is prose about neighbouring lines, and an earlier draft of
+# this gate flagged it.
+_COUNT_CLAIM = re.compile(
+    r'\b(?:offers|offering|lists|names|only the)\s+'
+    r'(one|two|three|four|five|six|seven|eight|nine|ten)\s+events\b')
+
+
+def _miscounts(text, correct):
+    """Number words that claim a count of the offered events and are wrong."""
+    claimed = set(_COUNT_CLAIM.findall(text))
+    return sorted(claimed - {_NUMBER_WORDS[correct]})
+
+
 def test_the_webhooks_page_counts_the_events_the_ui_offers():
+    """The page must say the number the code produces.
+
+    This test used to forbid the literal string 'six events', because six was
+    the wrong number on the day it was written. Then #943 moved
+    certificate_failed out of the filterable set and six became the right
+    answer — and a gate that bans a string cannot tell those two apart, so it
+    failed the corrected page. It derives the number now."""
     from modules.factory import _EVENT_TITLES
     from modules.core.notifier import _ALWAYS_NOTIFY_EVENTS
 
     page = (REPO / 'docs' / 'webhooks.md').read_text(encoding='utf-8')
     filterable = set(_EVENT_TITLES) - set(_ALWAYS_NOTIFY_EVENTS)
+    correct = _NUMBER_WORDS[len(filterable)]
 
-    assert 'six events' not in page
-    assert f'{len(filterable)} events' in page or 'seven events' in page
-    assert 'certificate_deployed` is not among them' not in page
+    assert f'{correct} events' in page, (
+        f'the settings page offers {len(filterable)} filterable events; '
+        f'docs/webhooks.md does not say "{correct} events"')
+    assert not _miscounts(page, len(filterable)), (
+        f'docs/webhooks.md also claims {_miscounts(page, len(filterable))}')
+    for event in filterable:
+        assert f'`{event}`' in page, f'{event} is offered and the page omits it'
+    for event in _ALWAYS_NOTIFY_EVENTS:
+        assert f'`{event}`' in page, (
+            f'{event} bypasses the filter and the page does not say so')
 
 
-def test_no_comment_still_says_six():
-    """Two comments in notifier.py said it as well, and a comment is what the
-    next person reads before the page."""
+def test_no_comment_claims_a_different_count():
+    """The comments in notifier.py are what the next person reads before the
+    page, and they drift the same way."""
+    from modules.factory import _EVENT_TITLES
+    from modules.core.notifier import _ALWAYS_NOTIFY_EVENTS
+
     notifier = (REPO / 'modules' / 'core' / 'notifier.py').read_text(encoding='utf-8')
-    assert 'six events' not in notifier
+    correct = len(set(_EVENT_TITLES) - set(_ALWAYS_NOTIFY_EVENTS))
+    assert not _miscounts(notifier, correct), (
+        f'a comment in notifier.py claims {_miscounts(notifier, correct)} '
+        f'while {correct} events are filterable')
     assert 'five certificate_*' not in notifier
 
 

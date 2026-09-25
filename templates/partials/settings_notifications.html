@@ -33,6 +33,7 @@
                             </label>
                         </template>
                     </div>
+                    <p class="mt-2 text-xs text-muted">Failures are always sent and are not listed here: a certificate that did not issue or renew, and a deploy hook that did not succeed.</p>
                 </div>
 
                 <!-- SMTP -->
@@ -138,7 +139,7 @@
                                 </div>
                                 <!-- Per-webhook event filtering -->
                                 <div class="mt-1">
-                                    <label class="text-xs text-muted mb-1 block">Events (leave empty for all)</label>
+                                    <label class="text-xs text-muted mb-1 block">Events (leave empty for all; failures are always sent)</label>
                                     <div class="flex flex-wrap gap-1.5">
                                         <template x-for="evt in notifiableEvents">
                                             <label class="inline-flex items-center px-2 py-1 rounded text-xs cursor-pointer border transition"

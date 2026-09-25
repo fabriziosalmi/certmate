@@ -2,11 +2,12 @@
 
 deploy_hook_failed is the silent-deploy alarm: a renewal succeeds but its deploy
 hook (nginx reload, LB push) exits non-zero, so the service keeps serving the OLD
-certificate while the dashboard says success. The events UI offers only the five
-certificate_* events, so an operator who ticks any of them sets a filter that
-does not include deploy_hook_failed and permanently silences exactly the alert it
-exists to raise. Critical failure events now bypass both the global and the
-per-webhook event filter.
+certificate while the dashboard says success. The events UI offers only the
+filterable events, so an operator who ticks any of them sets a filter that does
+not include deploy_hook_failed and permanently silences exactly the alert it
+exists to raise. Critical failure events bypass both the global and the
+per-webhook event filter. certificate_failed joined them in #943 — see
+tests/test_a_failure_you_cannot_filter_away.py.
 """
 from unittest.mock import MagicMock
 
