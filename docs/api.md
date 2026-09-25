@@ -1120,6 +1120,14 @@ Runs a discovery sweep and a CT-log poll immediately and returns both
 summaries. The two are failure-isolated: one failing does not stop the other,
 and the summary says which.
 
+Since API contract **2.17**, a scan that arrives while one is already running
+is declined rather than started beside it: each leg answers
+`{"skipped": true, "reason": "already_running"}` and the response is **409**
+with `code: SCAN_IN_PROGRESS`, naming the legs that were busy. The body still
+carries every leg's summary, so a caller can see which parts did run. Legs
+that were not busy do run — a poll declined because discovery is mid-sweep
+does not stop the registration check.
+
 #### Cryptographic readiness report
 
 **Endpoint**: `GET /api/inventory/crypto-report` — viewer

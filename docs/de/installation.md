@@ -1,6 +1,6 @@
 # Installationsanleitung
 
-<!-- CERTMATE-TRANSLATED-FROM b288912f631e6321 -->
+<!-- CERTMATE-TRANSLATED-FROM 90ab677cefc5616f -->
 
 Diese Anleitung beschreibt alle Methoden zur Installation und zum Deployment von CertMate.
 
@@ -313,12 +313,25 @@ CertMate jeden anderen Weg ins Internet verweigern.
 CertMates HTTP(S)-Clients (`requests`, `certbot`, Webhook-Zustellung via
 `urllib`, `boto3`) berücksichtigen die Standard-Umgebungsvariablen
 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, sodass keine Code-Änderungen
-erforderlich sind. **SMTP ist die Ausnahme:** E-Mail-Benachrichtigungen
-verwenden `smtplib`, das eine direkte TCP-Verbindung öffnet und die
-HTTP-Proxy-Variablen **nicht** berücksichtigt. In einem abgeschotteten
-Egress-Netzwerk erlauben Sie direkt `host:port` Ihres SMTP-Relays (per
-Firewall-/NetworkPolicy-Regel), oder verwenden Sie einen Webhook-Benachrichtigungskanal
-statt E-Mail.
+erforderlich sind. Die TLS-Sonden ebenfalls: die Deployment-Status-Prüfung,
+der Inventar-Durchlauf, der Endpunkt `POST /api/probe`, die HSTS-/Header-Prüfung
+und die Prüfung auf TLS 1.0/1.1 tunneln ihre TCP-Strecke alle per HTTP CONNECT,
+und der OCSP/CRL-Abruf für den Sperrstatus — einfaches HTTP — läuft über
+`HTTP_PROXY`. Ein Ziel, das auf eine private oder Loopback-Adresse auflöst,
+wird immer direkt angesprochen, da kein Ausgangs-Proxy eine solche bedient.
+
+**Zwei Dinge laufen nicht über den Proxy:**
+
+- **SMTP.** E-Mail-Benachrichtigungen verwenden `smtplib`, das eine direkte
+  TCP-Verbindung öffnet und die HTTP-Proxy-Variablen **nicht** berücksichtigt.
+  Erlauben Sie direkt `host:port` Ihres SMTP-Relays (per
+  Firewall-/NetworkPolicy-Regel), oder verwenden Sie einen
+  Webhook-Benachrichtigungskanal statt E-Mail.
+- **WHOIS.** Die Prüfung des Registrierungsablaufs weicht bei TLDs ohne RDAP
+  auf WHOIS über Port 43 aus, und ein HTTP-Proxy kann dieses Protokoll nicht
+  transportieren. RDAP — das HTTPS ist und das die meisten TLDs beantworten —
+  läuft sehr wohl über den Proxy. Erlauben Sie Port 43 zu den benötigten
+  Registries, oder lassen Sie diese TLDs `unavailable` melden.
 
 Beispiel mit [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager),
 einem selbst gehosteten Squid-basierten Forward Proxy mit WAF, DNS-Sinkhole und —

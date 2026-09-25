@@ -190,7 +190,7 @@
             },
             // Payload-template editor (#218): the placeholder chips, insertion at
             // the caret, and a dry render through /api/notifications/webhook/preview.
-            templateVariables: ['event', 'title', 'message', 'timestamp', 'domain', 'details', 'details.error', 'details.days_until_expiry', 'details.expires_at'],
+            templateVariables: ['event', 'title', 'message', 'timestamp', 'domain', 'details', 'details.error', 'details.days_until_expiry', 'details.expires_at', 'cert', 'fullchain'],
             insertPlaceholder: function (wh, name, ev) {
                 var token = '{{' + name + '}}';
                 var card = ev && ev.target ? ev.target.closest('.border.rounded-lg') : null;

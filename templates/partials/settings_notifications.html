@@ -221,6 +221,7 @@
                                         </div>
                                         <textarea x-model="wh.payload_template" :data-wh-idx="idx" rows="5" spellcheck="false" aria-label="Payload template" placeholder='{"text": "{{title}}: {{domain}} ({{event}})"}' class="w-full px-3 py-2 text-xs font-mono border text-foreground border-border rounded-lg bg-input"></textarea>
                                         <p class="mt-1 text-[11px] text-muted">Inside a string a value is escaped; outside it becomes a JSON literal (number, object, null). <code>{{details.&lt;field&gt;}}</code> reaches any field of the event.</p>
+                                        <p class="mt-1 text-[11px] text-muted"><code>{{cert}}</code> and <code>{{fullchain}}</code> carry the certificate itself, read at delivery time. They are empty when the event names no domain — a Test delivery included, since it is about no certificate. The private key is not a template variable.</p>
                                         <div x-show="wh._preview" x-cloak class="mt-2 rounded-lg border border-border bg-sunken p-2">
                                             <div class="flex items-center justify-between text-[11px] text-muted mb-1">
                                                 <span><span class="font-mono" x-text="wh._preview && wh._preview.method"></span> <span class="font-mono" x-text="wh._preview && wh._preview.url"></span></span>

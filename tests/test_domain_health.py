@@ -1169,7 +1169,9 @@ def fake_https(monkeypatch):
                 raise state['tls_error']
             return sock
 
-    monkeypatch.setattr(dh.socket, 'socket', make_socket)
+    # Patched in cert_probe, which is where the connect leg lives now that
+    # the probes tunnel through an outbound proxy when one applies.
+    monkeypatch.setattr('modules.core.cert_probe.socket.socket', make_socket)
     monkeypatch.setattr(ssl, 'create_default_context', lambda: Context())
     return state
 

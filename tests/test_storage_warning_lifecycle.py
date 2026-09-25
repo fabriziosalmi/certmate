@@ -95,10 +95,19 @@ def test_clearing_is_a_no_op_when_there_was_no_warning(tmp_path):
 
 
 def test_create_and_renew_share_one_implementation():
-    """They drifted precisely because they were two copies of this logic."""
+    """They drifted precisely because they were two copies of this logic.
+
+    Read off the whole renewal path rather than off `renew_certificate`
+    alone: #666 moved the storage call into `_publish_renewed_certificate`,
+    and a test that greps one method name stops covering the contract the
+    moment the code moves — see tests/renewal_path.py.
+    """
     import inspect
+
+    from tests.renewal_path import renewal_path_source
+
     src = inspect.getsource(CertificateManager.create_certificate)
-    renew_src = inspect.getsource(CertificateManager.renew_certificate)
+    renew_src = renewal_path_source()
     for body in (src, renew_src):
         assert '_store_in_backend' in body
         assert '_apply_storage_warning' in body

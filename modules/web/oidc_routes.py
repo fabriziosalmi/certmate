@@ -23,7 +23,7 @@ distinguish them only where it actually matters.
 import logging
 from urllib.parse import urlparse
 
-from flask import jsonify, redirect, request
+from flask import current_app, jsonify, redirect, request
 
 from modules.core.oidc import SECRET_MASK_SENTINEL
 
@@ -176,7 +176,23 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
         # duration became two (#590); both now ask the AuthManager.
         response.set_cookie(
             'certmate_session', session_id, httponly=True,
-            secure=request.is_secure, samesite='Strict', path='/',
+            # The decision the app already makes, rather than a
+            # per-request fact. `request.is_secure` is False behind a
+            # TLS-terminating proxy unless BEHIND_PROXY wires ProxyFix,
+            # so an operator who declared HTTPS (PREFERRED_URL_SCHEME or
+            # CERTMATE_ENABLE_HSTS) still got a session cookie without
+            # Secure — while their users were on HTTPS. factory.py
+            # computes exactly that for Flask's own cookie, with the
+            # right reasoning beside it; this one ignored it.
+            #
+            # `or request.is_secure` keeps the case where the request
+            # genuinely arrived over TLS and nothing was declared. A
+            # plain-HTTP install with no HTTPS signal still gets a cookie
+            # the browser accepts — setting Secure there would not harden
+            # anything, it would stop anyone logging in.
+            secure=(current_app.config.get('SESSION_COOKIE_SECURE')
+                    or request.is_secure),
+            samesite='Strict', path='/',
             max_age=auth_manager.session_timeout_seconds,
         )
 

@@ -3330,115 +3330,8 @@ class CertificateManager:
                 process_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
                 artifacts.ca_extra_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
 
-            dns_provider = metadata.get('dns_provider')
-            challenge_type = metadata.get('challenge_type', 'dns-01')
-
-            domain_alias = metadata.get('domain_alias')
-            if domain_alias:
-                alias_provider = metadata.get('alias_dns_provider') or dns_provider
-                if not alias_provider:
-                    raise RuntimeError(f"Cannot renew {domain}: metadata is missing alias DNS provider")
-
-                settings = self.settings_manager.load_settings()
-                dns_config, _ = self.dns_manager.get_dns_provider_account_config(
-                    alias_provider,
-                    metadata.get('account_id'),
-                    settings,
-                )
-                if not dns_config:
-                    raise RuntimeError(
-                        f"Cannot renew {domain}: DNS alias provider account for {alias_provider} is not configured"
-                    )
-
-                strategy = DNSStrategyFactory.get_strategy(alias_provider)
-                # Inject provider env vars (e.g. AWS credentials) for alias renewals too
-                strategy.prepare_environment(process_env, dns_config)
-
-                propagation_time = _propagation_seconds(
-                    settings, alias_provider, strategy)
-
-                artifacts.alias_hook_config = self._create_dns_alias_hook_config(
-                    alias_provider,
-                    dns_config,
-                    domain_alias,
-                    propagation_time,
-                )
-                self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
-                logger.info(
-                    f"Renewing {domain} with DNS alias '{domain_alias}' "
-                    f"using {alias_provider} manual hook."
-                )
-            elif dns_provider and challenge_type != 'http-01':
-                # Standard DNS-01 renewal: load DNS config and prepare env vars
-                settings = self.settings_manager.load_settings()
-                dns_config, _ = self.dns_manager.get_dns_provider_account_config(
-                    dns_provider,
-                    metadata.get('account_id'),
-                    settings,
-                )
-                acme_dns_alias = self._acme_dns_native_alias(dns_provider, dns_config)
-                if dns_config and acme_dns_alias:
-                    # Mirror the create path: acme-dns renews through CertMate's
-                    # native hook, never through a certbot plugin (issue #466).
-                    # Certs issued before this fix carry no domain_alias in
-                    # metadata, so they land here rather than in the alias
-                    # branch above — routing on the provider keeps them renewable
-                    # without a metadata migration.
-                    strategy = DNSStrategyFactory.get_strategy(dns_provider)
-                    strategy.prepare_environment(process_env, dns_config)
-                    artifacts.alias_hook_config = self._create_dns_alias_hook_config(
-                        dns_provider,
-                        dns_config,
-                        acme_dns_alias,
-                        _propagation_seconds(settings, dns_provider, strategy),
-                    )
-                    self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
-                    # Strip CR/LF so a crafted domain cannot forge log entries
-                    # (CodeQL py/log-injection), matching modules/web/cert_routes.py.
-                    safe_domain = str(domain).replace('\r', ' ').replace('\n', ' ')
-                    logger.info(f"Renewing {safe_domain} with the native acme-dns hook.")
-                elif dns_config:
-                    strategy = DNSStrategyFactory.get_strategy(dns_provider)
-                    strategy.prepare_environment(process_env, dns_config)
-                    # Create credentials file for providers that need one.
-                    # Pull SANs from metadata so the discovery hook sees
-                    # the same FQDN set the cert was originally issued with;
-                    # otherwise a wildcard SAN under a parent zone would
-                    # be invisible at renew time.
-                    self._write_dns_credentials(
-                        strategy, artifacts, dns_provider, dns_config, domain,
-                        san_domains=metadata.get('san_domains') or None,
-                    )
-                    # Pass the authenticator + credentials explicitly at renew
-                    # (mirrors the create path) so renewal does not depend on the
-                    # credentials path certbot baked into renewal/<domain>.conf at
-                    # issue time — that path is written relative to the issuing
-                    # CWD and goes stale after a data-dir/CWD move, which silently
-                    # broke renewal for file-based DNS providers. Env-based
-                    # providers (route53) return no credentials file and keep
-                    # using the stored authenticator + prepared env vars.
-                    if artifacts.credentials_file:
-                        strategy.configure_certbot_arguments(
-                            cmd, artifacts.credentials_file)
-                    if dns_provider == 'custom-script':
-                        # Mirror the create path: expose the propagation
-                        # setting to the hooks certbot replays at renewal.
-                        process_env.setdefault(
-                            'CERTMATE_DNS_PROPAGATION_SECONDS',
-                            str(_propagation_seconds(settings, dns_provider,
-                                                     strategy)))
-                    logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
-                else:
-                    # The DNS account this cert was issued with is gone from
-                    # settings. create_certificate raises on this same condition,
-                    # so renewal fails fast with a clear message instead of
-                    # letting certbot fail opaquely (which surfaced as a 500 with
-                    # no hint about the missing account).
-                    raise RuntimeError(
-                        f"Cannot renew {domain}: DNS provider '{dns_provider}' "
-                        f"account '{metadata.get('account_id') or 'default'}' is not configured"
-                    )
-
+            challenge_type = self._prepare_renewal_dns(
+                domain, metadata, cmd, process_env, artifacts)
             # certbot `renew` exits 0 BOTH when it renews and when nothing is
             # due, and its "not yet due" messages are display-channel output
             # certbot may suppress (it does under --quiet). The only signal
@@ -3479,131 +3372,28 @@ class CertificateManager:
 
                 if not renewed:
                     logger.info(f"Certificate for {domain} is not yet due for renewal; no action taken")
-                    # Before returning: does the flat copy still agree with
-                    # live/? This branch is where a half-finished publish
-                    # became permanent — it returns before the copy below, so
-                    # nothing ever retried it and the daily run kept booking
-                    # the domain as skipped_not_due. Reconciling here is what
-                    # heals an instance that is already in that state; the
-                    # staged publish above is what stops it happening again.
-                    stale = self._stale_flat_files(domain_dir / 'live' / domain, domain_dir)
-                    if stale:
-                        logger.warning(
-                            "Certificate for %s did not need renewing, but its "
-                            "served copy disagreed with certbot's: %s. "
-                            "Republishing — this is the state where a new "
-                            "certificate can sit beside the previous private "
-                            "key.", domain, ", ".join(stale))
-                        try:
-                            self._publish_flat_files(domain_dir / 'live' / domain, domain_dir)
-                        except Exception as republish_error:
-                            logger.error(
-                                "Could not republish the served copy for %s: %s",
-                                domain, republish_error)
-                            raise RuntimeError(
-                                f"{domain} is serving files that do not match "
-                                f"its certificate and they could not be "
-                                f"repaired: {republish_error}") from republish_error
-                    # Reconcile the external copy too. _store_in_backend is
-                    # otherwise reached only from create and the renewed=True
-                    # branch, so a store that failed once (an expired Vault
-                    # token, a transient 5xx) was never retried: the local cert
-                    # was fresh but the backend stayed on the OLD generation, and
-                    # because get_certificate_info reads the backend copy when a
-                    # storage backend is configured, needs_renewal stayed True
-                    # forever, every run landed here, and the store was never
-                    # tried again. And when the reconcile above republished
-                    # the flat PEMs, the new generation reached /download and the
-                    # deploy hooks but not the backend or the PFX. Push here
-                    # when the external copy is behind — a prior store failed
-                    # (storage_warning persisted) or we just republished — so
-                    # downstream is not stranded on the old certificate.
-                    reconcile_warning = None
-                    if self.storage_manager and (stale or metadata.get('storage_warning')):
-                        cert_files = {
-                            name: (domain_dir / name).read_bytes()
-                            for name in CERTIFICATE_FILES
-                            if (domain_dir / name).exists()
-                        }
-                        reconcile_warning = self._store_in_backend(
-                            domain, cert_files, metadata)
-                        try:
-                            self._apply_storage_warning(metadata, reconcile_warning)
-                            self._save_metadata(domain, metadata)
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to persist storage state for %s: %s",
-                                domain, e)
-                        if stale:
-                            # The served pair rotated a generation; rebuild the
-                            # PFX so Windows automation polling cert.pfx sees it.
-                            self._write_pfx(domain)
-                    self._invalidate_certificate_info_cache(domain)
-                    result = {
-                        'success': True,
-                        'renewed': False,
-                        'domain': domain,
-                        'repaired': stale or None,
-                        'message': 'Certificate not yet due for renewal',
-                    }
-                    if reconcile_warning:
-                        result['storage_warning'] = reconcile_warning
-                    return result
-
-                # Copy renewed certificates from the correct live directory
-                src_dir = domain_dir / 'live' / domain
-                dest_dir = domain_dir
-                
-                cert_files = self._publish_flat_files(src_dir, dest_dir)
-                
-                # Stamp the renewal BEFORE storing, so the external copy
-                # carries the same renewed_at as the local one; then persist
-                # metadata once, with the resulting storage state (#423).
-                metadata['renewed_at'] = utc_now_iso()
-                storage_warning = self._store_in_backend(domain, cert_files, metadata)
-
-                # Persist when there is metadata to update OR a warning to
-                # record: a domain with no metadata.json would otherwise lose
-                # the only signal that its external copy is stale.
-                if metadata_file.exists() or storage_warning:
-                    try:
-                        self._apply_storage_warning(metadata, storage_warning)
-                        self._save_metadata(domain, metadata)
-                        logger.info(f"Updated renewal timestamp in metadata for {domain}")
-                    except Exception as e:
-                        logger.warning(f"Failed to update metadata for {domain}: {e}")
-
-                logger.info(f"Certificate renewed successfully for {domain}")
-                self._invalidate_certificate_info_cache(domain)
-                self._write_pfx(domain)
-                renew_result = {
-                    'success': True,
-                    'renewed': True,
-                    'domain': domain,
-                    'message': "Certificate renewed successfully"
-                }
-                if storage_warning:
-                    renew_result['storage_warning'] = storage_warning
-                return renew_result
+                    return self._reconcile_without_renewal(
+                        domain, domain_dir, metadata)
+                return self._publish_renewed_certificate(
+                    domain, domain_dir, metadata, metadata_file)
             else:
-                # Mirror the create path: the redacted copy is what is
-                # logged and what is surfaced. See sanitize_certbot_stderr
-                # for the precise stripping rules.
-                error_msg = result.stderr or "Certificate not found"
-                from .utils import sanitize_certbot_stderr
-                safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
-                logger.error("Certificate renewal failed for %r: %r", domain, safe_error)
-                caa_domains = [domain] + list(metadata.get('san_domains') or [])
-                raise RuntimeError(
-                    f"Renewal failed: {safe_error}"
-                    + self._caa_explanation(metadata.get('ca_provider'), caa_domains,
-                                            challenge_type))
+                self._renewal_failed(domain, result, metadata,
+                                     challenge_type)
         except subprocess.TimeoutExpired:
             # Explicit, clean message before the generic handler below re-wraps
             # every exception as "Exception: ...". The finally block still runs,
             # releasing the domain lock and cleaning up credential files.
             logger.error(f"Certificate renewal timed out for {domain}")
             raise RuntimeError("Certificate renewal timed out")
+        except (FileNotFoundError, DomainOperationInProgress):
+            # These already say what they mean, and the routes map them to
+            # 404 and 409. Re-wrapping them as RuntimeError turned both into
+            # a 422 "renewal failed" — so the `except FileNotFoundError` arm
+            # in resources_lifecycle.py was dead code, and an operator asking
+            # to renew a certificate that is not there was told the CA had
+            # refused. Measured on a real manager: RuntimeError("Exception:
+            # No certificate found for domain: ...").
+            raise
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
@@ -3611,6 +3401,290 @@ class CertificateManager:
         finally:
             _remove_temp_files(artifacts)
             domain_lock.release()
+
+    def _prepare_renewal_dns(self, domain, metadata, cmd, process_env, artifacts):
+        """Give certbot what it needs to answer this certificate's challenge.
+
+        Mutates *cmd*, *process_env* and *artifacts* in place and returns the
+        challenge type, which the failure path needs for its CAA explanation.
+
+        Extracted from `renew_certificate` (#666), where it was 110 lines in
+        the middle of a 390-line method — so every one of the five branches
+        below had to be read with the lock held, the artifacts half-built and
+        the certbot command half-assembled. The create path was decomposed
+        this way first (`_resolve_challenge_and_dns`, `_prepare_issuance`),
+        and the two drifting apart is what that issue is about: the
+        private-CA trust bundle, the native acme-dns hook and the explicit
+        credentials path each reached one path months before the other.
+
+        The five cases, in the order they are decided:
+
+        1. a stored `domain_alias` — renew through CertMate's own hook;
+        2. acme-dns, recognised from the provider rather than from metadata,
+           so certificates issued before #466 stay renewable without a
+           migration;
+        3. a file-based provider — write the credentials and pass the
+           authenticator explicitly, not the path certbot baked in at issue
+           time;
+        4. an env-based provider — the prepared environment is the whole
+           configuration;
+        5. the account is gone from settings — fail fast and say so, as the
+           create path already does.
+        """
+        dns_provider = metadata.get('dns_provider')
+        challenge_type = metadata.get('challenge_type', 'dns-01')
+
+        domain_alias = metadata.get('domain_alias')
+        if domain_alias:
+            alias_provider = metadata.get('alias_dns_provider') or dns_provider
+            if not alias_provider:
+                raise RuntimeError(f"Cannot renew {domain}: metadata is missing alias DNS provider")
+
+            settings = self.settings_manager.load_settings()
+            dns_config, _ = self.dns_manager.get_dns_provider_account_config(
+                alias_provider,
+                metadata.get('account_id'),
+                settings,
+            )
+            if not dns_config:
+                raise RuntimeError(
+                    f"Cannot renew {domain}: DNS alias provider account for {alias_provider} is not configured"
+                )
+
+            strategy = DNSStrategyFactory.get_strategy(alias_provider)
+            # Inject provider env vars (e.g. AWS credentials) for alias renewals too
+            strategy.prepare_environment(process_env, dns_config)
+
+            propagation_time = _propagation_seconds(
+                settings, alias_provider, strategy)
+
+            artifacts.alias_hook_config = self._create_dns_alias_hook_config(
+                alias_provider,
+                dns_config,
+                domain_alias,
+                propagation_time,
+            )
+            self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
+            logger.info(
+                f"Renewing {domain} with DNS alias '{domain_alias}' "
+                f"using {alias_provider} manual hook."
+            )
+        elif dns_provider and challenge_type != 'http-01':
+            # Standard DNS-01 renewal: load DNS config and prepare env vars
+            settings = self.settings_manager.load_settings()
+            dns_config, _ = self.dns_manager.get_dns_provider_account_config(
+                dns_provider,
+                metadata.get('account_id'),
+                settings,
+            )
+            acme_dns_alias = self._acme_dns_native_alias(dns_provider, dns_config)
+            if dns_config and acme_dns_alias:
+                # Mirror the create path: acme-dns renews through CertMate's
+                # native hook, never through a certbot plugin (issue #466).
+                # Certs issued before this fix carry no domain_alias in
+                # metadata, so they land here rather than in the alias
+                # branch above — routing on the provider keeps them renewable
+                # without a metadata migration.
+                strategy = DNSStrategyFactory.get_strategy(dns_provider)
+                strategy.prepare_environment(process_env, dns_config)
+                artifacts.alias_hook_config = self._create_dns_alias_hook_config(
+                    dns_provider,
+                    dns_config,
+                    acme_dns_alias,
+                    _propagation_seconds(settings, dns_provider, strategy),
+                )
+                self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
+                # Strip CR/LF so a crafted domain cannot forge log entries
+                # (CodeQL py/log-injection), matching modules/web/cert_routes.py.
+                safe_domain = str(domain).replace('\r', ' ').replace('\n', ' ')
+                logger.info(f"Renewing {safe_domain} with the native acme-dns hook.")
+            elif dns_config:
+                strategy = DNSStrategyFactory.get_strategy(dns_provider)
+                strategy.prepare_environment(process_env, dns_config)
+                # Create credentials file for providers that need one.
+                # Pull SANs from metadata so the discovery hook sees
+                # the same FQDN set the cert was originally issued with;
+                # otherwise a wildcard SAN under a parent zone would
+                # be invisible at renew time.
+                self._write_dns_credentials(
+                    strategy, artifacts, dns_provider, dns_config, domain,
+                    san_domains=metadata.get('san_domains') or None,
+                )
+                # Pass the authenticator + credentials explicitly at renew
+                # (mirrors the create path) so renewal does not depend on the
+                # credentials path certbot baked into renewal/<domain>.conf at
+                # issue time — that path is written relative to the issuing
+                # CWD and goes stale after a data-dir/CWD move, which silently
+                # broke renewal for file-based DNS providers. Env-based
+                # providers (route53) return no credentials file and keep
+                # using the stored authenticator + prepared env vars.
+                if artifacts.credentials_file:
+                    strategy.configure_certbot_arguments(
+                        cmd, artifacts.credentials_file)
+                if dns_provider == 'custom-script':
+                    # Mirror the create path: expose the propagation
+                    # setting to the hooks certbot replays at renewal.
+                    process_env.setdefault(
+                        'CERTMATE_DNS_PROPAGATION_SECONDS',
+                        str(_propagation_seconds(settings, dns_provider,
+                                                 strategy)))
+                logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
+            else:
+                # The DNS account this cert was issued with is gone from
+                # settings. create_certificate raises on this same condition,
+                # so renewal fails fast with a clear message instead of
+                # letting certbot fail opaquely (which surfaced as a 500 with
+                # no hint about the missing account).
+                raise RuntimeError(
+                    f"Cannot renew {domain}: DNS provider '{dns_provider}' "
+                    f"account '{metadata.get('account_id') or 'default'}' is not configured"
+                )
+
+        return challenge_type
+
+    def _reconcile_without_renewal(self, domain, domain_dir, metadata):
+        """certbot said "not yet due". Make sure what we serve still agrees.
+
+        This is the branch that made a half-finished publish permanent: it
+        returns before the copy the renewed path makes, so nothing retried it
+        and every nightly run booked the domain as `skipped_not_due` while
+        the served files disagreed with certbot's.
+
+        Returns the result dict `renew_certificate` returns unchanged.
+        """
+        # Before returning: does the flat copy still agree with
+        # live/? This branch is where a half-finished publish
+        # became permanent — it returns before the copy below, so
+        # nothing ever retried it and the daily run kept booking
+        # the domain as skipped_not_due. Reconciling here is what
+        # heals an instance that is already in that state; the
+        # staged publish above is what stops it happening again.
+        stale = self._stale_flat_files(domain_dir / 'live' / domain, domain_dir)
+        if stale:
+            logger.warning(
+                "Certificate for %s did not need renewing, but its "
+                "served copy disagreed with certbot's: %s. "
+                "Republishing — this is the state where a new "
+                "certificate can sit beside the previous private "
+                "key.", domain, ", ".join(stale))
+            try:
+                self._publish_flat_files(domain_dir / 'live' / domain, domain_dir)
+            except Exception as republish_error:
+                logger.error(
+                    "Could not republish the served copy for %s: %s",
+                    domain, republish_error)
+                raise RuntimeError(
+                    f"{domain} is serving files that do not match "
+                    f"its certificate and they could not be "
+                    f"repaired: {republish_error}") from republish_error
+        # Reconcile the external copy too. _store_in_backend is
+        # otherwise reached only from create and the renewed=True
+        # branch, so a store that failed once (an expired Vault
+        # token, a transient 5xx) was never retried: the local cert
+        # was fresh but the backend stayed on the OLD generation, and
+        # because get_certificate_info reads the backend copy when a
+        # storage backend is configured, needs_renewal stayed True
+        # forever, every run landed here, and the store was never
+        # tried again. And when the reconcile above republished
+        # the flat PEMs, the new generation reached /download and the
+        # deploy hooks but not the backend or the PFX. Push here
+        # when the external copy is behind — a prior store failed
+        # (storage_warning persisted) or we just republished — so
+        # downstream is not stranded on the old certificate.
+        reconcile_warning = None
+        if self.storage_manager and (stale or metadata.get('storage_warning')):
+            cert_files = {
+                name: (domain_dir / name).read_bytes()
+                for name in CERTIFICATE_FILES
+                if (domain_dir / name).exists()
+            }
+            reconcile_warning = self._store_in_backend(
+                domain, cert_files, metadata)
+            try:
+                self._apply_storage_warning(metadata, reconcile_warning)
+                self._save_metadata(domain, metadata)
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist storage state for %s: %s",
+                    domain, e)
+            if stale:
+                # The served pair rotated a generation; rebuild the
+                # PFX so Windows automation polling cert.pfx sees it.
+                self._write_pfx(domain)
+        self._invalidate_certificate_info_cache(domain)
+        result = {
+            'success': True,
+            'renewed': False,
+            'domain': domain,
+            'repaired': stale or None,
+            'message': 'Certificate not yet due for renewal',
+        }
+        if reconcile_warning:
+            result['storage_warning'] = reconcile_warning
+        return result
+
+
+    def _publish_renewed_certificate(self, domain, domain_dir, metadata,
+                                     metadata_file):
+        """A renewal happened: publish it, stamp it, store it, report it.
+
+        Returns the result dict `renew_certificate` returns unchanged.
+        """
+        # Copy renewed certificates from the correct live directory
+        src_dir = domain_dir / 'live' / domain
+        dest_dir = domain_dir
+
+        cert_files = self._publish_flat_files(src_dir, dest_dir)
+
+        # Stamp the renewal BEFORE storing, so the external copy
+        # carries the same renewed_at as the local one; then persist
+        # metadata once, with the resulting storage state (#423).
+        metadata['renewed_at'] = utc_now_iso()
+        storage_warning = self._store_in_backend(domain, cert_files, metadata)
+
+        # Persist when there is metadata to update OR a warning to
+        # record: a domain with no metadata.json would otherwise lose
+        # the only signal that its external copy is stale.
+        if metadata_file.exists() or storage_warning:
+            try:
+                self._apply_storage_warning(metadata, storage_warning)
+                self._save_metadata(domain, metadata)
+                logger.info(f"Updated renewal timestamp in metadata for {domain}")
+            except Exception as e:
+                logger.warning(f"Failed to update metadata for {domain}: {e}")
+
+        logger.info(f"Certificate renewed successfully for {domain}")
+        self._invalidate_certificate_info_cache(domain)
+        self._write_pfx(domain)
+        renew_result = {
+            'success': True,
+            'renewed': True,
+            'domain': domain,
+            'message': "Certificate renewed successfully"
+        }
+        if storage_warning:
+            renew_result['storage_warning'] = storage_warning
+        return renew_result
+
+    def _renewal_failed(self, domain, result, metadata, challenge_type):
+        """certbot exited non-zero. Raise what the operator needs to read.
+
+        Always raises. It returns nothing, so a caller that forgets to let it
+        propagate gets None rather than a plausible-looking result dict.
+        """
+        # Mirror the create path: the redacted copy is what is
+        # logged and what is surfaced. See sanitize_certbot_stderr
+        # for the precise stripping rules.
+        error_msg = result.stderr or "Certificate not found"
+        from .utils import sanitize_certbot_stderr
+        safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
+        logger.error("Certificate renewal failed for %r: %r", domain, safe_error)
+        caa_domains = [domain] + list(metadata.get('san_domains') or [])
+        raise RuntimeError(
+            f"Renewal failed: {safe_error}"
+            + self._caa_explanation(metadata.get('ca_provider'), caa_domains,
+                                    challenge_type))
+
 
     def _renewal_ca_bundle(self, metadata):
         """Return the trust-bundle path certbot needs to talk to this
@@ -3690,7 +3764,8 @@ class CertificateManager:
             # sweep "did not consider" when it considered none would be noise.
             return {'checked': 0, 'renewed': 0, 'failed': 0,
                     'skipped_disabled': 0, 'skipped_invalid': 0,
-                    'skipped_not_due': 0, 'unmanaged': 0, 'reregistered': 0,
+                    'skipped_not_due': 0, 'skipped_busy': 0,
+                    'unmanaged': 0, 'reregistered': 0, 'ari_advanced': 0,
                     'auto_renew_disabled': True}
 
         # Migrate settings format if needed
@@ -3701,7 +3776,11 @@ class CertificateManager:
 
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
                    'skipped_disabled': 0, 'skipped_invalid': 0,
-                   'skipped_not_due': 0, 'unmanaged': 0, 'reregistered': 0}
+                   'skipped_not_due': 0, 'skipped_busy': 0,
+                   'unmanaged': 0, 'reregistered': 0,
+                   # Renewals the CA's window brought forward, which the
+                   # configured threshold would not have started tonight.
+                   'ari_advanced': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -3798,13 +3877,13 @@ class CertificateManager:
         self._mark_sweep_finished(summary, duration)
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
-            "%d failed, %d disabled, %d invalid, %d not-due, %d unmanaged, "
-            "%d re-registered",
+            "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
+            "%d unmanaged, %d re-registered",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
-            summary['skipped_not_due'], summary['unmanaged'],
-            summary['reregistered'],
+            summary['skipped_not_due'], summary['skipped_busy'],
+            summary['unmanaged'], summary['reregistered'],
         )
         return summary
 
@@ -3823,8 +3902,20 @@ class CertificateManager:
         settings. `skipped_not_due` is not that: certbot said no.
         """
         cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
-        if not (cert_info and cert_info.get('needs_renewal')):
+        if not cert_info:
             return False
+        if not cert_info.get('needs_renewal'):
+            # The threshold said no. Ask the CA, which may know something the
+            # threshold cannot: a batch replacement, a compromised
+            # intermediate, a ruling that shortens everything it issued. ARI
+            # can only bring a renewal FORWARD here — see modules/core/ari.py
+            # for why the other direction waits on #395.
+            if not self._ari_says_renew(domain, cert_info, settings):
+                return False
+            summary['ari_advanced'] += 1
+            logger.info("%s is not due by the configured threshold, but its CA "
+                        "says its renewal window has opened; renewing now.",
+                        domain)
 
         logger.info(f"Renewing certificate for {domain}")
         renew_started = time.time()
@@ -3848,6 +3939,19 @@ class CertificateManager:
             # it itself.
             self._publish_renewed_event(domain)
             return True
+        except DomainOperationInProgress:
+            # Not a failure — "try again in a minute". The lock is held by a
+            # manual renewal, a reissue or the previous sweep still running,
+            # and the next sweep will pick the domain up. Counting it as
+            # failed drove a failure metric, an audit failure entry and a
+            # certificate_failed notification, so an operator got paged for
+            # a queue. Every request-facing caller already distinguishes it:
+            # they answer 409.
+            summary['skipped_busy'] += 1
+            logger.info(
+                "Skipping %s this sweep: an operation is already in "
+                "progress. The next sweep will retry.", domain)
+            return False
         except Exception as e:
             summary['failed'] += 1
             logger.error(f"Failed to renew certificate for {domain}: {e}")
@@ -3858,6 +3962,98 @@ class CertificateManager:
             # channels stay silent while the cert marches to expiry.
             self._publish_failed_event(domain, e)
             return False
+
+    def _renewal_info_client(self):
+        """The ARI client, built once and kept for its directory cache.
+
+        One HTTP GET per CA per hour rather than one per certificate per
+        sweep: a fifty-domain estate on one CA asks for the directory once.
+        """
+        client = getattr(self, '_ari_client', None)
+        if client is None:
+            from .ari import RenewalInfoClient
+            client = RenewalInfoClient()
+            self._ari_client = client
+        return client
+
+    def _acme_directory_url(self, cert_info):
+        """The ACME directory this certificate was issued from, or None.
+
+        Asked of `ca_manager` rather than mapped here, so a provider whose
+        directory is regional or account-specific (DigiCert's mPKI, a private
+        CA) resolves the same way it does at issuance.
+        """
+        if self.ca_manager is None:
+            return None
+        ca_provider = cert_info.get('ca_provider') or 'letsencrypt'
+        account_config = None
+        try:
+            account_config, _ = self.ca_manager.get_ca_config(
+                ca_provider, cert_info.get('account_id'))
+        except ValueError:
+            # Let's Encrypt needs no saved configuration — certbot's defaults
+            # are the configuration — so an absent account is not an error
+            # here any more than it is at issuance.
+            account_config = None
+        try:
+            return self.ca_manager.get_acme_server_url(
+                ca_provider,
+                staging=ca_provider.endswith('_staging'),
+                account_config=account_config)
+        except ValueError:
+            # The reason is deliberately not logged. `account_config` carries
+            # the account's credentials — EAB keys among them — and it is an
+            # argument to the call that raised, so anything derived from that
+            # exception is one refactor away from being derived from them.
+            # Today's messages name the provider and nothing else, which
+            # CodeQL cannot see and which the next edit could change.
+            #
+            # Nothing is lost: an operator learns which CA has no usable
+            # directory here, and *why* where they configure it — the
+            # settings validation and issuance both report the full refusal.
+            # Nor the provider name, and for a second reason: CodeQL's
+            # clear-text-logging rule is field-insensitive on a dict, so
+            # anything read out of `cert_info` is treated as the secrets that
+            # dict also holds. `cert_service.py` met the same rule and took
+            # the same way out. The certificate this line is about is named
+            # by the sweep's own per-domain lines, which share this line's
+            # correlation id — and a CA with no usable directory is a
+            # configuration fact, identical for every certificate it issued,
+            # that the settings page reports once instead of nightly.
+            logger.info("Skipping ARI for this certificate: its CA has no "
+                        "usable ACME directory")
+            return None
+
+    def _ari_says_renew(self, domain, cert_info, settings, now=None):
+        """Has the CA's renewal window for this certificate opened? (#393)
+
+        False for every absence — ARI switched off, no CA manager, a CA that
+        does not publish `renewalInfo`, an unreadable certificate, a request
+        that failed. That asymmetry is the safety property: this can only
+        make a renewal happen sooner than the configured threshold would, so
+        a CA that is down or wrong cannot push a certificate towards expiry.
+
+        `ari_enabled: false` in settings.json turns it off. It is on by
+        default because the answer is strictly better than a fixed number
+        and costs one unauthenticated GET per certificate per sweep.
+        """
+        if not settings.get('ari_enabled', True):
+            return False
+        directory_url = self._acme_directory_url(cert_info)
+        if not directory_url:
+            return False
+        try:
+            from .ari import certificate_id
+
+            raw = (self.cert_dir / domain / 'cert.pem').read_bytes()
+            cert_id = certificate_id(x509.load_pem_x509_certificate(raw))
+        except (OSError, ValueError) as e:
+            # A self-signed certificate with no Authority Key Identifier
+            # cannot be named in ARI at all; so can an unreadable file.
+            logger.info("Cannot build an ARI identifier for %s: %s", domain, e)
+            return False
+        return self._renewal_info_client().says_renew_now(
+            directory_url, cert_id, now)
 
     def _sweep_unregistered(self, domain, settings, summary):
         """A certificate on disk that no settings entry names (#792).

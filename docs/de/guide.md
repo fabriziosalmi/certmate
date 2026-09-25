@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM 809425d238cebfed -->
+<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
 
 ## Übersicht
 
@@ -383,6 +383,48 @@ Usage Type: mobile-app
 - **Prüfzeitpunkt**: Täglich um 3:00 Uhr
 - **Schwellenwert**: 30 Tage vor Ablauf
 - **Aktion**: Automatische Erneuerung, sofern aktiviert
+
+### Wenn die CA dem Schwellenwert widerspricht (ARI)
+
+Der 30-Tage-Schwellenwert ist CertMates Meinung, und es ist dieselbe Meinung
+fur jedes Zertifikat und jede CA. Seit [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
+kann eine CA ihre eigene veroffentlichen, pro Zertifikat: ein
+`renewalInfo`-Endpunkt, der ein Zeitfenster nennt, in dem sie dieses
+Zertifikat ersetzt sehen mochte. Let's Encrypt bietet eines in Produktion;
+step-ca ebenfalls, fur eine private CA.
+
+Der TLS-Erneuerungsdurchlauf fragt danach. Fur jedes Zertifikat, das der
+Schwellenwert **nicht** bereits als fallig eingestuft hat, holt CertMate das
+Fenster der CA und erneuert sofort, wenn dieses Fenster es sagt. So erfahrt
+eine Instanz von einem Massenaustausch — einer Fehlausstellung, einem
+kompromittierten Intermediate, einer CA/Browser-Forum-Entscheidung — Tage
+bevor der Widerruf greift, statt erst wenn das Zertifikat nicht mehr
+funktioniert.
+
+**Es kann eine Erneuerung nur vorziehen.** Ihr Schwellenwert bleibt die
+Ruckfallebene: eine CA, die ausgefallen, langsam oder im Irrtum ist, kann eine
+Erneuerung nicht verzogern, die ohnehin stattgefunden hatte. Jede Leerstelle —
+eine CA ohne `renewalInfo`, ein nicht erreichbarer Endpunkt, eine fehlerhafte
+Antwort, ein selbstsigniertes Zertifikat ohne Authority Key Identifier, uber
+den es benannt werden konnte — fallt auf den Schwellenwert zuruck.
+
+Innerhalb des Fensters wahlt CertMate einen Punkt, abgeleitet aus der Kennung
+des Zertifikats selbst, sodass die Wahl bei jedem Durchlauf dieselbe ist und
+zwei Zertifikate nicht auf demselben Zeitpunkt landen. Genau dafur ist das
+Fenster da: eine CA will nicht, dass alle ihre Clients gleichzeitig erneuern.
+
+Die Zusammenfassung des Durchlaufs zahlt diese als `ari_advanced`, damit eine
+Erneuerung, die Ihre Konfiguration nicht erklart, zuordenbar bleibt.
+
+Setzen Sie `"ari_enabled": false` in `settings.json`, um es abzuschalten; es
+ist standardmassig aktiv und kostet eine unauthentifizierte GET pro Zertifikat
+pro Durchlauf, plus eine pro CA und Stunde fur das Directory.
+
+Noch nicht umgesetzt, und zwar bewusst: ARI eine Erneuerung uber Ihren
+Schwellenwert hinaus **verschieben** zu lassen. Das ist die Halfte, die fur
+kurzlebige Zertifikate zahlt, wo eine feste 30-Tage-Regel gegenuber einem
+6-Tage-Zertifikat sinnlos ist — sie kommt mit der Profilunterstutzung, die
+solche Zertifikate brauchen.
 
 ### Automatische Erneuerung aktivieren
 

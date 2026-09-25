@@ -190,6 +190,13 @@ itself: it applies to `POST /api/probe`, not to sweeps, which always follow the
 Trigger a sweep immediately from the dashboard ("Scan now") or
 `POST /api/inventory/scan`.
 
+Only one sweep of each kind runs at a time. A scan that arrives while one is
+already running is declined — `409`, with each busy leg reporting
+`{"skipped": true, "reason": "already_running"}` — rather than started beside
+it: two sweeps probe every endpoint twice, and the CT poll, the registration
+check and the blocklist queries each pace themselves on the assumption that
+they are the only caller. The dashboard says so next to the button.
+
 ---
 
 ## CT-log monitoring
@@ -581,7 +588,9 @@ question is which protocol version the server agrees to speak, and an expired
 certificate does not make an accepted TLS 1.0 handshake acceptable.
 
 **Network.** All of it is DNS, except the one `HEAD` per host over HTTPS,
-through the same SSRF guard as the probe and pinned to the validated address.
+through the same SSRF guard as the probe and pinned to the validated address
+— or tunnelled through `HTTPS_PROXY` where one applies, like every other
+connection the probes make.
 That request verifies the certificate: a browser ignores the policies these
 headers carry when it did not trust the connection, so reading them from an
 untrusted one would describe a policy nobody applies.
@@ -634,6 +643,13 @@ sweep, so remove it from **Discovery configuration** first when the intent is
   set to the hostname, so a DNS rebind between the check and the handshake cannot
   redirect the probe to an internal host. The OCSP, CRL and issuer URLs a
   certificate names are fetched through the same guard.
+- **Outbound proxy.** Where `HTTPS_PROXY` applies (and `NO_PROXY` does not),
+  the TCP leg is tunnelled with HTTP CONNECT and the handshake runs over the
+  tunnel, so the peer certificate read at the other end is still the real one.
+  The proxy resolves the name itself, so that one connection has no pinned
+  address — the guard still decides whether it is attempted, and a target
+  that resolves to a non-global address is never tunnelled. The OCSP/CRL
+  fetch is plain HTTP and follows `HTTP_PROXY`.
 - **Domain scope.** A scoped API key only sees inventory records within its
   `allowed_domains`, the same boundary the certificate API enforces, and can
   only `POST /api/probe` a host within it.

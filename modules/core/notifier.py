@@ -25,6 +25,8 @@ from urllib.request import (
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 
+from .domain_paths import validate_domain_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -228,7 +230,29 @@ TEMPLATE_VARIABLES = (
     ('domain', 'the certificate domain (shortcut for details.domain)'),
     ('details', 'the whole event payload as a JSON object'),
     ('details.<field>', 'one field of the event payload, e.g. details.error'),
+    ('cert', 'the leaf certificate, PEM (empty unless the event names a '
+             'domain this instance holds)'),
+    ('fullchain', 'the leaf certificate plus its chain, PEM (same condition)'),
 )
+
+# The files behind `{{cert}}` and `{{fullchain}}` (#218). Public material: a
+# certificate and its chain are what the server presents in every handshake,
+# so there is nothing here an eavesdropper could not already collect.
+#
+# `{{privkey}}` is deliberately absent. It is a different thing — the one
+# secret in the directory — and the conditions it would need (opt-in per
+# webhook, refused over plain http, never logged) are still waiting on the
+# reporter's answer in #218 about whether the key should travel in the same
+# request as the certificate at all.
+CERT_MATERIAL_FILES = {
+    'cert': 'cert.pem',
+    'fullchain': 'fullchain.pem',
+}
+
+# A PEM is a few kilobytes; a chain a few more. Read past this and something
+# is wrong with the file rather than with the certificate, and an unbounded
+# read here would put it in a request body.
+CERT_MATERIAL_MAX_BYTES = 256 * 1024
 
 _PLACEHOLDER_RE = re.compile(r'\{\{\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\s*\}\}')
 
@@ -244,6 +268,22 @@ def webhook_template_variables(event, title, message, details=None):
         'domain': details.get('domain'),
         'details': details,
     }
+
+
+def template_references(template, names):
+    """The subset of *names* a payload template actually asks for.
+
+    Read before anything is loaded, which is the whole point: the certificate
+    material is not in the event, it is on disk, and a template that never
+    mentions it must not cause a read. `details` — where every other variable
+    comes from — travels on the event bus to every subscriber, so putting a
+    PEM in there would hand it to listeners that asked for nothing.
+    """
+    if not isinstance(template, str):
+        return set()
+    wanted = set(names)
+    return {m.group(1) for m in _PLACEHOLDER_RE.finditer(template)
+            if m.group(1) in wanted}
 
 
 def _lookup(variables, dotted):
@@ -465,9 +505,58 @@ class Notifier:
 
     MAX_DELIVERY_LOG_ENTRIES = 1000
 
-    def __init__(self, settings_manager, data_dir: str = 'data'):
+    def __init__(self, settings_manager, data_dir: str = 'data',
+                 cert_dir: str = None):
         self.settings_manager = settings_manager
         self._delivery_log_path = Path(data_dir) / 'webhook_deliveries.jsonl'
+        # Where `{{cert}}` / `{{fullchain}}` are read from, when a template
+        # asks. None means they always render empty — which is what a
+        # Notifier built without one should do, rather than guess a path.
+        self._cert_dir = Path(cert_dir) if cert_dir else None
+
+    def _certificate_material(self, domain, wanted):
+        """Read the PEM files *wanted* for *domain*. Never raises.
+
+        Called only for the names a template actually contains, and only at
+        delivery time. A domain that is not on disk, unreadable, or not a
+        domain at all yields an empty string for each name — the same thing
+        an unknown placeholder renders as, so a template does not have to
+        branch on whether the event was about a certificate.
+        """
+        values = {name: '' for name in wanted}
+        if not wanted or self._cert_dir is None or not domain:
+            return values
+
+        # The canonical helper, not a second spelling of it. `domain` arrives
+        # from an event payload and is about to become a path segment; this
+        # is the same check the certificate routes make at the same sink, and
+        # it already does all three parts — path-safe segment, domain shape
+        # (a leading `*.` included, so a wildcard is deliverable), and the
+        # resolved directory still inside the certificate root, which is what
+        # catches a symlink.
+        #
+        # The first draft of this method hand-rolled those three. Two
+        # spellings of one rule is how the two answers start to differ.
+        domain_dir, error = validate_domain_path(domain, self._cert_dir)
+        if error:
+            logger.warning("Webhook template asked for certificate material "
+                           "for an unusable domain: %s", error)
+            return values
+
+        for name in wanted:
+            try:
+                with open(domain_dir / CERT_MATERIAL_FILES[name], 'rb') as fp:
+                    raw = fp.read(CERT_MATERIAL_MAX_BYTES + 1)
+                if len(raw) > CERT_MATERIAL_MAX_BYTES:
+                    logger.warning("%s for %s is larger than %d bytes; not "
+                                   "sending it", name, domain,
+                                   CERT_MATERIAL_MAX_BYTES)
+                    continue
+                values[name] = raw.decode('utf-8')
+            except (OSError, UnicodeDecodeError) as e:
+                logger.info("Certificate material %s unavailable for %s: %s",
+                            name, domain, e.__class__.__name__)
+        return values
 
     def _get_config(self) -> dict:
         """Get notification config from settings."""
@@ -847,8 +936,15 @@ class Notifier:
                     # even with default=str — not expected, but not a
                     # reason to crash the notifier either.)
                     try:
-                        rendered = render_payload_template(
-                            template, webhook_template_variables(event, title, message, details))
+                        variables = webhook_template_variables(
+                            event, title, message, details)
+                        # On demand, and only here: the PEM never entered the
+                        # event, so it never reached another subscriber.
+                        wanted = template_references(template, CERT_MATERIAL_FILES)
+                        if wanted:
+                            variables.update(self._certificate_material(
+                                variables.get('domain'), wanted))
+                        rendered = render_payload_template(template, variables)
                     except (ValueError, TypeError) as exc:
                         return {'error': str(exc), 'config_error': True}
                     body = rendered.encode('utf-8')

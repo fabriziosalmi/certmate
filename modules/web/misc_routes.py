@@ -182,7 +182,91 @@ def _webhook_config_for_save(settings_manager, webhook):
     return webhook
 
 
-def _activity_page(audit_logger, limit, query):
+def _event_stream_response(event_bus):
+    """The SSE response, or a refusal.
+
+    Lifted out of `register_misc_routes`, whose complexity is pinned by
+    scripts/check_complexity_budget.py at a ceiling that only comes down —
+    and the cap's two branches are two more against it.
+
+    Past the cap the answer is 503 with Retry-After, not an error page: each
+    live stream holds one of the eight gunicorn threads this product runs
+    with, so refusing is "come back", not "something broke". Accepting a
+    connection the server cannot serve alongside its ordinary work is how
+    nine open tabs made an instance stop responding with nothing wrong.
+    """
+    from flask import Response, stream_with_context
+
+    from modules.core.events import TooManyStreams
+
+    if event_bus is None:
+        return jsonify({'error': 'Event bus not available'}), 503
+    try:
+        q = event_bus.subscribe()
+    except TooManyStreams:
+        return jsonify({
+            'error': 'Too many live event streams on this instance',
+            'hint': 'Close another CertMate tab, or retry shortly.',
+        }), 503, {'Retry-After': '30'}
+    return Response(
+        stream_with_context(event_bus.stream(q)),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
+def _entry_domain(entry):
+    """The domain an audit entry is about, or None for instance-level work.
+
+    `details.domain` when the entry carries one; otherwise `resource_id`,
+    but only for `certificate` entries — that is the one resource type whose
+    id IS a domain (deploy-hook entries use it too, and file under the same
+    type). A login, a settings change, a backup: those are about the
+    instance, not about a name, and `resource_id` there is a username or a
+    filename.
+    """
+    details = entry.get('details')
+    if isinstance(details, dict):
+        domain = details.get('domain')
+        if isinstance(domain, str) and domain:
+            return domain
+    if entry.get('resource_type') == 'certificate':
+        resource_id = entry.get('resource_id')
+        if isinstance(resource_id, str) and resource_id:
+            return resource_id
+    return None
+
+
+def _entries_in_scope(entries, scope, matches):
+    """The entries a caller scoped to *scope* may read.
+
+    `scope is None` — a session, a local user, an unscoped key — reads
+    everything, which is the pre-existing behaviour for every other route
+    that filters this way.
+
+    A SCOPED key reads only the entries about domains it is scoped to.
+    Instance-level entries are withheld: a key restricted to one tenant has
+    no claim on which administrator logged in, from which address, or what
+    they changed in settings.
+
+    This is the filter `Settings.get` and `CertificateList.get` already
+    apply, arriving at the route that had been left without it. Measured
+    before: a viewer key scoped to `tenant-a.example.com` read
+    `tenant-b.example.com` out of /api/activity — the same cross-tenant
+    enumeration the M4 audit finding describes for the settings route,
+    which is where that filter came from.
+    """
+    if scope is None:
+        return entries
+    kept = []
+    for entry in entries:
+        domain = _entry_domain(entry)
+        if domain and matches(domain, scope):
+            kept.append(entry)
+    return kept
+
+
+def _activity_page(audit_logger, limit, query, scope=None, matches=None):
     """The activity response, filtered or not.
 
     Module level because `register_misc_routes` is one of the budgeted
@@ -193,17 +277,21 @@ def _activity_page(audit_logger, limit, query):
     filters = {field: query.get(field)
                for field in audit_logger.SEARCHABLE_FIELDS
                if query.get(field)}
+    def _in_scope(entries):
+        return _entries_in_scope(entries, scope, matches) if matches else entries
+
     if not filters:
-        logs = audit_logger.get_recent_entries(limit=limit)
+        logs = _in_scope(audit_logger.get_recent_entries(limit=limit))
         # Unfiltered, `limit` entries from the end IS the whole answer to
         # "what happened recently", so there is nothing for `complete` to
         # warn about.
         return {'entries': logs, 'count': len(logs), 'limit': limit,
                 'complete': True}
     found = audit_logger.search_entries(limit=limit, **filters)
+    visible = _in_scope(found['entries'])
     return {
-        'entries': found['entries'],
-        'count': len(found['entries']),
+        'entries': visible,
+        'count': len(visible),
         'limit': limit,
         'filters': filters,
         # False means the search stopped at `limit` matches and older ones
@@ -250,8 +338,14 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                 limit = 100
             limit = max(1, min(limit, 500))
 
-            return jsonify(_activity_page(managers['audit'], limit,
-                                          request.args))
+            # The scope the caller carries, read the same way the settings
+            # route and CertificateList.get read it. A session or an
+            # unscoped key has None and sees everything, as before.
+            user = getattr(request, 'current_user', None) or {}
+            return jsonify(_activity_page(
+                managers['audit'], limit, request.args,
+                scope=user.get('allowed_domains'),
+                matches=auth_manager.domain_matches_scope))
         except Exception as e:
             logger.error(f"Activity API error: {e}")
             return jsonify({'error': 'Failed to fetch activity'}), 500
@@ -554,16 +648,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         a role like every other one, and a second such surface will not copy
         the logic.
         """
-        from flask import Response, stream_with_context
-        event_bus = managers.get('events')
-        if event_bus is None:
-            return jsonify({'error': 'Event bus not available'}), 503
-        q = event_bus.subscribe()
-        return Response(
-            stream_with_context(event_bus.stream(q)),
-            mimetype='text/event-stream',
-            headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
-        )
+        return _event_stream_response(managers.get('events'))
 
     @app.route('/api/web/logs/stream')
     @auth_manager.require_role('admin')

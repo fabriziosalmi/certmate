@@ -17,9 +17,12 @@ certificate operation. Every endpoint yields a per-endpoint status record.
 """
 
 import logging
+import threading
+
 from .domain_entries import entry_domain
 
 from .cert_probe import probe_certificate, STATUS_OK
+from .utils import exclusive_run
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +216,12 @@ class CertDiscoveryManager:
         self.settings_manager = settings_manager
         self.inventory = inventory
         self._probe = probe
+        # One sweep at a time. The scheduler job holds a cross-PROCESS file
+        # lock (factory._renewal_process_lock), which the Scan endpoint does
+        # not go through at all: two clicks, or a click during a scheduled
+        # sweep, ran two sweeps side by side in the same worker — the same
+        # hosts probed twice and two writers on the inventory.
+        self._sweep_lock = threading.Lock()
 
     def get_config(self):
         """Return the effective ``monitored_endpoints`` config (with defaults)."""
@@ -252,9 +261,21 @@ class CertDiscoveryManager:
         """Run one discovery sweep. Safe to call from a scheduler thread.
 
         Returns a summary dict: ``{'skipped': bool, 'results': [...],
-        'summary': {...}}``. When discovery is disabled or there is nothing to
-        probe, ``skipped`` is True and no probing happens.
+        'summary': {...}}``. When discovery is disabled, there is nothing to
+        probe, or a sweep is already running, ``skipped`` is True and no
+        probing happens — ``reason`` says which.
+
+        The guard is in here rather than in the endpoint because the endpoint
+        is not the only caller: the scheduler calls this method directly, and
+        a guard on the route would let a scheduled sweep and a manual one
+        overlap while looking like it had stopped exactly that.
         """
+        return exclusive_run(self._sweep_lock, self._sweep,
+                             label='Certificate discovery sweep',
+                             extra={'results': []})
+
+    def _sweep(self):
+        """One sweep, with the caller holding :attr:`_sweep_lock`."""
         settings = self.settings_manager.load_settings()
         config = dict(DEFAULT_DISCOVERY_CONFIG)
         config.update(settings.get('monitored_endpoints') or {})

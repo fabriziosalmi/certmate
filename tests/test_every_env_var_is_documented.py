@@ -44,7 +44,7 @@ DOCS = [REPO / 'README.md', REPO / 'docs' / 'docker.md']
 # that nobody adds here would make the census quietly incomplete, which is the
 # failure mode this whole file exists to prevent.
 ENV_HELPERS = {'_int_env', '_env_float', '_env_bool', '_env_int',
-               '_clamp_env_int', '_load_or_create'}
+               '_clamp_env_int', '_load_or_create', '_resolve_bounded'}
 
 # Variables the AST census cannot see, because the name never appears as a
 # literal at the point of the read. Listed by hand and checked below: each must

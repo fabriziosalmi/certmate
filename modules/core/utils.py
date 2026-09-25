@@ -1170,3 +1170,46 @@ def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -
                 pass
             return repaired
     return repaired
+
+
+# --------------------------------------------------------------------------- #
+# Sweeps that must not overlap
+# --------------------------------------------------------------------------- #
+
+#: The `reason` a sweep gives for declining because one is already running.
+#: Beside `disabled` and `no_endpoints` in the vocabulary those summaries
+#: already use, so a caller that reads `reason` needs no new field.
+ALREADY_RUNNING = 'already_running'
+
+
+def exclusive_run(lock, work, *, label, extra=None):
+    """Run *work* under *lock*, or decline rather than overlap.
+
+    The four inventory sweeps — endpoint discovery, the CT poll, the
+    registration check and the name-level checks — are each safe to run and
+    each unsafe to run *twice at once*: they probe the same hosts, write the
+    same inventory rows, and pace themselves against shared rate-limited
+    services (crt.sh, the registries, the blocklists) with an interval that
+    assumes one caller.
+
+    The scheduler already kept them apart across processes, with one flock per
+    job. ``POST /api/inventory/scan`` did not go through any of that, so a
+    second click — or a click landing on top of a scheduled run — started a
+    second sweep in the same worker.
+
+    This is the in-process half of that guard, and it lives with the sweep
+    rather than with the endpoint because the endpoint is not the only caller.
+    It does not replace the file lock: a deployment that raises the worker
+    count past the shipped one still needs it for the scheduler's own jobs.
+
+    Returns what *work* returned, or ``{'skipped': True, 'reason':
+    'already_running'}`` merged with *extra* (pass ``{'results': []}`` where
+    the summary's readers expect that key to exist).
+    """
+    if not lock.acquire(blocking=False):
+        logger.info("%s already running; declining to start a second one.", label)
+        return dict({'skipped': True, 'reason': ALREADY_RUNNING}, **(extra or {}))
+    try:
+        return work()
+    finally:
+        lock.release()
