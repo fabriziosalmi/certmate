@@ -1794,146 +1794,11 @@ class CertificateManager:
         if not domain:
             return None
 
-        # First try to get certificate from storage backend if available
-        if self.storage_manager:
-            cache_enabled = use_cache
-            cache_settings = settings
-            if cache_settings is None:
-                try:
-                    cache_settings = self.settings_manager.load_settings()
-                except Exception as e:
-                    logger.debug("Failed to load settings in get_certificate_info: %s", e)
-                    cache_settings = {}
-            if cache_enabled:
-                cached = self._get_cached_certificate_info(domain, cache_settings)
-                if cached is not None:
-                    return cached
-            try:
-                retrieve_info = getattr(self.storage_manager, 'retrieve_certificate_info', None)
-                storage_result = None
-                if callable(retrieve_info):
-                    candidate = retrieve_info(domain)
-                    if candidate is None:
-                        storage_result = None
-                    elif isinstance(candidate, tuple) and len(candidate) == 2:
-                        storage_result = candidate
-                    else:
-                        logger.debug(
-                            "Storage backend returned invalid certificate-info "
-                            "shape for %s; falling back to full retrieve.",
-                            domain,
-                        )
-                        storage_result = self.storage_manager.retrieve_certificate(domain)
-                else:
-                    storage_result = self.storage_manager.retrieve_certificate(domain)
-                if storage_result:
-                    cert_files, metadata = storage_result
-                    if 'cert.pem' in cert_files:
-                        # What the key state is, asked of the key rather than
-                        # of the shape of a dict.
-                        #
-                        # This branch used to decide from whether the answer
-                        # happened to contain privkey.pem: present meant
-                        # 'present', absent meant 'unknown'. On the default
-                        # installation the answer never contained a key, since
-                        # the base retrieve_certificate_info fetched the whole
-                        # bundle and then dropped everything but cert.pem. So
-                        # every certificate reported 'unknown', and a
-                        # certificate with no key at all was reported healthy,
-                        # which is the sentence #608 was closed for, on the
-                        # path #608's fix never ran (#830).
-                        #
-                        # A key that is here is here, and is compared rather
-                        # than believed: cert.pem from one issuance beside
-                        # privkey.pem from another cannot complete a handshake
-                        # and would otherwise pass as 'present'.
-                        #
-                        # A key that is NOT here is the ambiguous case, and the
-                        # backend has to say which kind of absence it is. One
-                        # that fetches everything and finds no key knows it is
-                        # gone; one with a cheap info-only path never looked,
-                        # and reading that as 'missing' would mark every
-                        # certificate as needing renewal.
-                        #
-                        # `is True`, not truthiness: a backend that does not
-                        # implement the question, and a test double that
-                        # answers every attribute with another double, both
-                        # fail that test and get 'unknown', which is the safe
-                        # side of being wrong.
-                        key_pem = cert_files.get('privkey.pem')
-                        if key_pem:
-                            storage_key_state = self.key_state_for_bytes(
-                                domain, key_pem, cert_files['cert.pem'], metadata)
-                        elif (metadata or {}).get('key_management') == 'external':
-                            # A CSR-only certificate has no key ANYWHERE, and
-                            # the metadata says so, so this can answer
-                            # 'external' rather than the honest-but-useless
-                            # 'unknown' (#599).
-                            storage_key_state = 'external'
-                        else:
-                            knows_about_keys = False
-                            asks = getattr(self.storage_manager,
-                                           'info_includes_private_key', None)
-                            if callable(asks):
-                                try:
-                                    knows_about_keys = asks() is True
-                                except Exception as e:
-                                    logger.debug(
-                                        "Storage backend could not say whether "
-                                        "it reports private keys for %s: %s",
-                                        domain, e)
-                                    knows_about_keys = False
-                            storage_key_state = 'missing' if knows_about_keys else 'unknown'
-                        info = self._parse_certificate_info(
-                            domain, cert_files['cert.pem'], metadata,
-                            settings=cache_settings,
-                            key_state=storage_key_state)
-                        if cache_enabled:
-                            self._set_cached_certificate_info(domain, info, cache_settings)
-                        return info
-            except Exception as e:
-                logger.warning(f"Failed to retrieve certificate from storage backend for {domain}: {e}")
-        
-        # Fall back to local filesystem for backward compatibility
-        cert_dir = self.cert_dir
-        cert_path = cert_dir / domain
-        if not cert_path.exists():
-            logger.info(f"Certificate directory does not exist for domain: {domain}")
-            return self._create_empty_cert_info(domain)
-        
-        cert_file = cert_path / "cert.pem"
-        if not cert_file.exists():
-            logger.info(f"Certificate file does not exist for domain: {domain}")
-            return self._create_empty_cert_info(domain)
-        
-        # Get DNS provider info from metadata file first, then fall back to
-        # settings. Uses the centralised _load_metadata so a corrupt JSON file
-        # gets quarantined consistently and we don't have two divergent
-        # readers handling JSONDecodeError differently.
-        metadata = self._load_metadata(domain)
-        dns_provider = metadata.get('dns_provider') if metadata else None
-        if dns_provider:
-            logger.debug(f"Found DNS provider '{dns_provider}' in metadata for {domain}")
-        
-        if not dns_provider:
-            # Fall back to current settings. Reuse the caller-supplied dict
-            # when present (renewal job) to avoid reloading from disk.
-            if settings is None:
-                settings = self.settings_manager.load_settings()
-            dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
-            logger.debug(f"Using DNS provider '{dns_provider}' from settings for {domain}")
-
-        # Read certificate file and parse info
-        try:
-            with open(cert_file, 'rb') as f:
-                cert_content = f.read()
-            return self._parse_certificate_info(
-                domain, cert_content, metadata, settings=settings,
-                key_state=self.private_key_state(
-                    domain, cert_content, metadata))
-        except Exception as e:
-            logger.error(f"Failed to read certificate file for {domain}: {e}")
-            return self._create_empty_cert_info(domain)
+        info = self._certificate_info_from_backend(
+            domain, settings, use_cache) if self.storage_manager else None
+        if info is not None:
+            return info
+        return self._certificate_info_from_disk(domain, settings)
     
     def private_key_state(self, domain, cert_content=None, metadata=None):
         """Is there a usable private key beside this certificate? (#608)
@@ -2065,6 +1930,187 @@ class CertificateManager:
             # itself a mismatch.
             matches = False
         return 'present' if matches else 'mismatched'
+
+    def _storage_retrieve(self, domain):
+        """The backend's answer for *domain* as ``(cert_files, metadata)``, or None.
+
+        A backend may offer a cheap info-only path; one that answers with
+        something other than the pair this expects gets ignored and the full
+        bundle is fetched instead, because a malformed shape here would
+        otherwise be unpacked into two variables and fail somewhere less
+        obvious.
+        """
+        retrieve_info = getattr(self.storage_manager, 'retrieve_certificate_info', None)
+        storage_result = None
+        if callable(retrieve_info):
+            candidate = retrieve_info(domain)
+            if candidate is None:
+                storage_result = None
+            elif isinstance(candidate, tuple) and len(candidate) == 2:
+                storage_result = candidate
+            else:
+                logger.debug(
+                    "Storage backend returned invalid certificate-info "
+                    "shape for %s; falling back to full retrieve.",
+                    domain,
+                )
+                storage_result = self.storage_manager.retrieve_certificate(domain)
+        else:
+            storage_result = self.storage_manager.retrieve_certificate(domain)
+        return storage_result
+
+    def _storage_key_state(self, domain, cert_files, metadata):
+        """Which private-key state the backend's answer justifies.
+"""
+        # What the key state is, asked of the key rather than
+        # of the shape of a dict.
+        #
+        # This branch used to decide from whether the answer
+        # happened to contain privkey.pem: present meant
+        # 'present', absent meant 'unknown'. On the default
+        # installation the answer never contained a key, since
+        # the base retrieve_certificate_info fetched the whole
+        # bundle and then dropped everything but cert.pem. So
+        # every certificate reported 'unknown', and a
+        # certificate with no key at all was reported healthy,
+        # which is the sentence #608 was closed for, on the
+        # path #608's fix never ran (#830).
+        #
+        # A key that is here is here, and is compared rather
+        # than believed: cert.pem from one issuance beside
+        # privkey.pem from another cannot complete a handshake
+        # and would otherwise pass as 'present'.
+        #
+        # A key that is NOT here is the ambiguous case, and the
+        # backend has to say which kind of absence it is. One
+        # that fetches everything and finds no key knows it is
+        # gone; one with a cheap info-only path never looked,
+        # and reading that as 'missing' would mark every
+        # certificate as needing renewal.
+        #
+        # `is True`, not truthiness: a backend that does not
+        # implement the question, and a test double that
+        # answers every attribute with another double, both
+        # fail that test and get 'unknown', which is the safe
+        # side of being wrong.
+        key_pem = cert_files.get('privkey.pem')
+        if key_pem:
+            storage_key_state = self.key_state_for_bytes(
+                domain, key_pem, cert_files['cert.pem'], metadata)
+        elif (metadata or {}).get('key_management') == 'external':
+            # A CSR-only certificate has no key ANYWHERE, and
+            # the metadata says so, so this can answer
+            # 'external' rather than the honest-but-useless
+            # 'unknown' (#599).
+            storage_key_state = 'external'
+        else:
+            knows_about_keys = False
+            asks = getattr(self.storage_manager,
+                           'info_includes_private_key', None)
+            if callable(asks):
+                try:
+                    knows_about_keys = asks() is True
+                except Exception as e:
+                    logger.debug(
+                        "Storage backend could not say whether "
+                        "it reports private keys for %s: %s",
+                        domain, e)
+                    knows_about_keys = False
+            storage_key_state = 'missing' if knows_about_keys else 'unknown'
+        return storage_key_state
+
+    def _certificate_info_from_backend(self, domain, settings, use_cache):
+        """What the storage backend says about *domain*, or None to look on disk.
+
+        None for every way the backend declines to answer — no certificate, a
+        bundle with no cert.pem, and a raised exception all land here — so the
+        filesystem fallback is reached on exactly the conditions it was
+        reached on before.
+
+        Extracted from `get_certificate_info` (#666), which was 163 lines at
+        complexity 28 and is the method every listing endpoint calls once per
+        certificate. Two independent paths in one body is what let #830
+        happen: the key-state rule was fixed on the disk path while this one
+        kept deciding from the shape of a dict, so on a default installation
+        every certificate reported `unknown` — and a certificate with no key
+        at all reported healthy, which is the sentence #608 was closed for.
+        """
+        cache_enabled = use_cache
+        cache_settings = settings
+        if cache_settings is None:
+            try:
+                cache_settings = self.settings_manager.load_settings()
+            except Exception as e:
+                logger.debug("Failed to load settings in get_certificate_info: %s", e)
+                cache_settings = {}
+        if cache_enabled:
+            cached = self._get_cached_certificate_info(domain, cache_settings)
+            if cached is not None:
+                return cached
+        try:
+            storage_result = self._storage_retrieve(domain)
+            if storage_result:
+                cert_files, metadata = storage_result
+                if 'cert.pem' in cert_files:
+                    storage_key_state = self._storage_key_state(
+                        domain, cert_files, metadata)
+                    info = self._parse_certificate_info(
+                        domain, cert_files['cert.pem'], metadata,
+                        settings=cache_settings,
+                        key_state=storage_key_state)
+                    if cache_enabled:
+                        self._set_cached_certificate_info(domain, info, cache_settings)
+                    return info
+        except Exception as e:
+            logger.warning(f"Failed to retrieve certificate from storage backend for {domain}: {e}")
+        return None
+
+    def _certificate_info_from_disk(self, domain, settings):
+        """What the files under `cert_dir/<domain>` say about *domain*.
+
+        The original path, and the one a default installation uses.
+        """
+        # Fall back to local filesystem for backward compatibility
+        cert_dir = self.cert_dir
+        cert_path = cert_dir / domain
+        if not cert_path.exists():
+            logger.info(f"Certificate directory does not exist for domain: {domain}")
+            return self._create_empty_cert_info(domain)
+        
+        cert_file = cert_path / "cert.pem"
+        if not cert_file.exists():
+            logger.info(f"Certificate file does not exist for domain: {domain}")
+            return self._create_empty_cert_info(domain)
+        
+        # Get DNS provider info from metadata file first, then fall back to
+        # settings. Uses the centralised _load_metadata so a corrupt JSON file
+        # gets quarantined consistently and we don't have two divergent
+        # readers handling JSONDecodeError differently.
+        metadata = self._load_metadata(domain)
+        dns_provider = metadata.get('dns_provider') if metadata else None
+        if dns_provider:
+            logger.debug(f"Found DNS provider '{dns_provider}' in metadata for {domain}")
+        
+        if not dns_provider:
+            # Fall back to current settings. Reuse the caller-supplied dict
+            # when present (renewal job) to avoid reloading from disk.
+            if settings is None:
+                settings = self.settings_manager.load_settings()
+            dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
+            logger.debug(f"Using DNS provider '{dns_provider}' from settings for {domain}")
+
+        # Read certificate file and parse info
+        try:
+            with open(cert_file, 'rb') as f:
+                cert_content = f.read()
+            return self._parse_certificate_info(
+                domain, cert_content, metadata, settings=settings,
+                key_state=self.private_key_state(
+                    domain, cert_content, metadata))
+        except Exception as e:
+            logger.error(f"Failed to read certificate file for {domain}: {e}")
+            return self._create_empty_cert_info(domain)
+
 
     def _parse_certificate_info(self, domain, cert_content, metadata=None,
                                 settings=None, key_state='present'):
