@@ -743,7 +743,12 @@ def test_the_csr_renewal_returns_the_shape_the_route_reads(tmp_path):
     for key in ('success', 'renewed', 'domain', 'message'):
         assert key in result, f'{key} missing from the CSR renewal result'
 
-    # And the same keys the ordinary path promises, read off its own source.
-    ordinary = inspect.getsource(_CM.renew_certificate)
+    # And the same keys the ordinary path promises, read off its own source
+    # — the whole path, since #666 split the method that used to hold every
+    # return statement. tests/renewal_path.py says why that matters.
+    from tests.renewal_path import renewal_path_source
+
+    ordinary = renewal_path_source()
     for key in ('success', 'renewed', 'domain', 'message'):
         assert f"'{key}'" in ordinary
+    assert _CM is not None
