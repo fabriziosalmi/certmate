@@ -259,6 +259,20 @@ METADATA_SCHEMA_VERSION = 1
 #                                         cannot read the served chain, so a
 #                                         leaf-only result is not read as "no
 #                                         intermediate served".
+#   POST /api/certificates/zombies/scan
+#                                   a fourth status, `unverifiable`, and an
+#                                   `unverifiable` count in the summary
+#                                   (#924). A wildcard with no probe host
+#                                   used to be reported `zombie` — the
+#                                   scanner's word for "delete this" — after
+#                                   probing the one name a wildcard is
+#                                   guaranteed not to cover. MINOR: a new
+#                                   value of an existing field and a new
+#                                   count. A caller that treats an unknown
+#                                   status as "not a finding" is right; one
+#                                   that treated `zombie` as authoritative
+#                                   was being told something false.
+#
 #   {{cert}} / {{fullchain}}        two new webhook payload-template
 #                                   placeholders, carrying the leaf
 #                                   certificate and the chain (#218). They
@@ -291,7 +305,7 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.18'
+API_CONTRACT_VERSION = '2.19'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

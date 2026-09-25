@@ -1,6 +1,6 @@
 # Documentation CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 65c96cad2a0b7f6d -->
+<!-- CERTMATE-TRANSLATED-FROM 5a4367d627623f25 -->
 
 Bienvenue dans la documentation de CertMate. Ce dossier contient des guides complets pour toutes les fonctionnalités.
 
@@ -65,7 +65,7 @@ Bienvenue dans la documentation de CertMate. Ce dossier contient des guides comp
 - **Renouvellement automatique** avec seuils configurables
 - **Support Docker** avec constructions multi-plateforme (ARM64 + AMD64)
 - **Nettoyeur de logs** — Supprime automatiquement les tokens API, clés privées et identifiants sensibles des logs CertMate
-- **Analyseur de certificats zombies** — Analyseur multi-threadé du système de fichiers pour identifier et nettoyer les certificats orphelins
+- **Analyseur de certificats zombies** — Sonde multi-threadée qui demande si les noms de vos certificats gérés résolvent et répondent encore
 - **Serveur MCP (Model Context Protocol)** — Serveur Node.js autonome pour l'intégration avec des assistants IA agentiques
 
 ### Certificats clients
