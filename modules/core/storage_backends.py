@@ -50,6 +50,25 @@ class CertificateExistenceUnknown(RuntimeError):
     """
 
 
+class CertificateUpdateTimeUnknown(RuntimeError):
+    """The backend could not read when the Certificate object was last written.
+
+    The same distinction as `CertificateExistenceUnknown`, on the timestamp
+    Azure Key Vault's `both` mode compares to decide which of its two copies is
+    fresher. `get_certificate_update_time()` answered None for any exception,
+    and None is also how it says "there is no Certificate object" — so a
+    throttled read, a 403 or a blip made both callers take the Secrets-only
+    branch and return that copy *without comparing*. After a renewal that had
+    already written the Certificate object, the caller got the certificate the
+    renewal replaced.
+
+    A timestamp cannot carry the third value, so it is an exception:
+
+      datetime  the Certificate object was last written then
+      None      there is no Certificate object
+      raise     the read failed, and says which error stopped it
+    """
+
 
 def _looks_absent(error, *, codes=(), names=()) -> bool:
     """True when *error* is the SDK's way of saying "no such thing".
@@ -606,16 +625,23 @@ class _AzureKeyVaultCertificateImporter:
         return True
 
     def get_certificate_update_time(self, domain: str) -> Optional['datetime']:
-        """Return the ``updated_on`` timestamp of a Certificate object, or None."""
+        """When the Certificate object was last written, or None if absent.
+
+        Raises `CertificateUpdateTimeUnknown` when the read failed, because
+        None already means "there is no Certificate object" and the callers
+        act on that difference. Narrowed the way `certificate_exists` is, by
+        error code and class name rather than by importing azure.core.
+        """
         cert_name = self._certificate_name(domain)
         try:
             cert = self._get_cert_client().get_certificate(cert_name)
-            return getattr(cert.properties, 'updated_on', None)
-        except Exception:
-            # A timestamp used to decide whether the remote copy is newer.
-            # None means "cannot tell", and every caller treats that as "do
-            # not skip the work" rather than as "nothing is there".
-            return None
+        except Exception as error:
+            if _looks_absent(error, codes=('404',), names=('ResourceNotFoundError',)):
+                return None
+            raise CertificateUpdateTimeUnknown(
+                f'could not read the Certificate object update time for '
+                f'{domain}: {error}') from error
+        return getattr(cert.properties, 'updated_on', None)
 
     def export_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Reconstruct the four PEM files (and metadata from tags) from a Certificate object.
@@ -931,6 +957,43 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
     # key from one it did not ask for. See the base class.
     info_includes_private_key = False
 
+    def _cert_object_update_time(self, domain: str) -> Optional['datetime']:
+        """When the Certificate object was last written, as far as we can tell.
+
+        `both` mode holds two copies and picks the fresher one by comparing
+        this timestamp with the Secrets copy's. A read that FAILED used to
+        arrive here as None — indistinguishable from "there is no Certificate
+        object" — and both callers then returned the Secrets copy without
+        comparing anything. After a renewal that had written the Certificate
+        object, that is the certificate the renewal replaced.
+
+        So a failed read is retried once through the summary instead of being
+        answered for. That is deliberately the *same* SDK call — both reach
+        `get_certificate(cert_name)` — which is the point: the failures this
+        cannot distinguish from absence are overwhelmingly transient
+        (throttling, a reset, a token refreshed mid-flight), and a second
+        attempt either gets the number or confirms there is none to get. The
+        cost is one extra call on the failure path only — the compare branch
+        below still reads the certificate itself afterwards, so a retry that
+        succeeds makes three calls where a clean read makes two.
+
+        Only if that fails too is there nothing left to compare against, and
+        then the caller falls back to the Secrets copy with this warning on
+        the record rather than in silence.
+        """
+        importer = self._get_cert_importer()
+        try:
+            return importer.get_certificate_update_time(domain)
+        except CertificateUpdateTimeUnknown as error:
+            summary = importer.get_certificate_summary(domain)
+            if summary is not None:
+                return summary[2]
+            logger.warning(
+                "Azure KV both-mode: could not read the Certificate object for "
+                "%s (%s); serving the Secrets copy without comparing, which "
+                "may be older.", domain, error)
+            return None
+
     def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve only cert.pem and metadata for dashboard/listing paths."""
         # The catch lives OUTSIDE the retry boundary: a decorated method that
@@ -959,7 +1022,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             return cert_files, metadata
 
         secrets_result = self._retrieve_info_from_secrets(domain)
-        cert_update = self._get_cert_importer().get_certificate_update_time(domain)
+        cert_update = self._cert_object_update_time(domain)
 
         if secrets_result is not None and cert_update is None:
             cert_files, metadata, _ = secrets_result
@@ -1032,7 +1095,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
 
         # storage_mode == 'both' — compare timestamps to avoid stale reads
         secrets_result = self._retrieve_from_secrets(domain)
-        cert_update = self._get_cert_importer().get_certificate_update_time(domain)
+        cert_update = self._cert_object_update_time(domain)
 
         if secrets_result is not None and cert_update is None:
             cert_files, metadata, secrets_update = secrets_result

@@ -179,6 +179,17 @@ def fingerprint_from_pem(public_key_pem: str) -> Optional[str]:
         )
         return base64.b64encode(hashlib.sha256(raw).digest()).decode('ascii')[:16]
     except Exception:
-        # A short fingerprint for log lines and the verify response. None is
-        # "cannot say", and no caller does anything with it but display it.
+        # None is "cannot say". The comment here used to add "and no caller
+        # does anything with it but display it", which was not true: both uses
+        # in audit_verify are comparisons that decide whether a bundle is
+        # accepted, including the one against the key an auditor pinned with
+        # --pubkey. Two Nones compare equal, so a pin would pass on a key it
+        # never checked.
+        #
+        # What keeps that shut is upstream, not here: verify_signature only
+        # accepts a key whose type can sign this way (Ed25519), and that is
+        # exactly the type whose raw encoding — the input to this digest —
+        # always exists. RSA and EC keys do return None here, and the same
+        # verify_signature refuses them before any fingerprint is compared.
+        # Measured both ways; the guard is real but it is not this line's.
         return None
