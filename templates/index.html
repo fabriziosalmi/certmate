@@ -1,54 +1,19 @@
 {% extends "base.html" %}
 {% from "partials/_modal.html" import modal %}
 {% block title %}CertMate - SSL Certificate Manager{% endblock %}
+{# The dashboard's own topbar controls — view toggle, counters, and the store
+   both they and the panels below read. The page declares them, rather than the
+   topbar guessing from the path: `/` also serves setup.html (#359). #}
+{% block topbar_controls %}{% include 'partials/_dashboard_topbar.html' %}{% endblock %}
 {% block content %}
-    <!-- Main Content -->
-    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"
-         x-data="{ certView: (location.hash === '#client' ? 'client' : 'server') }"
-         x-init="$watch('certView', v => { history.replaceState(null, '', v === 'client' ? '#client' : '#'); if (v === 'client') initClientCerts(); });
-                 window.addEventListener('hashchange', () => { certView = (location.hash === '#client' ? 'client' : 'server') })">
+    <!-- Main Content
 
-        <!-- Page-header cluster: [ Server | Client | New ]. The Server/Client
-             segments are state toggles (ghost); "New" is an imperative action
-             (filled brand, divider, text label) so it never reads as a third
-             certificate type. "New" opens the creation drawer (overlay) — no
-             inline form, no layout jump. -->
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-            <div class="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-2 p-1" role="group" aria-label="Certificate view and creation">
-                <button type="button" id="certViewServerBtn" @click="certView = 'server'"
-                        :aria-pressed="certView === 'server' ? 'true' : 'false'"
-                        :class="certView === 'server' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
-                    <i class="fas fa-globe" aria-hidden="true"></i>Server
-                </button>
-                <button type="button" id="certViewClientBtn" @click="certView = 'client'"
-                        :aria-pressed="certView === 'client' ? 'true' : 'false'"
-                        :class="certView === 'client' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
-                    <i class="fas fa-id-card" aria-hidden="true"></i>Client
-                </button>
-                <span class="mx-1 h-6 w-px bg-border" aria-hidden="true"></span>
-                <button type="button" @click="openCertDrawer(certView)"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
-                        title="New certificate">
-                    <i class="fas fa-plus" aria-hidden="true"></i>New
-                </button>
-            </div>
-            <!-- Compact KPI strip — pulled up to share the toggle's row at the
-                 same height, filling the formerly-empty band on the right. Server
-                 is rendered by updateStats(); client is static + filled by
-                 ccLoadStatistics() (same ids). -->
-            <div x-show="certView === 'server'" id="statsCards"
-                 class="inline-flex items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden"
-                 aria-label="Certificate counts"></div>
-            <div x-show="certView === 'client'"
-                 class="inline-flex items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden"
-                 aria-label="Client certificate counts">
-                <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" id="totalCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
-                <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" id="activeCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Active</span></div>
-                <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" id="revokedCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
-            </div>
-        </div>
+         The header band that stood here — view toggle, certificate counters —
+         is in the topbar now (partials/_dashboard_topbar.html), which is why
+         this wrapper carries a bare `x-data`: it is an Alpine root that reads
+         the `certs` store the topbar writes, and holds no state of its own
+         (#359). -->
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8" x-data>
 
         <!-- Create Certificate drawer (overlay from the right). The form below
              was relocated out of the inline layout to kill the layout-jump;
@@ -541,9 +506,10 @@
 
         <!-- SERVER CERTIFICATES (stats + table). The creation drawer sits
              above, outside this x-show, so it is available from either view. -->
-        <div x-show="certView === 'server'">
-        <!-- The stat counters moved up to share the toggle's row (see #statsCards
-             above). updateStats() renders them there. -->
+        <div x-show="$store.certs.view === 'server'">
+        <!-- The stat counters are in the topbar, beside the view toggle
+             (partials/_dashboard_topbar.html). updateStats() renders them into
+             #statsCards there. -->
 
         <!-- Certificates List -->
         <div class="bg-surface shadow-card rounded-xl overflow-hidden">
@@ -665,7 +631,7 @@
     </div><!-- /x-show server -->
 
     <!-- CLIENT CERTIFICATES -->
-    <div x-show="certView === 'client'" x-cloak x-init="if (certView === 'client') initClientCerts()">
+    <div x-show="$store.certs.view === 'client'" x-cloak x-init="if ($store.certs.view === 'client') initClientCerts()">
         {% include 'partials/_client_certs.html' %}
     </div>
 

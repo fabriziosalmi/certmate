@@ -1,0 +1,119 @@
+{# The dashboard's own controls, living in the global topbar (#359).
+
+   These used to be a band at the top of the page content: the view toggle on
+   the left, the certificate counters on the right, and an empty row between
+   them and the table. Moving them into the topbar frees that whole row on the
+   one page where vertical space is worth the most.
+
+   The topbar is shared by every page, so this renders only on `/` — the toggle
+   and the counters are about certificates, and there is nothing for them to
+   toggle anywhere else.
+
+   `x-data` makes this an Alpine root, and the state it reads is the `certs`
+   store registered at the top of this file — because the control that writes
+   the view and the panels that read it are now in two different templates and
+   cannot share an `x-data` scope. The registration ships with the only markup
+   that reads it, so a page cannot end up with one half and not the other.
+
+   Element ids are unchanged — `#statsCards` is where `updateStats()` writes,
+   `#totalCount`/`#activeCount`/`#revokedCount` are where `ccLoadStatistics()`
+   writes, and the command palette clicks `#certViewServerBtn` /
+   `#certViewClientBtn` to change view. Only the surrounding layout moved.
+
+   The breakpoint is `xl` (1280px) because that is where the three clusters
+   measure as fitting: 64px of logo, 596px for this one (a 296px toggle, a
+   252px counter strip, the gap and its own padding) and a 443px icon rail come
+   to 1103px, against the 1216px inside the `max-w-7xl` container at 1280 and
+   the 1136px at 1200. The 1100px this was first written against is not enough
+   — the cluster lands in the bar and then wraps inside itself, leaving a
+   108px-tall navigation, which is worse than giving it a row. #}
+<script>
+// The dashboard's Server/Client view, as a global Alpine store.
+//
+// It was `x-data` on the page's content wrapper, which worked while the toggle
+// was inside that wrapper. The toggle is in the topbar now and the panels it
+// switches are in index.html: two Alpine roots with no common scope, so the
+// state has to sit outside both (#359).
+//
+// Not deferred, so it registers the listener before the deferred Alpine bundle
+// dispatches `alpine:init` — which is true wherever in the document this
+// partial is included. A <script> is display:none, so it is not a flex item of
+// the row around it.
+document.addEventListener('alpine:init', function () {
+    function fromHash() {
+        return location.hash === '#client' ? 'client' : 'server';
+    }
+    Alpine.store('certs', {
+        view: fromHash(),
+        // Every change goes through here: the URL keeps the view, so a reload
+        // or a shared link lands on the same one, and the client list loads
+        // the first time it is asked for.
+        select: function (view) {
+            this.view = view;
+            history.replaceState(null, '', view === 'client' ? '#client' : '#');
+            if (view === 'client' && typeof initClientCerts === 'function') {
+                initClientCerts();
+            }
+        },
+        // #425: the hash is read once above, so without this a fragment-only
+        // navigation — which is what every command-palette entry does — would
+        // change the URL and visibly do nothing.
+        init: function () {
+            var self = this;
+            window.addEventListener('hashchange', function () {
+                if (fromHash() !== self.view) { self.select(fromHash()); }
+            });
+        }
+    });
+});
+</script>
+<div x-data
+     class="order-last w-full flex flex-wrap items-center justify-between gap-2 py-2 border-t border-border
+            xl:order-none xl:w-auto xl:flex-1 xl:justify-center
+            xl:gap-4 xl:py-0 xl:px-4 xl:border-t-0">
+    <!-- [ Server | Client | New ]. The Server/Client segments are state
+         toggles (ghost); "New" is an imperative action (filled brand, divider,
+         text label) so it never reads as a third certificate type. "New" opens
+         the creation drawer (overlay) — no inline form, no layout jump. -->
+    <div class="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-2 p-1" role="group" aria-label="Certificate view and creation">
+        <button type="button" id="certViewServerBtn" @click="$store.certs.select('server')"
+                :aria-pressed="$store.certs.view === 'server' ? 'true' : 'false'"
+                :class="$store.certs.view === 'server' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
+                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
+            <i class="fas fa-globe" aria-hidden="true"></i>Server
+        </button>
+        <button type="button" id="certViewClientBtn" @click="$store.certs.select('client')"
+                :aria-pressed="$store.certs.view === 'client' ? 'true' : 'false'"
+                :class="$store.certs.view === 'client' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
+                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
+            <i class="fas fa-id-card" aria-hidden="true"></i>Client
+        </button>
+        <span class="mx-1 h-6 w-px bg-border" aria-hidden="true"></span>
+        <button type="button" @click="openCertDrawer($store.certs.view)"
+                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
+                title="New certificate">
+            <i class="fas fa-plus" aria-hidden="true"></i>New
+        </button>
+    </div>
+    <!-- Counters for whichever view the toggle is on. Server is rendered by
+         updateStats(); client is static markup filled by ccLoadStatistics()
+         (same ids). Both are cloaked so a single strip is on screen from the
+         first paint rather than both of them until Alpine initialises.
+
+         On a phone the strip cannot share a line with the toggle at any
+         sensible size, so it takes the full width and its segments share that
+         width equally — a summary bar across the row rather than a short chip
+         with dead space beside it. The child variant sets that on the segments
+         without touching the two places that generate them (updateStats and
+         the static markup below), which would otherwise have to agree. -->
+    <div x-show="$store.certs.view === 'server'" x-cloak id="statsCards"
+         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start"
+         aria-label="Certificate counts"></div>
+    <div x-show="$store.certs.view === 'client'" x-cloak
+         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start"
+         aria-label="Client certificate counts">
+        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" id="totalCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
+        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" id="activeCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Active</span></div>
+        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" id="revokedCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
+    </div>
+</div>
