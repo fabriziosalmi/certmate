@@ -1,3 +1,4 @@
+import re
 import socket
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -139,16 +140,28 @@ def test_a_wildcard_with_no_stand_in_says_why():
 
         assert result['status'] == 'unverifiable'
         reason = result['reason']
-        # Asserted on the three things the sentence has to carry, each in a
-        # form that says which role it plays. `'wildcard.com' in reason` was
-        # the first draft and CodeQL was right to flag it
-        # (py/incomplete-url-substring-sanitization): a bare hostname matched
-        # anywhere in a longer string proves nothing about where it matched,
-        # and here it would have passed on a message that named only the apex
-        # — which is the very name the certificate does not cover.
         assert '*.wildcard.com' in reason, 'the reason does not name the certificate'
-        assert 'www.wildcard.com' in reason, 'the reason suggests no usable name'
         assert 'deployment_host' in reason, 'the reason does not name the fix'
+
+        # The suggested name is EXTRACTED and then checked for the property
+        # that matters — that the wildcard actually covers it — rather than
+        # compared as a substring. Two drafts of this searched the sentence
+        # for a bare hostname and CodeQL flagged both
+        # (py/incomplete-url-substring-sanitization); it is right about the
+        # pattern, and it is right here for a concrete reason: `'wildcard.com'
+        # in reason` passes on a message that suggests the APEX, which is the
+        # one name a wildcard does not cover and the whole defect this test is
+        # about.
+        # The sentence reads '(for example www.wildcard.com)', so the
+        # closing paren has to come off — the first run of this caught it
+        # by failing on 'www.wildcard.com)'.
+        suggested = re.search(r'for example ([^\s)]+)', reason)
+        assert suggested, f'the reason suggests no name to use: {reason}'
+        name = suggested.group(1)
+        assert name.endswith('.wildcard.com'), name
+        assert name.count('.') == 2, (
+            f'{name} is not a name this wildcard covers — `*.` matches exactly '
+            f'one label')
         mock_dns.assert_not_called()
 
 
