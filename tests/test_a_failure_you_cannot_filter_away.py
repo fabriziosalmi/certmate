@@ -172,3 +172,22 @@ def test_certificate_failed_has_no_checkbox():
     js = Path('static/js/settings-notifications.js').read_text()
     listed = js.split('notifiableEvents:', 1)[1].split(']', 1)[0]
     assert "'certificate_failed'" not in listed
+
+
+def test_a_saved_filter_that_named_only_this_event_still_means_the_same(receiver):
+    """No migration is needed for configs written before the change.
+
+    Nothing validates the stored `events` list against a known set, so an
+    operator upgrading has whatever they last saved. The only list whose
+    meaning could have flipped is one naming certificate_failed and nothing
+    else: before, it meant "failures only"; now the entry matches nothing
+    filterable and failures arrive through the bypass instead. Same two
+    outcomes, reached a different way — which is why the stale entry can be
+    left alone rather than rewritten under the operator."""
+    n = _notifier(_config(receiver, global_events=['certificate_failed'],
+                          webhook_events=[]))
+    n.notify('certificate_failed', 'Renewal failed', 'certbot exited 1', {})
+    n.notify('certificate_created', 'Created', 'ok', {})
+    assert receiver.events == ['certificate_failed'], (
+        'a pre-upgrade filter of ["certificate_failed"] must still deliver '
+        'failures and still withhold everything else')
