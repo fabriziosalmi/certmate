@@ -123,7 +123,7 @@
                                         </template>
                                         <template x-if="keys[keyId].created_during_setup && keys[keyId].setup_origin_confirmed_at">
                                             <span class="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted"
-                                                  :title="'Created during setup; confirmed by ' + (keys[keyId].setup_origin_confirmed_by || '?') + ' on ' + new Date(keys[keyId].setup_origin_confirmed_at).toLocaleDateString()">
+                                                  :title="'Created during setup; confirmed by ' + (keys[keyId].setup_origin_confirmed_by || '?') + ' on ' + CertMate.formatDate(keys[keyId].setup_origin_confirmed_at)">
                                                 created during setup: confirmed
                                             </span>
                                         </template>
@@ -141,12 +141,12 @@
                                     <div class="text-xs text-muted">
                                         <span class="font-mono" x-text="keys[keyId].token_prefix + '...'"></span>
                                         <span class="mx-1">&middot;</span>
-                                        <span x-text="'Created ' + new Date(keys[keyId].created_at).toLocaleDateString()"></span>
+                                        <span x-text="'Created ' + CertMate.formatDate(keys[keyId].created_at)"></span>
                                         <template x-if="keys[keyId].last_used_at">
-                                            <span><span class="mx-1">&middot;</span><span x-text="'Last used ' + new Date(keys[keyId].last_used_at).toLocaleDateString()"></span></span>
+                                            <span><span class="mx-1">&middot;</span><span x-text="'Last used ' + CertMate.formatDate(keys[keyId].last_used_at)"></span></span>
                                         </template>
                                         <template x-if="keys[keyId].expires_at">
-                                            <span><span class="mx-1">&middot;</span><span x-text="'Expires ' + new Date(keys[keyId].expires_at).toLocaleDateString()"></span></span>
+                                            <span><span class="mx-1">&middot;</span><span x-text="'Expires ' + CertMate.formatDate(keys[keyId].expires_at)"></span></span>
                                         </template>
                                         <template x-if="Array.isArray(keys[keyId].allowed_domains) && keys[keyId].allowed_domains.length > 0">
                                             <span><span class="mx-1">&middot;</span><span class="font-mono" x-text="keys[keyId].allowed_domains.join(', ')"></span></span>

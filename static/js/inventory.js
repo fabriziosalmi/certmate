@@ -21,6 +21,48 @@
 
     function el(id) { return document.getElementById(id); }
 
+    // A count and the colour it earns, together.
+    //
+    // The nine alarm tiles on this page wrote the colour into their class
+    // attribute, so it belonged to the LABEL rather than to the value: "0
+    // expired", "0 revoked" and "0 weak" — the best states this page can
+    // report — were painted in the colour it uses for "act now", and a healthy
+    // instance opened on a wall of red (#939). The dashboard already got this
+    // right, and said so in a comment; the two surfaces disagreed about what a
+    // colour meant.
+    //
+    // It runs both ways. "Modern 0" was painted GREEN by the same habit, and
+    // zero modern certificates is not good news either — it is the same lie
+    // with the other palette.
+    //
+    // Zero is NEUTRAL, never green: on an instance that has scanned nothing,
+    // "0 weak" is an absence of evidence and not an achievement. The "nothing
+    // checked yet" copy under each table is where that distinction belongs.
+    //
+    // `data-nonzero` on the tile is the class the value earns when it is not
+    // zero — an alarm colour for a bad category, a positive one for a good
+    // one — so adding a tile is a template change and nothing here has to be
+    // remembered.
+    function setCount(id, value) {
+        var node = el(id);
+        if (!node) return;
+        var count = value || 0;
+        node.textContent = count;
+        var earned = node.getAttribute('data-nonzero');
+        if (!earned) return;
+        // The neutral class comes OFF when the earned one goes on. Both are
+        // `color` utilities of equal specificity, so the winner is whichever
+        // Tailwind emits later in the bundle and not whichever was added last
+        // to the element: leaving both in place left "Expired 4" white while
+        // "<= 7 days 1" went orange, because those two colours happen to sit
+        // on opposite sides of `text-foreground` in the generated stylesheet.
+        // Visible only in a browser — `classList.contains` was satisfied.
+        node.classList.toggle('text-foreground', count === 0);
+        earned.split(/\s+/).forEach(function (cls) {
+            if (cls) node.classList.toggle(cls, count > 0);
+        });
+    }
+
     function roleAtLeast(name) {
         return (ROLE_LEVELS[currentRole] || 0) >= (ROLE_LEVELS[name] || 0);
     }
@@ -227,14 +269,14 @@
     function setSummary(s) {
         s = s || {};
         var ex = s.expiry || {};
-        el('sumTotal').textContent = s.total || 0;
-        el('sumIssued').textContent = s.issued || 0;
-        el('sumDiscovered').textContent = s.discovered || 0;
-        el('sumExpired').textContent = ex.expired || 0;
-        el('sum7').textContent = ex['7'] || 0;
-        el('sum30').textContent = ex['30'] || 0;
-        el('sum90').textContent = ex['90'] || 0;
-        el('sumRevoked').textContent = (s.revocation || {}).revoked || 0;
+        setCount('sumTotal', s.total);
+        setCount('sumIssued', s.issued);
+        setCount('sumDiscovered', s.discovered);
+        setCount('sumExpired', ex.expired);
+        setCount('sum7', ex['7']);
+        setCount('sum30', ex['30']);
+        setCount('sum90', ex['90']);
+        setCount('sumRevoked', (s.revocation || {}).revoked);
     }
 
     function load() {
@@ -277,10 +319,10 @@
                 var rows = data.domains || [];
                 var s = data.summary || {};
                 var ex = s.expiry || {};
-                el('regExpired').textContent = ex.expired || 0;
-                el('reg30').textContent = ex['30'] || 0;
-                el('reg90').textContent = ex['90'] || 0;
-                el('regNotPublished').textContent = (s.by_status || {}).not_published || 0;
+                setCount('regExpired', ex.expired);
+                setCount('reg30', ex['30']);
+                setCount('reg90', ex['90']);
+                setCount('regNotPublished', (s.by_status || {}).not_published);
                 el('regCount').textContent = rows.length ? rows.length + ' domains' : '';
                 if (!rows.length) {
                     el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-muted">'
@@ -325,10 +367,10 @@
             .then(function (data) {
                 var rows = data.names || [];
                 var by = (data.summary || {}).by_status || {};
-                el('healthFailing').textContent = by.failing || 0;
-                el('healthWarning').textContent = by.warning || 0;
-                el('healthUnknown').textContent = by.unknown || 0;
-                el('healthOk').textContent = by.ok || 0;
+                setCount('healthFailing', by.failing);
+                setCount('healthWarning', by.warning);
+                setCount('healthUnknown', by.unknown);
+                setCount('healthOk', by.ok);
                 el('healthCount').textContent = rows.length ? rows.length + ' names' : '';
                 if (!rows.length) {
                     el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-muted">'
@@ -361,10 +403,10 @@
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (rep) {
                 var c = rep.by_classification || {};
-                el('cryptoWeak').textContent = c.weak || 0;
-                el('cryptoAcceptable').textContent = c.acceptable || 0;
-                el('cryptoModern').textContent = c.modern || 0;
-                el('cryptoQuantum').textContent = rep.quantum_vulnerable || 0;
+                setCount('cryptoWeak', c.weak);
+                setCount('cryptoAcceptable', c.acceptable);
+                setCount('cryptoModern', c.modern);
+                setCount('cryptoQuantum', rep.quantum_vulnerable);
             })
             .catch(function () { /* leave placeholders */ });
     }
