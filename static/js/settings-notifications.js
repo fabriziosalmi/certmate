@@ -20,10 +20,12 @@
             // — an event the system publishes and `_EVENT_TITLES` names, so
             // ticking any box silently excluded it and nothing said so.
             //
-            // `deploy_hook_failed` and `certificate_deploy_incomplete` are
-            // deliberately absent: the notifier's _ALWAYS_NOTIFY_EVENTS sends
-            // them whatever is selected, so a checkbox would imply a choice
-            // that does not exist.
+            // `deploy_hook_failed`, `certificate_deploy_incomplete` and
+            // `certificate_failed` are deliberately absent: the notifier's
+            // _ALWAYS_NOTIFY_EVENTS sends them whatever is selected, so a
+            // checkbox would imply a choice that does not exist. The third one
+            // joined that set in #943 — a renewal that did not happen is the
+            // one message an operator cannot afford to have filtered away.
             //
             // tests/test_every_filterable_event_is_selectable.py compares this
             // against the backend's own two sets.
@@ -33,7 +35,6 @@
                 'certificate_deployed',
                 'certificate_expiring',
                 'certificate_revoked',
-                'certificate_failed',
                 'domain_expiring'
             ],
             showSmtp: false,

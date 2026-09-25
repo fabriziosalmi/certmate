@@ -15,14 +15,16 @@ PagerDuty, an ITSM endpoint, your own service.
 Two event lists narrow what is sent, and an empty list means every event: the
 global **Notify on Events** list (`notifications.events`) applies to every
 channel, email included, and each webhook can then be limited further by its
-own list. The settings page offers seven events for both lists:
+own list. The settings page offers six events for both lists:
 `certificate_created`, `certificate_renewed`, `certificate_deployed`,
-`certificate_expiring`, `certificate_revoked`, `certificate_failed` and
-`domain_expiring` — every event that can be filtered on.
+`certificate_expiring`, `certificate_revoked` and `domain_expiring` — every
+event that can be filtered on.
 
-`deploy_hook_failed` and `certificate_deploy_incomplete` are delivered whatever
-the filter says: they report a failure an operator must not be able to silence
-by accident.
+`certificate_failed`, `deploy_hook_failed` and `certificate_deploy_incomplete`
+are delivered whatever the filter says, and have no checkbox because there is
+no choice to offer: they report a failure an operator must not be able to
+silence by accident. Putting one of them in a list changes nothing; leaving it
+out changes nothing either.
 
 ### The two expiry warnings
 

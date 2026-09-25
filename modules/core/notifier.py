@@ -176,7 +176,8 @@ def urlopen(req, timeout=None):
 # presenting the previous one. An operator who silences it has chosen not to
 # be told that a renewal did not reach production.
 _ALWAYS_NOTIFY_EVENTS = frozenset({'deploy_hook_failed',
-                                   'certificate_deploy_incomplete'})
+                                   'certificate_deploy_incomplete',
+                                   'certificate_failed'})
 
 WEBHOOK_METHODS = ('POST', 'PUT', 'PATCH')
 WEBHOOK_AUTH_TYPES = ('none', 'bearer', 'basic', 'header')
@@ -594,6 +595,14 @@ class Notifier:
         # deploy_hook_failed and permanently silences exactly the alert it
         # exists to raise — with no way to re-enable it. An operator must never be able to filter away a
         # failure they need to see, so these are always delivered.
+        #
+        # certificate_failed joined them for the same reason, one release after
+        # the principle was written down without it (#943). It is THE failure of
+        # this product: the certificate did not renew, and the next thing that
+        # happens is an expiry. Ticking "renewed" to hear about successes
+        # silently opted out of hearing about the one that did not happen —
+        # which is the shape of the complaint, and the shape the two events
+        # above were exempted for.
         events_filter = config.get('events', [])
         if (events_filter and event not in events_filter
                 and event not in _ALWAYS_NOTIFY_EVENTS):
