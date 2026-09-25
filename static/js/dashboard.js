@@ -759,7 +759,7 @@
             }
 
             var expiryDate = new Date(cert.expiry_date);
-            var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var expiryStr = CertMate.formatDate(expiryDate);
             // The day counter is the focal value (large, status-coloured); the
             // absolute date drops to a smaller secondary line. Status colour is
             // carried onto the counter itself — green for healthy so the colour
@@ -1047,7 +1047,7 @@
             // it carried could never fire: a day count is -1 for anything
             // expired within 24 hours, never 0.
             var daysText = CertMate.lifetimePhrase(cert);
-            var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var expiryStr = CertMate.formatDate(expiryDate);
             var bannerBg = isExpired ? 'bg-danger-surface' : isExpiringSoon ? 'bg-warning-surface' : 'bg-success-surface';
             var bannerIcon = isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
             var autoOn = cert.auto_renew !== false;
@@ -1196,7 +1196,7 @@
     function addDebugLog(message, type) {
         type = type || 'info';
         var output = document.getElementById('debugOutput');
-        var timestamp = new Date().toLocaleTimeString();
+        var timestamp = CertMate.formatTime(new Date());
         var colors = {
             info: 'text-green-400',
             warn: 'text-yellow-400',

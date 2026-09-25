@@ -248,7 +248,7 @@
                                     <tbody>
                                         <template x-for="d in deliveries" :key="d.timestamp+d.webhook_name">
                                             <tr class="border-t border-gray-100 dark:border-gray-700/50">
-                                                <td class="py-1 pr-2 text-muted whitespace-nowrap" x-text="new Date(d.timestamp).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})"></td>
+                                                <td class="py-1 pr-2 text-muted whitespace-nowrap" x-text="CertMate.formatDateTime(d.timestamp)"></td>
                                                 <td class="py-1 pr-2 text-label" x-text="d.webhook_name"></td>
                                                 <td class="py-1 pr-2 text-muted" x-text="d.event.replace('certificate_','')"></td>
                                                 <td class="py-1 pr-2"><span :class="d.success ? 'text-success-fg' : 'text-danger-fg'" x-text="d.success ? 'HTTP ' + d.status : (d.error || 'failed').substring(0, 40)"></span></td>
