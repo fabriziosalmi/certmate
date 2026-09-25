@@ -374,7 +374,9 @@ def collect_sanitized_logs(ctx: ApiContext) -> tuple[dict, dict]:
                     continue
                 try:
                     sanitized.append(formatter.sanitize_data(json.loads(text)))
-                except Exception:
+                except (ValueError, TypeError):
+                    # Not JSON: a plain-text log line, which is the normal
+                    # case for anything not written by the structured logger.
                     sanitized.append(formatter.sanitize_data(text))
     except Exception as e:
         logger.warning(f"Diagnostic: failed to read sanitized logs: {e}")

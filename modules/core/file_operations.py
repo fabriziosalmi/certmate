@@ -965,6 +965,10 @@ class FileOperations:
         try:
             ok, err = dm._validate_deploy_config(deploy_block)
         except Exception as ve:
+            # The validator is being run on config from a BACKUP, which may
+            # predate it — so it may raise on shapes it was never written for.
+            # That is a reason to refuse the restore with an explanation, not
+            # to crash it: the type and message are the return value.
             return f"deploy config validator raised {type(ve).__name__}: {ve}"
         return None if ok else (err or "deploy config failed current validator")
 

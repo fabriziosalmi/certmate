@@ -162,6 +162,10 @@ class KubernetesSecretTarget:
         try:
             resp = patch(url, json=manifest, headers=headers, verify=verify, timeout=15)
         except Exception as e:
+            # Broad because `requests` raises a family of them and they all
+            # mean the same thing to the caller. The exception reaches the
+            # operator in `message`, scrubbed of the bearer token first —
+            # which is the reason this cannot simply propagate.
             return {'success': False, 'status_code': None,
                     'message': f'Kubernetes API request failed: {_scrub(str(e), token)}'}
         finally:
@@ -214,6 +218,9 @@ def _safe_body(resp):
     try:
         return (resp.text or '')[:300]
     except Exception:
+        # A response body is only ever quoted back to the operator here, so
+        # any failure to read one has to be a string rather than an exception
+        # that replaces the status code the caller is reporting.
         return '<unreadable response>'
 
 

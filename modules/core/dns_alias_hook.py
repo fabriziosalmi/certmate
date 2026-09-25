@@ -390,6 +390,7 @@ def _rfc2136_find_zone(record_fqdn, host, port, timeout):
     """Find the zone apex hosting *record_fqdn* by walking parent labels and
     asking the authoritative server for the SOA. dnspython's dynamic UPDATE is
     addressed to the zone, not the record FQDN."""
+    import dns.exception
     import dns.name
     import dns.message
     import dns.query
@@ -403,7 +404,12 @@ def _rfc2136_find_zone(record_fqdn, host, port, timeout):
             resp = dns.query.udp(query, host, port=port, timeout=timeout)
             if resp.flags & dns.flags.TC:
                 resp = dns.query.tcp(query, host, port=port, timeout=timeout)
-        except Exception:
+        except (dns.exception.DNSException, OSError):
+            # Retry over TCP, which is what a resolver does when UDP is
+            # blocked, truncated or unanswered. dnspython raises DNSException
+            # for a protocol fault and OSError (socket.timeout among them) for
+            # a transport one; anything else is a programming error here and
+            # must not be turned into a second query.
             resp = dns.query.tcp(query, host, port=port, timeout=timeout)
         for section in (resp.answer, resp.authority):
             for rrset in section:

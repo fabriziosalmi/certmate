@@ -159,6 +159,11 @@ def verify_signature(public_key_pem: str, signature_b64: str, data: bytes) -> bo
         except InvalidSignature:
             return False
     except Exception:
+        # Every failure here must read as "not verified". Narrowing would mean
+        # listing the ways a malformed key or signature can fail to load, and
+        # a type this missed would propagate out of a verification as an
+        # exception — which a caller checking a boolean would not treat as a
+        # refusal. Broad in the safe direction, on purpose.
         return False
 
 
@@ -174,4 +179,6 @@ def fingerprint_from_pem(public_key_pem: str) -> Optional[str]:
         )
         return base64.b64encode(hashlib.sha256(raw).digest()).decode('ascii')[:16]
     except Exception:
+        # A short fingerprint for log lines and the verify response. None is
+        # "cannot say", and no caller does anything with it but display it.
         return None

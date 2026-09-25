@@ -1084,6 +1084,9 @@ class CertificateManager:
         try:
             backend_name = self.storage_manager.get_backend_name()
         except Exception:
+            # Only a label for the warning below. A backend that cannot say
+            # its own name must not stop the store it is about to be asked
+            # for, and 'external' is true of all of them.
             backend_name = 'external'
         try:
             stored = self.storage_manager.store_certificate(domain, cert_files, metadata)
@@ -1742,6 +1745,10 @@ class CertificateManager:
             try:
                 found_targets = self._resolve_cname(source)
             except Exception as e:
+                # Every resolver failure is the same answer here — the
+                # expectation could not be checked — and it is reported, not
+                # swallowed: `error` goes into the per-source result the
+                # caller renders.
                 error = str(e)
 
             normalized_found = [self._normalize_cname_target(target) for target in found_targets]

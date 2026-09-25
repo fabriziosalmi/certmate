@@ -180,6 +180,10 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                         f"{domain} (fingerprint {expected_fp_prefix}...)."
                     )
             except Exception as e:
+                # Broad on purpose: this answers "what is this host serving",
+                # and every way a probe can fail — DNS, TCP, TLS, a malformed
+                # certificate — is the same answer. The exception is not
+                # discarded, it is the `error` field of the response.
                 result['error'] = str(e)
                 result['probe_status'] = 'unreachable'
                 result['mismatch_reason'] = (
