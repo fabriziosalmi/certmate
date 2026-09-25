@@ -246,3 +246,69 @@ def test_the_endpoint_that_shows_the_origin_is_still_admin_only():
         'the viewer-readable settings route is what the hint must stay out of; '
         'if it is gone, re-derive where the hint may appear'
     )
+
+
+# ── what the page says this endpoint does ─────────────────────────────
+
+def test_a_partial_save_deep_merges_instead_of_replacing(client):
+    """docs/api.md said "POST replaces rather than merges". It does not.
+
+    Measured against a live instance while writing that page: a body of only
+    `{"enabled": false}` turned notifications off and left three configured
+    webhooks and the SMTP block untouched. The merge was deliberate (audit H4 —
+    a partial submit must not destroy siblings) and the sentence describing the
+    endpoint had outlived it. This pins the behaviour the corrected page now
+    describes, so the next person to change one has to change the other."""
+    r = client.post('/api/notifications/config', json={'enabled': False})
+    assert r.status_code == 200, r.data
+    saved = client._saved['notifications']
+    assert saved['enabled'] is False
+    assert len(saved['channels']['webhooks']) == 2, (
+        'a partial save destroyed the webhooks'
+    )
+    assert saved['channels']['smtp']['host'] == 'smtp.example.com'
+
+
+def test_the_webhooks_list_is_replaced_wholesale(client):
+    """The exception the page now names: a list has no key to merge on.
+
+    Sending one webhook replaces the two that were stored — and the masked URL
+    of the survivor is still restored from disk, because that is done by
+    identity and not by position."""
+    r = client.post('/api/notifications/config', json={'channels': {'webhooks': [
+        {'name': 'ops', 'type': 'slack', 'enabled': True,
+         'url': SECRET_MASK_SENTINEL},
+    ]}})
+    assert r.status_code == 200, r.data
+    webhooks = client._saved['notifications']['channels']['webhooks']
+    assert [w['name'] for w in webhooks] == ['ops']
+    assert webhooks[0]['url'].endswith('zZtOpSeCrEt')
+
+
+def test_the_new_field_is_recorded_where_the_rule_lives():
+    """`url_hint` shipped without moving API_CONTRACT_VERSION.
+
+    The rule beside the constant has six clauses — new endpoint, endpoint
+    removed, new response field, field removed or retyped, request field become
+    required, status code changed — and the only gate over it
+    (test_the_contract_moves_with_the_surface.py) compares a snapshot of the
+    ROUTES. It sees two of the six. A new field on a response is invisible to
+    it, which is how this one went out in 2.19.
+
+    So the check is that the field is written down in the changelog beside the
+    constant, and in the page a caller reads. Neither is derivable; both are the
+    thing that was missing."""
+    from pathlib import Path
+    constants = Path('modules/core/constants.py').read_text()
+    assert 'url_hint' in constants, (
+        'a new response field is not recorded in the contract changelog'
+    )
+    api_doc = Path('docs/api.md').read_text()
+    assert 'url_hint' in api_doc, 'the field is not documented for callers'
+    # Stated positively on purpose. Banning the old, false sentence would be a
+    # gate that encodes yesterday's mistake rather than today's truth, and the
+    # behaviour it describes is already pinned by the two tests above — which
+    # are what fails first if the endpoint ever does start replacing.
+    assert 'deep-merge' in api_doc.lower(), (
+        'the page no longer says what the endpoint does with a partial body'
+    )
