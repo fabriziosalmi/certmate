@@ -505,6 +505,48 @@ def delivery_log_url(url) -> str:
     return f'{parsed.scheme}://{host}'
 
 
+def webhook_url_hint(url) -> str:
+    """What the settings page may show of a saved webhook URL: its origin.
+
+    The URL is masked on read because it IS the credential (see
+    `delivery_log_url`), and #944 is what that costs: the name is on screen and
+    the URL is `********`, so an operator cannot tell which Slack workspace or
+    which receiver a webhook points at, nor spot a typo in the host, without
+    re-typing the whole thing from memory.
+
+    The rule is: enough to RECOGNISE the destination, never enough to USE it.
+    Origin only — scheme, host, port — plus markers saying that a path and/or a
+    query exist, with none of their content. That matters per receiver type:
+    for Slack the secret is the last path segment, for Discord likewise, for
+    ntfy the topic in the first segment is itself the authorisation, and for
+    Gotify the token is in the query. A rule that showed "just the first path
+    segment" would be safe for Slack and wrong for ntfy, so no path content is
+    shown at all.
+
+    This reveals nothing new to the caller. `GET /api/notifications/config` is
+    admin-only, and `GET /api/webhooks/deliveries` — also admin-only — already
+    returns exactly this origin for every delivery, via `delivery_log_url`.
+
+    It must NOT be folded into `mask_secrets_in_settings`. That helper also
+    serves `GET /api/web/settings`, which the **viewer** role may read, and the
+    share-safe backup ZIP. Both mask the URL whole today, and both must keep
+    doing so; the hint belongs to the admin endpoint alone.
+    """
+    origin = delivery_log_url(url)
+    if not origin or origin == DELIVERY_URL_UNPARSEABLE:
+        return origin
+    try:
+        parsed = urlparse(str(url).strip())
+    except ValueError:  # pragma: no cover - delivery_log_url already parsed it
+        return origin
+    suffix = ''
+    if parsed.path and parsed.path != '/':
+        suffix += '/\u2026'
+    if parsed.query:
+        suffix += '?\u2026'
+    return origin + suffix
+
+
 class Notifier:
     """Sends notifications via configured channels."""
 

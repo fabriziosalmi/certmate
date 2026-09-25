@@ -37,6 +37,10 @@
                 'certificate_revoked',
                 'domain_expiring'
             ],
+            // The masking sentinel the API returns for a saved credential. The
+            // template needs it to tell "this is what is stored, hidden" from
+            // "this is what the operator just typed".
+            MASK: '********',
             showSmtp: false,
             showWebhooks: false,
             showDeliveries: false,
