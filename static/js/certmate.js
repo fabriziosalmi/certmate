@@ -689,6 +689,44 @@
         if (_scrollLocks === 0) document.documentElement.style.overflow = '';
     };
 
+    // ── How long is left, in words ───────────────────────────────
+    //
+    // One sentence, one implementation. There were three, and they had already
+    // drifted: two carried a "less than a day" case and one did not, so a
+    // certificate with 23 hours of life was described in the past tense on the
+    // notifications page while the dashboard got it right (#938).
+    //
+    // The magnitude comes from `seconds_left`, never from a day count. That is
+    // the whole fix. `days_until_expiry` is `timedelta.days`, which truncates
+    // toward minus infinity, so anything expired by less than 24 hours is -1
+    // and NEVER 0 — which made the "less than a day ago" branch that already
+    // existed unreachable, and every fresh expiry read "1 day ago". A day count
+    // is still the fallback for a server too old to send seconds, because "1
+    // day ago" is the best answer available from -1.
+    var SECONDS_IN_DAY = 86400;
+
+    CM.lifetimePhrase = function (cert) {
+        cert = cert || {};
+        var seconds = typeof cert.seconds_left === 'number' ? cert.seconds_left : null;
+        var days = typeof cert.days_until_expiry === 'number' ? cert.days_until_expiry : null;
+        if (seconds === null && days === null) return '';
+
+        // `expired` is the API's answer and outranks any arithmetic here; it is
+        // null when the certificate could not be parsed, and then the sign of
+        // what we do have is all there is to go on.
+        var expired = cert.expired === true ||
+            (cert.expired !== false && (seconds !== null ? seconds <= 0 : days < 0));
+
+        var magnitude = seconds !== null
+            ? Math.abs(seconds)
+            : Math.abs(days) * SECONDS_IN_DAY;
+        var whole = Math.floor(magnitude / SECONDS_IN_DAY);
+        var direction = expired ? 'ago' : 'left';
+
+        if (whole === 0) return 'less than a day ' + direction;
+        return whole + (whole === 1 ? ' day ' : ' days ') + direction;
+    };
+
     // ── Expose globally ──────────────────────────────────────────
     window.CertMate = CM;
 

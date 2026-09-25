@@ -373,6 +373,31 @@ def _credential_missing(variable, what):
 
 CREDENTIALED_FIXTURES = frozenset({"cloudflare_token"})
 
+# The same shape, for a TOOL rather than a credential. The frontend unit tests
+# execute static/js through node, and a machine without node must not report
+# them as passing. CI sets CERTMATE_REQUIRE_NODE=1, so the one job that exists
+# to run them cannot run none.
+TOOL_SKIP_MARK = "[no-tool]"
+_REQUIRE_NODE = os.environ.get("CERTMATE_REQUIRE_NODE") == "1"
+
+
+@pytest.fixture(scope="session")
+def node():
+    """Path to a node binary, or a countable skip."""
+    import shutil
+
+    found = shutil.which("node")
+    if found:
+        return found
+    if _REQUIRE_NODE:
+        pytest.fail(
+            "node is not on PATH, so the frontend unit tests cannot run. "
+            "CERTMATE_REQUIRE_NODE=1 means this must not be skipped."
+        )
+    pytest.skip(f"{TOOL_SKIP_MARK} node not on PATH — frontend unit tests not run")
+
+
+
 
 def pytest_collection_modifyitems(config, items):
     """Mark every test that needs a third-party credential, by derivation.
@@ -397,6 +422,20 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     of whoever reads the run.
     """
     skipped = terminalreporter.stats.get("skipped", [])
+
+    # Tools, same argument as credentials: a test that could not run is not a
+    # test that passed, and the run has to say which.
+    toolless = [r for r in skipped
+                if TOOL_SKIP_MARK in str(getattr(r, "longrepr", ""))]
+    if toolless:
+        terminalreporter.write_sep("=", "not executed: missing tools",
+                                   yellow=True, bold=True)
+        terminalreporter.write_line(
+            f"{len(toolless)} test(s) did not run because a required tool is "
+            f"not installed. They are not passing; they are unmeasured. "
+            f"CERTMATE_REQUIRE_NODE=1 makes their absence a failure."
+        )
+
     missing = [r for r in skipped
                if CREDENTIAL_SKIP_MARK in str(getattr(r, "longrepr", ""))]
     if not missing:
