@@ -101,18 +101,25 @@
                                     <button type="button" @click="config.channels.webhooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 text-sm"><i class="fas fa-trash"></i></button>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div class="sm:col-span-2" x-show="wh.type !== 'telegram'"><input type="url" x-model="wh.url" :placeholder="wh.type === 'ntfy' ? 'https://ntfy.sh/your-topic' : (wh.type === 'gotify' ? 'https://gotify.example.com' : 'https://hooks.slack.com/...')" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    <div class="sm:col-span-2" x-show="wh.type !== 'telegram'"><input type="url" x-model="wh.url" :placeholder="wh.type === 'google_chat' ? 'https://chat.googleapis.com/v1/spaces/.../messages?key=...&amp;token=...' : (wh.type === 'ntfy' ? 'https://ntfy.sh/your-topic' : (wh.type === 'gotify' ? 'https://gotify.example.com' : 'https://hooks.slack.com/...'))" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
                                     <div>
                                         <select x-model="wh.type" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input">
                                             <option value="generic">Generic</option>
                                             <option value="slack">Slack</option>
                                             <option value="discord">Discord</option>
+                                            <option value="google_chat">Google Chat</option>
                                             <option value="telegram">Telegram</option>
                                             <option value="ntfy">ntfy</option>
                                             <option value="gotify">Gotify</option>
                                         </select>
                                     </div>
                                     <div x-show="wh.type === 'generic'"><input type="text" x-model="wh.secret" placeholder="HMAC secret (optional)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                </div>
+                                <p x-show="wh.type === 'google_chat'" class="text-xs text-muted">Copy an incoming webhook URL from your Google Chat space. Its key and token stay masked after saving. Events appear as cards in the space.</p>
+                                <div x-show="wh.type === 'google_chat'">
+                                    <label class="text-xs text-muted mb-1 block">CertMate URL (optional, for card buttons)</label>
+                                    <input type="url" x-model="wh.certmate_url" placeholder="https://certmate.example.com" aria-label="CertMate URL for Google Chat buttons" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input">
+                                    <p class="text-xs text-muted mt-1">Leave empty to test the card without buttons. For buttons, use the HTTPS address Chat users open in their browser.</p>
                                 </div>
                                 <!-- Telegram: token is in the URL path, chat_id in the body -->
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.type === 'telegram'">
@@ -266,6 +273,3 @@
                 </button>
             </div>
         </div>
-
-
-        

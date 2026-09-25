@@ -2,7 +2,7 @@
 
 CertMate's notification channels (Settings → Notifications) include a
 **generic webhook**: an HTTP request CertMate sends to a URL of yours on
-certificate lifecycle events. Slack, Discord, Telegram, ntfy and Gotify have
+certificate lifecycle events. Slack, Discord, Google Chat, Telegram, ntfy and Gotify have
 their own channel types; the generic one is for everything else — Mattermost,
 PagerDuty, an ITSM endpoint, your own service.
 
@@ -36,6 +36,34 @@ starts again from the first threshold, and an unfixed one is announced at each
 mark rather than every morning. Both carry `days_left`, `days_until_expiry`,
 `expires_at`, `expired` and `threshold_days` in `details`; `certificate_expiring`
 adds `auto_renew`, and `domain_expiring` adds `registrar` and `source`.
+
+## Google Chat
+
+Create an [incoming webhook in a Google Chat space](https://developers.google.com/workspace/chat/quickstart/webhooks),
+then in **Settings → Notifications → Webhooks** add a webhook, choose **Google Chat**,
+and paste the URL copied from that space (`https://chat.googleapis.com/...?...`).
+Optionally set **CertMate URL** to the HTTPS address your Chat users open in a
+browser (for example, `https://certmate.example.com`). Leave it empty to send
+and test the card without buttons.
+Enable notifications and the webhook, select events if desired, save, and use
+**Test** to send a sample card. No OAuth credentials or Google Cloud project
+are needed for an incoming webhook. The webhook can post only into its own
+space; it cannot receive replies or run interactive actions.
+
+CertMate sends a single Google Chat [`cardsV2`](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards) message with a title, event status,
+summary and certificate details. When CertMate URL is configured, the card has
+**Open CertMate** and, for certificate events with a domain, **View certificate** buttons that open the
+dashboard's certificate detail panel (`/?cert=<domain>`). No separate text
+message is sent.
+It uses the same event filters, delivery attempts and delivery log as other
+webhooks. Google Chat webhook URLs contain `key` and `token` query parameters:
+the entire URL is masked when settings are read back, preserved on an
+unrelated save, and reduced to `https://chat.googleapis.com` in delivery logs.
+Only HTTPS incoming webhook URLs at `chat.googleapis.com` are accepted for
+this channel. Invalid Google Chat destinations (or an invalid optional
+CertMate URL) are rejected when settings are saved, before an event fires;
+the same validation runs at send time. Google Chat applies a per-space message
+rate limit, so a burst may be retried after HTTP 429.
 
 ## The default body
 

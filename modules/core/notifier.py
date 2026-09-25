@@ -1,6 +1,6 @@
 """
 Notification system for CertMate.
-Supports SMTP email and webhook (Slack, Discord, generic) notifications.
+Supports SMTP email and webhook (Slack, Discord, Google Chat, generic) notifications.
 """
 
 import base64
@@ -11,6 +11,7 @@ import re
 import smtplib
 import hashlib
 import hmac
+from html import escape
 import ipaddress
 import socket
 import time
@@ -22,7 +23,7 @@ from urllib.request import (
     Request, build_opener, HTTPRedirectHandler, HTTPSHandler, HTTPHandler,
 )
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from .domain_paths import validate_domain_path
 
@@ -184,6 +185,45 @@ WEBHOOK_MAX_TIMEOUT = 60
 WEBHOOK_DEFAULT_RETRIES = 3
 WEBHOOK_MAX_RETRIES = 5
 
+
+def google_chat_card(event, title, message, details=None, *, certmate_url=None):
+    """Build a Google Chat incoming-webhook message with a Cards v2 summary."""
+    icon = ('⚠️' if event in ('certificate_failed', 'certificate_expiring', 'certificate_revoked',
+                              'domain_expiring', 'deploy_hook_failed',
+                              'certificate_deploy_incomplete') else '✅')
+    title = str(title)
+    message = str(message)
+    sections = [{'widgets': [{'textParagraph': {'text': escape(message[:1400])}}]}]
+    if isinstance(details, dict) and details:
+        widgets = []
+        for key, value in list(details.items())[:12]:
+            if isinstance(value, (dict, list)):
+                value = json.dumps(value, ensure_ascii=False, default=str)
+            widgets.append({'decoratedText': {
+                'topLabel': escape(str(key)[:40]),
+                'text': escape(str(value)[:200]),
+            }})
+        sections.append({'header': 'Details', 'widgets': widgets})
+    if certmate_url:
+        buttons = []
+        domain = None
+        if isinstance(details, dict):
+            domain = details.get('domain')
+        if event.startswith('certificate_') and isinstance(domain, str) and domain:
+            buttons.append({'text': 'View certificate', 'onClick': {'openLink': {
+                'url': f'{certmate_url}/?cert={quote(domain, safe="")}'}}})
+        buttons.append({'text': 'Open CertMate', 'onClick': {'openLink': {
+            'url': f'{certmate_url}/'}}})
+        sections.append({'widgets': [{'buttonList': {'buttons': buttons}}]})
+    return {
+        'cardsV2': [{'cardId': 'certmate-notification', 'card': {
+            'header': {'title': f'{icon} {title}'[:120],
+                       'subtitle': f'CertMate · {event.replace("_", " ").title()}'[:120]},
+            'sections': sections,
+        }}],
+    }
+
+
 # What a template may reference. ``details.*`` reaches into the event payload
 # (domain, error, hook_name, days_until_expiry, ... whatever the event carries).
 TEMPLATE_VARIABLES = (
@@ -335,14 +375,26 @@ def _coerce_int(value, default, low, high, name):
 
 
 def validate_webhook_config(cfg):
-    """Return an error string for a malformed generic-webhook config, else None.
+    """Return an error for malformed generic or Google Chat webhook config.
 
-    Only the new fields are judged here (method, auth, template, timeout,
-    retries); URL/scheme/SSRF checks stay in the send path, where they
-    always were, so a placeholder URL can still be saved and tested later.
+    Generic webhooks can still save placeholder URLs. Google Chat checks its
+    destination and optional card-link base on save and again at send time.
+    SSRF checks stay in the send path.
     """
     if not isinstance(cfg, dict):
         return 'webhook must be an object'
+    if cfg.get('type') == 'google_chat':
+        url = (cfg.get('url') or '').strip()
+        parsed = urlparse(url)
+        if parsed.scheme != 'https' or parsed.hostname != 'chat.googleapis.com':
+            return 'Google Chat requires an HTTPS incoming webhook URL from chat.googleapis.com'
+        certmate_url = (cfg.get('certmate_url') or '').strip().rstrip('/')
+        if certmate_url:
+            link = urlparse(certmate_url)
+            if (link.scheme != 'https' or not link.hostname or link.username or link.password
+                    or link.query or link.fragment):
+                return 'Google Chat CertMate URL must be HTTPS for card buttons'
+        return None
     if cfg.get('type', 'generic') != 'generic':
         return None
     method = (cfg.get('method') or 'POST').upper()
@@ -792,7 +844,7 @@ class Notifier:
         """Send a notification to a webhook-style channel.
 
         Supported ``type`` values: ``generic`` (signed JSON), ``slack``,
-        ``discord``, ``telegram``, ``ntfy``, ``gotify``. Each formats the
+        ``discord``, ``google_chat``, ``telegram``, ``ntfy``, ``gotify``. Each formats the
         request (URL, body, headers) for its target service. Microsoft Teams
         is covered by the SMTP channel via a Teams channel email address — no
         dedicated adapter.
@@ -828,6 +880,14 @@ class Notifier:
                     embed['fields'] = [{'name': k, 'value': str(v), 'inline': True}
                                        for k, v in details.items()]
                 body = json.dumps({'embeds': [embed]}).encode('utf-8')
+
+            elif wh_type == 'google_chat':
+                problem = validate_webhook_config(cfg)
+                if problem:
+                    return {'error': problem, 'config_error': True}
+                certmate_url = (cfg.get('certmate_url') or '').strip().rstrip('/')
+                body = json.dumps(google_chat_card(event, title, message, details, certmate_url=certmate_url),
+                                  ensure_ascii=False).encode('utf-8')
 
             elif wh_type == 'telegram':
                 # Bot API: the token is in the URL path, chat_id in the body.
@@ -1008,7 +1068,7 @@ class Notifier:
         and the body. Returns ``{'error': ...}`` for a config that cannot
         render."""
         if (cfg.get('type') or 'generic') != 'generic':
-            return {'error': "preview renders generic webhooks only; Slack, Discord, "
+            return {'error': "preview renders generic webhooks only; Slack, Discord, Google Chat, "
                              "Telegram, ntfy and Gotify have a fixed body — use Test"}
         err = validate_webhook_config(cfg)
         if err:
