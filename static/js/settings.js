@@ -105,7 +105,7 @@
         type = type || 'info';
         var output = document.getElementById('settingsDebugOutput');
         var color = type === 'error' ? 'text-red-400' : type === 'warn' ? 'text-yellow-400' : 'text-green-400';
-        var time = new Date().toLocaleTimeString();
+        var time = CertMate.formatTime(new Date());
         var entry = document.createElement('div');
         entry.className = color;
         entry.textContent = '[' + time + '] ' + type.toUpperCase() + ': ' + message;
@@ -1777,7 +1777,7 @@
 
             function backupRow(backup) {
                 var metadata = backup.metadata || {};
-                var createdDate = new Date(metadata.created || metadata.timestamp).toLocaleString();
+                var createdDate = CertMate.formatDateTime(metadata.created || metadata.timestamp);
                 var sizeMB = Math.round((metadata.size || 0) / (1024 * 1024) * 10) / 10;
                 var reason = metadata.backup_reason || metadata.reason || 'manual';
                 var domains = metadata.total_domains || (metadata.domains && metadata.domains.length) || 0;
@@ -3203,7 +3203,7 @@
                     var userInfo = users[username];
                     var roleColor = userInfo.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : userInfo.role === 'operator' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
                     var statusColor = userInfo.enabled !== false ? 'text-green-500' : 'text-red-500';
-                    var lastLogin = userInfo.last_login ? new Date(userInfo.last_login).toLocaleString() : 'Never';
+                    var lastLogin = userInfo.last_login ? CertMate.formatDateTime(userInfo.last_login) : 'Never';
 
                     var isSso = userInfo.sso === true;
                     var isSoleAdmin = userInfo.role === 'admin' && adminCount === 1;

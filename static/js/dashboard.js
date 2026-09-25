@@ -759,7 +759,7 @@
             }
 
             var expiryDate = new Date(cert.expiry_date);
-            var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var expiryStr = CertMate.formatDate(expiryDate);
             // The day counter is the focal value (large, status-coloured); the
             // absolute date drops to a smaller secondary line. Status colour is
             // carried onto the counter itself — green for healthy so the colour
@@ -1047,7 +1047,7 @@
             // it carried could never fire: a day count is -1 for anything
             // expired within 24 hours, never 0.
             var daysText = CertMate.lifetimePhrase(cert);
-            var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var expiryStr = CertMate.formatDate(expiryDate);
             var bannerBg = isExpired ? 'bg-danger-surface' : isExpiringSoon ? 'bg-warning-surface' : 'bg-success-surface';
             var bannerIcon = isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
             var autoOn = cert.auto_renew !== false;
@@ -1196,7 +1196,7 @@
     function addDebugLog(message, type) {
         type = type || 'info';
         var output = document.getElementById('debugOutput');
-        var timestamp = new Date().toLocaleTimeString();
+        var timestamp = CertMate.formatTime(new Date());
         var colors = {
             info: 'text-green-400',
             warn: 'text-yellow-400',
@@ -2628,15 +2628,20 @@
             requestBody.elliptic_curve = document.getElementById('cert_elliptic_curve').value;
         }
 
-        // Phase 3: opt fresh creates into async issuance so the UI can show an
+        // Phase 3 opted fresh creates into async issuance so the UI can show an
         // optimistic "Issuing" row + poll the job instead of blocking on the
-        // full ACME round-trip. Reissue stays synchronous — it edits a row that
-        // already exists, so an optimistic new row would be wrong. If the server
-        // has no async executor it ignores the flag and replies synchronously,
-        // which the 202-vs-200 branch below handles transparently.
-        if (!editingDomain) {
-            requestBody.async = true;
-        }
+        // full ACME round-trip. Reissue was excluded, and the reason given was
+        // that "an optimistic new row would be wrong" for a row that already
+        // exists — which stopped being true: buildPendingRowsHtml skips any job
+        // whose domain is already in the table, a guard added for the race
+        // where SSE beats the poll. So no row appears, and the only thing the
+        // exclusion still bought was a request held open for the whole ACME
+        // round-trip — which is what #942 is: a proxy or gunicorn's --timeout
+        // answers with an HTML error page while the work completes.
+        //
+        // A server with no async executor ignores the flag and replies
+        // synchronously, which the 202-vs-200 branch below handles.
+        requestBody.async = true;
 
         var submitEndpoint = editingDomain
             ? '/api/certificates/' + encodeURIComponent(editingDomain) + '/reissue'
@@ -2652,7 +2657,7 @@
                 // handed back a job id. Show the optimistic row + poll instead
                 // of treating this as a finished create.
                 if (response.status === 202 && result && result.job_id) {
-                    handleAsyncAccepted(result, requestBody, domainsDisplay);
+                    handleAsyncAccepted(result, requestBody, domainsDisplay, !!editingDomain);
                     return;
                 }
                 if (response.ok && result.success !== false) {
@@ -2820,20 +2825,53 @@
         container.insertAdjacentHTML('afterbegin', html);
     }
 
-    function handleAsyncAccepted(job, requestBody, domainsDisplay) {
+    // A queued renewal, tracked by the same poller as a queued create.
+    //
+    // No "Issuing" row appears: buildPendingRowsHtml skips a job whose domain
+    // is present in the table — a guard written for the race where SSE beats
+    // the poll, and exactly right here, since a renewal is only ever asked for
+    // a certificate that exists.
+    //
+    // A FAILED job is rendered even so (`job.state !== 'failed' && live[...]`),
+    // which is what should happen: the row carries the reason the renewal
+    // failed, beside the certificate that is still serving. Retry hides itself
+    // because this record has no `payload` to replay — and it must, since the
+    // retry path posts to /create, which is not what was asked for.
+    function adoptRenewalJob(job, domain, force) {
+        var jobId = job.job_id;
+        pendingJobs[jobId] = {
+            domain: job.domain || domain,
+            provider: '',
+            sanCount: 0,
+            state: 'issuing',
+            kind: 'renew',
+            domainsDisplay: job.domain || domain
+        };
+        showMessage((force ? 'Force renewing ' : 'Renewing ') + (job.domain || domain) +
+                    '\u2026 this continues in the background.', 'info');
+        pollCertJob(jobId, job.status_url || ('/api/certificates/jobs/' + jobId));
+    }
+
+    function handleAsyncAccepted(job, requestBody, domainsDisplay, isReissue) {
         var jobId = job.job_id;
         pendingJobs[jobId] = {
             domain: job.domain || requestBody.domain,
             provider: requestBody.dns_provider || '',
             sanCount: (requestBody.san_domains || []).length,
             state: 'issuing',
+            kind: isReissue ? 'reissue' : 'create',
             payload: requestBody,
             domainsDisplay: domainsDisplay
         };
-        clearCreateFormAfterSubmit();
+        if (isReissue) {
+            cancelEditReissue();
+        } else {
+            clearCreateFormAfterSubmit();
+        }
         updateAccountSelection();
         if (typeof closeCertDrawer === 'function') { closeCertDrawer(); }
-        showMessage('Issuing certificate for ' + domainsDisplay + '…', 'info');
+        showMessage((isReissue ? 'Reissuing certificate for ' : 'Issuing certificate for ') +
+                    domainsDisplay + '…', 'info');
         renderPendingRows();
         pollCertJob(jobId, job.status_url || ('/api/certificates/jobs/' + jobId));
     }
@@ -2903,7 +2941,10 @@
                     pendingJobs[jobId].errorCode = jobRec && jobRec.error_code;
                     delete pendingPollTimers[jobId];
                     renderPendingRows();
-                    showMessage('Certificate issuance failed for ' + pendingJobs[jobId].domain + ': ' + pendingJobs[jobId].error, 'error');
+                    showMessage((pendingJobs[jobId].kind === 'renew'
+                        ? 'Certificate renewal failed for '
+                        : 'Certificate issuance failed for ') +
+                        pendingJobs[jobId].domain + ': ' + pendingJobs[jobId].error, 'error');
                 } else if (status === '__gone__') {
                     // Job evicted/unknown — drop the optimistic row and resync.
                     delete pendingJobs[jobId];
@@ -2935,7 +2976,10 @@
         }).then(function (response) {
             return response.json().then(function (result) {
                 if (response.status === 202 && result && result.job_id) {
-                    handleAsyncAccepted(result, requestBody, domainsDisplay);
+                    // Create-only mirror: `false` rather than editingDomain,
+                    // which is whatever the form happens to hold when a retry
+                    // fires and would label this a reissue.
+                    handleAsyncAccepted(result, requestBody, domainsDisplay, false);
                 } else if (response.ok && result.success !== false) {
                     showMessage('Certificate created successfully for ' + domainsDisplay + '!', 'success');
                     loadCertificates();
@@ -3160,15 +3204,29 @@
             force ? 'This bypasses the normal due check and may count against CA rate limits...' : 'This may take a few minutes...'
         );
 
+        // `async: true`, the same opt-in fresh creates have had since phase 3.
+        // Without it the request stays open for the whole issuance — DNS-01
+        // propagation and ACME polling, which is minutes, not seconds — and
+        // anything in front of CertMate (a reverse proxy, gunicorn's own
+        // --timeout) eventually answers with an HTML error page. The browser
+        // then reports `NETWORK_ERROR` and "Unexpected token '<'" for a
+        // renewal that COMPLETED: #942 arrived with `renew / certificate /
+        // success` in its own attached activity log. A server with no async
+        // executor ignores the flag and replies 200, which the 202 branch
+        // below falls through for.
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/renew', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ force: force })
+            headers: API_HEADERS,
+            body: JSON.stringify({ force: force, async: true })
         }).then(function (response) {
             return response.json().then(function (result) {
                 return { ok: response.ok, status: response.status, result: result };
             });
         }).then(function (data) {
+            if (data.status === 202 && data.result && data.result.job_id) {
+                adoptRenewalJob(data.result, domain, force);
+                return;
+            }
             if (data.ok) {
                 showMessage((force ? 'Forced renewal completed for ' : 'Certificate renewal completed for ') + domain + '!', 'success');
                 setTimeout(function () { loadCertificates(); }, 2000);

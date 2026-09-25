@@ -32,11 +32,11 @@
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Total</div><div class="text-xl font-semibold text-foreground" id="sumTotal">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Issued</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Discovered</div><div class="text-xl font-semibold text-foreground" id="sumDiscovered">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-danger-fg" id="sumExpired">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 7 days</div><div class="text-xl font-semibold text-orange-600 dark:text-orange-400" id="sum7">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-warning-fg" id="sum30">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumExpired">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 7 days</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-orange-600 dark:text-orange-400" id="sum7">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="sum30">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="sum90">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="A verified OCSP or CRL answer says the issuer revoked it">Revoked</div><div class="text-xl font-semibold text-danger-fg" id="sumRevoked">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="A verified OCSP or CRL answer says the issuer revoked it">Revoked</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumRevoked">–</div></div>
         </div>
     </div>
 
@@ -51,10 +51,10 @@
             </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Weak</div><div class="text-xl font-semibold text-danger-fg" id="cryptoWeak">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Weak</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="cryptoWeak">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Acceptable</div><div class="text-xl font-semibold text-foreground" id="cryptoAcceptable">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Modern</div><div class="text-xl font-semibold text-success-fg" id="cryptoModern">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="Classically strong but quantum-vulnerable">Quantum-vulnerable</div><div class="text-xl font-semibold text-warning-fg" id="cryptoQuantum">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Modern</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-success-fg" id="cryptoModern">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="Classically strong but quantum-vulnerable">Quantum-vulnerable</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="cryptoQuantum">–</div></div>
         </div>
     </div>
 
@@ -65,8 +65,8 @@
             <span class="text-xs text-muted" id="regCount"></span>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-danger-fg" id="regExpired">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-warning-fg" id="reg30">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="regExpired">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="reg30">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="reg90">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The registry does not publish an expiry date (.de, .eu, ...)">Not published</div><div class="text-xl font-semibold text-foreground" id="regNotPublished">–</div></div>
         </div>
@@ -94,8 +94,8 @@
             <span class="text-xs text-muted" id="healthCount"></span>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Failing</div><div class="text-xl font-semibold text-danger-fg" id="healthFailing">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Warning</div><div class="text-xl font-semibold text-warning-fg" id="healthWarning">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Failing</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="healthFailing">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Warning</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="healthWarning">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The check could not be completed. This is not a pass.">Not verifiable</div><div class="text-xl font-semibold text-foreground" id="healthUnknown">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">OK</div><div class="text-xl font-semibold text-foreground" id="healthOk">–</div></div>
         </div>
