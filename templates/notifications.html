@@ -68,11 +68,11 @@
             if (!ts) return '';
             var d = new Date(ts);
             if (isNaN(d.getTime())) return '';
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return CertMate.formatDate(d);
         }
         function fmtDateTime(ms) {
             var d = new Date(ms);
-            return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            return CertMate.formatDateTime(d);
         }
 
         function rowHtml(w) {

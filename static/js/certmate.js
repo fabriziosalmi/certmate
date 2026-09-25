@@ -409,7 +409,7 @@
             if (!output) return;
 
             var colors = { info: '#60a5fa', success: '#4ade80', error: '#f87171', warning: '#fbbf24' };
-            var now = new Date().toLocaleTimeString();
+            var now = CM.formatTime(new Date());
             var entry = document.createElement('div');
             entry.style.cssText = 'padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.1)';
             entry.innerHTML = '<span style="color:#9ca3af">[' + now + ']</span> ' +
@@ -725,6 +725,63 @@
 
         if (whole === 0) return 'less than a day ' + direction;
         return whole + (whole === 1 ? ' day ' : ' days ') + direction;
+    };
+
+    // ── Dates, in one convention ─────────────────────────────────
+    //
+    // Twenty-one call sites formatted dates, and five pinned `en-US` while
+    // sixteen took the browser's locale — `client-certs.js` did both, four
+    // lines apart. The activity feed printed `08/09/2026` above `8 set, 16:23`
+    // on the same row: a numeric date whose order is a guess, and an Italian
+    // month abbreviation inside an interface that is entirely in English
+    // (#940).
+    //
+    // Two decisions, and only one of them is about locale.
+    //
+    // **Named months, never numeric.** `08/09/2026` is 8 September or 9 August
+    // depending on a convention the page does not state, and that is true in
+    // every locale. "Sep 8, 2026" cannot be read two ways.
+    //
+    // **Pinned to `en-US`.** The application is English — it is the
+    // DOCUMENTATION that is translated, not the interface — so a date in the
+    // reader's language is an inconsistency rather than a courtesy. It also
+    // means a screenshot in a bug report shows what everyone else sees.
+    //
+    // Four shapes because four things are being said: a day, a moment, an
+    // audited moment (seconds matter in an audit log), and a clock reading.
+    //
+    // The clock is 24-hour, stated rather than inherited: `en-US` would
+    // otherwise render "04:27 PM", and this is an operations tool whose times
+    // sit next to log lines and audit entries. The Italian locale these sites
+    // used to fall into already showed 14:27, so this keeps what an operator
+    // was reading and loses only the ambiguity.
+    var DATE_LOCALE = 'en-US';
+    var CLOCK = { hour12: false };
+
+    function _formatted(value, options) {
+        if (value === null || value === undefined || value === '') return '';
+        var date = (value instanceof Date) ? value : new Date(value);
+        // An unparseable timestamp is not a date, and `Invalid Date` printed
+        // into a table is worse than an empty cell: it reads as data.
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleString(DATE_LOCALE, options);
+    }
+
+    CM.formatDate = function (value) {
+        return _formatted(value, { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+    CM.formatDateTime = function (value) {
+        return _formatted(value, { year: 'numeric', month: 'short', day: 'numeric',
+                                   hour: '2-digit', minute: '2-digit', hour12: CLOCK.hour12 });
+    };
+    CM.formatTimestamp = function (value) {
+        return _formatted(value, { year: 'numeric', month: 'short', day: 'numeric',
+                                   hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                   hour12: CLOCK.hour12 });
+    };
+    CM.formatTime = function (value) {
+        return _formatted(value, { hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                   hour12: CLOCK.hour12 });
     };
 
     // ── Expose globally ──────────────────────────────────────────
