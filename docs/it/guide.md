@@ -1,6 +1,6 @@
 # CertMate Certificati Client - Guida all'utilizzo
 
-<!-- CERTMATE-TRANSLATED-FROM 809425d238cebfed -->
+<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
 
 ## Panoramica
 
@@ -383,6 +383,46 @@ Usage Type: mobile-app
 - **Orario di verifica**: Ogni giorno alle 3:00
 - **Soglia**: 30 giorni prima della scadenza
 - **Azione**: Rinnovo automatico se abilitato
+
+### Quando la CA non e d'accordo con la soglia (ARI)
+
+La soglia di 30 giorni e l'opinione di CertMate, ed e la stessa per ogni
+certificato e per ogni CA. Dalla [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
+una CA puo pubblicare la propria, per singolo certificato: un endpoint
+`renewalInfo` che risponde con una finestra entro cui desidera che quel
+certificato venga sostituito. Let's Encrypt ne espone uno in produzione; lo fa
+anche step-ca, per una CA privata.
+
+La scansione di rinnovo TLS lo chiede. Per ogni certificato che la soglia
+**non** ha gia dichiarato in scadenza, CertMate recupera la finestra della CA
+e rinnova subito se quella finestra lo dice. E cosi che un'istanza viene a
+sapere di una sostituzione in blocco — una emissione errata, un intermedio
+compromesso, una decisione del CA/Browser Forum — giorni prima che arrivi la
+revoca, invece che quando il certificato smette di funzionare.
+
+**Puo solo anticipare un rinnovo.** La tua soglia resta la rete di sicurezza:
+una CA spenta, lenta o sbagliata non puo ritardare un rinnovo che sarebbe
+comunque avvenuto. Ogni assenza — una CA che non pubblica `renewalInfo`, un
+endpoint irraggiungibile, una risposta malformata, un certificato autofirmato
+senza Authority Key Identifier con cui nominarlo — ricade sulla soglia.
+
+Dentro la finestra CertMate sceglie un punto, derivato dall'identificatore del
+certificato stesso, cosi la scelta e la stessa a ogni scansione e due
+certificati non finiscono sullo stesso istante. E esattamente a questo che
+serve la finestra: una CA non vuole che tutti i suoi client rinnovino insieme.
+
+Il riepilogo della scansione li conta come `ari_advanced`, cosi un rinnovo che
+la tua configurazione non spiega resta attribuibile.
+
+Imposta `"ari_enabled": false` in `settings.json` per disattivarlo; e attivo
+per impostazione predefinita e costa una GET non autenticata per certificato
+per scansione, piu una per CA all'ora per la directory.
+
+Non ancora fatto, e deliberatamente: permettere ad ARI di **posticipare** un
+rinnovo oltre la tua soglia. E la meta che conta per i certificati di breve
+durata, dove una regola fissa di 30 giorni non ha senso contro un certificato
+da 6 giorni — arrivera con il supporto ai profili che quei certificati
+richiedono.
 
 ### Abilitazione del rinnovo automatico
 

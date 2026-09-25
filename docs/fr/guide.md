@@ -1,6 +1,6 @@
 # CertMate Certificats Clients - Guide d'utilisation
 
-<!-- CERTMATE-TRANSLATED-FROM 809425d238cebfed -->
+<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
 
 ## Vue d'ensemble
 
@@ -383,6 +383,48 @@ Type d'usage : mobile-app
 - **Vérification** : Tous les jours à 3h du matin
 - **Seuil** : 30 jours avant l'expiration
 - **Action** : Renouvellement automatique si activé
+
+### Quand la CA n'est pas d'accord avec le seuil (ARI)
+
+Le seuil de 30 jours est l'avis de CertMate, et c'est le meme avis pour chaque
+certificat et chaque CA. Depuis la [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
+une CA peut publier le sien, par certificat : un endpoint `renewalInfo` qui
+repond par une fenetre pendant laquelle elle souhaite voir ce certificat
+remplace. Let's Encrypt en expose un en production ; step-ca aussi, pour une
+CA privee.
+
+Le balayage de renouvellement TLS le demande. Pour chaque certificat que le
+seuil n'a **pas** deja declare echu, CertMate recupere la fenetre de la CA et
+renouvelle immediatement si cette fenetre le dit. C'est ainsi qu'une instance
+apprend un remplacement massif — une emission erronee, un intermediaire
+compromis, une decision du CA/Browser Forum — des jours avant que la
+revocation n'arrive, au lieu du moment ou le certificat cesse de fonctionner.
+
+**Cela ne peut qu'avancer un renouvellement.** Votre seuil reste le filet de
+securite : une CA en panne, lente ou dans l'erreur ne peut pas retarder un
+renouvellement qui aurait eu lieu de toute facon. Chaque absence — une CA qui
+ne publie pas `renewalInfo`, un endpoint injoignable, une reponse malformee,
+un certificat auto-signe sans Authority Key Identifier pour le nommer —
+retombe sur le seuil.
+
+Dans la fenetre, CertMate choisit un point derive de l'identifiant du
+certificat lui-meme, de sorte que le choix soit le meme a chaque balayage et
+que deux certificats ne tombent pas sur le meme instant. C'est precisement a
+cela que sert la fenetre : une CA ne veut pas que tous ses clients renouvellent
+en meme temps.
+
+Le resume du balayage les compte comme `ari_advanced`, pour qu'un
+renouvellement que votre configuration n'explique pas reste attribuable.
+
+Mettez `"ari_enabled": false` dans `settings.json` pour le desactiver ; il est
+actif par defaut et coute une GET non authentifiee par certificat et par
+balayage, plus une par CA et par heure pour le directory.
+
+Pas encore fait, et deliberement : laisser ARI **differer** un renouvellement
+au-dela de votre seuil. C'est la moitie qui compte pour les certificats de
+courte duree, ou une regle fixe de 30 jours n'a aucun sens face a un
+certificat de 6 jours — elle arrivera avec la prise en charge des profils dont
+ces certificats ont besoin.
 
 ### Activation du renouvellement automatique
 
