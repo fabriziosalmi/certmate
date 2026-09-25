@@ -28,6 +28,34 @@ logger = logging.getLogger(__name__)
 
 ROLE_HIERARCHY = {'viewer': 0, 'operator': 1, 'admin': 2}
 
+# Whether the `last_used_at` write has already complained this process.
+_LAST_USED_WRITE_WARNED = False
+
+
+def _warn_once_about_last_used(error):
+    """One WARNING per process for a failed `last_used_at` write, then DEBUG.
+
+    The handler that calls this said "never silent either — this swallow
+    already hid one defect" and logged at DEBUG. `CERTMATE_LOG_LEVEL` defaults
+    to INFO, so on a default install that line does not exist: the defect it
+    remembers (a `json.dump` refusing a datetime, leaving the column empty for
+    every key, forever) would hide in exactly the same place a second time.
+
+    It cannot simply be raised to WARNING either. This runs once per API-key
+    request, so a settings file that stays unwritable would fill the log at
+    request rate — which is its own way of hiding something. Once per process
+    is what makes it visible without making it noise.
+    """
+    global _LAST_USED_WRITE_WARNED
+    if _LAST_USED_WRITE_WARNED:
+        logger.debug("Could not persist last_used_at for an API key: %s", error)
+        return
+    _LAST_USED_WRITE_WARNED = True
+    logger.warning(
+        "Could not persist last_used_at for an API key: %s. The key still "
+        "authenticates; only its last-used column is affected. Further "
+        "occurrences are logged at DEBUG.", error)
+
 # Who a request is while the instance is in setup mode: anyone who can reach
 # it, served as admin. Anything created under this name was created by whoever
 # was there during the setup window, which is why it is recorded and reviewed.
@@ -752,9 +780,10 @@ class AuthManager:
                             # write. But never silent either — this swallow
                             # already hid one defect (see the comment above:
                             # json.dump refused a datetime and the column
-                            # stayed empty for every key, forever).
-                            logger.debug(
-                                "Could not persist last_used_at for an API key: %s", e)
+                            # stayed empty for every key, forever). DEBUG was
+                            # not enough to keep that promise on a default
+                            # install; see _warn_once_about_last_used.
+                            _warn_once_about_last_used(e)
                     return {
                         'username': 'api_key:' + key_data.get('name', key_id),
                         'role': self._normalize_role(key_data.get('role', 'viewer')),
