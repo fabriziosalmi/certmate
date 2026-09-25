@@ -26,7 +26,7 @@ import pytest
 pytestmark = [pytest.mark.unit]
 
 API_DIR = Path(__file__).resolve().parent.parent / 'modules' / 'api'
-FACTORY = Path(__file__).resolve().parent.parent / 'modules' / 'core' / 'factory.py'
+FACTORY = Path(__file__).resolve().parent.parent / 'modules' / 'factory.py'
 
 
 def _known_manager_keys():

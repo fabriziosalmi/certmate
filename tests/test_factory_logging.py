@@ -4,7 +4,7 @@ Unit tests for request-watchdog helpers in the app factory.
 
 import threading
 
-from modules.core.factory import _env_float, _format_thread_stack
+from modules.factory import _env_float, _format_thread_stack
 
 import pytest
 

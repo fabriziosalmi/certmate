@@ -1,6 +1,6 @@
 # Documentación de CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 65c96cad2a0b7f6d -->
+<!-- CERTMATE-TRANSLATED-FROM 5a4367d627623f25 -->
 
 Bienvenido a la documentación de CertMate. Esta carpeta contiene guías completas para todas las funcionalidades.
 
@@ -65,7 +65,7 @@ Bienvenido a la documentación de CertMate. Esta carpeta contiene guías complet
 - **Renovación automática** con umbrales configurables
 - **Soporte Docker** con builds multiplataforma (ARM64 + AMD64)
 - **Log Sanitizer** — Elimina automáticamente tokens de API, claves privadas y credenciales sensibles de los logs de CertMate
-- **Zombie Certificate Scanner** — Escáner de sistema de archivos multihilo para identificar y limpiar certificados huérfanos
+- **Zombie Certificate Scanner** — Sonda multihilo que pregunta si los nombres de sus certificados gestionados siguen resolviendo y respondiendo
 - **Servidor MCP (Model Context Protocol)** — Servidor Node.js independiente para integrarse con asistentes de IA agénticos
 
 ### Certificados de cliente

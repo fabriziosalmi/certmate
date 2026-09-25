@@ -122,7 +122,7 @@ GENERAL_LIMIT = 10
 # 430 -> 431 on 2026-09-24, for sealing the audit chain on a clean shutdown
 # (#876 item 10). LOGS.
 #
-#   modules/core/factory.py   stop_background_work's new checkpoint step. It
+#   modules/factory.py        stop_background_work's new checkpoint step. It
 #                             could have been narrowed: write_checkpoint
 #                             catches Exception itself and returns None, so in
 #                             practice only a manager without the method can
@@ -149,7 +149,24 @@ GENERAL_LIMIT = 10
 #                             path that ever ran, and the "try" half had never
 #                             worked in any release. Declaring the Gauge
 #                             directly leaves one call that cannot raise.
-TOTAL_LIMIT = 429
+#
+# 429 -> 421 on 2026-09-25, working the unaccounted list below to zero. Eight
+# came off by narrowing or removal rather than by explanation:
+#
+#   ValueError around `response.json()`, `json.loads` and two `urlparse`
+#   calls — a fault that is not a parse failure was being reported to the
+#   operator as one;
+#   (OSError, ValueError, UnicodeError) around the webhook SSRF guard's
+#   resolution, which is every way it can actually fail;
+#   (DNSException, OSError) around the UDP-then-TCP retry in the RFC 2136
+#   hook, so a programming error there is no longer turned into a second
+#   query;
+#   RuntimeError around a session read outside a request context;
+#   and one REMOVED: `warn_if_bearer_token_hash_is_stale` opened
+#   API_BEARER_TOKEN_FILE itself and returned in silence, a second spelling of
+#   `_operator_supplied_token` — which this same pin's previous entry had
+#   already fixed. It calls that instead now.
+TOTAL_LIMIT = 421
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
@@ -165,7 +182,17 @@ TOTAL_LIMIT = 429
 #
 # A comment satisfies this, deliberately. The aim is that the silence be
 # chosen, and a reader can judge a stated reason; they cannot judge an absence.
-UNACCOUNTED_LIMIT = 30
+#
+# Zero, so this is a RULE now and not a ratchet, like the bare and silent ones
+# above. The thirty that were left went one of three ways, and the split is the
+# useful part of that pass: eight were narrowed to the exception they actually
+# expect or removed outright, four were route handlers that discarded the cause
+# entirely (`modules/web/backup_cache_routes.py` had no logger at all, so an
+# operator got "Failed to list backups" and the log said nothing), and the rest
+# were broad for a good reason that nobody had written down — mostly "the
+# failure is the return value", which is invisible to this checker and to the
+# next reader alike.
+UNACCOUNTED_LIMIT = 0
 
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
@@ -173,9 +200,9 @@ BUDGET = {
     'modules/core/certificates.py': 45,
     'modules/core/file_operations.py': 16,
     'modules/web/misc_routes.py': 16,
-    'modules/api/resources_health.py': 15,
-    'modules/core/auth.py': 13,
-    'modules/core/factory.py': 14,
+    'modules/api/resources_health.py': 14,
+    'modules/core/auth.py': 12,
+    'modules/factory.py': 13,
     'modules/web/settings_routes.py': 13,
     'modules/api/client_certificates.py': 13,
     'modules/core/client_certificates.py': 12,

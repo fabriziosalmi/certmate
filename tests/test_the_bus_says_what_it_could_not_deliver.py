@@ -212,7 +212,7 @@ def test_the_application_registers_the_drain_at_exit():
     """
     import inspect
 
-    from modules.core import factory
+    from modules import factory
 
     source = inspect.getsource(factory._stop_background_work_at_exit)
     assert 'atexit.register' in source

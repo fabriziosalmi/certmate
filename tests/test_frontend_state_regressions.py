@@ -76,7 +76,11 @@ def test_the_sso_loader_records_the_failure_instead_of_falling_back_to_defaults(
 
 @pytest.mark.parametrize("template,state", [
     ("templates/settings.html", "tab"),
-    ("templates/index.html", "certView"),
+    # #359 moved the dashboard's view toggle into the global topbar, so the
+    # view itself moved out of index.html's `x-data` and into an Alpine store
+    # that ships with the toggle. The listener that keeps it following the
+    # fragment is registered beside the store, which is where this now looks.
+    ("templates/partials/_dashboard_topbar.html", "Alpine.store('certs',"),
 ])
 def test_pages_react_to_a_hash_change(template, state):
     html = _read(template)

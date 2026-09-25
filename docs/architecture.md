@@ -72,33 +72,43 @@ CertMate is a modular, pluggable SSL/TLS certificate management system built wit
 │  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
 │  └───────────────────────────────────────────────┘  │
 │                                                     │
-│  ┌───────────────────────────────────────────────┐  │
-│  │   Composition root — modules/core/factory.py   │  │
-│  │                                               │  │
-│  │   create_app() constructs every manager above  │  │
-│  │   and then REGISTERS the API and web layers    │  │
-│  │   onto the Flask app.                          │  │
-│  └───┬───────────────────────────────────────┬───┘  │
-│      │ constructs (downward, like the rest)  │      │
-│      └──────────────► Manager Layer          │      │
-│                                              │      │
-│      ┌───────────────────────────────────────┘      │
-│      │ imports UPWARD — the one edge in the system  │
-│      └──────────────► REST API / Web Routes         │
 └─────────────────────────────────────────────────────┘
+
+        ┌─────────────────────────────────────┐
+        │  Composition root — modules/factory.py
+        │                                     │
+        │  create_app() constructs every       │
+        │  manager and REGISTERS the API and   │
+        │  web layers onto the Flask app.      │
+        └───┬──────────────┬──────────────┬────┘
+            │ constructs   │ registers    │ registers
+            ▼              ▼              ▼
+      Manager Layer   REST API      Web Routes
+        (core/)        (api/)         (web/)
 ```
 
-Every arrow above points down except one. `modules/core/factory.py` is the
-composition root: it builds the managers *and* imports the API and web layers
-to register them, which is an import from `core/` into `api/` and `web/` —
-upward through the layers everything else respects.
+Every arrow points down. The composition root sits **above** the three layers
+it composes, in `modules/factory.py`, so `modules/core/` imports neither
+`modules/api/` nor `modules/web/`.
 
-That is what a composition root is for, and it is deliberate: the alternative
-is either a layer that knows how to construct itself (and therefore its
-dependencies) or a registry that hides the same edge behind indirection. It is
-drawn here because a single documented exception is a design; an undocumented
-one is something the next reader finds by tracing an import and then wonders
-whether the rest of the diagram is true.
+It did not always. Until #668 the root lived in `modules/core/factory.py` and
+imported the two layers above it — the one upward edge in the system, drawn
+in this diagram and argued for as a deliberate exception. The argument was
+sound as far as it went: a composition root has to know what it composes, and
+the alternatives are a layer that constructs its own dependencies or a
+registry that hides the same edge behind indirection.
+
+What the argument missed is that the third option is the cheap one. A
+composition root does not have to live *inside* one of the layers it
+composes. Moving the file one directory up removes the exception rather than
+documenting it, and the cycle that made it look unavoidable turned out to be
+one function wide: `api/client_certificates.py` imported
+`error_code_for_status` back from the root, and deriving `NOT_FOUND` from 404
+never belonged there. It is `modules/core/http_errors.py` now.
+
+A single documented exception is a design; it is still worth checking whether
+it has to be one. `tests/test_the_layers_point_one_way.py` is what keeps this
+paragraph true.
 
 ---
 

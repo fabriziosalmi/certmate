@@ -63,7 +63,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **Auto-renewal** with configurable thresholds
 - **Docker support** with multi-platform builds (ARM64 + AMD64)
 - **Log Sanitizer** — Automatically redacts API tokens, private keys, and sensitive credentials from CertMate logs
-- **Zombie Certificate Scanner** — Multi-threaded filesystem scanner to identify and clean up orphan certificates
+- **Zombie Certificate Scanner** — Multi-threaded probe that asks whether the names in your managed certificates still resolve and answer
 - **Model Context Protocol (MCP) Server** — Standalone Node.js server to integrate with agentic AI assistants
 
 ### Client Certificates

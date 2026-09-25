@@ -1,6 +1,5 @@
 import atexit
 import os
-import re
 import secrets
 import sys
 import threading
@@ -23,6 +22,7 @@ from modules.core import (
     RateLimitConfig, SimpleRateLimiter,
     get_certmate_logger
 )
+from modules.core.http_errors import error_code_for_status
 from modules.core.metrics import metrics_collector
 from modules.core.shell import ShellExecutor
 from modules.core.notifier import Notifier
@@ -298,7 +298,7 @@ def resolve_state_directories(test_config=None) -> dict:
     answer available, so a deployment that wanted certificates on one volume
     and backups on another had to bind-mount over the install tree, and this
     repository's own test suite redirects state by monkeypatching
-    `modules.core.factory.__file__`, which is not a thing an application
+    `modules.factory.__file__`, which is not a thing an application
     should require of anyone.
 
     `test_config` is honoured first because it was already in the signature
@@ -308,7 +308,7 @@ def resolve_state_directories(test_config=None) -> dict:
     Relative values resolve against the current working directory, and every
     result is resolved, so what the container reports is always absolute.
     """
-    base = Path(__file__).resolve().parent.parent.parent
+    base = Path(__file__).resolve().parent.parent
     config = test_config or {}
     resolved = {}
     for attribute, env_name, default_name in STATE_DIRECTORIES:
@@ -548,7 +548,7 @@ def configure_app(container: AppContainer, app, test_config=None):
     # in modules/web/routes.py serves them. Both sides resolve the path through
     # the same acme_webroot_dir() helper (overridable via ACME_CHALLENGES_DIR)
     # so they cannot drift; expose it on the app config for the route.
-    from .dns_strategies import acme_webroot_dir
+    from .core.dns_strategies import acme_webroot_dir
     app.config['ACME_CHALLENGES_DIR'] = str(acme_webroot_dir())
     challenge_dir = os.path.join(
         app.config['ACME_CHALLENGES_DIR'], '.well-known', 'acme-challenge')
@@ -711,11 +711,11 @@ def initialize_managers(container: AppContainer, app):
     # The key persists under data/ like the Flask secret key; off-box via
     # AUDIT_SIGNING_KEY_FILE. Best-effort: if it can't be set up, the unsigned
     # hash chain still works.
-    from .audit_signing import AuditSigner
+    from .core.audit_signing import AuditSigner
     audit_signer = AuditSigner(container.data_dir)
     # SIEM audit sink (#474): stream every audit entry to a configured collector
     # (syslog/CEF/HTTP), sanitized + failure-isolated. Reads its config live.
-    from .audit_sink import AuditSink
+    from .core.audit_sink import AuditSink
     audit_sink = AuditSink(settings_manager)
     audit_logger = AuditLogger(audit_dir, chain_dir=audit_chain_dir,
                                signer=audit_signer, audit_sink=audit_sink)
@@ -732,7 +732,7 @@ def initialize_managers(container: AppContainer, app):
     # admin opts in via Settings → SSO. Lives alongside AuthManager so
     # the cookie session it mints is indistinguishable to the
     # @require_auth / @require_role decorators.
-    from .oidc import OIDCManager
+    from .core.oidc import OIDCManager
     oidc_manager = OIDCManager(settings_manager, auth_manager, audit_logger)
 
     rate_limit_config = RateLimitConfig(settings_manager=settings_manager)
@@ -779,23 +779,23 @@ def initialize_managers(container: AppContainer, app):
     # reference to the container.
     app.config['DATA_DIR'] = str(container.data_dir)
 
-    from .cert_service import CertificateService
+    from .core.cert_service import CertificateService
     cert_service = CertificateService(
         certificate_manager, settings_manager, auth_manager,
         audit_logger=audit_logger, event_bus=event_bus,
     )
-    from .cert_jobs import IssuanceExecutor
+    from .core.cert_jobs import IssuanceExecutor
     cert_executor = IssuanceExecutor(app, event_bus=event_bus)
 
     # Certificate inventory + discovery (#468/#469). The inventory is a SQLite
     # store under data_dir; the discovery manager probes the configured
     # monitored endpoints into it on a schedule.
-    from .cert_inventory import CertInventory
-    from .cert_discovery import CertDiscoveryManager
-    from .ct_monitor import CTMonitorManager
-    from .domain_health import DomainHealthManager
-    from .domain_registration import DomainRegistrationManager
-    from .expiry_watch import ExpiryWatch
+    from .core.cert_inventory import CertInventory
+    from .core.cert_discovery import CertDiscoveryManager
+    from .core.ct_monitor import CTMonitorManager
+    from .core.domain_health import DomainHealthManager
+    from .core.domain_registration import DomainRegistrationManager
+    from .core.expiry_watch import ExpiryWatch
     cert_inventory = CertInventory(container.data_dir)
     cert_discovery = CertDiscoveryManager(settings_manager, cert_inventory)
     ct_monitor = CTMonitorManager(settings_manager, cert_inventory)
@@ -816,7 +816,7 @@ def initialize_managers(container: AppContainer, app):
     # Opt-in, and off until it is. docs/ca-providers.md offers the private CA
     # for air-gapped systems, so an instance nobody asked to reach the
     # internet must not reach it.
-    from .update_check import UpdateCheck
+    from .core.update_check import UpdateCheck
     from modules import __version__ as _running_version
     update_check = UpdateCheck(settings_manager, _running_version)
 
@@ -1211,7 +1211,7 @@ def setup_scheduler(container: AppContainer):
         )
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler
-        from .utils import utc_now_iso
+        from .core.utils import utc_now_iso
         container.scheduler_status = {
             "state": "running", "error": None, "timestamp": utc_now_iso(),
         }
@@ -1228,7 +1228,7 @@ def setup_scheduler(container: AppContainer):
         # signal of a broken scheduler was a single ERROR line in the logs;
         # operators that don't tail logs would never know automatic renewal
         # had silently stopped working.
-        from .utils import utc_now_iso
+        from .core.utils import utc_now_iso
         container.scheduler_status = {
             "state": "failed", "error": str(e), "timestamp": utc_now_iso(),
         }
@@ -1242,7 +1242,7 @@ def setup_api(container: AppContainer, app):
     # contract version: that is API_CONTRACT_VERSION, sent on every response
     # as X-CertMate-API-Version and reported by /health, because the release
     # number moves on every patch whether or not the surface did.
-    from .constants import API_CONTRACT_VERSION
+    from .core.constants import API_CONTRACT_VERSION
     api = Api(app, version=__version__, title='CertMate API',
               description=(
                   'SSL Certificate API. The interface contract is version '
@@ -1444,7 +1444,9 @@ def setup_csrf_protection(app):
         try:
             parsed = urlparse(source)
             source_host = _normalize(parsed.scheme, parsed.netloc)
-        except Exception:
+        except ValueError:
+            # The only thing urlparse raises. An empty host then fails the
+            # comparison below, which is the fail-closed direction.
             source_host = ''
         if source_host != expected:
             from flask import jsonify
@@ -1452,27 +1454,6 @@ def setup_csrf_protection(app):
         return None
 
 
-def error_code_for_status(status, name=None):
-    """The symbolic `code` for an HTTP-level failure, e.g. 404 -> NOT_FOUND.
-
-    `code` is the machine-readable half of an error body and it is a string
-    everywhere the application produces one: CERTIFICATE_NOT_FOUND,
-    DOMAIN_OUT_OF_SCOPE, ACME_RATE_LIMITED. The two handlers below used to put
-    the HTTP status INTEGER in the same field, so one API answered with two
-    incompatible types under one name and a client could not branch on it
-    without type-checking first — while the SDK this repository publishes
-    already documented it as "CertMate's machine-readable error code (e.g.
-    DOMAIN_OUT_OF_SCOPE) when present".
-
-    Derived from Werkzeug's own name so a status this function has never seen
-    still produces a usable symbol rather than falling back to a number. The
-    HTTP status itself is not lost: it is the status line, and it stays in
-    `status` for the handlers that carry it.
-    """
-    text = (name or '').strip()
-    if not text:
-        return f'HTTP_{status}'
-    return re.sub(r'[^A-Z0-9]+', '_', text.upper()).strip('_') or f'HTTP_{status}'
 
 
 def setup_error_handlers(app):
@@ -1611,8 +1592,8 @@ def setup_api_contract_headers(app):
     Deprecation announcements ride along here for the same reason: see
     modules/api/deprecation.py.
     """
-    from .constants import API_CONTRACT_VERSION
-    from ..api.deprecation import apply_deprecation_headers
+    from .core.constants import API_CONTRACT_VERSION
+    from .api.deprecation import apply_deprecation_headers
 
     @app.after_request
     def _api_version(response):
@@ -1649,7 +1630,7 @@ def setup_correlation_ids(app):
       `get_request_context()` already reads it and the slow-request watchdog
       reports it.
     """
-    from .structured_logging import (
+    from .core.structured_logging import (
         LogContext, clean_correlation_id, new_correlation_id,
     )
 
@@ -1822,10 +1803,11 @@ def create_app(test_config=None):
     container = AppContainer()
     setup_directories(container, test_config)
 
-    # Resolve project root (three levels up from modules/core/factory.py)
+    # Resolve project root (two levels up from modules/factory.py — it was
+    # three when this file lived in modules/core/, and #668 moved it)
     # Using absolute paths to ensure reliability across environments (Docker, local, tests)
     factory_path = Path(__file__).resolve()
-    base_dir = factory_path.parent.parent.parent
+    base_dir = factory_path.parent.parent
     template_dir = (base_dir / "templates").resolve()
     static_dir = (base_dir / "static").resolve()
 
@@ -2060,7 +2042,7 @@ def check_issuance_readiness(container: AppContainer):
     See modules.core.issuance_readiness for why this runs the command rather
     than checking that the file exists.
     """
-    from . import issuance_readiness
+    from .core import issuance_readiness
     try:
         status = issuance_readiness.probe(
             container.managers.get('shell_executor'))

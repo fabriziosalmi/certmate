@@ -83,6 +83,10 @@ def _certificate_subject_summary(cert_bytes):
             parts.append('SAN=' + shown)
         return '; '.join(parts)
     except Exception:
+        # Purely diagnostic: this string goes into a mismatch message so an
+        # operator can see WHICH certificate a host is serving. Never a trust
+        # decision, so bytes that will not parse are '' rather than an error
+        # that replaces the answer the probe already has.
         return ''
 
 def _tls_probe_timeout_seconds():

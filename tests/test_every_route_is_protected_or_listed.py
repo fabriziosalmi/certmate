@@ -148,7 +148,7 @@ def app():
     """The real application, built under a temporary root.
 
     `setup_directories()` creates data/, certificates/ and logs/ relative to
-    `modules.core.factory.__file__`, so anchoring that keeps a test that only
+    `modules.factory.__file__`, so anchoring that keeps a test that only
     reads the route table from writing into the working tree — the pattern
     tests/test_advertised_endpoints_exist.py established.
     """
@@ -161,8 +161,8 @@ def app():
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
-        from modules.core.factory import create_app
-        patch.setattr('modules.core.factory.__file__', str(anchor))
+        from modules.factory import create_app
+        patch.setattr('modules.factory.__file__', str(anchor))
         result = create_app()
     return result[0] if isinstance(result, tuple) else result
 

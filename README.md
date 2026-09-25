@@ -148,7 +148,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Automatic Renewal** - Smart renewal 30 days before expiry
 - **Certificate Validation** - Real-time SSL certificate status checking
 - **Per-Certificate CA Selection** - Choose different CAs for different certificates
-- **Zombie Certificate Scanner** - filesystem scanner to identify and clean up orphan ("zombie") certificates no longer tracked in the active configuration
+- **Zombie Certificate Scanner** - multi-threaded probe that asks whether the names in your managed certificates still resolve and answer, so a domain you have let go is visible before its renewals start failing
 
 ### **Multi-DNS Provider Support**
 - **Multi-Account Support** - Manage multiple accounts per provider for enterprise environments
@@ -573,7 +573,7 @@ sudo -u certmate python3 -m venv venv
 sudo -u certmate ./venv/bin/pip install -r requirements.txt
 
 # Create necessary directories. All four: the startup writeability probe
-# in modules/core/factory.py checks certificates, data, backups AND logs,
+# in modules/factory.py checks certificates, data, backups AND logs,
 # and raises at boot if any of them is not writable.
 sudo -u certmate mkdir -p certificates data backups logs
 ```

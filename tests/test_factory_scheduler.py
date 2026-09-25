@@ -5,7 +5,7 @@ de APScheduler se saltan silenciosamente.
 """
 import pytest
 
-from modules.core import factory
+from modules import factory
 
 pytestmark = [pytest.mark.unit]
 

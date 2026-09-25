@@ -799,6 +799,9 @@ class DeployManager:
         except subprocess.TimeoutExpired:
             result['error'] = f"timeout after {timeout}s"
         except Exception as e:
+            # The hook is arbitrary operator-supplied shell: every way it can
+            # fail is a hook failure, and the text reaches the delivery log
+            # and the operator through `error`.
             result['error'] = str(e)
 
         result['duration_ms'] = int((time.time() - start) * 1000)

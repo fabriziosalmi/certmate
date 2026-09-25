@@ -171,10 +171,11 @@ FLOORS = {
     'modules/core/update_check.py': 100,
     'modules/core/domain_registration.py': 90,
     'modules/core/events.py': 80,
-    'modules/core/factory.py': 80,
+    'modules/factory.py': 80,
     # Measured at 94.9%: what is left is the defensive parse of a stored
     # expiry timestamp that the registration check writes in ISO form.
     'modules/core/expiry_watch.py': 90,
+    'modules/core/http_errors.py': 95,
     'modules/core/file_operations.py': 80,
     'modules/core/inventory_sources.py': 95,
     'modules/core/inventory_view.py': 95,
@@ -203,6 +204,12 @@ FLOORS = {
 
 WATCHED_PREFIXES = ('modules/api/', 'modules/web/', 'modules/core/')
 
+# The composition root is one file rather than a layer, and since #668 it sits
+# beside the three directories above instead of inside `core/`. A prefix of
+# `modules/` would pull in `__init__.py` as well, which has nothing to floor;
+# naming the file keeps the watched set exactly what it was.
+WATCHED_FILES = ('modules/factory.py',)
+
 
 def main(argv: list[str]) -> int:
     report_path = Path(argv[1] if len(argv) > 1 else 'coverage.json')
@@ -222,7 +229,8 @@ def main(argv: list[str]) -> int:
 
     measured = {name: data['summary']['percent_covered']
                 for name, data in files.items()
-                if name.startswith(WATCHED_PREFIXES)}
+                if name.startswith(WATCHED_PREFIXES)
+                or name in WATCHED_FILES}
 
     problems = []
 

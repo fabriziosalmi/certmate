@@ -256,6 +256,9 @@ class OIDCManager:
             metadata = getattr(client, 'server_metadata', None) or {}
             return metadata.get('id_token_signing_alg_values_supported')
         except Exception:
+            # Reading what the IdP advertised. None means "the IdP did not
+            # say", and the caller then does not narrow the algorithm list —
+            # it does not relax any check.
             return None
 
     def _invalidate_client(self):
@@ -817,7 +820,9 @@ class OIDCManager:
             params: dict = {}
             try:
                 id_token = flask_session.get(self._SESSION_ID_TOKEN_KEY)
-            except Exception:
+            except RuntimeError:
+                # Outside a request context there is no session to read. The
+                # logout URL is still built; it just carries no id_token_hint.
                 id_token = None
             if id_token:
                 params['id_token_hint'] = id_token

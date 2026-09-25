@@ -65,7 +65,7 @@ def audit(tmp_path):
 
 
 def _container(audit, bus=None):
-    from modules.core.factory import AppContainer
+    from modules.factory import AppContainer
 
     container = AppContainer.__new__(AppContainer)
     container.shutdown_complete = False
@@ -95,7 +95,7 @@ def test_nothing_is_sealed_before_the_interval(audit, tmp_path):
 
 
 def test_a_clean_stop_seals_what_is_there(audit, tmp_path):
-    from modules.core.factory import stop_background_work
+    from modules.factory import stop_background_work
 
     for i in range(5):
         audit.log_operation('renew', 'certificate', f'd{i}.example.com', 'success')
@@ -113,7 +113,7 @@ def test_the_seal_covers_entries_written_while_stopping(audit, tmp_path):
     """The ordering. Sealing before the bus drains would sign seq 4 and leave
     the entry the drain produced outside it — a checkpoint that looks right
     and attests one entry less than the chain holds."""
-    from modules.core.factory import stop_background_work
+    from modules.factory import stop_background_work
 
     for i in range(5):
         audit.log_operation('renew', 'certificate', f'd{i}.example.com', 'success')
@@ -134,7 +134,7 @@ def test_an_empty_chain_seals_nothing(audit, tmp_path):
     """`write_checkpoint` returns None for an empty chain, and an instance
     that started and stopped without auditing anything must not leave a
     checkpoint attesting nothing."""
-    from modules.core.factory import stop_background_work
+    from modules.factory import stop_background_work
 
     summary = stop_background_work(_container(audit))
 
@@ -146,7 +146,7 @@ def test_a_second_stop_changes_nothing(audit, tmp_path):
     """`stop_background_work` is idempotent — app.py calls it on Ctrl-C and
     atexit calls it again. A second checkpoint for the same head would be
     noise in a file auditors read."""
-    from modules.core.factory import stop_background_work
+    from modules.factory import stop_background_work
 
     audit.log_operation('renew', 'certificate', 'a.example.com', 'success')
     container = _container(audit)
@@ -160,7 +160,7 @@ def test_a_second_stop_changes_nothing(audit, tmp_path):
 def test_a_failure_to_seal_does_not_break_the_shutdown(audit, tmp_path):
     """Sealing is best-effort by design: the process is going away, and an
     audit checkpoint must never be the reason a container fails to stop."""
-    from modules.core.factory import stop_background_work
+    from modules.factory import stop_background_work
 
     audit.log_operation('renew', 'certificate', 'a.example.com', 'success')
 
@@ -174,7 +174,7 @@ def test_a_failure_to_seal_does_not_break_the_shutdown(audit, tmp_path):
 
 def test_the_chain_still_verifies_after_the_seal(audit, tmp_path):
     from modules.core import audit_chain
-    from modules.core.factory import stop_background_work
+    from modules.factory import stop_background_work
 
     for i in range(4):
         audit.log_operation('renew', 'certificate', f'd{i}.example.com', 'success')

@@ -1615,6 +1615,23 @@ A certificate for a name you have let go is a certificate that will keep being
 renewed and can no longer be validated, and the renewal failures are the first
 anyone usually hears of it.
 
+Each certificate comes back `alive`, `suspect`, `zombie` or — since API
+contract **2.19** — `unverifiable`, with a matching count in the summary.
+
+`unverifiable` means **nothing was asked**, which is not the same as nothing
+being there. It is the answer for a **wildcard with no probe host**: a
+wildcard does not cover its own apex (RFC 6125), so `*.example.com` cannot be
+checked by contacting `example.com` — that is the one name the certificate is
+guaranteed not to cover, and it is frequently a name that resolves to nothing
+while every host the certificate protects is up. Set `deployment_host` to a
+name the wildcard covers (`PATCH /api/certificates/<domain>`, or Settings →
+Probe in the UI) and the check runs there instead. The response carries a
+`reason` saying exactly that. A scan that crashed is `unverifiable` too, for
+the same reason: the scanner's own failure is not a finding about the estate.
+
+The concrete SANs of a wildcard certificate are still probed as themselves, so
+one live SAN makes the certificate `alive` whether or not a probe host is set.
+
 ---
 
 ## Error Handling

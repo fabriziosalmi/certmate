@@ -239,7 +239,11 @@ def create_ca_resources(api, models, ctx: ApiContext) -> dict:
                             if directory_response.status_code == 200:
                                 try:
                                     directory_data = directory_response.json()
-                                except Exception:
+                                except ValueError:
+                                    # requests raises JSONDecodeError, which
+                                    # subclasses ValueError. Narrow, so a
+                                    # different fault here is not reported to
+                                    # the operator as "invalid JSON".
                                     return {
                                         'success': False,
                                         'message': 'Endpoint is accessible but returned invalid JSON',

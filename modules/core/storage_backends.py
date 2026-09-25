@@ -612,6 +612,9 @@ class _AzureKeyVaultCertificateImporter:
             cert = self._get_cert_client().get_certificate(cert_name)
             return getattr(cert.properties, 'updated_on', None)
         except Exception:
+            # A timestamp used to decide whether the remote copy is newer.
+            # None means "cannot tell", and every caller treats that as "do
+            # not skip the work" rather than as "nothing is there".
             return None
 
     def export_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
@@ -1658,6 +1661,11 @@ class InfisicalBackend(CertificateStorageBackend):
                     environment=self.environment
                 )
             except Exception:
+                # Update-then-create: the SDK does not offer an upsert, and it
+                # does not document a distinct not-found error either, so the
+                # absence cannot be told from anything else without depending
+                # on an undocumented type. A create that also fails raises,
+                # which is the honest outcome.
                 client.create_secret(
                     secret_name=secret_key,
                     secret_value=secret_value,
@@ -1676,6 +1684,7 @@ class InfisicalBackend(CertificateStorageBackend):
                 environment=self.environment
             )
         except Exception:
+            # Same update-then-create as above, for the metadata secret.
             client.create_secret(
                 secret_name=metadata_key,
                 secret_value=metadata_value,

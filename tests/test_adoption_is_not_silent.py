@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-from modules.core.factory import create_app
+from modules.factory import create_app
 
 pytestmark = [pytest.mark.unit]
 
@@ -56,7 +56,7 @@ def app_container(tmp_path, monkeypatch):
     module_dir = project_root / "modules" / "core"
     module_dir.mkdir(parents=True)
     (module_dir / "factory.py").write_text("# test path anchor\n")
-    monkeypatch.setattr("modules.core.factory.__file__", str(module_dir / "factory.py"))
+    monkeypatch.setattr("modules.factory.__file__", str(module_dir / "factory.py"))
     monkeypatch.setenv("FLASK_ENV", "testing")
     monkeypatch.setenv("TESTING", "true")
     application, container = create_app()
@@ -215,7 +215,7 @@ def test_the_notification_says_adopted_rather_than_created(
 
 def test_the_notification_title_reflects_adoption(app_container):
     """The bridge renders the message; a marker nothing reads is not a fix."""
-    from modules.core import factory
+    from modules import factory
 
     src = factory.build_notification_message
     assert src('certificate_created', {'domain': 'example.com'}) == (
@@ -243,7 +243,7 @@ def test_the_event_name_is_one_every_subscriber_honours():
     import re
 
     from modules.api import resources_inventory
-    from modules.core import factory
+    from modules import factory
     from modules.core.cache import CacheManager
     from modules.core.deployer import DeployManager
 
@@ -255,7 +255,7 @@ def test_the_event_name_is_one_every_subscriber_honours():
 
     # The notifier bridge is checked against its title table rather than its
     # source: the session-scoped fixture from #702 repoints
-    # modules.core.factory.__file__ at a stub, so inspect.getsource() on the
+    # modules.factory.__file__ at a stub, so inspect.getsource() on the
     # MODULE reads "# test path anchor" and every containment check passes
     # vacuously. Function objects carry their own co_filename and are safe.
     for event in published:

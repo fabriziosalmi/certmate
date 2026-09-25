@@ -219,7 +219,7 @@ def test_it_is_called_at_startup_after_the_hasher_is_installed():
     and it is invisible at the call site — so it is asserted on the source."""
     import inspect
 
-    from modules.core import factory
+    from modules import factory
 
     src = inspect.getsource(factory.initialize_managers)
     hasher_at = src.index('set_token_hasher')

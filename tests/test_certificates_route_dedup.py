@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 import werkzeug.exceptions
 
-from modules.core.factory import create_app
+from modules.factory import create_app
 
 
 pytestmark = [pytest.mark.unit]
@@ -32,7 +32,7 @@ def app(tmp_path, monkeypatch):
     anchored under ``tmp_path`` so ``create_app()`` never writes into the repo.
 
     Uses the same path-anchor trick as ``tests/test_factory_directories.py``:
-    point ``modules.core.factory.__file__`` at a fake ``factory.py`` inside a
+    point ``modules.factory.__file__`` at a fake ``factory.py`` inside a
     temp project tree, so ``setup_directories`` resolves all dirs relative to
     that tree instead of the real checkout.
     """
@@ -41,7 +41,7 @@ def app(tmp_path, monkeypatch):
     module_dir.mkdir(parents=True)
     fake_factory_file = module_dir / "factory.py"
     fake_factory_file.write_text("# test path anchor\n")
-    monkeypatch.setattr("modules.core.factory.__file__", str(fake_factory_file))
+    monkeypatch.setattr("modules.factory.__file__", str(fake_factory_file))
 
     monkeypatch.setenv("FLASK_ENV", "testing")
     monkeypatch.setenv("TESTING", "true")

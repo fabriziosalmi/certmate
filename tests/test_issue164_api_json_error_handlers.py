@@ -17,7 +17,7 @@ different type from the same field on every application error.
 """
 import pytest
 
-from modules.core import factory
+from modules import factory
 
 
 pytestmark = [pytest.mark.unit]

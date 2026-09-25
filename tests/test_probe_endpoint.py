@@ -20,11 +20,11 @@ pytestmark = [pytest.mark.unit]
 
 @pytest.fixture
 def probe_app(tmp_path, monkeypatch):
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     root = tmp_path / 'certmate' / 'modules' / 'core'
     root.mkdir(parents=True)
     (root / 'factory.py').write_text('# anchor\n')
-    monkeypatch.setattr('modules.core.factory.__file__', str(root / 'factory.py'))
+    monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
     token = secrets.token_urlsafe(32)

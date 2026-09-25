@@ -569,6 +569,9 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                 else:
                     checks['disk_space'] = 'ok'
             except Exception:
+                # 'unknown' is a first-class answer here, and the reason this
+                # is broad: a health check that cannot look must not report
+                # 'ok', and must not fail the whole health response either.
                 checks['disk_space'] = 'unknown'
 
         # Always return 200 — Flask is serving requests.

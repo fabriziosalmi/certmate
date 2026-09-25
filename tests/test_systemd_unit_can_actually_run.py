@@ -25,7 +25,7 @@ pytestmark = [pytest.mark.unit]
 
 ROOT = Path(__file__).resolve().parent.parent
 UNIT = ROOT / 'certmate.service'
-FACTORY = ROOT / 'modules' / 'core' / 'factory.py'
+FACTORY = ROOT / 'modules' / 'factory.py'
 
 
 def _unit_directives():

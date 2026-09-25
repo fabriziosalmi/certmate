@@ -28,7 +28,7 @@ import time
 
 import pytest
 
-from modules.core import factory
+from modules import factory
 from modules.core.cert_jobs import IssuanceExecutor
 
 pytestmark = [pytest.mark.unit]

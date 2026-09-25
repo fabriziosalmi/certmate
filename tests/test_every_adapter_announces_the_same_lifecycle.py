@@ -50,7 +50,7 @@ def instance(tmp_path_factory):
         patch.setenv('TESTING', 'true')
         patch.setenv('API_BEARER_TOKEN', TOKEN)
         os.environ['API_BEARER_TOKEN'] = TOKEN
-        from modules.core.factory import create_app
+        from modules.factory import create_app
         app, container = create_app()
         yield app, container
 
@@ -202,7 +202,7 @@ def test_every_construction_of_the_service_gets_a_bus():
     import pathlib
 
     repo = pathlib.Path(__file__).resolve().parent.parent
-    for relative in ('modules/core/factory.py',
+    for relative in ('modules/factory.py',
                      'modules/web/cert_routes.py',
                      'modules/api/resource_context.py'):
         source = (repo / relative).read_text(encoding='utf-8')
