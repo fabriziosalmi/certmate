@@ -1444,7 +1444,9 @@ def setup_csrf_protection(app):
         try:
             parsed = urlparse(source)
             source_host = _normalize(parsed.scheme, parsed.netloc)
-        except Exception:
+        except ValueError:
+            # The only thing urlparse raises. An empty host then fails the
+            # comparison below, which is the fail-closed direction.
             source_host = ''
         if source_host != expected:
             from flask import jsonify

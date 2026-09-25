@@ -1,5 +1,9 @@
+import logging
+
 from flask import request, jsonify
 from modules.core.request_fields import json_booleans
+
+logger = logging.getLogger(__name__)
 
 
 def register_backup_cache_routes(app, managers, require_web_auth,
@@ -14,7 +18,11 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         try:
             backups = file_ops.list_backups()
             return jsonify(backups)
-        except Exception:
+        except Exception as e:
+            # Logged, not only answered. The operator gets the same generic
+            # 500 — a traceback must not reach the client — but the cause has
+            # to exist somewhere, and this file used to have no logger at all.
+            logger.error("Failed to list backups: %s", e)
             return jsonify({'error': 'Failed to list backups'}), 500
 
     @app.route('/api/web/backups/create', methods=['POST'])
@@ -53,7 +61,8 @@ def register_backup_cache_routes(app, managers, require_web_auth,
                 'filename': filename,
                 'secrets_masked': not include_secrets,
             })
-        except Exception:
+        except Exception as e:
+            logger.error("Backup creation failed: %s", e)
             return jsonify({'error': 'Backup creation failed'}), 500
 
     # Only /api/web/... is registered here. The bare /api/cache/stats is
@@ -71,7 +80,8 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         try:
             stats = cache_manager.get_cache_stats()
             return jsonify(stats)
-        except Exception:
+        except Exception as e:
+            logger.error("Failed to get cache stats: %s", e)
             return jsonify({'error': 'Failed to get cache stats'}), 500
 
     @app.route('/api/web/cache/clear', methods=['POST'])
@@ -81,5 +91,6 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         try:
             cache_manager.clear_cache()
             return jsonify({'message': 'Cache cleared'})
-        except Exception:
+        except Exception as e:
+            logger.error("Failed to clear cache: %s", e)
             return jsonify({'error': 'Failed to clear cache'}), 500

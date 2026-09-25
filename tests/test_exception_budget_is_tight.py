@@ -4,10 +4,11 @@ That is the whole argument for this checker, and it is the same one behind
 `scripts/check_complexity_budget.py`: a number written into an issue is read
 once, and a number in CI is read on every push.
 
-Two of the three counts in #671 are now zero, measured with the AST rather than
-grep: no bare `except:` and no broad handler whose body is only `pass`. Those
-become rules rather than budgets, because zero is the only value either should
-ever have. The third is pinned twice over: a total for the tree, which is the
+Three of the four counts here are now zero, measured with the AST rather than
+grep: no bare `except:`, no broad handler whose body is only `pass`, and — since
+the last thirty were worked through — none that neither records the failure nor
+says why silence is right. Those are rules rather than budgets, because zero is
+the only value any of them should ever have. The third is pinned twice over: a total for the tree, which is the
 number the issue names, and a per-file entry for each file already over the
 general limit, because a total alone cannot tell one file improving from
 another getting worse.
@@ -203,11 +204,19 @@ def test_the_unaccounted_count_growing_is_caught():
 
 def test_the_unaccounted_count_falling_asks_for_the_pin_to_come_down():
     """Same both-ways discipline as the total: a pin above the tree enforces
-    nothing, and reads in review as though it does."""
+    nothing, and reads in review as though it does.
+
+    Driven with a synthetic pin rather than the real `UNACCOUNTED_LIMIT`,
+    because that reached **zero** when the last thirty were worked through:
+    the count cannot fall below zero, so with the real pin this test would
+    exercise nothing while still passing. The property belongs to the checker,
+    not to today's value.
+    """
     measured = dict(BUDGET)
+    pinned = 5
     problems = CHECK['evaluate'](
-        measured, [], [], [f'fake.py:{i}' for i in range(UNACCOUNTED - 1)],
-        BUDGET, LIMIT, sum(measured.values()), UNACCOUNTED)
+        measured, [], [], [f'fake.py:{i}' for i in range(pinned - 1)],
+        BUDGET, LIMIT, sum(measured.values()), pinned)
 
     assert any('Lower UNACCOUNTED_LIMIT' in p for p in problems)
 

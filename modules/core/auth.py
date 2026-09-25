@@ -1323,15 +1323,15 @@ class AuthManager:
         never raises into startup.
         """
         try:
-            token_file = os.getenv('API_BEARER_TOKEN_FILE')
-            if token_file:
-                try:
-                    from pathlib import Path
-                    env_token = Path(token_file).read_text().strip()
-                except Exception:
-                    return
-            else:
-                env_token = (os.getenv('API_BEARER_TOKEN') or '').strip()
+            # Asked of the canonical reader rather than read again here. This
+            # used to open API_BEARER_TOKEN_FILE itself and `return` in
+            # silence when it could not — a second spelling of "what did the
+            # operator supply", which #843 had already fixed in
+            # `_operator_supplied_token` (it warns, and says what a failure
+            # means for authentication). Two readers of one file is how the
+            # two answers start to differ; this one now inherits that warning
+            # instead of swallowing the same failure a second time.
+            env_token = self._operator_supplied_token()
             if not env_token:
                 return  # operator supplied no token — nothing to diagnose
 
@@ -1561,6 +1561,10 @@ class AuthManager:
             best = accept.best_match(['text/html', 'application/json'])
             return best == 'text/html'
         except Exception:
+            # Content negotiation on a header the client controls. Any header
+            # werkzeug cannot parse means we answer JSON, which is the safe
+            # default for an API: a browser shown JSON is a cosmetic problem,
+            # a script handed HTML is a broken integration.
             return False
 
     def require_auth(self, f):
@@ -1731,6 +1735,9 @@ class AuthManager:
             from flask import request as _request
             ip = _request.remote_addr
         except Exception:
+            # Outside a request context — a scheduled job, a CLI call — there
+            # is no address to record. The warning below still goes out with
+            # everything else it knows.
             ip = None
 
         logger.warning(

@@ -47,7 +47,11 @@ def _webhook_url_is_internal(url: str) -> bool:
         if not host:
             return False
         infos = socket.getaddrinfo(host, None)
-    except Exception:
+    except (OSError, ValueError, UnicodeError):
+        # Every way this can fail: gaierror and herror subclass OSError, a
+        # malformed URL raises ValueError, and a host that is not encodable
+        # raises UnicodeError. A host that does not resolve is deliberately
+        # NOT internal — see the docstring.
         return False
     for info in infos:
         try:

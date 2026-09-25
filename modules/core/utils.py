@@ -187,7 +187,9 @@ def validate_domain(domain: str) -> Tuple[bool, str]:
             domain = urlparse(domain).netloc
             if not domain:
                 return False, "Could not extract a valid domain from the provided URL."
-        except Exception:
+        except ValueError:
+            # urlparse raises ValueError on a malformed IPv6 literal or a
+            # non-numeric port, and nothing else.
             return False, "Invalid URL format provided."
             
     # A single trailing dot is the root-anchored FQDN form: what `dig +short`
@@ -902,6 +904,9 @@ def validate_dns_provider_account(provider: str, account_id: str, account_config
         
         return True, "Valid configuration."
     except Exception as e:
+        # A validator must answer rather than raise: its callers are request
+        # handlers that turn (False, reason) into a 400. The exception is the
+        # reason, so nothing is lost.
         return False, f"An unexpected error occurred during validation: {e}"
 
 
