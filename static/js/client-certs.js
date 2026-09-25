@@ -184,8 +184,8 @@
                 '<td class="px-6 py-4 text-sm font-medium text-foreground cm-mono">' + safeCN + '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
                 '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium">' + safeUsage + '</span></td>' +
-                '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell">' + createdDate.toLocaleDateString() + '</td>' +
-                '<td class="px-6 py-4 text-sm ' + (isExpiringSoon ? 'text-danger-fg font-semibold' : 'text-muted') + '">' + expiresDate.toLocaleDateString() + '</td>' +
+                '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell">' + CertMate.formatDate(createdDate) + '</td>' +
+                '<td class="px-6 py-4 text-sm ' + (isExpiringSoon ? 'text-danger-fg font-semibold' : 'text-muted') + '">' + CertMate.formatDate(expiresDate) + '</td>' +
                 '<td class="px-6 py-4 text-sm">' +
                     (cert.revoked
                         ? '<span class="px-2 py-1 bg-danger-surface text-danger-strong rounded text-xs font-medium">Revoked</span>'
@@ -456,7 +456,7 @@
                 '<i class="fas ' + bannerIcon + ' text-2xl ' + bannerFg + ' flex-shrink-0"></i>' +
                 '<div class="min-w-0">' +
                     '<div class="text-lg font-semibold ' + bannerFg + '">' + statusLabel + '</div>' +
-                    '<div class="text-sm ' + bannerFg + ' opacity-80">' + (expired ? 'Expired ' : 'Expires ') + expiresDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</div>' +
+                    '<div class="text-sm ' + bannerFg + ' opacity-80">' + (expired ? 'Expired ' : 'Expires ') + CertMate.formatDate(expiresDate) + '</div>' +
                 '</div>' +
             '</div>' +
             '<dl class="divide-y divide-border">' +
@@ -465,7 +465,7 @@
                 row('Organization', cert.organization) +
                 row('Usage', cert.cert_usage) +
                 row('Serial', cert.serial_number, true) +
-                row('Created', new Date(cert.created_at).toLocaleString()) +
+                row('Created', CertMate.formatDateTime(cert.created_at)) +
                 row('Identifier', cert.identifier, true) +
             '</dl>';
 
