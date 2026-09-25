@@ -2,7 +2,7 @@
 
 `requirements-minimal.txt` is not a convenience copy — the Dockerfile documents
 `REQUIREMENTS_FILE` as a supported build argument, so it is a shipped product
-surface. It had been missing SQLAlchemy for months: `modules/core/factory.py`
+surface. It had been missing SQLAlchemy for months: `modules/factory.py`
 imports APScheduler's `SQLAlchemyJobStore` at module scope, so an image built
 from it died during gunicorn's worker import and restart-looped forever (#514).
 

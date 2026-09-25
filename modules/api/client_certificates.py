@@ -33,7 +33,7 @@ def abort(status, message, code=None):
     per-call-site invention: a uniform, honest answer beats fifty new
     constants nobody has a use for yet. Pass one where it earns its keep.
     """
-    from ..core.factory import error_code_for_status
+    from ..core.http_errors import error_code_for_status
     try:
         flask_abort(status)
     except HTTPException as exc:

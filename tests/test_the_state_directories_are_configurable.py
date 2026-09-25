@@ -1,5 +1,9 @@
 """Four directories that nothing could move, and a config parameter read nowhere.
 
+What the code used to be (quoted as history — the anchor is two levels up now
+that #668 moved the composition root to `modules/factory.py`, and the four
+directories are configurable):
+
     def setup_directories(container: AppContainer, test_config=None):
         _base = Path(__file__).resolve().parent.parent.parent
         container.cert_dir = (_base / "certificates").resolve()
@@ -10,7 +14,7 @@ makes the image and the systemd unit work with no configuration at all — but i
 was the only answer available. A deployment wanting certificates on one volume
 and backups on another had to bind-mount over the install tree, and this
 repository's own suite redirects state by monkeypatching
-`modules.core.factory.__file__`, which is not something an application should
+`modules.factory.__file__`, which is not something an application should
 require of anyone.
 
 `test_config` made it worse rather than better: `create_app(test_config={...})`
@@ -26,7 +30,7 @@ import os
 
 import pytest
 
-from modules.core import factory
+from modules import factory
 
 pytestmark = [pytest.mark.unit]
 
@@ -47,7 +51,12 @@ def test_with_nothing_set_the_directories_are_where_they_were():
     the systemd unit all rely on this derivation and none of them was changed."""
     from pathlib import Path
 
-    base = Path(factory.__file__).resolve().parent.parent.parent
+    # Two levels up, not three: #668 moved the composition root from
+    # modules/core/factory.py to modules/factory.py, and this derivation
+    # is relative to that file. The base is the directory that CONTAINS
+    # `modules/`, which is what the image, the compose file and the
+    # systemd unit all rely on.
+    base = Path(factory.__file__).resolve().parent.parent
     resolved = factory.resolve_state_directories()
 
     assert resolved == {
@@ -100,7 +109,12 @@ def test_an_empty_value_is_not_a_path(monkeypatch):
 
     monkeypatch.setenv('CERTMATE_DATA_DIR', '   ')
 
-    base = Path(factory.__file__).resolve().parent.parent.parent
+    # Two levels up, not three: #668 moved the composition root from
+    # modules/core/factory.py to modules/factory.py, and this derivation
+    # is relative to that file. The base is the directory that CONTAINS
+    # `modules/`, which is what the image, the compose file and the
+    # systemd unit all rely on.
+    base = Path(factory.__file__).resolve().parent.parent
     assert factory.resolve_state_directories()['data_dir'] == (base / 'data').resolve()
 
 

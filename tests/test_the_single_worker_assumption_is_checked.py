@@ -26,7 +26,7 @@ import logging
 
 import pytest
 
-from modules.core import factory
+from modules import factory
 
 pytestmark = [pytest.mark.unit]
 
@@ -140,7 +140,7 @@ def test_startup_performs_the_check():
     write into the checkout, and reading it here would measure the stub."""
     import pathlib
     source = (pathlib.Path(__file__).resolve().parent.parent / 'modules'
-              / 'core' / 'factory.py').read_text()
+              / 'factory.py').read_text()
     assert 'warn_if_multiple_workers()' in source.split('def create_app')[-1], (
         'create_app no longer checks the worker count, so the one route left '
         'to violate the single-worker assumption is unguarded again'

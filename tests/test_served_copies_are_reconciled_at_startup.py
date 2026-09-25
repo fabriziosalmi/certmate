@@ -193,13 +193,16 @@ def test_a_real_create_app_repairs_a_torn_publish(tmp_path, monkeypatch):
     application, and check the served copy afterwards. A grep for the call
     would pass just as well with the call in dead code.
     """
-    from modules.core.factory import create_app
+    from modules.factory import create_app
 
     project_root = tmp_path / 'certmate'
-    module_dir = project_root / 'modules' / 'core'
+    # `modules/factory.py` since #668 — the anchor has to sit where the real
+    # composition root sits, or the state directories land one level deep
+    # inside a fake `modules/` and this test boots against an empty tree.
+    module_dir = project_root / 'modules'
     module_dir.mkdir(parents=True)
     (module_dir / 'factory.py').write_text('# test path anchor\n')
-    monkeypatch.setattr('modules.core.factory.__file__',
+    monkeypatch.setattr('modules.factory.__file__',
                         str(module_dir / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
@@ -222,7 +225,7 @@ def test_a_real_create_app_repairs_a_torn_publish(tmp_path, monkeypatch):
 def test_the_startup_wrapper_never_raises(monkeypatch):
     """CONTROL: a repair that can crash the boot is worse than the defect it
     repairs — the instance would not come back at all."""
-    from modules.core import factory
+    from modules import factory
 
     class Boom:
         def reconcile_served_copies(self):
@@ -235,7 +238,7 @@ def test_the_startup_wrapper_never_raises(monkeypatch):
 
 
 def test_the_startup_wrapper_tolerates_a_missing_manager():
-    from modules.core import factory
+    from modules import factory
 
     class Container:
         managers = {}

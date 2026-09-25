@@ -122,7 +122,7 @@ GENERAL_LIMIT = 10
 # 430 -> 431 on 2026-09-24, for sealing the audit chain on a clean shutdown
 # (#876 item 10). LOGS.
 #
-#   modules/core/factory.py   stop_background_work's new checkpoint step. It
+#   modules/factory.py        stop_background_work's new checkpoint step. It
 #                             could have been narrowed: write_checkpoint
 #                             catches Exception itself and returns None, so in
 #                             practice only a manager without the method can
@@ -175,7 +175,7 @@ BUDGET = {
     'modules/web/misc_routes.py': 16,
     'modules/api/resources_health.py': 15,
     'modules/core/auth.py': 13,
-    'modules/core/factory.py': 14,
+    'modules/factory.py': 14,
     'modules/web/settings_routes.py': 13,
     'modules/api/client_certificates.py': 13,
     'modules/core/client_certificates.py': 12,

@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 import pytest
 from flask import Flask
 
-from modules.core.factory import setup_rate_limiting
+from modules.factory import setup_rate_limiting
 
 pytestmark = [pytest.mark.unit]
 

@@ -29,7 +29,7 @@ def url_map(tmp_path_factory):
     Built once because the first version called `create_app()` inside every
     parametrised case, and under a temporary root because `setup_directories()`
     creates `data/`, `certificates/` and `logs/` relative to
-    `modules/core/factory.__file__` — so a test that only wants to read the
+    `modules/factory.__file__` — so a test that only wants to read the
     route table was creating directories in the working tree and would fail on
     a read-only checkout (Copilot, #534). Anchoring the module's `__file__` to
     a temp tree is the pattern the rest of the suite already uses; see
@@ -44,8 +44,8 @@ def url_map(tmp_path_factory):
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("TESTING", "true")
         patch.setenv("FLASK_ENV", "testing")
-        from modules.core.factory import create_app
-        patch.setattr("modules.core.factory.__file__", str(anchor))
+        from modules.factory import create_app
+        patch.setattr("modules.factory.__file__", str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
     # Union the verbs, do not overwrite them. Several paths are served by more

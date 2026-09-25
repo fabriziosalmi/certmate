@@ -573,7 +573,7 @@ sudo -u certmate python3 -m venv venv
 sudo -u certmate ./venv/bin/pip install -r requirements.txt
 
 # Create necessary directories. All four: the startup writeability probe
-# in modules/core/factory.py checks certificates, data, backups AND logs,
+# in modules/factory.py checks certificates, data, backups AND logs,
 # and raises at boot if any of them is not writable.
 sudo -u certmate mkdir -p certificates data backups logs
 ```

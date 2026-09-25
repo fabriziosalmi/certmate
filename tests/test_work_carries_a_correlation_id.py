@@ -30,7 +30,7 @@ import pytest
 from flask import Flask, g
 
 from modules.core.events import EventBus
-from modules.core.factory import setup_correlation_ids
+from modules.factory import setup_correlation_ids
 from modules.core.structured_logging import (
     LogContext, clean_correlation_id, current_correlation_id,
     new_correlation_id,

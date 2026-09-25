@@ -1,7 +1,7 @@
 """Running the tests must not modify the working tree's runtime directories.
 
 `setup_directories` resolves `certificates/`, `data/`, `backups/` and `logs/`
-from `modules.core.factory.__file__` — three levels up — and honours no
+from `modules.factory.__file__` — two levels up — and honours no
 override. So any in-process `create_app()` reads and writes the checkout's own
 directories, whatever `tmp_path` or env var the test set up. Thirteen test
 files do that, and several believed they were isolated: they set `DATA_DIR`,
@@ -34,7 +34,7 @@ RUNTIME_DIRS = ('certificates', 'data', 'backups', 'logs')
 
 def _build_an_app(tmp_path):
     """Whatever this leaves behind is what a test leaves behind."""
-    from modules.core import factory
+    from modules import factory
     factory._flask_app = None
     app, container = factory.create_app(test_config={'TESTING': True})
     if container.scheduler:
@@ -68,11 +68,11 @@ def test_the_anchor_is_actually_in_place():
     rather than because the isolation works, and the next person would have no
     idea where to look.
     """
-    from modules.core import factory
+    from modules import factory
 
     anchored = Path(factory.__file__).resolve()
     assert REPO_ROOT not in anchored.parents, (
-        f'modules.core.factory.__file__ is {anchored} — the session anchor in '
+        f'modules.factory.__file__ is {anchored} — the session anchor in '
         f'tests/conftest.py is not in effect, so every in-process create_app() '
         f'is writing to the working tree'
     )
@@ -81,14 +81,14 @@ def test_the_anchor_is_actually_in_place():
 def test_the_templates_the_anchor_points_at_still_exist():
     """The anchor relocates more than the data directories.
 
-    `factory.__file__` also locates `templates/` and `static/` (factory.py
-    around :1305). An anchor without them breaks every page-rendering test —
+    `factory.__file__` also locates `templates/` and `static/`. An anchor without them breaks every page-rendering test —
     and only warns at startup, so the first symptom is a confusing failure
     somewhere else entirely.
     """
     root = Path(__file__).resolve()
-    from modules.core import factory
-    anchored_root = Path(factory.__file__).resolve().parent.parent.parent
+    from modules import factory
+    # Two levels up since #668; see modules/factory.py.
+    anchored_root = Path(factory.__file__).resolve().parent.parent
 
     for shared in ('templates', 'static'):
         assert (anchored_root / shared).is_dir(), (

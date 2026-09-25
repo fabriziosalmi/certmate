@@ -63,7 +63,7 @@ def route_table():
     os.environ.setdefault('API_BEARER_TOKEN', secrets.token_urlsafe(32))
     os.environ['TESTING'] = 'true'
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     result = create_app()
     app = result[0] if isinstance(result, tuple) else result
 

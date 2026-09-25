@@ -40,7 +40,7 @@ pytestmark = [pytest.mark.unit]
 def client(tmp_path_factory):
     """The whole app, under a temporary root.
 
-    Anchoring modules.core.factory.__file__ is the pattern the suite already
+    Anchoring modules.factory.__file__ is the pattern the suite already
     uses: setup_directories derives the state directories from the module's
     location, so without it a test that only wants to make requests creates
     data/ and certificates/ in the working tree.
@@ -54,8 +54,8 @@ def client(tmp_path_factory):
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
-        from modules.core.factory import create_app
-        patch.setattr('modules.core.factory.__file__', str(anchor))
+        from modules.factory import create_app
+        patch.setattr('modules.factory.__file__', str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
     return app.test_client()
@@ -143,7 +143,7 @@ def test_the_flask_restful_spelling_is_not_the_one_used():
     looks right and changes nothing, which is how the narration survived being
     turned off."""
     factory = (pathlib.Path(__file__).resolve().parent.parent / 'modules'
-               / 'core' / 'factory.py').read_text(encoding='utf-8')
+               / 'factory.py').read_text(encoding='utf-8')
 
     assert "'RESTX_ERROR_404_HELP'" in factory
     assert "app.config['ERROR_404_HELP']" not in factory
@@ -153,7 +153,7 @@ def test_the_symbol_is_derived_not_enumerated():
     """A status this code has never seen must still produce a usable symbol
     rather than falling back to a number, or the type guarantee holds only for
     the statuses somebody remembered."""
-    from modules.core.factory import error_code_for_status
+    from modules.factory import error_code_for_status
 
     assert error_code_for_status(404, 'Not Found') == 'NOT_FOUND'
     assert error_code_for_status(413, 'Request Entity Too Large') == \

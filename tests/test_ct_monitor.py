@@ -311,7 +311,7 @@ def test_include_managed_polls_managed_domains(settings_manager, inventory):
 
 
 def test_ct_job_registered_in_factory():
-    from modules.core import factory
+    from modules import factory
     assert callable(getattr(factory, '_ct_monitor_job', None))
 
 

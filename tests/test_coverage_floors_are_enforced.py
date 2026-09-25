@@ -128,6 +128,10 @@ def test_every_watched_module_has_a_floor():
         for directory in ('modules/api', 'modules/web', 'modules/core')
         for path in (REPO_ROOT / directory).glob('*.py')
     }
+    # The composition root is watched by name rather than by prefix: since
+    # #668 it is `modules/factory.py`, beside the three layers instead of
+    # inside one. Read from the checker so the two lists cannot drift.
+    on_disk |= set(_checker_namespace()['WATCHED_FILES'])
     assert not (on_disk - floors), (
         f'these watched modules have no coverage floor: '
         f'{sorted(on_disk - floors)}'

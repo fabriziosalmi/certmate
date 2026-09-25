@@ -179,7 +179,7 @@ def test_the_decision_follows_what_the_operator_declared(monkeypatch, env,
     monkeypatch.setenv('API_BEARER_TOKEN', token)
     os.environ['API_BEARER_TOKEN'] = token
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     app, _ = create_app()
 
     assert app.config['SESSION_COOKIE_SECURE'] is expected

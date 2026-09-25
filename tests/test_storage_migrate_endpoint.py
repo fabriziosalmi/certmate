@@ -33,7 +33,7 @@ def app_client(tmp_path, monkeypatch):
     monkeypatch.setenv('CERTMATE_BACKUP_DIR', str(tmp_path / 'backups'))
     monkeypatch.setenv('CERTMATE_LOGS_DIR', str(tmp_path / 'logs'))
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     app, container = create_app()
     app.config['TESTING'] = True
 

@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from modules.core.factory import _data_dir_is_on_its_own_mount
+from modules.factory import _data_dir_is_on_its_own_mount
 
 pytestmark = [pytest.mark.unit]
 
@@ -28,7 +28,7 @@ def _only_root_is_mounted():
     (/tmp is tmpfs on many Linux hosts), which would report "persistent" for
     reasons unrelated to the behaviour being tested.
     """
-    return patch('modules.core.factory.os.path.ismount',
+    return patch('modules.factory.os.path.ismount',
                  side_effect=lambda p: Path(p) == Path('/'))
 
 
@@ -80,7 +80,7 @@ def test_a_mounted_data_directory_is_reported_as_persistent(tmp_path):
     data_dir.mkdir()
     resolved = data_dir.resolve()
 
-    with patch('modules.core.factory.os.path.ismount',
+    with patch('modules.factory.os.path.ismount',
                side_effect=lambda p: Path(p) == resolved):
         assert _data_dir_is_on_its_own_mount(data_dir) is True
 
@@ -96,7 +96,7 @@ def test_a_mounted_parent_also_counts(tmp_path):
     data_dir.mkdir(parents=True)
     resolved_parent = parent.resolve()
 
-    with patch('modules.core.factory.os.path.ismount',
+    with patch('modules.factory.os.path.ismount',
                side_effect=lambda p: Path(p) == resolved_parent):
         assert _data_dir_is_on_its_own_mount(data_dir) is True
 
@@ -110,12 +110,12 @@ def test_the_root_filesystem_alone_is_not_persistence(tmp_path):
     data_dir = tmp_path / 'data'
     data_dir.mkdir()
 
-    with patch('modules.core.factory.os.path.ismount',
+    with patch('modules.factory.os.path.ismount',
                side_effect=lambda p: Path(p) == Path('/')):
         assert _data_dir_is_on_its_own_mount(data_dir) is False
 
 
 def test_an_unreadable_path_does_not_claim_persistence(tmp_path):
     """A check that cannot answer must not answer optimistically."""
-    with patch('modules.core.factory.os.path.ismount', side_effect=OSError):
+    with patch('modules.factory.os.path.ismount', side_effect=OSError):
         assert _data_dir_is_on_its_own_mount(tmp_path) is False

@@ -64,7 +64,7 @@ def _refusable_paths(app):
 def app():
     """The application, built under a temporary root.
 
-    Anchoring `modules.core.factory.__file__` to a temp tree is the pattern
+    Anchoring `modules.factory.__file__` to a temp tree is the pattern
     tests/test_advertised_endpoints_exist.py already uses: `setup_directories()`
     creates data/, certificates/ and logs/ relative to that module's file, so a
     test that only wants to make requests would otherwise write into the
@@ -85,8 +85,8 @@ def app():
         # every caller an admin, and then nothing refuses anything and this
         # test would pass by having found no refusals to check.
         patch.setenv("API_BEARER_TOKEN", secrets.token_urlsafe(32))
-        from modules.core.factory import create_app
-        patch.setattr("modules.core.factory.__file__", str(anchor))
+        from modules.factory import create_app
+        patch.setattr("modules.factory.__file__", str(anchor))
         result = create_app()
     return result[0] if isinstance(result, tuple) else result
 

@@ -52,7 +52,7 @@ def client(tmp_path_factory):
         patch.setenv('TESTING', 'true')
         patch.setenv('API_BEARER_TOKEN', TOKEN)
         os.environ['API_BEARER_TOKEN'] = TOKEN
-        from modules.core.factory import create_app
+        from modules.factory import create_app
         application, _ = create_app()
         yield application.test_client()
 
@@ -175,14 +175,14 @@ def test_the_checkpoint_docstring_knows_about_its_second_caller():
     doc = inspect.getdoc(AuditLogger.write_checkpoint) or ''
     assert 'nothing calls' not in doc
     assert 'shutdown' in doc.lower()
-    factory = (REPO / 'modules' / 'core' / 'factory.py').read_text(encoding='utf-8')
+    factory = (REPO / 'modules' / 'factory.py').read_text(encoding='utf-8')
     assert 'write_checkpoint()' in factory, (
         'the docstring now claims a shutdown caller that is not there'
     )
 
 
 def test_the_webhooks_page_counts_the_events_the_ui_offers():
-    from modules.core.factory import _EVENT_TITLES
+    from modules.factory import _EVENT_TITLES
     from modules.core.notifier import _ALWAYS_NOTIFY_EVENTS
 
     page = (REPO / 'docs' / 'webhooks.md').read_text(encoding='utf-8')

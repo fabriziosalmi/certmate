@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from modules.core.factory import create_app
+from modules.factory import create_app
 
 pytestmark = [pytest.mark.unit]
 
@@ -22,7 +22,7 @@ def app_container(tmp_path, monkeypatch):
     module_dir.mkdir(parents=True)
     fake_factory_file = module_dir / "factory.py"
     fake_factory_file.write_text("# test path anchor\n")
-    monkeypatch.setattr("modules.core.factory.__file__", str(fake_factory_file))
+    monkeypatch.setattr("modules.factory.__file__", str(fake_factory_file))
     monkeypatch.setenv("FLASK_ENV", "testing")
     monkeypatch.setenv("TESTING", "true")
     application, container = create_app()

@@ -275,7 +275,7 @@ def test_health_reports_the_certbot_version_when_it_works():
 # --- the wiring ----------------------------------------------------------
 
 def test_startup_records_the_probe_where_the_probes_read_it():
-    from modules.core import factory
+    from modules import factory
 
     class Container:
         managers = {'shell_executor': _executor(
@@ -289,7 +289,7 @@ def test_startup_records_the_probe_where_the_probes_read_it():
 def test_a_probe_that_itself_explodes_does_not_stop_startup(monkeypatch):
     """CONTROL: a readiness check that can crash the boot is worse than the
     blindness it removes — the instance would not come back at all."""
-    from modules.core import factory
+    from modules import factory
 
     monkeypatch.setattr(readiness, 'probe',
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError('x')))

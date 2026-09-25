@@ -498,51 +498,44 @@ def test_the_english_set_is_what_this_compares_against():
 # The architecture diagram must draw the one edge that breaks its own rule
 # ---------------------------------------------------------------------------
 
-def test_the_composition_root_is_the_only_upward_import():
-    """The claim the diagram now makes, checked rather than asserted in prose.
+def test_the_diagram_is_right_that_every_arrow_points_down():
+    """The claim the diagram makes, checked rather than asserted in prose.
 
-    Every arrow in the high-level diagram points down: web and API call into
-    the managers, the managers into execution and storage. One import goes the
-    other way — `modules/core/factory.py` imports `modules.api` and
-    `modules.web` in order to register them, which is `core/` reaching upward.
+    It used to make the opposite claim — "every arrow points down except one",
+    that one being `modules/core/factory.py` importing `modules.api` and
+    `modules.web` to register them. #668 moved the composition root to
+    `modules/factory.py`, so there is no exception left to document, and this
+    is the assertion that stops the paragraph drifting back into fiction.
 
-    That is what a composition root is for, and the diagram says so. If a
-    SECOND file starts doing it, the diagram has stopped being true and this
-    fails with the file that did it.
+    The enumeration is borrowed from tests/test_the_layers_point_one_way.py
+    rather than written again here: that file owns the rule for all three
+    packages and both import spellings, and two implementations of "does this
+    file reach upward" is how two answers to one question start. This test
+    owns something narrower — whether the DOCUMENT is true.
     """
-    import ast
+    from tests.test_the_layers_point_one_way import _imported_packages
 
     upward = {}
-    for path in sorted((REPO_ROOT / "modules" / "core").glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            modules = []
-            if isinstance(node, ast.ImportFrom) and node.module:
-                modules.append("." * node.level + node.module)
-            elif isinstance(node, ast.Import):
-                modules += [alias.name for alias in node.names]
-            for module in modules:
-                if (module.startswith(("modules.api", "modules.web"))
-                        or module.startswith(("..api", "..web"))):
-                    upward.setdefault(path.name, []).append(
-                        f"{module} (line {node.lineno})")
+    for path in sorted((REPO_ROOT / "modules" / "core").rglob("*.py")):
+        reaching = _imported_packages(path) & {"api", "web"}
+        if reaching:
+            upward[path.name] = sorted(reaching)
 
-    assert set(upward) == {"factory.py"}, (
-        "modules/core/ imports upward into api/ or web/ from somewhere other "
-        "than the composition root, so the architecture diagram is no longer "
-        f"true: {upward}"
+    assert upward == {}, (
+        "docs/architecture.md says every arrow points down, and these files "
+        f"in modules/core/ import upward: {upward}"
     )
 
 
 def test_the_diagram_draws_the_composition_root():
-    """A single documented exception is a design; an undocumented one is
-    something the next reader finds by tracing an import and then wonders
-    whether the rest of the diagram is true."""
+    """The root is the piece a reader needs in order to believe the rest: it
+    is what constructs the managers and registers the two layers, and a
+    diagram that leaves it out is one where the arrows have no origin."""
     architecture = (DOCS / "architecture.md").read_text(encoding="utf-8")
     diagram = architecture.split("## High-Level Diagram")[1].split("---")[0]
     assert "Composition root" in diagram, (
-        "the high-level diagram has lost the composition root, so the only "
-        "upward edge in the system is again the one thing it does not draw"
+        "the high-level diagram has lost the composition root, which is the "
+        "one box every arrow in it starts from"
     )
     assert "factory.py" in diagram
     assert "UPWARD" in diagram or "upward" in diagram

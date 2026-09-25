@@ -26,7 +26,7 @@ from modules.core.expiry_watch import (
     due_threshold,
     thresholds_for_certificate,
 )
-from modules.core.factory import _EVENT_TITLES, build_notification_message
+from modules.factory import _EVENT_TITLES, build_notification_message
 
 pytestmark = [pytest.mark.unit]
 
@@ -346,11 +346,11 @@ def test_every_event_the_settings_ui_offers_can_be_rendered():
 @pytest.fixture
 def real_app(tmp_path, monkeypatch):
     import secrets
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     root = tmp_path / 'certmate' / 'modules' / 'core'
     root.mkdir(parents=True)
     (root / 'factory.py').write_text('# anchor\n')
-    monkeypatch.setattr('modules.core.factory.__file__', str(root / 'factory.py'))
+    monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
     monkeypatch.setenv('API_BEARER_TOKEN', secrets.token_urlsafe(32))

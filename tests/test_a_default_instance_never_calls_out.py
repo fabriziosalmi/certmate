@@ -291,7 +291,7 @@ def client(tmp_path_factory):
     process-global, so signing in per test returns 429 partway through."""
     import secrets
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
 
     tmp_path = tmp_path_factory.mktemp('updatecheck')
     with pytest.MonkeyPatch.context() as patch:
@@ -334,7 +334,7 @@ def test_the_endpoint_of_a_real_instance_does_not_reach_out(client, monkeypatch)
 
 def test_the_endpoint_needs_a_session(client):
     """It is behind the same guard as every other /api/web route here."""
-    from modules.core.factory import create_app  # noqa: F401  (documents the path)
+    from modules.factory import create_app  # noqa: F401  (documents the path)
 
     anonymous = client.application.test_client()
     assert anonymous.get('/api/web/update-check').status_code in (401, 302)
