@@ -50,7 +50,7 @@ Enable notifications and the webhook, select events if desired, save, and use
 are needed for an incoming webhook. The webhook can post only into its own
 space; it cannot receive replies or run interactive actions.
 
-CertMate sends a single Google Chat [`cardsV2`](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards?hl=fr) message with a title, event status,
+CertMate sends a single Google Chat [`cardsV2`](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards) message with a title, event status,
 summary and certificate details. When CertMate URL is configured, the card has
 **Open CertMate** and, for certificate events with a domain, **View certificate** buttons that open the
 dashboard's certificate detail panel (`/?cert=<domain>`). No separate text
@@ -60,8 +60,10 @@ webhooks. Google Chat webhook URLs contain `key` and `token` query parameters:
 the entire URL is masked when settings are read back, preserved on an
 unrelated save, and reduced to `https://chat.googleapis.com` in delivery logs.
 Only HTTPS incoming webhook URLs at `chat.googleapis.com` are accepted for
-this channel. Google Chat applies a per-space message rate limit, so a burst
-may be retried after HTTP 429.
+this channel. Invalid Google Chat destinations (or an invalid optional
+CertMate URL) are rejected when settings are saved, before an event fires;
+the same validation runs at send time. Google Chat applies a per-space message
+rate limit, so a burst may be retried after HTTP 429.
 
 ## The default body
 

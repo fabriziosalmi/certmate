@@ -174,6 +174,14 @@ def _unmasked_test_config(settings_manager, channel_type, config):
     return _deep_merge_dict(existing, stripped)
 
 
+def _webhook_config_for_save(settings_manager, webhook):
+    """Restore a saved Google Chat URL before validating a masked UI echo."""
+    if isinstance(webhook, dict) and webhook.get('type') == 'google_chat':
+        # Match by (type, name), never by position or another webhook's URL.
+        return _unmasked_test_config(settings_manager, 'webhook', webhook)
+    return webhook
+
+
 def _activity_page(audit_logger, limit, query):
     """The activity response, filtered or not.
 
@@ -620,12 +628,11 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                 _strip_masked_values, _deep_merge_dict, _restore_masked_list_secrets,
             )
             from modules.core.notifier import validate_webhook_config
-            # A generic webhook's method / auth / payload template is judged
-            # here, at save time, so a template that cannot render is a 400
-            # now and not a silent delivery failure later (#218).
+            # Validate generic templates and Google Chat URLs before saving,
+            # rather than first discovering a bad configuration on delivery.
             channels = data.get('channels') if isinstance(data.get('channels'), dict) else {}
             for index, webhook in enumerate(channels.get('webhooks') or []):
-                problem = validate_webhook_config(webhook)
+                problem = validate_webhook_config(_webhook_config_for_save(settings_manager, webhook))
                 if problem:
                     label = (webhook.get('name') if isinstance(webhook, dict) else None) or f'#{index + 1}'
                     return jsonify({'error': f'webhook {label}: {problem}'}), 400

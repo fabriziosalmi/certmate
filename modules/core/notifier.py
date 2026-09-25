@@ -331,14 +331,26 @@ def _coerce_int(value, default, low, high, name):
 
 
 def validate_webhook_config(cfg):
-    """Return an error string for a malformed generic-webhook config, else None.
+    """Return an error for malformed generic or Google Chat webhook config.
 
-    Only the new fields are judged here (method, auth, template, timeout,
-    retries); URL/scheme/SSRF checks stay in the send path, where they
-    always were, so a placeholder URL can still be saved and tested later.
+    Generic webhooks can still save placeholder URLs. Google Chat checks its
+    destination and optional card-link base on save and again at send time.
+    SSRF checks stay in the send path.
     """
     if not isinstance(cfg, dict):
         return 'webhook must be an object'
+    if cfg.get('type') == 'google_chat':
+        url = (cfg.get('url') or '').strip()
+        parsed = urlparse(url)
+        if parsed.scheme != 'https' or parsed.hostname != 'chat.googleapis.com':
+            return 'Google Chat requires an HTTPS incoming webhook URL from chat.googleapis.com'
+        certmate_url = (cfg.get('certmate_url') or '').strip().rstrip('/')
+        if certmate_url:
+            link = urlparse(certmate_url)
+            if (link.scheme != 'https' or not link.hostname or link.username or link.password
+                    or link.query or link.fragment):
+                return 'Google Chat CertMate URL must be HTTPS for card buttons'
+        return None
     if cfg.get('type', 'generic') != 'generic':
         return None
     method = (cfg.get('method') or 'POST').upper()
@@ -777,17 +789,10 @@ class Notifier:
                 body = json.dumps({'embeds': [embed]}).encode('utf-8')
 
             elif wh_type == 'google_chat':
-                parsed = urlparse(url)
-                if parsed.scheme != 'https' or parsed.hostname != 'chat.googleapis.com':
-                    return {'error': 'Google Chat requires an HTTPS incoming webhook URL from chat.googleapis.com',
-                            'config_error': True}
+                problem = validate_webhook_config(cfg)
+                if problem:
+                    return {'error': problem, 'config_error': True}
                 certmate_url = (cfg.get('certmate_url') or '').strip().rstrip('/')
-                if certmate_url:
-                    link = urlparse(certmate_url)
-                    if (link.scheme != 'https' or not link.hostname or link.username or link.password
-                            or link.query or link.fragment):
-                        return {'error': 'Google Chat CertMate URL must be HTTPS for card buttons',
-                                'config_error': True}
                 body = json.dumps(google_chat_card(event, title, message, details, certmate_url=certmate_url),
                                   ensure_ascii=False).encode('utf-8')
 

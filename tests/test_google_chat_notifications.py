@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from modules.core.notifier import Notifier, google_chat_card
+from modules.core.notifier import Notifier, google_chat_card, validate_webhook_config
 from modules.core.settings import SECRET_MASK_SENTINEL, _restore_masked_list_secrets, mask_secrets_in_settings
 from modules.web.misc_routes import _unmasked_test_config
 
@@ -117,6 +117,8 @@ def test_buttons_encode_domain_and_omit_certificate_link_for_other_events():
 ])
 def test_google_chat_refuses_other_webhook_targets_without_sending(tmp_path, url):
     notifier = Notifier(MagicMock(), data_dir=str(tmp_path))
+    assert 'Google Chat' in validate_webhook_config({
+        'type': 'google_chat', 'url': url, 'certmate_url': CERTMATE_URL})
     with patch('modules.core.notifier.urlopen') as send:
         result = notifier.test_channel('webhook', {'type': 'google_chat', 'url': url,
                                                    'certmate_url': CERTMATE_URL})
@@ -133,6 +135,8 @@ def test_google_chat_refuses_other_webhook_targets_without_sending(tmp_path, url
 ])
 def test_google_chat_needs_a_safe_certmate_url_for_buttons(tmp_path, base):
     notifier = Notifier(MagicMock(), data_dir=str(tmp_path))
+    assert 'CertMate URL' in validate_webhook_config({
+        'type': 'google_chat', 'url': CHAT_URL, 'certmate_url': base})
     with patch('modules.core.notifier.urlopen') as send:
         result = notifier.test_channel('webhook', {
             'type': 'google_chat', 'url': CHAT_URL, 'certmate_url': base})

@@ -35,6 +35,8 @@ pytestmark = [pytest.mark.unit]
 
 MASK = SECRET_MASK_SENTINEL  # '********'
 
+CHAT_URL = 'https://chat.googleapis.com/v1/spaces/SPACE/messages?key=example&token=secret'
+
 
 def _passthrough_role(_min_role):
     def deco(fn):
@@ -109,6 +111,60 @@ def route_client(tmp_path):
 def _disk_webhooks(settings_path):
     doc = json.loads(settings_path.read_text())
     return doc["notifications"]["channels"]["webhooks"]
+
+
+@pytest.mark.parametrize('url', [
+    'http://chat.googleapis.com/v1/spaces/SPACE/messages',
+    'https://chat.googleapis.com.evil.example/hook',
+    'https://evil.example/hook',
+])
+def test_google_chat_refuses_wrong_destination_on_save(route_client, url):
+    client, settings_path, seed = route_client
+    seed({'notifications': {'channels': {'webhooks': []}}})
+    r = client.post('/api/notifications/config', json={'channels': {'webhooks': [
+        {'type': 'google_chat', 'name': 'ops', 'url': url, 'enabled': True},
+    ]}})
+    assert r.status_code == 400
+    assert 'Google Chat' in r.get_json()['error']
+    assert _disk_webhooks(settings_path) == []
+
+
+def test_google_chat_masked_save_validates_saved_url_without_losing_it(route_client):
+    client, settings_path, seed = route_client
+    seed({'notifications': {'channels': {'webhooks': [
+        {'type': 'google_chat', 'name': 'ops', 'url': CHAT_URL, 'enabled': True},
+    ]}}})
+    masked = client.get('/api/notifications/config').get_json()['channels']['webhooks'][0]
+    assert masked['url'] == MASK
+    masked['enabled'] = False
+    r = client.post('/api/notifications/config', json={'channels': {'webhooks': [masked]}})
+    assert r.status_code == 200, r.get_json()
+    assert _disk_webhooks(settings_path)[0]['url'] == CHAT_URL
+    assert _disk_webhooks(settings_path)[0]['enabled'] is False
+
+
+def test_google_chat_unmatched_mask_is_not_accepted_on_save(route_client):
+    client, settings_path, seed = route_client
+    seed({'notifications': {'channels': {'webhooks': [
+        {'type': 'google_chat', 'name': 'ops', 'url': CHAT_URL},
+    ]}}})
+    r = client.post('/api/notifications/config', json={'channels': {'webhooks': [
+        {'type': 'google_chat', 'name': 'renamed', 'url': MASK},
+    ]}})
+    assert r.status_code == 400
+    assert _disk_webhooks(settings_path)[0]['name'] == 'ops'
+
+
+def test_google_chat_refuses_invalid_button_url_on_save(route_client):
+    client, settings_path, seed = route_client
+    seed({'notifications': {'channels': {'webhooks': []}}})
+    r = client.post('/api/notifications/config', json={'channels': {'webhooks': [
+        {'type': 'google_chat', 'name': 'ops', 'url': CHAT_URL,
+         'certmate_url': 'javascript:alert(1)'},
+    ]}})
+    assert r.status_code == 400
+    assert 'CertMate URL' in r.get_json()['error']
+    assert _disk_webhooks(settings_path) == []
 
 
 def _seed_one_webhook(seed, token="REAL-TOKEN", **extra):
