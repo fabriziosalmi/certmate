@@ -765,17 +765,11 @@
             // carried onto the counter itself — green for healthy so the colour
             // encodes the state, not just the expired/expiring alarm cases.
             var daysClass = isExpired ? 'text-danger-fg' : isExpiringSoon ? 'text-warning-fg' : 'text-success-fg';
-            var absDays = Math.abs(cert.days_until_expiry);
-            // "0 days left" was the other half of the same lie: under a day
-            // is not none, and under a day expired is not a whole day ago.
-            var daysText;
-            if (isExpired) {
-                daysText = absDays === 0 ? 'less than a day ago'
-                    : absDays + (absDays === 1 ? ' day ago' : ' days ago');
-            } else {
-                daysText = cert.days_until_expiry === 0 ? 'less than a day left'
-                    : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
-            }
+            // One sentence, one implementation (#938). This used to compute it
+            // here from `days_until_expiry`, and the "less than a day ago" case
+            // it carried could never fire: a day count is -1 for anything
+            // expired within 24 hours, never 0.
+            var daysText = CertMate.lifetimePhrase(cert);
 
             // Inline subtle glyph instead of a rounded blue panel — the
             // rounded panel read like an interactive control to users
@@ -1048,17 +1042,11 @@
             else if (isExpiringSoon) { statusClass = 'text-warning-fg'; statusText = 'Expiring Soon'; }
             else { statusClass = 'text-success-fg'; statusText = 'Valid'; }
 
-            var absDays = Math.abs(cert.days_until_expiry);
-            // "0 days left" was the other half of the same lie: under a day
-            // is not none, and under a day expired is not a whole day ago.
-            var daysText;
-            if (isExpired) {
-                daysText = absDays === 0 ? 'less than a day ago'
-                    : absDays + (absDays === 1 ? ' day ago' : ' days ago');
-            } else {
-                daysText = cert.days_until_expiry === 0 ? 'less than a day left'
-                    : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
-            }
+            // One sentence, one implementation (#938). This used to compute it
+            // here from `days_until_expiry`, and the "less than a day ago" case
+            // it carried could never fire: a day count is -1 for anything
+            // expired within 24 hours, never 0.
+            var daysText = CertMate.lifetimePhrase(cert);
             var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             var bannerBg = isExpired ? 'bg-danger-surface' : isExpiringSoon ? 'bg-warning-surface' : 'bg-success-surface';
             var bannerIcon = isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';

@@ -60,6 +60,17 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    # Nothing in this job executed a line of the frontend until #938. Three
+    # defects found in one afternoon's navigation lived in static/js and in a
+    # template's inline script, and every guard the suite had for them read the
+    # source rather than running it — which a rewrite of the arithmetic walks
+    # straight past. Node is here so the pure functions can be executed; tests
+    # that need it skip loudly when it is absent, and in this job it never is.
+    - name: Set up Node (for the frontend unit tests)
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v4
+      with:
+        node-version: '20'
+
     - name: Cache pip dependencies
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v4 (was v3)
       with:
@@ -115,6 +126,10 @@ jobs:
       env:
         FLASK_ENV: testing
         TESTING: true
+        # The frontend unit tests execute static/js through node; without
+        # this they would skip, and a skipped test in the job that exists
+        # to run them is the failure mode #938's guards already had.
+        CERTMATE_REQUIRE_NODE: '1'
       run: |
         # Measure the application package (modules/), not the whole repo: a
         # bare --cov=. folds the tests/ and scripts/ trees (which run at ~100%)

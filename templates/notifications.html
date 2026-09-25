@@ -57,11 +57,12 @@
             if (type === 'critical') return { label: 'Critical', icon: 'fa-circle-exclamation', fg: 'text-danger-fg', bg: 'bg-danger-surface', group: 'Critical — 7 days or less' };
             return { label: 'Expiring', icon: 'fa-triangle-exclamation', fg: 'text-warning-fg', bg: 'bg-warning-surface', group: 'Expiring — 30 days or less' };
         }
-        function daysText(days) {
-            var a = Math.abs(days);
-            return days <= 0
-                ? a + (a === 1 ? ' day ago' : ' days ago')
-                : days + (days === 1 ? ' day left' : ' days left');
+        // One sentence, one implementation (#938). This page had its own copy
+        // with no "less than a day" case at all, so a certificate with 23 hours
+        // of life was described in the past tense as "0 days ago" — the exact
+        // sentence #829 was closed for, on a page #829's fix never reached.
+        function daysText(w) {
+            return CertMate.lifetimePhrase(w);
         }
         function fmtDate(ts) {
             if (!ts) return '';
@@ -76,7 +77,10 @@
 
         function rowHtml(w) {
             var s = sev(w.type);
-            var meta = daysText(w.days) + (w.expiry_date ? ' · Expires ' + escapeHtml(fmtDate(w.expiry_date)) : '');
+            var expiredNow = w.expired === true || (w.expired !== false && w.days < 0);
+            var meta = daysText(w) + (w.expiry_date
+                ? (expiredNow ? ' · Expired ' : ' · Expires ') + escapeHtml(fmtDate(w.expiry_date))
+                : '');
             return '<li class="flex items-center gap-4 px-4 sm:px-6 py-4">' +
                 '<div class="flex-shrink-0">' +
                     '<div class="w-9 h-9 rounded-full ' + s.bg + ' flex items-center justify-center">' +
@@ -111,7 +115,7 @@
                 '<div class="flex-shrink-0"><div class="w-8 h-8 rounded-full bg-surface-2 flex items-center justify-center"><i class="fas fa-clock text-muted text-xs" aria-hidden="true"></i></div></div>' +
                 '<div class="flex-1 min-w-0">' +
                     '<p class="text-sm font-medium text-foreground truncate">' + escapeHtml(w.domain) + '</p>' +
-                    '<p class="text-xs text-muted mt-0.5">Snoozed until ' + escapeHtml(fmtDateTime(until)) + ' · ' + escapeHtml(daysText(w.days)) + '</p>' +
+                    '<p class="text-xs text-muted mt-0.5">Snoozed until ' + escapeHtml(fmtDateTime(until)) + ' · ' + escapeHtml(daysText(w)) + '</p>' +
                 '</div>' +
                 '<button type="button" data-unsnooze="' + escapeHtml(w.domain) + '" class="flex-shrink-0 inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition" title="Remove snooze">' +
                     '<i class="fas fa-bell mr-1.5 text-[10px]"></i>Unsnooze' +

@@ -107,10 +107,17 @@ def test_a_certificate_that_cannot_be_parsed_does_not_claim_to_be_valid():
 # The list is the point: the first fix touched dashboard.js only, and the
 # command palette went on saying Expired for a valid certificate, under a
 # comment explaining why that must not happen.
+# templates/notifications.html was missing from this list, and that is how
+# #938 happened: it kept `days <= 0`, so a certificate with 23 hours of life
+# was labelled "0 days ago" on that page for as long as the list said nothing
+# about it. A hand-written list of things to check fails silently when it is
+# incomplete — see tests/test_one_sentence_about_how_long_is_left.py, which
+# derives the equivalent list from the tree.
 RENDERERS = [
     ('static/js/dashboard.js', ['days_until_expiry <= 0']),
     ('static/js/cmd-palette.js', ['days > 0 ?']),
     ('templates/base.html', ['days <= 0']),
+    ('templates/notifications.html', ['days <= 0']),
 ]
 
 
