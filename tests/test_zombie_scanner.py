@@ -138,8 +138,17 @@ def test_a_wildcard_with_no_stand_in_says_why():
                                            'san_domains': []})
 
         assert result['status'] == 'unverifiable'
-        assert 'deployment_host' in result['reason']
-        assert 'wildcard.com' in result['reason']
+        reason = result['reason']
+        # Asserted on the three things the sentence has to carry, each in a
+        # form that says which role it plays. `'wildcard.com' in reason` was
+        # the first draft and CodeQL was right to flag it
+        # (py/incomplete-url-substring-sanitization): a bare hostname matched
+        # anywhere in a longer string proves nothing about where it matched,
+        # and here it would have passed on a message that named only the apex
+        # — which is the very name the certificate does not cover.
+        assert '*.wildcard.com' in reason, 'the reason does not name the certificate'
+        assert 'www.wildcard.com' in reason, 'the reason suggests no usable name'
+        assert 'deployment_host' in reason, 'the reason does not name the fix'
         mock_dns.assert_not_called()
 
 
