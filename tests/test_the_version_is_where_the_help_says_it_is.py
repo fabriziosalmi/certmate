@@ -45,7 +45,7 @@ def client(tmp_path_factory):
     """
     import secrets
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
 
     tmp_path = tmp_path_factory.mktemp('version')
     with pytest.MonkeyPatch.context() as patch:

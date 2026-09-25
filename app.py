@@ -13,7 +13,7 @@ from modules.core.structured_logging import (
     DEFAULT_LOG_BACKUP_COUNT,
     DEFAULT_LOG_MAX_BYTES,
 )
-from modules.core.factory import create_app, stop_background_work
+from modules.factory import create_app, stop_background_work
 
 # Configure structured JSON logging.
 # CERTMATE_LOG_FILE is opt-in (#431): the container logs to stdout, which is

@@ -66,7 +66,7 @@ def url_map():
 
     Same anchoring trick as tests/test_advertised_endpoints_exist.py:
     `setup_directories()` creates data/, certificates/ and logs/ relative to
-    `modules.core.factory.__file__`, so a test that only wants to read routes
+    `modules.factory.__file__`, so a test that only wants to read routes
     would otherwise write into the working tree.
     """
     import tempfile
@@ -81,8 +81,8 @@ def url_map():
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
         patch.setenv('API_BEARER_TOKEN', secrets.token_urlsafe(32))
-        from modules.core.factory import create_app
-        patch.setattr('modules.core.factory.__file__', str(anchor))
+        from modules.factory import create_app
+        patch.setattr('modules.factory.__file__', str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
     return sorted({_normalise(str(rule)) for rule in app.url_map.iter_rules()})

@@ -288,7 +288,7 @@ def instance(tmp_path_factory):
         patch.setenv('TESTING', 'true')
         patch.setenv('API_BEARER_TOKEN', token)
         os.environ['API_BEARER_TOKEN'] = token
-        from modules.core.factory import create_app
+        from modules.factory import create_app
         app, container = create_app()
         yield app, container, token
 

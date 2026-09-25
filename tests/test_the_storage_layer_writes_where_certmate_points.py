@@ -172,7 +172,7 @@ def test_the_app_wires_its_certificate_directory_through(tmp_path, monkeypatch):
     monkeypatch.setenv('TESTING', 'true')
     monkeypatch.delenv('API_BEARER_TOKEN', raising=False)
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     _, container = create_app()
 
     storage_dir = pathlib.Path(container.managers['storage'].get_backend().cert_dir)

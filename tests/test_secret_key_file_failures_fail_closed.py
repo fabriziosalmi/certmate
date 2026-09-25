@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from modules.core.factory import (
+from modules.factory import (
     SecretKeyUnreadableError, _secret_key_from_env_or_generate,
 )
 
@@ -175,7 +175,7 @@ def test_create_app_propagates_the_refusal(tmp_path, monkeypatch):
     """The resolver raising is worth nothing if create_app swallows it. app.py
     catches whatever create_app raises and exits 1, so what matters is that
     the exception gets out."""
-    from modules.core.factory import create_app
+    from modules.factory import create_app
 
     root = tmp_path / 'certmate'
     module_dir = root / 'modules' / 'core'
@@ -187,7 +187,7 @@ def test_create_app_propagates_the_refusal(tmp_path, monkeypatch):
         if source.is_dir():
             (root / shared).symlink_to(source)
 
-    monkeypatch.setattr('modules.core.factory.__file__', str(anchor))
+    monkeypatch.setattr('modules.factory.__file__', str(anchor))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('SECRET_KEY_FILE', str(tmp_path / 'never-mounted'))
 

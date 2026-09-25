@@ -106,12 +106,12 @@ def test_the_login_cookie_expires_when_the_session_does(
     module_dir = project_root / 'modules' / 'core'
     module_dir.mkdir(parents=True)
     (module_dir / 'factory.py').write_text('# test path anchor\n')
-    monkeypatch.setattr('modules.core.factory.__file__',
+    monkeypatch.setattr('modules.factory.__file__',
                         str(module_dir / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     app, container = create_app()
     assert Path(container.cert_dir).resolve().is_relative_to(tmp_path)
 

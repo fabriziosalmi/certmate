@@ -151,7 +151,7 @@ def test_there_is_a_route_that_serves_the_ca():
     """The comments in private_ca.py said there was. There was not."""
     # Read from the repo, not from `factory.__file__`: the suite has bitten
     # this project before with a module path that is not the source file.
-    source = (REPO / 'modules' / 'core' / 'factory.py').read_text(encoding='utf-8')
+    source = (REPO / 'modules' / 'factory.py').read_text(encoding='utf-8')
 
     assert "'ClientCertificateAuthorityCert'], '/ca')" in source
 

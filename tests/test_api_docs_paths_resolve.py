@@ -59,8 +59,8 @@ def url_map(tmp_path_factory):
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("TESTING", "true")
         patch.setenv("FLASK_ENV", "testing")
-        from modules.core.factory import create_app
-        patch.setattr("modules.core.factory.__file__", str(anchor))
+        from modules.factory import create_app
+        patch.setattr("modules.factory.__file__", str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
     # Methods are UNIONED across every rule with the same path, never taken

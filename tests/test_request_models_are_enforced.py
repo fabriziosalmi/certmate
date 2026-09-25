@@ -54,7 +54,7 @@ def _enum_of(field_name):
 # --- validation is actually on ------------------------------------------
 
 def test_validation_is_enabled():
-    source = (REPO / 'modules' / 'core' / 'factory.py').read_text()
+    source = (REPO / 'modules' / 'factory.py').read_text()
     assert "app.config['RESTX_VALIDATE'] = True" in source, (
         'the request models are published and unenforced again: a caller '
         'reading the Swagger document is told about a boundary that does not '
@@ -134,9 +134,9 @@ def client():
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
-        patch.setattr('modules.core.factory.__file__', str(anchor))
+        patch.setattr('modules.factory.__file__', str(anchor))
         os.environ.setdefault('FLASK_ENV', 'testing')
-        from modules.core.factory import create_app
+        from modules.factory import create_app
         app, _ = create_app()
     return app.test_client()
 

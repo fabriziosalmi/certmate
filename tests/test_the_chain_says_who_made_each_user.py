@@ -58,7 +58,7 @@ def instance(tmp_path, monkeypatch):
     monkeypatch.setenv('TESTING', 'true')
     monkeypatch.delenv('API_BEARER_TOKEN', raising=False)
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     app, container = create_app()
     assert container.managers['auth'].is_setup_mode(), (
         'the window under test does not exist on this instance')

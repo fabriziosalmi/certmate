@@ -16,4 +16,4 @@ deviations: []                  # MUSTs are NEVER waivable (AG-GOV-01)
 #   AG-CSP-02 (HIGH) — script-src carries 'unsafe-eval' + 'unsafe-inline' (Alpine.js v3).
 #   Surface is non-conformant at Bronze until fixed.
 #   fix:    @alpinejs/csp build + nonce inline scripts -> drop both tokens
-#   issue:  #314   owner: fabrizio   target: 2026-09-30   evidence: modules/core/factory.py:823-851
+#   issue:  #314   owner: fabrizio   target: 2026-09-30   evidence: modules/factory.py:1696

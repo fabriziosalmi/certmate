@@ -212,7 +212,7 @@ def app_client():
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
-        patch.setattr('modules.core.factory.__file__', str(anchor))
-        from modules.core.factory import create_app
+        patch.setattr('modules.factory.__file__', str(anchor))
+        from modules.factory import create_app
         app, _ = create_app()
     return app.test_client()

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from modules.core import factory
+from modules import factory
 
 pytestmark = [pytest.mark.unit]
 

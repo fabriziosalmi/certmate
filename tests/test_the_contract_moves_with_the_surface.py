@@ -63,8 +63,8 @@ def current_surface():
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
         patch.setenv('API_BEARER_TOKEN', secrets.token_urlsafe(32))
-        from modules.core.factory import create_app
-        patch.setattr('modules.core.factory.__file__', str(anchor))
+        from modules.factory import create_app
+        patch.setattr('modules.factory.__file__', str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
 

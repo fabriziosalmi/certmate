@@ -206,11 +206,11 @@ def test_an_injected_lookup_still_wins_over_the_setting(monkeypatch, tmp_path):
 
 @pytest.fixture
 def real_app(tmp_path, monkeypatch):
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     root = tmp_path / 'certmate' / 'modules' / 'core'
     root.mkdir(parents=True)
     (root / 'factory.py').write_text('# anchor\n')
-    monkeypatch.setattr('modules.core.factory.__file__', str(root / 'factory.py'))
+    monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
     return create_app()

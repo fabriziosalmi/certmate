@@ -1286,11 +1286,11 @@ def test_a_name_that_could_split_a_query_never_becomes_a_tracked_name(tmp_path):
 
 @pytest.fixture
 def real_app(tmp_path, monkeypatch):
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     root = tmp_path / 'certmate' / 'modules' / 'core'
     root.mkdir(parents=True)
     (root / 'factory.py').write_text('# anchor\n')
-    monkeypatch.setattr('modules.core.factory.__file__', str(root / 'factory.py'))
+    monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
     return create_app()
@@ -1329,12 +1329,12 @@ def test_the_health_endpoint_filters_by_scope(tmp_path, monkeypatch):
     """
     import secrets
 
-    from modules.core.factory import create_app
+    from modules.factory import create_app
     admin_token = secrets.token_urlsafe(32)
     root = tmp_path / 'certmate' / 'modules' / 'core'
     root.mkdir(parents=True)
     (root / 'factory.py').write_text('# anchor\n')
-    monkeypatch.setattr('modules.core.factory.__file__', str(root / 'factory.py'))
+    monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
     monkeypatch.setenv('API_BEARER_TOKEN', admin_token)

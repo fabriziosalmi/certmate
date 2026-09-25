@@ -47,7 +47,7 @@ def client(tmp_path_factory):
         patch.setenv('TESTING', 'true')
         patch.setenv('API_BEARER_TOKEN', TOKEN)
         os.environ['API_BEARER_TOKEN'] = TOKEN
-        from modules.core.factory import create_app
+        from modules.factory import create_app
         application, _ = create_app()
         yield application.test_client()
 

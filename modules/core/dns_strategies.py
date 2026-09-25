@@ -680,7 +680,7 @@ def acme_webroot_dir() -> Path:
     writes the token), the challenge-directory pre-creation in
     ``CertificateManager``, and the Flask route that serves
     ``/.well-known/acme-challenge/<token>`` (see ``modules/web/routes.py`` and
-    ``modules/core/factory.py``). Override the location with the
+    ``modules/factory.py``). Override the location with the
     ``ACME_CHALLENGES_DIR`` environment variable; the default keeps the
     historical ``<cwd>/data/acme-challenges`` path.
     """

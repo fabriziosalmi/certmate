@@ -28,7 +28,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from flask import Flask, request
 
-from modules.core import factory
+from modules import factory
 from modules.core.certificates import CertificateManager
 from modules.core.constants import CERTIFICATE_FILES
 from modules.core.deployer import DeployManager

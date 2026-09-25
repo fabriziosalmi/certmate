@@ -136,7 +136,7 @@ def test_the_global_body_limit_is_left_alone():
     would break it."""
     import pathlib
     source = (pathlib.Path(__file__).resolve().parent.parent / 'modules'
-              / 'core' / 'factory.py').read_text()
+              / 'factory.py').read_text()
     assert "app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024" in source, (
         'the global body limit changed; the backup upload needs it'
     )

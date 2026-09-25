@@ -16,7 +16,7 @@ import pytest
 from flask import Flask
 from prometheus_client import REGISTRY
 
-from modules.core import factory
+from modules import factory
 from modules.core.certificates import CertificateManager
 
 pytestmark = [pytest.mark.unit]

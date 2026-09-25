@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from modules.core.factory import AppContainer, setup_directories
+from modules.factory import AppContainer, setup_directories
 
 
 pytestmark = [pytest.mark.unit]
@@ -10,12 +10,15 @@ pytestmark = [pytest.mark.unit]
 
 def test_setup_directories_keeps_project_data_dir(tmp_path, monkeypatch):
     project_root = tmp_path / "certmate"
-    module_dir = project_root / "modules" / "core"
+    # `modules/factory.py`, mirroring where the composition root lives since
+    # #668. The derivation is two levels up from that file, so an anchor at
+    # the old `modules/core/` depth puts every directory one level too deep.
+    module_dir = project_root / "modules"
     module_dir.mkdir(parents=True)
     fake_factory_file = module_dir / "factory.py"
     fake_factory_file.write_text("# test path anchor\n")
 
-    monkeypatch.setattr("modules.core.factory.__file__", str(fake_factory_file))
+    monkeypatch.setattr("modules.factory.__file__", str(fake_factory_file))
 
     container = AppContainer()
     setup_directories(container)

@@ -113,7 +113,7 @@ def routes(tmp_path_factory):
     """The application's route table, keyed by normalised path.
 
     Built under a temporary root: `setup_directories()` creates state relative
-    to `modules/core/factory.__file__`, and a test that only reads the route
+    to `modules/factory.__file__`, and a test that only reads the route
     table must not write into the checkout (#702).
     """
     root = tmp_path_factory.mktemp('sdkroutes') / 'certmate'
@@ -125,8 +125,8 @@ def routes(tmp_path_factory):
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
-        from modules.core.factory import create_app
-        patch.setattr('modules.core.factory.__file__', str(anchor))
+        from modules.factory import create_app
+        patch.setattr('modules.factory.__file__', str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
 

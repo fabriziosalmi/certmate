@@ -10,7 +10,7 @@ Covers the three-step resolution order:
 
 import pytest
 
-from modules.core.factory import (
+from modules.factory import (
     SecretKeyUnreadableError, _secret_key_from_env_or_generate,
 )
 

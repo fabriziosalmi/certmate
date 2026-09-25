@@ -189,7 +189,7 @@ def test_run_discovery_allow_private_propagates(settings_manager, inventory):
 # --------------------------------------------------------------------------- #
 
 def test_discovery_job_registered_in_factory():
-    from modules.core import factory
+    from modules import factory
     # The picklable job wrapper exists (APScheduler requires a module-level fn).
     assert hasattr(factory, '_certificate_discovery_job')
     assert callable(factory._certificate_discovery_job)

@@ -24,7 +24,7 @@ def test_the_route_is_registered_and_does_not_shadow_an_identifier():
     certificate identifier by the `/<string:identifier>` rule above it."""
     import pathlib
     factory = (pathlib.Path(__file__).resolve().parent.parent
-               / 'modules' / 'core' / 'factory.py').read_text(encoding='utf-8')
+               / 'modules' / 'factory.py').read_text(encoding='utf-8')
 
     assert "'ClientCertificateAuthorityReset'], '/ca/reset'" in factory
     assert '/' in '/ca/reset'.strip('/'), 'a single-segment path would collide'

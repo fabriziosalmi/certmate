@@ -59,7 +59,7 @@ def _isolate_runtime_dirs(tmp_path_factory):
     """Keep `create_app()` out of the checkout's real runtime directories.
 
     `setup_directories` resolves cert/data/backup/log paths from
-    `modules.core.factory.__file__` — three levels up — and honours no
+    `modules.factory.__file__` — two levels up — and honours no
     override. So any in-process `create_app()` reads and writes the working
     tree's own `data/`, `certificates/`, `backups/` and `logs/`, whatever
     tmp_path the test set up. Thirteen test files do that, and a suite run was
@@ -86,7 +86,12 @@ def _isolate_runtime_dirs(tmp_path_factory):
     # assumption they were all container-backed. They are not — several run
     # in-process, and they were the ones still writing to the checkout.
     root = tmp_path_factory.mktemp("runtime")
-    module_dir = root / "modules" / "core"
+    # `modules/factory.py`, mirroring where the composition root actually
+    # lives. It was `modules/core/factory.py` until #668 moved it one level
+    # up, and the anchor has to move with it: the resolution is two levels
+    # up from this file, so a stale `modules/core/` here put every state
+    # directory one level too deep — inside a fake `modules/`, not beside it.
+    module_dir = root / "modules"
     module_dir.mkdir(parents=True)
     anchor = module_dir / "factory.py"
     anchor.write_text("# test path anchor\n", encoding="utf-8")
@@ -101,7 +106,7 @@ def _isolate_runtime_dirs(tmp_path_factory):
     # built against the real tree by the time the anchor was applied. Measured,
     # not assumed — the two fixtures were made to print their order.
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr("modules.core.factory.__file__", str(anchor),
+        patch.setattr("modules.factory.__file__", str(anchor),
                       raising=False)
         # The four directories are now relocatable with CERTMATE_*_DIR, which
         # takes precedence over the anchor above. Unset them for the whole

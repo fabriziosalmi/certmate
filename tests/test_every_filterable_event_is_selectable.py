@@ -8,7 +8,7 @@ so.
 
 The backend already holds both halves of the answer:
 
-* `modules/core/factory.py::_EVENT_TITLES` is effectively the set of notifiable
+* `modules/factory.py::_EVENT_TITLES` is effectively the set of notifiable
   events. Its own comment says why: an event without a title makes
   `build_notification_message` return None, "and the notifier was never
   reached, so the event nobody could silence was silent".
@@ -30,7 +30,7 @@ import re
 
 import pytest
 
-from modules.core.factory import _EVENT_TITLES
+from modules.factory import _EVENT_TITLES
 from modules.core.notifier import _ALWAYS_NOTIFY_EVENTS
 
 pytestmark = [pytest.mark.unit]
