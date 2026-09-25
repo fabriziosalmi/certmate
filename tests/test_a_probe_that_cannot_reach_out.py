@@ -94,7 +94,12 @@ def _self_signed(common_name, tmp_path):
 class _TLSBackend:
     """A TLS server on 127.0.0.1 that completes a handshake and hangs up."""
 
-    def __init__(self, certfile, keyfile):
+    def __init__(self, certfile, keyfile, refuse_starttls=False):
+        self.refuse_starttls = refuse_starttls
+        # What the sessions actually did. A fake that fails inside its own
+        # thread is otherwise invisible: the test waits out the probe's read
+        # timeout and reports a timeout, which says nothing about why.
+        self.sessions = []
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(('127.0.0.1', 0))
@@ -593,7 +598,12 @@ class _SMTPBackend:
     sequence: banner, EHLO, STARTTLS, upgrade.
     """
 
-    def __init__(self, certfile, keyfile):
+    def __init__(self, certfile, keyfile, refuse_starttls=False):
+        self.refuse_starttls = refuse_starttls
+        # What the sessions actually did. A fake that fails inside its own
+        # thread is otherwise invisible: the test waits out the probe's read
+        # timeout and reports a timeout, which says nothing about why.
+        self.sessions = []
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(('127.0.0.1', 0))
@@ -619,6 +629,14 @@ class _SMTPBackend:
             stream.write(b'220 smtp.example.test ESMTP\r\n')
             stream.flush()
             stream.readline()                       # EHLO
+            if self.refuse_starttls:
+                stream.write(b'250 smtp.example.test\r\n')
+                stream.flush()
+                stream.readline()                   # STARTTLS
+                stream.write(b'454 TLS not available\r\n')
+                stream.flush()
+                self.sessions.append('refused')
+                return
             stream.write(b'250-smtp.example.test\r\n250 STARTTLS\r\n')
             stream.flush()
             stream.readline()                       # STARTTLS
@@ -626,8 +644,14 @@ class _SMTPBackend:
             stream.flush()
             with self._ctx.wrap_socket(conn, server_side=True) as tls:
                 tls.recv(16)
-        except (OSError, ssl.SSLError, ValueError):
-            pass
+            self.sessions.append('upgraded')
+        except (OSError, ssl.SSLError, ValueError) as error:
+            self.sessions.append(f'{type(error).__name__}: {error}')
+        finally:
+            try:
+                conn.close()
+            except OSError:
+                pass
 
     def close(self):
         self._running = False
@@ -680,36 +704,23 @@ def test_the_smtp_leg_tunnels_too(tmp_path, monkeypatch):
         relay.close()
         smtp.close()
 
-
 def test_an_smtp_server_that_refuses_starttls_is_not_reachable(tmp_path, monkeypatch):
     """CONTROL on the leg above: a server that answers the upgrade with a
-    refusal must not be reported as having served a certificate."""
+    refusal must not be reported as having served a certificate.
+
+    This used to hand-roll its own listener, with a SINGLE `accept()` in a
+    daemon thread whose failures were swallowed, and it failed once in a
+    release gate: a 2.5s read timeout — the probe spends half its budget on
+    each read — with nothing to say why. A one-shot accept is consumed by
+    whatever connects first, and a helper that fails in silence turns that
+    into a timeout instead of an explanation. It uses the same backend as the
+    test above now, which serves in a loop and records what each session did.
+    """
     from modules.api.tls_probe import _probe_tls_certificate
 
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.bind(('127.0.0.1', 0))
-    listener.listen(2)
-    port = listener.getsockname()[1]
-
-    def refuse():
-        try:
-            conn, _ = listener.accept()
-            stream = conn.makefile('rwb')
-            stream.write(b'220 smtp.example.test ESMTP\r\n')
-            stream.flush()
-            stream.readline()
-            stream.write(b'250 smtp.example.test\r\n')
-            stream.flush()
-            stream.readline()
-            stream.write(b'454 TLS not available\r\n')
-            stream.flush()
-            time.sleep(0.2)
-            conn.close()
-        except OSError:
-            pass
-
-    threading.Thread(target=refuse, daemon=True).start()
-    relay = _ConnectProxy(port)
+    _cert, certfile, keyfile = _self_signed('smtp.example.test', tmp_path)
+    smtp = _SMTPBackend(certfile, keyfile, refuse_starttls=True)
+    relay = _ConnectProxy(smtp.port)
     try:
         monkeypatch.delenv('no_proxy', raising=False)
         monkeypatch.setenv('https_proxy', relay.url)
@@ -719,6 +730,9 @@ def test_an_smtp_server_that_refuses_starttls_is_not_reachable(tmp_path, monkeyp
                                    protocol='smtp-starttls', timeout=5)
 
         assert 'STARTTLS' in str(raised.value)
+        # The refusal must have come from the server, not from a helper that
+        # died before answering: that is the difference the timeout hid.
+        assert smtp.sessions == ['refused'], smtp.sessions
     finally:
         relay.close()
-        listener.close()
+        smtp.close()
