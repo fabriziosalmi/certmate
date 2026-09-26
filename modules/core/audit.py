@@ -1064,7 +1064,8 @@ class AuditLogger:
             # different answers, and only one of them is safe to act on.
             return {'entries': [], 'complete': False, 'error': str(e)}
 
-        return {'entries': found[-limit:], 'complete': complete}
+        # Newest first, like `get_recent_entries` — see the note there.
+        return {'entries': found[-limit:][::-1], 'complete': complete}
 
     @staticmethod
     def _parse_entries(raw: bytes, partial_first: bool) -> list:
@@ -1152,7 +1153,14 @@ class AuditLogger:
             entries = self._parse_entries(
                 b''.join(reversed(blocks)), partial_first=remaining > 0)
 
-            return entries[-limit:]
+            # `[-limit:]` picks the right WINDOW — the most recent entries,
+            # not the first ones — and `[::-1]` puts the newest at the front,
+            # which is what both this method's docstring and the one on
+            # `search_entries` have always claimed. The reversal was missing,
+            # so /activity opened on the oldest thing that ever happened: on a
+            # seventeen-day log the first six rows were from seventeen days
+            # ago (#941).
+            return entries[-limit:][::-1]
 
         except Exception as e:
             logger.error(f"Error reading audit logs: {e}")

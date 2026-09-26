@@ -124,7 +124,8 @@ def test_the_newest_entries_are_the_ones_returned(log):
 
     entries = reader.get_recent_entries(limit=5)
 
-    assert [entry['n'] for entry in entries] == [19995, 19996, 19997, 19998, 19999]
+    # Same window as before #941 — the last five — read newest first.
+    assert [entry['n'] for entry in entries] == [19999, 19998, 19997, 19996, 19995]
 
 
 def test_a_partial_first_line_is_still_dropped(log):
@@ -198,7 +199,7 @@ def test_a_short_log_returns_everything_it_has(tmp_path):
     reader = AuditLogger.__new__(AuditLogger)
     reader.audit_log_file = path
 
-    assert [e['n'] for e in reader.get_recent_entries(limit=100)] == [0, 1, 2]
+    assert [e['n'] for e in reader.get_recent_entries(limit=100)] == [2, 1, 0]
 
 
 @pytest.mark.parametrize('limit', [0, -1])

@@ -15,7 +15,7 @@ def _audit_line(ts: str, payload: dict) -> str:
     return f"{ts} - certmate.audit - INFO - {json.dumps(payload)}\n"
 
 
-def test_get_recent_entries_uses_tail_and_preserves_order(tmp_path):
+def test_get_recent_entries_reads_the_tail_and_returns_it_newest_first(tmp_path):
     audit = AuditLogger(tmp_path)
     try:
         lines = []
@@ -38,7 +38,9 @@ def test_get_recent_entries_uses_tail_and_preserves_order(tmp_path):
         audit.audit_log_file.write_text("".join(lines))
 
         entries = audit.get_recent_entries(limit=3)
-        assert [e["resource_id"] for e in entries] == ["domain-1998", "domain-1999", "domain-2000"]
+        # The tail seek picks the last three; #941 made the direction within
+        # them newest-first, which is what the method has always documented.
+        assert [e["resource_id"] for e in entries] == ["domain-2000", "domain-1999", "domain-1998"]
     finally:
         audit.audit_logger.removeHandler(audit.file_handler)
         audit.file_handler.close()
