@@ -1397,8 +1397,25 @@ how, not the list of accounts. Credential values are masked.
 **Endpoint**: `GET /api/notifications/config` — admin
 **Endpoint**: `POST /api/notifications/config` — admin
 
-Reads and replaces the whole notifications block. POST replaces rather than
-merges.
+Reads and writes the notifications block. POST **deep-merges** against what is
+stored, so a body carrying only `{"enabled": false}` turns notifications off and
+leaves the channels alone — measured: three configured webhooks and the SMTP
+block survive it. The `channels.webhooks` **list** is the exception: a body that
+carries one is replaced by it wholesale, because a list has no key to merge on.
+
+Credentials are masked as `********` on read and restored from disk on write
+when the sentinel comes back unchanged, so the form can be saved without
+re-typing them. Since API contract **2.20** each webhook also carries
+`url_hint`: the **origin** of its saved URL — `https://hooks.slack.com/…`,
+`https://gotify.example.com:8443/…?…` — with no path or query content and any
+userinfo dropped, so an operator can tell which receiver a webhook points at
+without being handed the credential. It is derived on read and ignored on write;
+sending it back changes nothing. `GET /api/settings`, which the viewer role may
+read, carries no `url_hint` and masks the URL whole.
+
+Secrets are matched to their stored values by `(type, name)`. Changing either of
+those in the same save that leaves a secret masked drops it — see
+[#950](https://github.com/fabriziosalmi/certmate/issues/950).
 
 #### Send a test message
 

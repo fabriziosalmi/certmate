@@ -296,6 +296,18 @@ METADATA_SCHEMA_VERSION = 1
 #                                   changed", and a reader should be able to
 #                                   disagree having seen the reasoning.
 #
+#   GET /api/notifications/config   a `url_hint` field on each webhook: the
+#                                   ORIGIN of its saved URL, which the response
+#                                   otherwise masks whole (#944). The settings
+#                                   page showed a name and `********`, so an
+#                                   operator could not tell which receiver a
+#                                   webhook pointed at. MINOR: a new field on a
+#                                   response, which a caller can ignore. Derived
+#                                   on read and stripped on save, so it is not
+#                                   a new request field. Recorded here because
+#                                   it shipped in 2.19 without moving the
+#                                   number — see the note under the rule.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -305,7 +317,17 @@ METADATA_SCHEMA_VERSION = 1
 # Deprecating something does NOT bump either — that is the point of deprecating
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
-API_CONTRACT_VERSION = '2.19'
+#
+# WHAT CHECKS THIS, AND WHAT DOES NOT. tests/test_the_contract_moves_with_the_
+# surface.py compares a snapshot of the ROUTES against the tree, so it catches
+# an endpoint appearing or going away and nothing else. The rule above has six
+# clauses and that gate sees two. A new field on a response, a field removed or
+# retyped, a request field becoming required, a status code changing for an
+# existing condition: all of those can ship with this number unmoved, and one
+# already did — `url_hint` above went out in 2.19. If you are changing what a
+# response CONTAINS rather than which responses exist, this comment is the only
+# thing that will stop you, so read the rule and move the number yourself.
+API_CONTRACT_VERSION = '2.20'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
