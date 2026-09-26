@@ -5,6 +5,7 @@ Handles loading/saving settings, migrations, and configuration management
 
 import os
 import re
+import secrets
 import threading
 import logging
 from collections import deque
@@ -374,29 +375,62 @@ def _restore_masked_list_secrets(old_list, new_list):
     def _identity(d):
         return (d.get('type'), d.get('name'))
 
+    def _stable_id(d):
+        value = d.get('id')
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
     def _field_is_secret(key):
         return _is_secret_key(key) or key in _WEBHOOK_LIST_SECRET_FIELDS
 
-    by_identity = {}
-    for old in old_list:
-        if isinstance(old, dict):
-            by_identity.setdefault(_identity(old), deque()).append(old)
-    # An identity shared by more than one prior entry is AMBIGUOUS: with no
-    # stable per-webhook id, list order is the only thing left to match on, and
-    # a reorder or a deletion would then restore the wrong entry's secret — the
-    # same cross-endpoint credential leak (type,name) was chosen to avoid. So a
-    # masked secret whose identity is ambiguous is dropped (the operator
-    # re-enters it), never guessed by position.
-    ambiguous = {ident for ident, q in by_identity.items() if len(q) > 1}
+    priors = [old for old in old_list if isinstance(old, dict)]
+    spent = [False] * len(priors)
+    # Two indexes over the same entries. `id` is the one an operator cannot
+    # edit; (type, name) is the fallback for entries written before ids
+    # existed, and for a client that sends back a shape it did not receive.
+    by_id, by_name = {}, {}
+    for position, old in enumerate(priors):
+        stable = _stable_id(old)
+        if stable is not None:
+            by_id.setdefault(stable, deque()).append(position)
+        by_name.setdefault(_identity(old), deque()).append(position)
+    # An identity shared by more than one prior entry is AMBIGUOUS: list order
+    # is the only thing left to match on, and a reorder or a deletion would then
+    # restore the wrong entry's secret — the cross-endpoint credential leak
+    # (type,name) was itself chosen to avoid. So a masked secret whose identity
+    # is ambiguous is dropped (the operator re-enters it), never guessed by
+    # position. Duplicate ids should not occur, and are treated the same way.
+    ambiguous_ids = {key for key, q in by_id.items() if len(q) > 1}
+    ambiguous_names = {key for key, q in by_name.items() if len(q) > 1}
+
+    def _claim(index, key):
+        """The first prior under `key` that no other entry has taken."""
+        queue = index.get(key)
+        while queue:
+            position = queue.popleft()
+            if not spent[position]:
+                spent[position] = True
+                return priors[position]
+        return {}
+
+    def _prior_for(item):
+        """An `id` is a positive claim about WHICH entry this is.
+
+        When the submission carries one, it is matched on that alone: an id
+        naming no stored entry means the entry is new or was deleted, and
+        falling back to the name would then hand it whatever secret happens to
+        share that name. Without an id we are in the pre-migration world and
+        (type, name) is all there is.
+        """
+        stable = _stable_id(item)
+        if stable is not None:
+            return {} if stable in ambiguous_ids else _claim(by_id, stable)
+        name = _identity(item)
+        return {} if name in ambiguous_names else _claim(by_name, name)
 
     for item in new_list:
         if not isinstance(item, dict):
             continue
-        ident = _identity(item)
-        queue = by_identity.get(ident)
-        # Unique identity match, or nothing — never a positional guess, and
-        # never an ambiguous duplicate (see above and the docstring).
-        prior = queue.popleft() if (queue and ident not in ambiguous) else {}
+        prior = _prior_for(item)
         for key in list(item.keys()):
             if _field_is_secret(key) and item.get(key) == SECRET_MASK_SENTINEL:
                 if key in prior:
@@ -418,6 +452,63 @@ def _restore_masked_list_secrets(old_list, new_list):
                         else:
                             nested.pop(sub, None)
     return new_list
+
+
+#: Where a list entry's identity is editable AND its secrets are masked on the
+#: way out, so the save has to find the entry again to put them back.
+#:
+#: Only webhooks qualify today. `deploy_hooks.targets` has the same shape — a
+#: list of dicts keyed by (type, name), holding ssh_key and api_token inside
+#: `config` — and the same hazard when `_restore_masked_list_secrets` is handed
+#: one, which is easy to demonstrate by calling the function directly. It is
+#: nevertheless NOT listed here, because neither route that writes targets can
+#: reach that path: `/api/deploy/config` returns them unmasked and saves what it
+#: is given, and the generic settings POST refuses `deploy_hooks` outright —
+#: it is in SETTINGS_REJECT_KEYS, with tests naming it
+#: (tests/test_sprint1_security.py). Adding ids there would be a field written
+#: against a hazard a tested gate already prevents. If that gate ever opens,
+#: this tuple is where targets belong.
+_STABLE_ID_LISTS = (
+    ('notifications', 'channels', 'webhooks'),
+)
+
+
+def assign_stable_entry_ids(settings):
+    """Give every entry in _STABLE_ID_LISTS an `id` it keeps for life.
+
+    `_restore_masked_list_secrets` matched a submission to its stored entry by
+    `(type, name)` — the two fields the operator edits. Renaming a webhook, or
+    changing its type, therefore meant the save could not find the entry the
+    masked secrets belonged to, so it dropped them: the webhook stayed
+    `enabled`, lost its URL and every custom header, the save answered 200, and
+    nothing on screen said so, because the URL is never displayed (#950).
+
+    The id is random rather than derived: anything derived from a field is a
+    field, and a field can be edited. It is assigned here, at load, rather than
+    at save, so the entries already on disk have ids BEFORE anyone can rename
+    one — assigning at save would leave exactly one unprotected save, the first
+    after upgrading, and that is the save an operator makes to fix a name.
+
+    Returns True when it changed something, so the caller writes it back.
+    """
+    changed = False
+    for path in _STABLE_ID_LISTS:
+        node = settings
+        for key in path:
+            node = node.get(key) if isinstance(node, dict) else None
+            if node is None:
+                break
+        if not isinstance(node, list):
+            continue
+        for entry in node:
+            if not isinstance(entry, dict):
+                continue
+            existing = entry.get('id')
+            if isinstance(existing, str) and existing.strip():
+                continue
+            entry['id'] = secrets.token_hex(8)
+            changed = True
+    return changed
 
 
 def _restore_masked_list_secrets_deep(old_subtree, new_subtree):
@@ -1188,6 +1279,12 @@ class SettingsManager:
                 settings = self.migrate_dns_providers_to_multi_account(settings)
                 if settings.get('dns_providers', {}) != dns_providers_before:
                     was_migrated = True
+
+                # Before anyone can rename a webhook or a deploy target, give
+                # every one of them an id it keeps for life (#950). Written
+                # without a branch of its own: load_settings sits at a
+                # complexity ceiling that only comes down.
+                was_migrated = assign_stable_entry_ids(settings) or was_migrated
 
                 # Ensure certificate_storage exists with default configuration
                 if 'certificate_storage' not in settings:
