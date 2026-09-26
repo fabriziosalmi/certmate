@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.37.0 (what a walk through it turned up)
+
+[Read the notes](docs/releases/v2.37.0.md)
+
 ## v2.36.0 (the reasons, checked)
 
 [Read the notes](docs/releases/v2.36.0.md)
