@@ -114,7 +114,7 @@ Full tool reference, attribution model and safety notes: **[docs/mcp.md](docs/mc
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
 
 - **Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry, with deploy hooks to reload services
-- **Multi-Cloud Support** - Works with two dozen+ DNS providers (Cloudflare, AWS, Azure, GCP, Akamai Edge DNS, Hetzner, Porkbun, GoDaddy, and more — see [docs/dns-providers.md](docs/dns-providers.md) for the full list)
+- **Multi-Cloud Support** - Cloudflare, AWS, Azure, GCP, Akamai Edge DNS, Hetzner, Porkbun, GoDaddy and the rest — [docs/dns-providers.md](docs/dns-providers.md) has the full list
 - **Enterprise-Ready** - RBAC, scoped API keys, Docker, Kubernetes, REST API, and monitoring built-in
 - **Simple Integration** - One-URL certificate downloads for easy automation
 - **Security-First** - Role-based access control, scoped API keys, audit logging, HMAC-signed webhooks
@@ -342,7 +342,7 @@ API_BEARER_TOKEN=your_super_secure_api_token_here_change_this
 #
 # Cloudflare is the only provider configured from the environment: this token
 # bootstraps the default Cloudflare account on first run. Route53, Azure,
-# Google Cloud DNS, PowerDNS and the other 25+ providers are configured in the
+# Google Cloud DNS, PowerDNS and every other provider are configured in the
 # web UI (Settings -> DNS Providers) or through the API — CertMate reads no
 # environment variable for any of them, so setting AWS_ACCESS_KEY_ID or
 # AZURE_CLIENT_ID here does nothing at all.
@@ -2421,24 +2421,6 @@ python app.py --debug --log-level DEBUG
 FLASK_ENV=development
 ```
 
-### What's New in v2.0.0
-
-CertMate 2.0 is a major release that adds enterprise-grade access control, a notification system, post-issuance automation, and a modernized UI.
-
-**Highlights:**
-- **Role-Based Access Control** - Three-tier RBAC (viewer / operator / admin) with per-user roles
-- **Scoped API Key Management** - Create, list, revoke API keys with role scope and optional expiry
-- **Notification System** - Email (SMTP), Slack, Discord, and webhook channels with HMAC signatures
-- **Deploy Hooks** - Post-issuance shell commands with environment variables, dry-run testing, and execution history
-- **Weekly Digest** - Scheduled email summary of certificate health and upcoming renewals
-- **Setup Wizard** - Guided first-run flow for DNS, CA, and authentication configuration
-- **Command Palette** - Cmd+K / Ctrl+K quick search and navigation
-- **Keyboard Shortcuts** - Power-user shortcuts (`?` help, `/` search, `g+h` home, `g+s` settings, etc.)
-- **Activity Timeline** - Chronological event log for all certificate and system operations
-- **SSE Real-Time Events** - Live push notifications on the dashboard
-- **Dark Mode Toggle** - System-aware theme switching
-- **Mobile Bottom Tab Bar** - Responsive navigation on small screens
-- **HTTP-01 Challenge Support** - Alternative to DNS-01 for simple setups
 
 ### Reporting Bugs
 
