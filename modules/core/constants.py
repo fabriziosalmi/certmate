@@ -308,6 +308,15 @@ METADATA_SCHEMA_VERSION = 1
 #                                   it shipped in 2.19 without moving the
 #                                   number — see the note under the rule.
 #
+#   GET /api/notifications/config   an `id` on each webhook, and the same field
+#                                   accepted on POST (#950). It is what a
+#                                   masked secret is matched back to on save,
+#                                   so renaming a webhook no longer drops its
+#                                   URL, token and headers. MINOR: a new field
+#                                   on a response and a new optional request
+#                                   field. A caller that ignores it keeps the
+#                                   old `(type, name)` matching, unchanged.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -327,7 +336,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.20'
+API_CONTRACT_VERSION = '2.21'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

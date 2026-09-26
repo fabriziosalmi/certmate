@@ -1413,9 +1413,16 @@ without being handed the credential. It is derived on read and ignored on write;
 sending it back changes nothing. `GET /api/settings`, which the viewer role may
 read, carries no `url_hint` and masks the URL whole.
 
-Secrets are matched to their stored values by `(type, name)`. Changing either of
-those in the same save that leaves a secret masked drops it — see
-[#950](https://github.com/fabriziosalmi/certmate/issues/950).
+Each webhook carries an `id`, assigned by CertMate and returned on every read.
+Since API contract **2.21** it is what a masked secret is matched back to on
+save, so renaming a webhook or changing its type keeps its URL, its token and
+its custom headers. Echo it back unchanged; a submission carrying an `id` that
+names no stored webhook is treated as a new one and inherits nothing. A webhook
+sent without an `id` still matches on `(type, name)`, which is what
+configurations written before 2.21 have, and what they had before.
+
+Existing configurations are given ids the first time CertMate loads them, so
+there is nothing to do on upgrade.
 
 #### Send a test message
 
