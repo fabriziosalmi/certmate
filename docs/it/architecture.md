@@ -24,13 +24,13 @@ Questo documento descrive l'architettura completa di CertMate — sia il sistema
 
 ## Architettura del sistema principale
 
-CertMate è un sistema modulare ed estensibile per la gestione di certificati SSL/TLS costruito con Python/Flask. Supporta molteplici provider CA, oltre due dozzine di provider DNS e backend di archiviazione intercambiabili.
+CertMate è un sistema modulare ed estensibile per la gestione di certificati SSL/TLS costruito con Python/Flask. Supporta molteplici provider CA, i provider DNS elencati in [Provider DNS](./dns-providers.md) e backend di archiviazione intercambiabili.
 
 **Informazioni principali:**
 - **Linguaggio**: Python 3.12 (Flask, Flask-RESTX)
 - **Archiviazione**: filesystem locale come impostazione predefinita + 5 backend remoti (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible)
 - **Provider CA**: Let's Encrypt, DigiCert ACME, CA privata
-- **Provider DNS**: oltre due dozzine supportati (Cloudflare, AWS Route53, Azure, Google e altri — vedere [Provider DNS](./dns-providers.md) per l'elenco completo)
+- **Provider DNS**: Cloudflare, AWS Route53, Azure, Google e altri — vedere [Provider DNS](./dns-providers.md) per l'elenco completo
 - **API**: REST con Swagger/OpenAPI tramite Flask-RESTX
 - **Tipi di certificati attuali**: TLS lato server (DV, OV, EV)
 

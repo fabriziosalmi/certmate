@@ -1,6 +1,6 @@
 # Documentation CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 5d329368f9d77176 -->
+<!-- CERTMATE-TRANSLATED-FROM a879b146f5b3fca4 -->
 
 Bienvenue dans la documentation de CertMate. Ce dossier contient des guides complets pour toutes les fonctionnalités.
 
@@ -58,7 +58,7 @@ Bienvenue dans la documentation de CertMate. Ce dossier contient des guides comp
 ## Aperçu des fonctionnalités
 
 ### Certificats serveur
-- **Plus de deux douzaines de fournisseurs DNS** pour les défis Let's Encrypt DNS-01 (voir [Fournisseurs DNS](./dns-providers.md) pour la liste complète)
+- **Tous les fournisseurs DNS pris en charge** pour les défis Let's Encrypt DNS-01 (voir [Fournisseurs DNS](./dns-providers.md) pour la liste complète)
 - **Plusieurs fournisseurs CA** : Let's Encrypt, DigiCert, CA privée
 - **Support multi-comptes** par fournisseur DNS
 - **Backends de stockage interchangeables** : Local, Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible
