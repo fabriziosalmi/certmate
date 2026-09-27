@@ -24,7 +24,7 @@ name: E2E (staging)
 #   set -a; . ./.env; set +a
 #   CERTMATE_E2E_CA_PROVIDER=letsencrypt_staging python -m pytest -v -m e2e \
 #     tests/test_health_ready_e2e.py tests/test_cert_lifecycle.py \
-#     tests/test_async_issuance_e2e.py
+#     tests/test_async_issuance_e2e.py tests/test_ari_staging_e2e.py
 #
 # To run it here on demand, dispatch this workflow with these repository secrets:
 #   CLOUDFLARE_API_TOKEN  - token with Zone:DNS:Edit on the test zone (required)
@@ -100,4 +100,5 @@ jobs:
         python -m pytest -v -m e2e \
           tests/test_health_ready_e2e.py \
           tests/test_cert_lifecycle.py \
-          tests/test_async_issuance_e2e.py
+          tests/test_async_issuance_e2e.py \
+          tests/test_ari_staging_e2e.py
