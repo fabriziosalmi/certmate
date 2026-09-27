@@ -152,7 +152,15 @@ rather than written by hand:
   "deployment_port": null,
   "deployment_protocol": null,
   "created_at": "2026-09-01T10:14:02Z",
-  "renewed_at": "2026-09-14T02:31:55Z"
+  "renewed_at": "2026-09-14T02:31:55Z",
+  "renewal_info": {
+    "status": "window",
+    "checked_at": "2026-09-27T02:00:04Z",
+    "window_start": "2026-11-02T17:18:36Z",
+    "window_end": "2026-11-04T12:29:25Z",
+    "renew_at": "2026-11-03T08:41:10Z",
+    "explanation_url": null
+  }
 }
 ```
 
@@ -196,6 +204,28 @@ does not force renewal.
 `missing` and `mismatched` force `needs_renewal`, because a certificate that
 cannot serve TLS has nothing to wait for. Restoring a share-safe backup
 produces certificates with no key, which is the case this exists for.
+
+##### When will it renew?
+
+`renewal_info` is what the CA said, per certificate, through ACME Renewal
+Information ([RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)) at the
+last renewal sweep. It is read from a record the sweep keeps beside the
+certificate, never fetched from the CA when you call this endpoint. It is
+`null` until a sweep has asked, and again right after a renewal until the next
+sweep asks about the new certificate.
+
+| `status` | meaning |
+| :--- | :--- |
+| `window` | The CA suggested a window. `renew_at` is the instant inside it at which the sweep renews this certificate, if the configured threshold has not already. |
+| `unsupported` | The CA publishes no `renewalInfo`. That does not change from one sweep to the next. |
+| `unavailable` | The CA publishes it, and the last sweep got no usable answer. If this lasts, look at the CA. |
+| `no_identifier` | The certificate has no Authority Key Identifier, so ARI cannot name it. Common on hand-made private-CA certificates. |
+| `disabled` | `ari_enabled` is `false` in settings. Nothing is asked. |
+
+The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the
+CA attached to the window, when it gave one; only `https` URLs are kept. The
+window can only bring a renewal forward: the threshold stays the backstop.
+Available since API contract **2.23**.
 
 #### Turn automatic renewal on or off
 

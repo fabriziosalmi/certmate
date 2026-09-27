@@ -649,6 +649,43 @@
         '<span class="text-muted" title="Not recorded \u2014 this certificate was ' +
         'issued before CertMate stored the CA, or by an older version">\u2014</span>';
 
+    // When the CA would like this certificate replaced (ARI, RFC 9773), from
+    // the record the renewal sweep keeps (#962) — the dashboard never asks the
+    // CA itself. Every state renders as a sentence: "not checked yet" is an
+    // answer, and an absent row would read as "nothing to know".
+    function renewalWindowHtml(info) {
+        if (!info) {
+            return '<span class="text-muted" title="The renewal sweep has not asked the CA about this certificate yet">Not checked yet</span>';
+        }
+        var checked = info.checked_at
+            ? ' title="Checked ' + escapeHtml(CertMate.formatDateTime(info.checked_at)) + '"'
+            : '';
+        switch (info.status) {
+            case 'window':
+                var html = '<span' + checked + '>' +
+                    escapeHtml(CertMate.formatDate(info.window_start)) + ' \u2013 ' +
+                    escapeHtml(CertMate.formatDate(info.window_end)) + '</span>' +
+                    '<div class="text-xs text-muted">Renews at ' +
+                    escapeHtml(CertMate.formatDateTime(info.renew_at)) + '</div>';
+                // The server keeps only https; checked again here because this
+                // string becomes an href.
+                if (typeof info.explanation_url === 'string' && /^https:\/\//.test(info.explanation_url)) {
+                    html += '<a href="' + escapeHtml(info.explanation_url) + '" target="_blank" rel="noopener noreferrer" ' +
+                        'class="text-xs text-info-fg hover:underline">Why the CA set this window</a>';
+                }
+                return '<div class="text-right">' + html + '</div>';
+            case 'unsupported':
+                return '<span class="text-muted"' + checked + '>The CA does not publish one</span>';
+            case 'unavailable':
+                return '<span class="text-warning-fg"' + checked + '>The CA did not answer at the last check</span>';
+            case 'no_identifier':
+                return '<span class="text-muted"' + checked + '>Cannot be asked: no Authority Key Identifier</span>';
+            case 'disabled':
+                return '<span class="text-muted">Off (ari_enabled is false)</span>';
+        }
+        return '<span class="text-muted">\u2014</span>';
+    }
+
     function displayCertificates(certificates) {
         var container = document.getElementById('certificatesList');
         var thead = document.querySelector('#certificatesTable thead');
@@ -1104,6 +1141,7 @@
                 // "not recorded" is an answer; silence would read as "public,
                 // like everything else".
                 detailRow('Issuing CA', caDetailLabel || CA_NOT_RECORDED) +
+                detailRow('CA renewal window', renewalWindowHtml(cert.renewal_info)) +
                 (sanDomains.length ? detailRow('SANs', '<div class="text-right">' + sanDomainsHtml + '</div>') : '') +
                 (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
                 (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +

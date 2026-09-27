@@ -58,6 +58,19 @@ DIRECTORY_TTL_SECONDS = 3600
 # check; one that says "renew in 1970" would renew it every night.
 MAX_WINDOW_LENGTH = timedelta(days=365)
 
+# What one sweep learned about one certificate (#962). Four answers, because
+# they call for four different things from an operator: nothing, nothing yet,
+# a look at the CA, and a look at the certificate.
+STATUS_WINDOW = 'window'            # the CA answered with a usable window
+STATUS_UNSUPPORTED = 'unsupported'  # the CA publishes no renewalInfo at all
+STATUS_UNAVAILABLE = 'unavailable'  # it does; this sweep got no usable answer
+STATUS_NO_IDENTIFIER = 'no_identifier'  # the certificate cannot be named
+
+# RFC 9773 §4.2 lets the CA attach a page explaining the window — the one
+# place a mass revocation says *why*. It is rendered as a link, so only https
+# is kept, and a CA's answer is not a place to store an essay.
+MAX_EXPLANATION_URL_LENGTH = 2048
+
 
 def _b64(raw: bytes) -> str:
     """base64url, unpadded — the encoding RFC 9773 §4.1 specifies."""
@@ -178,6 +191,59 @@ def due_at(cert_id: str, start: datetime, end: datetime) -> datetime:
     return start + timedelta(seconds=span * fraction)
 
 
+def explanation_url(payload):
+    """The CA's `explanationURL`, when it is an https URL, else None."""
+    if not isinstance(payload, dict):
+        return None
+    url = payload.get('explanationURL')
+    if not isinstance(url, str) or len(url) > MAX_EXPLANATION_URL_LENGTH:
+        return None
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != 'https' or not parsed.netloc:
+        return None
+    return url
+
+
+def _stamp(instant):
+    """Naive UTC → RFC 3339 with an explicit Z.
+
+    Explicit, unlike the rest of this codebase's naive timestamps, because
+    these reach a browser: `new Date('2026-11-02T17:18:36')` is read as LOCAL
+    time, and a renewal instant that is off by the viewer's UTC offset is a
+    wrong answer to the only question the field exists for.
+    """
+    return instant.replace(microsecond=0).isoformat() + 'Z'
+
+
+def observation(cert_id, status, payload, now: datetime) -> dict:
+    """The record the sweep keeps about one certificate's window.
+
+    ``status`` is one of the STATUS_* values. The window fields are filled
+    only for STATUS_WINDOW; ``renew_at`` is the point `due_at` picks, so what
+    an operator is shown is the instant the sweep will act on, not a
+    re-derivation of it.
+    """
+    record = {
+        'cert_id': cert_id,
+        'checked_at': _stamp(now),
+        'status': status,
+        'window_start': None,
+        'window_end': None,
+        'renew_at': None,
+        'explanation_url': None,
+    }
+    if status != STATUS_WINDOW:
+        return record
+    start, end = parse_window(payload)
+    record.update(
+        window_start=_stamp(start),
+        window_end=_stamp(end),
+        renew_at=_stamp(due_at(cert_id, start, end)),
+        explanation_url=explanation_url(payload),
+    )
+    return record
+
+
 def is_due(cert_id: str, payload, now: datetime) -> bool:
     """True when the CA's window says this certificate should be renewed now."""
     window = parse_window(payload)
@@ -240,12 +306,35 @@ class RenewalInfoClient:
         self._directories[directory_url] = (now, document)
         return document
 
+    def now(self):
+        """The client's clock — injected in tests, UTC otherwise."""
+        return self._clock()
+
     def renewal_info(self, directory_url, cert_id):
         """The ARI payload for *cert_id*, or None when there is no answer."""
         url = renewal_info_url(self.directory(directory_url), cert_id)
         if url is None:
             return None
         return self._fetch_json(url)
+
+    def lookup(self, directory_url, cert_id):
+        """``(status, payload)`` — the answer, and which kind of answer it is.
+
+        `renewal_info` collapses every absence into None, which is all the
+        renewal decision needs. An operator needs more: a CA that does not
+        speak ARI is a fact about the CA, one that did not answer tonight is
+        an incident, and the two must not render the same (#962).
+        """
+        directory = self.directory(directory_url)
+        if directory is None:
+            return STATUS_UNAVAILABLE, None
+        url = renewal_info_url(directory, cert_id)
+        if url is None:
+            return STATUS_UNSUPPORTED, None
+        payload = self._fetch_json(url)
+        if parse_window(payload) is None:
+            return STATUS_UNAVAILABLE, None
+        return STATUS_WINDOW, payload
 
     def says_renew_now(self, directory_url, cert_id, now=None):
         """True when the CA's window for this certificate has opened."""

@@ -1,6 +1,6 @@
 # CertMate Certificati Client - Guida all'utilizzo
 
-<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
+<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
 
 ## Panoramica
 
@@ -413,6 +413,17 @@ serve la finestra: una CA non vuole che tutti i suoi client rinnovino insieme.
 
 Il riepilogo della scansione li conta come `ari_advanced`, cosi un rinnovo che
 la tua configurazione non spiega resta attribuibile.
+
+Il pannello di dettaglio del certificato mostra cosa ha detto la CA
+all'ultima scansione, alla voce **CA renewal window**: la finestra, l'istante
+al suo interno in cui CertMate rinnova, e il link di spiegazione della CA
+quando lo fornisce. Quando non c'e una finestra dice quale assenza e: la CA
+non ne pubblica, la CA non ha risposto all'ultimo controllo, oppure il
+certificato non puo essere nominato in ARI. Lo stesso record e restituito come
+`renewal_info` da `GET /api/certificates/<domain>`. Viene letto da cio che la
+scansione ha salvato, quindi aprire la dashboard non manda mai una richiesta
+alla CA. Subito dopo un rinnovo mostra "Not checked yet" finche la scansione
+successiva non chiede del nuovo certificato.
 
 Imposta `"ari_enabled": false` in `settings.json` per disattivarlo; e attivo
 per impostazione predefinita e costa una GET non autenticata per certificato
