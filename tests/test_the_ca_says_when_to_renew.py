@@ -681,3 +681,20 @@ def test_a_link_on_disk_is_filtered_again_on_the_way_out(swept):
     info = _parsed(manager, domain)['renewal_info']
     assert info['status'] == ari.STATUS_WINDOW
     assert info['explanation_url'] is None
+
+
+@pytest.mark.parametrize('cert_id', ['aa.bb', 'cc.dd', 'uVnyjs8i8Ib.BUOTO'])
+def test_the_instant_shown_is_the_instant_acted_on(cert_id):
+    """Found by the LE-staging E2E, not by these tests (#962). The record
+    showed `renew_at` to the second while the sweep compared against the
+    point to the microsecond, so a sweep at the shown instant did not renew.
+    Staging's windows carry fractional seconds, so the start has one here."""
+    payload = {'suggestedWindow': {'start': '2026-11-25T12:06:10.412Z',
+                                   'end': '2026-11-27T07:16:59.907Z'}}
+    record = ari.observation(cert_id, ari.STATUS_WINDOW, payload, NOW)
+    shown = datetime.fromisoformat(record['renew_at'].replace('Z', ''))
+
+    assert ari.is_due(cert_id, payload, shown) is True
+    assert ari.is_due(cert_id, payload, shown - timedelta(seconds=1)) is False
+    start, end = ari.parse_window(payload)
+    assert start <= shown <= end

@@ -188,7 +188,16 @@ def due_at(cert_id: str, start: datetime, end: datetime) -> datetime:
         return start
     digest = hashlib.sha256(cert_id.encode('utf-8')).digest()
     fraction = int.from_bytes(digest[:8], 'big') / float(1 << 64)
-    return start + timedelta(seconds=span * fraction)
+    point = start + timedelta(seconds=span * fraction)
+    # Whole seconds, rounded up (#962). The instant is shown to an operator
+    # and returned by the API at second precision; a point carrying
+    # microseconds made the shown instant up to a second EARLIER than the one
+    # the sweep acts on, so a sweep at exactly the shown time did not renew.
+    # The E2E against Let's Encrypt staging found it. Up rather than down so
+    # the point never falls before a window start that has a fraction.
+    if point.microsecond:
+        point += timedelta(microseconds=1_000_000 - point.microsecond)
+    return point
 
 
 def explanation_url(payload):
