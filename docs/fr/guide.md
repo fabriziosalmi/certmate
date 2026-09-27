@@ -1,6 +1,6 @@
 # CertMate Certificats Clients - Guide d'utilisation
 
-<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
+<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
 
 ## Vue d'ensemble
 
@@ -390,8 +390,10 @@ Le seuil de 30 jours est l'avis de CertMate, et c'est le meme avis pour chaque
 certificat et chaque CA. Depuis la [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 une CA peut publier le sien, par certificat : un endpoint `renewalInfo` qui
 repond par une fenetre pendant laquelle elle souhaite voir ce certificat
-remplace. Let's Encrypt en expose un en production ; step-ca aussi, pour une
-CA privee.
+remplace. Let's Encrypt en expose un, en production et en staging. step-ca pas
+encore (0.30.2, mesure ; voir smallstep/certificates#2162) : sur une step-ca
+privee, seul le seuil decide, et le panneau du certificat indique que la CA ne
+publie pas de fenetre.
 
 Le balayage de renouvellement TLS le demande. Pour chaque certificat que le
 seuil n'a **pas** deja declare echu, CertMate recupere la fenetre de la CA et

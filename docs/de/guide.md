@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
+<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
 
 ## Übersicht
 
@@ -390,8 +390,11 @@ Der 30-Tage-Schwellenwert ist CertMates Meinung, und es ist dieselbe Meinung
 fur jedes Zertifikat und jede CA. Seit [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 kann eine CA ihre eigene veroffentlichen, pro Zertifikat: ein
 `renewalInfo`-Endpunkt, der ein Zeitfenster nennt, in dem sie dieses
-Zertifikat ersetzt sehen mochte. Let's Encrypt bietet eines in Produktion;
-step-ca ebenfalls, fur eine private CA.
+Zertifikat ersetzt sehen mochte. Let's Encrypt bietet eines, in Produktion und
+im Staging. step-ca noch nicht (0.30.2, gemessen; siehe
+smallstep/certificates#2162), daher entscheidet bei einer privaten step-ca
+allein der Schwellenwert, und das Zertifikatsfenster sagt, dass die CA kein
+Zeitfenster veroffentlicht.
 
 Der TLS-Erneuerungsdurchlauf fragt danach. Fur jedes Zertifikat, das der
 Schwellenwert **nicht** bereits als fallig eingestuft hat, holt CertMate das

@@ -388,7 +388,9 @@ The 30-day threshold is CertMate's opinion, and it is the same opinion for
 every certificate and every CA. Since [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 a CA can publish its own, per certificate: a `renewalInfo` endpoint answering a
 window during which it wants that certificate replaced. Let's Encrypt serves
-one in production; so does step-ca, for a private CA.
+one, in production and on staging. step-ca does not yet (0.30.2, measured; see
+smallstep/certificates#2162), so on a private step-ca the threshold decides
+alone and the certificate panel says the CA does not publish a window.
 
 The TLS renewal sweep asks. For every certificate the threshold has **not**
 already called due, CertMate fetches the CA's window and renews now if that
