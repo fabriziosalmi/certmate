@@ -1,6 +1,6 @@
 # Documentazione CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM a879b146f5b3fca4 -->
+<!-- CERTMATE-TRANSLATED-FROM ad1c89b022b41760 -->
 
 Benvenuto nella documentazione di CertMate. Questa cartella contiene guide complete per tutte le funzionalità.
 
@@ -15,6 +15,7 @@ Benvenuto nella documentazione di CertMate. Questa cartella contiene guide compl
 
 ### Funzionalità principali
 - **[Provider DNS](./dns-providers.md)** — Provider supportati, multi-account, alias di dominio
+- **[Script DNS personalizzato](../custom-dns-script.md)** — qualsiasi provider senza plugin, guidato dai tuoi script *(in inglese)*
 - **[Provider CA](./ca-providers.md)** — Let's Encrypt, DigiCert, CA privata
 - **[Certificati client](./guide.md)** — Ciclo di vita dei certificati client, dashboard web, operazioni batch
 - **[Server MCP (Model Context Protocol)](./mcp.md)** — Server Node.js standalone per l'integrazione con agenti IA

@@ -1,6 +1,6 @@
 # DNS-Anbieter
 
-<!-- CERTMATE-TRANSLATED-FROM 9b103696fbd47ac1 -->
+<!-- CERTMATE-TRANSLATED-FROM bea10221be3c2cdc -->
 
 CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt DNS-01-Challenges über individuelle certbot-Plugins. Die vollständige Liste befindet sich in der nachstehenden Tabelle.
 
@@ -374,7 +374,9 @@ Wildcards wie `*.mybox.duckdns.org` werden mit demselben Token unterstützt. Da 
 
 ### Custom Script (eigene Lösung)
 
-Für DNS-Anbieter ohne certbot-Plugin — Oracle Cloud (OCI), unternehmensinternes DNS, Appliance-APIs — verweisen Sie CertMate auf Ihre eigenen Skripte; CertMate steuert diese dann über certbots `--manual`-Modus. Eine Plugin-Installation ist nicht erforderlich.
+Für DNS-Anbieter ohne certbot-Plugin — Oracle Cloud (OCI), Total Uptime, Netriplex, unternehmensinternes DNS, Appliance-APIs — verweisen Sie CertMate auf Ihre eigenen Skripte; CertMate steuert diese dann über certbots `--manual`-Modus. Eine Plugin-Installation ist nicht erforderlich.
+
+**[Eigenes DNS-Skript](../custom-dns-script.md)** ist die vollständige Anleitung: die Pfadregeln und warum sie streng sind, die genaue Umgebung, mit der Ihr Skript aufgerufen wird, der Fall Wildcard plus Apex, was die Erneuerung sich merkt, und ein durchgearbeitetes Beispiel. *(auf Englisch)*
 
 ```json
 {

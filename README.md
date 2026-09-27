@@ -2466,6 +2466,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[README.md](README.md)**                         | Main documentation and quick start  | All users             |
 | **[docs/installation.md](docs/installation.md)**   | Installation and deployment         | System administrators |
 | **[docs/dns-providers.md](docs/dns-providers.md)** | DNS provider setup                  | DevOps engineers      |
+| **[docs/custom-dns-script.md](docs/custom-dns-script.md)** | Any DNS provider with no plugin, via your own hooks | DevOps engineers      |
 | **[docs/ca-providers.md](docs/ca-providers.md)**   | Certificate Authority configuration | Enterprise users      |
 | **[docs/docker.md](docs/docker.md)**               | Docker and multi-platform builds    | DevOps engineers      |
 | **[docs/testing.md](docs/testing.md)**             | Testing framework and CI/CD         | Developers            |
