@@ -85,7 +85,9 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
     # by tests/test_the_renewal_sweep_says_what_it_did.py.
     assert summary['duration_seconds'] >= 0
     assert summary['examined'] == 6   # 2 checked + 1 disabled + 3 invalid
-    mgr.renew_certificate.assert_called_once_with('good.com')
+    # force=False: the threshold path asks certbot; only a renewal the CA
+    # asked for through ARI is forced (#962).
+    mgr.renew_certificate.assert_called_once_with('good.com', force=False)
 
 
 def test_renew_failure_is_counted_not_swallowed(tmp_path):
