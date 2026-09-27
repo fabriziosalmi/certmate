@@ -90,7 +90,7 @@ def test_check_renewals_skips_disabled_domain(cert_manager, monkeypatch):
     monkeypatch.setattr(
         cert_manager,
         'renew_certificate',
-        lambda domain: renewed.append(domain) or {'dns_provider': 'cloudflare'},
+        lambda domain, force=False: renewed.append(domain) or {'dns_provider': 'cloudflare'},
     )
 
     cert_manager.check_renewals()
@@ -113,7 +113,7 @@ def test_check_renewals_legacy_string_entries_default_to_enabled(cert_manager, m
     monkeypatch.setattr(
         cert_manager,
         'renew_certificate',
-        lambda domain: renewed.append(domain) or {},
+        lambda domain, force=False: renewed.append(domain) or {},
     )
 
     cert_manager.check_renewals()

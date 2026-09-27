@@ -698,3 +698,90 @@ def test_the_instant_shown_is_the_instant_acted_on(cert_id):
     assert ari.is_due(cert_id, payload, shown - timedelta(seconds=1)) is False
     start, end = ari.parse_window(payload)
     assert start <= shown <= end
+
+
+# --- the renewal the window asked for has to reach the CA (#962) ------------
+
+def _certbot_gate(days_left):
+    """`renew_certificate` as the pinned certbot 2.10.0 behaves.
+
+    Measured by running the real `certbot renew --cert-name` against
+    hand-built lineages (#962): without `--force-renewal` it renews only when
+    fewer than 30 days are left (`RENEWER_DEFAULTS['renew_before_expiry']`)
+    and otherwise answers "not yet due", which `renew_certificate` reports as
+    `renewed: False`. With 29 days left it attempts the renewal; with 31, 45
+    and 60 it does nothing.
+    """
+    from unittest.mock import MagicMock
+
+    def renew(domain, force=False):
+        if not force and days_left >= 30:
+            return {'success': True, 'renewed': False, 'domain': domain}
+        return {'success': True, 'renewed': True, 'domain': domain}
+
+    return MagicMock(side_effect=renew)
+
+
+def _sweep_manager(needs_renewal, ari_says, days_left):
+    from unittest.mock import MagicMock
+
+    from modules.core.certificates import CertificateManager
+
+    manager = CertificateManager.__new__(CertificateManager)
+    manager.get_certificate_info = MagicMock(return_value={
+        'exists': True, 'needs_renewal': needs_renewal, 'days_left': days_left})
+    manager._ari_says_renew = MagicMock(return_value=ari_says)
+    manager.renew_certificate = _certbot_gate(days_left)
+    manager._audit_scheduled_renew = MagicMock()
+    manager._record_renewal_metrics = MagicMock()
+    manager._publish_failed_event = MagicMock()
+    manager._publish_renewed_event = MagicMock()
+    return manager
+
+
+def _summary():
+    return {'checked': 0, 'renewed': 0, 'failed': 0, 'skipped_busy': 0,
+            'skipped_not_due': 0, 'ari_advanced': 0}
+
+
+def test_a_renewal_the_ca_asked_for_actually_happens():
+    """THE regression. A mass revocation moves the window to now on a
+    certificate with 60 days left. The threshold says no, the CA says yes —
+    and certbot, asked without `--force-renewal`, says "not yet due" and
+    renews nothing. That was #926 in the one case it exists for."""
+    manager = _sweep_manager(needs_renewal=False, ari_says=True, days_left=60)
+    summary = _summary()
+
+    assert manager._renew_if_due('ari.example.test', {}, summary) is True
+    assert summary['renewed'] == 1
+    assert summary['skipped_not_due'] == 0
+    assert summary['ari_advanced'] == 1
+    manager.renew_certificate.assert_called_once_with(
+        'ari.example.test', force=True)
+
+
+def test_the_counter_says_what_happened_not_what_was_tried():
+    """`ari_advanced` is what makes an early renewal attributable. Counted
+    before the attempt, it reported renewals that never happened — and still
+    would, for a renewal that fails."""
+    manager = _sweep_manager(needs_renewal=False, ari_says=True, days_left=60)
+    manager.renew_certificate.side_effect = RuntimeError('certbot exited 1')
+    summary = _summary()
+
+    assert manager._renew_if_due('ari.example.test', {}, summary) is False
+    assert summary['failed'] == 1
+    assert summary['ari_advanced'] == 0
+
+
+def test_the_threshold_path_is_not_forced():
+    """CONTROL. Only the renewal the CA asked for is forced. The threshold
+    path keeps asking certbot, so a threshold above certbot's 30 days behaves
+    exactly as before — that is a separate decision (#962, out of scope)."""
+    manager = _sweep_manager(needs_renewal=True, ari_says=False, days_left=20)
+    summary = _summary()
+
+    assert manager._renew_if_due('ari.example.test', {}, summary) is True
+    manager.renew_certificate.assert_called_once_with(
+        'ari.example.test', force=False)
+    manager._ari_says_renew.assert_not_called()
+    assert summary['ari_advanced'] == 0

@@ -3972,6 +3972,7 @@ class CertificateManager:
         cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
         if not cert_info:
             return False
+        ari_advanced = False
         if not cert_info.get('needs_renewal'):
             # The threshold said no. Ask the CA, which may know something the
             # threshold cannot: a batch replacement, a compromised
@@ -3980,7 +3981,7 @@ class CertificateManager:
             # for why the other direction waits on #395.
             if not self._ari_says_renew(domain, cert_info, settings):
                 return False
-            summary['ari_advanced'] += 1
+            ari_advanced = True
             logger.info("%s is not due by the configured threshold, but its CA "
                         "says its renewal window has opened; renewing now.",
                         domain)
@@ -3988,7 +3989,13 @@ class CertificateManager:
         logger.info(f"Renewing certificate for {domain}")
         renew_started = time.time()
         try:
-            res = self.renew_certificate(domain)
+            # Forced when the CA asked for it, and only then (#962). certbot
+            # has its own gate — without --force-renewal it renews only inside
+            # 30 days of expiry — so an early renewal the CA requested was
+            # answered "not yet due" in exactly the case ARI exists for: a
+            # window moved to now on a certificate with 60 days left. The
+            # threshold path still asks certbot, unchanged.
+            res = self.renew_certificate(domain, force=ari_advanced)
             # certbot can report "not yet due" (renewed=False) when the
             # configured threshold is wider than certbot's own window. That is
             # NOT a real renewal — don't count it, audit it, or fire deploy
@@ -3998,6 +4005,11 @@ class CertificateManager:
                 logger.info(f"{domain} not yet due for renewal per certbot; will retry next run")
                 return False
             summary['renewed'] += 1
+            if ari_advanced:
+                # Counted after the renewal, not before the attempt: the
+                # counter exists to attribute a renewal, so it must not report
+                # one that failed or never happened.
+                summary['ari_advanced'] += 1
             logger.info(f"Successfully renewed certificate for {domain}")
             self._record_renewal_metrics(
                 domain, cert_info, True, time.time() - renew_started)

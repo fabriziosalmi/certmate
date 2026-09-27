@@ -339,7 +339,7 @@ def _renewable(instance, config=None):
 def _renewal_returns(instance, result):
     calls = []
 
-    def _renew(domain):
+    def _renew(domain, force=False):
         calls.append(domain)
         if isinstance(result, Exception):
             raise result
