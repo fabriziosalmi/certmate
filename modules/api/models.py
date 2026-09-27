@@ -154,6 +154,35 @@ def create_api_models(api):
         'multi': fields.Raw(description='Configuration for any DNS provider via certbot-dns-multi')
     })
 
+    # What the CA's ARI endpoint (RFC 9773) said at the last renewal sweep
+    # (#962). Read from the record the sweep keeps, never fetched on request.
+    renewal_info_model = api.model('RenewalInfo', {
+        'status': fields.String(
+            enum=['window', 'unsupported', 'unavailable', 'no_identifier',
+                  'disabled'],
+            description=(
+                "'window': the CA answered with a renewal window. "
+                "'unsupported': it publishes no renewalInfo, which will not "
+                "change. 'unavailable': it does, and the last sweep got no "
+                "usable answer. 'no_identifier': the certificate has no "
+                "Authority Key Identifier to name it by. 'disabled': "
+                "ari_enabled is false, so nothing is asked.")),
+        'checked_at': fields.String(
+            description='When the sweep asked, RFC 3339 UTC with Z.'),
+        'window_start': fields.String(
+            description="Start of the CA's suggested window, RFC 3339 UTC. Null unless status is 'window'."),
+        'window_end': fields.String(
+            description="End of the CA's suggested window, RFC 3339 UTC. Null unless status is 'window'."),
+        'renew_at': fields.String(
+            description=(
+                'The point inside the window at which the sweep renews this '
+                'certificate if the configured threshold has not already. '
+                'Derived from the certificate id, so it is stable across '
+                'sweeps. Null unless status is window.')),
+        'explanation_url': fields.String(
+            description="The CA's page explaining the window, when it gave one (https only)."),
+    })
+
     certificate_model = api.model('Certificate', {
         'domain': fields.String(required=True, description='Domain name'),
         'exists': fields.Boolean(description='Whether certificate exists'),
@@ -227,6 +256,12 @@ def create_api_models(api):
             description='When the certificate was first issued, ISO 8601, from its metadata.'),
         'renewed_at': fields.String(
             description='When the certificate was last renewed, ISO 8601, from its metadata. Null if it has never been renewed.'),
+        'renewal_info': fields.Nested(
+            renewal_info_model, allow_null=True,
+            description=(
+                "What the CA's ARI endpoint said at the last renewal sweep. "
+                'Null when no sweep has asked about this certificate yet, '
+                'including right after a renewal. Since API contract 2.23.')),
         'total_issued': fields.Integer(description='Total certificates issued'),
         'total_active': fields.Integer(description='Total active certificates'),
         'total_revoked': fields.Integer(description='Total revoked certificates'),

@@ -1,6 +1,6 @@
 # CertMate Certificados de Cliente - Guía de uso
 
-<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
+<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
 
 ## Descripción general
 
@@ -414,6 +414,17 @@ CA no quiere que todos sus clientes renueven a la vez.
 
 El resumen del barrido los cuenta como `ari_advanced`, para que una renovacion
 que su configuracion no explica sea atribuible.
+
+El panel de detalle del certificado muestra, bajo **CA renewal window**, lo
+que dijo la CA en el ultimo barrido: la ventana, el instante dentro de ella en
+que CertMate renueva, y el enlace de explicacion de la CA cuando lo da. Si no
+hay ventana, indica que ausencia es: la CA no publica ninguna, la CA no
+respondio en la ultima comprobacion, o el certificado no se puede nombrar en
+ARI. El mismo registro lo devuelve `GET /api/certificates/<domain>` como
+`renewal_info`. Se lee de lo que guardo el barrido, asi que abrir el panel
+nunca envia una peticion a la CA. Justo despues de una renovacion muestra
+"Not checked yet" hasta que el siguiente barrido pregunte por el nuevo
+certificado.
 
 Ponga `"ari_enabled": false` en `settings.json` para desactivarlo; esta activo
 por defecto y cuesta una GET no autenticada por certificado y barrido, mas una

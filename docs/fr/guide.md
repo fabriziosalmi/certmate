@@ -1,6 +1,6 @@
 # CertMate Certificats Clients - Guide d'utilisation
 
-<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
+<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
 
 ## Vue d'ensemble
 
@@ -415,6 +415,17 @@ en meme temps.
 
 Le resume du balayage les compte comme `ari_advanced`, pour qu'un
 renouvellement que votre configuration n'explique pas reste attribuable.
+
+Le panneau de detail du certificat affiche, sous **CA renewal window**, ce que
+la CA a dit lors du dernier balayage : la fenetre, l'instant a l'interieur
+auquel CertMate renouvelle, et le lien d'explication de la CA quand elle en
+donne un. Sans fenetre, il indique de quelle absence il s'agit : la CA n'en
+publie pas, la CA n'a pas repondu lors du dernier controle, ou le certificat
+ne peut pas etre nomme dans ARI. Le meme enregistrement est renvoye comme
+`renewal_info` par `GET /api/certificates/<domain>`. Il est lu depuis ce que
+le balayage a conserve, donc ouvrir le tableau de bord n'envoie jamais de
+requete a la CA. Juste apres un renouvellement, il affiche "Not checked yet"
+jusqu'a ce que le balayage suivant interroge la CA sur le nouveau certificat.
 
 Mettez `"ari_enabled": false` dans `settings.json` pour le desactiver ; il est
 actif par defaut et coute une GET non authentifiee par certificat et par

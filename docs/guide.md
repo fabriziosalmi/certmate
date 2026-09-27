@@ -410,6 +410,16 @@ want all of its clients renewing at once.
 The sweep summary counts these as `ari_advanced`, so a renewal your
 configuration does not explain is attributable.
 
+The certificate's detail panel shows what the CA said at the last sweep, under
+**CA renewal window**: the window, the instant inside it at which CertMate
+renews, and the CA's explanation link when it gave one. When there is no
+window it says which absence it is: the CA publishes none, the CA did not
+answer at the last check, or the certificate cannot be named in ARI. The same
+record is returned as `renewal_info` by `GET /api/certificates/<domain>`. It is
+read from what the sweep kept, so opening the dashboard never sends a request
+to the CA. Right after a renewal it reads "Not checked yet" until the next
+sweep asks about the new certificate.
+
 Set `"ari_enabled": false` in `settings.json` to turn it off; it is on by
 default and costs one unauthenticated GET per certificate per sweep, plus one
 per CA per hour for the directory.

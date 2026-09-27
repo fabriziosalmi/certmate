@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM c9f680a52f9eca05 -->
+<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
 
 ## Übersicht
 
@@ -415,6 +415,17 @@ Fenster da: eine CA will nicht, dass alle ihre Clients gleichzeitig erneuern.
 
 Die Zusammenfassung des Durchlaufs zahlt diese als `ari_advanced`, damit eine
 Erneuerung, die Ihre Konfiguration nicht erklart, zuordenbar bleibt.
+
+Das Detailfenster des Zertifikats zeigt unter **CA renewal window**, was die CA
+beim letzten Durchlauf gesagt hat: das Fenster, den Zeitpunkt darin, zu dem
+CertMate erneuert, und den Erklarungslink der CA, wenn sie einen angibt. Gibt
+es kein Fenster, nennt es den Grund: die CA veroffentlicht keines, die CA hat
+bei der letzten Prufung nicht geantwortet, oder das Zertifikat kann in ARI
+nicht benannt werden. Derselbe Eintrag wird von
+`GET /api/certificates/<domain>` als `renewal_info` zuruckgegeben. Er wird aus
+dem gelesen, was der Durchlauf gespeichert hat, daher sendet das Offnen des
+Dashboards nie eine Anfrage an die CA. Direkt nach einer Erneuerung steht dort
+"Not checked yet", bis der nachste Durchlauf nach dem neuen Zertifikat fragt.
 
 Setzen Sie `"ari_enabled": false` in `settings.json`, um es abzuschalten; es
 ist standardmassig aktiv und kostet eine unauthentifizierte GET pro Zertifikat

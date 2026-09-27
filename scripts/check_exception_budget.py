@@ -166,7 +166,19 @@ GENERAL_LIMIT = 10
 #   API_BEARER_TOKEN_FILE itself and returned in silence, a second spelling of
 #   `_operator_supplied_token` — which this same pin's previous entry had
 #   already fixed. It calls that instead now.
-TOTAL_LIMIT = 421
+# 421 -> 422 on 2026-09-27, for showing the CA's ARI window (#962). LOGS.
+#
+#   modules/core/certificates.py  _renewal_info_for, the reader of a display
+#                             field. It runs inside _parse_certificate_info's
+#                             try, whose except branch reports the certificate
+#                             as unparseable with needs_renewal: True — so a
+#                             defect in this reader, of whatever class, would
+#                             become a renewal. Narrowing it would protect
+#                             only against the failures already foreseen,
+#                             which the body handles itself; the handler is
+#                             for the ones that were not. The writer beside it
+#                             was narrowed to OSError instead.
+TOTAL_LIMIT = 422
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
@@ -197,7 +209,7 @@ UNACCOUNTED_LIMIT = 0
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
     'modules/core/storage_backends.py': 64,
-    'modules/core/certificates.py': 45,
+    'modules/core/certificates.py': 46,
     'modules/core/file_operations.py': 16,
     'modules/web/misc_routes.py': 16,
     'modules/api/resources_health.py': 14,

@@ -117,6 +117,15 @@ _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
     'deployment_status', 'key_type', 'key_size', 'elliptic_curve',
 })
 
+# What the renewal sweep last heard from the CA's ARI endpoint about one
+# certificate (#962), kept beside it. See `_record_renewal_info` for why it is
+# not a metadata.json key. The fields are what the API returns; `cert_id` is
+# kept on disk only, to tell a record about this certificate from one about
+# the certificate it replaced.
+RENEWAL_INFO_FILE = 'renewal-info.json'
+RENEWAL_INFO_FIELDS = ('status', 'checked_at', 'window_start', 'window_end',
+                       'renew_at', 'explanation_url')
+
 
 def _fsync_directory(directory: Path) -> None:
     """Persist a directory entry, so a rename into it survives a power loss.
@@ -2222,6 +2231,9 @@ class CertificateManager:
                 # from metadata), so /metrics can report real timestamps.
                 'created_at': metadata.get('created_at'),
                 'renewed_at': metadata.get('renewed_at'),
+                # What the CA's ARI endpoint said at the last sweep (#962),
+                # read from the record the sweep keeps — never fetched here.
+                'renewal_info': self._renewal_info_for(domain, cert, settings),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -2253,6 +2265,9 @@ class CertificateManager:
             'storage_warning': metadata.get('storage_warning'),
             'deployment_port': metadata.get('deployment_port'),
             'deployment_protocol': metadata.get('deployment_protocol'),
+            # A certificate that cannot be parsed cannot be named in ARI, so
+            # there is no record that could belong to it.
+            'renewal_info': None,
         }
 
     def _create_empty_cert_info(self, domain):
@@ -4104,21 +4119,113 @@ class CertificateManager:
         """
         if not settings.get('ari_enabled', True):
             return False
-        directory_url = self._acme_directory_url(cert_info)
-        if not directory_url:
-            return False
-        try:
-            from .ari import certificate_id
+        from . import ari
 
+        client = self._renewal_info_client()
+        now = now or client.now()
+        try:
             raw = (self.cert_dir / domain / 'cert.pem').read_bytes()
-            cert_id = certificate_id(x509.load_pem_x509_certificate(raw))
+            cert_id = ari.certificate_id(x509.load_pem_x509_certificate(raw))
         except (OSError, ValueError) as e:
             # A self-signed certificate with no Authority Key Identifier
             # cannot be named in ARI at all; so can an unreadable file.
             logger.info("Cannot build an ARI identifier for %s: %s", domain, e)
+            self._record_renewal_info(domain, ari.observation(
+                None, ari.STATUS_NO_IDENTIFIER, None, now))
             return False
-        return self._renewal_info_client().says_renew_now(
-            directory_url, cert_id, now)
+        directory_url = self._acme_directory_url(cert_info)
+        if not directory_url:
+            # No usable ACME directory is, from here, a CA that publishes no
+            # window — which is what the operator is told, not "unavailable",
+            # because no sweep will ever get a different answer.
+            self._record_renewal_info(domain, ari.observation(
+                cert_id, ari.STATUS_UNSUPPORTED, None, now))
+            return False
+        status, payload = client.lookup(directory_url, cert_id)
+        record = ari.observation(cert_id, status, payload, now)
+        self._record_renewal_info(domain, record)
+        if status != ari.STATUS_WINDOW:
+            return False
+        return ari.is_due(cert_id, payload, now)
+
+    def _record_renewal_info(self, domain, record):
+        """Keep what the CA said about this certificate, beside it (#962).
+
+        A file of its own, not a key in metadata.json: the sweep reaches here
+        without the domain lock, and metadata.json records key custody — a
+        write that raced a reissue could put back the record the reissue had
+        just replaced. This file has one writer, the sweep, and nothing reads
+        it to make a decision; it only answers "what did the CA say".
+
+        A failed write is logged and swallowed. It is an observation, and
+        failing to keep it must not become a failed renewal check.
+        """
+        try:
+            self._atomic_json_write(
+                self.cert_dir / domain / RENEWAL_INFO_FILE, record)
+        except OSError as e:
+            # The class name only: an OSError's text repeats the path, and
+            # nothing here is worth a traceback in a nightly log.
+            logger.info("Could not record the ARI answer for %s: %s",
+                        domain, e.__class__.__name__)
+            return
+        self._invalidate_certificate_info_cache(domain)
+
+    def _renewal_info_for(self, domain, cert, settings):
+        """The recorded ARI answer for *cert*, or None — never fetched here.
+
+        Read from the file the sweep keeps and nothing else: this runs for
+        every row of every listing, and asking the CA from here would turn
+        each dashboard load into one request per certificate.
+
+        None when the record belongs to another certificate. A renewal
+        changes the serial, so the window on file is the predecessor's until
+        the next sweep asks again — and a window shown against the wrong
+        certificate is worse than no window.
+
+        Never raises, and not only by care in the body: this runs inside
+        `_parse_certificate_info`'s try, whose except branch reports the
+        certificate as unparseable with `needs_renewal: True`. A defect in
+        what is only a display field must not become a renewal.
+        """
+        try:
+            return self._read_renewal_info(domain, cert, settings)
+        except Exception as e:  # noqa: BLE001 — see the docstring
+            logger.warning("Could not read the recorded ARI answer for %s: %s",
+                           domain, e.__class__.__name__)
+            return None
+
+    def _read_renewal_info(self, domain, cert, settings):
+        if not settings.get('ari_enabled', True):
+            # The same shape as every other answer, so a client does not have
+            # to know which branch produced it.
+            return {**dict.fromkeys(RENEWAL_INFO_FIELDS), 'status': 'disabled'}
+        cert_dir = getattr(self, 'cert_dir', None)
+        if cert_dir is None:
+            return None
+        try:
+            with open(cert_dir / domain / RENEWAL_INFO_FILE,
+                      encoding='utf-8') as handle:
+                record = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        if not isinstance(record, dict):
+            return None
+        from .ari import certificate_id, explanation_url
+
+        try:
+            current = certificate_id(cert)
+        except ValueError:
+            current = None
+        if record.get('cert_id') != current:
+            return None
+        shown = {key: record.get(key) for key in RENEWAL_INFO_FIELDS}
+        # Filtered again on the way out, not only when the sweep wrote it: the
+        # file can also arrive from a restored backup, and every API client —
+        # not only the dashboard, which checks too — may render it as a link.
+        shown['explanation_url'] = explanation_url(
+            {'explanationURL': shown['explanation_url']})
+        return shown
 
     def _sweep_unregistered(self, domain, settings, summary):
         """A certificate on disk that no settings entry names (#792).
