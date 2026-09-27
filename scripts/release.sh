@@ -187,6 +187,7 @@ $(echo "$changed" | grep -E "$SENSITIVE_RE" | sed 's/^/  /')"
       [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || { echo "CLOUDFLARE_API_TOKEN empty in .env" >&2; exit 1; }
       CERTMATE_E2E_CA_PROVIDER=letsencrypt_staging "'"$PY"'" -m pytest -q -m e2e \
         tests/test_health_ready_e2e.py tests/test_cert_lifecycle.py tests/test_async_issuance_e2e.py \
+        tests/test_ari_staging_e2e.py \
         -p no:cacheprovider'
   fi
   gate "Docker build" docker build -t certmate:release-check .

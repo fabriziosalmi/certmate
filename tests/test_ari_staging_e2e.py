@@ -1,0 +1,170 @@
+"""ARI end to end: a real CA's window drives a real renewal (#962).
+
+Everything below is real except one thing. A certificate is issued by Let's
+Encrypt STAGING through Cloudflare DNS-01, the renewal sweep asks staging's
+`renewalInfo` endpoint about it, keeps the answer, and — once the ARI client's
+clock is placed at the instant the sweep chose inside that window — renews it
+through the real certbot, against the real CA.
+
+**The one thing that is not real is that clock**, and only in the ARI client.
+A fresh certificate's window opens weeks from now; waiting for it is not a
+test. The threshold, certbot and the CA all run on the wall clock, which is
+the point: certbot sees a certificate with most of its life left and, asked
+without `--force-renewal`, answers "not yet due". That is the defect this was
+written to catch. The unit tests model certbot's gate; this one runs it.
+
+**Why in-process rather than against the container** like the other e2e
+files: the container can only be driven over HTTP, and moving the ARI clock
+there would need a test-only hook in production code. Here the clock is
+injected exactly as the unit tests inject it, and nothing else is replaced.
+
+Requires CLOUDFLARE_API_TOKEN and CERTMATE_TEST_DOMAIN (a zone the token can
+edit). Issuance is pinned to staging and the issuer is read off the leaf.
+"""
+import json
+import os
+import secrets
+import urllib.request
+import uuid
+from datetime import datetime, timezone
+
+import pytest
+from cryptography import x509
+
+from modules.core import ari
+from tests.e2e_support import TEST_EMAIL, assert_staging_issuer
+
+pytestmark = [pytest.mark.e2e, pytest.mark.slow]
+
+STAGING_DIRECTORY = 'https://acme-staging-v02.api.letsencrypt.org/directory'
+BASE_DOMAIN = os.environ.get('CERTMATE_TEST_DOMAIN', 'gpfree.org')
+TEST_DOMAIN = f'ari-e2e-{uuid.uuid4().hex[:8]}.{BASE_DOMAIN}'
+ACCOUNT_ID = 'ari-e2e'
+
+
+def _utc_naive(text):
+    return datetime.fromisoformat(text.replace('Z', '+00:00')).astimezone(
+        timezone.utc).replace(tzinfo=None)
+
+
+@pytest.fixture(scope='module')
+def instance(tmp_path_factory, cloudflare_token):
+    """A real CertMate, in this process, pinned to Let's Encrypt staging."""
+    tmp = tmp_path_factory.mktemp('ari-e2e')
+    token = secrets.token_urlsafe(32)
+    with pytest.MonkeyPatch.context() as patch:
+        for var, sub in (('CERTMATE_CERT_DIR', 'certs'),
+                         ('CERTMATE_DATA_DIR', 'data'),
+                         ('CERTMATE_BACKUP_DIR', 'backups'),
+                         ('CERTMATE_LOGS_DIR', 'logs')):
+            (tmp / sub).mkdir(exist_ok=True)
+            patch.setenv(var, str(tmp / sub))
+        patch.setenv('API_BEARER_TOKEN', token)
+        from modules.factory import create_app
+        _, container = create_app()
+        managers = container.managers
+
+        settings_manager = managers['settings']
+        settings = settings_manager.load_settings()
+        settings.update({
+            'email': TEST_EMAIL,
+            'default_ca': 'letsencrypt_staging',
+            # Non-empty on purpose: an EMPTY staging entry aliases back to
+            # production in ca_manager.get_ca_config (see e2e_support).
+            'ca_providers': {
+                'letsencrypt': {'email': TEST_EMAIL},
+                'letsencrypt_staging': {'email': TEST_EMAIL},
+            },
+            'dns_provider': 'cloudflare',
+            'domains': [{'domain': TEST_DOMAIN, 'dns_provider': 'cloudflare',
+                         'account_id': ACCOUNT_ID, 'auto_renew': True}],
+        })
+        assert settings_manager.save_settings(settings, 'ari-e2e') is not False
+        managers['dns'].add_account(
+            ACCOUNT_ID, 'cloudflare', {'api_token': cloudflare_token})
+        yield managers['certificates']
+
+
+def _leaf(manager):
+    pem = (manager.cert_dir / TEST_DOMAIN / 'cert.pem').read_bytes()
+    return pem, x509.load_pem_x509_certificate(pem)
+
+
+def _record(manager):
+    path = manager.cert_dir / TEST_DOMAIN / 'renewal-info.json'
+    return json.loads(path.read_text())
+
+
+def test_01_issue_on_staging(instance):
+    result = instance.create_certificate(
+        TEST_DOMAIN, TEST_EMAIL, 'cloudflare', account_id=ACCOUNT_ID,
+        ca_provider='letsencrypt_staging')
+    assert result, result
+    pem, _ = _leaf(instance)
+    print('issuer:', assert_staging_issuer(pem.decode()))
+
+
+def test_02_the_sweep_records_what_staging_says(instance):
+    """No renewal yet — the window is in the future — but the answer is
+    kept, and it is the CA's answer rather than one CertMate made up."""
+    summary = instance.check_renewals()
+    assert summary['renewed'] == 0, summary
+    assert summary['failed'] == 0, summary
+
+    _, cert = _leaf(instance)
+    record = _record(instance)
+    cert_id = ari.certificate_id(cert)
+    assert record['status'] == ari.STATUS_WINDOW, record
+    assert record['cert_id'] == cert_id
+
+    # Asked of staging directly, bypassing CertMate's client entirely.
+    with urllib.request.urlopen(STAGING_DIRECTORY, timeout=15) as r:
+        base = json.load(r)['renewalInfo']
+    with urllib.request.urlopen(f'{base.rstrip("/")}/{cert_id}',
+                                timeout=15) as r:
+        direct = json.load(r)['suggestedWindow']
+    assert _utc_naive(record['window_start']) == _utc_naive(direct['start'])
+    assert _utc_naive(record['window_end']) == _utc_naive(direct['end'])
+
+    renew_at = _utc_naive(record['renew_at'])
+    assert _utc_naive(direct['start']) <= renew_at <= _utc_naive(direct['end'])
+    not_after = cert.not_valid_after_utc.replace(tzinfo=None)
+    days_left = (not_after - datetime.utcnow()).days
+    print(f'window {direct["start"]} .. {direct["end"]}, renew_at '
+          f'{record["renew_at"]}, {days_left} days left')
+
+    # And what the API returns is that record.
+    info = instance.get_certificate_info(TEST_DOMAIN, use_cache=False)
+    assert info['renewal_info']['renew_at'] == record['renew_at']
+
+
+def test_03_the_window_drives_a_real_renewal(instance):
+    """THE test. The threshold says no; staging's window, read at the instant
+    the sweep chose, says yes; the renewal has to reach the CA."""
+    pem_before, cert_before = _leaf(instance)
+    renew_at = _utc_naive(_record(instance)['renew_at'])
+    days_left = (cert_before.not_valid_after_utc.replace(tzinfo=None)
+                 - datetime.utcnow()).days
+    assert days_left > 30, (
+        f'{days_left} days left: certbot would renew this without being '
+        f'forced, so this run cannot tell the fix from its absence')
+
+    instance._ari_client = ari.RenewalInfoClient(clock=lambda: renew_at)
+    summary = instance.check_renewals()
+
+    assert summary['failed'] == 0, summary
+    assert summary['skipped_not_due'] == 0, (
+        'certbot answered "not yet due" to a renewal the CA asked for', summary)
+    assert summary['renewed'] == 1, summary
+    assert summary['ari_advanced'] == 1, summary
+
+    pem_after, cert_after = _leaf(instance)
+    assert cert_after.serial_number != cert_before.serial_number
+    assert_staging_issuer(pem_after.decode())
+    print('renewed:', hex(cert_before.serial_number), '->',
+          hex(cert_after.serial_number))
+
+
+def test_04_the_old_window_is_not_shown_for_the_new_certificate(instance):
+    info = instance.get_certificate_info(TEST_DOMAIN, use_cache=False)
+    assert info['renewal_info'] is None, info['renewal_info']
