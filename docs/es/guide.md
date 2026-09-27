@@ -1,6 +1,6 @@
 # CertMate Certificados de Cliente - Guía de uso
 
-<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
+<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
 
 ## Descripción general
 
@@ -390,8 +390,10 @@ El umbral de 30 dias es la opinion de CertMate, y es la misma para cada
 certificado y cada CA. Desde la [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 una CA puede publicar la suya, por certificado: un endpoint `renewalInfo` que
 responde con una ventana durante la cual quiere que ese certificado se
-sustituya. Let's Encrypt ofrece uno en produccion; step-ca tambien, para una
-CA privada.
+sustituya. Let's Encrypt ofrece uno, en produccion y en staging. step-ca todavia
+no (0.30.2, medido; vea smallstep/certificates#2162), asi que en una step-ca
+privada decide solo el umbral y el panel del certificado indica que la CA no
+publica una ventana.
 
 El barrido de renovacion TLS lo pregunta. Para cada certificado que el umbral
 **no** ha declarado ya vencido, CertMate obtiene la ventana de la CA y renueva

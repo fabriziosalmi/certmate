@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.39.0 (the renewal the CA asked for)
+
+[Read the notes](docs/releases/v2.39.0.md)
+
 ## v2.38.0 (things that were true somewhere else)
 
 [Read the notes](docs/releases/v2.38.0.md)

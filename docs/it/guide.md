@@ -1,6 +1,6 @@
 # CertMate Certificati Client - Guida all'utilizzo
 
-<!-- CERTMATE-TRANSLATED-FROM ee0e35c1ecc54621 -->
+<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
 
 ## Panoramica
 
@@ -390,8 +390,10 @@ La soglia di 30 giorni e l'opinione di CertMate, ed e la stessa per ogni
 certificato e per ogni CA. Dalla [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 una CA puo pubblicare la propria, per singolo certificato: un endpoint
 `renewalInfo` che risponde con una finestra entro cui desidera che quel
-certificato venga sostituito. Let's Encrypt ne espone uno in produzione; lo fa
-anche step-ca, per una CA privata.
+certificato venga sostituito. Let's Encrypt ne espone uno, in produzione e in
+staging. step-ca non ancora (0.30.2, misurato; vedi smallstep/certificates#2162),
+quindi su una step-ca privata decide solo la soglia e il pannello del
+certificato dice che la CA non pubblica una finestra.
 
 La scansione di rinnovo TLS lo chiede. Per ogni certificato che la soglia
 **non** ha gia dichiarato in scadenza, CertMate recupera la finestra della CA
