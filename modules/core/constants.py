@@ -317,6 +317,22 @@ METADATA_SCHEMA_VERSION = 1
 #                                   field. A caller that ignores it keeps the
 #                                   old `(type, name)` matching, unchanged.
 #
+#   GET /api/activity               states its ordering for the first time:
+#                                   newest first (#941). The code's own
+#                                   docstrings always claimed it and the code
+#                                   did the opposite, so /activity opened on
+#                                   the oldest entry in the log. Counted MINOR
+#                                   rather than MAJOR because nothing
+#                                   published promised the other direction —
+#                                   docs/api.md described the WINDOW ("the
+#                                   most recent entries") and never the
+#                                   direction within it. A caller that relied
+#                                   on ascending was relying on behaviour that
+#                                   contradicted the documentation it came
+#                                   with, and a reader should be able to
+#                                   disagree having seen the reasoning. Same
+#                                   for GET /api/web/audit-logs.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -336,7 +352,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.21'
+API_CONTRACT_VERSION = '2.22'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

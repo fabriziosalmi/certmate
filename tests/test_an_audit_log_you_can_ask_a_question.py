@@ -174,9 +174,14 @@ def test_the_page_explains_what_an_empty_answer_means():
 def test_the_newest_match_is_first_from_the_callers_point_of_view(audit):
     """`get_recent_entries` documents "newest first" and the activity page
     renders in that order; a search that came back oldest-first would put the
-    least interesting row at the top."""
+    least interesting row at the top.
+
+    This test asserted `entries[-1]` until #941 — the newest match LAST, which
+    is the thing its own name and the sentence above say must not happen. The
+    name carried the intent and the index carried the observed behaviour, so
+    the test documented the defect while claiming to prevent it."""
     _fill(audit, count=3)
     audit.log_operation('revoke', 'certificate', 'newest.example.com', 'success')
 
     found = audit.search_entries(limit=10, resource_type='certificate')
-    assert found['entries'][-1]['resource_id'] == 'newest.example.com'
+    assert found['entries'][0]['resource_id'] == 'newest.example.com'

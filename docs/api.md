@@ -1834,7 +1834,11 @@ key with `is_agent: true` (a checkbox on Settings → API Keys, or `is_agent` in
 ### Reading the audit log over the API
 
 `GET /api/activity?limit=N` returns the most recent entries (admin/viewer,
-bounded to 500).
+bounded to 500), **newest first**. Since API contract **2.22** that ordering is
+stated rather than merely observed: the code always documented it and did the
+opposite, so the page opened on the oldest entry in the log. `limit` selects
+the window — the most recent N — and the direction within it is newest to
+oldest. `GET /api/web/audit-logs` answers the same way.
 
 It can also be **narrowed**, by any of `operation`, `resource_type`,
 `resource_id`, `user` and `status`:
