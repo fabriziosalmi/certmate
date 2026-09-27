@@ -13,6 +13,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 
 ### Core Features
 - **[DNS Providers](./dns-providers.md)** — supported providers, multi-account, domain alias
+- **[Custom DNS Script](./custom-dns-script.md)** — any provider with no plugin, driven by your own hooks
 - **[CA Providers](./ca-providers.md)** — Let's Encrypt, DigiCert, Private CA
 - **[Client Certificates](./guide.md)** — Client cert lifecycle, web dashboard, batch ops
 - **[Model Context Protocol (MCP) Server](./mcp.md)** — Standalone Node.js server for AI agent integrations
@@ -163,6 +164,7 @@ docs/
   csr-only-certificates.md  issuing when the key stays on the device
   deploy-hooks.md         post-issuance deploy hooks
   webhooks.md             generic webhooks: payload templates, auth, signature
+  custom-dns-script.md    any DNS provider with no plugin, via your own hooks
   discovery-inventory.md  discovery, inventory, adopt, crypto readiness
   dns-providers.md        DNS providers, multi-account, domain alias
   docker.md               Docker build and deployment

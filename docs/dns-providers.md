@@ -398,9 +398,14 @@ multiple DuckDNS subdomains are not supported.
 
 ### Custom Script (bring your own provider)
 
-For DNS providers without a certbot plugin — Oracle Cloud (OCI), in-house DNS,
-appliance APIs — point CertMate at your own scripts and it drives them through
-certbot's core `--manual` mode. No plugin installation required.
+For DNS providers without a certbot plugin — Oracle Cloud (OCI), Total Uptime,
+Netriplex, in-house DNS, appliance APIs — point CertMate at your own scripts
+and it drives them through certbot's core `--manual` mode. No plugin
+installation required.
+
+**[Custom DNS Script](custom-dns-script.md)** is the full guide: the path rules
+and why they are strict, the exact environment your script is called with, the
+wildcard-plus-apex case, what renewal remembers, and a worked example.
 
 ```json
 {
