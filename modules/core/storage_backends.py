@@ -95,6 +95,56 @@ def _looks_absent(error, *, codes=(), names=()) -> bool:
     return code in codes or status == 404
 
 
+def _aws_storage_auth(config, backend_name):
+    """Resolve legacy key-pair settings or an explicit AWS credential-chain mode."""
+    key = (config.get('access_key_id') or '').strip()
+    secret = (config.get('secret_access_key') or '').strip()
+    mode = config.get('auth_mode') or ('access_keys' if key or secret else 'iam_role')
+    role_arn = (config.get('assume_role_arn') or '').strip()
+    if mode not in ('access_keys', 'iam_role'):
+        raise ValueError(f"{backend_name} auth_mode must be access_keys or iam_role")
+    if mode == 'access_keys' and not (key and secret):
+        raise ValueError(f"{backend_name} requires access_key_id and secret_access_key in access_keys mode")
+    if role_arn and not re.fullmatch(
+            r'arn:aws(?:-us-gov|-cn)?:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+', role_arn):
+        raise ValueError("assume_role_arn must be an IAM role ARN")
+    return mode, key, secret, role_arn
+
+
+def _aws_storage_client(service, region, mode, key, secret, role_arn='', endpoint_url=None):
+    """Create an AWS client, refreshing STS credentials for an assumed role."""
+    import boto3
+
+    options = {'region_name': region}
+    if mode == 'access_keys':
+        options.update(aws_access_key_id=key, aws_secret_access_key=secret)
+    service_options = {'endpoint_url': endpoint_url} if service == 's3' else {}
+    if not role_arn:
+        return boto3.client(service, **options, **service_options)
+
+    from botocore.credentials import RefreshableCredentials
+    from botocore.session import get_session
+
+    sts = boto3.client('sts', **options)
+
+    def refresh():
+        creds = sts.assume_role(
+            RoleArn=role_arn, RoleSessionName=f'certmate-{service}-storage')['Credentials']
+        return {
+            'access_key': creds['AccessKeyId'],
+            'secret_key': creds['SecretAccessKey'],
+            'token': creds['SessionToken'],
+            'expiry_time': creds['Expiration'].isoformat(),
+        }
+
+    session = get_session()
+    session._credentials = RefreshableCredentials.create_from_metadata(
+        metadata=refresh(), refresh_using=refresh, method='sts-assume-role')
+    session.set_config_variable('region', region)
+    return boto3.Session(botocore_session=session).client(
+        service, region_name=region, **service_options)
+
+
 def _is_transient(exc):
     """Determine whether an exception is transient and worth retrying.
 
@@ -1281,15 +1331,9 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
     """AWS Secrets Manager storage backend"""
     
     def __init__(self, config: Dict[str, str]):
-        self.region = config.get('region', 'us-east-1')
-        self.access_key_id = config.get('access_key_id')
-        self.secret_access_key = config.get('secret_access_key')
-        
-        self.region = (self.region or 'us-east-1').strip()
-        self.access_key_id = (self.access_key_id or '').strip()
-        self.secret_access_key = (self.secret_access_key or '').strip()
-        if not all([self.access_key_id, self.secret_access_key]):
-            raise ValueError("AWS Secrets Manager backend requires access_key_id and secret_access_key")
+        self.region = (config.get('region') or 'us-east-1').strip()
+        (self.auth_mode, self.access_key_id, self.secret_access_key,
+         self.assume_role_arn) = _aws_storage_auth(config, 'AWS Secrets Manager backend')
         
         self._client = None
         logger.info(f"AWSSecretsManagerBackend initialized for region: {self.region}")
@@ -1298,13 +1342,9 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
         """Get AWS Secrets Manager client with lazy initialization"""
         if self._client is None:
             try:
-                import boto3
-                self._client = boto3.client(
-                    'secretsmanager',
-                    region_name=self.region,
-                    aws_access_key_id=self.access_key_id,
-                    aws_secret_access_key=self.secret_access_key
-                )
+                self._client = _aws_storage_client(
+                    'secretsmanager', self.region, self.auth_mode,
+                    self.access_key_id, self.secret_access_key, self.assume_role_arn)
             except ImportError:
                 raise ImportError("AWS Secrets Manager backend requires 'boto3' package")
         return self._client
@@ -1925,15 +1965,17 @@ class S3CompatibleBackend(CertificateStorageBackend):
     def __init__(self, config: Dict[str, str]):
         self.endpoint_url = (config.get('endpoint_url') or '').strip()
         self.bucket = (config.get('bucket') or '').strip()
-        self.access_key_id = (config.get('access_key_id') or '').strip()
-        self.secret_access_key = (config.get('secret_access_key') or '').strip()
+        (self.auth_mode, self.access_key_id, self.secret_access_key,
+         self.assume_role_arn) = _aws_storage_auth(config, 'S3-compatible backend')
         self.region = (config.get('region') or 'us-east-1').strip()
         # Key namespace inside the bucket; trailing slashes normalised away.
         self.prefix = (config.get('prefix') or 'certmate/certificates').strip().strip('/')
-        if not all([self.endpoint_url, self.bucket, self.access_key_id, self.secret_access_key]):
-            raise ValueError(
-                "S3-compatible backend requires endpoint_url, bucket, "
-                "access_key_id and secret_access_key")
+        if not self.bucket:
+            raise ValueError("S3-compatible backend requires bucket")
+        if self.auth_mode == 'iam_role' and self.endpoint_url:
+            raise ValueError("IAM role authentication requires an empty endpoint_url (AWS S3)")
+        if self.assume_role_arn and self.endpoint_url:
+            raise ValueError("AssumeRole requires an empty endpoint_url (AWS S3)")
         self._client = None
         logger.info("S3CompatibleBackend initialized for endpoint %s bucket %s",
                     self.endpoint_url, self.bucket)
@@ -1941,14 +1983,10 @@ class S3CompatibleBackend(CertificateStorageBackend):
     def _get_client(self):
         if self._client is None:
             try:
-                import boto3
-                self._client = boto3.client(
-                    's3',
-                    endpoint_url=self.endpoint_url,
-                    aws_access_key_id=self.access_key_id,
-                    aws_secret_access_key=self.secret_access_key,
-                    region_name=self.region,
-                )
+                self._client = _aws_storage_client(
+                    's3', self.region, self.auth_mode, self.access_key_id,
+                    self.secret_access_key, self.assume_role_arn,
+                    endpoint_url=self.endpoint_url or None)
             except ImportError:
                 raise ImportError("S3-compatible backend requires 'boto3' package")
         return self._client
@@ -2329,7 +2367,13 @@ class StorageManager:
         migration_results = {}
         
         try:
-            domains = source_backend.list_certificates()
+            # These two public list methods return [] after a permission or
+            # network error. For migration, that is indistinguishable from an
+            # actually empty source, so use the raising attempts instead.
+            if isinstance(source_backend, (S3CompatibleBackend, AWSSecretsManagerBackend)):
+                domains = source_backend._list_certificates_attempt()
+            else:
+                domains = source_backend.list_certificates()
             logger.info(f"Starting migration of {len(domains)} certificates from {source_backend.get_backend_name()} to {target_backend.get_backend_name()}")
             
             for domain in domains:

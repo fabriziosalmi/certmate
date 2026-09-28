@@ -2374,6 +2374,20 @@
         if (typeof toggleAzureBackfillRow === 'function') {
             toggleAzureBackfillRow();
         }
+        toggleAWSAuthMode();
+        toggleS3AuthMode();
+    }
+
+    function toggleAWSAuthMode() {
+        var keys = document.getElementById('aws-key-fields');
+        var mode = document.getElementById('aws-auth-mode');
+        if (keys && mode) keys.style.display = mode.value === 'iam_role' ? 'none' : '';
+    }
+
+    function toggleS3AuthMode() {
+        var keys = document.getElementById('s3-key-fields');
+        var mode = document.getElementById('s3-auth-mode');
+        if (keys && mode) keys.style.display = mode.value === 'iam_role' ? 'none' : '';
     }
 
     function testStorageBackend() {
@@ -2511,8 +2525,10 @@
 
             case 'aws_secrets_manager':
                 config.region = document.getElementById('aws-region').value || 'us-east-1';
-                config.access_key_id = document.getElementById('aws-access-key-id').value;
-                config.secret_access_key = document.getElementById('aws-secret-access-key').value;
+                config.auth_mode = document.getElementById('aws-auth-mode').value;
+                config.access_key_id = config.auth_mode === 'iam_role' ? '' : document.getElementById('aws-access-key-id').value;
+                config.secret_access_key = config.auth_mode === 'iam_role' ? '' : document.getElementById('aws-secret-access-key').value;
+                config.assume_role_arn = document.getElementById('aws-assume-role-arn').value;
                 break;
 
             case 'hashicorp_vault':
@@ -2533,8 +2549,10 @@
             case 's3_compatible':
                 config.endpoint_url = document.getElementById('s3-endpoint-url').value;
                 config.bucket = document.getElementById('s3-bucket').value;
-                config.access_key_id = document.getElementById('s3-access-key-id').value;
-                config.secret_access_key = document.getElementById('s3-secret-access-key').value;
+                config.auth_mode = document.getElementById('s3-auth-mode').value;
+                config.access_key_id = config.auth_mode === 'iam_role' ? '' : document.getElementById('s3-access-key-id').value;
+                config.secret_access_key = config.auth_mode === 'iam_role' ? '' : document.getElementById('s3-secret-access-key').value;
+                config.assume_role_arn = document.getElementById('s3-assume-role-arn').value;
                 config.region = document.getElementById('s3-region').value || 'us-east-1';
                 config.prefix = document.getElementById('s3-prefix').value || 'certmate/certificates';
                 break;
@@ -2552,7 +2570,7 @@
                 return config.vault_url && config.tenant_id && config.client_id && config.client_secret;
 
             case 'aws_secrets_manager':
-                return config.access_key_id && config.secret_access_key;
+                return config.auth_mode === 'iam_role' || (config.access_key_id && config.secret_access_key);
 
             case 'hashicorp_vault':
                 return config.vault_url && config.vault_token;
@@ -2561,7 +2579,9 @@
                 return config.client_id && config.client_secret && config.project_id;
 
             case 's3_compatible':
-                return config.endpoint_url && config.bucket && config.access_key_id && config.secret_access_key;
+                if (!config.bucket || (config.assume_role_arn && config.endpoint_url)) return false;
+                if (config.auth_mode === 'iam_role') return !config.endpoint_url;
+                return config.access_key_id && config.secret_access_key;
 
             default:
                 return false;
@@ -2743,8 +2763,12 @@
             case 'aws_secrets_manager':
                 // Support both nested ({aws_secrets_manager:{...}}) and legacy flat format
                 var awsConfig = storageConfig.aws_secrets_manager || storageConfig;
+                document.getElementById('aws-auth-mode').value = awsConfig.auth_mode ||
+                    (awsConfig.access_key_id || awsConfig.secret_access_key ? 'access_keys' : 'iam_role');
                 document.getElementById('aws-region').value = awsConfig.region || 'us-east-1';
                 document.getElementById('aws-access-key-id').value = awsConfig.access_key_id || '';
+                document.getElementById('aws-assume-role-arn').value = awsConfig.assume_role_arn || '';
+                toggleAWSAuthMode();
                 // Don't populate secret_access_key for security
                 break;
 
@@ -2768,10 +2792,14 @@
 
             case 's3_compatible':
                 var s3Config = storageConfig.s3_compatible || storageConfig;
+                document.getElementById('s3-auth-mode').value = s3Config.auth_mode ||
+                    (s3Config.access_key_id || s3Config.secret_access_key ? 'access_keys' : 'iam_role');
                 document.getElementById('s3-endpoint-url').value = s3Config.endpoint_url || '';
                 document.getElementById('s3-bucket').value = s3Config.bucket || '';
                 document.getElementById('s3-region').value = s3Config.region || 'us-east-1';
                 document.getElementById('s3-prefix').value = s3Config.prefix || 'certmate/certificates';
+                document.getElementById('s3-assume-role-arn').value = s3Config.assume_role_arn || '';
+                toggleS3AuthMode();
                 // Don't populate access keys for security
                 break;
         }
@@ -2926,8 +2954,12 @@
             '</div>' +
             '<div class="mb-4">' +
             '<p class="text-sm text-muted">' +
-            'This will migrate all existing certificates from the current storage backend to the newly configured backend.' +
+            'Copy certificates from the selected source into the storage backend shown in Settings.' +
             '</p>' +
+            '<label for="storageMigSource" class="block text-sm text-label mt-3 mb-1">Source backend</label>' +
+            '<select id="storageMigSource" class="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground">' +
+            '<option value="local_filesystem">Local filesystem</option>' +
+            '</select>' +
             '<div class="mt-3 p-3 bg-warning-surface border border-warning-line rounded-md">' +
             '<div class="flex">' +
             '<i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5 mr-2"></i>' +
@@ -2951,6 +2983,19 @@
             '</div>' +
             '</div>';
         document.body.appendChild(modal);
+
+        // The operator may have saved the target already. In that case the
+        // saved backend is no longer the source, but its previous configuration
+        // remains in settings and can still be selected explicitly.
+        var stored = currentSettings.certificate_storage || {};
+        var sourceSelect = document.getElementById('storageMigSource');
+        Array.prototype.forEach.call(document.getElementById('storage-backend').options, function (option) {
+            if (option.value !== 'local_filesystem' && stored[option.value]) {
+                sourceSelect.add(new Option(option.text, option.value));
+            }
+        });
+        var target = document.getElementById('storage-backend').value;
+        if (stored.backend && stored.backend !== target) sourceSelect.value = stored.backend;
 
         // Wire up event listeners instead of inline onclick
         document.getElementById('storageMigCloseBtn').addEventListener('click', closeStorageMigrationModal);
@@ -2982,6 +3027,7 @@
 
     function performStorageMigration() {
         var newConfig = collectStorageBackendSettings();
+        var sourceBackend = document.getElementById('storageMigSource').value;
         // Pull the per-backend sub-config out of the envelope produced by
         // collectStorageBackendSettings (which nests under the backend key,
         // e.g. { backend: 'azure_keyvault', azure_keyvault: {...} }). The
@@ -2998,14 +3044,14 @@
         showMessage('Starting certificate migration...', 'info');
         closeStorageMigrationModal();
 
-        // Send target_backend explicitly + the envelope as target_config. The
-        // server defaults source_backend/source_config from the currently
-        // saved certificate_storage, so the UI doesn't have to track the
-        // pre-edit backend identity itself.
+        // Send the selected source explicitly; the server resolves its stored
+        // configuration (or the default local certificate directory). This
+        // still works after the target backend has already been saved.
         fetch('/api/storage/migrate', {
             method: 'POST',
             headers: API_HEADERS,
             body: JSON.stringify({
+                source_backend: sourceBackend,
                 target_backend: newConfig.backend,
                 target_config: newConfig
             })
@@ -3020,6 +3066,10 @@
                 if (result.ok && data.success) {
                     var migrated = (data.migrated_count != null) ? data.migrated_count : 0;
                     var failed = (data.failed_count != null) ? data.failed_count : 0;
+                    if (data.total === 0) {
+                        showMessage('No certificates found in the selected source backend. Check the source and its certificate directory.', 'warning');
+                        return;
+                    }
                     var msg = 'Migration completed. ' + migrated + ' certificates migrated';
                     if (failed > 0) {
                         msg += ', ' + failed + ' failed (see server logs)';
@@ -3525,6 +3575,8 @@
     window.toggleTokenVisibility = toggleTokenVisibility;
     window.generateToken = generateToken;
     window.toggleStorageBackendConfig = toggleStorageBackendConfig;
+    window.toggleAWSAuthMode = toggleAWSAuthMode;
+    window.toggleS3AuthMode = toggleS3AuthMode;
     window.toggleDefaultKeyOptions = toggleDefaultKeyOptions;
     window.testStorageBackend = testStorageBackend;
     window.toggleAzureBackfillRow = toggleAzureBackfillRow;
