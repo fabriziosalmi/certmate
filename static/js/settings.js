@@ -2954,10 +2954,12 @@
             '</div>' +
             '<div class="mb-4">' +
             '<p class="text-sm text-muted">' +
-            'Copy certificates from the selected source into the storage backend shown in Settings.' +
+            'Copy certificates from the source you choose into the storage backend shown in Settings. ' +
+            'Select the saved backend even when changing only its bucket or other settings.' +
             '</p>' +
             '<label for="storageMigSource" class="block text-sm text-label mt-3 mb-1">Source backend</label>' +
             '<select id="storageMigSource" class="w-full px-3 py-2 text-sm border border-border rounded bg-input text-foreground">' +
+            '<option value="">Choose source backend...</option>' +
             '<option value="local_filesystem">Local filesystem</option>' +
             '</select>' +
             '<div class="mt-3 p-3 bg-warning-surface border border-warning-line rounded-md">' +
@@ -2984,9 +2986,8 @@
             '</div>';
         document.body.appendChild(modal);
 
-        // The operator may have saved the target already. In that case the
-        // saved backend is no longer the source, but its previous configuration
-        // remains in settings and can still be selected explicitly.
+        // A saved target and an unsaved edit to the same backend type are
+        // indistinguishable by type alone. Never guess the source.
         var stored = currentSettings.certificate_storage || {};
         var sourceSelect = document.getElementById('storageMigSource');
         Array.prototype.forEach.call(document.getElementById('storage-backend').options, function (option) {
@@ -2994,8 +2995,6 @@
                 sourceSelect.add(new Option(option.text, option.value));
             }
         });
-        var target = document.getElementById('storage-backend').value;
-        if (stored.backend && stored.backend !== target) sourceSelect.value = stored.backend;
 
         // Wire up event listeners instead of inline onclick
         document.getElementById('storageMigCloseBtn').addEventListener('click', closeStorageMigrationModal);
@@ -3028,6 +3027,10 @@
     function performStorageMigration() {
         var newConfig = collectStorageBackendSettings();
         var sourceBackend = document.getElementById('storageMigSource').value;
+        if (!sourceBackend) {
+            showMessage('Select the source backend before migrating certificates.', 'error');
+            return;
+        }
         // Pull the per-backend sub-config out of the envelope produced by
         // collectStorageBackendSettings (which nests under the backend key,
         // e.g. { backend: 'azure_keyvault', azure_keyvault: {...} }). The

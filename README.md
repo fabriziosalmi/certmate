@@ -1715,7 +1715,10 @@ backend currently saved in settings, so migrate **before** switching:
 
 If you already saved the new backend, choose **Local filesystem** (or the
 previously configured backend) as **Source backend** in the Settings migration
-dialog. The target remains the backend selected in Settings. Via the API,
+dialog. The dialog always requires an explicit source choice: when migrating
+from bucket A to bucket B within S3, choose the **saved S3 backend** as source,
+even though S3 is also selected as the target. The target remains the backend
+selected in Settings. Via the API,
 include `"source_backend": "local_filesystem"` in the migration request.
 A zero-domain result means no certificates were found in that source; check
 the source selection and certificate directory rather than assuming the
