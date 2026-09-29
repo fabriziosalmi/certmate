@@ -175,3 +175,71 @@ def test_the_route_refuses_a_string_instead_of_walking_it(tmp_path):
     response = app.test_client().post('/api/web/certificates/batch',
                                       json={'domains': 'a.example.com'})
     assert response.status_code == 400
+
+
+# --- the route, as the adapter it now is -----------------------------------
+
+def _route_client(tmp_path, *, email='ops@example.com', service=None):
+    from flask import Flask, request
+
+    from modules.core.constants import CERTIFICATE_FILES
+    from modules.web.cert_routes import register_cert_routes
+
+    app = Flask(__name__)
+    auth = MagicMock()
+    auth.require_role = MagicMock(side_effect=lambda role: (lambda fn: fn))
+    settings = MagicMock()
+    settings.load_settings.return_value = {'email': email} if email else {}
+    register_cert_routes(app, {'audit': MagicMock(), 'cert_service': service},
+                         lambda fn: fn, auth, MagicMock(cert_dir=Path(tmp_path)),
+                         lambda d: d, MagicMock(), settings, MagicMock(), CERTIFICATE_FILES)
+
+    @app.before_request
+    def _user():
+        request.current_user = {'username': 'op', 'role': 'operator'}
+
+    return app.test_client()
+
+
+@pytest.mark.parametrize('body, status', [
+    ({}, 400),
+    ({'domains': []}, 400),
+    ({'domains': [f'd{i}.example.com' for i in range(51)]}, 400),
+])
+def test_the_route_refuses_a_batch_it_cannot_run(tmp_path, body, status):
+    response = _route_client(tmp_path).post('/api/web/certificates/batch', json=body)
+    assert response.status_code == status
+
+
+def test_the_route_refuses_without_an_email(tmp_path):
+    response = _route_client(tmp_path, email=None).post(
+        '/api/web/certificates/batch', json={'domains': ['a.example.com']})
+    assert response.status_code == 400
+    assert 'Email' in response.get_json()['error']
+
+
+def test_the_route_hands_every_field_to_the_service_and_returns_its_results(tmp_path):
+    service = MagicMock()
+    service.create_batch.return_value = [{'domain': 'a.example.com', 'success': True,
+                                          'message': 'Certificate created'}]
+    response = _route_client(tmp_path, service=service).post(
+        '/api/web/certificates/batch',
+        json={'domains': ['a.example.com'], 'dns_provider': 'cloudflare',
+              'account_id': 'prod', 'ca_provider': 'letsencrypt',
+              'ca_account_id': 'ca1', 'challenge_type': 'dns-01'})
+
+    assert response.status_code == 200
+    assert response.get_json() == service.create_batch.return_value
+    kwargs = service.create_batch.call_args.kwargs
+    assert (kwargs['domains'], kwargs['dns_provider'], kwargs['account_id'],
+            kwargs['ca_provider'], kwargs['ca_account_id'], kwargs['challenge_type']) == (
+        ['a.example.com'], 'cloudflare', 'prod', 'letsencrypt', 'ca1', 'dns-01')
+
+
+def test_an_unexpected_error_is_a_generic_500(tmp_path):
+    service = MagicMock()
+    service.create_batch.side_effect = RuntimeError('secret-bearing detail')
+    response = _route_client(tmp_path, service=service).post(
+        '/api/web/certificates/batch', json={'domains': ['a.example.com']})
+    assert response.status_code == 500
+    assert 'secret' not in response.get_data(as_text=True)
