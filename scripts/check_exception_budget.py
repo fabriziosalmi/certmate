@@ -181,7 +181,10 @@ GENERAL_LIMIT = 10
 # 422 -> 421 on 2026-09-29: IssuanceExecutor._publish is gone with the
 # executor's own lifecycle events (the double-publish fix). One broad handler
 # fewer, because the thing it guarded no longer exists.
-TOTAL_LIMIT = 421
+# 421 -> 420 the same day: _publish_renewed_certificate's try/except around
+# "apply warning + save metadata" went with the shared _commit_certificate
+# (#666). Neither call can raise: _save_metadata returns a bool and logs.
+TOTAL_LIMIT = 420
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
@@ -212,7 +215,7 @@ UNACCOUNTED_LIMIT = 0
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
     'modules/core/storage_backends.py': 64,
-    'modules/core/certificates.py': 46,
+    'modules/core/certificates.py': 45,
     'modules/core/file_operations.py': 16,
     'modules/web/misc_routes.py': 16,
     'modules/api/resources_health.py': 14,
