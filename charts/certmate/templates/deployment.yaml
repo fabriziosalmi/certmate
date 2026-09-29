@@ -113,6 +113,9 @@ spec:
               mountPath: /app/backups
               subPath: backups
             {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -121,6 +124,9 @@ spec:
         - name: backups
           persistentVolumeClaim:
             claimName: {{ include "certmate.backupPvcName" . }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
