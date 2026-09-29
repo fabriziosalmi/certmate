@@ -2770,19 +2770,29 @@ class CertificateManager:
             # with the account that controls that zone — which renewals
             # already honour via metadata alias_dns_provider (issue #129).
             alias_hook_config = dns_config
+            alias_propagation = propagation_time or strategy.default_propagation_seconds
             if alias_hook_provider != dns_provider:
                 alias_hook_config, _ = self._get_dns_config(alias_hook_provider, account_id)
                 if not alias_hook_config:
                     raise ValueError(
                         f"Alias DNS provider '{alias_hook_provider}' is not configured"
                     )
+                # The TXT record lands on the ALIAS zone, so its provider
+                # decides the environment and the wait, exactly as renewal
+                # already did (_prepare_renewal_dns). Issuance used the
+                # primary provider's: a Cloudflare domain aliased onto Route53
+                # waited Cloudflare's seconds for a Route53 record (#666, D5).
+                alias_strategy = DNSStrategyFactory.get_strategy(alias_hook_provider)
+                alias_strategy.prepare_environment(process_env, alias_hook_config)
+                alias_propagation = _propagation_seconds(
+                    settings or {}, alias_hook_provider, alias_strategy)
             logger.info(
                 f"DNS alias '{effective_domain_alias}' requested for {domain}; "
                 f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
             )
             artifacts.alias_hook_config = self._create_dns_alias_hook_config(
                 alias_hook_provider, alias_hook_config, effective_domain_alias,
-                propagation_time or strategy.default_propagation_seconds
+                alias_propagation
             )
             self._configure_dns_alias_arguments(certbot_cmd,
                                                 artifacts.alias_hook_config)
