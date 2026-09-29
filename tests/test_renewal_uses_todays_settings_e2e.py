@@ -27,8 +27,10 @@ pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 BASE_DOMAIN = os.environ.get('CERTMATE_TEST_DOMAIN', 'gpfree.org')
 TEST_DOMAIN = f'wait-e2e-{uuid.uuid4().hex[:8]}.{BASE_DOMAIN}'
 ACCOUNT_ID = 'wait-e2e'
-ISSUE_DAY_WAIT = 11
-TODAYS_WAIT = 17
+ISSUE_DAY_WAIT = 40
+TODAYS_WAIT = 47
+# Long enough for Cloudflare: at 11 s staging once found no TXT record yet.
+# Only the issuance pays it; staging reuses the authorization at renewal.
 
 
 @pytest.fixture(scope='module')
