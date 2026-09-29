@@ -391,6 +391,20 @@
                          children, so hiding the picker alone left them
                          visible (issue #226). -->
                     <div id="dns-config-section">
+                    <!-- Per-provider propagation wait (#974). Shows and edits the
+                         value for the provider selected above; the whole map is
+                         saved with the rest of the settings. -->
+                    <div id="dns-propagation-section" class="mb-4 hidden">
+                        <label for="dns_propagation_current" class="block text-xs font-medium text-muted mb-2">
+                            Propagation wait for <span id="dns-propagation-provider">this provider</span> (seconds)
+                        </label>
+                        <input type="number" id="dns_propagation_current" min="1" max="3600"
+                               class="w-32 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
+                        <p class="mt-1 text-xs text-muted">
+                            How long certbot waits after publishing the DNS-01 TXT record before the CA checks it.
+                            Raise it when validation fails with &quot;Some challenges have failed&quot; although the record appears shortly after.
+                        </p>
+                    </div>
                     <!-- Cloudflare Configuration -->
                     <div id="cloudflare-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">

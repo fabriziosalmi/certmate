@@ -129,7 +129,31 @@
     // DNS provider configuration functions
     // =============================================
 
+    // Per-provider propagation wait (#974): the whole map as loaded, edited
+    // one provider at a time through #dns_propagation_current.
+    var propagationSeconds = {};
+
+    function renderPropagationField(provider) {
+        var section = document.getElementById('dns-propagation-section');
+        var field = document.getElementById('dns_propagation_current');
+        var label = document.getElementById('dns-propagation-provider');
+        if (!section || !field) return;
+        if (!provider || !(provider in propagationSeconds)) {
+            section.classList.add('hidden');
+            return;
+        }
+        field.dataset.provider = provider;
+        field.value = propagationSeconds[provider];
+        if (label) {
+            var radio = document.querySelector('input[name="dns_provider"][value="' + provider + '"]');
+            var name = radio && radio.parentElement ? radio.parentElement.querySelector('.text-xs.font-medium') : null;
+            label.textContent = name ? name.textContent.trim() : provider;
+        }
+        section.classList.remove('hidden');
+    }
+
     function showDNSConfig(provider) {
+        renderPropagationField(provider);
         // Hide all DNS config sections
         document.querySelectorAll('.dns-config').forEach(function (config) {
             config.classList.add('hidden');
@@ -228,6 +252,12 @@
                 default_key_size: defaultKeyType === 'rsa' ? (defaultKeySize || 2048) : 2048,
                 default_elliptic_curve: defaultEllipticCurve
             };
+
+            // The whole propagation map (#974): a provider left out would
+            // return to its default on the server.
+            if (Object.keys(propagationSeconds).length) {
+                settings.dns_propagation_seconds = Object.assign({}, propagationSeconds);
+            }
 
             // PFX export password (#230). Secret field: only send when the
             // user typed a value — a blank field means "keep existing", which
@@ -761,6 +791,12 @@
                         });
                     }
                 }
+            }
+
+            if (data.dns_propagation_seconds && typeof data.dns_propagation_seconds === 'object') {
+                propagationSeconds = Object.assign({}, data.dns_propagation_seconds);
+                var checkedProvider = document.querySelector('input[name="dns_provider"]:checked');
+                renderPropagationField(checkedProvider ? checkedProvider.value : data.dns_provider);
             }
 
             if (data.renewal_threshold_days !== undefined) {
@@ -3510,6 +3546,17 @@
                 addDebugLog('Challenge type changed to: ' + this.value, 'info');
             });
         });
+
+        var propagationField = document.getElementById('dns_propagation_current');
+        if (propagationField) {
+            propagationField.addEventListener('input', function () {
+                var provider = this.dataset.provider;
+                var seconds = parseInt(this.value, 10);
+                if (provider && seconds > 0) {
+                    propagationSeconds[provider] = seconds;
+                }
+            });
+        }
 
         // Add radio button listeners
         document.querySelectorAll('input[name="dns_provider"]').forEach(function (radio) {
