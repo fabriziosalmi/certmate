@@ -1164,7 +1164,7 @@ class CertificateManager:
         if (always_persist or storage_warning
                 or self._metadata_path(domain).exists()):
             if self._save_metadata(domain, metadata):
-                logger.info("Saved certificate metadata for %s", domain)
+                logger.info("Saved certificate metadata for %r", domain)
         self._invalidate_certificate_info_cache(domain)
         self._write_pfx(domain)
         return storage_warning
