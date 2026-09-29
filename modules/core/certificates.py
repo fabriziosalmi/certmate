@@ -29,6 +29,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from cryptography import x509
+from .ca_manager import CAManager
 from .shell import ShellExecutor
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir,
                              check_certbot_plugin_installed, clamp_propagation_seconds)
@@ -2715,59 +2716,22 @@ class CertificateManager:
         # Build certbot command (artifacts.ca_extra_env was hoisted above the try
         # so the finally block can clean up safely on early failure)
         san_list = all_domains[1:] if len(all_domains) > 1 else None
-        if self.ca_manager and ca_account_config:
-            try:
-                certbot_cmd, artifacts.ca_extra_env = self.ca_manager.build_certbot_command(
-                    domain, email, ca_provider, dns_provider, dns_config,
-                    ca_account_config, staging, cert_dir, san_domains=san_list,
-                    key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
-                )
-            except TypeError as e:
-                # Defensive fallback: older build_certbot_command without san_domains
-                logger.warning(f"build_certbot_command does not accept san_domains, adding manually: {e}")
-                result = self.ca_manager.build_certbot_command(
-                    domain, email, ca_provider, dns_provider, dns_config,
-                    ca_account_config, staging, cert_dir
-                )
-                if isinstance(result, tuple):
-                    certbot_cmd, artifacts.ca_extra_env = result
-                else:
-                    certbot_cmd = result
-                # Manually append SAN domains
-                if san_list:
-                    for san in san_list:
-                        certbot_cmd.extend(['-d', san])
-                # Fallback path also needs the key flags appended manually
-                # so a stale ca_manager doesn't silently downgrade certs.
-                if key_type == 'rsa' and key_size:
-                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
-                elif key_type == 'ecdsa' and elliptic_curve:
-                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
-        else:
-            certbot_cmd = [
-                'certbot', 'certonly',
-                '--non-interactive',
-                '--agree-tos',
-                '--email', email,
-                '--cert-name', domain,
-                '--config-dir', str(cert_output_dir),
-                '--work-dir', str(cert_output_dir / 'work'),
-                '--logs-dir', str(cert_output_dir / 'logs'),
-            ]
-
-            # Add all domains
-            for d in all_domains:
-                certbot_cmd.extend(['-d', d])
-
-            if staging:
-                certbot_cmd.append('--staging')
-
-            # No-ca_manager path: still honour the resolved key shape so
-            # this branch produces the same cert as the main path.
-            if key_type == 'rsa' and key_size:
-                certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
-            elif key_type == 'ecdsa' and elliptic_curve:
-                certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+        # One builder (#666). There used to be three: this call, a TypeError
+        # fallback "for an older build_certbot_command" (both live in this
+        # repository, so its only reachable effect was to retry past a real
+        # TypeError), and a hand-built argv for Let's Encrypt with no saved CA
+        # config. The hand-built one was equivalent for LE (--staging vs the
+        # staging --server URL) but was a second copy every new flag had to
+        # reach, and the command-contract test pinned only that copy, not the
+        # one production runs. With no saved config the builder gets an empty
+        # account: for LE that is the pinned directory; every other CA was
+        # already refused in _resolve_ca.
+        builder = self.ca_manager or CAManager(self.settings_manager)
+        certbot_cmd, artifacts.ca_extra_env = builder.build_certbot_command(
+            domain, email, ca_provider, dns_provider, dns_config,
+            ca_account_config or {}, staging, cert_dir, san_domains=san_list,
+            key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
+        )
 
         if replace:
             # If the existing lineage is broken (stale paths / non-symlink
