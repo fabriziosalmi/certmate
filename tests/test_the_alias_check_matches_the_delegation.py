@@ -188,7 +188,9 @@ def test_it_reaches_the_issuance_call():
 
     from modules.core.cert_service import CertificateService
 
-    source = inspect.getsource(CertificateService.issue_create)
+    # The create_certificate call lives in _issue_create, the core that both
+    # the single create and the batch go through (#666, D9).
+    source = inspect.getsource(CertificateService._issue_create)
     calls = [ast.unparse(n) for n in ast.walk(ast.parse(source.strip()))
              if isinstance(n, ast.Call)]
 
