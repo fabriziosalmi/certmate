@@ -1068,6 +1068,72 @@ _CERTBOT_LINEAGE_FILES = ('cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem
 _ARCHIVE_VERSION_RE = re.compile(r'^(?P<stem>cert|chain|fullchain|privkey)(?P<n>\d+)\.pem$')
 
 
+def repair_certbot_renewal_paths(domain_dir: Union[str, Path], domain: str) -> bool:
+    """Point renewal/<domain>.conf at THIS lineage, not the one it came from.
+
+    certbot writes absolute paths into the conf: ``archive_dir``, the four
+    ``live/`` files, and ``config_dir`` / ``work_dir`` / ``logs_dir``. A backup
+    restored into another directory (``CERTMATE_CERT_DIR`` changed, bare metal
+    moved into the container, a second install on the same host) keeps the
+    original install's paths, and certbot follows them: measured in #966, it
+    evaluated the OTHER install's lineage and would have renewed those files.
+    Where the old path is gone, it is a parse failure every night instead.
+
+    The old domain directory is read off ``archive_dir``, and only when it has
+    the exact shape certbot gives it under CertMate, ``<dir>/<domain>/archive/
+    <domain>``. Anything else is left alone: certbot's own error is better
+    than a guessed repair. Only lines whose value starts with that old
+    directory are rewritten; the rest of the file is kept byte for byte.
+
+    Returns True when the conf was rewritten. Same untrusted-``domain``
+    precautions as :func:`repair_certbot_lineage_symlinks`, which runs next to
+    it on both the restore path and the renewal path.
+    """
+    shape_ok, _ = validate_domain(domain)
+    if not shape_ok:
+        return False
+    domain_dir = Path(domain_dir)
+    try:
+        base = domain_dir.resolve()
+        conf = (base / 'renewal' / f'{domain}.conf').resolve()
+        conf.relative_to(base)
+    except (OSError, ValueError):
+        return False
+    if not conf.is_file():
+        return False
+
+    text = conf.read_text(encoding='utf-8')
+    match = re.search(r'^archive_dir\s*=\s*(.+?)\s*$', text, re.MULTILINE)
+    if not match:
+        return False
+    suffix = f'/archive/{domain}'
+    archive_value = match.group(1)
+    if not archive_value.endswith(suffix):
+        return False
+    old_dir = archive_value[:-len(suffix)]
+    if Path(old_dir).name != domain or old_dir == str(base) or old_dir == str(domain_dir):
+        return False
+
+    new_dir = str(domain_dir)
+    changed = False
+    out = []
+    for line in text.splitlines(keepends=True):
+        key, sep, value = line.partition('=')
+        stripped = value.strip()
+        if sep and (stripped == old_dir or stripped.startswith(old_dir + '/')):
+            ending = '\n' if line.endswith('\n') else ''
+            line = f"{key}{sep} {new_dir}{stripped[len(old_dir):]}{ending}"
+            changed = True
+        out.append(line)
+    if not changed:
+        return False
+
+    tmp = conf.with_name(f'.{conf.name}.repath')
+    tmp.write_text(''.join(out), encoding='utf-8')
+    os.replace(tmp, conf)
+    return True
+
+
 def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -> bool:
     """Rebuild live/<domain>/*.pem as symlinks into archive/<domain>/.
 

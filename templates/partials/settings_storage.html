@@ -122,30 +122,43 @@
                                         <i class="fab fa-aws mr-1"></i> AWS Secrets Manager Configuration
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div class="md:col-span-3">
+                                            <label for="aws-auth-mode" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Authentication</label>
+                                            <select id="aws-auth-mode" onchange="toggleAWSAuthMode()" class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground">
+                                                <option value="access_keys">Access keys</option>
+                                                <option value="iam_role">AWS credentials / IAM role (no keys)</option>
+                                            </select>
+                                        </div>
                                         <div>
                                             <label for="aws-region" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Region</label>
                                             <input type="text" id="aws-region" 
                                                    class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
                                                    placeholder="us-east-1" value="us-east-1">
                                         </div>
-                                        <div>
-                                            <label for="aws-access-key-id" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Access Key ID</label>
-                                            <input type="text" id="aws-access-key-id" 
-                                                   class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
-                                                   placeholder="AKIAIOSFODNN7EXAMPLE">
+                                        <div id="aws-key-fields" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label for="aws-access-key-id" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Access Key ID</label>
+                                                <input type="text" id="aws-access-key-id"
+                                                       class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
+                                                       placeholder="AKIAIOSFODNN7EXAMPLE">
+                                            </div>
+                                            <div>
+                                                <label for="aws-secret-access-key" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Secret Access Key</label>
+                                                <input type="password" id="aws-secret-access-key"
+                                                       class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
+                                                       placeholder="Enter secret access key"
+                                                       autocomplete="new-password" spellcheck="false" data-lpignore="true">
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label for="aws-secret-access-key" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Secret Access Key</label>
-                                            <input type="password" id="aws-secret-access-key" 
+                                        <div class="md:col-span-3">
+                                            <label for="aws-assume-role-arn" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Assume role ARN (optional)</label>
+                                            <input type="text" id="aws-assume-role-arn"
                                                    class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
-                                                   placeholder="Enter secret access key"
-                                                   autocomplete="new-password" 
-                                                   spellcheck="false"
-                                                   data-lpignore="true">
+                                                   placeholder="arn:aws:iam::123456789012:role/CertMateSecrets">
                                         </div>
                                     </div>
                                     <p class="text-xs text-orange-700 dark:text-orange-300 mt-2">
-                                        Certificates will be stored in AWS Secrets Manager with automatic encryption and access logging.
+                                        Leave access keys blank in IAM mode to use the AWS credential chain (EC2/ECS/EKS roles). Optionally provide a role ARN to assume with STS. Existing access-key configurations continue to work.
                                     </p>
                                 </div>
                             </div>
@@ -246,8 +259,15 @@
                                         <i class="fas fa-database mr-1"></i> S3-Compatible Object Storage
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div class="md:col-span-2">
+                                            <label for="s3-auth-mode" class="block text-xs text-success-strong mb-1">Authentication</label>
+                                            <select id="s3-auth-mode" onchange="toggleS3AuthMode()" class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground">
+                                                <option value="access_keys">Access keys (S3-compatible)</option>
+                                                <option value="iam_role">AWS credentials / IAM role (no keys)</option>
+                                            </select>
+                                        </div>
                                         <div>
-                                            <label for="s3-endpoint-url" class="block text-xs text-success-strong mb-1">Endpoint URL</label>
+                                            <label for="s3-endpoint-url" class="block text-xs text-success-strong mb-1">Endpoint URL (leave blank for AWS S3)</label>
                                             <input type="text" id="s3-endpoint-url"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="https://s3.eu-central-1.example.com">
@@ -258,18 +278,26 @@
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="my-certmate-bucket">
                                         </div>
-                                        <div>
-                                            <label for="s3-access-key-id" class="block text-xs text-success-strong mb-1">Access Key ID</label>
-                                            <input type="text" id="s3-access-key-id"
-                                                   class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
-                                                   placeholder="Access key" autocomplete="off">
+                                        <div id="s3-key-fields" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label for="s3-access-key-id" class="block text-xs text-success-strong mb-1">Access Key ID</label>
+                                                <input type="text" id="s3-access-key-id"
+                                                       class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
+                                                       placeholder="Access key" autocomplete="off">
+                                            </div>
+                                            <div>
+                                                <label for="s3-secret-access-key" class="block text-xs text-success-strong mb-1">Secret Access Key</label>
+                                                <input type="password" id="s3-secret-access-key"
+                                                       class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
+                                                       placeholder="Secret key"
+                                                       autocomplete="new-password" spellcheck="false" data-lpignore="true">
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label for="s3-secret-access-key" class="block text-xs text-success-strong mb-1">Secret Access Key</label>
-                                            <input type="password" id="s3-secret-access-key"
+                                        <div class="md:col-span-2">
+                                            <label for="s3-assume-role-arn" class="block text-xs text-success-strong mb-1">Assume role ARN (optional, AWS S3 only)</label>
+                                            <input type="text" id="s3-assume-role-arn"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
-                                                   placeholder="Secret key"
-                                                   autocomplete="new-password" spellcheck="false" data-lpignore="true">
+                                                   placeholder="arn:aws:iam::123456789012:role/CertMateS3">
                                         </div>
                                         <div>
                                             <label for="s3-region" class="block text-xs text-success-strong mb-1">Region</label>
@@ -285,7 +313,7 @@
                                         </div>
                                     </div>
                                     <p class="text-xs text-success-fg mt-2">
-                                        Works with any S3-compatible object storage (Hetzner, Contabo, OVHcloud, Scaleway, Wasabi, MinIO, AWS). Certificates are stored as one JSON object per domain under the key prefix.
+                                        For AWS S3, leave Endpoint URL and access keys blank to use the AWS credential chain (EC2/ECS/EKS roles). Optionally provide a role ARN to assume using STS. Other S3-compatible services use their endpoint and access keys.
                                     </p>
                                 </div>
                             </div>
@@ -327,4 +355,3 @@
                             </button>
                         </div>
                     </div>
-                

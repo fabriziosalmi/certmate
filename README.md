@@ -1488,6 +1488,25 @@ pip install -r requirements-aws-storage.txt
 }
 ```
 
+For **IAM authentication**, choose **AWS credentials / IAM role (no keys)** in
+Settings → Storage, enter the region and leave access keys empty. CertMate uses
+the AWS credential chain (for example an EC2 instance profile, ECS task role or
+EKS pod identity). An optional **Assume role ARN** uses `sts:AssumeRole` and
+refreshes the temporary credentials automatically. Existing key-based settings
+still work. If `auth_mode` is absent in a manual configuration, access keys
+remain required. Equivalent settings without an additional assumed role:
+
+```json
+{"certificate_storage":{"backend":"aws_secrets_manager","aws_secrets_manager":{"region":"eu-west-1","auth_mode":"iam_role"}}}
+```
+
+The IAM identity needs `secretsmanager:ListSecrets` (account-wide, resource
+`*`) and `GetSecretValue`, `DescribeSecret`, `CreateSecret`, `UpdateSecret`
+and `DeleteSecret` for the `certmate/certificates/*` secrets. Assuming a
+second role also requires permission to call
+`sts:AssumeRole` and a trust policy on the target role. The connection test
+reports AWS permission errors rather than treating them as an empty store.
+
 **Benefits:**
 - AWS-native secret management
 - Automatic encryption at rest with AWS KMS
@@ -1578,7 +1597,7 @@ pip install -r requirements-infisical-storage.txt
 - Multi-environment certificate management
 
 #### S3-Compatible Object Storage
-One backend for any S3 endpoint, selected by `endpoint_url`: Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi, self-hosted MinIO, or AWS S3 itself. Each domain is stored as one JSON object, `<prefix>/<domain>.json`, holding the certificate files and their metadata.
+One backend for S3-compatible object storage: Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi, self-hosted MinIO, or AWS S3 itself. Each domain is stored as one JSON object, `<prefix>/<domain>.json`, holding the certificate files and their metadata.
 
 **Required Dependencies:** `boto3`, already in `requirements.txt` and `requirements-storage-all.txt` (not in `requirements-minimal.txt`).
 
@@ -1599,7 +1618,11 @@ One backend for any S3 endpoint, selected by `endpoint_url`: Hetzner, Contabo, O
 }
 ```
 
-`endpoint_url`, `bucket`, `access_key_id` and `secret_access_key` are required; `region` defaults to `us-east-1` and `prefix` to `certmate/certificates`.
+For S3-compatible services, use **Access keys** and provide both keys, the bucket and the service's endpoint. Existing key-based configurations continue to work unchanged. `region` defaults to `us-east-1` and `prefix` to `certmate/certificates`.
+
+For **AWS S3 with an IAM role**, select **AWS credentials / IAM role (no keys)** in Settings → Storage, provide the bucket and region, and leave the endpoint URL and access keys empty. Boto3 uses its standard credential chain (for example an EC2 instance profile, ECS task role or EKS pod identity). You can optionally enter an **Assume role ARN** (`arn:aws:iam::123456789012:role/CertMateS3`): the current identity must have `sts:AssumeRole` permission and the destination role must trust it. CertMate refreshes the temporary STS credentials automatically. The role needs `s3:ListBucket` on the bucket and `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on `<prefix>/*` (including object existence checks). The **Test Storage Backend** action lists the prefix and reports authentication/permission failures.
+
+For manual `settings.json`, explicitly set `"auth_mode":"iam_role"` to use AWS credentials without keys or an endpoint: `{"backend":"s3_compatible","s3_compatible":{"bucket":"certmate","region":"eu-west-1","auth_mode":"iam_role","assume_role_arn":"arn:aws:iam::123456789012:role/CertMateS3"}}`. Omit `assume_role_arn` to use the attached role directly. Without `auth_mode`, legacy key-pair requirements still apply. The optional off-site S3 backup storage has separate credential settings; this option configures **certificate storage** only.
 
 #### Quick Installation Guide
 
@@ -1690,6 +1713,17 @@ backend currently saved in settings, so migrate **before** switching:
 3. Check the response: `migrated_count`, `failed_count`, and `migration_results`, one `true`/`false` per domain
 4. Switch the active backend (`POST /api/storage/config`)
 5. Optionally clean up the old storage — CertMate never deletes it
+
+If you already saved the new backend, choose **Local filesystem** (or the
+previously configured backend) as **Source backend** in the Settings migration
+dialog. The dialog always requires an explicit source choice: when migrating
+from bucket A to bucket B within S3, choose the **saved S3 backend** as source,
+even though S3 is also selected as the target. The target remains the backend
+selected in Settings. Via the API,
+include `"source_backend": "local_filesystem"` in the migration request.
+A zero-domain result means no certificates were found in that source; check
+the source selection and certificate directory rather than assuming the
+certificates were copied.
 
 *Migration via API:*
 ```bash

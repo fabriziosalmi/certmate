@@ -15,7 +15,8 @@ from pathlib import Path
 import logging
 from .domain_entries import iter_domains
 
-from .utils import utc_now, utc_now_iso, repair_certbot_lineage_symlinks
+from .utils import (utc_now, utc_now_iso, repair_certbot_lineage_symlinks,
+                    repair_certbot_renewal_paths)
 
 logger = logging.getLogger(__name__)
 
@@ -1006,6 +1007,32 @@ class FileOperations:
                 f"the keys on disk. Restore a disaster-recovery archive "
                 f"(include_secrets=true) instead, or restore onto an empty instance.")
 
+    def _repair_restored_lineages(self, restored_domains):
+        """Make each restored certbot lineage one certbot will accept.
+
+        Two things a ZIP round trip breaks. The conf first, because it names
+        the lineage certbot will use: a backup restored into another directory
+        still names the old install's paths (#966). Then the links: a ZIP
+        cannot carry symlinks, so live/<domain>/*.pem came back as flat files
+        and certbot would parsefail the lineage and skip it, making every
+        future renewal a silent no-op (#410).
+
+        Never raises: a lineage that cannot be repaired here is repaired again
+        at the top of renew_certificate, and a failure is logged per domain.
+        """
+        for domain in restored_domains:
+            domain_dir = self.cert_dir / domain
+            try:
+                if repair_certbot_renewal_paths(domain_dir, domain):
+                    logger.info(f"Pointed the certbot renewal config for {domain} at this install")
+            except OSError as e:
+                logger.warning(f"Could not rewrite the renewal config paths for {domain}: {e}")
+            try:
+                if repair_certbot_lineage_symlinks(domain_dir, domain):
+                    logger.info(f"Rebuilt certbot lineage symlinks for {domain}")
+            except OSError as e:
+                logger.warning(f"Could not rebuild lineage symlinks for {domain}: {e}")
+
     def restore_unified_backup(self, backup_file_path):
         """Restore from a unified backup file (both settings and certificates).
 
@@ -1335,16 +1362,7 @@ class FileOperations:
 
                         restored_data_files += 1
             
-            # A ZIP cannot carry symlinks, so certbot's live/<domain>/*.pem
-            # came back as flat files and certbot would parsefail the lineage
-            # and skip it — making every future renewal a silent no-op (#410).
-            # Rebuild the links from the archive/ generation we restored.
-            for domain in restored_domains:
-                try:
-                    if repair_certbot_lineage_symlinks(self.cert_dir / domain, domain):
-                        logger.info(f"Rebuilt certbot lineage symlinks for {domain}")
-                except OSError as e:
-                    logger.warning(f"Could not rebuild lineage symlinks for {domain}: {e}")
+            self._repair_restored_lineages(restored_domains)
 
             # Symlinks for the good domains are rebuilt above regardless, so a
             # partially-restored instance is at least internally consistent for
