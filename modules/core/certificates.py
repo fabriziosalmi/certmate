@@ -200,11 +200,9 @@ def _uses_alias_hook(challenge_type, alias_provider, alias):
     """Whether a challenge is answered through CertMate's DNS alias hook.
 
     Decided here once for create and renew (#666, S3). Renew used to decide
-    on the stored alias alone, so a certificate issued with an alias on a
-    provider the hook does not implement (custom-script, solidserver, every
-    generic lexicon provider), or with an alias and HTTP-01, was issued
-    through the plugin and then failed every renewal with "DNS alias mode is
-    not implemented".
+    on the stored alias alone, so an HTTP-01 certificate issued with an alias
+    (create answers HTTP-01 through the webroot and stores the alias anyway)
+    failed every renewal looking for a DNS account named "http-01".
     """
     return (challenge_type == 'dns-01' and bool(alias)
             and alias_provider in DNS_ALIAS_SUPPORTED_PROVIDERS)
