@@ -1098,8 +1098,15 @@ class CertificateManager:
             # its own name must not stop the store it is about to be asked
             # for, and 'external' is true of all of them.
             backend_name = 'external'
+        # The external copy never carries a storage_warning: a copy that lands
+        # is by definition not stale, and one that does not land receives
+        # nothing. Handing over the record as loaded from disk made a renewal
+        # after a failed store push "the external copy is stale" INTO the
+        # external copy, where a cloud backend's get_certificate_info kept
+        # reading it after the problem had gone (#423, from the other side).
+        record = {k: v for k, v in metadata.items() if k != 'storage_warning'}
         try:
-            stored = self.storage_manager.store_certificate(domain, cert_files, metadata)
+            stored = self.storage_manager.store_certificate(domain, cert_files, record)
         except Exception as e:
             # Class name only at ERROR: a backend exception can embed a token
             # or a signed URL, and application logs are readable by any admin
