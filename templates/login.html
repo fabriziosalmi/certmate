@@ -180,7 +180,15 @@
                     return '/';
                 }
                 if (resolved.origin !== window.location.origin) return '/';
-                return resolved.pathname + resolved.search + resolved.hash;
+                // Check what is returned, not only what was parsed. For
+                // `/..//evil.example` the parser drops the `..` and the
+                // pathname is `//evil.example`: same-origin as the URL above,
+                // protocol-relative as a string handed to location.href. So
+                // the returned value is resolved on its own and compared
+                // again: the string checked is the string used.
+                var out = resolved.pathname + resolved.search + resolved.hash;
+                if (new URL(out, window.location.origin).origin !== window.location.origin) return '/';
+                return out;
             } catch (e) { return '/'; }
         }
 
