@@ -126,6 +126,20 @@ def _read_version(result):
     return out.strip()
 
 
+def _candidate_present(path):
+    """Whether a candidate can be tried at all.
+
+    A bare command name (`certbot`) is resolved on PATH by the shell, so only
+    the shell can answer for it. A path (`.venv/bin/certbot`) either exists or
+    it does not, and asking the shell to run one that does not exist made it
+    log a FileNotFoundError at ERROR on every probe in the image, where that
+    path never exists and nothing is wrong.
+    """
+    if os.sep not in path and '/' not in path:
+        return True
+    return os.path.exists(path)
+
+
 def _run_once(shell_executor, path):
     """Try one candidate. Returns (version, error); exactly one is truthy."""
     try:
@@ -187,6 +201,11 @@ def _probe_locked(shell_executor):
 
     errors = []
     for path in CERTBOT_CANDIDATES:
+        if not _candidate_present(path):
+            # Still named in the failure below if nothing else works, so an
+            # operator reading /health sees every place that was looked at.
+            errors.append(f'{path}: not present')
+            continue
         version, error = _run_once(shell_executor, path)
         if version:
             logger.info("certbot is available: %s (via %s)", version, path)
