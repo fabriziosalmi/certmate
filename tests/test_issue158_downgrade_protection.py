@@ -191,3 +191,41 @@ def test_load_settings_logs_warning_when_domains_missing_but_certs_exist(
 
     assert "settings.json has no domains but certificates exist on disk" in caplog.text
     assert "example.com" in caplog.text
+
+
+def _no_users_records(caplog):
+    return [r for r in caplog.records
+            if 'settings.json has no users' in r.getMessage()]
+
+
+def test_the_no_users_warning_is_said_once_not_at_every_load(settings_manager, caplog):
+    """It lived inside load_settings, so it fired at every read of the file:
+    five CRITICAL lines on the first boot of the released image, and one per
+    settings load forever on an instance used only through an API token,
+    which is a legitimate configuration with no users at all. An alarm that
+    repeats on a healthy instance is one an operator learns to ignore."""
+    settings_manager.settings_file.write_text(json.dumps({
+        "email": "admin@example.com", "domains": [], "setup_completed": True}))
+
+    with caplog.at_level("ERROR"):
+        for _ in range(5):
+            settings_manager.load_settings()
+
+    assert len(_no_users_records(caplog)) == 1
+
+
+def test_a_changed_situation_is_said_again(settings_manager, caplog):
+    """CONTROL. Once per situation, not once forever: a backup appearing
+    later is new information (there is now something to restore from) and
+    the message that names it must still be written."""
+    settings_manager.settings_file.write_text(json.dumps({
+        "email": "admin@example.com", "domains": [], "setup_completed": True}))
+    with caplog.at_level("ERROR"):
+        settings_manager.load_settings()
+        (settings_manager.file_ops.backup_dir / "unified"
+         / "backup_20260929_later.zip").write_text("dummy")
+        settings_manager.load_settings()
+
+    messages = [r.getMessage() for r in _no_users_records(caplog)]
+    assert len(messages) == 2
+    assert 'backup_20260929_later.zip' in messages[1]

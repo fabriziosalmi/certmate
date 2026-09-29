@@ -66,8 +66,8 @@ BUDGET = {
     # The two that are genuinely one algorithm each, and the ones worth
     # decomposing first: everything above is a container for handlers, these
     # two are a single unit a reader has to hold in their head at once.
-    'modules/core/settings.py::SettingsManager.load_settings': 50,
-    'modules/core/file_operations.py::FileOperations.restore_unified_backup': 46,
+    'modules/core/settings.py::SettingsManager.load_settings': 46,
+    'modules/core/file_operations.py::FileOperations.restore_unified_backup': 42,
 }
 
 REPORT = re.compile(

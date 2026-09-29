@@ -48,6 +48,15 @@ def clean_probe():
     readiness.reset()
 
 
+@pytest.fixture(autouse=True)
+def every_candidate_is_present(monkeypatch):
+    """These tests drive the probe's DECISIONS with a fake shell keyed by
+    candidate path. Whether a path candidate exists on this machine is a
+    separate question with its own tests (test_a_missing_candidate_is_not_an_
+    error.py), and must not decide which of these run what."""
+    monkeypatch.setattr(readiness, '_candidate_present', lambda path: True)
+
+
 def _executor(results):
     """A shell that answers from `results`, keyed by the binary path."""
     calls = []

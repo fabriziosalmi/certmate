@@ -22,6 +22,13 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 
+# (settings file, backups offered) pairs already reported as "no users" in
+# this process. The check runs inside load_settings, i.e. at every read of the
+# file, and a report per read is not a report: five CRITICAL lines at every
+# first boot, and one per load for ever on an instance run only through an API
+# token. Once per situation keeps the one line that is news.
+_NO_USERS_REPORTED = set()
+
 
 # --- POST /api/settings input validation -----------------------------------
 # Strict whitelist enforced by validate_settings_post() below. Two callsites
@@ -969,6 +976,48 @@ class SettingsManager:
                 len(masked_only), ", ".join(masked_only))
         return None
 
+    def _report_missing_users(self):
+        """Say, once per situation, that settings.json has no users.
+
+        Defensive logging for a settings file whose users vanished: a
+        destructive downgrade or partial corruption. It gives the operator a
+        concrete next step before the wizard overwrites state. Extracted from
+        load_settings, which runs it at every read of the file; the
+        `_NO_USERS_REPORTED` guard is what stops that being a report per read.
+        """
+        backups = []
+        try:
+            unified = self.file_ops.backup_dir / 'unified'
+            if unified.exists():
+                backups = sorted(
+                    [b.name for b in unified.iterdir() if b.suffix == '.zip'],
+                    reverse=True
+                )[:3]
+                # Exclude migration-created backups: they were
+                # produced seconds ago by this boot and don't help
+                # the operator recover from pre-existing data loss.
+                backups = [b for b in backups if '_migration' not in b]
+        except OSError as e:
+            # A failure here makes the message say "no backups
+            # found", which is what an operator reads as "there is
+            # nothing to restore from".
+            logger.warning("Could not list unified backups: %s", e)
+        situation = (str(self.settings_file), tuple(backups))
+        if situation not in _NO_USERS_REPORTED:
+            _NO_USERS_REPORTED.add(situation)
+            if backups:
+                logger.error(
+                    "CRITICAL: settings.json has no users. If this is "
+                    "unexpected, restore a backup before using the UI: %s",
+                    backups
+                )
+            else:
+                logger.error(
+                    "CRITICAL: settings.json has no users and no backups "
+                    "were found. If this is unexpected, check that the "
+                    "data volume is mounted correctly."
+                )
+
     def load_settings(self, use_cache=True):
         """Load settings from file with improved error handling.
 
@@ -1357,35 +1406,7 @@ class SettingsManager:
                 # operators a concrete next step before the wizard overwrites
                 # state.
                 if not settings.get('users'):
-                    backups = []
-                    try:
-                        unified = self.file_ops.backup_dir / 'unified'
-                        if unified.exists():
-                            backups = sorted(
-                                [b.name for b in unified.iterdir() if b.suffix == '.zip'],
-                                reverse=True
-                            )[:3]
-                            # Exclude migration-created backups: they were
-                            # produced seconds ago by this boot and don't help
-                            # the operator recover from pre-existing data loss.
-                            backups = [b for b in backups if '_migration' not in b]
-                    except OSError as e:
-                        # A failure here makes the message say "no backups
-                        # found", which is what an operator reads as "there is
-                        # nothing to restore from".
-                        logger.warning("Could not list unified backups: %s", e)
-                    if backups:
-                        logger.error(
-                            "CRITICAL: settings.json has no users. If this is "
-                            "unexpected, restore a backup before using the UI: %s",
-                            backups
-                        )
-                    else:
-                        logger.error(
-                            "CRITICAL: settings.json has no users and no backups "
-                            "were found. If this is unexpected, check that the "
-                            "data volume is mounted correctly."
-                        )
+                    self._report_missing_users()
 
                 if not settings.get('domains'):
                     cert_dir = getattr(self.file_ops, 'cert_dir', None)
