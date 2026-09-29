@@ -254,9 +254,13 @@ def test_create_fails_loudly_when_script_vanished(tmp_path):
     assert not shell.commands_executed
 
 
-def test_renew_validates_hooks_but_adds_no_arguments(tmp_path, auth_hook):
-    """certbot renew replays manual_auth_hook from the renewal conf; the
-    renew command CertMate builds must stay argument-free for hooks."""
+def test_renew_runs_the_hooks_configured_today(tmp_path, auth_hook):
+    """certbot renew replays manual_auth_hook from the renewal conf unless the
+    command line names one. This test used to assert that the renew command
+    stayed argument-free and relied on that replay, with "reissue after
+    relocating a script" as the documented cost. Renewal now passes the hooks
+    configured today, exactly as create does (#666, D6), so moving a script
+    and updating Settings is enough."""
     domain = 'app.example.com'
     shell = MockShellExecutor()
     shell.set_next_result(returncode=0)
@@ -276,7 +280,9 @@ def test_renew_validates_hooks_but_adds_no_arguments(tmp_path, auth_hook):
     assert shell.commands_executed, 'renewal never invoked certbot'
     cmd = shell.commands_executed[0].split()
     assert cmd[:2] == ['certbot', 'renew']
-    assert '--manual-auth-hook' not in cmd
+    assert cmd[cmd.index('--manual-auth-hook') + 1] == str(auth_hook)
+    # --manual accepts no propagation flag.
+    assert not any('propagation-seconds' in part for part in cmd)
 
 
 # ---------------------------------------------------------------------------

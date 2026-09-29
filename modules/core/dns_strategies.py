@@ -572,11 +572,10 @@ class CustomScriptStrategy(DNSProviderStrategy):
     quoted, and rejecting them here beats certbot's cryptic
     HookCommandNotFound on a truncated token.
 
-    Renewals work because certbot persists manual_auth_hook /
-    manual_cleanup_hook in its per-domain renewal conf: the scripts are
-    stable admin paths, not temp files, so the replay just works. If the
-    admin moves a script after issuance, the conf still points at the old
-    path — reissue (or edit the renewal conf) after relocating scripts.
+    Renewals pass the hooks configured today, as create does (#666, D6),
+    rather than relying on certbot replaying the paths it persisted in the
+    per-domain renewal conf at issue time: a script moved after issuance
+    only needs its new path in Settings.
     """
 
     def __init__(self):
