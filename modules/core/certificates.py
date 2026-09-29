@@ -1139,6 +1139,40 @@ class CertificateManager:
             metadata.pop('storage_warning', None)
         return metadata
 
+    def _commit_certificate(self, domain, cert_files, metadata, *,
+                            always_persist=True):
+        """What every issuance owes once its files are published (#666).
+
+        Store the external copy, record how that went, persist the metadata,
+        drop the cached info and rebuild the PFX: one sequence, for create,
+        reissue and renew. It existed twice, and the two copies had drifted
+        into a defect: create stored BEFORE merging a reissue's metadata, so
+        with the default local backend (which writes metadata.json into this
+        same directory) the store overwrote the file and the merge read back
+        its own issuance-only dict. Every Edit & Reissue lost the deployment
+        probe config and renewed_at, and the backend copy never had them.
+
+        ``metadata`` must be FINAL when it arrives here: a reissue merges
+        before calling. ``always_persist=False`` is renew's rule, persist
+        only when metadata.json exists or there is a warning to record; it is
+        evaluated after the store, exactly as it was.
+
+        Returns the storage warning, or None.
+        """
+        storage_warning = self._store_in_backend(domain, cert_files, metadata)
+        self._apply_storage_warning(metadata, storage_warning)
+        if (always_persist or storage_warning
+                or self._metadata_path(domain).exists()):
+            if self._save_metadata(domain, metadata):
+                # CR/LF stripped rather than %r: CodeQL does not read repr as
+                # a sanitizer for py/log-injection, and this is its recognised
+                # form (same treatment as the routes).
+                logger.info("Saved certificate metadata for %s",
+                            str(domain).replace('\r', '').replace('\n', ''))
+        self._invalidate_certificate_info_cache(domain)
+        self._write_pfx(domain)
+        return storage_warning
+
     def _merge_reissue_metadata(self, domain: str, issuance: dict) -> dict:
         """Carry forward the metadata a reissue does not own (#421).
 
@@ -3130,20 +3164,16 @@ class CertificateManager:
             # operator had no signal their backup never landed. Capture a
             # generic warning (no raw exception text — it can carry backend
             # credentials/URLs) and surface it on the result and in metadata.
-            storage_warning = self._store_in_backend(domain, cert_files, metadata)
-            self._apply_storage_warning(metadata, storage_warning)
-
+            #
+            # A reissue merges FIRST: the merge reads what is on disk, and the
+            # store below rewrites it (see _commit_certificate).
             if replace:
                 metadata = self._merge_reissue_metadata(domain, metadata)
-
-            if self._save_metadata(domain, metadata):
-                logger.info(f"Saved certificate metadata to {self._metadata_path(domain)}")
+            storage_warning = self._commit_certificate(domain, cert_files, metadata)
 
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
             self._record_creation_metrics(domain, dns_provider, True, duration)
-            self._invalidate_certificate_info_cache(domain)
-            self._write_pfx(domain)
 
             result = {
                 'success': True,
@@ -3357,7 +3387,6 @@ class CertificateManager:
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
 
-            metadata_file = domain_dir / 'metadata.json'
             # The one metadata reader that quarantines a corrupt file instead
             # of returning {} over it. The inline json.load this replaces did
             # the latter — and the renewal then wrote renewed_at into that
@@ -3455,7 +3484,7 @@ class CertificateManager:
                     return self._reconcile_without_renewal(
                         domain, domain_dir, metadata)
                 return self._publish_renewed_certificate(
-                    domain, domain_dir, metadata, metadata_file)
+                    domain, domain_dir, metadata)
             else:
                 self._renewal_failed(domain, result, metadata,
                                      challenge_type)
@@ -3704,8 +3733,7 @@ class CertificateManager:
         return result
 
 
-    def _publish_renewed_certificate(self, domain, domain_dir, metadata,
-                                     metadata_file):
+    def _publish_renewed_certificate(self, domain, domain_dir, metadata):
         """A renewal happened: publish it, stamp it, store it, report it.
 
         Returns the result dict `renew_certificate` returns unchanged.
@@ -3720,22 +3748,13 @@ class CertificateManager:
         # carries the same renewed_at as the local one; then persist
         # metadata once, with the resulting storage state (#423).
         metadata['renewed_at'] = utc_now_iso()
-        storage_warning = self._store_in_backend(domain, cert_files, metadata)
-
-        # Persist when there is metadata to update OR a warning to
-        # record: a domain with no metadata.json would otherwise lose
-        # the only signal that its external copy is stale.
-        if metadata_file.exists() or storage_warning:
-            try:
-                self._apply_storage_warning(metadata, storage_warning)
-                self._save_metadata(domain, metadata)
-                logger.info(f"Updated renewal timestamp in metadata for {domain}")
-            except Exception as e:
-                logger.warning(f"Failed to update metadata for {domain}: {e}")
+        # Persist when there is metadata to update OR a warning to record: a
+        # domain with no metadata.json would otherwise lose the only signal
+        # that its external copy is stale.
+        storage_warning = self._commit_certificate(
+            domain, cert_files, metadata, always_persist=False)
 
         logger.info(f"Certificate renewed successfully for {domain}")
-        self._invalidate_certificate_info_cache(domain)
-        self._write_pfx(domain)
         renew_result = {
             'success': True,
             'renewed': True,
