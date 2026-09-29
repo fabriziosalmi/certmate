@@ -136,6 +136,12 @@ env:
   letsencryptEmail: ""
 extraEnv: []
 
+# Additional Kubernetes volumes and mounts for the CertMate container.
+# Volumes can refer to existing ConfigMaps, Secrets, PVCs or any other
+# Kubernetes volume source. Each mount's name must match a volume name.
+extraVolumes: []
+extraVolumeMounts: []
+
 resources:
   limits:
     cpu: "1"

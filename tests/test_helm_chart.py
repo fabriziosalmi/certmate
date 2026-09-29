@@ -9,6 +9,7 @@ The static assertions run everywhere. The render assertions need the helm
 binary and skip without it — stated plainly rather than pretending to cover
 what they cannot.
 """
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -113,6 +114,28 @@ class TestRender:
         assert res.returncode == 0, res.stderr
         assert "claimName: my-pvc" in res.stdout
         assert "kind: PersistentVolumeClaim" not in res.stdout
+
+    def test_additional_volumes_mount_in_the_app_pod(self):
+        import yaml
+
+        volumes = [
+            {'name': 'config', 'configMap': {'name': 'certmate-config'}},
+            {'name': 'credentials', 'secret': {'secretName': 'certmate-credentials'}},
+            {'name': 'shared', 'persistentVolumeClaim': {'claimName': 'shared-data'}},
+        ]
+        mounts = [
+            {'name': 'config', 'mountPath': '/app/config-extra', 'readOnly': True},
+            {'name': 'credentials', 'mountPath': '/app/credentials', 'readOnly': True},
+            {'name': 'shared', 'mountPath': '/app/shared'},
+        ]
+        res = self._template('--set-json', 'extraVolumes=' + json.dumps(volumes),
+                             '--set-json', 'extraVolumeMounts=' + json.dumps(mounts))
+        assert res.returncode == 0, res.stderr
+        deployment = next(doc for doc in yaml.safe_load_all(res.stdout)
+                          if doc and doc.get('kind') == 'Deployment')
+        pod = deployment['spec']['template']['spec']
+        assert pod['volumes'][1:] == volumes
+        assert pod['containers'][0]['volumeMounts'][4:] == mounts
 
 
 @pytest.mark.skipif(shutil.which("helm") is None, reason="helm is not installed")

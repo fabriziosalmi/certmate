@@ -122,6 +122,38 @@ kubectl -n certmate rollout restart deployment/certmate
 or run a controller that does it for you, such as
 [stakater/Reloader](https://github.com/stakater/Reloader).
 
+## Additional volumes
+
+Use `extraVolumes` and `extraVolumeMounts` to mount existing Kubernetes
+ConfigMaps, Secrets, PVCs or other volume sources in the CertMate container:
+
+```yaml
+extraVolumes:
+  - name: config
+    configMap:
+      name: certmate-config
+  - name: credentials
+    secret:
+      secretName: certmate-credentials
+  - name: shared-data
+    persistentVolumeClaim:
+      claimName: certmate-shared-data
+extraVolumeMounts:
+  - name: config
+    mountPath: /app/config-extra
+    readOnly: true
+  - name: credentials
+    mountPath: /app/credentials
+    readOnly: true
+  - name: shared-data
+    mountPath: /app/shared
+```
+
+The referenced ConfigMaps, Secrets and claims must exist in the release
+namespace. These values add mounts only to the CertMate Deployment, not the
+off-site backup CronJob. Avoid paths already used by the chart (`/app/data`,
+`/app/certificates`, `/app/logs` and `/app/backups`).
+
 ## Common values
 
 | key | default | note |
@@ -136,6 +168,7 @@ or run a controller that does it for you, such as
 | `env.gunicornTimeout` | `300` | raise for slow DNS providers |
 | `ingress.enabled` | `false` | |
 | `secrets.existingSecret` | `""` | strongly preferred over inline values |
+| `extraVolumes`, `extraVolumeMounts` | `[]` | additional Kubernetes volumes and CertMate container mounts |
 
 ## OpenShift
 
