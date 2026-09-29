@@ -187,11 +187,13 @@ Si vous avez besoin de l'un de ces éléments, mettez la logique dans un fichier
 
 ### Références de fichiers bloquées
 
-Les références aux fichiers sensibles de CertMate sont rejetées (insensible à la casse) :
+Une commande qui nomme l'un des fichiers sensibles de CertMate est rejetée (insensible à la casse) :
 
-`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`, `private*key`, `.pem`
+`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`
 
-Ainsi `cat $CERTMATE_FULLCHAIN_PATH` est acceptable (la variable est développée par le shell, la chaîne littérale `.pem` n'apparaît pas dans `command`), mais `cat /app/data/settings.json` serait rejeté à la sauvegarde.
+Les fichiers du certificat ne sont pas dans la liste : installer le certificat et sa clé (`privkey.pem`, `$CERTMATE_KEY_PATH`) est le travail normal d'un hook. `cat /app/data/settings.json` est rejeté à la sauvegarde.
+
+Le contrôle reconnaît ces noms **tels qu'ils sont écrits**. Il arrête un hook qui nomme l'un de ces fichiers par erreur. Il n'arrête pas une commande qui atteint le même fichier sans écrire son nom : un glob (`settings*`), un joker `?` ou un nom coupé par des guillemets (`settings"."json`) passent. C'est une protection contre les accidents, pas une frontière de sécurité. Seul un admin peut enregistrer ou exécuter un hook, et un admin qui peut enregistrer un hook peut déjà exécuter n'importe quelle commande en tant que CertMate. Il en va de même pour les motifs de shell ci-dessus.
 
 ### Ce qui est autorisé
 
