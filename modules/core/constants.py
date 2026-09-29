@@ -399,6 +399,17 @@ METADATA_SCHEMA_VERSION = 1
 #                                   certificate looked healthy there. 2.28,
 #                                   MINOR: a new field on a response.
 #
+#   POST /api/certificates/create, POST /api/certificates/<domain>/reissue
+#                                   `challenge_type` accepts a new value,
+#                                   `prevalidated` (#983): a Sectigo SCM
+#                                   account whose names are already authorized
+#                                   issues without a DNS or HTTP challenge. A
+#                                   reissue now also keeps the CA account the
+#                                   certificate was issued under when the CA
+#                                   does not change; it used the CA's default
+#                                   account. 2.29, MINOR: a new value of an
+#                                   existing request field.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -418,7 +429,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.28'
+API_CONTRACT_VERSION = '2.29'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

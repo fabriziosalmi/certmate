@@ -136,6 +136,17 @@ Select an account using `ca_account_id` on the certificate creation API; if
 omitted, CertMate uses `default_ca_accounts.sectigo` or the first configured account.
 Renewal reuses the recorded CA account. DNS-01 (including Custom Script) and
 HTTP-01 remain available; SCM may already have authorized the requested domain.
+For an SCM account that already authorizes **every** requested name, select
+**Sectigo → Sectigo (already authorized in SCM)** as the certificate challenge
+type. CertMate does not configure DNS or HTTP validation in that mode, and a
+wildcard can be requested if that SCM account/profile authorizes it. Certbot
+uses its manual authenticator with a non-publishing hook only to satisfy its
+non-interactive requirement: when the CA returns valid ACME authorizations,
+the hook is never called. If SCM returns a pending authorization, the hook
+publishes no validation material, so CertMate cannot satisfy it in this mode.
+Use DNS-01 or HTTP-01 when the names are not already authorized. Before
+renewal, the same account must still be authorized in SCM.
+This mode is available only when Sectigo is selected explicitly as the CA.
 Existing Sectigo configurations under Private CA continue to work unchanged.
 
 ### Private CA

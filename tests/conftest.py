@@ -480,6 +480,29 @@ def _no_browser(reason):
     pytest.skip(reason)
 
 
+def reopen_shared_container(api):
+    """Put the session-wide container back the way the other modules expect
+    it: local auth off, setup mode, open (#986).
+
+    A module that turns local auth on for its own tests must turn it off
+    again, and must check that it did. Since #587 the server refuses to drop
+    the last way in without `confirm_unauthenticated`, answering 409; the
+    teardowns that posted `{"local_auth_enabled": false}` alone were refused
+    in silence, and every module after them saw
+    "Authorization header required" or not depending on file order.
+    """
+    import requests
+
+    r = api.post_json("/api/auth/config", {
+        "local_auth_enabled": False, "confirm_unauthenticated": True})
+    assert r.status_code == 200, (
+        f"could not reopen the shared container: {r.status_code} {r.text[:200]}")
+    probe = requests.get(f"{api.base_url}/api/certificates", timeout=10)
+    assert probe.status_code == 200, (
+        f"the shared container is still closed after the teardown "
+        f"({probe.status_code}): the modules after this one would fail by order")
+
+
 @pytest.fixture(scope="session")
 def ui_session_cookie(docker_container):
     """Log the UI suite in ONCE, for every module.
