@@ -156,14 +156,14 @@ end, that is the value to branch on.
 
 ## Renewal
 
-Renewals work, without re-entering anything. certbot records
-`manual_auth_hook` and `manual_cleanup_hook` in the certificate's renewal
-configuration, so an unattended renewal replays them.
+Renewals work, without re-entering anything. Every renewal passes certbot the
+hook paths and the propagation wait configured **now**, exactly as issuance
+does, so moving a script only needs its new path in Settings. Nothing has to
+be reissued.
 
-The consequence is worth knowing: **the renewal configuration holds the path
-your script had when the certificate was issued.** Move the script, and
-renewal still points at the old location. Reissue the certificate after
-relocating your hooks, or edit the renewal conf by hand.
+Before v2.42.0 renewal relied on the paths certbot had recorded in the
+certificate's renewal configuration at issue time, and a moved script kept
+failing until the certificate was reissued.
 
 ## A worked example
 

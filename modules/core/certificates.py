@@ -196,6 +196,18 @@ def _remove_temp_files(artifacts):
             pass
 
 
+def _uses_alias_hook(challenge_type, alias_provider, alias):
+    """Whether a challenge is answered through CertMate's DNS alias hook.
+
+    Decided here once for create and renew (#666, S3). Renew used to decide
+    on the stored alias alone, so an HTTP-01 certificate issued with an alias
+    (create answers HTTP-01 through the webroot and stores the alias anyway)
+    failed every renewal looking for a DNS account named "http-01".
+    """
+    return (challenge_type == 'dns-01' and bool(alias)
+            and alias_provider in DNS_ALIAS_SUPPORTED_PROVIDERS)
+
+
 def _propagation_seconds(settings, dns_provider, strategy):
     """How long to wait for a DNS-01 TXT record to propagate, in seconds.
 
@@ -2678,6 +2690,60 @@ class CertificateManager:
             getattr(strategy, 'extra_credential_files', []) or [])
         return artifacts.credentials_file
 
+    def _answer_through_plugin(self, cmd, process_env, artifacts, *, strategy,
+                               provider, dns_config, domain, san_domains,
+                               settings, challenge_type, domain_alias=None):
+        """Point certbot at the provider's own plugin (or webroot, or manual
+        hook), with today's credentials and today's wait.
+
+        One unit for create and renew (#666, S3). Renew used to pass the
+        authenticator and credentials only when a credentials file existed,
+        and never the wait: certbot replays the options of the run that
+        issued the certificate unless the command line overrides them, so the
+        propagation seconds, the HTTP-01 webroot and the manual hooks of issue
+        day applied to every renewal after it (D6). Raising a provider's wait
+        in Settings fixed new certificates and none of the existing ones.
+        """
+        strategy.prepare_environment(process_env, dns_config)
+        self._write_dns_credentials(
+            strategy, artifacts, provider, dns_config, domain,
+            san_domains=san_domains,
+        )
+        strategy.configure_certbot_arguments(
+            cmd, artifacts.credentials_file, domain_alias=domain_alias)
+        if challenge_type != 'dns-01':
+            return
+        propagation = _propagation_seconds(settings or {}, provider, strategy)
+        # Some plugins (e.g. certbot-dns-route53 >= 1.22) do not accept a
+        # --{plugin}-propagation-seconds flag and handle propagation internally.
+        if strategy.supports_propagation_seconds_flag:
+            cmd.extend([f'--{strategy.plugin_name}-propagation-seconds',
+                        str(propagation)])
+        if provider == 'custom-script':
+            # --manual has no propagation flag: surface the configured
+            # per-provider value to custom-script hooks via env instead.
+            # An account-level propagation_seconds (exported by
+            # prepare_environment above) wins over the global setting.
+            process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS',
+                                   str(propagation))
+
+    def _answer_through_alias_hook(self, cmd, process_env, artifacts, *,
+                                   provider, dns_config, alias, settings):
+        """Answer through CertMate's own DNS hook, on the alias zone.
+
+        The TXT record lands on the zone *provider* controls, so that
+        provider decides the environment and the wait. Create used the
+        primary provider's until #977 (D5); renew always used the alias
+        provider's. One unit now, so the two cannot disagree again.
+        """
+        strategy = DNSStrategyFactory.get_strategy(provider)
+        strategy.prepare_environment(process_env, dns_config)
+        artifacts.alias_hook_config = self._create_dns_alias_hook_config(
+            provider, dns_config, alias,
+            _propagation_seconds(settings or {}, provider, strategy),
+        )
+        self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
+
     def _build_issuance_command(self, prepared, artifacts, *, domain, email,
                                 account_id, domain_alias, alias_dns_provider,
                                 replace):
@@ -2764,25 +2830,13 @@ class CertificateManager:
         # Build per-request environment (avoid race conditions with os.environ)
         process_env = os.environ.copy()
         process_env.update(artifacts.ca_extra_env)
-        strategy.prepare_environment(process_env, dns_config)
 
-        # Set propagation time (DNS-01 only; HTTP-01 has no propagation)
-        propagation_time = None
-        if challenge_type == 'dns-01':
-            if settings is None:
-                try:
-                    settings = self.settings_manager.load_settings()
-                except Exception as e:
-                    logger.debug("Failed to load settings for propagation time: %s", e)
-                    settings = {}
-            propagation_time = _propagation_seconds(settings, dns_provider, strategy)
-
-            # --manual has no propagation flag: surface the configured
-            # per-provider value to custom-script hooks via env instead.
-            # An account-level propagation_seconds (exported earlier by
-            # prepare_environment) wins over the global setting.
-            if dns_provider == 'custom-script':
-                process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS', str(propagation_time))
+        if challenge_type == 'dns-01' and settings is None:
+            try:
+                settings = self.settings_manager.load_settings()
+            except Exception as e:
+                logger.debug("Failed to load settings for propagation time: %s", e)
+                settings = {}
 
         alias_hook_provider = alias_dns_provider or dns_provider
         # acme-dns is always driven by the native hook, with the configured
@@ -2791,59 +2845,36 @@ class CertificateManager:
         effective_domain_alias = domain_alias or self._acme_dns_native_alias(
             dns_provider, dns_config
         )
-        use_dns_alias_hook = (
-            challenge_type == 'dns-01'
-            and effective_domain_alias
-            and alias_hook_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
-        )
-
-        if use_dns_alias_hook:
+        if _uses_alias_hook(challenge_type, alias_hook_provider,
+                            effective_domain_alias):
             # The TXT records land on the ALIAS zone, so the hook must run
             # with the account that controls that zone — which renewals
             # already honour via metadata alias_dns_provider (issue #129).
             alias_hook_config = dns_config
-            alias_propagation = propagation_time or strategy.default_propagation_seconds
             if alias_hook_provider != dns_provider:
                 alias_hook_config, _ = self._get_dns_config(alias_hook_provider, account_id)
                 if not alias_hook_config:
                     raise ValueError(
                         f"Alias DNS provider '{alias_hook_provider}' is not configured"
                     )
-                # The TXT record lands on the ALIAS zone, so its provider
-                # decides the environment and the wait, exactly as renewal
-                # already did (_prepare_renewal_dns). Issuance used the
-                # primary provider's: a Cloudflare domain aliased onto Route53
-                # waited Cloudflare's seconds for a Route53 record (#666, D5).
-                alias_strategy = DNSStrategyFactory.get_strategy(alias_hook_provider)
-                alias_strategy.prepare_environment(process_env, alias_hook_config)
-                alias_propagation = _propagation_seconds(
-                    settings or {}, alias_hook_provider, alias_strategy)
             logger.info(
                 f"DNS alias '{effective_domain_alias}' requested for {domain}; "
                 f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
             )
-            artifacts.alias_hook_config = self._create_dns_alias_hook_config(
-                alias_hook_provider, alias_hook_config, effective_domain_alias,
-                alias_propagation
-            )
-            self._configure_dns_alias_arguments(certbot_cmd,
-                                                artifacts.alias_hook_config)
+            self._answer_through_alias_hook(
+                certbot_cmd, process_env, artifacts,
+                provider=alias_hook_provider, dns_config=alias_hook_config,
+                alias=effective_domain_alias, settings=settings)
         else:
-            # Create Config File. Pass the SAN list so the discovery
-            # path (Azure today) can resolve every cert FQDN against
-            # the account's hosted zones in one pass.
-            self._write_dns_credentials(
-                strategy, artifacts, dns_provider, dns_config, domain,
+            # Pass the SAN list so the discovery path (Azure today) can
+            # resolve every cert FQDN against the account's hosted zones in
+            # one pass.
+            self._answer_through_plugin(
+                certbot_cmd, process_env, artifacts, strategy=strategy,
+                provider=dns_provider, dns_config=dns_config, domain=domain,
                 san_domains=all_domains[1:] if len(all_domains) > 1 else None,
-            )
-
-            # Configure Args
-            strategy.configure_certbot_arguments(certbot_cmd, artifacts.credentials_file, domain_alias=domain_alias)
-
-            # Some plugins (e.g. certbot-dns-route53 >= 1.22) do not accept a
-            # --{plugin}-propagation-seconds flag and handle propagation internally.
-            if challenge_type == 'dns-01' and strategy.supports_propagation_seconds_flag:
-                certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
+                settings=settings, challenge_type=challenge_type,
+                domain_alias=domain_alias)
         return certbot_cmd, process_env
 
     def _caa_explanation(self, ca_provider, domains, challenge_type):
@@ -3544,19 +3575,22 @@ class CertificateManager:
         private-CA trust bundle, the native acme-dns hook and the explicit
         credentials path each reached one path months before the other.
 
-        The five cases, in the order they are decided:
+        What certbot is told comes from two units create uses too,
+        `_answer_through_plugin` and `_answer_through_alias_hook`, and which
+        one applies is decided by the same `_uses_alias_hook` (#666, S3).
+        What stays here is where the inputs come from: metadata and today's
+        settings, where create has the request. In order:
 
-        1. a stored `domain_alias` — renew through CertMate's own hook;
-        2. acme-dns, recognised from the provider rather than from metadata,
+        1. HTTP-01 — today's webroot;
+        2. a stored alias the hook implements — CertMate's own hook, with
+           the alias provider's account;
+        3. the account is gone from settings — fail fast and say so, as the
+           create path already does;
+        4. acme-dns, recognised from the provider rather than from metadata,
            so certificates issued before #466 stay renewable without a
            migration;
-        3. a file-based provider — write the credentials and pass the
-           authenticator explicitly, not the path certbot baked in at issue
-           time;
-        4. an env-based provider — the prepared environment is the whole
-           configuration;
-        5. the account is gone from settings — fail fast and say so, as the
-           create path already does.
+        5. everything else — the provider's plugin with today's
+           credentials, authenticator and wait.
         """
         dns_provider = metadata.get('dns_provider')
         challenge_type = metadata.get('challenge_type', 'dns-01')
@@ -3567,111 +3601,85 @@ class CertificateManager:
             return challenge_type
 
         domain_alias = metadata.get('domain_alias')
-        if domain_alias:
-            alias_provider = metadata.get('alias_dns_provider') or dns_provider
-            if not alias_provider:
-                raise RuntimeError(f"Cannot renew {domain}: metadata is missing alias DNS provider")
+        san_domains = metadata.get('san_domains') or None
+        if challenge_type == 'http-01':
+            # The webroot of today, not the one baked into renewal/<domain>.conf
+            # at issue time (#666, D6).
+            self._answer_through_plugin(
+                cmd, process_env, artifacts, strategy=HTTP01Strategy(),
+                provider=dns_provider or 'http-01', dns_config={},
+                domain=domain, san_domains=san_domains, settings=None,
+                challenge_type=challenge_type)
+            return challenge_type
 
-            settings = self.settings_manager.load_settings()
+        alias_provider = metadata.get('alias_dns_provider') or dns_provider
+        if domain_alias and not alias_provider:
+            raise RuntimeError(f"Cannot renew {domain}: metadata is missing alias DNS provider")
+        if not dns_provider and not domain_alias:
+            # Nothing recorded to prepare from: certbot replays its own
+            # renewal configuration, as it always has for these.
+            return challenge_type
+
+        settings = self.settings_manager.load_settings()
+        if _uses_alias_hook(challenge_type, alias_provider, domain_alias):
             dns_config, _ = self.dns_manager.get_dns_provider_account_config(
-                alias_provider,
-                metadata.get('account_id'),
-                settings,
-            )
+                alias_provider, metadata.get('account_id'), settings)
             if not dns_config:
                 raise RuntimeError(
                     f"Cannot renew {domain}: DNS alias provider account for {alias_provider} is not configured"
                 )
-
-            strategy = DNSStrategyFactory.get_strategy(alias_provider)
-            # Inject provider env vars (e.g. AWS credentials) for alias renewals too
-            strategy.prepare_environment(process_env, dns_config)
-
-            propagation_time = _propagation_seconds(
-                settings, alias_provider, strategy)
-
-            artifacts.alias_hook_config = self._create_dns_alias_hook_config(
-                alias_provider,
-                dns_config,
-                domain_alias,
-                propagation_time,
-            )
-            self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
+            self._answer_through_alias_hook(
+                cmd, process_env, artifacts, provider=alias_provider,
+                dns_config=dns_config, alias=domain_alias, settings=settings)
             logger.info(
                 f"Renewing {domain} with DNS alias '{domain_alias}' "
                 f"using {alias_provider} manual hook."
             )
-        elif dns_provider and challenge_type != 'http-01':
-            # Standard DNS-01 renewal: load DNS config and prepare env vars
-            settings = self.settings_manager.load_settings()
-            dns_config, _ = self.dns_manager.get_dns_provider_account_config(
-                dns_provider,
-                metadata.get('account_id'),
-                settings,
-            )
-            acme_dns_alias = self._acme_dns_native_alias(dns_provider, dns_config)
-            if dns_config and acme_dns_alias:
-                # Mirror the create path: acme-dns renews through CertMate's
-                # native hook, never through a certbot plugin (issue #466).
-                # Certs issued before this fix carry no domain_alias in
-                # metadata, so they land here rather than in the alias
-                # branch above — routing on the provider keeps them renewable
-                # without a metadata migration.
-                strategy = DNSStrategyFactory.get_strategy(dns_provider)
-                strategy.prepare_environment(process_env, dns_config)
-                artifacts.alias_hook_config = self._create_dns_alias_hook_config(
-                    dns_provider,
-                    dns_config,
-                    acme_dns_alias,
-                    _propagation_seconds(settings, dns_provider, strategy),
-                )
-                self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
-                # Strip CR/LF so a crafted domain cannot forge log entries
-                # (CodeQL py/log-injection), matching modules/web/cert_routes.py.
-                safe_domain = str(domain).replace('\r', ' ').replace('\n', ' ')
-                logger.info(f"Renewing {safe_domain} with the native acme-dns hook.")
-            elif dns_config:
-                strategy = DNSStrategyFactory.get_strategy(dns_provider)
-                strategy.prepare_environment(process_env, dns_config)
-                # Create credentials file for providers that need one.
-                # Pull SANs from metadata so the discovery hook sees
-                # the same FQDN set the cert was originally issued with;
-                # otherwise a wildcard SAN under a parent zone would
-                # be invisible at renew time.
-                self._write_dns_credentials(
-                    strategy, artifacts, dns_provider, dns_config, domain,
-                    san_domains=metadata.get('san_domains') or None,
-                )
-                # Pass the authenticator + credentials explicitly at renew
-                # (mirrors the create path) so renewal does not depend on the
-                # credentials path certbot baked into renewal/<domain>.conf at
-                # issue time — that path is written relative to the issuing
-                # CWD and goes stale after a data-dir/CWD move, which silently
-                # broke renewal for file-based DNS providers. Env-based
-                # providers (route53) return no credentials file and keep
-                # using the stored authenticator + prepared env vars.
-                if artifacts.credentials_file:
-                    strategy.configure_certbot_arguments(
-                        cmd, artifacts.credentials_file)
-                if dns_provider == 'custom-script':
-                    # Mirror the create path: expose the propagation
-                    # setting to the hooks certbot replays at renewal.
-                    process_env.setdefault(
-                        'CERTMATE_DNS_PROPAGATION_SECONDS',
-                        str(_propagation_seconds(settings, dns_provider,
-                                                 strategy)))
-                logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
-            else:
-                # The DNS account this cert was issued with is gone from
-                # settings. create_certificate raises on this same condition,
-                # so renewal fails fast with a clear message instead of
-                # letting certbot fail opaquely (which surfaced as a 500 with
-                # no hint about the missing account).
-                raise RuntimeError(
-                    f"Cannot renew {domain}: DNS provider '{dns_provider}' "
-                    f"account '{metadata.get('account_id') or 'default'}' is not configured"
-                )
+            return challenge_type
 
+        dns_config, _ = self.dns_manager.get_dns_provider_account_config(
+            dns_provider, metadata.get('account_id'), settings)
+        if not dns_config:
+            # The DNS account this cert was issued with is gone from
+            # settings. create_certificate raises on this same condition,
+            # so renewal fails fast with a clear message instead of
+            # letting certbot fail opaquely (which surfaced as a 500 with
+            # no hint about the missing account).
+            raise RuntimeError(
+                f"Cannot renew {domain}: DNS provider '{dns_provider}' "
+                f"account '{metadata.get('account_id') or 'default'}' is not configured"
+            )
+        acme_dns_alias = self._acme_dns_native_alias(dns_provider, dns_config)
+        if acme_dns_alias:
+            # Mirror the create path: acme-dns renews through CertMate's
+            # native hook, never through a certbot plugin (issue #466).
+            # Certs issued before this fix carry no domain_alias in
+            # metadata, so routing on the provider keeps them renewable
+            # without a metadata migration.
+            self._answer_through_alias_hook(
+                cmd, process_env, artifacts, provider=dns_provider,
+                dns_config=dns_config, alias=acme_dns_alias, settings=settings)
+            # Strip CR/LF so a crafted domain cannot forge log entries
+            # (CodeQL py/log-injection), matching modules/web/cert_routes.py.
+            safe_domain = str(domain).replace('\r', ' ').replace('\n', ' ')
+            logger.info(f"Renewing {safe_domain} with the native acme-dns hook.")
+            return challenge_type
+
+        # The same authenticator, credentials and wait create passes, from
+        # today's settings. Pull SANs from metadata so the discovery hook
+        # sees the same FQDN set the cert was originally issued with;
+        # otherwise a wildcard SAN under a parent zone would be invisible at
+        # renew time. Passing them explicitly also means renewal does not
+        # depend on the credentials path certbot baked into
+        # renewal/<domain>.conf at issue time, which is written relative to
+        # the issuing CWD and goes stale after a data-dir/CWD move.
+        self._answer_through_plugin(
+            cmd, process_env, artifacts,
+            strategy=DNSStrategyFactory.get_strategy(dns_provider),
+            provider=dns_provider, dns_config=dns_config, domain=domain,
+            san_domains=san_domains, settings=settings,
+            challenge_type=challenge_type, domain_alias=domain_alias)
+        logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
         return challenge_type
 
     def _reconcile_without_renewal(self, domain, domain_dir, metadata):

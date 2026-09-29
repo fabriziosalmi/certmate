@@ -1,6 +1,6 @@
 # Provider DNS
 
-<!-- CERTMATE-TRANSLATED-FROM bea10221be3c2cdc -->
+<!-- CERTMATE-TRANSLATED-FROM b1fb9435446a84d3 -->
 
 CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let's Encrypt tramite plugin certbot individuali. La lista completa si trova nella tabella seguente.
 
@@ -376,7 +376,7 @@ I wildcard come `*.mybox.duckdns.org` sono supportati con lo stesso token. Poich
 
 Per i provider DNS privi di plugin certbot — Oracle Cloud (OCI), Total Uptime, Netriplex, DNS interno, API di appliance — punta CertMate ai tuoi script e li gestirà tramite la modalità `--manual` di certbot. Non è richiesta alcuna installazione di plugin.
 
-**[Script DNS personalizzato](../custom-dns-script.md)** è la guida completa: le regole sui percorsi e perché sono severe, l'ambiente esatto con cui il tuo script viene chiamato, il caso wildcard più apice, cosa ricorda il rinnovo e un esempio funzionante. *(in inglese)*
+**[Script DNS personalizzato](../custom-dns-script.md)** è la guida completa: le regole sui percorsi e perché sono severe, l'ambiente esatto con cui il tuo script viene chiamato, il caso wildcard più apice, cosa usa il rinnovo e un esempio funzionante. *(in inglese)*
 
 ```json
 {
@@ -433,7 +433,7 @@ Requisiti e modello di fiducia:
 - I percorsi devono essere **assoluti**, i file devono esistere, essere **eseguibili**, non scrivibili da tutti gli utenti **né dal gruppo** (`chmod 755` o più restrittivo), e non contenere spazi o metacaratteri della shell (certbot esegue gli hook tramite la shell). Un hook con `chmod 775` — un modo ordinario per uno script di proprietà di un gruppo di deploy — viene rifiutato: chiunque appartenga a quel gruppo potrebbe riscrivere ciò che CertMate sta per eseguire. Validati all'emissione e dall'endpoint API di test (`POST /api/web/certificates/test-provider`)
 - Gli script vengono eseguiti con i privilegi di CertMate — stesso modello di fiducia dei deploy hook: solo gli amministratori possono configurarli, trattali come parte del tuo deployment
 - L'impostazione `dns_propagation_seconds` per provider viene esportata agli script come `CERTMATE_DNS_PROPAGATION_SECONDS` (un campo `propagation_seconds` a livello di account lo sovrascrive)
-- I rinnovi rieseguono i percorsi degli hook dalla configurazione di rinnovo di certbot: mantieni gli script in un percorso stabile (se li sposti, riemetti il certificato)
+- I rinnovi usano i percorsi degli hook configurati adesso, come l'emissione: se sposti uno script, aggiorna il percorso nelle Impostazioni e il rinnovo successivo userà quello
 - I certificati wildcard funzionano (l'hook riceve ogni record di validazione)
 
 ---

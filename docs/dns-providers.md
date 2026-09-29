@@ -405,7 +405,7 @@ installation required.
 
 **[Custom DNS Script](custom-dns-script.md)** is the full guide: the path rules
 and why they are strict, the exact environment your script is called with, the
-wildcard-plus-apex case, what renewal remembers, and a worked example.
+wildcard-plus-apex case, what renewal uses, and a worked example.
 
 ```json
 {
@@ -479,8 +479,8 @@ Requirements and trust model:
 - The per-provider `dns_propagation_seconds` setting is exported to the
   scripts as `CERTMATE_DNS_PROPAGATION_SECONDS` (an account-level
   `propagation_seconds` field overrides it)
-- Renewals replay the hook paths from certbot's renewal configuration:
-  keep the scripts at a stable path (if you move them, reissue)
+- Renewals use the hook paths configured now, as issuance does: move a
+  script, update its path in Settings, and the next renewal uses it
 - Wildcard certificates work (the hook receives each validation record)
 
 ---
