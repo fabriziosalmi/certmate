@@ -1641,6 +1641,15 @@ one that can actually restore, encrypted at rest.
 
 Only unified backups can be restored.
 
+A successful restore answers with `reissue_required`: the certificates that came
+back **without a private key**, which is every certificate in a share-safe
+archive, and never a CSR-only one, whose key was never here. The list is empty
+after a full restore. When it is not, `next_step` says what to do: re-enter
+the DNS provider credentials (a share-safe archive masks them), then reissue
+each listed certificate. Until then they cannot serve TLS. These fields are
+there since API contract **2.25**; since **2.26** a renewal of such a
+certificate answers `REISSUE_REQUIRED` rather than trying.
+
 #### Upload one taken elsewhere
 
 **Endpoint**: `POST /api/backups/upload` — admin

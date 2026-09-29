@@ -47,6 +47,25 @@ def _validate_backup_filename(filename):
     return None
 
 
+def _keyless_restore_fields(file_ops):
+    """What a successful restore says about certificates left without a key.
+
+    Said at restore time, not discovered at the next sweep (#966): a
+    share-safe archive carries no private keys, and only a reissue repairs a
+    certificate without one. `reissue_required` is always present, empty after
+    a full restore; `next_step` only when there is something to do.
+    """
+    keyless = list(getattr(file_ops, 'last_restore_keyless', None) or [])
+    fields = {'reissue_required': keyless}
+    if keyless:
+        fields['next_step'] = (
+            f'{len(keyless)} certificate(s) were restored without a private '
+            f'key and cannot serve TLS until they are reissued. Re-enter the '
+            f'DNS provider credentials first (a share-safe backup masks them), '
+            f'then reissue each certificate listed in reissue_required.')
+    return fields
+
+
 def create_backup_resources(api, models, ctx: ApiContext) -> dict:
     """Build the backup resources against *ctx*."""
 
@@ -306,6 +325,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
                     if pre_restore_backup:
                         response['pre_restore_backup'] = pre_restore_backup
                         response['note'] = 'A backup of the previous state was created before restore'
+                    response.update(_keyless_restore_fields(ctx.file_ops))
 
                     return response, 200
                 else:
