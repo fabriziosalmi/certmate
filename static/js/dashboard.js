@@ -1650,6 +1650,66 @@
         });
     }
 
+    // --- Certificates that lost their private key (#966) -------------------
+    // Restoring a share-safe backup brings certificates back without a key.
+    // Renewal refuses them (REISSUE_REQUIRED), and the list reports them as
+    // `reissue_required`. The server paces the reissue (a few per call, two at
+    // a time), so the banner says what was queued and what is left rather
+    // than promising all of them at once.
+    function renderKeylessBanner(certificates) {
+        var banner = document.getElementById('keylessBanner');
+        if (!banner) return;
+        var keyless = certificates.filter(function (cert) { return cert.reissue_required === true; });
+        if (keyless.length === 0) {
+            banner.classList.add('hidden');
+            banner.innerHTML = '';
+            return;
+        }
+        var names = keyless.slice(0, 5).map(function (cert) { return escapeHtml(cert.domain); }).join(', ') +
+            (keyless.length > 5 ? ' and ' + (keyless.length - 5) + ' more' : '');
+        var action = roleAtLeast('operator')
+            ? '<button type="button" id="reissueKeylessBtn" onclick="reissueKeyless()" class="shrink-0 px-3 py-1 border border-warning-line rounded-md text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50">Reissue all</button>'
+            : '<span class="shrink-0 text-xs">An operator can reissue them.</span>';
+        banner.innerHTML =
+            '<div class="flex items-center justify-between gap-4 p-3 rounded-md bg-warning-surface border border-warning-line text-sm text-warning-fg">' +
+            '<span><i class="fas fa-key mr-2"></i><strong>' + keyless.length + ' certificate' + (keyless.length === 1 ? '' : 's') +
+            ' ha' + (keyless.length === 1 ? 's' : 've') + ' no private key</strong> (' + names + '), ' +
+            'as a share-safe backup restores them. They cannot be renewed, only reissued, and a reissue creates a new key that deploy hooks will ship.</span>' +
+            action + '</div>';
+        banner.classList.remove('hidden');
+    }
+
+    function reissueKeyless() {
+        var btn = document.getElementById('reissueKeylessBtn');
+        if (btn) btn.disabled = true;
+        fetch('/api/certificates/reissue-keyless', {
+            method: 'POST',
+            headers: API_HEADERS,
+            credentials: 'same-origin',
+            body: JSON.stringify({})
+        }).then(function (response) {
+            return response.json().then(function (body) { return { status: response.status, body: body }; });
+        }).then(function (res) {
+            var body = res.body || {};
+            if (res.status !== 200 && res.status !== 202) {
+                showMessage(body.error || body.message || ('Reissue failed (HTTP ' + res.status + ')'), 'error');
+                return;
+            }
+            var queued = (body.queued || []).length;
+            var remaining = (body.remaining || []).length;
+            var refused = (body.refused || []).length;
+            var parts = [queued + ' reissue' + (queued === 1 ? '' : 's') + ' queued'];
+            if (remaining) parts.push(remaining + ' still to do: run it again once these finish');
+            if (refused) parts.push(refused + ' cannot be reissued from their recorded configuration');
+            showMessage(parts.join('; ') + '.', refused ? 'warning' : 'success');
+        }).catch(function (error) {
+            showMessage('Reissue failed: ' + error.message, 'error');
+        }).finally(function () {
+            if (btn) btn.disabled = false;
+            loadCertificates();
+        });
+    }
+
     // Load certificates with deployment status
     function loadCertificates() {
         addDebugLog('Loading certificates from API...', 'info');
@@ -1678,6 +1738,7 @@
             allCertificates = certificates;
             updateStats(certificates);
             displayCertificates(certificates);
+            renderKeylessBanner(certificates);
 
             // Check deployment status for all certificates after a short delay.
             // Single source of automatic checks — batched/deduped via
@@ -3529,6 +3590,7 @@
 
     // Expose functions needed by HTML onclick handlers and SSE
     window.loadCertificates = loadCertificates;
+    window.reissueKeyless = reissueKeyless;
     window.exportAllCertificates = exportAllCertificates;
     window.openCertDetail = openCertDetail;
     window.certRowKey = certRowKey;
