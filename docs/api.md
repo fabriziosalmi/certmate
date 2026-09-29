@@ -1646,8 +1646,9 @@ back **without a private key**, which is every certificate in a share-safe
 archive, and never a CSR-only one, whose key was never here. The list is empty
 after a full restore. When it is not, `next_step` says what to do: re-enter
 the DNS provider credentials (a share-safe archive masks them), then reissue
-each listed certificate. Until then they cannot serve TLS, and a renewal
-answers `REISSUE_REQUIRED` rather than trying. Since API contract **2.25**.
+each listed certificate. Until then they cannot serve TLS. These fields are
+there since API contract **2.25**; since **2.26** a renewal of such a
+certificate answers `REISSUE_REQUIRED` rather than trying.
 
 #### Upload one taken elsewhere
 
@@ -1760,6 +1761,7 @@ and may be reworded.
 | `ACME_RATE_LIMITED` | 422 | The CA refused because a rate limit was reached — waiting is the fix, retrying is the cause |
 | `CERTIFICATE_CREATION_FAILED` / `CERTIFICATE_REISSUE_FAILED` / `CERTIFICATE_REISSUE_REJECTED` | 422 | Issuance was attempted and refused |
 | `RENEWAL_CONFIG_BROKEN` | 422 | certbot's renewal config for this lineage no longer resolves; reissue |
+| `REISSUE_REQUIRED` | 422 | The certificate has no private key left anywhere to renew with (typically after restoring a share-safe backup); only a reissue repairs it |
 | `DNS_ACCOUNT_NOT_CONFIGURED` | 422 | The DNS account this certificate uses is gone from settings |
 | `ISSUANCE_QUEUE_FULL` | 429 | Too much async issuance is already queued or running; the body carries the depth and the limit |
 | `ADOPTION_UNAVAILABLE` | 503 | Discovery/adoption is not available on this build |
