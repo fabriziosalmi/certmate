@@ -73,7 +73,7 @@ def test_a_copy_that_fails_still_leaves_the_warning_locally(tmp_path):
 def test_the_caller_s_record_is_not_modified(tmp_path):
     """The copy is taken for the backend only: the caller still owns its dict,
     and _commit_certificate decides what the local record says."""
-    domain_dir = _renewed_domain(tmp_path)
+    _renewed_domain(tmp_path)
     storage, _received = _backend(True)
     manager, _ = _manager(tmp_path, storage)
     record = {'domain': DOMAIN, 'storage_warning': STALE}
