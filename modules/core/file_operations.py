@@ -292,6 +292,10 @@ class FileOperations:
         ]
         # Why the last restore_unified_backup() returned False, when it knows.
         self.last_restore_error = None
+        # Domains the last restore brought back with no private key (#966):
+        # what a share-safe archive produces. Only a reissue repairs them, and
+        # the operator should learn it from the restore, not the next sweep.
+        self.last_restore_keyless = []
 
     def safe_file_read(self, file_path, is_json=False, default=None):
         """Safely read a file with proper error handling.
@@ -1007,6 +1011,27 @@ class FileOperations:
                 f"the keys on disk. Restore a disaster-recovery archive "
                 f"(include_secrets=true) instead, or restore onto an empty instance.")
 
+    def _restored_without_a_key(self, restored_domains):
+        """The restored domains that have a certificate and no private key.
+
+        A CSR-only certificate is not one of them: its key lives on the device
+        that generated it, so its absence here is the design (#599). Read from
+        its metadata, as private_key_state does.
+        """
+        keyless = []
+        for domain in restored_domains:
+            domain_dir = self.cert_dir / domain
+            if not (domain_dir / 'cert.pem').exists() or (domain_dir / 'privkey.pem').exists():
+                continue
+            try:
+                metadata = json.loads((domain_dir / 'metadata.json').read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                metadata = {}
+            if isinstance(metadata, dict) and metadata.get('key_management') == 'external':
+                continue
+            keyless.append(domain)
+        return sorted(keyless)
+
     def _repair_restored_lineages(self, restored_domains):
         """Make each restored certbot lineage one certbot will accept.
 
@@ -1117,6 +1142,7 @@ class FileOperations:
 
             # Extract unified backup
             self.last_restore_error = None
+            self.last_restore_keyless = []
             with zipfile.ZipFile(backup_path, 'r') as zipf:
                 # Gate 0: a share-safe archive carries no private keys. Laid
                 # over an instance that has certificates it would replace
@@ -1363,6 +1389,7 @@ class FileOperations:
                         restored_data_files += 1
             
             self._repair_restored_lineages(restored_domains)
+            self.last_restore_keyless = self._restored_without_a_key(restored_domains)
 
             # Symlinks for the good domains are rebuilt above regardless, so a
             # partially-restored instance is at least internally consistent for
