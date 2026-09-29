@@ -77,6 +77,7 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         # it happens, so a caller reading the summary does not have to know
         # which path produced the dict.
         'ari_advanced': 0,
+        'reissue_required': 0,
     }
     # The sweep also reports its own shape now — how long it took and how many
     # entries it looked at — so an instance that is slowly outgrowing its

@@ -96,6 +96,25 @@ class DomainOperationInProgress(RuntimeError):
         super().__init__(f"A certificate operation for {domain} is already in progress")
 
 
+class ReissueRequired(RuntimeError):
+    """The certificate has no private key anywhere certbot can reach (#966).
+
+    Not in the served privkey.pem, not in live/, not in archive/: what restoring
+    a share-safe backup produces. certbot cannot renew such a lineage (it
+    cannot even parse it), so a renewal attempt is pointless and its error is
+    generic. The repair is a reissue, which issues a new key; the message says
+    so. A RuntimeError so every caller that handles renewal failures still
+    handles this one.
+    """
+    def __init__(self, domain):
+        self.domain = domain
+        super().__init__(
+            f"{domain} has no private key anywhere it can be recovered from "
+            f"(typically after restoring a share-safe backup, which carries no "
+            f"keys). A renewal cannot repair that: reissue the certificate, "
+            f"which issues a new key.")
+
+
 # Metadata keys a reissue (create_certificate(replace=True)) is authoritative
 # for: they are rebuilt from the issuance parameters on every reissue, and the
 # alias pair must be *cleared* when the reissue drops the alias. Every other
@@ -3312,6 +3331,29 @@ class CertificateManager:
             if isinstance(result, dict) else None,
         }
 
+    @staticmethod
+    def _lineage_lost_its_key(domain_dir, domain):
+        """Is this a certbot lineage stripped of every private key? (#966)
+
+        Positive evidence, not absence: archive/ holds certificate generations
+        but no privkey generation, and neither the served copy nor live/ has a
+        key. That is exactly what restoring a share-safe backup leaves, as
+        measured on LE staging. A key that is still anywhere is left to the
+        ordinary path, which republishes the served files from live/ (the
+        missing- or mismatched-served-key cases heal that way); a directory
+        with no lineage at all is not this case either.
+        """
+        if (domain_dir / 'privkey.pem').exists():
+            return False
+        if (domain_dir / 'live' / domain / 'privkey.pem').exists():
+            return False
+        archive = domain_dir / 'archive' / domain
+        if not archive.is_dir():
+            return False
+        has_certs = any(archive.glob('cert*.pem'))
+        has_keys = any(archive.glob('privkey*.pem'))
+        return has_certs and not has_keys
+
     def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
         # A CSR-only certificate has no certbot lineage, so `certbot renew`
@@ -3369,6 +3411,13 @@ class CertificateManager:
                     )
             except OSError as e:
                 logger.warning(f"Could not rebuild lineage symlinks for {domain}: {e}")
+
+            # After the repairs, before certbot: a key that is nowhere cannot
+            # be renewed, only reissued (#966, scenario B, measured on LE
+            # staging). A key certbot can still reach in live/ or archive/ is
+            # left to the ordinary path, which republishes it.
+            if self._lineage_lost_its_key(domain_dir, domain):
+                raise ReissueRequired(domain)
 
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
@@ -3480,7 +3529,7 @@ class CertificateManager:
             # releasing the domain lock and cleaning up credential files.
             logger.error(f"Certificate renewal timed out for {domain}")
             raise RuntimeError("Certificate renewal timed out")
-        except (FileNotFoundError, DomainOperationInProgress):
+        except (FileNotFoundError, DomainOperationInProgress, ReissueRequired):
             # These already say what they mean, and the routes map them to
             # 404 and 409. Re-wrapping them as RuntimeError turned both into
             # a 422 "renewal failed" — so the `except FileNotFoundError` arm
@@ -3851,6 +3900,7 @@ class CertificateManager:
                     'skipped_disabled': 0, 'skipped_invalid': 0,
                     'skipped_not_due': 0, 'skipped_busy': 0,
                     'unmanaged': 0, 'reregistered': 0, 'ari_advanced': 0,
+                    'reissue_required': 0,
                     'auto_renew_disabled': True}
 
         # Migrate settings format if needed
@@ -3865,7 +3915,10 @@ class CertificateManager:
                    'unmanaged': 0, 'reregistered': 0,
                    # Renewals the CA's window brought forward, which the
                    # configured threshold would not have started tonight.
-                   'ari_advanced': 0}
+                   'ari_advanced': 0,
+                   # Certificates with no key anywhere: only a reissue repairs
+                   # them, so they are counted apart from failures (#966).
+                   'reissue_required': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -3963,12 +4016,13 @@ class CertificateManager:
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
             "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
-            "%d unmanaged, %d re-registered",
+            "%d unmanaged, %d re-registered, %d need reissue",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
             summary['skipped_not_due'], summary['skipped_busy'],
             summary['unmanaged'], summary['reregistered'],
+            summary['reissue_required'],
         )
         return summary
 
@@ -4036,6 +4090,15 @@ class CertificateManager:
             # it itself.
             self._publish_renewed_event(domain)
             return True
+        except ReissueRequired as e:
+            # A known state with a known remedy, not a failure of this sweep:
+            # counted apart, and the notification says what to do. Audited as
+            # a failure, because the renewal did not happen.
+            summary['reissue_required'] += 1
+            logger.warning("%s", e)
+            self._audit_scheduled_renew(domain, 'failure', error=e)
+            self._publish_failed_event(domain, e)
+            return False
         except DomainOperationInProgress:
             # Not a failure — "try again in a minute". The lock is held by a
             # manual renewal, a reissue or the previous sweep still running,
