@@ -214,7 +214,7 @@ UNACCOUNTED_LIMIT = 0
 # Files already over GENERAL_LIMIT, with what they measure today.
 BUDGET = {
     'modules/core/storage_backends.py': 64,
-    'modules/core/certificates.py': 46,
+    'modules/core/certificates.py': 45,
     'modules/core/file_operations.py': 16,
     'modules/web/misc_routes.py': 16,
     'modules/api/resources_health.py': 14,
