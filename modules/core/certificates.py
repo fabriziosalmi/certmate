@@ -2175,6 +2175,18 @@ class CertificateManager:
             return self._create_empty_cert_info(domain)
 
 
+    def _reissue_required(self, domain, key_state):
+        """Would renewal answer REISSUE_REQUIRED for this certificate? (#966)
+
+        The list reports it so the dashboard can offer "reissue all": it never
+        read private_key_state, and a certificate restored from a share-safe
+        backup looked healthy there until its first sweep failed. Only looked
+        up when the served key is missing, which is the one state it can be.
+        """
+        if key_state != 'missing':
+            return False
+        return self._lineage_lost_its_key(Path(self.cert_dir) / domain, domain)
+
     def _parse_certificate_info(self, domain, cert_content, metadata=None,
                                 settings=None, key_state='present'):
         """Parse certificate information from certificate content.
@@ -2260,6 +2272,7 @@ class CertificateManager:
                                   or key_state in ('missing', 'mismatched')),
                 'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
+                'reissue_required': self._reissue_required(domain, key_state),
                 'usable': _usable(key_state),
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
@@ -2301,6 +2314,7 @@ class CertificateManager:
             'needs_renewal': True,
             'private_key_present': _private_key_present(key_state),
             'private_key_state': key_state,
+            'reissue_required': self._reissue_required(domain, key_state),
             'usable': False,
             'dns_provider': dns_provider,
             'domain_alias': domain_alias,

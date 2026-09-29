@@ -140,6 +140,7 @@ rather than written by hand:
   "needs_renewal": false,
   "private_key_present": true,
   "private_key_state": "present",
+  "reissue_required": false,
   "usable": true,
   "dns_provider": "cloudflare",
   "domain_alias": null,
@@ -194,6 +195,7 @@ A certificate with no private key beside it cannot complete a handshake, and
 | `private_key_state` | `present`, `missing`, `mismatched`, `unknown`, or `external`. |
 | `private_key_present` | Whether a key was found. `null` when it was not looked for. |
 | `usable` | `exists` AND a matching key. `null` when the storage backend does not fetch key material on this path and says so, which today means Azure Key Vault. |
+| `reissue_required` | No private key anywhere: not served, not in `live/`, not in any archived generation. This is what restoring a share-safe backup leaves. Renewal refuses it with `REISSUE_REQUIRED`, and [`POST /api/certificates/reissue-keyless`](#reissue-every-certificate-that-lost-its-key) repairs it. A key missing only from the served copy is `false`, because renewal republishes it from the lineage. Since API contract **2.28**. |
 
 `mismatched` is a certificate from one issuance sitting beside a key from
 another: the two are compared, not assumed to match. `external` is a CSR-only
