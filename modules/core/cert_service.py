@@ -16,6 +16,7 @@ denial can be audited here and raised as :class:`DomainOutOfScope`, which the
 adapters map to HTTP 403.
 """
 import logging
+import time
 
 from .structured_logging import scrub_log_value
 from .constants import PROBE_PROTOCOLS
@@ -854,6 +855,7 @@ class CertificateService:
         """
         domain = prepared['domain']
         audit_ctx = prepared.get('_audit_ctx')
+        started = time.monotonic()
         try:
             result = self._certs.renew_certificate(domain, force=force)
         except Exception as e:
@@ -863,10 +865,15 @@ class CertificateService:
             # publishing `certificate_failed` for either would page someone
             # for a queue. Only what the CA or the configuration refused,
             # and what broke inside CertMate, is an event.
-            from .certificates import DomainOperationInProgress
+            from .certificates import DomainOperationInProgress, ReissueRequired
             if not isinstance(e, (DomainOperationInProgress, FileNotFoundError)):
                 self._publish('certificate_failed',
                               {'domain': domain, 'error': str(e)})
+            # The metric follows the sweep's rule: a certificate that needs a
+            # reissue did not fail to renew, renewal was never the remedy.
+            if not isinstance(e, (DomainOperationInProgress, FileNotFoundError,
+                                  ReissueRequired)):
+                self._record_renewal(domain, False, started, e)
             raise
         self._audit_emit(audit_ctx, 'renew', domain, 'success',
                          details={'force': bool(force)})
@@ -875,7 +882,26 @@ class CertificateService:
         # behaviour for older manager results without the flag.
         if bool(result.get('renewed', True)):
             self._publish('certificate_renewed', {'domain': domain})
+            self._record_renewal(domain, True, started)
         return result
+
+    def _record_renewal(self, domain, success, started, error=None):
+        """Feed the renewal metrics for a renewal run on request (#666 D7).
+
+        They were fed by the nightly sweep only, so a renewal an operator ran
+        by hand, including the one the CA refused for a rate limit, left no
+        trace in Prometheus. The sweep calls the manager directly and records
+        its own, so nothing is counted twice.
+        """
+        # Telemetry must not turn a renewal that happened into an error: the
+        # metadata read is the one step here that can raise (the recorder
+        # swallows its own), and without it the label is 'unknown'.
+        try:
+            metadata = self._certs._load_metadata(domain) or {}
+        except OSError:
+            metadata = {}
+        self._certs._record_renewal_metrics(
+            domain, metadata, success, time.monotonic() - started, error=error)
 
 
 def _add_domain_entry(prepared):

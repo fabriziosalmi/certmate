@@ -40,6 +40,13 @@ class _Manager:
             raise self.renew_error
         return dict(self.renew_result)
 
+    # The service feeds the renewal metrics through these (#666 D7).
+    def _load_metadata(self, domain):
+        return {}
+
+    def _record_renewal_metrics(self, domain, cert_info, success, duration, error=None):
+        pass
+
 
 class _Settings:
     def update(self, fn, reason):

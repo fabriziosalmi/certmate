@@ -174,6 +174,13 @@ class _FakeCerts:
             raise RuntimeError('certbot exploded')
         return {'dns_provider': 'cloudflare', 'duration': 1.0}
 
+    # The service feeds the renewal metrics through these (#666 D7).
+    def _load_metadata(self, domain):
+        return {}
+
+    def _record_renewal_metrics(self, domain, cert_info, success, duration, error=None):
+        pass
+
 
 def _service(audit, fail=False):
     return CertificateService(_FakeCerts(fail=fail), _FakeSettings(), _FakeAuth(),
