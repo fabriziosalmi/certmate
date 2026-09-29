@@ -43,9 +43,13 @@ def _app(tmp_path, monkeypatch, bearer=None):
 
 
 def _complete_setup(client):
-    """What templates/setup.html does: the first admin, then local login."""
+    """What templates/setup.html does: the first admin, which enables local
+    login in the same request; the separate step only for an admin left over
+    from an earlier, half-finished run (409)."""
     created = client.post('/api/web/settings/users', json={
         'username': 'operator', 'password': STRONG_PASSWORD, 'role': 'admin'})
+    if created.status_code == 201 and (created.get_json() or {}).get('local_auth_enabled'):
+        return created, None
     enabled = client.post('/api/auth/config', json={'local_auth_enabled': True})
     return created, enabled
 
@@ -79,7 +83,8 @@ def test_nothing_created_in_setup_mode_survives_into_the_configured_instance(tmp
     assert client.post('/api/keys', json={'name': 'k', 'role': 'admin'}).status_code == 409
 
     created, enabled = _complete_setup(client)
-    assert (created.status_code, enabled.status_code) == (201, 200)
+    assert created.status_code == 201 and enabled is None
+    assert created.get_json()['local_auth_enabled'] is True
     auth = container.managers['auth']
     assert not auth.is_setup_mode()
     assert auth.list_api_keys() == {}
@@ -94,19 +99,23 @@ def test_setup_mode_creates_the_first_admin_and_no_second(tmp_path, monkeypatch)
     assert first.status_code == 201
     second = client.post('/api/users', json={
         'username': 'another', 'password': STRONG_PASSWORD, 'role': 'admin'})
-    assert second.status_code == 409
-    assert second.get_json()['code'] == 'SETUP_BOOTSTRAP_ONLY'
+    # The first admin closed setup: the anonymous second attempt is refused
+    # as unauthenticated, before the setup-mode rule is even reached.
+    assert second.status_code == 401
     assert list(container.managers['auth'].list_users()) == ['operator']
 
 
 def test_a_half_finished_setup_still_completes(tmp_path, monkeypatch):
     """The setup page reads 409 on the user step as "an admin already exists"
-    and goes on to enable login. A rerun after a half-finished setup must
-    still end with login on."""
+    and goes on to enable login. A rerun on an instance a half-finished setup
+    left behind must still end with login on."""
     application, container = _app(tmp_path, monkeypatch)
     client = application.test_client()
-    assert client.post('/api/web/settings/users', json={
-        'username': 'operator', 'password': STRONG_PASSWORD, 'role': 'admin'}).status_code == 201
+    # The state an earlier version left when its second request never came:
+    # an admin, and local login still off. The route cannot produce it any
+    # more (the first admin enables login), so it is made directly.
+    ok, _ = container.managers['auth'].create_user('operator', STRONG_PASSWORD, 'admin')
+    assert ok and container.managers['auth'].is_setup_mode()
     # The page is reloaded and the form submitted again.
     rerun, enabled = _complete_setup(client)
     assert rerun.status_code == 409

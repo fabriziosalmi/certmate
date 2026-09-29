@@ -68,6 +68,29 @@ def bootstrap_only(auth_manager, audit_logger, operation, resource_type,
     return decorator
 
 
+def _is_bootstrap_admin(auth_manager, role):
+    """Is this request creating the instance's first admin, in setup mode?"""
+    return (role == 'admin' and auth_manager.is_setup_mode()
+            and not auth_manager.list_users())
+
+
+def _close_setup_with(auth_manager, audit_logger, username, body, bootstrap_admin):
+    """Enable local auth together with the first admin, and say so in *body*.
+
+    Setup used to take two requests (create the admin, then enable local
+    auth), and an instance whose second request never came stayed open to
+    anyone as admin while its operator believed it had one.
+    """
+    if not bootstrap_admin or not auth_manager.enable_local_auth(True):
+        return
+    body['local_auth_enabled'] = True
+    if audit_logger:
+        audit_logger.log_auth_config_changed(
+            local_auth_enabled_before=False, local_auth_enabled_after=True,
+            user=username, ip_address=request.remote_addr,
+            confirm_unauthenticated=False)
+
+
 def _confirm_setup_key(auth_manager, audit_logger, key_id):
     """PATCH /api/keys/<id> {"confirmed": true}: vouch for a key created
     while the instance was in setup mode, clearing its review flag."""
@@ -312,6 +335,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 'error': 'Password must be at least 12 characters and include a digit and a symbol'
             }), 400
 
+        bootstrap_admin = _is_bootstrap_admin(auth_manager, role)
         success, msg = auth_manager.create_user(username, password, role)
         if success:
             if audit_logger:
@@ -322,7 +346,10 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                     user=actor.get('username'),
                     ip_address=request.remote_addr,
                 )
-            return jsonify({'message': 'User created'}), 201
+            body = {'message': 'User created'}
+            _close_setup_with(auth_manager, audit_logger, username, body,
+                              bootstrap_admin)
+            return jsonify(body), 201
         if 'already exists' in msg.lower():
             return jsonify({'error': msg}), 409
         return jsonify({'error': msg}), 500

@@ -105,10 +105,30 @@ def test_the_code_is_always_a_string(client, layer, verb, path, status):
     assert body['code'] == body['code'].upper()
 
 
-def test_the_same_condition_reports_the_same_code(client):
+@pytest.fixture
+def token_client(tmp_path, monkeypatch):
+    """An instance past setup, with an operator bearer token. Setup mode
+    refuses downloads before they can say what is missing, so the question
+    below is asked where it has an answer."""
+    import secrets
+    for var, sub in (('CERTMATE_CERT_DIR', 'certs'), ('CERTMATE_DATA_DIR', 'data'),
+                     ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
+        (tmp_path / sub).mkdir()
+        monkeypatch.setenv(var, str(tmp_path / sub))
+    token = secrets.token_urlsafe(32)
+    monkeypatch.setenv('API_BEARER_TOKEN', token)
+    from modules.factory import create_app
+    app, _ = create_app()
+    client = app.test_client()
+    client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {token}'
+    return client
+
+
+def test_the_same_condition_reports_the_same_code(token_client):
     """It was possible for one condition to have a code on one endpoint and
     none on another: the certificate listing said nothing while the download
     path said CERTIFICATE_NOT_FOUND, for the same missing certificate."""
+    client = token_client
     _, listing = _body(client, 'get', '/api/certificates/nope.example.com')
     _, download = _body(client, 'get',
                         '/api/certificates/nope.example.com/download')

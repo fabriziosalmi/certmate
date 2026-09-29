@@ -14,6 +14,7 @@ Environment variables:
 """
 
 import os
+import secrets
 import time
 import subprocess
 import pytest
@@ -149,6 +150,40 @@ TEST_PORT = int(os.environ.get("CERTMATE_TEST_PORT", "18888"))
 IMAGE_NAME = os.environ.get("CERTMATE_IMAGE", "certmate:test")
 CONTAINER_NAME = "certmate-test-suite"
 BASE_URL = f"http://localhost:{TEST_PORT}"
+
+# The shared test container runs with an operator bearer token, like any
+# instance past its first minutes. It used to run in setup mode, where every
+# request is served as admin; setup mode now refuses deploy hooks, backups and
+# private-key downloads to that anonymous admin, and the tests that exercise
+# those surfaces (the release gate's real-certificate ones among them) need a
+# credential. Tests about setup mode itself build an in-process instance of
+# their own. For an external instance (CERTMATE_E2E_BASE_URL), pass its token
+# in CERTMATE_E2E_API_TOKEN.
+E2E_API_TOKEN = (os.environ.get("CERTMATE_E2E_API_TOKEN")
+                 or (None if os.environ.get("CERTMATE_E2E_BASE_URL")
+                     else secrets.token_urlsafe(32)))
+if E2E_API_TOKEN:
+    # The SDK and the CLI read it from here.
+    os.environ.setdefault("CERTMATE_TOKEN", E2E_API_TOKEN)
+
+
+def e2e_auth_headers():
+    """The Authorization header the shared test instance expects, if any."""
+    return {"Authorization": f"Bearer {E2E_API_TOKEN}"} if E2E_API_TOKEN else {}
+
+
+def _only_browser_tests(session):
+    """True when every selected test is a UI test.
+
+    The browser suite starts the way a person does: a fresh instance with no
+    token, the first admin created on the setup page, a login. It also
+    exercises what that bootstrap state implies (turning login off would
+    reopen setup mode), which a token would change. The API suite
+    authenticates like an integration, with a token. They run as separate
+    invocations in CI and in release.sh; when mixed, the token wins.
+    """
+    items = getattr(session, "items", None) or []
+    return bool(items) and all(item.get_closest_marker("ui") for item in items)
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 TEST_DOMAIN = os.environ.get("CERTMATE_TEST_DOMAIN", "test.gpfree.org")
@@ -206,6 +241,7 @@ def _disable_rate_limiting(base_url=BASE_URL):
         resp = requests.post(
             f"{base_url}/api/settings",
             json={"rate_limits": {"enabled": False}},
+            headers=e2e_auth_headers(),
             timeout=10,
         )
         if resp.status_code != 200:
@@ -220,7 +256,7 @@ def _disable_rate_limiting(base_url=BASE_URL):
 # Session-scoped: one Docker container for the entire test run
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
-def docker_container():
+def docker_container(request):
     """Yield the base URL of a running CertMate instance.
 
     Default: build the image, start a container, tear it down at session
@@ -245,12 +281,19 @@ def docker_container():
     # Remove any stale container
     _docker("rm", "-f", CONTAINER_NAME, check=False)
 
+    global E2E_API_TOKEN
+    if _only_browser_tests(request.session):
+        E2E_API_TOKEN = None
+        os.environ.pop("CERTMATE_TOKEN", None)
+    token_env = ["-e", f"API_BEARER_TOKEN={E2E_API_TOKEN}"] if E2E_API_TOKEN else []
+
     # Start container
     print(f"[tests] Starting container {CONTAINER_NAME} on port {TEST_PORT} ...")
     _docker(
         "run", "-d",
         "--name", CONTAINER_NAME,
         "-p", f"{TEST_PORT}:8000",
+        *token_env,
         IMAGE_NAME,
     )
 
@@ -299,6 +342,7 @@ def api(docker_container):
             # Setting it here makes our test client behave like a same-origin
             # browser without each test needing to remember the header.
             self.session.headers["Origin"] = base_url
+            self.session.headers.update(e2e_auth_headers())
 
         # --- HTTP verbs ---------------------------------------------------
         def get(self, path, **kw):
@@ -482,25 +526,26 @@ def _no_browser(reason):
 
 def reopen_shared_container(api):
     """Put the session-wide container back the way the other modules expect
-    it: local auth off, setup mode, open (#986).
+    it: local auth off (#986).
 
     A module that turns local auth on for its own tests must turn it off
     again, and must check that it did. Since #587 the server refuses to drop
     the last way in without `confirm_unauthenticated`, answering 409; the
     teardowns that posted `{"local_auth_enabled": false}` alone were refused
-    in silence, and every module after them saw
-    "Authorization header required" or not depending on file order.
+    in silence, and every module after them saw a different instance
+    depending on file order.
     """
     import requests
 
     r = api.post_json("/api/auth/config", {
         "local_auth_enabled": False, "confirm_unauthenticated": True})
     assert r.status_code == 200, (
-        f"could not reopen the shared container: {r.status_code} {r.text[:200]}")
-    probe = requests.get(f"{api.base_url}/api/certificates", timeout=10)
-    assert probe.status_code == 200, (
-        f"the shared container is still closed after the teardown "
-        f"({probe.status_code}): the modules after this one would fail by order")
+        f"could not restore the shared container: {r.status_code} {r.text[:200]}")
+    state = requests.get(f"{api.base_url}/api/auth/config",
+                         headers=e2e_auth_headers(), timeout=10)
+    assert state.status_code == 200 and state.json().get("local_auth_enabled") is False, (
+        f"local auth is still on after the teardown ({state.status_code}): "
+        f"the modules after this one would see another instance")
 
 
 @pytest.fixture(scope="session")
@@ -526,10 +571,10 @@ def ui_session_cookie(docker_container):
     # Setup mode: no auth required for these two.
     requests.post(f"{BASE_URL}/api/web/settings/users", json={
         "username": "admin", "password": "Password123!", "role": "admin"
-    })
+    }, headers=e2e_auth_headers())
     requests.post(f"{BASE_URL}/api/auth/config", json={
         "local_auth_enabled": True
-    })
+    }, headers=e2e_auth_headers())
 
     login_r = requests.post(f"{BASE_URL}/api/auth/login", json={
         "username": "admin", "password": "Password123!"

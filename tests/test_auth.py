@@ -76,13 +76,23 @@ class TestAuthConfig:
         data = r.json()
         assert "local_auth_enabled" in data
 
-    def test_auth_me_returns_bypass_user_in_setup_mode(self, api):
+    def test_auth_me_returns_bypass_user_in_setup_mode(self, tmp_path, monkeypatch):
         """/api/auth/me returns 200 with admin role during setup mode
         (no users yet / local_auth disabled) so the dashboard can
-        render. Updated for v2.4.0 — see issue #109/M2 audit fix."""
-        r = api.get("/api/auth/me")
+        render. Updated for v2.4.0 — see issue #109/M2 audit fix.
+
+        On an in-process instance of its own: the shared test container runs
+        with a bearer token, so it is never in setup mode."""
+        for var, sub in (('CERTMATE_CERT_DIR', 'certs'), ('CERTMATE_DATA_DIR', 'data'),
+                         ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
+            (tmp_path / sub).mkdir()
+            monkeypatch.setenv(var, str(tmp_path / sub))
+        monkeypatch.delenv('API_BEARER_TOKEN', raising=False)
+        from modules.factory import create_app
+        app, _ = create_app()
+        r = app.test_client().get("/api/auth/me")
         assert r.status_code == 200
-        body = r.json()
+        body = r.get_json()
         assert body['user']['role'] == 'admin'
         assert body['auth_mode'] == 'bypass'
 

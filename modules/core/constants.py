@@ -427,6 +427,18 @@ METADATA_SCHEMA_VERSION = 1
 #                                   calls MAJOR; counted as the security fix it
 #                                   is, the precedent being 2.7.
 #
+#   Setup mode (no credential configured yet)
+#                                   refuses its anonymous admin, with 409
+#                                   SETUP_BOOTSTRAP_ONLY, deploy-hook changes,
+#                                   tests and runs, certificate and key
+#                                   downloads, and backup creation and
+#                                   download; restore and upload stay allowed.
+#                                   And POST /api/users (first admin, in setup
+#                                   mode) now also enables local auth, saying
+#                                   so with `local_auth_enabled: true`. 2.32.
+#                                   New answers to existing requests, counted
+#                                   as the security fix they are (2.7, 2.31).
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -446,7 +458,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.31'
+API_CONTRACT_VERSION = '2.32'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
