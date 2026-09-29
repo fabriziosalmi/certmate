@@ -713,6 +713,31 @@ class HTTP01Strategy(DNSProviderStrategy):
         return 0  # No propagation needed for HTTP-01
 
 
+class PrevalidatedStrategy(DNSProviderStrategy):
+    """Certbot manual mode for an ACME order already authorized by the CA.
+
+    Manual needs a hook in non-interactive mode even when every authorization
+    is valid. Certbot never invokes it for valid authorizations; if an order
+    contains a pending one, /usr/bin/false cannot publish a DNS challenge.
+    """
+
+    @property
+    def plugin_name(self) -> str:
+        return 'manual'
+
+    @property
+    def supports_propagation_seconds_flag(self) -> bool:
+        return False
+
+    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+        return None
+
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path],
+                                    domain_alias: Optional[str] = None) -> None:
+        cmd.extend(['--manual', '--preferred-challenges', 'dns',
+                    '--manual-auth-hook', '/usr/bin/false'])
+
+
 class SolidServerStrategy(DNSProviderStrategy):
     """EfficientIP SOLIDserver DNS strategy using custom hook script."""
 

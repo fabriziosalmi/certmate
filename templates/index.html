@@ -205,10 +205,11 @@
                                     <option value="">Use default from settings</option>
                                     <option value="dns-01">DNS-01 (DNS provider credentials)</option>
                                     <option value="http-01">HTTP-01 (domain points to this server)</option>
+                                    <option value="prevalidated" hidden disabled>Sectigo (already authorized in SCM)</option>
                                 </select>
                                 <p class="mt-1 text-xs text-muted">
                                     <i class="fas fa-info-circle mr-1"></i>
-                                    HTTP-01 does not require DNS credentials but cannot issue wildcard certificates
+                                    HTTP-01 does not require DNS credentials but cannot issue wildcard certificates. Sectigo prevalidated requires all names to already be authorized in SCM, including wildcards.
                                 </p>
                             </div>
 

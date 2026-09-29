@@ -1849,7 +1849,7 @@
                     infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Enterprise certificates (requires EAB credentials configured in Settings)';
                     break;
                 case 'sectigo':
-                    infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Sectigo SCM ACME (requires account directory URL and EAB credentials)';
+                    infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Sectigo SCM ACME (requires account directory URL and EAB credentials; prevalidated mode is available for already-authorized names)';
                     break;
                 case 'sslcom':
                     infoText = '<i class="fas fa-shield-alt mr-1 text-indigo-500"></i> Enterprise certificates from SSL.com (requires EAB)';
@@ -1869,13 +1869,22 @@
         } else {
             infoDiv.classList.add('hidden');
         }
+        toggleDnsProviderVisibility();
     }
 
     function toggleDnsProviderVisibility() {
         var select = document.getElementById('challenge_type_select');
         var container = document.getElementById('dns-provider-container');
         if (!container) return;
-        if (select && select.value === 'http-01') {
+        var ca = document.getElementById('ca_provider_select');
+        var prevalidated = select && select.querySelector('option[value="prevalidated"]');
+        if (prevalidated) {
+            var allowed = ca && ca.value === 'sectigo';
+            prevalidated.hidden = !allowed;
+            prevalidated.disabled = !allowed;
+            if (!allowed && select.value === 'prevalidated') select.value = '';
+        }
+        if (select && (select.value === 'http-01' || select.value === 'prevalidated')) {
             container.style.display = 'none';
         } else {
             container.style.display = '';
@@ -2628,10 +2637,10 @@
         if (challengeType) {
             requestBody.challenge_type = challengeType;
         }
-        if (dnsProvider) {
+        if (dnsProvider && challengeType !== 'prevalidated') {
             requestBody.dns_provider = dnsProvider;
         }
-        if (accountId) {
+        if (accountId && challengeType !== 'prevalidated') {
             requestBody.account_id = accountId;
         }
         if (caProvider) {

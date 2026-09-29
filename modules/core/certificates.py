@@ -29,7 +29,7 @@ import urllib.request
 from pathlib import Path
 from cryptography import x509
 from .shell import ShellExecutor
-from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir,
+from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
                              check_certbot_plugin_installed, clamp_propagation_seconds)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS)
@@ -2430,7 +2430,7 @@ class CertificateManager:
 
     def _resolve_challenge_and_dns(self, settings, domain, challenge_type,
                                    dns_provider, dns_config, account_id,
-                                   domain_alias, alias_dns_provider):
+                                   domain_alias, alias_dns_provider, ca_provider=None):
         """Which challenge, which DNS provider and account, which strategy.
 
         Also creates the HTTP-01 webroot directory, which is part of why the
@@ -2441,8 +2441,16 @@ class CertificateManager:
         if not challenge_type:
             challenge_type = settings.get().get('challenge_type', 'dns-01')
 
+        if challenge_type == 'prevalidated':
+            if ca_provider != 'sectigo':
+                raise ValueError('Prevalidated ACME is available only for Sectigo')
+            if dns_provider or dns_config or account_id or domain_alias or alias_dns_provider:
+                raise ValueError('Prevalidated ACME does not use DNS providers, accounts or aliases')
+            strategy = PrevalidatedStrategy()
+            dns_config = {}
+            logger.info('Using prevalidated Sectigo ACME authorizations')
         # HTTP-01 path: skip DNS config entirely
-        if challenge_type == 'http-01':
+        elif challenge_type == 'http-01':
             strategy = HTTP01Strategy()
             dns_config = dns_config or {}
             dns_provider = dns_provider or 'http-01'
@@ -2585,7 +2593,7 @@ class CertificateManager:
         challenge_type, dns_provider, dns_config, strategy = \
             self._resolve_challenge_and_dns(
                 settings, domain, challenge_type, dns_provider, dns_config,
-                account_id, domain_alias, alias_dns_provider)
+                account_id, domain_alias, alias_dns_provider, ca_provider=ca_provider)
 
         all_domains = _resolve_all_domains(domain, san_domains, challenge_type)
 
@@ -2775,7 +2783,7 @@ class CertificateManager:
 
         # Set propagation time (DNS-01 only; HTTP-01 has no propagation)
         propagation_time = None
-        if challenge_type != 'http-01':
+        if challenge_type == 'dns-01':
             if settings is None:
                 try:
                     settings = self.settings_manager.load_settings()
@@ -2799,7 +2807,7 @@ class CertificateManager:
             dns_provider, dns_config
         )
         use_dns_alias_hook = (
-            challenge_type != 'http-01'
+            challenge_type == 'dns-01'
             and effective_domain_alias
             and alias_hook_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
         )
@@ -2839,7 +2847,7 @@ class CertificateManager:
 
             # Some plugins (e.g. certbot-dns-route53 >= 1.22) do not accept a
             # --{plugin}-propagation-seconds flag and handle propagation internally.
-            if challenge_type != 'http-01' and strategy.supports_propagation_seconds_flag:
+            if challenge_type == 'dns-01' and strategy.supports_propagation_seconds_flag:
                 certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
         return certbot_cmd, process_env
 
@@ -2865,7 +2873,8 @@ class CertificateManager:
                            .get(ca_provider) or {}).get('name')
             from .dns_resolver import configured_nameservers
             sentence = caa.explain_failure(
-                ca_provider, domains, challenge_type=challenge_type,
+                ca_provider, domains,
+                challenge_type=None if challenge_type == 'prevalidated' else challenge_type,
                 ca_name=ca_name,
                 nameservers=configured_nameservers(
                     self.settings_manager.load_settings() or {}))
@@ -3577,6 +3586,11 @@ class CertificateManager:
         """
         dns_provider = metadata.get('dns_provider')
         challenge_type = metadata.get('challenge_type', 'dns-01')
+
+        if challenge_type == 'prevalidated':
+            if metadata.get('ca_provider') != 'sectigo':
+                raise RuntimeError('Prevalidated ACME renewal is available only for Sectigo')
+            return challenge_type
 
         domain_alias = metadata.get('domain_alias')
         if domain_alias:

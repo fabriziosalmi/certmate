@@ -271,7 +271,12 @@ class CertificateService:
             ca_provider = settings.get('default_ca', 'letsencrypt')
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
-        if challenge_type != 'http-01' and not dns_provider:
+        if challenge_type == 'prevalidated':
+            if ca_provider != 'sectigo':
+                raise ValueError('Prevalidated ACME is available only for Sectigo')
+            if dns_provider or account_id or domain_alias or alias_dns_provider:
+                raise ValueError('Prevalidated ACME does not use DNS providers, accounts or aliases')
+        if challenge_type not in ('http-01', 'prevalidated') and not dns_provider:
             dns_provider = settings.get('dns_provider')
             if not dns_provider:
                 raise ValueError('No DNS provider specified')
@@ -653,6 +658,8 @@ class CertificateService:
             )
 
         metadata = self._certs._load_metadata(domain)
+        dns_provider_was_named = dns_provider is not None
+        dns_account_was_named = account_id is not None
 
         # Whether the caller NAMED a SAN set, recorded before inheritance
         # rewrites it. With a CSR the distinction is the whole thing: naming
@@ -725,7 +732,14 @@ class CertificateService:
             ca_provider = settings.get('default_ca', 'letsencrypt')
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
-        if challenge_type != 'http-01' and not dns_provider:
+        if challenge_type == 'prevalidated':
+            if ca_provider != 'sectigo':
+                raise ValueError('Prevalidated ACME is available only for Sectigo')
+            if (dns_provider_was_named and dns_provider) or (dns_account_was_named and account_id) or domain_alias:
+                raise ValueError('Prevalidated ACME does not use DNS providers, accounts or aliases')
+            dns_provider = None
+            account_id = None
+        if challenge_type not in ('http-01', 'prevalidated') and not dns_provider:
             dns_provider = settings.get('dns_provider')
             if not dns_provider:
                 raise ValueError('No DNS provider specified')
@@ -736,6 +750,7 @@ class CertificateService:
             'dns_provider': dns_provider,
             'account_id': account_id,
             'ca_provider': ca_provider,
+            'ca_account_id': metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None,
             'domain_alias': domain_alias,
             'alias_dns_provider': alias_dns_provider,
             'san_domains': san_domains,
@@ -764,6 +779,7 @@ class CertificateService:
                 dns_provider=prepared['dns_provider'],
                 account_id=prepared['account_id'],
                 ca_provider=prepared['ca_provider'],
+                ca_account_id=prepared.get('ca_account_id'),
                 domain_alias=prepared['domain_alias'],
                 alias_dns_provider=prepared['alias_dns_provider'],
                 san_domains=prepared['san_domains'],
@@ -776,7 +792,8 @@ class CertificateService:
             )
 
             # Idempotent: repairs the settings entry if it ever went missing.
-            resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
+            resolved_dns_provider = (None if prepared['challenge_type'] == 'prevalidated' else
+                                     prepared['dns_provider'] or prepared['_settings_dns_provider'])
             self._settings.update(
                 _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
                 'certificate_reissued',
@@ -861,7 +878,8 @@ def _add_domain_entry(prepared):
     """The settings entry a prepared create registers, as one mutator."""
     return _make_add_domain(
         prepared['domain'],
-        prepared['dns_provider'] or prepared['_settings_dns_provider'],
+        (None if prepared['challenge_type'] == 'prevalidated' else
+         prepared['dns_provider'] or prepared['_settings_dns_provider']),
         prepared['account_id'])
 
 
