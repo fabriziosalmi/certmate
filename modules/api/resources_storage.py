@@ -188,7 +188,9 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
 
     class StorageBackendTest(Resource):
         @api.doc(security='Bearer')
-        @ctx.auth.require_role('operator')
+        # Admin, like the save it supports: the request carries a whole
+        # configuration and the server connects with it.
+        @ctx.auth.require_role('admin')
         @api.expect(models['storage_test_config_model'])
         def post(self):
             """Test storage backend connection"""

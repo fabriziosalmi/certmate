@@ -1601,7 +1601,7 @@ an unknown key (`404 API_KEY_NOT_FOUND`).
 
 #### Test a CA provider
 
-**Endpoint**: `POST /api/settings/test-ca-provider` — operator
+**Endpoint**: `POST /api/settings/test-ca-provider` — admin (operator before API contract 2.31)
 
 Checks that the configured ACME directory answers, before an issuance depends
 on it.
@@ -1638,7 +1638,7 @@ perfectly healthy from everywhere else.
 
 #### Test a backend before committing to it
 
-**Endpoint**: `POST /api/storage/test` — operator
+**Endpoint**: `POST /api/storage/test` — admin (operator before API contract 2.31)
 
 Opens a connection with the credentials given and reports whether they work,
 without storing them. Worth doing before `POST /api/storage/config`: a backend
