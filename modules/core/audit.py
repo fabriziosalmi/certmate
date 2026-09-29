@@ -208,27 +208,31 @@ class AuditLogger:
             self._chain_dir.mkdir(parents=True, exist_ok=True)
             if not self.audit_chain_file.exists():
                 return
+            # One read, and the size recorded is the size of what was read.
+            # A separate stat() afterwards measured a file another process may
+            # have appended to in between: the cached head then described the
+            # old file while the size described the new one, the staleness
+            # check in _refresh_if_another_writer_appended matched, and the
+            # next append reused a seq (#1000).
+            with open(self.audit_chain_file, 'rb') as f:
+                data = f.read()
             last_good = None
-            with open(self.audit_chain_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        rec = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue  # skip a corrupt/truncated line
-                    if not isinstance(rec, dict):
-                        continue  # a non-object line is not a valid record
-                    if isinstance(rec.get('seq'), int) and rec.get('hash'):
-                        last_good = rec
+            for raw in data.decode('utf-8', errors='replace').splitlines():
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # skip a corrupt/truncated line
+                if not isinstance(rec, dict):
+                    continue  # a non-object line is not a valid record
+                if isinstance(rec.get('seq'), int) and rec.get('hash'):
+                    last_good = rec
             if last_good is not None:
                 self._next_seq = last_good['seq'] + 1
                 self._last_hash = last_good['hash']
-            try:
-                self._chain_size = self.audit_chain_file.stat().st_size
-            except OSError:
-                self._chain_size = 0
+            self._chain_size = len(data)
         except Exception as e:
             # Recovery runs inside AuditLogger.__init__, which the factory calls
             # unguarded — it must NEVER abort app startup (that would take the

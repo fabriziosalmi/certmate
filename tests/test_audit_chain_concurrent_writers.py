@@ -149,3 +149,56 @@ def test_two_real_processes_do_not_corrupt_the_chain(tmp_path):
     assert len(seqs) == len(set(seqs)), f"duplicate seq across processes: {seqs}"
     result = audit_chain.verify_chain(str(path))
     assert result["ok"] is True, f"{result['reason']} (seqs: {seqs})"
+
+
+def test_a_writer_that_lands_while_the_chain_is_being_read_is_seen(tmp_path, monkeypatch):
+    """#1000: CI once wrote seq 0 twice, `[0, 0, 1, 2, ...]`.
+
+    Recovery read the chain, then measured it with a separate stat(). A line
+    another process finished in between was in the size but not in the head,
+    so the staleness check matched and the next append reused the seq. Here
+    the other writer lands exactly in that gap: right after the reader closes
+    the file.
+    """
+    from modules.core import audit as audit_module
+
+    (tmp_path / "chain").mkdir()
+    chain = tmp_path / "chain" / audit_chain.CHAIN_FILENAME
+    chain.touch()                    # an append-mode open has already created it
+    other = _make_logger(tmp_path)
+
+    real_open = open
+    landed = []
+
+    class _ThenTheOtherWriterLands:
+        def __init__(self, f):
+            self._f = f
+
+        def __enter__(self):
+            return self._f.__enter__()
+
+        def __exit__(self, *exc):
+            result = self._f.__exit__(*exc)
+            if not landed:
+                landed.append(True)
+                other.log_operation(operation="other", resource_type="test",
+                                    resource_id="o", status="success")
+            return result
+
+    def _open(file, mode="r", *args, **kwargs):
+        f = real_open(file, mode, *args, **kwargs)
+        if "r" in mode and str(file) == str(chain) and not landed:
+            return _ThenTheOtherWriterLands(f)
+        return f
+
+    monkeypatch.setattr(audit_module, "open", _open, raising=False)
+    reader = _make_logger(tmp_path)
+    monkeypatch.undo()
+    assert landed, "the other writer never landed; the test proves nothing"
+
+    reader.log_operation(operation="mine", resource_type="test",
+                         resource_id="r", status="success")
+
+    seqs = [r["seq"] for r in _read_chain(chain)]
+    assert seqs == [0, 1], f"the append reused a seq: {seqs}"
+    assert audit_chain.verify_chain(str(chain))["ok"] is True
