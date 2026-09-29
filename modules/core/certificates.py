@@ -622,27 +622,6 @@ class CertificateManager:
         # not invalidate every other domain's cached info.
         self._certificate_info_cache.clear_prefix(f"{domain}|")
 
-    @staticmethod
-    def _atomic_binary_copy(src: Path, dest: Path) -> None:
-        """Copy a binary file atomically via a temp sibling + rename,
-        preserving the source's permission bits.
-
-        Without copymode the temp is created under the process umask
-        (typically 0644). The renew path copies certbot's live files with this
-        helper, so a renewed privkey.pem — which certbot writes 0600 — would
-        land world-readable after every renewal. The local storage backend
-        re-chmods afterwards, but a cloud backend never touches the local file,
-        so it would silently stay 0644. The create path already calls
-        shutil.copymode for exactly this reason; mirror it here."""
-        tmp = dest.with_suffix('.tmp')
-        try:
-            tmp.write_bytes(src.read_bytes())
-            shutil.copymode(src, tmp)
-            tmp.replace(dest)
-        except Exception:
-            tmp.unlink(missing_ok=True)
-            raise
-
     def _seed_acme_account(self, domain, cert_dir, ca_provider, ca_account_id):
         """Give a new domain the ACME account a sibling already registered.
 
