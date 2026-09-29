@@ -79,6 +79,7 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         'ari_advanced': 0,
         'reissue_required': 0,
         'auto_reissued': 0,
+        'early_forced': 0, 'early_deferred': 0,
     }
     # The sweep also reports its own shape now — how long it took and how many
     # entries it looked at — so an instance that is slowly outgrowing its

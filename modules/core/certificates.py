@@ -3948,6 +3948,11 @@ class CertificateManager:
                    # Certificates with no key anywhere: only a reissue repairs
                    # them, so they are counted apart from failures (#966).
                    'reissue_required': 0,
+                   # Renewals the threshold called due while certbot's own
+                   # 30-day gate would have refused, forced (#966, part 2);
+                   # and those held for the next sweep by the cap or because
+                   # the certificate is less than a week old.
+                   'early_forced': 0, 'early_deferred': 0,
                    # Reissued by the sweep itself, opt-in (#966, step 4).
                    'auto_reissued': 0}
         # Every domain this sweep took a decision about, so the reconciliation
@@ -4048,15 +4053,82 @@ class CertificateManager:
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
             "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
             "%d unmanaged, %d re-registered, %d need reissue, "
-            "%d auto-reissued",
+            "%d auto-reissued, %d early (forced), %d early deferred",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
             summary['skipped_not_due'], summary['skipped_busy'],
             summary['unmanaged'], summary['reregistered'],
             summary['reissue_required'], summary['auto_reissued'],
+            summary['early_forced'], summary['early_deferred'],
         )
         return summary
+
+    #: certbot renews unforced only inside this many seconds of expiry
+    #: (`renew_before_expiry`, default "30 days", never set by CertMate).
+    CERTBOT_RENEWAL_WINDOW_SECONDS = 30 * 86400
+    #: Default for `early_renewals_per_sweep` (#966, part 2).
+    EARLY_RENEWAL_DEFAULT_PER_SWEEP = 10
+    #: A certificate younger than this is never force-renewed (#966, part 2).
+    EARLY_RENEWAL_MIN_AGE_SECONDS = 7 * 86400
+
+    @classmethod
+    def _threshold_outruns_certbot(cls, cert_info, settings):
+        """Did the threshold, and only the threshold, call this due while
+        certbot's own gate would answer "not yet due"? (#966, part 2)
+
+        Measured in seconds against certbot's window, because days_left rounds
+        down: 30 days and some hours reads 30 and certbot still refuses. A
+        certificate due for another reason (a missing or mismatched served
+        key forces needs_renewal) is not this case: it repairs from the
+        lineage, and forcing would ship a new key for nothing.
+        """
+        seconds_left = cert_info.get('seconds_left')
+        if not cert_info.get('needs_renewal') or not isinstance(seconds_left, int):
+            return False
+        threshold = cls._coerce_renewal_threshold_days(settings) * 86400
+        return cls.CERTBOT_RENEWAL_WINDOW_SECONDS <= seconds_left <= threshold
+
+    @classmethod
+    def _early_renewal_cap(cls, settings):
+        """How many early renewals one sweep may force, clamped to [1, 50]."""
+        raw = (settings or {}).get('early_renewals_per_sweep',
+                                   cls.EARLY_RENEWAL_DEFAULT_PER_SWEEP)
+        try:
+            return max(1, min(50, int(raw)))
+        except (TypeError, ValueError):
+            return cls.EARLY_RENEWAL_DEFAULT_PER_SWEEP
+
+    def _may_force_early(self, domain, settings, summary):
+        """The two guards on a forced early renewal (#966, part 2).
+
+        The cap counts attempts, not successes: it limits orders sent to the
+        CA, and a refused order still counts against its limits. The age guard
+        bounds the damage of a threshold at or above the certificate's
+        lifetime, or of a miscomputed expiry: one renewal a week, not one a
+        night against Let's Encrypt's five duplicate certificates a week. An
+        unreadable age does not block a renewal that is due.
+        """
+        if summary.get('early_forced', 0) >= self._early_renewal_cap(settings):
+            logger.info("%s is due by the threshold, but this sweep already "
+                        "forced its %d early renewals; it waits for the next.",
+                        domain, self._early_renewal_cap(settings))
+            return False
+        age = self._certificate_age_seconds(domain)
+        if age is not None and age < self.EARLY_RENEWAL_MIN_AGE_SECONDS:
+            logger.info("%s is due by the threshold but was issued less than "
+                        "7 days ago; not forcing a renewal.", domain)
+            return False
+        return True
+
+    def _certificate_age_seconds(self, domain):
+        """Seconds since the served certificate's notBefore, or None."""
+        try:
+            with open(Path(self.cert_dir) / domain / 'cert.pem', 'rb') as f:
+                cert = x509.load_pem_x509_certificate(f.read())
+        except (OSError, ValueError):
+            return None
+        return int((utc_now() - cert.not_valid_before_utc.replace(tzinfo=None)).total_seconds())
 
     #: Default for `auto_reissue_keyless_per_sweep` (#966, step 4).
     AUTO_REISSUE_DEFAULT_PER_SWEEP = 5
@@ -4165,19 +4237,29 @@ class CertificateManager:
                         "says its renewal window has opened; renewing now.",
                         domain)
 
+        force = ari_advanced
+        if not ari_advanced and self._threshold_outruns_certbot(cert_info, settings):
+            if not self._may_force_early(domain, settings, summary):
+                summary['early_deferred'] += 1
+                return False
+            summary['early_forced'] += 1
+            force = True
+
         logger.info(f"Renewing certificate for {domain}")
         renew_started = time.time()
         try:
-            # Forced when the CA asked for it, and only then (#962). certbot
-            # has its own gate — without --force-renewal it renews only inside
-            # 30 days of expiry — so an early renewal the CA requested was
-            # answered "not yet due" in exactly the case ARI exists for: a
-            # window moved to now on a certificate with 60 days left. The
-            # threshold path still asks certbot, unchanged.
-            res = self.renew_certificate(domain, force=ari_advanced)
-            # certbot can report "not yet due" (renewed=False) when the
-            # configured threshold is wider than certbot's own window. That is
-            # NOT a real renewal — don't count it, audit it, or fire deploy
+            # Forced when the CA asked for it (#962), or when the threshold
+            # called it due while certbot would refuse (#966). certbot has its
+            # own gate — without --force-renewal it renews only inside 30 days
+            # of expiry — so both were answered "not yet due": the CA's window
+            # moved to now on a certificate with 60 days left, or a threshold
+            # of 45 that behaved as 30. Inside certbot's window nothing is
+            # forced, and certbot keeps its say.
+            res = self.renew_certificate(domain, force=force)
+            # certbot can still report "not yet due" (renewed=False) on an
+            # unforced run: a certificate due for a key problem rather than the
+            # threshold, which the reconcile step repairs from the lineage.
+            # That is NOT a renewal — don't count it, audit it, or fire deploy
             # hooks; it retries next run.
             if isinstance(res, dict) and res.get('renewed') is False:
                 summary['skipped_not_due'] += 1
