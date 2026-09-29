@@ -140,6 +140,7 @@ rather than written by hand:
   "needs_renewal": false,
   "private_key_present": true,
   "private_key_state": "present",
+  "reissue_required": false,
   "usable": true,
   "dns_provider": "cloudflare",
   "domain_alias": null,
@@ -194,6 +195,7 @@ A certificate with no private key beside it cannot complete a handshake, and
 | `private_key_state` | `present`, `missing`, `mismatched`, `unknown`, or `external`. |
 | `private_key_present` | Whether a key was found. `null` when it was not looked for. |
 | `usable` | `exists` AND a matching key. `null` when the storage backend does not fetch key material on this path and says so, which today means Azure Key Vault. |
+| `reissue_required` | No private key anywhere: not served, not in `live/`, not in any archived generation. This is what restoring a share-safe backup leaves. Renewal refuses it with `REISSUE_REQUIRED`, and [`POST /api/certificates/reissue-keyless`](#reissue-every-certificate-that-lost-its-key) repairs it. A key missing only from the served copy is `false`, because renewal republishes it from the lineage. Since API contract **2.28**. |
 
 `mismatched` is a certificate from one issuance sitting beside a key from
 another: the two are compared, not assumed to match. `external` is a CSR-only
@@ -226,6 +228,40 @@ The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the
 CA attached to the window, when it gave one; only `https` URLs are kept. The
 window can only bring a renewal forward: the threshold stays the backstop.
 Available since API contract **2.23**.
+
+#### Reissue every certificate that lost its key
+
+**Endpoint**: `POST /api/certificates/reissue-keyless` — operator
+
+Restoring a share-safe backup leaves certificates with **no private key
+anywhere** (a renewal of one answers `REISSUE_REQUIRED`). This queues a reissue
+for each of them, with the configuration its metadata records, at a pace: at
+most `limit` per call (default 10, at most 50) on the async executor, which
+runs two at a time. Call it again for the rest once the queued jobs finish.
+
+```json
+{ "limit": 10 }
+```
+
+Answers `202` when something was queued, `200` when there was nothing to do:
+
+```json
+{
+  "queued": [{"domain": "a.example.com", "job_id": "…", "status_url": "/api/certificates/jobs/…"}],
+  "remaining": ["k.example.com"],
+  "refused": [{"domain": "x.example.com", "reason": "out of scope"}],
+  "next_step": "1 more certificate(s) need a reissue. Call this again once the queued jobs finish."
+}
+```
+
+A scoped API key only sees and reissues its own domains. A full queue stops
+the loop, and what was not queued is in `remaining`. With async issuance off
+the answer is `503 ASYNC_ISSUANCE_DISABLED`. Since API contract **2.27**.
+
+For an unattended instance, `"auto_reissue_keyless": true` in `settings.json`
+lets the nightly renewal sweep do this itself, at most
+`auto_reissue_keyless_per_sweep` per sweep (default 5, clamped 1-50). It is
+off by default, because a reissue changes the key and deploy hooks ship it.
 
 #### Turn automatic renewal on or off
 

@@ -178,14 +178,14 @@ def test_legacy_staging_boolean_maps_to_staging_ca(tmp_path):
     domain = 'app.example.duckdns.org'
     shell = _fake_issuance(MockShellExecutor(), tmp_path, domain)
     shell.set_next_result(returncode=0)
-    mgr = _cert_manager(tmp_path, shell)  # no ca_manager: plain-certbot branch
+    mgr = _cert_manager(tmp_path, shell)  # no ca_manager: the builder is built on demand
 
     result = _create(mgr, domain, staging=True)
 
     assert result['success'] is True
     assert result['ca_provider'] == 'letsencrypt_staging'
     cmd = shell.commands_executed[0].split()
-    assert '--staging' in cmd
+    assert cmd[cmd.index('--server') + 1] == 'https://acme-staging-v02.api.letsencrypt.org/directory'
     metadata = json.loads((tmp_path / domain / 'metadata.json').read_text())
     assert metadata['ca_provider'] == 'letsencrypt_staging'
     assert metadata['staging'] is True
@@ -206,10 +206,10 @@ def test_unconfigured_staging_ca_is_not_flipped_to_production(tmp_path):
     assert result['success'] is True
     assert result['ca_provider'] == 'letsencrypt_staging'
     cmd = shell.commands_executed[0].split()
-    # Fallback branch has no --server, so --staging is what keeps the
-    # request on the staging directory.
-    assert '--staging' in cmd
-    assert '--server' not in cmd
+    # No saved config: the one builder (#666) gets an empty account and
+    # names the staging directory itself, never the production one.
+    assert cmd[cmd.index('--server') + 1] == 'https://acme-staging-v02.api.letsencrypt.org/directory'
+    assert 'acme-v02.api.letsencrypt.org' not in ' '.join(cmd)
 
 
 def test_an_unconfigured_other_ca_is_refused_not_substituted(tmp_path):

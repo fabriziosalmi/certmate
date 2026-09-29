@@ -27,7 +27,7 @@ test cases.
 
 import pytest
 
-from modules.core.utils import sanitize_certbot_stderr
+from modules.core.utils import CERTBOT_OUTPUT_TRUNCATED, sanitize_certbot_stderr
 
 
 pytestmark = [pytest.mark.unit]
@@ -112,7 +112,8 @@ class TestSanitizeCertbotStderr:
         out = sanitize_certbot_stderr(raw)
         # Hard cap from the implementation is 4096; the truncation
         # marker is appended after.
-        assert len(out) <= 4096 + len('\n[…truncated — see application log for full output]')
+        assert len(out) <= 4096 + len(CERTBOT_OUTPUT_TRUNCATED)
+        assert out.endswith(CERTBOT_OUTPUT_TRUNCATED)
         assert '[…truncated' in out
 
     def test_empty_input_returns_empty_string(self):

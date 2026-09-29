@@ -14,7 +14,7 @@ from ..core.audit_context import audit_context_from_request
 from ..core.request_fields import json_booleans
 from ..core.cert_jobs import IssuanceQueueFull
 from ..core.cert_service import DomainOutOfScope
-from ..core.certificates import DomainOperationInProgress
+from ..core.certificates import CREATION_FAILED, DomainOperationInProgress
 from ..core.utils import classify_renewal_error
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import (
@@ -80,8 +80,9 @@ def _configuration_hint(error_msg: str):
 
 #: Prepended by the create path already (`certificates.py`), so the API must
 #: not prepend it again — the error read "Certificate creation failed:
-#: Certificate creation failed: ..." for every certbot failure.
-_CREATION_PREFIX = 'Certificate creation failed: '
+#: Certificate creation failed: ..." for every certbot failure. Imported, so
+#: the two cannot drift apart.
+_CREATION_PREFIX = CREATION_FAILED + ': '
 
 
 def _certbot_hint(error_msg: str) -> str:

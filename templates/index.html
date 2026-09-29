@@ -512,6 +512,10 @@
              (partials/_dashboard_topbar.html). updateStats() renders them into
              #statsCards there. -->
 
+        <!-- Certificates with no private key anywhere (#966): what restoring a
+             share-safe backup leaves. Filled by renderKeylessBanner(). -->
+        <div id="keylessBanner" class="hidden mb-4" role="status" aria-live="polite"></div>
+
         <!-- Certificates List -->
         <div class="bg-surface shadow-card rounded-xl overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 dark:border-white/5">

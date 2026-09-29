@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import logging
+import signal
 import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -28,6 +29,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from cryptography import x509
+from .ca_manager import CAManager
 from .shell import ShellExecutor
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
                              check_certbot_plugin_installed, clamp_propagation_seconds)
@@ -48,6 +50,12 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: The prefixes a failed certbot run is raised with. The API strips the
+#: creation one before adding its own (resources_lifecycle), so both sides
+#: import it rather than agreeing by literal.
+CREATION_FAILED = 'Certificate creation failed'
+RENEWAL_FAILED = 'Renewal failed'
 
 DNS_ALIAS_SUPPORTED_PROVIDERS = {
     'cloudflare',
@@ -482,7 +490,7 @@ class CertificateManager:
                 "Failed to publish certificate_failed for %s", domain
             )
 
-    def _audit_scheduled_renew(self, domain, status, error=None):
+    def _audit_scheduled_renew(self, domain, status, error=None, details=None):
         """Emit an attributed audit record for an unattended renewal. No-op
         when no audit logger is wired; never raises."""
         if not self._audit_logger:
@@ -493,7 +501,7 @@ class CertificateManager:
             self._audit_logger.log_operation(
                 operation='renew', resource_type='certificate',
                 resource_id=domain, status=status,
-                details={'force': False},
+                details=details if details is not None else {'force': False},
                 error=(str(error)[:500] if error else None),
                 user=ctx.get('user'), ip_address=ctx.get('ip'),
                 actor=ctx.get('actor'), trigger=ctx.get('trigger'),
@@ -809,7 +817,7 @@ class CertificateManager:
         try:
             csr = read_csr(csr_pem)
         except CSRError as e:
-            raise RuntimeError(f'Certificate creation failed: {e}')
+            raise RuntimeError(f'{CREATION_FAILED}: {e}')
 
         all_domains = csr_domains(csr)
         if domain not in all_domains:
@@ -818,7 +826,7 @@ class CertificateManager:
             # A CSR for other names would produce a certificate filed under a
             # domain it does not cover.
             raise RuntimeError(
-                f'Certificate creation failed: the CSR does not cover '
+                f'{CREATION_FAILED}: the CSR does not cover '
                 f'{domain}. It requests {", ".join(all_domains)}.')
         # Primary first, so metadata's san_domains means the same thing here as
         # everywhere else.
@@ -831,7 +839,7 @@ class CertificateManager:
         existing_key = domain_dir / 'privkey.pem'
         if existing_key.exists():
             raise RuntimeError(
-                f'Certificate creation failed: {domain} already has a private '
+                f'{CREATION_FAILED}: {domain} already has a private '
                 f'key managed by CertMate. Delete the certificate first if you '
                 f'want to move its key onto the device.')
 
@@ -2168,6 +2176,18 @@ class CertificateManager:
             return self._create_empty_cert_info(domain)
 
 
+    def _reissue_required(self, domain, key_state):
+        """Would renewal answer REISSUE_REQUIRED for this certificate? (#966)
+
+        The list reports it so the dashboard can offer "reissue all": it never
+        read private_key_state, and a certificate restored from a share-safe
+        backup looked healthy there until its first sweep failed. Only looked
+        up when the served key is missing, which is the one state it can be.
+        """
+        if key_state != 'missing':
+            return False
+        return self._lineage_lost_its_key(Path(self.cert_dir) / domain, domain)
+
     def _parse_certificate_info(self, domain, cert_content, metadata=None,
                                 settings=None, key_state='present'):
         """Parse certificate information from certificate content.
@@ -2253,6 +2273,7 @@ class CertificateManager:
                                   or key_state in ('missing', 'mismatched')),
                 'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
+                'reissue_required': self._reissue_required(domain, key_state),
                 'usable': _usable(key_state),
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
@@ -2294,6 +2315,7 @@ class CertificateManager:
             'needs_renewal': True,
             'private_key_present': _private_key_present(key_state),
             'private_key_state': key_state,
+            'reissue_required': self._reissue_required(domain, key_state),
             'usable': False,
             'dns_provider': dns_provider,
             'domain_alias': domain_alias,
@@ -2702,59 +2724,22 @@ class CertificateManager:
         # Build certbot command (artifacts.ca_extra_env was hoisted above the try
         # so the finally block can clean up safely on early failure)
         san_list = all_domains[1:] if len(all_domains) > 1 else None
-        if self.ca_manager and ca_account_config:
-            try:
-                certbot_cmd, artifacts.ca_extra_env = self.ca_manager.build_certbot_command(
-                    domain, email, ca_provider, dns_provider, dns_config,
-                    ca_account_config, staging, cert_dir, san_domains=san_list,
-                    key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
-                )
-            except TypeError as e:
-                # Defensive fallback: older build_certbot_command without san_domains
-                logger.warning(f"build_certbot_command does not accept san_domains, adding manually: {e}")
-                result = self.ca_manager.build_certbot_command(
-                    domain, email, ca_provider, dns_provider, dns_config,
-                    ca_account_config, staging, cert_dir
-                )
-                if isinstance(result, tuple):
-                    certbot_cmd, artifacts.ca_extra_env = result
-                else:
-                    certbot_cmd = result
-                # Manually append SAN domains
-                if san_list:
-                    for san in san_list:
-                        certbot_cmd.extend(['-d', san])
-                # Fallback path also needs the key flags appended manually
-                # so a stale ca_manager doesn't silently downgrade certs.
-                if key_type == 'rsa' and key_size:
-                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
-                elif key_type == 'ecdsa' and elliptic_curve:
-                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
-        else:
-            certbot_cmd = [
-                'certbot', 'certonly',
-                '--non-interactive',
-                '--agree-tos',
-                '--email', email,
-                '--cert-name', domain,
-                '--config-dir', str(cert_output_dir),
-                '--work-dir', str(cert_output_dir / 'work'),
-                '--logs-dir', str(cert_output_dir / 'logs'),
-            ]
-
-            # Add all domains
-            for d in all_domains:
-                certbot_cmd.extend(['-d', d])
-
-            if staging:
-                certbot_cmd.append('--staging')
-
-            # No-ca_manager path: still honour the resolved key shape so
-            # this branch produces the same cert as the main path.
-            if key_type == 'rsa' and key_size:
-                certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
-            elif key_type == 'ecdsa' and elliptic_curve:
-                certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+        # One builder (#666). There used to be three: this call, a TypeError
+        # fallback "for an older build_certbot_command" (both live in this
+        # repository, so its only reachable effect was to retry past a real
+        # TypeError), and a hand-built argv for Let's Encrypt with no saved CA
+        # config. The hand-built one was equivalent for LE (--staging vs the
+        # staging --server URL) but was a second copy every new flag had to
+        # reach, and the command-contract test pinned only that copy, not the
+        # one production runs. With no saved config the builder gets an empty
+        # account: for LE that is the pinned directory; every other CA was
+        # already refused in _resolve_ca.
+        builder = self.ca_manager or CAManager(self.settings_manager)
+        certbot_cmd, artifacts.ca_extra_env = builder.build_certbot_command(
+            domain, email, ca_provider, dns_provider, dns_config,
+            ca_account_config or {}, staging, cert_dir, san_domains=san_list,
+            key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
+        )
 
         if replace:
             # If the existing lineage is broken (stale paths / non-symlink
@@ -3069,35 +3054,14 @@ class CertificateManager:
             )
 
             if result.returncode != 0:
-                # certbot-dns-azure and a few other plugins echo the
-                # offending credentials .ini line on parse failure, so the
-                # raw stderr carries secret material. The sanitised copy is
-                # what goes BOTH to the log and to the exception that
-                # becomes the API response body.
-                #
-                # It used to be logged raw, on the reasoning that the log is
-                # internal and an operator debugging a failed issuance wants
-                # everything. But the log is a file that outlives the
-                # request, gets shipped to whatever collects logs, and ends
-                # up in a support bundle — so "internal" was doing a lot of
-                # work in that sentence, and the comment above this one used
-                # to say the raw stderr carries secrets while the line below
-                # it wrote them down. Internal audit finding H3.
-                from .utils import sanitize_certbot_stderr
-                safe_stderr = sanitize_certbot_stderr(result.stderr)
-                for flag in ('--eab-kid', '--eab-hmac-key'):
-                    if flag in certbot_cmd:
-                        secret = certbot_cmd[certbot_cmd.index(flag) + 1]
-                        if secret:
-                            safe_stderr = safe_stderr.replace(secret, '***')
-                # %r, and as logging ARGUMENTS: repr escapes a newline to a
-                # literal \n so neither the domain nor certbot's output can
-                # forge a second log line, and a handler can still filter on
-                # the values. Same convention as every other log line here
-                # that carries a domain.
-                logger.error("Certbot failed for %r: %r", domain, safe_stderr)
+                # One builder for create and renew (#666 S6): what is logged
+                # and what is raised are the same redacted text.
+                eab_secrets = tuple(
+                    certbot_cmd[certbot_cmd.index(flag) + 1]
+                    for flag in ('--eab-kid', '--eab-hmac-key') if flag in certbot_cmd)
                 raise RuntimeError(
-                    f"Certificate creation failed: {safe_stderr}"
+                    self._certbot_failure(CREATION_FAILED, domain,
+                                          result, secrets=eab_secrets)
                     + self._caa_explanation(ca_provider, all_domains, challenge_type))
             
             # Move certificates to standard location. Publish live/ to the flat
@@ -3824,22 +3788,77 @@ class CertificateManager:
             renew_result['storage_warning'] = storage_warning
         return renew_result
 
+    # How much of stdout to keep when it is the only account of a failure: the
+    # last lines are where certbot says what went wrong, the rest is progress.
+    CERTBOT_STDOUT_TAIL_LINES = 20
+    CERTBOT_DEBUG_LOG_BANNER = 'Saving debug log to '
+
+    @staticmethod
+    def _certbot_silence(returncode):
+        """What to say when certbot exited non-zero without saying why."""
+        if isinstance(returncode, int) and returncode < 0:
+            try:
+                name = signal.Signals(-returncode).name
+            except ValueError:
+                name = f'signal {-returncode}'
+            return f'certbot was killed by {name} before it reported an error'
+        return f'certbot exited with code {returncode} without reporting an error'
+
+    def _certbot_failure(self, prefix, domain, result, *, secrets=()):
+        """The message for a certbot run that exited non-zero, logged and returned.
+
+        One builder for create and renew (#666 S6), which had drifted apart: a
+        certbot killed before writing anything (exit -9, empty stderr) read
+        "Certificate creation failed: " on one and "Renewal failed: Certificate
+        not found" on the other, and stdout was dropped on both.
+
+        certbot-dns-azure and a few other plugins echo the offending
+        credentials .ini line on parse failure, so everything certbot printed
+        goes through sanitize_certbot_stderr, and *secrets* (the EAB pair on
+        create) are masked, BEFORE the text is logged: the log outlives the
+        request, gets shipped and ends up in support bundles (audit H3). The
+        stderr wins when it says anything besides the debug-log banner;
+        otherwise the exit code (or the signal that killed certbot), and the
+        tail of stdout, which is where certbot narrates how far it got.
+        """
+        from .utils import sanitize_certbot_stderr
+        # certbot writes a "Saving debug log to ..." banner to stderr before it
+        # does anything. It is not an error: a certbot killed mid-run (the OOM
+        # killer, exit -9) leaves only that, and that was the whole message.
+        stderr = '\n'.join(
+            line for line in str(result.stderr or '').splitlines()
+            if not line.startswith(self.CERTBOT_DEBUG_LOG_BANNER))
+        detail = sanitize_certbot_stderr(stderr).strip()
+        if not detail:
+            detail = self._certbot_silence(result.returncode)
+            # The tail is cut BEFORE redaction, and by whole lines only: a cut
+            # inside a line could leave "en = <secret>" where the redaction
+            # pattern needs "_token = ". The sanitiser caps the length itself.
+            tail = '\n'.join(str(result.stdout or '').splitlines()[-self.CERTBOT_STDOUT_TAIL_LINES:])
+            tail = sanitize_certbot_stderr(tail).strip()
+            if tail:
+                detail += '. The last it printed:\n' + tail
+        for secret in secrets:
+            if secret:
+                detail = detail.replace(secret, '***')
+        # CR/LF removed from both values before they reach the log, so neither
+        # the domain nor certbot's output can forge a second log line; the
+        # line breaks of certbot's output become " | ". (repr alone did the
+        # same, but CodeQL does not recognise it as a sanitiser.)
+        logger.error("%s for %s: %s", prefix,
+                     str(domain).replace('\r', '').replace('\n', ''),
+                     detail.replace('\r', '').replace('\n', ' | '))
+        return f'{prefix}: {detail}'
+
     def _renewal_failed(self, domain, result, metadata, challenge_type):
         """certbot exited non-zero. Raise what the operator needs to read.
 
         Always raises. It returns nothing, so a caller that forgets to let it
         propagate gets None rather than a plausible-looking result dict.
         """
-        # Mirror the create path: the redacted copy is what is
-        # logged and what is surfaced. See sanitize_certbot_stderr
-        # for the precise stripping rules.
-        error_msg = result.stderr or "Certificate not found"
-        from .utils import sanitize_certbot_stderr
-        safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
-        logger.error("Certificate renewal failed for %r: %r", domain, safe_error)
         caa_domains = [domain] + list(metadata.get('san_domains') or [])
         raise RuntimeError(
-            f"Renewal failed: {safe_error}"
+            self._certbot_failure(RENEWAL_FAILED, domain, result)
             + self._caa_explanation(metadata.get('ca_provider'), caa_domains,
                                     challenge_type))
 
@@ -3924,7 +3943,7 @@ class CertificateManager:
                     'skipped_disabled': 0, 'skipped_invalid': 0,
                     'skipped_not_due': 0, 'skipped_busy': 0,
                     'unmanaged': 0, 'reregistered': 0, 'ari_advanced': 0,
-                    'reissue_required': 0,
+                    'reissue_required': 0, 'auto_reissued': 0,
                     'auto_renew_disabled': True}
 
         # Migrate settings format if needed
@@ -3942,7 +3961,9 @@ class CertificateManager:
                    'ari_advanced': 0,
                    # Certificates with no key anywhere: only a reissue repairs
                    # them, so they are counted apart from failures (#966).
-                   'reissue_required': 0}
+                   'reissue_required': 0,
+                   # Reissued by the sweep itself, opt-in (#966, step 4).
+                   'auto_reissued': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -4040,15 +4061,92 @@ class CertificateManager:
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
             "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
-            "%d unmanaged, %d re-registered, %d need reissue",
+            "%d unmanaged, %d re-registered, %d need reissue, "
+            "%d auto-reissued",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
             summary['skipped_not_due'], summary['skipped_busy'],
             summary['unmanaged'], summary['reregistered'],
-            summary['reissue_required'],
+            summary['reissue_required'], summary['auto_reissued'],
         )
         return summary
+
+    #: Default for `auto_reissue_keyless_per_sweep` (#966, step 4).
+    AUTO_REISSUE_DEFAULT_PER_SWEEP = 5
+
+    @classmethod
+    def _auto_reissue_cap(cls, settings):
+        """How many keyless certificates one sweep may reissue, clamped.
+
+        [1, 50]: a typo must mean neither "reissue everything tonight" nor
+        "never", and an unparseable value falls back to the default.
+        """
+        raw = (settings or {}).get('auto_reissue_keyless_per_sweep',
+                                   cls.AUTO_REISSUE_DEFAULT_PER_SWEEP)
+        try:
+            return max(1, min(50, int(raw)))
+        except (TypeError, ValueError):
+            return cls.AUTO_REISSUE_DEFAULT_PER_SWEEP
+
+    def _auto_reissue(self, domain, settings, summary):
+        """Reissue a certificate that lost its key, when the operator opted in.
+
+        Off by default (#966): a reissue changes the key, and after a
+        share-safe restore of N certificates a silent reissue is N orders in
+        one night. With `auto_reissue_keyless: true` the sweep does it itself,
+        at most `_auto_reissue_cap` per sweep; the rest keep their
+        reissue_required state until the next one. A success leaves a
+        renewal's traces: the audit record and `certificate_renewed`, so
+        deploy hooks ship the new key and certificate.
+
+        Returns True when the certificate was reissued.
+        """
+        if not (settings or {}).get('auto_reissue_keyless', False):
+            return False
+        if summary.get('auto_reissued', 0) >= self._auto_reissue_cap(settings):
+            return False
+        try:
+            self._reissue_from_metadata(domain)
+        except (RuntimeError, ValueError, OSError) as e:
+            # What a reissue raises when it does not happen: certbot's refusal
+            # and a busy domain (RuntimeError and its subclasses), a
+            # configuration it cannot use (ValueError), a file it cannot write
+            # (OSError). Anything else is a defect and surfaces through the
+            # sweep's own handler instead of reading as "reissue failed".
+            logger.warning("Automatic reissue of %s failed: %s", domain, e)
+            return False
+        summary['auto_reissued'] = summary.get('auto_reissued', 0) + 1
+        logger.info("Reissued %s, which had no private key left "
+                    "(auto_reissue_keyless)", domain)
+        self._audit_scheduled_renew(domain, 'success',
+                                    details={'auto_reissue_keyless': True})
+        self._publish_renewed_event(domain)
+        return True
+
+    def _reissue_from_metadata(self, domain):
+        """Reissue *domain* with the configuration its metadata records.
+
+        The same inputs Edit & Reissue would send unchanged: CA, DNS provider
+        and account, alias, SANs, challenge. A share-safe backup keeps
+        metadata.json (it is not key material), so this is available right
+        after the restore that made it necessary.
+        """
+        metadata = self._load_metadata(domain)
+        email = metadata.get('email') or self.settings_manager.load_settings().get('email')
+        return self.create_certificate(
+            domain=domain,
+            email=email,
+            dns_provider=metadata.get('dns_provider'),
+            account_id=metadata.get('account_id'),
+            ca_provider=metadata.get('ca_provider'),
+            ca_account_id=metadata.get('ca_account_id'),
+            domain_alias=metadata.get('domain_alias'),
+            alias_dns_provider=metadata.get('alias_dns_provider'),
+            challenge_type=metadata.get('challenge_type'),
+            san_domains=metadata.get('san_domains') or None,
+            replace=True,
+        )
 
     def _renew_if_due(self, domain, settings, summary):
         """Renew one certificate if it is due, and account for the outcome.
@@ -4115,6 +4213,8 @@ class CertificateManager:
             self._publish_renewed_event(domain)
             return True
         except ReissueRequired as e:
+            if self._auto_reissue(domain, settings, summary):
+                return True
             # A known state with a known remedy, not a failure of this sweep:
             # counted apart, and the notification says what to do. Audited as
             # a failure, because the renewal did not happen.

@@ -619,6 +619,27 @@ class CertificateService:
                 self._enforce_scope(name, scope_action, user, ip_address)
         return csr_names
 
+    def keyless_domains(self, user=None):
+        """The certificates whose lineage lost every private key (#966).
+
+        The same test the renewal path uses to answer REISSUE_REQUIRED, so
+        "what needs reissuing" and "what renewal refuses" cannot disagree.
+        Filtered to the caller's scope before anything is attempted, so a
+        scoped key neither sees nor probes another tenant's domains.
+        """
+        from .certificates import CertificateManager
+        from .constants import iter_cert_domain_dirs
+
+        scope = (user or {}).get('allowed_domains')
+        found = []
+        for domain_dir in iter_cert_domain_dirs(self._certs.cert_dir):
+            domain = domain_dir.name
+            if not self._auth.domain_matches_scope(domain, scope):
+                continue
+            if CertificateManager._lineage_lost_its_key(domain_dir, domain):
+                found.append(domain)
+        return sorted(found)
+
     def prepare_reissue(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, challenge_type=None,
                         domain_alias=None, alias_dns_provider=None,
