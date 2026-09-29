@@ -137,6 +137,25 @@ class TestRender:
         assert pod['volumes'][1:] == volumes
         assert pod['containers'][0]['volumeMounts'][4:] == mounts
 
+    def test_a_hook_configmap_keeps_its_executable_mode(self):
+        """The README's hook example: a ConfigMap mounts 0644 by default and
+        `sh -c /app/hooks/x.sh` then fails with exit 126, so the example sets
+        defaultMode, and the chart must pass it through untouched (0755 is
+        493 once YAML has read it)."""
+        import yaml
+
+        volumes = [{'name': 'hooks',
+                    'configMap': {'name': 'certmate-hooks', 'defaultMode': 493}}]
+        mounts = [{'name': 'hooks', 'mountPath': '/app/hooks', 'readOnly': True}]
+        res = self._template('--set-json', 'extraVolumes=' + json.dumps(volumes),
+                             '--set-json', 'extraVolumeMounts=' + json.dumps(mounts))
+        assert res.returncode == 0, res.stderr
+        deployment = next(doc for doc in yaml.safe_load_all(res.stdout)
+                          if doc and doc.get('kind') == 'Deployment')
+        hooks = [v for v in deployment['spec']['template']['spec']['volumes']
+                 if v['name'] == 'hooks']
+        assert hooks and hooks[0]['configMap']['defaultMode'] == 0o755
+
 
 @pytest.mark.skipif(shutil.which("helm") is None, reason="helm is not installed")
 class TestSecretWiring:

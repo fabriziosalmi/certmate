@@ -153,6 +153,30 @@ The referenced ConfigMaps, Secrets and claims must exist in the release
 namespace. These values add mounts only to the CertMate Deployment, not the
 off-site backup CronJob. Avoid paths already used by the chart (`/app/data`,
 `/app/certificates`, `/app/logs` and `/app/backups`).
+The volume names `data` and `backups` are taken by the chart, and Kubernetes
+rejects a Deployment with two volumes of the same name.
+
+### Deploy-hook scripts from a ConfigMap
+
+CertMate runs a deploy hook as `sh -c <command>`. Files from a ConfigMap are
+mounted with mode `0644` by default, so a hook whose command is the script's
+path fails with `Permission denied` (exit 126). Measured in the CertMate image.
+Mount them executable:
+
+```yaml
+extraVolumes:
+  - name: hooks
+    configMap:
+      name: certmate-hooks
+      defaultMode: 0755
+extraVolumeMounts:
+  - name: hooks
+    mountPath: /app/hooks
+    readOnly: true
+```
+
+Then the hook command can be `/app/hooks/reload.sh`. Without `defaultMode`,
+write it as `sh /app/hooks/reload.sh` instead.
 
 ## Common values
 
