@@ -345,7 +345,10 @@ class EdgeDNSStrategy(DNSProviderStrategy):
 
     @property
     def default_propagation_seconds(self) -> int:
-        return 90
+        # The plugin's own default, and half of what its docs suggest (240).
+        # 90 was not enough for Edge DNS to reach all of its authoritative
+        # nameservers before the CA looked (#974).
+        return 180
 
     def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
         cmd.extend(['--authenticator', self.plugin_name])

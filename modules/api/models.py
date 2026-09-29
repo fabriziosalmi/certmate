@@ -316,7 +316,14 @@ def create_api_models(api):
         'default_elliptic_curve': fields.String(
             description="Global default ECDSA curve — applied when default_key_type='ecdsa'.",
             enum=['secp256r1', 'secp384r1']
-        )
+        ),
+        'dns_propagation_seconds': fields.Raw(
+            description=('Seconds certbot waits after publishing the DNS-01 TXT record '
+                         'before the CA checks it, per DNS provider, e.g. '
+                         '{"edgedns": 180}. Raise a provider\'s value when validation '
+                         'fails although the record appears shortly after. POST it '
+                         'whole: providers left out return to their defaults. '
+                         'Returned since API contract 2.30.')),
     })
 
     create_cert_model = api.model('CreateCertificate', {

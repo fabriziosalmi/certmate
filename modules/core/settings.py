@@ -776,6 +776,50 @@ def backup_can_restore(zf, names, settings):
     return SECRET_MASK_SENTINEL not in json.dumps(settings)
 
 
+#: Akamai Edge DNS: the certbot plugin's own default is 180 and its docs
+#: suggest 240. CertMate passed 90 until #974, and a reporter on Akamai saw
+#: nearly every order fail before the record reached all of Edge DNS's
+#: authoritative nameservers.
+DEFAULT_EDGEDNS_PROPAGATION_SECONDS = 180
+
+#: Propagation defaults CertMate used to write, per provider: (retired value,
+#: current value, last version that wrote the retired one). Every install that
+#: ever saved its settings has the default of its day stored in settings.json,
+#: so the retired value in a file LAST WRITTEN by such a version is read as
+#: "the operator never chose" and moved. The version gate makes it run once:
+#: after the first save by a newer version, a 90 is the operator's choice and
+#: stays. The settings schema is not bumped for this, because that would
+#: refuse a rollback over a default.
+RETIRED_PROPAGATION_DEFAULTS = {
+    'edgedns': (90, DEFAULT_EDGEDNS_PROPAGATION_SECONDS, (2, 40, 0)),
+}
+
+
+def _written_by(settings):
+    """The version that last wrote *settings*, as a tuple; (0,) when unknown."""
+    raw = str(settings.get('certmate_version') or '')
+    try:
+        return tuple(int(part) for part in raw.split('.')[:3])
+    except ValueError:
+        return (0,)
+
+
+def _move_retired_propagation_defaults(settings):
+    """Replace stored retired propagation defaults; True when one was moved."""
+    stored = settings.get('dns_propagation_seconds')
+    if not isinstance(stored, dict):
+        return False
+    moved = False
+    written_by = _written_by(settings)
+    for provider, (retired, current, last) in RETIRED_PROPAGATION_DEFAULTS.items():
+        if written_by <= last and stored.get(provider) == retired:
+            stored[provider] = current
+            logger.info("dns_propagation_seconds[%s]: %s was the old default, "
+                        "now %s (#974)", provider, retired, current)
+            moved = True
+    return moved
+
+
 class SettingsManager:
     """Class to handle settings management and migrations"""
 
@@ -1664,7 +1708,7 @@ class SettingsManager:
                     'infomaniak': 300,
                     'acme-dns': 30,
                     'duckdns': 60,
-                    'edgedns': 90,
+                    'edgedns': DEFAULT_EDGEDNS_PROPAGATION_SECONDS,
                     'hetzner-cloud': 120,
                     'desec': 80,
                     'scaleway': 60,
@@ -1867,6 +1911,9 @@ class SettingsManager:
     def _migrate_settings_format(self, settings):
         """Migrate settings to handle format changes and ensure backward compatibility"""
         migrated = False
+
+        # Migration 0: a propagation default this project retired (#974).
+        migrated = _move_retired_propagation_defaults(settings) or migrated
 
         # Migration 1: Handle backup format wrapping
         if 'settings' in settings and 'metadata' in settings:

@@ -226,7 +226,7 @@ curl -H "Authorization: Bearer $TOKEN" \
                         </div>
                         <div>
                             <dt class="font-medium text-foreground">Certificate creation hangs or times out</dt>
-                            <dd class="text-muted mt-0.5">Usually slow DNS propagation. Most providers settle within a minute or two, some take up to 10. If a particular provider is reliably slow, raise <code class="text-xs bg-surface-2 px-1 rounded">dns_propagation_seconds</code> in Settings.</dd>
+                            <dd class="text-muted mt-0.5">Usually slow DNS propagation. Most providers settle within a minute or two, some take up to 10. If a particular provider is reliably slow, select it in Settings &rarr; DNS and raise its propagation wait (stored as <code class="text-xs bg-surface-2 px-1 rounded">dns_propagation_seconds</code>).</dd>
                         </div>
                         <div>
                             <dt class="font-medium text-foreground">Let's Encrypt rate limit hit</dt>
