@@ -54,6 +54,21 @@ HOSTILE = [
     'https://evil.example/',
     'http://evil.example/',
     '//evil.example\\@certmate.example/',
+    # Dot segments. The guard checked the RESOLVED value and returned its
+    # pathname: for `/..//evil.example` the parser drops the `..`, the
+    # pathname becomes `//evil.example`, same-origin as a checked URL and
+    # protocol-relative as a string handed to location.href. Every one of
+    # these reached another origin from v2.36.0 to v2.40.0.
+    '/..//evil.example/phish',
+    '/.//evil.example/',
+    '/%2e%2e//evil.example/',
+    '/%2E//evil.example/',
+    '/a/..//evil.example/',
+    '/..\\/evil.example/',
+    '/..///evil.example/',
+    '/../..//evil.example/phish?x=1',
+    '/..//user:pw@evil.example/',
+    '/..//evil.example:443/x',
 ]
 
 # And values that must still work, or the guard has traded one defect for a
@@ -122,6 +137,16 @@ def test_a_legitimate_destination_still_works(value, expected):
     returned, origin = _run([value])[value]
 
     assert (returned, origin) == (expected, ORIGIN)
+
+
+def test_the_guard_checks_what_it_returns():
+    """The dot-segment bypass was a guard that validated one string and
+    returned another. The returned value itself must be resolved and compared,
+    so no later normalisation can open the same gap."""
+    source = _guard_source()
+
+    assert source.count('.origin !== ') >= 2, (
+        'the returned value is no longer checked on its own')
 
 
 def test_the_guard_parses_rather_than_inspecting_characters():
