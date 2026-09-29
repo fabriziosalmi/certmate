@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
+<!-- CERTMATE-TRANSLATED-FROM f31f91fe8af58072 -->
 
 ## Übersicht
 
@@ -439,6 +439,34 @@ Schwellenwert hinaus **verschieben** zu lassen. Das ist die Halfte, die fur
 kurzlebige Zertifikate zahlt, wo eine feste 30-Tage-Regel gegenuber einem
 6-Tage-Zertifikat sinnlos ist — sie kommt mit der Profilunterstutzung, die
 solche Zertifikate brauchen.
+
+### Ein Schwellenwert ueber 30 Tagen
+
+certbot hat eine eigene Schranke fuer die Erneuerung: ohne Erzwingen erneuert
+es nur innerhalb der letzten 30 Tage vor Ablauf. Vor 2.40 hat CertMate es ohne
+Erzwingen aufgerufen, daher verhielt sich ein `renewal_threshold_days` von 45
+wie 30, und der Durchlauf zaehlte die Luecke jede Nacht als
+`skipped_not_due`.
+
+Wenn der Schwellenwert, und nur der Schwellenwert, ein Zertifikat faellig
+nennt, waehrend certbot ablehnen wuerde, erzwingt CertMate die Erneuerung jetzt,
+wie schon bei einem von der CA veroeffentlichten Fenster. Innerhalb der letzten
+30 Tage aendert sich nichts. Zwei Schutzmechanismen gehoeren dazu:
+
+- **Hoechstens `early_renewals_per_sweep` pro Durchlauf** (Standard 10,
+  zwischen 1 und 50). Wer den Schwellenwert bei vielen Zertifikaten anhebt,
+  verteilt die vorgezogenen Erneuerungen auf mehrere Naechte, statt alle
+  Bestellungen in einer Nacht an die CA zu schicken. Die Zusammenfassung des
+  Durchlaufs zaehlt sie als `early_forced`, die auf den naechsten Durchlauf
+  verschobenen als `early_deferred`.
+- **Ein Zertifikat, das vor weniger als 7 Tagen ausgestellt wurde, wird nie
+  erzwungen.** Ein Schwellenwert in Hoehe der Laufzeit oder darueber wuerde es
+  sonst dauerhaft faellig nennen. Mit diesem Schutz kostet das hoechstens eine
+  Erneuerung pro Woche, nicht eine pro Nacht.
+
+Ein Zertifikat, das aus einem anderen Grund Aufmerksamkeit braucht, ein
+ausgelieferter Schluessel, der fehlt oder nicht passt, wird nicht erzwungen:
+es wird ohne neuen Schluessel aus seiner Lineage repariert.
 
 ### Automatische Erneuerung aktivieren
 
