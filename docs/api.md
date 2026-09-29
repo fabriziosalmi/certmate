@@ -1752,6 +1752,7 @@ and may be reworded.
 | `ACME_RATE_LIMITED` | 422 | The CA refused because a rate limit was reached — waiting is the fix, retrying is the cause |
 | `CERTIFICATE_CREATION_FAILED` / `CERTIFICATE_REISSUE_FAILED` / `CERTIFICATE_REISSUE_REJECTED` | 422 | Issuance was attempted and refused |
 | `RENEWAL_CONFIG_BROKEN` | 422 | certbot's renewal config for this lineage no longer resolves; reissue |
+| `REISSUE_REQUIRED` | 422 | The certificate has no private key left anywhere to renew with (typically after restoring a share-safe backup); only a reissue repairs it |
 | `DNS_ACCOUNT_NOT_CONFIGURED` | 422 | The DNS account this certificate uses is gone from settings |
 | `ISSUANCE_QUEUE_FULL` | 429 | Too much async issuance is already queued or running; the body carries the depth and the limit |
 | `ADOPTION_UNAVAILABLE` | 503 | Discovery/adoption is not available on this build |

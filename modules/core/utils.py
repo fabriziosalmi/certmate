@@ -471,6 +471,15 @@ def classify_renewal_error(reason: str) -> tuple:
     pad with the sanitized reason.
     """
     low = (reason or '').lower()
+    if 'no private key anywhere' in low:
+        # ReissueRequired (#966): checked first, because a lineage with no
+        # key would otherwise read as the broken-config case below.
+        return (
+            "This certificate has no private key left to renew with (typically "
+            "after restoring a share-safe backup). Reissue it: that issues a "
+            "new key.",
+            'REISSUE_REQUIRED',
+        )
     broken_markers = ('parsefail', 'renewal configuration', 'is broken', 'to be a symlink')
     if any(marker in low for marker in broken_markers):
         return (

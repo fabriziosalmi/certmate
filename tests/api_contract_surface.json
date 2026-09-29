@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.24",
+  "contract_version": "2.25",
   "surface": [
     "DELETE /api/backups/delete/<X>/<X>",
     "DELETE /api/certificates/<X>",
