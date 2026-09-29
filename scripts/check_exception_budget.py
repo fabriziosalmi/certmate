@@ -181,7 +181,9 @@ GENERAL_LIMIT = 10
 # 422 -> 421 on 2026-09-29: IssuanceExecutor._publish is gone with the
 # executor's own lifecycle events (the double-publish fix). One broad handler
 # fewer, because the thing it guarded no longer exists.
-TOTAL_LIMIT = 421
+# 421 -> 420: the dead _atomic_binary_copy (no callers; its docstring still
+# claimed the renew path used it) went, and its broad handler with it.
+TOTAL_LIMIT = 420
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
