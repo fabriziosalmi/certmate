@@ -250,11 +250,13 @@ If you need any of those, put the logic in a script file inside the container an
 
 ### Blocked file references
 
-References to CertMate's own sensitive files are rejected outright (case-insensitive):
+A command that names one of CertMate's own sensitive files is rejected (case-insensitive):
 
 `settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`
 
-Certificate files are not on the list: installing the certificate and its key (`privkey.pem`, `$CERTMATE_KEY_PATH`) is the normal job of a hook. `cat /app/data/settings.json` would be rejected at save.
+Certificate files are not on the list: installing the certificate and its key (`privkey.pem`, `$CERTMATE_KEY_PATH`) is the normal job of a hook. `cat /app/data/settings.json` is rejected at save.
+
+The check matches those names **as written**. It catches a hook that names one of those files by mistake. It does not stop a command that reaches the same file without spelling its name: a glob (`settings*`), a `?` wildcard, or a name split by quotes (`settings"."json`) all get past it. It is a guard against accidents, not a security boundary. Only an admin can save or run a hook, and an admin who can save a hook can already run any command as CertMate. The same holds for the shell patterns above.
 
 ### What's allowed
 

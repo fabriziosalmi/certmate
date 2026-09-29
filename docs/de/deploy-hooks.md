@@ -187,11 +187,13 @@ Wenn Sie eines dieser Muster benötigen, legen Sie die Logik in eine Skriptdatei
 
 ### Blockierte Dateireferenzen
 
-Referenzen auf CertMates eigene sensible Dateien werden grundsätzlich abgelehnt (Gross-/Kleinschreibung wird ignoriert):
+Ein Befehl, der eine von CertMates eigenen sensiblen Dateien nennt, wird abgelehnt (Gross-/Kleinschreibung wird ignoriert):
 
-`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`, `private*key`, `.pem`
+`settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`
 
-`cat $CERTMATE_FULLCHAIN_PATH` ist also zulässig (die Variable wird von der Shell aufgelöst, die literale Zeichenkette `.pem` erscheint nicht in `command`), aber `cat /app/data/settings.json` würde beim Speichern abgelehnt.
+Zertifikatsdateien stehen nicht auf der Liste: das Zertifikat und seinen Schlüssel zu installieren (`privkey.pem`, `$CERTMATE_KEY_PATH`) ist die normale Aufgabe eines Hooks. `cat /app/data/settings.json` wird beim Speichern abgelehnt.
+
+Die Prüfung erkennt diese Namen **so, wie sie geschrieben sind**. Sie fängt einen Hook ab, der eine dieser Dateien versehentlich nennt. Sie hält keinen Befehl auf, der dieselbe Datei erreicht, ohne ihren Namen auszuschreiben: ein Glob (`settings*`), ein `?`-Platzhalter oder ein durch Anführungszeichen geteilter Name (`settings"."json`) kommen durch. Sie schützt vor Versehen, sie ist keine Sicherheitsgrenze. Nur ein Admin kann einen Hook speichern oder ausführen, und ein Admin, der einen Hook speichern kann, kann bereits jeden Befehl als CertMate ausführen. Dasselbe gilt für die Shell-Muster oben.
 
 ### Was erlaubt ist
 

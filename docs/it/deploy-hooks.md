@@ -190,11 +190,13 @@ Se hai bisogno di uno di questi, inserisci la logica in un file script all'inter
 
 ### Riferimenti a file bloccati
 
-I riferimenti ai file sensibili di CertMate vengono rifiutati (senza distinzione tra maiuscole e minuscole):
+Un comando che nomina uno dei file sensibili di CertMate viene rifiutato (senza distinzione tra maiuscole e minuscole):
 
 `settings.json`, `api_bearer_token`, `client_secret`, `vault_token`, `.env`
 
-I file del certificato non sono nella lista: installare il certificato e la sua chiave (`privkey.pem`, `$CERTMATE_KEY_PATH`) è il compito normale di un hook. `cat /app/data/settings.json` verrebbe rifiutato al salvataggio.
+I file del certificato non sono nella lista: installare il certificato e la sua chiave (`privkey.pem`, `$CERTMATE_KEY_PATH`) è il compito normale di un hook. `cat /app/data/settings.json` viene rifiutato al salvataggio.
+
+Il controllo riconosce quei nomi **così come sono scritti**. Ferma un hook che nomina uno di quei file per errore. Non ferma un comando che raggiunge lo stesso file senza scriverne il nome: un glob (`settings*`), un carattere jolly `?` o un nome spezzato dalle virgolette (`settings"."json`) passano. È una protezione dagli incidenti, non un confine di sicurezza. Solo un admin può salvare o eseguire un hook, e un admin che può salvare un hook può già eseguire qualsiasi comando come CertMate. Lo stesso vale per i pattern di shell elencati sopra.
 
 ### Cosa è consentito
 
