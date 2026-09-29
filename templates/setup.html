@@ -137,6 +137,15 @@
                 return;
             }
 
+            // The server enables local login together with the first admin
+            // and says so; only an admin left over from an earlier,
+            // half-finished run (409) still needs the separate step.
+            let enabled = false;
+            if (created) {
+                try { enabled = (await response.clone().json()).local_auth_enabled === true; } catch (_) { /* non-JSON */ }
+            }
+            if (enabled) { window.location.href = '/login'; return; }
+
             // Enable local auth so the admin can actually log in.
             const cfg = await fetch('/api/auth/config', {
                 method: 'POST',

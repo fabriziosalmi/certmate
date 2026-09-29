@@ -6,6 +6,7 @@ Supports both API token and local username/password authentication
 
 import logging
 import os
+import re
 import secrets
 import hashlib
 import hmac
@@ -60,6 +61,29 @@ def _warn_once_about_last_used(error):
 # it, served as admin. Anything created under this name was created by whoever
 # was there during the setup window, which is why it is recorded and reviewed.
 SETUP_USERNAME = 'setup_user'
+
+# What setup mode refuses outright, even to its anonymous admin (#999 follow-
+# up). Setup mode exists so a fresh instance can be bootstrapped, and it
+# serves every caller as admin until a credential exists. These are the
+# requests that turn "anyone who can reach the instance" into lasting damage:
+# running a command on the host, carrying away private keys, or planting a
+# command that outlives setup. Restoring and uploading a backup stay allowed:
+# restoring onto a fresh host is the documented recovery path, and it happens
+# in setup mode. (method, path pattern)
+_SETUP_REFUSED = tuple((method, re.compile(pattern)) for method, pattern in (
+    ('POST', r'^/api/deploy/(config|test/[^/]+)$'),
+    ('POST', r'^/api/certificates/[^/]+/deploy$'),
+    ('GET', r'^/api/certificates/[^/]+/download(/[^/]+)?$'),
+    ('POST', r'^/api/web/certificates/download/batch$'),
+    ('GET', r'^/api/client-certs/[^/]+/download/(key|pfx)$'),
+    ('POST', r'^/api/(web/)?backups/create$'),
+    ('GET', r'^/api/backups/download/'),
+))
+
+
+def _refused_in_setup(method, path):
+    """Is this request one setup mode refuses even to its anonymous admin?"""
+    return any(method == m and pattern.match(path) for m, pattern in _SETUP_REFUSED)
 
 # Distinct from None/False so the operator-bearer-token detection can be
 # memoised (env/file are fixed for the process lifetime) without a False
@@ -1525,6 +1549,15 @@ class AuthManager:
             # credential (local auth + a user, OR an API bearer token), so a
             # configured bearer token is always enforced here.
             if self.is_setup_mode():
+                if _refused_in_setup(request.method, request.path):
+                    return None, ({
+                        'error': ('Setup is not complete: every request is still '
+                                  'served as admin to anyone who can reach this '
+                                  'instance, so deploy hooks, backups and '
+                                  'private-key downloads are refused until it is. '
+                                  'Create the first admin (or set '
+                                  'API_BEARER_TOKEN), sign in, then retry.'),
+                        'code': 'SETUP_BOOTSTRAP_ONLY'}, 409)
                 return {'username': SETUP_USERNAME, 'role': 'admin'}, None
 
             # Check for session-based auth first (for web UI)

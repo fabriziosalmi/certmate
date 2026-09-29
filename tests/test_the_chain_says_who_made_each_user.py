@@ -104,9 +104,8 @@ def test_a_user_made_afterwards_is_attributed_to_the_operator(instance):
     """The half that makes the first one mean something. If every creation
     were recorded as `setup_user`, the marker would separate nothing."""
     client, tmp_path = instance
-    _bootstrap(client)
-    assert client.post('/api/auth/config', json={'local_auth_enabled': True},
-                       headers=ORIGIN).status_code == 200
+    # The first admin enables local login in the same request.
+    assert _bootstrap(client).get_json().get('local_auth_enabled') is True
     assert client.post('/api/auth/login',
                        json={'username': 'admin', 'password': PASSWORD},
                        headers=ORIGIN).status_code == 200
@@ -124,8 +123,9 @@ def test_the_window_still_refuses_a_second_user(instance):
     client, _ = instance
     assert _bootstrap(client).status_code == 201
     second = _bootstrap(client, username='planted')
-    assert second.status_code == 409
-    assert second.get_json().get('code') == 'SETUP_BOOTSTRAP_ONLY'
+    # The first admin closed setup, so an anonymous second attempt is not
+    # even served as the setup admin any more: refused as unauthenticated.
+    assert second.status_code == 401
 
 
 def test_the_name_in_the_chain_is_the_constant_the_docs_name():

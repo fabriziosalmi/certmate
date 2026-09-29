@@ -23,7 +23,7 @@ from certmate import Client, NotFoundError  # noqa: E402
 
 @pytest.fixture
 def sdk(docker_container):
-    with Client(docker_container) as c:   # setup-mode container → open, no token
+    with Client(docker_container) as c:   # token from CERTMATE_TOKEN (conftest)
         yield c
 
 

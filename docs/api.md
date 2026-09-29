@@ -1569,6 +1569,17 @@ it would stay valid once setup is complete. Enable local authentication (or set
 same `409` for any user after the first one while setup is incomplete: the
 first admin is the bootstrap.
 
+The first admin closes setup: creating it while the instance is in setup mode
+also enables local authentication, and the response says so with
+`"local_auth_enabled": true`. A separate `POST /api/auth/config` is no longer
+needed (on an instance already closed it answers `401`).
+
+Until setup is complete, the anonymous admin is also refused, with the same
+`409 SETUP_BOOTSTRAP_ONLY`, anything that outlives setup or carries private
+keys away: deploy-hook changes, tests and runs, certificate and key downloads,
+and backup creation and download. Restoring and uploading a backup stay
+allowed, since that is how an instance is recovered onto a fresh host.
+
 #### Revoke an API key
 
 **Endpoint**: `DELETE /api/keys/<key_id>` — admin
