@@ -14,6 +14,8 @@ future tightening doesn't silently regress these endpoints.
 
 import pytest
 
+from tests.conftest import reopen_shared_container
+
 pytestmark = [pytest.mark.e2e]
 
 
@@ -45,8 +47,10 @@ def admin_session(api):
     api.session.cookies.set("certmate_session", cookie)
     yield cookie
 
-    # Teardown: disable local auth so other test modules aren't affected.
-    api.post("/api/auth/config", json={"local_auth_enabled": False})
+    # Teardown: reopen the shared container so other test modules aren't
+    # affected, and check it worked; the bare disable was refused with 409
+    # since #587 and nobody noticed (#986).
+    reopen_shared_container(api)
 
 
 class TestNotificationsConfigRoute:

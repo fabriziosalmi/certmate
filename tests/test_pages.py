@@ -5,6 +5,8 @@ and the welcome/setup banners are shown for first-time users.
 
 import pytest
 
+from tests.conftest import reopen_shared_container
+
 pytestmark = [pytest.mark.e2e]
 
 
@@ -65,6 +67,10 @@ class TestWelcomeBanner:
             "username": "admin",
             "password": "Password123!"
         })
+        yield
+        # The container is shared by the whole session: leave it open, as
+        # the modules after this one expect (#986).
+        reopen_shared_container(api)
 
     def test_index_loads_dashboard_js(self, api):
         r = api.get("/", allow_redirects=True)
