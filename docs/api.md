@@ -958,6 +958,12 @@ explicitly changed (no key flags are sent and certbot keeps the lineage key).
 - `san_domains`: replacement SAN set — omit to keep, `[]` to drop every SAN
 - `domain_alias`: omit to keep, `""` to clear
 - `dns_provider`, `account_id`, `ca_provider`, `challenge_type`: omit to keep
+- `challenge_type`: `dns-01`, `http-01`, or `prevalidated` (Sectigo only: the
+  SCM account must already authorize every name, and no DNS provider, account
+  or alias may be given; see [CA providers](ca-providers.md)). Since API
+  contract **2.29**.
+- the CA account the certificate was issued under is kept when `ca_provider`
+  does not change; before 2.29 a reissue used the CA's default account.
 - `key_type`/`key_size`/`elliptic_curve`: omit to keep the existing key shape
 - `async`: defer issuance to a background job (202 + job id, poll `GET /api/certificates/jobs/<job_id>`)
 

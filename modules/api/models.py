@@ -333,6 +333,9 @@ def create_api_models(api):
                                            'google', 'digicert', 'sslcom',
                                            'actalis', 'sectigo', 'private_ca']),
         'ca_account_id': fields.String(description='CA provider account ID (optional)'),
+        'challenge_type': fields.String(
+            description='ACME challenge (prevalidated requires Sectigo SCM authorization)',
+            enum=['dns-01', 'http-01', 'prevalidated']),
         'domain_alias': fields.String(description='Optional domain alias for DNS validation'),
         'alias_dns_provider': fields.String(
             description=('DNS provider that hosts the alias zone, when it is '
@@ -384,7 +387,9 @@ def create_api_models(api):
         'dns_provider': fields.String(description='Omit to keep the value the certificate was issued with'),
         'account_id': fields.String(description='Omit to keep the value the certificate was issued with'),
         'ca_provider': fields.String(description='Omit to keep the value the certificate was issued with'),
-        'challenge_type': fields.String(description='Omit to keep the value the certificate was issued with'),
+        'challenge_type': fields.String(
+            description='Omit to keep the issued challenge (prevalidated is Sectigo-only)',
+            enum=['dns-01', 'http-01', 'prevalidated']),
         'domain_alias': fields.String(description='Omit to keep the current alias; pass "" to clear it'),
         'alias_dns_provider': fields.String(description='Provider managing the alias zone when it differs from dns_provider. Omit to keep the issued value'),
         'csr': fields.String(

@@ -2,7 +2,7 @@
 
 <!-- CERTMATE-TRANSLATED-FROM 4a4fcc10de4a1e4b -->
 <!-- CERTMATE-STALE-TRANSLATION -->
-> **Diese Übersetzung ist nicht aktuell.** Die englische Fassung ([`docs/ca-providers.md`](../ca-providers.md)) ist maßgeblich. Sie beschreibt auch den neuen Sectigo-ACME-Anbieter mit kontospezifischen HTTPS-Verzeichnis-URLs und EAB-Zugangsdaten.
+> **Diese Übersetzung ist nicht aktuell.** Die englische Fassung ([`docs/ca-providers.md`](../ca-providers.md)) ist maßgeblich. Sie beschreibt auch Sectigo ACME mit kontospezifischen HTTPS-Verzeichnis-URLs, EAB-Zugangsdaten und einem Modus für bereits in SCM autorisierte Namen ohne DNS- oder HTTP-Challenge.
 
 CertMate unterstützt mehrere Zertifizierungsstellen-Anbieter, sodass Sie die für Ihre Anforderungen am besten geeignete CA auswählen können.
 
