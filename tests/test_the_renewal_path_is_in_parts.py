@@ -201,8 +201,7 @@ def test_the_renewed_branch_publishes_stamps_and_reports(tmp_path):
     manager = _manager(tmp_path)
     metadata = {'domain': domain}
 
-    result = manager._publish_renewed_certificate(
-        domain, domain_dir, metadata, domain_dir / 'metadata.json')
+    result = manager._publish_renewed_certificate(domain, domain_dir, metadata)
 
     assert result == {'success': True, 'renewed': True, 'domain': domain,
                       'message': 'Certificate renewed successfully'}
