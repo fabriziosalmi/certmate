@@ -381,6 +381,15 @@ METADATA_SCHEMA_VERSION = 1
 #                                   as `unverifiable` above. The HTTP status is
 #                                   unchanged.
 #
+#   POST /api/certificates/reissue-keyless
+#                                   new endpoint (#966, step 3): queues a
+#                                   reissue for every certificate whose
+#                                   lineage lost its private key, at most
+#                                   `limit` per call (default 10, max 50) on
+#                                   the async executor, and answers `queued`,
+#                                   `remaining`, `refused`. MINOR: a new
+#                                   endpoint.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -400,7 +409,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.26'
+API_CONTRACT_VERSION = '2.27'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

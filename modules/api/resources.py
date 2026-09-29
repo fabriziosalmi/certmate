@@ -9,6 +9,7 @@ from .resources_cache import create_cache_resources
 from .resources_backup import create_backup_resources
 from .resources_inventory import create_inventory_resources
 from .resources_lifecycle import create_lifecycle_resources
+from .resources_reissue_keyless import create_reissue_keyless_resources
 from .resources_certificates import create_certificates_resources
 from .resources_deployment import create_deployment_resources
 from .resources_discovery import create_discovery_resources
@@ -109,6 +110,7 @@ def create_api_resources(api, models, managers):
         **create_ca_resources(api, models, ctx),
         **create_download_resources(api, models, ctx, _privkey_to_pkcs1),
         **create_lifecycle_resources(api, models, ctx),
+        **create_reissue_keyless_resources(api, models, ctx),
         **create_certificates_resources(api, models, ctx),
         **create_deployment_resources(api, models, ctx),
         **create_discovery_resources(api, models, ctx),

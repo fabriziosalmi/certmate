@@ -489,7 +489,7 @@ class CertificateManager:
                 "Failed to publish certificate_failed for %s", domain
             )
 
-    def _audit_scheduled_renew(self, domain, status, error=None):
+    def _audit_scheduled_renew(self, domain, status, error=None, details=None):
         """Emit an attributed audit record for an unattended renewal. No-op
         when no audit logger is wired; never raises."""
         if not self._audit_logger:
@@ -500,7 +500,7 @@ class CertificateManager:
             self._audit_logger.log_operation(
                 operation='renew', resource_type='certificate',
                 resource_id=domain, status=status,
-                details={'force': False},
+                details=details if details is not None else {'force': False},
                 error=(str(error)[:500] if error else None),
                 user=ctx.get('user'), ip_address=ctx.get('ip'),
                 actor=ctx.get('actor'), trigger=ctx.get('trigger'),
@@ -3948,7 +3948,7 @@ class CertificateManager:
                     'skipped_disabled': 0, 'skipped_invalid': 0,
                     'skipped_not_due': 0, 'skipped_busy': 0,
                     'unmanaged': 0, 'reregistered': 0, 'ari_advanced': 0,
-                    'reissue_required': 0,
+                    'reissue_required': 0, 'auto_reissued': 0,
                     'auto_renew_disabled': True}
 
         # Migrate settings format if needed
@@ -3966,7 +3966,9 @@ class CertificateManager:
                    'ari_advanced': 0,
                    # Certificates with no key anywhere: only a reissue repairs
                    # them, so they are counted apart from failures (#966).
-                   'reissue_required': 0}
+                   'reissue_required': 0,
+                   # Reissued by the sweep itself, opt-in (#966, step 4).
+                   'auto_reissued': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -4064,15 +4066,92 @@ class CertificateManager:
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
             "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
-            "%d unmanaged, %d re-registered, %d need reissue",
+            "%d unmanaged, %d re-registered, %d need reissue, "
+            "%d auto-reissued",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
             summary['skipped_not_due'], summary['skipped_busy'],
             summary['unmanaged'], summary['reregistered'],
-            summary['reissue_required'],
+            summary['reissue_required'], summary['auto_reissued'],
         )
         return summary
+
+    #: Default for `auto_reissue_keyless_per_sweep` (#966, step 4).
+    AUTO_REISSUE_DEFAULT_PER_SWEEP = 5
+
+    @classmethod
+    def _auto_reissue_cap(cls, settings):
+        """How many keyless certificates one sweep may reissue, clamped.
+
+        [1, 50]: a typo must mean neither "reissue everything tonight" nor
+        "never", and an unparseable value falls back to the default.
+        """
+        raw = (settings or {}).get('auto_reissue_keyless_per_sweep',
+                                   cls.AUTO_REISSUE_DEFAULT_PER_SWEEP)
+        try:
+            return max(1, min(50, int(raw)))
+        except (TypeError, ValueError):
+            return cls.AUTO_REISSUE_DEFAULT_PER_SWEEP
+
+    def _auto_reissue(self, domain, settings, summary):
+        """Reissue a certificate that lost its key, when the operator opted in.
+
+        Off by default (#966): a reissue changes the key, and after a
+        share-safe restore of N certificates a silent reissue is N orders in
+        one night. With `auto_reissue_keyless: true` the sweep does it itself,
+        at most `_auto_reissue_cap` per sweep; the rest keep their
+        reissue_required state until the next one. A success leaves a
+        renewal's traces: the audit record and `certificate_renewed`, so
+        deploy hooks ship the new key and certificate.
+
+        Returns True when the certificate was reissued.
+        """
+        if not (settings or {}).get('auto_reissue_keyless', False):
+            return False
+        if summary.get('auto_reissued', 0) >= self._auto_reissue_cap(settings):
+            return False
+        try:
+            self._reissue_from_metadata(domain)
+        except (RuntimeError, ValueError, OSError) as e:
+            # What a reissue raises when it does not happen: certbot's refusal
+            # and a busy domain (RuntimeError and its subclasses), a
+            # configuration it cannot use (ValueError), a file it cannot write
+            # (OSError). Anything else is a defect and surfaces through the
+            # sweep's own handler instead of reading as "reissue failed".
+            logger.warning("Automatic reissue of %s failed: %s", domain, e)
+            return False
+        summary['auto_reissued'] = summary.get('auto_reissued', 0) + 1
+        logger.info("Reissued %s, which had no private key left "
+                    "(auto_reissue_keyless)", domain)
+        self._audit_scheduled_renew(domain, 'success',
+                                    details={'auto_reissue_keyless': True})
+        self._publish_renewed_event(domain)
+        return True
+
+    def _reissue_from_metadata(self, domain):
+        """Reissue *domain* with the configuration its metadata records.
+
+        The same inputs Edit & Reissue would send unchanged: CA, DNS provider
+        and account, alias, SANs, challenge. A share-safe backup keeps
+        metadata.json (it is not key material), so this is available right
+        after the restore that made it necessary.
+        """
+        metadata = self._load_metadata(domain)
+        email = metadata.get('email') or self.settings_manager.load_settings().get('email')
+        return self.create_certificate(
+            domain=domain,
+            email=email,
+            dns_provider=metadata.get('dns_provider'),
+            account_id=metadata.get('account_id'),
+            ca_provider=metadata.get('ca_provider'),
+            ca_account_id=metadata.get('ca_account_id'),
+            domain_alias=metadata.get('domain_alias'),
+            alias_dns_provider=metadata.get('alias_dns_provider'),
+            challenge_type=metadata.get('challenge_type'),
+            san_domains=metadata.get('san_domains') or None,
+            replace=True,
+        )
 
     def _renew_if_due(self, domain, settings, summary):
         """Renew one certificate if it is due, and account for the outcome.
@@ -4139,6 +4218,8 @@ class CertificateManager:
             self._publish_renewed_event(domain)
             return True
         except ReissueRequired as e:
+            if self._auto_reissue(domain, settings, summary):
+                return True
             # A known state with a known remedy, not a failure of this sweep:
             # counted apart, and the notification says what to do. Audited as
             # a failure, because the renewal did not happen.
