@@ -18,14 +18,15 @@ ROLE = 'arn:aws:iam::123456789012:role/CertMateS3'
 
 
 def test_aws_role_uses_sdk_credential_chain_without_explicit_keys():
-    backend = S3CompatibleBackend({'bucket': 'certs', 'region': 'eu-west-1'})
+    backend = S3CompatibleBackend({'bucket': 'certs', 'region': 'eu-west-1',
+                                   'auth_mode': 'iam_role'})
     with patch('boto3.client') as client:
         backend._get_client()
     client.assert_called_once_with('s3', endpoint_url=None, region_name='eu-west-1')
 
 
 def test_secrets_manager_uses_sdk_credential_chain_without_explicit_keys():
-    backend = AWSSecretsManagerBackend({'region': 'eu-west-1'})
+    backend = AWSSecretsManagerBackend({'region': 'eu-west-1', 'auth_mode': 'iam_role'})
     with patch('boto3.client') as client:
         backend._get_client()
     client.assert_called_once_with('secretsmanager', region_name='eu-west-1')
@@ -49,6 +50,15 @@ def test_existing_secrets_manager_access_keys_are_unchanged():
         backend._get_client()
     client.assert_called_once_with('secretsmanager', region_name='us-east-1',
                                    aws_access_key_id='key', aws_secret_access_key='secret')
+
+
+@pytest.mark.parametrize('backend_class,config', [
+    (S3CompatibleBackend, {'bucket': 'certs'}),
+    (AWSSecretsManagerBackend, {'region': 'eu-west-1'}),
+])
+def test_missing_keys_without_explicit_auth_mode_fail_closed(backend_class, config):
+    with pytest.raises(ValueError, match='access_key_id and secret_access_key'):
+        backend_class(config)
 
 
 def test_selecting_iam_ignores_any_old_stored_access_keys():
@@ -129,8 +139,9 @@ def test_explicit_keys_can_be_the_source_for_assume_role(backend_class):
     ({'auth_mode': 'unknown'}, 'auth_mode'),
     ({'auth_mode': 'access_keys'}, 'secret_access_key'),
     ({'auth_mode': 'iam_role', 'endpoint_url': 'https://minio.example'}, 'endpoint_url'),
-    ({'assume_role_arn': ROLE, 'endpoint_url': 'https://minio.example'}, 'endpoint_url'),
-    ({'assume_role_arn': 'not-an-arn'}, 'assume_role_arn'),
+    ({'auth_mode': 'iam_role', 'assume_role_arn': ROLE,
+      'endpoint_url': 'https://minio.example'}, 'endpoint_url'),
+    ({'auth_mode': 'iam_role', 'assume_role_arn': 'not-an-arn'}, 'assume_role_arn'),
 ])
 def test_invalid_auth_combinations_fail_before_connecting(config, error):
     with pytest.raises(ValueError, match=error):
@@ -140,7 +151,7 @@ def test_invalid_auth_combinations_fail_before_connecting(config, error):
 @pytest.mark.parametrize('config, error', [
     ({'auth_mode': 'unknown'}, 'auth_mode'),
     ({'auth_mode': 'access_keys'}, 'secret_access_key'),
-    ({'assume_role_arn': 'not-an-arn'}, 'assume_role_arn'),
+    ({'auth_mode': 'iam_role', 'assume_role_arn': 'not-an-arn'}, 'assume_role_arn'),
 ])
 def test_secrets_manager_rejects_bad_auth_config(config, error):
     with pytest.raises(ValueError, match=error):

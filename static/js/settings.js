@@ -2763,8 +2763,7 @@
             case 'aws_secrets_manager':
                 // Support both nested ({aws_secrets_manager:{...}}) and legacy flat format
                 var awsConfig = storageConfig.aws_secrets_manager || storageConfig;
-                document.getElementById('aws-auth-mode').value = awsConfig.auth_mode ||
-                    (awsConfig.access_key_id || awsConfig.secret_access_key ? 'access_keys' : 'iam_role');
+                document.getElementById('aws-auth-mode').value = awsConfig.auth_mode || 'access_keys';
                 document.getElementById('aws-region').value = awsConfig.region || 'us-east-1';
                 document.getElementById('aws-access-key-id').value = awsConfig.access_key_id || '';
                 document.getElementById('aws-assume-role-arn').value = awsConfig.assume_role_arn || '';
@@ -2792,8 +2791,7 @@
 
             case 's3_compatible':
                 var s3Config = storageConfig.s3_compatible || storageConfig;
-                document.getElementById('s3-auth-mode').value = s3Config.auth_mode ||
-                    (s3Config.access_key_id || s3Config.secret_access_key ? 'access_keys' : 'iam_role');
+                document.getElementById('s3-auth-mode').value = s3Config.auth_mode || 'access_keys';
                 document.getElementById('s3-endpoint-url').value = s3Config.endpoint_url || '';
                 document.getElementById('s3-bucket').value = s3Config.bucket || '';
                 document.getElementById('s3-region').value = s3Config.region || 'us-east-1';

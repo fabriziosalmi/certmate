@@ -99,7 +99,7 @@ def _aws_storage_auth(config, backend_name):
     """Resolve legacy key-pair settings or an explicit AWS credential-chain mode."""
     key = (config.get('access_key_id') or '').strip()
     secret = (config.get('secret_access_key') or '').strip()
-    mode = config.get('auth_mode') or ('access_keys' if key or secret else 'iam_role')
+    mode = config.get('auth_mode') or 'access_keys'
     role_arn = (config.get('assume_role_arn') or '').strip()
     if mode not in ('access_keys', 'iam_role'):
         raise ValueError(f"{backend_name} auth_mode must be access_keys or iam_role")
@@ -1978,7 +1978,7 @@ class S3CompatibleBackend(CertificateStorageBackend):
             raise ValueError("AssumeRole requires an empty endpoint_url (AWS S3)")
         self._client = None
         logger.info("S3CompatibleBackend initialized for endpoint %s bucket %s",
-                    self.endpoint_url, self.bucket)
+                    self.endpoint_url or 'AWS S3 (default)', self.bucket)
 
     def _get_client(self):
         if self._client is None:

@@ -1493,7 +1493,8 @@ Settings → Storage, enter the region and leave access keys empty. CertMate use
 the AWS credential chain (for example an EC2 instance profile, ECS task role or
 EKS pod identity). An optional **Assume role ARN** uses `sts:AssumeRole` and
 refreshes the temporary credentials automatically. Existing key-based settings
-still work. Equivalent settings without an additional assumed role:
+still work. If `auth_mode` is absent in a manual configuration, access keys
+remain required. Equivalent settings without an additional assumed role:
 
 ```json
 {"certificate_storage":{"backend":"aws_secrets_manager","aws_secrets_manager":{"region":"eu-west-1","auth_mode":"iam_role"}}}
@@ -1621,7 +1622,7 @@ For S3-compatible services, use **Access keys** and provide both keys, the bucke
 
 For **AWS S3 with an IAM role**, select **AWS credentials / IAM role (no keys)** in Settings → Storage, provide the bucket and region, and leave the endpoint URL and access keys empty. Boto3 uses its standard credential chain (for example an EC2 instance profile, ECS task role or EKS pod identity). You can optionally enter an **Assume role ARN** (`arn:aws:iam::123456789012:role/CertMateS3`): the current identity must have `sts:AssumeRole` permission and the destination role must trust it. CertMate refreshes the temporary STS credentials automatically. The role needs `s3:ListBucket` on the bucket and `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on `<prefix>/*` (including object existence checks). The **Test Storage Backend** action lists the prefix and reports authentication/permission failures.
 
-For manual `settings.json`, an AWS S3 configuration can omit the keys and endpoint: `{"backend":"s3_compatible","s3_compatible":{"bucket":"certmate","region":"eu-west-1","auth_mode":"iam_role","assume_role_arn":"arn:aws:iam::123456789012:role/CertMateS3"}}`. Omit `assume_role_arn` to use the attached role directly. The optional off-site S3 backup storage has separate credential settings; this option configures **certificate storage** only.
+For manual `settings.json`, explicitly set `"auth_mode":"iam_role"` to use AWS credentials without keys or an endpoint: `{"backend":"s3_compatible","s3_compatible":{"bucket":"certmate","region":"eu-west-1","auth_mode":"iam_role","assume_role_arn":"arn:aws:iam::123456789012:role/CertMateS3"}}`. Omit `assume_role_arn` to use the attached role directly. Without `auth_mode`, legacy key-pair requirements still apply. The optional off-site S3 backup storage has separate credential settings; this option configures **certificate storage** only.
 
 #### Quick Installation Guide
 
