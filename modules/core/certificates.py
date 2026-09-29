@@ -44,6 +44,7 @@ from .domain_paths import reject_unsafe_domain, validate_domain_path
 from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,
+    repair_certbot_renewal_paths,
 )
 
 logger = logging.getLogger(__name__)
@@ -3333,6 +3334,17 @@ class CertificateManager:
             # "renewed: False" forever while the certificate marches to
             # expiry. Repairing here (not only on the reissue path) is what
             # makes an unattended instance recover on its own.
+            # And a conf still naming another install's directory (a backup
+            # restored elsewhere, a data dir moved by hand) would have certbot
+            # judge and renew THAT lineage (#966). Before the symlinks, because
+            # the conf decides which lineage they belong to.
+            try:
+                if repair_certbot_renewal_paths(domain_dir, domain):
+                    logger.warning(
+                        "Pointed the certbot renewal config for %s at this "
+                        "install; it named another directory", domain)
+            except OSError as e:
+                logger.warning(f"Could not rewrite renewal config paths for {domain}: {e}")
             try:
                 if repair_certbot_lineage_symlinks(domain_dir, domain):
                     logger.warning(
