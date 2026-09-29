@@ -1347,6 +1347,8 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['DownloadCertificateFile'], '/<string:domain>/download/<string:file_type>')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
     ns_certificates.add_resource(api_resources['CertificateReissue'], '/<string:domain>/reissue')
+    # Every certificate that lost its private key, queued at a pace (#966).
+    ns_certificates.add_resource(api_resources['ReissueKeyless'], '/reissue-keyless')
     ns_certificates.add_resource(api_resources['CertificateJobs'], '/jobs')
     ns_certificates.add_resource(api_resources['CertificateJob'], '/jobs/<string:job_id>')
     ns_certificates.add_resource(api_resources['CertificateAutoRenew'], '/<string:domain>/auto-renew')

@@ -227,6 +227,40 @@ CA attached to the window, when it gave one; only `https` URLs are kept. The
 window can only bring a renewal forward: the threshold stays the backstop.
 Available since API contract **2.23**.
 
+#### Reissue every certificate that lost its key
+
+**Endpoint**: `POST /api/certificates/reissue-keyless` — operator
+
+Restoring a share-safe backup leaves certificates with **no private key
+anywhere** (a renewal of one answers `REISSUE_REQUIRED`). This queues a reissue
+for each of them, with the configuration its metadata records, at a pace: at
+most `limit` per call (default 10, at most 50) on the async executor, which
+runs two at a time. Call it again for the rest once the queued jobs finish.
+
+```json
+{ "limit": 10 }
+```
+
+Answers `202` when something was queued, `200` when there was nothing to do:
+
+```json
+{
+  "queued": [{"domain": "a.example.com", "job_id": "…", "status_url": "/api/certificates/jobs/…"}],
+  "remaining": ["k.example.com"],
+  "refused": [{"domain": "x.example.com", "reason": "out of scope"}],
+  "next_step": "1 more certificate(s) need a reissue. Call this again once the queued jobs finish."
+}
+```
+
+A scoped API key only sees and reissues its own domains. A full queue stops
+the loop, and what was not queued is in `remaining`. With async issuance off
+the answer is `503 ASYNC_ISSUANCE_DISABLED`. Since API contract **2.27**.
+
+For an unattended instance, `"auto_reissue_keyless": true` in `settings.json`
+lets the nightly renewal sweep do this itself, at most
+`auto_reissue_keyless_per_sweep` per sweep (default 5, clamped 1-50). It is
+off by default, because a reissue changes the key and deploy hooks ship it.
+
 #### Turn automatic renewal on or off
 
 **Endpoint**: `PUT /api/certificates/<domain>/auto-renew` — operator
