@@ -236,6 +236,16 @@ def create_api_models(api):
                 "`usable` is null because this node cannot answer for a key it "
                 "does not hold."
             )),
+        'reissue_required': fields.Boolean(
+            description=(
+                'True when this certificate has no private key anywhere: not '
+                'served, not in live/, not in any archived generation. What '
+                'restoring a share-safe backup leaves. Renewal answers '
+                'REISSUE_REQUIRED for it, and POST '
+                '/api/certificates/reissue-keyless reissues it. A key missing '
+                'only from the served copy is not this: it is republished from '
+                'the lineage. Added in API contract 2.28 (#966).'
+            )),
         'auto_renew': fields.Boolean(description='Whether automatic renewal is enabled for this certificate'),
         'dns_provider': fields.String(description='DNS provider used for the certificate'),
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),

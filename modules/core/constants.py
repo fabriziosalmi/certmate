@@ -390,6 +390,15 @@ METADATA_SCHEMA_VERSION = 1
 #                                   `remaining`, `refused`. MINOR: a new
 #                                   endpoint.
 #
+#   GET /api/certificates (and every certificate record)
+#                                   `reissue_required` (#966, step 3 from the
+#                                   UI): true when the certificate has no
+#                                   private key anywhere, the same test renewal
+#                                   answers REISSUE_REQUIRED with. The dashboard
+#                                   never read private_key_state, so such a
+#                                   certificate looked healthy there. 2.28,
+#                                   MINOR: a new field on a response.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -409,7 +418,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.27'
+API_CONTRACT_VERSION = '2.28'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
