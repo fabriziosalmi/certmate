@@ -46,6 +46,10 @@ def _manager(tmp_path, shell):
     ca_mgr = MagicMock()
     ca_mgr.ca_providers = {'letsencrypt': {'name': "Let's Encrypt"}}
     ca_mgr.get_ca_config.return_value = (None, None)
+    # The one command builder create uses (#666); a bare MagicMock returns
+    # nothing to unpack.
+    from modules.core.ca_manager import CAManager
+    ca_mgr.build_certbot_command = CAManager(settings_mgr).build_certbot_command
     mgr = CertificateManager(cert_dir=tmp_path, settings_manager=settings_mgr,
                              dns_manager=dns_mgr, storage_manager=None,
                              ca_manager=ca_mgr, shell_executor=shell)
