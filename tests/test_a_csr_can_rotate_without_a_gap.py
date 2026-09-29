@@ -85,6 +85,9 @@ def service(tmp_path, monkeypatch):
     instance = CertificateService.__new__(CertificateService)
     instance._certs = _Certs()
     instance._settings = _Settings()
+    # No bus: the reissue now announces itself from the service (#916's
+    # rule, applied to reissue), and this test is about the CSR, not events.
+    instance._events = None
     monkeypatch.setattr(instance, '_enforce_scope',
                         lambda *a, **k: None, raising=False)
     monkeypatch.setattr(instance, '_audit_emit',

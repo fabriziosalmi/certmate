@@ -785,7 +785,7 @@ def initialize_managers(container: AppContainer, app):
         audit_logger=audit_logger, event_bus=event_bus,
     )
     from .core.cert_jobs import IssuanceExecutor
-    cert_executor = IssuanceExecutor(app, event_bus=event_bus)
+    cert_executor = IssuanceExecutor(app)
 
     # Certificate inventory + discovery (#468/#469). The inventory is a SQLite
     # store under data_dir; the discovery manager probes the configured
