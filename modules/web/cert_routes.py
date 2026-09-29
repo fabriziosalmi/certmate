@@ -83,114 +83,31 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             domains = data.get('domains', [])
             if not domains:
                 return jsonify({'error': 'Domains list required'}), 400
+            if not isinstance(domains, list):
+                # A string would be walked character by character.
+                return jsonify({'error': 'domains must be a list'}), 400
             if len(domains) > 50:
                 return jsonify({'error': 'Batch size limit exceeded: maximum 50 domains per request'}), 400
 
             settings = settings_manager.load_settings()
-            email = settings.get('email')
-            if not email:
+            if not settings.get('email'):
                 return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
 
-            dns_provider = data.get('dns_provider') or settings.get('dns_provider')
-            ca_provider = data.get('ca_provider') or settings.get('default_ca', 'letsencrypt')
-            challenge_type = data.get('challenge_type') or settings.get('challenge_type', 'dns-01')
-
-            user = getattr(request, 'current_user', None) or {}
-            scope = user.get('allowed_domains')
-
-            from ..core.utils import validate_domain
-            results = []
-            for domain in domains:
-                domain = (domain if isinstance(domain, str) else '').strip()
-                if not domain:
-                    continue
-                # Structural validation BEFORE scope check so a poisoned
-                # entry (e.g. "../escape") never even reaches the cert
-                # manager or settings.json. This route calls create_certificate
-                # directly — it does NOT go through prepare_create — so it must
-                # normalise the domain itself: validate_domain returns the bare
-                # hostname (netloc extracted, lowercased) as its second value,
-                # and we use it from here on rather than the raw entry, which
-                # could be a URL form whose path component escapes cert_dir.
-                d_valid, d_normalized = validate_domain(domain)
-                if not d_valid:
-                    results.append({
-                        'domain': domain, 'success': False,
-                        'message': f'Invalid domain: {d_normalized}',
-                    })
-                    continue
-                domain = d_normalized
-                if not auth_manager.domain_matches_scope(domain, scope):
-                    if audit_logger:
-                        audit_logger.log_authz_denied(
-                            operation='batch_create',
-                            resource_type='certificate',
-                            resource_id=domain,
-                            reason='domain outside scoped key allowed_domains',
-                            user=user.get('username'),
-                            ip_address=request.remote_addr,
-                        )
-                    results.append({
-                        'domain': domain, 'success': False,
-                        'message': 'API key not authorized for this domain',
-                    })
-                    continue
-                try:
-                    certificate_manager.create_certificate(
-                        domain=domain, email=email,
-                        dns_provider=dns_provider, ca_provider=ca_provider,
-                        ca_account_id=data.get('ca_account_id'),
-                        challenge_type=challenge_type,
-                    )
-                    results.append({'domain': domain, 'success': True, 'message': 'Certificate created'})
-                except Exception as e:
-                    # Log the detail; return a generic per-item message so raw
-                    # exception text (non-certbot ValueError/IO) never reaches
-                    # the client. Mirrors the single-cert path's non-disclosure.
-                    logger.warning("Batch create failed for %s: %s",
-                                   str(domain).replace('\n', ' ').replace('\r', ' '),
-                                   str(e).replace('\n', ' ').replace('\r', ' '))
-                    results.append({'domain': domain, 'success': False, 'message': 'Certificate creation failed'})
-
-            # Register every successfully-created domain for automatic renewal.
-            # This path calls certificate_manager.create_certificate directly
-            # (fast, no per-domain settings write), but that low-level call does
-            # NOT append the domain to settings['domains'] — only
-            # CertificateService does. check_renewals iterates ONLY that list,
-            # so without this, batch-created certs were never renewed and
-            # expired ~90 days later with no warning. One settings.update (not
-            # one per domain) avoids running a full pre-save backup 50 times.
-            created_domains = [r['domain'] for r in results if r.get('success')]
-            if created_domains:
-                account_id = data.get('account_id')
-
-                def _register_batch(s):
-                    domains_list = s.get('domains', []) or []
-                    present = {
-                        (d if isinstance(d, str) else d.get('domain'))
-                        for d in domains_list
-                    }
-                    for d in created_domains:
-                        if d in present:
-                            continue
-                        domains_list.append({
-                            'domain': d,
-                            'dns_provider': dns_provider,
-                            'dns_account_id': account_id,
-                        })
-                        present.add(d)
-                    s['domains'] = domains_list
-
-                try:
-                    settings_manager.update(_register_batch, 'certificate_created')
-                except Exception as e:
-                    # Certs exist but tracking failed — surface it loudly rather
-                    # than let them silently fall out of the renewal loop.
-                    logger.error(
-                        "Batch certs created but domain registration for renewal "
-                        "failed (%d domains may not auto-renew): %s",
-                        len(created_domains), e,
-                    )
+            # Each domain through the service's own create steps (account,
+            # scope, audit, event), registered in ONE settings write (#666,
+            # D9). This route used to call the manager directly and dropped
+            # account_id on the way to issuance.
+            results = cert_service.create_batch(
+                domains=domains,
+                dns_provider=data.get('dns_provider'),
+                account_id=data.get('account_id'),
+                ca_provider=data.get('ca_provider'),
+                ca_account_id=data.get('ca_account_id'),
+                challenge_type=data.get('challenge_type'),
+                user=getattr(request, 'current_user', None) or {},
+                ip_address=request.remote_addr,
+                audit_ctx=audit_context_from_request(),
+            )
             return jsonify(results)
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")

@@ -57,7 +57,7 @@ BUDGET = {
     'modules/api/client_certificates.py::create_client_certificate_resources': 82,
     'modules/api/resources_storage.py::create_storage_resources': 68,
     'modules/api/resources_lifecycle.py::create_lifecycle_resources': 47,
-    'modules/web/cert_routes.py::register_cert_routes': 60,
+    'modules/web/cert_routes.py::register_cert_routes': 48,
     'modules/api/resources_downloads.py::create_download_resources': 55,
     'modules/api/resources_settings.py::create_settings_resources': 54,
     'modules/api/resources_backup.py::create_backup_resources': 52,

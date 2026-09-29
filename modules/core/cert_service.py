@@ -304,6 +304,18 @@ class CertificateService:
         ``DomainOperationInProgress`` (409), ``RuntimeError`` or
         ``FileExistsError``.
         """
+        return self._issue_create(prepared, register=True)
+
+    def _issue_create(self, prepared, *, register):
+        """Issue one certificate, audit it, announce it: what every create owes.
+
+        ``register=False`` leaves the settings entry to the caller: a batch
+        registers all its domains in ONE write, because every settings save
+        takes a full unified backup (settings plus every certificate) and one
+        write per domain would zip the whole store N times. Everything else,
+        the account, the audit record and the event, is this method's, so a
+        batch cannot skip any of it again (#666, D9).
+        """
         domain = prepared['domain']
         audit_ctx = prepared.get('_audit_ctx')
         try:
@@ -326,15 +338,14 @@ class CertificateService:
 
             # Append the new domain under the settings manager's lock so two
             # parallel creates for different domains cannot race and drop an entry.
-            resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
-            self._settings.update(
-                _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
-                'certificate_created',
-            )
+            if register:
+                self._settings.update(_add_domain_entry(prepared), 'certificate_created')
         except Exception as e:
             self._audit_emit(audit_ctx, 'create', domain, 'failure', error=e)
             raise
-        logger.info("Ensured domain %s is in settings after certificate creation", _scrub_log(domain))
+        if register:
+            logger.info("Ensured domain %s is in settings after certificate creation",
+                        _scrub_log(domain))
         self._audit_emit(audit_ctx, 'create', domain, 'success', details={
             'ca_provider': prepared.get('ca_provider'),
             'challenge_type': prepared.get('challenge_type'),
@@ -347,6 +358,80 @@ class CertificateService:
             'ca_provider': result.get('ca_provider'),
         })
         return result
+
+    def create_batch(self, *, domains, dns_provider=None, account_id=None,
+                     ca_provider=None, ca_account_id=None, challenge_type=None,
+                     user=None, ip_address=None, audit_ctx=None):
+        """Create a certificate per domain; register them in one write.
+
+        Each domain goes through ``prepare_create`` and ``_issue_create``, the
+        same steps as a single create: normalisation, the scope check and its
+        audit record, the settings defaults, the account the caller named, the
+        success/failure audit and the ``certificate_created`` event. The batch
+        route used to call the manager directly and re-implement a subset of
+        this, and dropped ``account_id`` on the way to issuance (#666, D9).
+
+        One domain's failure does not stop the rest. Per-item messages are
+        fixed strings, never exception text. Returns one result dict per
+        non-empty entry, in order.
+        """
+        results, created = [], []
+        # Request names, a list of strings: not the settings' domain-entry
+        # union, which only domain_entries.py decodes.
+        for requested in domains:
+            raw = requested.strip() if isinstance(requested, str) else ''
+            if not raw:
+                continue
+            # The message a caller sees for a bad name, stated from the
+            # validator rather than from an exception's text.
+            ok, reason = validate_domain(raw)
+            if not ok:
+                results.append({'domain': raw, 'success': False,
+                                'message': f'Invalid domain: {reason}'})
+                continue
+            try:
+                prepared = self.prepare_create(
+                    domain=raw, dns_provider=dns_provider, account_id=account_id,
+                    ca_provider=ca_provider, ca_account_id=ca_account_id,
+                    challenge_type=challenge_type, user=user,
+                    ip_address=ip_address, audit_ctx=audit_ctx)
+            except DomainOutOfScope:
+                results.append({'domain': reason, 'success': False,
+                                'message': 'API key not authorized for this domain'})
+                continue
+            except ValueError as e:
+                logger.info("Batch create rejected %s: %s", _scrub_log(reason), e)
+                results.append({'domain': reason, 'success': False,
+                                'message': 'Invalid certificate request'})
+                continue
+            try:
+                self._issue_create(prepared, register=False)
+            except Exception as e:
+                logger.warning("Batch create failed for %s: %s", _scrub_log(reason),
+                               str(e).replace('\n', ' ').replace('\r', ' '))
+                results.append({'domain': reason, 'success': False,
+                                'message': 'Certificate creation failed'})
+                continue
+            created.append(prepared)
+            results.append({'domain': reason, 'success': True,
+                            'message': 'Certificate created'})
+
+        if created:
+            mutators = [_add_domain_entry(p) for p in created]
+
+            def _register_all(s):
+                for add in mutators:
+                    add(s)
+
+            try:
+                self._settings.update(_register_all, 'certificate_created')
+            except Exception as e:
+                # The certificates exist; losing the tracking would drop them
+                # out of the renewal loop in silence. Said loudly instead.
+                logger.error(
+                    "Batch certificates created but registering them for renewal "
+                    "failed (%d domains may not auto-renew): %s", len(created), e)
+        return results
 
 
     # ------------------------------------------------------------------
@@ -791,6 +876,14 @@ class CertificateService:
         if bool(result.get('renewed', True)):
             self._publish('certificate_renewed', {'domain': domain})
         return result
+
+
+def _add_domain_entry(prepared):
+    """The settings entry a prepared create registers, as one mutator."""
+    return _make_add_domain(
+        prepared['domain'],
+        prepared['dns_provider'] or prepared['_settings_dns_provider'],
+        prepared['account_id'])
 
 
 def _make_add_domain(domain, dns_provider, account_id):
