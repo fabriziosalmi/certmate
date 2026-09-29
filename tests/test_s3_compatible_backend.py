@@ -112,10 +112,10 @@ def test_get_backend_name():
     assert _backend().get_backend_name() == 's3_compatible'
 
 
-def test_requires_endpoint_bucket_and_keys():
-    with pytest.raises(ValueError):
-        S3CompatibleBackend({'bucket': 'x', 'access_key_id': 'a', 'secret_access_key': 'b'})  # no endpoint
+def test_requires_bucket_and_complete_key_pair():
     with pytest.raises(ValueError):
         S3CompatibleBackend({'endpoint_url': 'https://x', 'access_key_id': 'a', 'secret_access_key': 'b'})  # no bucket
     with pytest.raises(ValueError):
-        S3CompatibleBackend({'endpoint_url': 'https://x', 'bucket': 'b'})  # no keys
+        S3CompatibleBackend({'endpoint_url': 'https://x', 'bucket': 'b'})  # non-AWS endpoint needs keys
+    with pytest.raises(ValueError, match='secret_access_key'):
+        S3CompatibleBackend({'bucket': 'b', 'access_key_id': 'a'})

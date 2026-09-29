@@ -516,8 +516,11 @@ def create_api_models(api):
 
     aws_secrets_manager_storage_model = api.model('AWSSecretsManagerStorage', {
         'region': fields.String(description='AWS Region', default='us-east-1'),
-        'access_key_id': fields.String(description='AWS Access Key ID'),
-        'secret_access_key': fields.String(description='AWS Secret Access Key')
+        'auth_mode': fields.String(description='Key pair or AWS credential chain',
+                                   enum=['access_keys', 'iam_role']),
+        'access_key_id': fields.String(description='AWS Access Key ID (access_keys mode)'),
+        'secret_access_key': fields.String(description='AWS Secret Access Key (access_keys mode)'),
+        'assume_role_arn': fields.String(description='Optional AWS IAM role ARN to assume via STS')
     })
 
     hashicorp_vault_storage_model = api.model('HashiCorpVaultStorage', {
@@ -536,11 +539,13 @@ def create_api_models(api):
     })
 
     s3_compatible_storage_model = api.model('S3CompatibleStorage', {
-        'endpoint_url': fields.String(description='S3-compatible endpoint URL '
-                                      '(Hetzner / Contabo / OVHcloud / Scaleway / Wasabi / MinIO / AWS)'),
+        'endpoint_url': fields.String(description='S3-compatible endpoint URL; omit for AWS S3'),
         'bucket': fields.String(description='Bucket name'),
-        'access_key_id': fields.String(description='S3 access key ID'),
-        'secret_access_key': fields.String(description='S3 secret access key'),
+        'auth_mode': fields.String(description='Key pair or AWS credential chain',
+                                   enum=['access_keys', 'iam_role']),
+        'access_key_id': fields.String(description='S3 access key ID (access_keys mode)'),
+        'secret_access_key': fields.String(description='S3 secret access key (access_keys mode)'),
+        'assume_role_arn': fields.String(description='Optional AWS IAM role ARN to assume via STS'),
         'region': fields.String(description='Region', default='us-east-1'),
         'prefix': fields.String(description='Object key prefix', default='certmate/certificates')
     })

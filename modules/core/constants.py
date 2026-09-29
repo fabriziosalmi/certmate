@@ -343,6 +343,23 @@ METADATA_SCHEMA_VERSION = 1
 #                                   the sweep keeps, so it costs no request to
 #                                   the CA.
 #
+#   POST /api/storage/config        `auth_mode` ('access_keys' | 'iam_role')
+#   POST /api/storage/test          and `assume_role_arn` on the S3-compatible
+#                                   and AWS Secrets Manager backends (#971,
+#                                   contributed by QuentinBtd): the AWS
+#                                   credential chain and STS AssumeRole instead
+#                                   of static keys. MINOR: new optional request
+#                                   fields. An absent `auth_mode` keeps its old
+#                                   meaning, access keys required, so a caller
+#                                   that ignores it is unaffected. Same change:
+#                                   POST /api/storage/migrate now fails when an
+#                                   S3 or Secrets Manager source cannot be
+#                                   listed, where it used to report an empty
+#                                   migration as success. Counted as the bug
+#                                   fix it is, not a changed contract: nothing
+#                                   promised that a source nobody could read
+#                                   holds no certificates.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -362,7 +379,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.23'
+API_CONTRACT_VERSION = '2.24'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
