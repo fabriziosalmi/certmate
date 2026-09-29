@@ -18,6 +18,7 @@ The endpoint is now lenient:
 """
 
 import pytest
+from unittest.mock import MagicMock, patch
 
 
 pytestmark = [pytest.mark.unit]
@@ -105,3 +106,29 @@ def test_invalid_target_backend_returns_400(app_client):
         'target_config': {},
     }, token)
     assert resp.status_code == 400
+
+
+def test_explicit_local_source_after_s3_target_was_saved(app_client):
+    client, token, tmp_path = app_client
+    for domain in ('first.example.com', 'second.example.com'):
+        cert_dir = tmp_path / 'certs' / domain
+        cert_dir.mkdir(parents=True)
+        (cert_dir / 'cert.pem').write_bytes(b'cert')
+        (cert_dir / 'privkey.pem').write_bytes(b'key')
+
+    target = {'bucket': 'certmate', 'auth_mode': 'iam_role', 'region': 'eu-west-1'}
+    saved = client.post('/api/storage/config', json={
+        'backend': 's3_compatible', 's3_compatible': target,
+    }, headers={'Authorization': f'Bearer {token}'})
+    assert saved.status_code == 200, saved.get_json()
+
+    s3 = MagicMock()
+    with patch('boto3.client', return_value=s3):
+        resp = _post(client, {
+            'source_backend': 'local_filesystem',
+            'target_backend': 's3_compatible',
+            'target_config': {'backend': 's3_compatible', 's3_compatible': target},
+        }, token)
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()['migrated_count'] == 2
+    assert s3.put_object.call_count == 2
