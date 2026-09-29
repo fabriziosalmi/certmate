@@ -112,17 +112,15 @@ def test_an_unprefixed_message_still_gets_one():
     assert body['error'] == _CREATION_PREFIX + 'certbot exploded'
 
 
-def test_the_prefix_is_the_one_the_core_actually_raises():
-    """The two are in different modules and only agree by literal. If the
-    core's wording changes, this fails instead of the duplication coming
-    back silently."""
-    core = (REPO / 'modules' / 'core' / 'certificates.py').read_text(encoding='utf-8')
-    assert f'f"{_CREATION_PREFIX}{{safe_stderr}}"' in core or \
-           f"f'{_CREATION_PREFIX}{{safe_stderr}}'" in core, (
-        'the create path no longer raises with this prefix; _CREATION_PREFIX '
-        'is now guarding against a duplication that cannot happen, and a real '
-        'one may have taken its place'
-    )
+def test_the_prefix_is_the_one_the_core_actually_raises(tmp_path):
+    """The prefix the API strips is the one a real failed create raises with:
+    driven through the create path against a failing certbot, not read from
+    the source (#666 S6 made the two share one constant)."""
+    from tests.test_one_certbot_failure_message import _create, _manager, _shell
+
+    raised = _create(_manager(tmp_path, _shell(1, stderr='certbot exploded')))
+    assert raised.startswith(_CREATION_PREFIX), raised
+    assert _creation_failure(raised)['error'] == _CREATION_PREFIX + 'certbot exploded'
 
 
 def test_the_body_still_carries_a_hint_and_a_code():

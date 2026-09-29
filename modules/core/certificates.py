@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import logging
+import signal
 import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -48,6 +49,12 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: The prefixes a failed certbot run is raised with. The API strips the
+#: creation one before adding its own (resources_lifecycle), so both sides
+#: import it rather than agreeing by literal.
+CREATION_FAILED = 'Certificate creation failed'
+RENEWAL_FAILED = 'Renewal failed'
 
 DNS_ALIAS_SUPPORTED_PROVIDERS = {
     'cloudflare',
@@ -809,7 +816,7 @@ class CertificateManager:
         try:
             csr = read_csr(csr_pem)
         except CSRError as e:
-            raise RuntimeError(f'Certificate creation failed: {e}')
+            raise RuntimeError(f'{CREATION_FAILED}: {e}')
 
         all_domains = csr_domains(csr)
         if domain not in all_domains:
@@ -818,7 +825,7 @@ class CertificateManager:
             # A CSR for other names would produce a certificate filed under a
             # domain it does not cover.
             raise RuntimeError(
-                f'Certificate creation failed: the CSR does not cover '
+                f'{CREATION_FAILED}: the CSR does not cover '
                 f'{domain}. It requests {", ".join(all_domains)}.')
         # Primary first, so metadata's san_domains means the same thing here as
         # everywhere else.
@@ -831,7 +838,7 @@ class CertificateManager:
         existing_key = domain_dir / 'privkey.pem'
         if existing_key.exists():
             raise RuntimeError(
-                f'Certificate creation failed: {domain} already has a private '
+                f'{CREATION_FAILED}: {domain} already has a private '
                 f'key managed by CertMate. Delete the certificate first if you '
                 f'want to move its key onto the device.')
 
@@ -3060,35 +3067,14 @@ class CertificateManager:
             )
 
             if result.returncode != 0:
-                # certbot-dns-azure and a few other plugins echo the
-                # offending credentials .ini line on parse failure, so the
-                # raw stderr carries secret material. The sanitised copy is
-                # what goes BOTH to the log and to the exception that
-                # becomes the API response body.
-                #
-                # It used to be logged raw, on the reasoning that the log is
-                # internal and an operator debugging a failed issuance wants
-                # everything. But the log is a file that outlives the
-                # request, gets shipped to whatever collects logs, and ends
-                # up in a support bundle — so "internal" was doing a lot of
-                # work in that sentence, and the comment above this one used
-                # to say the raw stderr carries secrets while the line below
-                # it wrote them down. Internal audit finding H3.
-                from .utils import sanitize_certbot_stderr
-                safe_stderr = sanitize_certbot_stderr(result.stderr)
-                for flag in ('--eab-kid', '--eab-hmac-key'):
-                    if flag in certbot_cmd:
-                        secret = certbot_cmd[certbot_cmd.index(flag) + 1]
-                        if secret:
-                            safe_stderr = safe_stderr.replace(secret, '***')
-                # %r, and as logging ARGUMENTS: repr escapes a newline to a
-                # literal \n so neither the domain nor certbot's output can
-                # forge a second log line, and a handler can still filter on
-                # the values. Same convention as every other log line here
-                # that carries a domain.
-                logger.error("Certbot failed for %r: %r", domain, safe_stderr)
+                # One builder for create and renew (#666 S6): what is logged
+                # and what is raised are the same redacted text.
+                eab_secrets = tuple(
+                    certbot_cmd[certbot_cmd.index(flag) + 1]
+                    for flag in ('--eab-kid', '--eab-hmac-key') if flag in certbot_cmd)
                 raise RuntimeError(
-                    f"Certificate creation failed: {safe_stderr}"
+                    self._certbot_failure(CREATION_FAILED, domain,
+                                          result, secrets=eab_secrets)
                     + self._caa_explanation(ca_provider, all_domains, challenge_type))
             
             # Move certificates to standard location. Publish live/ to the flat
@@ -3810,22 +3796,74 @@ class CertificateManager:
             renew_result['storage_warning'] = storage_warning
         return renew_result
 
+    # How much of stdout to keep when it is the only account of a failure: the
+    # last lines are where certbot says what went wrong, the rest is progress.
+    CERTBOT_STDOUT_TAIL_LINES = 20
+    CERTBOT_DEBUG_LOG_BANNER = 'Saving debug log to '
+
+    @staticmethod
+    def _certbot_silence(returncode):
+        """What to say when certbot exited non-zero without saying why."""
+        if isinstance(returncode, int) and returncode < 0:
+            try:
+                name = signal.Signals(-returncode).name
+            except ValueError:
+                name = f'signal {-returncode}'
+            return f'certbot was killed by {name} before it reported an error'
+        return f'certbot exited with code {returncode} without reporting an error'
+
+    def _certbot_failure(self, prefix, domain, result, *, secrets=()):
+        """The message for a certbot run that exited non-zero, logged and returned.
+
+        One builder for create and renew (#666 S6), which had drifted apart: a
+        certbot killed before writing anything (exit -9, empty stderr) read
+        "Certificate creation failed: " on one and "Renewal failed: Certificate
+        not found" on the other, and stdout was dropped on both.
+
+        certbot-dns-azure and a few other plugins echo the offending
+        credentials .ini line on parse failure, so everything certbot printed
+        goes through sanitize_certbot_stderr, and *secrets* (the EAB pair on
+        create) are masked, BEFORE the text is logged: the log outlives the
+        request, gets shipped and ends up in support bundles (audit H3). The
+        stderr wins when it says anything besides the debug-log banner;
+        otherwise the exit code (or the signal that killed certbot), and the
+        tail of stdout, which is where certbot narrates how far it got.
+        """
+        from .utils import sanitize_certbot_stderr
+        # certbot writes a "Saving debug log to ..." banner to stderr before it
+        # does anything. It is not an error: a certbot killed mid-run (the OOM
+        # killer, exit -9) leaves only that, and that was the whole message.
+        stderr = '\n'.join(
+            line for line in str(result.stderr or '').splitlines()
+            if not line.startswith(self.CERTBOT_DEBUG_LOG_BANNER))
+        detail = sanitize_certbot_stderr(stderr).strip()
+        if not detail:
+            detail = self._certbot_silence(result.returncode)
+            # The tail is cut BEFORE redaction, and by whole lines only: a cut
+            # inside a line could leave "en = <secret>" where the redaction
+            # pattern needs "_token = ". The sanitiser caps the length itself.
+            tail = '\n'.join(str(result.stdout or '').splitlines()[-self.CERTBOT_STDOUT_TAIL_LINES:])
+            tail = sanitize_certbot_stderr(tail).strip()
+            if tail:
+                detail += '. The last it printed:\n' + tail
+        for secret in secrets:
+            if secret:
+                detail = detail.replace(secret, '***')
+        # %r, and as logging ARGUMENTS: repr escapes a newline to a literal \n
+        # so neither the domain nor certbot's output can forge a second log
+        # line, and a handler can still filter on the values.
+        logger.error("%s for %r: %r", prefix, domain, detail)
+        return f'{prefix}: {detail}'
+
     def _renewal_failed(self, domain, result, metadata, challenge_type):
         """certbot exited non-zero. Raise what the operator needs to read.
 
         Always raises. It returns nothing, so a caller that forgets to let it
         propagate gets None rather than a plausible-looking result dict.
         """
-        # Mirror the create path: the redacted copy is what is
-        # logged and what is surfaced. See sanitize_certbot_stderr
-        # for the precise stripping rules.
-        error_msg = result.stderr or "Certificate not found"
-        from .utils import sanitize_certbot_stderr
-        safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
-        logger.error("Certificate renewal failed for %r: %r", domain, safe_error)
         caa_domains = [domain] + list(metadata.get('san_domains') or [])
         raise RuntimeError(
-            f"Renewal failed: {safe_error}"
+            self._certbot_failure(RENEWAL_FAILED, domain, result)
             + self._caa_explanation(metadata.get('ca_provider'), caa_domains,
                                     challenge_type))
 
