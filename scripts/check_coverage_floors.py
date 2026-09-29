@@ -69,6 +69,7 @@ FLOORS = {
     # create, renew and reissue, and a 500 where a 422 belongs sends an
     # operator looking inside CertMate for a problem in their DNS provider.
     'modules/api/resources_lifecycle.py': 77,
+    'modules/api/resources_reissue_keyless.py': 90,
     'modules/api/resources_settings.py': 60,
     'modules/api/resources_storage.py': 70,
     'modules/api/tls_probe.py': 50,
