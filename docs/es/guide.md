@@ -1,6 +1,6 @@
 # CertMate Certificados de Cliente - Guía de uso
 
-<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
+<!-- CERTMATE-TRANSLATED-FROM f31f91fe8af58072 -->
 
 ## Descripción general
 
@@ -437,6 +437,32 @@ mas alla de su umbral. Esa es la mitad que importa para los certificados de
 corta duracion, donde una regla fija de 30 dias no tiene sentido frente a un
 certificado de 6 dias — llegara con el soporte de perfiles que esos
 certificados necesitan.
+
+### Un umbral de mas de 30 dias
+
+certbot tiene su propia barrera de renovacion: si no se le fuerza, solo renueva
+dentro de los ultimos 30 dias antes de la caducidad. Antes de la 2.40 CertMate lo
+llamaba sin forzarlo, asi que un `renewal_threshold_days` de 45 se comportaba
+como 30, y el barrido contaba la diferencia como `skipped_not_due` cada noche.
+
+Cuando el umbral, y solo el umbral, declara un certificado pendiente de
+renovar mientras certbot se negaria, CertMate ahora fuerza la renovacion, como
+ya hacia con una ventana publicada por la CA. Dentro de los ultimos 30 dias no
+cambia nada. Vienen con dos protecciones:
+
+- **Como maximo `early_renewals_per_sweep` por barrido** (10 por defecto, entre
+  1 y 50). Subir el umbral en muchos certificados reparte las renovaciones
+  anticipadas en varias noches en lugar de enviar todos los pedidos a la CA en
+  una sola. El resumen del barrido las cuenta como `early_forced`, y las que
+  quedan para el barrido siguiente como `early_deferred`.
+- **Un certificado emitido hace menos de 7 dias nunca se fuerza.** Un umbral
+  igual o superior a la vida del certificado lo declararia pendiente para
+  siempre. Con esta proteccion cuesta como mucho una renovacion por semana, no
+  una por noche.
+
+Un certificado que necesita atencion por otro motivo, una clave servida que
+falta o no coincide, no se fuerza: se repara desde su linaje sin una clave
+nueva.
 
 ### Activar la renovación automática
 

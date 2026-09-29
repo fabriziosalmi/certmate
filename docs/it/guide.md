@@ -1,6 +1,6 @@
 # CertMate Certificati Client - Guida all'utilizzo
 
-<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
+<!-- CERTMATE-TRANSLATED-FROM f31f91fe8af58072 -->
 
 ## Panoramica
 
@@ -436,6 +436,33 @@ rinnovo oltre la tua soglia. E la meta che conta per i certificati di breve
 durata, dove una regola fissa di 30 giorni non ha senso contro un certificato
 da 6 giorni — arrivera con il supporto ai profili che quei certificati
 richiedono.
+
+### Una soglia oltre i 30 giorni
+
+certbot ha un suo cancello per il rinnovo: se non viene forzato, rinnova solo
+negli ultimi 30 giorni prima della scadenza. Prima della 2.40 CertMate lo
+chiamava senza forzarlo, quindi un `renewal_threshold_days` di 45 si comportava
+come 30, e la scansione contava la differenza come `skipped_not_due` ogni
+notte.
+
+Quando e la soglia, e solo la soglia, a dire che un certificato va rinnovato
+mentre certbot rifiuterebbe, CertMate ora forza il rinnovo, come faceva gia per
+una finestra pubblicata dalla CA. Negli ultimi 30 giorni non cambia niente. Con
+questo arrivano due protezioni:
+
+- **Al massimo `early_renewals_per_sweep` per scansione** (predefinito 10, tra
+  1 e 50). Alzare la soglia su molti certificati distribuisce i rinnovi
+  anticipati su piu notti invece di mandare tutti gli ordini alla CA in una
+  sola. Il riepilogo della scansione li conta come `early_forced`, e quelli
+  lasciati alla scansione successiva come `early_deferred`.
+- **Un certificato emesso da meno di 7 giorni non viene mai forzato.** Una
+  soglia pari o superiore alla durata del certificato lo darebbe altrimenti
+  sempre da rinnovare. Con questa protezione costa al massimo un rinnovo a
+  settimana, non uno a notte.
+
+Un certificato che richiede attenzione per un altro motivo, una chiave servita
+che manca o non corrisponde, non viene forzato: viene riparato dalla sua
+lineage senza una chiave nuova.
 
 ### Abilitazione del rinnovo automatico
 

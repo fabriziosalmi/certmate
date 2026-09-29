@@ -1,6 +1,6 @@
 # CertMate Certificats Clients - Guide d'utilisation
 
-<!-- CERTMATE-TRANSLATED-FROM 58548ae93437307e -->
+<!-- CERTMATE-TRANSLATED-FROM f31f91fe8af58072 -->
 
 ## Vue d'ensemble
 
@@ -438,6 +438,33 @@ au-dela de votre seuil. C'est la moitie qui compte pour les certificats de
 courte duree, ou une regle fixe de 30 jours n'a aucun sens face a un
 certificat de 6 jours — elle arrivera avec la prise en charge des profils dont
 ces certificats ont besoin.
+
+### Un seuil au-dela de 30 jours
+
+certbot a sa propre barriere de renouvellement : sans etre force, il ne
+renouvelle que dans les 30 derniers jours avant l'expiration. Avant la 2.40,
+CertMate l'appelait sans le forcer, donc un `renewal_threshold_days` de 45 se
+comportait comme 30, et le balayage comptait l'ecart comme `skipped_not_due`
+chaque nuit.
+
+Quand le seuil, et seulement le seuil, declare un certificat a renouveler
+alors que certbot refuserait, CertMate force desormais le renouvellement, comme
+il le faisait deja pour une fenetre publiee par la CA. Dans les 30 derniers
+jours rien ne change. Deux garde-fous l'accompagnent :
+
+- **Au plus `early_renewals_per_sweep` par balayage** (10 par defaut, entre 1
+  et 50). Relever le seuil sur un grand parc repartit les renouvellements
+  anticipes sur plusieurs nuits au lieu d'envoyer toutes les commandes a la CA
+  en une seule. Le resume du balayage les compte comme `early_forced`, et ceux
+  laisses au balayage suivant comme `early_deferred`.
+- **Un certificat emis il y a moins de 7 jours n'est jamais force.** Un seuil
+  egal ou superieur a la duree de vie du certificat le declarerait sinon
+  toujours a renouveler. Avec ce garde-fou, cela coute au plus un
+  renouvellement par semaine, pas un par nuit.
+
+Un certificat qui demande de l'attention pour une autre raison, une cle servie
+absente ou qui ne correspond pas, n'est pas force : il est repare depuis sa
+lignee sans nouvelle cle.
 
 ### Activation du renouvellement automatique
 

@@ -431,6 +431,31 @@ threshold. That is the half that matters for short-lived certificates, where a
 fixed 30-day rule is meaningless against a 6-day certificate — it arrives with
 the profile support those certificates need.
 
+### A threshold above 30 days
+
+certbot has a renewal gate of its own: without being forced, it renews only
+inside 30 days of expiry. Before 2.40 CertMate asked it unforced, so a
+`renewal_threshold_days` of 45 behaved as 30, and the sweep counted the gap as
+`skipped_not_due` every night.
+
+When the threshold, and only the threshold, calls a certificate due while
+certbot would refuse, CertMate now forces the renewal, as it already did for a
+window the CA published. Inside the last 30 days nothing changes. Two guards
+come with it:
+
+- **At most `early_renewals_per_sweep` a sweep** (default 10, between 1 and
+  50). Raising the threshold on a large estate spreads the early renewals over
+  several nights instead of sending every order to the CA in one. The sweep
+  summary counts them as `early_forced`, and the ones left for the next sweep
+  as `early_deferred`.
+- **A certificate issued less than 7 days ago is never forced.** A threshold at
+  or above the certificate's lifetime would otherwise call it due forever. With
+  this guard it costs at most one renewal a week, not one a night.
+
+A certificate that needs attention for another reason, a served key that is
+missing or does not match, is not forced: it is repaired from its lineage
+without a new key.
+
 ### Enabling Auto-Renewal
 
 Auto-renewal is enabled by default. To check status:
