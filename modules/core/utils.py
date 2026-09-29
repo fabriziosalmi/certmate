@@ -506,6 +506,11 @@ def classify_renewal_error(reason: str) -> tuple:
     return ('Certificate renewal failed', 'RENEWAL_FAILED')
 
 
+CERTBOT_OUTPUT_TRUNCATED = (
+    "\n[…truncated; certbot's full log is logs/letsencrypt.log in the "
+    "certificate's directory]")
+
+
 def sanitize_certbot_stderr(stderr_text: str) -> str:
     """Strip credential material from a certbot stderr blob before it
     is sent to an API client.
@@ -539,7 +544,9 @@ def sanitize_certbot_stderr(stderr_text: str) -> str:
     text = _CERTBOT_STDERR_CREDENTIAL_LINE_RE.sub(lambda m: f'{m.group(1)} = [REDACTED]', text)
     text = _CERTBOT_CONFIG_PATH_RE.sub('<credential file>', text)
     if len(text) > _CERTBOT_STDERR_MAX_BYTES:
-        text = text[:_CERTBOT_STDERR_MAX_BYTES] + '\n[…truncated — see application log for full output]'
+        # Not "see the application log": that gets this same truncated copy.
+        # certbot's own debug log (--logs-dir) has the whole run.
+        text = text[:_CERTBOT_STDERR_MAX_BYTES] + CERTBOT_OUTPUT_TRUNCATED
     return text
 
 
