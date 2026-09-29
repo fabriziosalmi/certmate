@@ -179,3 +179,15 @@ def test_an_ordinary_exit_names_its_code(tmp_path, operation):
     mgr = _manager(tmp_path, _shell(1, stderr=KILLED_STDERR))
     text = _create(mgr) if operation == 'create' else _renew(tmp_path, mgr)
     assert 'certbot exited with code 1 without reporting an error' in text, text
+
+
+def test_neither_the_domain_nor_the_output_can_forge_a_log_line(tmp_path, caplog):
+    caplog.set_level(logging.ERROR, logger='modules.core.certificates')
+    mgr = _manager(tmp_path, None)
+    result = MagicMock(returncode=1, stdout='',
+                       stderr='Detail: one\r\nERROR certmate: all certificates revoked')
+    mgr._certbot_failure('Renewal failed', 'evil.example\nERROR certmate: forged', result)
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    assert '\n' not in message and '\r' not in message
+    assert 'Detail: one | ERROR certmate: all certificates revoked' in message

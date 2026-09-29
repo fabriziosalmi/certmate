@@ -3849,10 +3849,13 @@ class CertificateManager:
         for secret in secrets:
             if secret:
                 detail = detail.replace(secret, '***')
-        # %r, and as logging ARGUMENTS: repr escapes a newline to a literal \n
-        # so neither the domain nor certbot's output can forge a second log
-        # line, and a handler can still filter on the values.
-        logger.error("%s for %r: %r", prefix, domain, detail)
+        # CR/LF removed from both values before they reach the log, so neither
+        # the domain nor certbot's output can forge a second log line; the
+        # line breaks of certbot's output become " | ". (repr alone did the
+        # same, but CodeQL does not recognise it as a sanitiser.)
+        logger.error("%s for %s: %s", prefix,
+                     str(domain).replace('\r', '').replace('\n', ''),
+                     detail.replace('\r', '').replace('\n', ' | '))
         return f'{prefix}: {detail}'
 
     def _renewal_failed(self, domain, result, metadata, challenge_type):
