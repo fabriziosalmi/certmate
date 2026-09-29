@@ -1164,7 +1164,11 @@ class CertificateManager:
         if (always_persist or storage_warning
                 or self._metadata_path(domain).exists()):
             if self._save_metadata(domain, metadata):
-                logger.info("Saved certificate metadata for %r", domain)
+                # CR/LF stripped rather than %r: CodeQL does not read repr as
+                # a sanitizer for py/log-injection, and this is its recognised
+                # form (same treatment as the routes).
+                logger.info("Saved certificate metadata for %s",
+                            str(domain).replace('\r', '').replace('\n', ''))
         self._invalidate_certificate_info_cache(domain)
         self._write_pfx(domain)
         return storage_warning
