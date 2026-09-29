@@ -181,6 +181,14 @@
         return cert.expired === true;
     }
 
+    // No private key anywhere (#966): what restoring a share-safe backup
+    // leaves. It cannot serve TLS and renewal cannot repair it, only a reissue
+    // can, so it is never "Valid", whatever its expiry date says.
+    function lostItsKey(cert) {
+        return cert.reissue_required === true;
+    }
+    var LOST_KEY_TITLE = 'No private key anywhere: this certificate cannot be renewed, only reissued.';
+
     // Seconds where the API sends them, days elsewhere: ordering a 23-hour
     // certificate against one that lapsed an hour ago needs finer grain than
     // a day, and both of those are 0 or -1 in days.
@@ -197,7 +205,8 @@
         }
 
         var total = certificates.length;
-        var valid = certificates.filter(function (cert) { return cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30; }).length;
+        var valid = certificates.filter(function (cert) { return cert.exists && !lostItsKey(cert) && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30; }).length;
+        var keyless = certificates.filter(lostItsKey).length;
         var expiring = certificates.filter(function (cert) { return cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30; }).length;
         var expired = certificates.filter(function (cert) { return cert.exists && hasExpired(cert); }).length;
 
@@ -235,6 +244,8 @@
         if (expired > 0) {
             attn = ['Expired', expired, 'danger', 'fa-circle-xmark text-danger-fg',
                     expiring > 0 ? ('renew now · ' + expiring + ' expiring') : 'renew now'];
+        } else if (keyless > 0) {
+            attn = ['No key', keyless, 'warn', 'fa-key text-warning-fg', 'reissue needed'];
         } else if (expiring > 0) {
             attn = ['Expiring', expiring, 'warn', 'fa-triangle-exclamation text-warning-fg', 'within 30 days'];
         } else {
@@ -366,7 +377,7 @@
             if (statusFilter !== 'all') {
                 var isExpired = cert.exists && hasExpired(cert);
                 var isExpiringSoon = cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30;
-                var isValid = cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30;
+                var isValid = cert.exists && !lostItsKey(cert) && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30;
 
                 switch (statusFilter) {
                     case 'valid':
@@ -787,7 +798,14 @@
             var isExpired = hasExpired(cert);
             var isExpiringSoon = lifeKnown(cert) && !isExpired && cert.days_until_expiry <= 30;
             var statusClass, statusIcon, statusText, healthClass;
-            if (isExpired) {
+            var keylessRow = lostItsKey(cert);
+            if (keylessRow) {
+                statusClass = isExpired
+                    ? 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'
+                    : 'bg-yellow-500/10 text-warning-fg ring-1 ring-inset ring-yellow-500/20';
+                statusIcon = 'fa-key'; statusText = 'Needs reissue';
+                healthClass = isExpired ? 'health-expired' : 'health-warning';
+            } else if (isExpired) {
                 statusClass = 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
             } else if (isExpiringSoon) {
                 statusClass = 'bg-yellow-500/10 text-warning-fg ring-1 ring-inset ring-yellow-500/20'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring'; healthClass = 'health-warning';
@@ -848,11 +866,13 @@
                 : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileCaLine}${mobileDeploymentLine}</div>`);
-            var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
+            var lockColor = isExpired ? 'text-red-400' : (isExpiringSoon || keylessRow) ? 'text-yellow-400' : 'text-green-500';
             // An expired cert is no longer trusted; a closed padlock (the
             // "secure connection" glyph) is a visual paradox there. Show an
             // open padlock for expired so the icon matches the state.
-            var lockIcon = isExpired ? 'fa-lock-open' : 'fa-lock';
+            // A certificate with no key gets a key glyph, not a padlock: it
+            // secures nothing until it is reissued.
+            var lockIcon = keylessRow ? 'fa-key' : isExpired ? 'fa-lock-open' : 'fa-lock';
             return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
                 <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
@@ -864,7 +884,7 @@
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
+                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${keylessRow ? LOST_KEY_TITLE : ''}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${expiryStr}</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
@@ -1075,7 +1095,9 @@
             var isExpiringSoon = lifeKnown(cert) && !isExpired && cert.days_until_expiry <= 30;
             var expiryDate = new Date(cert.expiry_date);
             var statusClass, statusText;
-            if (isExpired) { statusClass = 'text-danger-fg'; statusText = 'Expired'; }
+            var keylessDetail = lostItsKey(cert);
+            if (keylessDetail) { statusClass = isExpired ? 'text-danger-fg' : 'text-warning-fg'; statusText = 'Needs reissue'; }
+            else if (isExpired) { statusClass = 'text-danger-fg'; statusText = 'Expired'; }
             else if (isExpiringSoon) { statusClass = 'text-warning-fg'; statusText = 'Expiring Soon'; }
             else { statusClass = 'text-success-fg'; statusText = 'Valid'; }
 
@@ -1085,8 +1107,8 @@
             // expired within 24 hours, never 0.
             var daysText = CertMate.lifetimePhrase(cert);
             var expiryStr = CertMate.formatDate(expiryDate);
-            var bannerBg = isExpired ? 'bg-danger-surface' : isExpiringSoon ? 'bg-warning-surface' : 'bg-success-surface';
-            var bannerIcon = isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
+            var bannerBg = isExpired ? 'bg-danger-surface' : (isExpiringSoon || keylessDetail) ? 'bg-warning-surface' : 'bg-success-surface';
+            var bannerIcon = keylessDetail ? 'fa-key' : isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
             var autoOn = cert.auto_renew !== false;
 
             // Quick-action icon button — same glyphs as the dashboard table row
@@ -1124,6 +1146,7 @@
                 '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
+                (keylessDetail ? '<div class="text-sm ' + statusClass + ' mt-1">' + LOST_KEY_TITLE + ' Use Edit &amp; Reissue, or Reissue all on the dashboard.</div>' : '') +
                 '</div>' +
                 // Auto-Renew moved into the banner's empty right side (point 1).
                 '<div class="flex-shrink-0 flex items-center gap-2">' +
