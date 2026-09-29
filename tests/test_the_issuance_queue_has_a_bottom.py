@@ -29,7 +29,7 @@ pytestmark = [pytest.mark.unit]
 @pytest.fixture
 def blocked():
     """An executor whose single worker is stuck, so everything else queues."""
-    executor = IssuanceExecutor(app=None, event_bus=None, max_workers=1,
+    executor = IssuanceExecutor(app=None, max_workers=1,
                                 queue_limit=3)
     release = threading.Event()
     running = threading.Event()
@@ -104,7 +104,7 @@ def test_finished_jobs_do_not_count_against_the_limit(blocked):
 def test_two_callers_arriving_together_cannot_both_take_the_last_slot():
     """The check and the registration are under one lock. Read the depth,
     then register, and both threads see one below the limit."""
-    executor = IssuanceExecutor(app=None, event_bus=None, max_workers=1,
+    executor = IssuanceExecutor(app=None, max_workers=1,
                                 queue_limit=4)
     release = threading.Event()
     running = threading.Event()

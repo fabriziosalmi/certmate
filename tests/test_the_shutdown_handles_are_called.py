@@ -37,7 +37,7 @@ LOGGER = 'modules.core.cert_jobs'
 
 
 def _executor(**kw):
-    return IssuanceExecutor(app=None, event_bus=None, **kw)
+    return IssuanceExecutor(app=None, **kw)
 
 
 def _wait_for(predicate, timeout=5):

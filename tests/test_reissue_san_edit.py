@@ -442,26 +442,17 @@ def _wait_terminal(executor, job_id, timeout=5.0):
     raise AssertionError('job did not reach a terminal state')
 
 
-def test_reissue_job_publishes_renewed_event():
-    bus = MagicMock()
-    executor = IssuanceExecutor(app=None, event_bus=bus)
-    job_id = executor.submit('reissue', DOMAIN, lambda: {'success': True})
-    job = _wait_terminal(executor, job_id)
-    assert job['status'] == 'succeeded'
-    bus.publish.assert_called_once_with('certificate_renewed', {'domain': DOMAIN})
-    executor.shutdown()
-
-
-def test_reissue_job_failure_publishes_failed_event():
-    bus = MagicMock()
-    executor = IssuanceExecutor(app=None, event_bus=bus)
+def test_a_reissue_job_records_its_outcome():
+    """What a reissue PUBLISHES is asserted on the composition (the service
+    owns it): tests/test_one_issuance_one_event.py."""
+    executor = IssuanceExecutor(app=None)
+    ok = _wait_terminal(executor, executor.submit('reissue', DOMAIN, lambda: {'success': True}))
+    assert ok['status'] == 'succeeded'
 
     def boom():
         raise RuntimeError('certbot failed')
 
-    job_id = executor.submit('reissue', DOMAIN, boom)
-    job = _wait_terminal(executor, job_id)
-    assert job['status'] == 'failed'
-    bus.publish.assert_called_once_with(
-        'certificate_failed', {'domain': DOMAIN, 'error': 'certbot failed'})
+    failed = _wait_terminal(executor, executor.submit('reissue', DOMAIN, boom))
+    assert failed['status'] == 'failed'
+    assert failed['error'] == 'certbot failed'
     executor.shutdown()
