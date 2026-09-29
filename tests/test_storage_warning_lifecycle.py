@@ -95,21 +95,18 @@ def test_clearing_is_a_no_op_when_there_was_no_warning(tmp_path):
 
 
 def test_create_and_renew_share_one_implementation():
-    """They drifted precisely because they were two copies of this logic.
-
-    Read off the whole renewal path rather than off `renew_certificate`
-    alone: #666 moved the storage call into `_publish_renewed_certificate`,
-    and a test that greps one method name stops covering the contract the
-    moment the code moves — see tests/renewal_path.py.
+    """They drifted precisely because they were two copies of this logic, and
+    the drift was a defect: create stored before merging a reissue's metadata.
+    Now one method, `_commit_certificate`, does store -> warning -> save ->
+    invalidate -> PFX for both. Each path must call it and must not re-inline
+    any of its steps: that is how the second copy would grow back.
     """
     import inspect
 
-    from tests.renewal_path import renewal_path_source
-
-    src = inspect.getsource(CertificateManager.create_certificate)
-    renew_src = renewal_path_source()
-    for body in (src, renew_src):
-        assert '_store_in_backend' in body
-        assert '_apply_storage_warning' in body
-        # No inline store_certificate call left to drift again.
-        assert 'storage_manager.store_certificate' not in body
+    for method in (CertificateManager.create_certificate,
+                   CertificateManager._publish_renewed_certificate):
+        body = inspect.getsource(method)
+        assert 'self._commit_certificate(' in body, method.__name__
+        for step in ('_store_in_backend(', '_save_metadata(', '_write_pfx(',
+                     'storage_manager.store_certificate'):
+            assert step not in body, f'{method.__name__} re-inlines {step}'
