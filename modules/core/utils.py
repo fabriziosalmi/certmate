@@ -528,9 +528,10 @@ def sanitize_certbot_stderr(stderr_text: str) -> str:
       failures, hint URLs, exit codes — everything an operator needs
       to figure out why a renewal failed.
 
-    The full unredacted stderr is still written to the application log
-    (``logger.error``) at the call site; this helper only sanitises the
-    copy that flows into the API response.
+    Both call sites, create and renew, log this sanitised copy too: the
+    unredacted stderr is written nowhere. (This docstring used to say the
+    opposite, which is the sentence someone reads before "restoring" the raw
+    log line.)
     """
     if not stderr_text:
         return ''
