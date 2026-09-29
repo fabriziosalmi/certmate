@@ -3,8 +3,11 @@
 Two layers:
 
 * ``IssuanceExecutor`` (modules/core/cert_jobs.py): job lifecycle, result
-  sanitisation, completion-event mapping (mirroring the synchronous routes),
-  parallel distinct-domain execution, and bounded-registry eviction. Built with
+  sanitisation, parallel distinct-domain execution, and bounded-registry
+  eviction. It publishes NO lifecycle event: CertificateService does, and
+  the two together used to announce every async issuance twice. What each
+  async outcome publishes is asserted on the composition, in
+  tests/test_one_issuance_one_event.py. Built with
   ``app=None`` so no Flask context is pushed.
 * The RESTX adapters: ``async`` opt-in returns 202 + job id and does NOT block
   on certbot, while bad input / out-of-scope are rejected *synchronously*
@@ -32,8 +35,8 @@ pytestmark = [pytest.mark.unit]
 # IssuanceExecutor
 # ---------------------------------------------------------------------------
 
-def _exec(event_bus=None, **kw):
-    return IssuanceExecutor(app=None, event_bus=event_bus, **kw)
+def _exec(**kw):
+    return IssuanceExecutor(app=None, **kw)
 
 
 def _wait_terminal(ex, job_id, timeout=5):
@@ -47,9 +50,8 @@ def _wait_terminal(ex, job_id, timeout=5):
 
 
 class TestIssuanceExecutorLifecycle:
-    def test_success_records_result_and_publishes_created(self):
-        bus = MagicMock()
-        ex = _exec(event_bus=bus)
+    def test_success_records_the_result(self):
+        ex = _exec()
         jid = ex.submit('create', 'a.example.com',
                         lambda: {'success': True, 'domain': 'a.example.com',
                                  'dns_provider': 'cloudflare'})
@@ -60,33 +62,23 @@ class TestIssuanceExecutorLifecycle:
         assert job['result']['dns_provider'] == 'cloudflare'
         assert job['error'] is None
         assert job['started_at'] and job['finished_at']
-        bus.publish.assert_called_once_with('certificate_created', {'domain': 'a.example.com'})
 
-    def test_renew_success_publishes_renewed(self):
-        bus = MagicMock()
-        ex = _exec(event_bus=bus)
-        jid = ex.submit('renew', 'a.example.com', lambda: {'success': True, 'message': 'ok'})
-        _wait_terminal(ex, jid)
-        bus.publish.assert_called_once_with('certificate_renewed', {'domain': 'a.example.com'})
-
-    def test_noop_renew_does_not_publish_renewed(self):
-        """A renew that no-oped (certbot 'not yet due', renewed=False) replaced
-        nothing — deploy hooks must not fire, mirroring the sync route."""
-        bus = MagicMock()
-        ex = _exec(event_bus=bus)
+    def test_a_noop_renew_is_recorded_as_such(self):
+        """certbot's "not yet due" is a success that replaced nothing; the job
+        must say so, since that is what the poller shows."""
+        ex = _exec()
         jid = ex.submit('renew', 'a.example.com',
                         lambda: {'success': True, 'renewed': False,
                                  'message': 'Certificate not yet due for renewal'})
         job = _wait_terminal(ex, jid)
         assert job['status'] == 'succeeded'
         assert job['result']['renewed'] is False
-        bus.publish.assert_not_called()
 
     def test_get_unknown_returns_none(self):
         assert _exec().get('does-not-exist') is None
 
     def test_result_drops_private_keys(self):
-        ex = _exec(event_bus=MagicMock())
+        ex = _exec()
         jid = ex.submit('create', 'a.example.com',
                         lambda: {'success': True, '_settings_dns_provider': 'internal'})
         job = _wait_terminal(ex, jid)
@@ -95,9 +87,8 @@ class TestIssuanceExecutorLifecycle:
 
 
 class TestIssuanceExecutorFailure:
-    def test_create_failure_records_error_and_publishes_nothing(self):
-        bus = MagicMock()
-        ex = _exec(event_bus=bus)
+    def test_a_failure_is_recorded_on_the_job(self):
+        ex = _exec()
 
         def boom():
             raise RuntimeError('certbot blew up')
@@ -106,22 +97,9 @@ class TestIssuanceExecutorFailure:
         assert job['status'] == 'failed'
         assert 'certbot blew up' in job['error']
         assert job['error_code'] is None
-        bus.publish.assert_not_called()  # sync create emits no failure event either
 
-    def test_renew_failure_publishes_certificate_failed(self):
-        bus = MagicMock()
-        ex = _exec(event_bus=bus)
-
-        def boom():
-            raise RuntimeError('renew failed')
-
-        _wait_terminal(ex, ex.submit('renew', 'a.example.com', boom))
-        events = [c.args[0] for c in bus.publish.call_args_list]
-        assert 'certificate_failed' in events
-
-    def test_renew_busy_sets_code_and_no_failure_event(self):
-        bus = MagicMock()
-        ex = _exec(event_bus=bus)
+    def test_a_busy_domain_gets_its_own_code(self):
+        ex = _exec()
 
         def busy():
             raise DomainOperationInProgress('a.example.com')
@@ -129,13 +107,17 @@ class TestIssuanceExecutorFailure:
         job = _wait_terminal(ex, ex.submit('renew', 'a.example.com', busy))
         assert job['status'] == 'failed'
         assert job['error_code'] == 'DOMAIN_OPERATION_IN_PROGRESS'
-        events = [c.args[0] for c in bus.publish.call_args_list]
-        assert 'certificate_failed' not in events  # busy is not a failure
+
+    def test_the_executor_publishes_nothing_of_its_own(self):
+        """It has no bus at all now. Kept as a statement, because putting one
+        back is the one-line change that re-creates the double event."""
+        import inspect
+        assert 'event_bus' not in inspect.signature(IssuanceExecutor).parameters
 
 
 class TestIssuanceExecutorConcurrencyAndBounds:
     def test_distinct_domains_run_in_parallel(self):
-        ex = _exec(event_bus=MagicMock(), max_workers=2)
+        ex = _exec(max_workers=2)
         # Both jobs must be running simultaneously for the barrier to release;
         # if the pool serialised them this would time out -> failed jobs.
         barrier = threading.Barrier(2, timeout=5)
@@ -150,7 +132,7 @@ class TestIssuanceExecutorConcurrencyAndBounds:
         assert _wait_terminal(ex, j2)['status'] == 'succeeded'
 
     def test_capacity_evicts_oldest_terminal_job(self):
-        ex = _exec(event_bus=MagicMock(), max_workers=1, capacity=5)
+        ex = _exec(max_workers=1, capacity=5)
         ids = []
         for i in range(8):
             jid = ex.submit('create', f'd{i}.example.com', lambda: {'success': True})

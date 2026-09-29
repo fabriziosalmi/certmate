@@ -374,11 +374,6 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     ctx.cert_service.prepare_reissue(**kwargs)
                 )
 
-                event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus:
-                    # A reissue refreshes the domain's certificate: consumers
-                    # (deploy hooks, notifications) react as for a renewal.
-                    event_bus.publish('certificate_renewed', {'domain': domain})
 
                 return {
                     'message': f'Certificate reissued successfully for {domain}',
@@ -406,9 +401,6 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 # so a reissue that failed during issuance read "Certificate
                 # reissue failed: Certificate creation failed: ...".
                 hint = _certbot_hint(error_msg)
-                event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus:
-                    event_bus.publish('certificate_failed', {'domain': domain, 'error': error_msg})
                 return {
                     'code': 'CERTIFICATE_REISSUE_FAILED',
                     'error': _prefixed(_REISSUE_PREFIX, error_msg),
@@ -420,9 +412,6 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 # py/log-injection; same treatment as cert_service._scrub_log).
                 safe_domain = str(domain).replace('\r', '').replace('\n', '')
                 logger.error(f"Certificate reissue failed for {safe_domain}: {str(e)}")
-                event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus:
-                    event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {
                     'code': 'CERTIFICATE_REISSUE_ERROR',
                     'error': 'Certificate reissue failed unexpectedly',

@@ -698,12 +698,24 @@ class CertificateService:
             )
         except Exception as e:
             self._audit_emit(audit_ctx, 'reissue', domain, 'failure', error=e)
+            # The same rule as issue_renew: a busy domain is a queue and a
+            # missing certificate is a 404, neither pages anyone. Published
+            # HERE and nowhere else: the sync route and the async executor
+            # each kept their own copy, which is how create and renew came to
+            # announce themselves twice (tests/test_one_issuance_one_event.py).
+            from .certificates import DomainOperationInProgress
+            if not isinstance(e, (DomainOperationInProgress, FileNotFoundError)):
+                self._publish('certificate_failed',
+                              {'domain': domain, 'error': str(e)})
             raise
         self._audit_emit(audit_ctx, 'reissue', domain, 'success', details={
             'ca_provider': prepared.get('ca_provider'),
             'challenge_type': prepared.get('challenge_type'),
             'san_count': len(prepared.get('san_domains') or []),
         })
+        # A reissue refreshes the domain's certificate: consumers (deploy
+        # hooks, notifications) react exactly as they do for a renewal.
+        self._publish('certificate_renewed', {'domain': domain})
         return result
 
     def renew(self, *, domain, force=False, user=None, ip_address=None, audit_ctx=None):

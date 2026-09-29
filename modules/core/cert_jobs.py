@@ -47,17 +47,12 @@ class IssuanceQueueFull(Exception):
         self.depth = depth
         self.limit = limit
 
-# Success event per issuance kind, mirroring the synchronous routes. Renewal
-# failures (other than "busy") emit certificate_failed like the sync API renew
-# route; create failures emit nothing, also matching the sync create route.
-# Reissue (#267) emits certificate_renewed: the domain's certificate was
-# refreshed, and consumers (deploy hooks, notifications) must react exactly
-# as they do for a renewal.
-_SUCCESS_EVENT = {
-    'create': 'certificate_created',
-    'renew': 'certificate_renewed',
-    'reissue': 'certificate_renewed',
-}
+# The executor publishes NO lifecycle event. CertificateService does, for
+# every kind, because every adapter passes through it (#916). The executor
+# used to publish too, so an async issuance (the dashboard's, always) announced
+# itself twice: deploy hooks, webhooks and notifications ran twice, and a
+# failed renewal paged twice. Measured by composing a real bus, a real
+# executor and a real service: tests/test_one_issuance_one_event.py.
 
 
 def _clamp_env_int(name, default, lo, hi):
@@ -76,10 +71,8 @@ class IssuanceExecutor:
     ``CERTMATE_ISSUANCE_JOB_HISTORY`` (default 200, clamped 20-2000).
     """
 
-    def __init__(self, app, event_bus=None, max_workers=None, capacity=None,
-                 queue_limit=None):
+    def __init__(self, app, max_workers=None, capacity=None, queue_limit=None):
         self._app = app
-        self._event_bus = event_bus
         self._pool = ThreadPoolExecutor(
             max_workers=max_workers or _clamp_env_int('CERTMATE_ISSUANCE_WORKERS', 2, 1, 16),
             thread_name_prefix='cert-issue',
@@ -210,35 +203,17 @@ class IssuanceExecutor:
         try:
             result = fn()
             sanitized = self._sanitize_result(result)
-            # Publish the completion event BEFORE marking the job terminal, so a
-            # poller that observes 'succeeded' is guaranteed the event has fired.
-            # Exception: a renew that no-oped (renewed=False, certbot "not yet
-            # due") replaced nothing, so deploy hooks must not fire for it —
-            # mirrors the synchronous renew route.
-            if not (isinstance(result, dict) and result.get('renewed') is False):
-                self._publish(_SUCCESS_EVENT.get(kind), {'domain': domain})
             self._set(job_id, status='succeeded', finished_at=utc_now_iso(),
                       result=sanitized)
         except Exception as e:  # record every failure on the job, never crash the worker
             busy = isinstance(e, DomainOperationInProgress)
             logger.error("Async %s job %s failed for %s: %s", kind, job_id, domain, e)
-            # Mirror the sync renew route: a real renewal failure emits
-            # certificate_failed, but "domain busy" does not (busy != failure).
-            if kind in ('renew', 'reissue') and not busy:
-                self._publish('certificate_failed', {'domain': domain, 'error': str(e)})
             self._set(job_id, status='failed', finished_at=utc_now_iso(),
                       error=str(e),
                       error_code='DOMAIN_OPERATION_IN_PROGRESS' if busy else None)
         finally:
             if ctx is not None:
                 ctx.pop()
-
-    def _publish(self, event, data):
-        if event and self._event_bus is not None:
-            try:
-                self._event_bus.publish(event, data)
-            except Exception:
-                logger.exception("Async issuance event publish failed for %s", event)
 
     @staticmethod
     def _sanitize_result(result):

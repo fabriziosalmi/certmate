@@ -178,10 +178,13 @@ GENERAL_LIMIT = 10
 #                             which the body handles itself; the handler is
 #                             for the ones that were not. The writer beside it
 #                             was narrowed to OSError instead.
-# 422 -> 421 on 2026-09-29: _publish_renewed_certificate's try/except around
+# 422 -> 421 on 2026-09-29: IssuanceExecutor._publish is gone with the
+# executor's own lifecycle events (the double-publish fix). One broad handler
+# fewer, because the thing it guarded no longer exists.
+# 421 -> 420 the same day: _publish_renewed_certificate's try/except around
 # "apply warning + save metadata" went with the shared _commit_certificate
 # (#666). Neither call can raise: _save_metadata returns a bool and logs.
-TOTAL_LIMIT = 421
+TOTAL_LIMIT = 420
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
