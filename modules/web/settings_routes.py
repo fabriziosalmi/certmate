@@ -121,6 +121,159 @@ def _confirm_setup_key(auth_manager, audit_logger, key_id):
     return jsonify({'message': msg, 'key_id': key_id})
 
 
+# A CA account ID is chosen by the operator and ends up in the URL, in
+# certificate metadata and in log lines ("Using CA account: <id>"), so a new
+# one is held to a plain charset. IDs that already exist are still accepted
+# for edit and delete, so an account named before this rule is not stranded.
+_CA_ACCOUNT_ID_RE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
+_CA_ACCOUNT_FIELDS = frozenset({'name', 'email', 'acme_url', 'eab_kid', 'eab_hmac', 'ca_cert'})
+
+
+def _ca_accounts_of(settings, provider):
+    existing = (settings.get('ca_providers') or {}).get(provider) or {}
+    if isinstance(existing.get('accounts'), dict):
+        return existing['accounts']
+    return {'default': existing} if existing else {}
+
+
+def _as_accounts(settings, provider):
+    """Convert the provider entry to the accounts shape, in place, and return
+    its accounts. The flat keys MOVE into the default account: left beside
+    `accounts` they would be a credential copy nothing reads or rotates."""
+    configured = settings.setdefault('ca_providers', {}).setdefault(provider, {})
+    if not isinstance(configured.get('accounts'), dict):
+        legacy = {k: v for k, v in configured.items() if k != 'accounts'}
+        if not legacy and provider == 'letsencrypt' and settings.get('email'):
+            legacy = {'email': settings['email']}
+        configured.clear()
+        configured['accounts'] = {'default': legacy} if legacy else {}
+    else:
+        for key in [k for k in configured if k != 'accounts']:
+            del configured[key]
+    return configured['accounts']
+
+
+def _audit_ca_account(audit_logger, operation, provider, account_id, status,
+                      fields=None, error=None):
+    if not audit_logger:
+        return
+    user = getattr(request, 'current_user', None) or {}
+    # Field NAMES only: the values include the EAB secret.
+    details = {'fields': sorted(fields)} if fields else None
+    audit_logger.log_operation(
+        operation=operation, resource_type='ca_provider',
+        resource_id=f"{provider}:{account_id}", status=status,
+        details=details, user=user.get('username'),
+        ip_address=request.remote_addr, error=error,
+    )
+
+
+def _ca_account_in_use(managers, settings_manager, settings, provider, account_id):
+    service = managers.get('cert_service')
+    if not service:
+        return False
+    domains = {entry_domain(entry) for entry in settings.get('domains') or []}
+    cert_dir = getattr(getattr(settings_manager, 'file_ops', None), 'cert_dir', None)
+    if isinstance(cert_dir, Path) and cert_dir.is_dir():
+        domains.update(path.name for path in iter_cert_domain_dirs(cert_dir))
+    for domain in domains:
+        metadata = service.read_metadata(domain) if domain else {}
+        if (metadata.get('ca_provider') == provider and
+                (metadata.get('ca_account_id') or 'default') == account_id):
+            return True
+    return False
+
+
+def _delete_ca_account(managers, settings_manager, audit_logger, settings,
+                       accounts, provider, account_id):
+    if account_id not in accounts:
+        return jsonify({'error': 'CA account not found'}), 404
+    chosen = (settings.get('default_ca_accounts') or {}).get(provider) or (
+        'default' if 'default' in accounts else next(iter(accounts)))
+    if provider == settings.get('default_ca', 'letsencrypt') and account_id == chosen:
+        return jsonify({'error': 'Choose another default CA account before deleting this one'}), 409
+    if _ca_account_in_use(managers, settings_manager, settings, provider, account_id):
+        return jsonify({'error': 'Reissue or delete certificates using this account first'}), 409
+
+    def remove_account(s):
+        remaining = _as_accounts(s, provider)
+        remaining.pop(account_id, None)
+        defaults = s.get('default_ca_accounts') or {}
+        if not remaining:
+            s['ca_providers'].pop(provider, None)
+            defaults.pop(provider, None)
+        elif defaults.get(provider) == account_id:
+            defaults[provider] = next(iter(remaining))
+
+    if not settings_manager.update(remove_account, 'ca_account_deleted'):
+        _audit_ca_account(audit_logger, 'delete_ca_account', provider, account_id,
+                          'failure', error='settings write failed')
+        return jsonify({'error': 'Failed to delete CA account'}), 500
+    _audit_ca_account(audit_logger, 'delete_ca_account', provider, account_id, 'success')
+    return jsonify({'message': 'CA account deleted'})
+
+
+def _save_ca_account(settings_manager, audit_logger, accounts,
+                     ca_manager, provider, account_id):
+    from modules.core.settings import _strip_masked_values
+    from modules.core.utils import validate_email
+
+    creating = account_id not in accounts
+    if request.args.get('create') == '1' and not creating:
+        return jsonify({'error': 'CA account already exists; use Edit'}), 409
+    if creating and not _CA_ACCOUNT_ID_RE.fullmatch(account_id):
+        return jsonify({'error': 'Account name must be 1-64 letters, digits, dots, '
+                                 'dashes or underscores, starting with a letter or digit'}), 400
+    raw = request.get_json(silent=True) or {}
+    if not isinstance(raw, dict) or set(raw) - _CA_ACCOUNT_FIELDS:
+        return jsonify({'error': 'Invalid CA account configuration'}), 400
+    submitted = _strip_masked_values(raw)
+    config = {**accounts.get(account_id, {}), **submitted}
+    if not config.get('email') or not validate_email(config['email'])[0]:
+        return jsonify({'error': 'A valid CA account email is required'}), 400
+    valid, reason = ca_manager.validate_ca_configuration(provider, config)
+    if not valid:
+        return jsonify({'error': reason}), 400
+
+    def save_account(s):
+        _as_accounts(s, provider)[account_id] = config
+
+    operation = 'create_ca_account' if creating else 'update_ca_account'
+    if not settings_manager.update(save_account, 'ca_account_saved'):
+        _audit_ca_account(audit_logger, operation, provider, account_id,
+                          'failure', error='settings write failed')
+        return jsonify({'error': 'Failed to save CA account'}), 500
+    _audit_ca_account(audit_logger, operation, provider, account_id, 'success',
+                      fields=submitted)
+    return jsonify({'message': 'CA account saved'})
+
+
+def _ca_provider_account(managers, settings_manager, audit_logger, provider, account_id):
+    """POST (create/edit) or DELETE one account of a CA provider."""
+    from modules.core.ca_manager import CAManager
+
+    ca_manager = managers.get('ca') or CAManager(settings_manager)
+    if (provider not in ca_manager.ca_providers or not account_id or len(account_id) > 100
+            or account_id in ('__proto__', 'constructor', 'prototype')):
+        return jsonify({'error': 'Invalid CA provider or account ID'}), 400
+    settings = settings_manager.load_settings() or {}
+    accounts = _ca_accounts_of(settings, provider)
+    if request.method == 'DELETE':
+        return _delete_ca_account(managers, settings_manager, audit_logger,
+                                  settings, accounts, provider, account_id)
+    return _save_ca_account(settings_manager, audit_logger, accounts,
+                            ca_manager, provider, account_id)
+
+
+def _register_ca_account_route(app, auth_manager, managers, settings_manager, audit_logger):
+    @app.route('/api/web/settings/ca-providers/<string:provider>/accounts/<string:account_id>',
+               methods=['POST', 'DELETE'])
+    @auth_manager.require_role('admin')
+    def ca_provider_account(provider, account_id):
+        return _ca_provider_account(managers, settings_manager, audit_logger,
+                                    provider, account_id)
+
+
 def register_settings_routes(app, managers, require_web_auth, auth_manager,
                              settings_manager, dns_manager):
     """Register settings-related routes"""
@@ -214,82 +367,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             logger.error(f"Failed to load settings: {e}")
             return jsonify({'error': 'Failed to load settings'}), 500
 
-    @app.route('/api/web/settings/ca-providers/<string:provider>/accounts/<string:account_id>',
-               methods=['POST', 'DELETE'])
-    @auth_manager.require_role('admin')
-    def ca_provider_account(provider, account_id):
-        from modules.core.ca_manager import CAManager
-        from modules.core.settings import _strip_masked_values
-        from modules.core.utils import validate_email
-
-        ca_manager = managers.get('ca') or CAManager(settings_manager)
-        if (provider not in ca_manager.ca_providers or not account_id or len(account_id) > 100
-                or account_id in ('__proto__', 'constructor', 'prototype')):
-            return jsonify({'error': 'Invalid CA provider or account ID'}), 400
-
-        settings = settings_manager.load_settings() or {}
-        existing = (settings.get('ca_providers') or {}).get(provider) or {}
-        accounts = existing.get('accounts') if isinstance(existing.get('accounts'), dict) else (
-            {'default': existing} if existing else {})
-        if request.method == 'DELETE':
-            if account_id not in accounts:
-                return jsonify({'error': 'CA account not found'}), 404
-            chosen = (settings.get('default_ca_accounts') or {}).get(provider) or (
-                'default' if 'default' in accounts else next(iter(accounts)))
-            if provider == settings.get('default_ca', 'letsencrypt') and account_id == chosen:
-                return jsonify({'error': 'Choose another default CA account before deleting this one'}), 409
-            service = managers.get('cert_service')
-            if service:
-                domains = {entry_domain(entry) for entry in settings.get('domains') or []}
-                cert_dir = getattr(getattr(settings_manager, 'file_ops', None), 'cert_dir', None)
-                if isinstance(cert_dir, Path) and cert_dir.is_dir():
-                    domains.update(path.name for path in iter_cert_domain_dirs(cert_dir))
-                for domain in domains:
-                    metadata = service.read_metadata(domain) if domain else {}
-                    if (metadata.get('ca_provider') == provider and
-                            (metadata.get('ca_account_id') or 'default') == account_id):
-                        return jsonify({'error': 'Reissue or delete certificates using this account first'}), 409
-
-            def remove_account(s):
-                configured = s['ca_providers'][provider]
-                if 'accounts' not in configured:
-                    configured['accounts'] = {'default': dict(configured)}
-                configured['accounts'].pop(account_id, None)
-                if not configured['accounts']:
-                    s['ca_providers'].pop(provider, None)
-                    (s.get('default_ca_accounts') or {}).pop(provider, None)
-                elif (s.get('default_ca_accounts') or {}).get(provider) == account_id:
-                    s['default_ca_accounts'][provider] = next(iter(configured['accounts']))
-
-            if not settings_manager.update(remove_account, 'ca_account_deleted'):
-                return jsonify({'error': 'Failed to delete CA account'}), 500
-            return jsonify({'message': 'CA account deleted'})
-
-        fields = {'name', 'email', 'acme_url', 'eab_kid', 'eab_hmac', 'ca_cert'}
-        if request.args.get('create') == '1' and account_id in accounts:
-            return jsonify({'error': 'CA account already exists; use Edit'}), 409
-        raw = request.get_json(silent=True) or {}
-        if not isinstance(raw, dict) or set(raw) - fields:
-            return jsonify({'error': 'Invalid CA account configuration'}), 400
-        config = {**accounts.get(account_id, {}), **_strip_masked_values(raw)}
-        if not config.get('email') or not validate_email(config['email'])[0]:
-            return jsonify({'error': 'A valid CA account email is required'}), 400
-        valid, reason = ca_manager.validate_ca_configuration(provider, config)
-        if not valid:
-            return jsonify({'error': reason}), 400
-
-        def save_account(s):
-            configured = s.setdefault('ca_providers', {}).setdefault(provider, {})
-            if 'accounts' not in configured:
-                legacy = {k: v for k, v in configured.items() if k != 'accounts'}
-                if not legacy and provider == 'letsencrypt' and s.get('email'):
-                    legacy = {'email': s['email']}
-                configured['accounts'] = {'default': legacy} if legacy else {}
-            configured['accounts'][account_id] = config
-
-        if not settings_manager.update(save_account, 'ca_account_saved'):
-            return jsonify({'error': 'Failed to save CA account'}), 500
-        return jsonify({'message': 'CA account saved'})
+    _register_ca_account_route(app, auth_manager, managers, settings_manager, audit_logger)
 
     @app.route('/api/settings', methods=['POST'])
     @app.route('/api/web/settings', methods=['POST'])
