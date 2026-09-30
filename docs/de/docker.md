@@ -1,6 +1,6 @@
 # Docker Build & Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM 2fbf24622135f998 -->
+<!-- CERTMATE-TRANSLATED-FROM 875370d723412467 -->
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 
@@ -33,6 +33,21 @@ Optionale Variablen für `.env`: `CLOUDFLARE_TOKEN` (legt beim ersten Start ein 
 **Aktualisieren:** Laden Sie die Datei erneut herunter (oder ändern Sie `CERTMATE_VERSION`) und führen Sie dann `docker compose pull && docker compose up -d` aus.
 
 Die `docker-compose.yml` im Wurzelverzeichnis des Repositorys baut das Image aus dem Quellcode und ist für die Entwicklung gedacht.
+
+---
+
+## Portainer
+
+Stellen Sie in Portainer das [Produktions-Compose-Bundle](#produktion-mit-docker-compose) als Stack direkt aus diesem Repository bereit:
+
+1. **Stacks → Add stack**, nennen Sie ihn `certmate` und wählen Sie **Repository**.
+2. Repository-URL `https://github.com/fabriziosalmi/certmate`, Referenz `refs/heads/main`, Compose-Pfad `deploy/docker-compose.yml`.
+3. Fügen Sie unter **Environment variables** `API_BEARER_TOKEN`, `SECRET_KEY` und `CERTMATE_BACKUP_PASSPHRASE` hinzu, jeweils mit einem langen Zufallswert wie der Ausgabe von `openssl rand -hex 32`. Optional: `CERTMATE_PORT`, `CERTMATE_BIND` oder `CLOUDFLARE_TOKEN`.
+4. **Deploy the stack.**
+
+Ohne die beiden Pflichtvariablen schlägt das Deployment fehl und nennt die fehlende (`required variable API_BEARER_TOKEN is missing a value`), statt mit Schlüsseln zu starten, die sich bei jedem Redeploy ändern. Zum Aktualisieren verwenden Sie **Pull and redeploy** am Stack: Die benannten Volumes und damit Zertifikate und Einstellungen bleiben erhalten.
+
+Verifiziert mit Portainer CE 2.45: Ein Stack ohne die Variablen wird mit dieser Meldung abgelehnt; mit ihnen startet er gesund, das Token autorisiert die API, und ein Pull and Redeploy erstellt den Container mit intakten Daten neu.
 
 ---
 

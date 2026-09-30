@@ -32,8 +32,8 @@ services:
     environment:
       # Required. Without them the app would invent values at startup that
       # change on every recreate, so sessions and API clients would break.
-      - API_BEARER_TOKEN=${API_BEARER_TOKEN:?set API_BEARER_TOKEN in .env (see the header of this file)}
-      - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY in .env (see the header of this file)}
+      - API_BEARER_TOKEN=${API_BEARER_TOKEN:?set API_BEARER_TOKEN in .env or in the stack environment (see the header of deploy/docker-compose.yml)}
+      - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY in .env or in the stack environment (see the header of deploy/docker-compose.yml)}
       # Without it, automatic backups are masked and cannot restore this
       # instance. With it, they are complete and encrypted at rest.
       - CERTMATE_BACKUP_PASSPHRASE=${CERTMATE_BACKUP_PASSPHRASE:-}

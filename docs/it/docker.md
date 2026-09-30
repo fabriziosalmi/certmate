@@ -1,6 +1,6 @@
 # Build e distribuzione con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 2fbf24622135f998 -->
+<!-- CERTMATE-TRANSLATED-FROM 875370d723412467 -->
 
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
 
@@ -33,6 +33,21 @@ Variabili facoltative per `.env`: `CLOUDFLARE_TOKEN` (crea un account DNS Cloudf
 **Aggiornamento:** scarica di nuovo il file (oppure cambia `CERTMATE_VERSION`), poi esegui `docker compose pull && docker compose up -d`.
 
 Il `docker-compose.yml` nella radice del repository compila l'immagine dai sorgenti ed è pensato per lo sviluppo.
+
+---
+
+## Portainer
+
+In Portainer, distribuisci il [bundle compose di produzione](#in-produzione-con-docker-compose) come stack direttamente da questo repository:
+
+1. **Stacks → Add stack**, chiamalo `certmate` e scegli **Repository**.
+2. URL del repository `https://github.com/fabriziosalmi/certmate`, riferimento `refs/heads/main`, percorso compose `deploy/docker-compose.yml`.
+3. In **Environment variables** aggiungi `API_BEARER_TOKEN`, `SECRET_KEY` e `CERTMATE_BACKUP_PASSPHRASE`, ciascuno con un valore casuale lungo, come l'output di `openssl rand -hex 32`. Facoltativi: `CERTMATE_PORT`, `CERTMATE_BIND` o `CLOUDFLARE_TOKEN`.
+4. **Deploy the stack.**
+
+Senza le due variabili obbligatorie il deploy fallisce e dice quale manca (`required variable API_BEARER_TOKEN is missing a value`), invece di partire con chiavi che cambierebbero a ogni redeploy. Per aggiornare usa **Pull and redeploy** sullo stack: i volumi con nome, e con loro certificati e impostazioni, restano.
+
+Verificato su Portainer CE 2.45: uno stack senza le variabili viene rifiutato con quel messaggio; con le variabili parte sano, il token autorizza l'API, e un pull and redeploy ricrea il container mantenendo i dati.
 
 ---
 

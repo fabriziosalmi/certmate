@@ -34,6 +34,21 @@ The `docker-compose.yml` at the root of the repository builds the image from sou
 
 ---
 
+## Portainer
+
+In Portainer, deploy the [production compose bundle](#production-with-docker-compose) as a stack straight from this repository:
+
+1. **Stacks → Add stack**, name it `certmate`, and choose **Repository**.
+2. Repository URL `https://github.com/fabriziosalmi/certmate`, reference `refs/heads/main`, compose path `deploy/docker-compose.yml`.
+3. Under **Environment variables**, add `API_BEARER_TOKEN`, `SECRET_KEY` and `CERTMATE_BACKUP_PASSPHRASE`, each a long random value such as the output of `openssl rand -hex 32`. Optionally add `CERTMATE_PORT`, `CERTMATE_BIND` or `CLOUDFLARE_TOKEN`.
+4. **Deploy the stack.**
+
+Without the two required variables the deployment fails and says which one is missing (`required variable API_BEARER_TOKEN is missing a value`), rather than starting with keys that change on every redeploy. To upgrade, use **Pull and redeploy** on the stack: the named volumes, and so the certificates and settings, are kept.
+
+Checked on Portainer CE 2.45: a stack without the variables is refused with that message; with them it comes up healthy, the token authorises the API, and a pull-and-redeploy recreates the container with its data intact.
+
+---
+
 ## Quick Start
 
 ### Pull and Run
