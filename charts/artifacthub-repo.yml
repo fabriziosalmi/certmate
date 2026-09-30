@@ -6,6 +6,6 @@
 #
 # repositoryID is assigned by Artifact Hub when the repository is added there
 # (Control Panel -> Repositories). With it set, the listing shows the
-# "Verified publisher" badge. Until then it is empty and the workflow skips
+# "Verified publisher" badge. While it is empty the workflow skips
 # the push: an empty file would verify nothing.
-repositoryID: ""
+repositoryID: 7ab0836d-071e-463b-93b8-1e77e2885973
