@@ -159,8 +159,8 @@ def validate_webhook_target(target):
     if cfg.get('pin_sha256'):
         try:
             pinned_https.normalise_pin(cfg['pin_sha256'])
-        except pinned_https.UnsafeDestination as error:
-            return False, str(error)
+        except pinned_https.UnsafeDestination:
+            return False, pinned_https.PIN_FORMAT
     if cfg.get('ca_cert'):
         try:
             x509.load_pem_x509_certificate(str(cfg['ca_cert']).encode())

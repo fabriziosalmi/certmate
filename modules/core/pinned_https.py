@@ -115,10 +115,13 @@ def resolve(host, port, allow_internal):
     return addresses[0]
 
 
+PIN_FORMAT = 'pin_sha256 must be a SHA-256 fingerprint: 64 hexadecimal digits'
+
+
 def normalise_pin(pin):
     cleaned = ''.join(ch for ch in str(pin) if ch not in ': \t').lower()
     if len(cleaned) != 64 or any(ch not in '0123456789abcdef' for ch in cleaned):
-        raise UnsafeDestination('pin_sha256 must be a SHA-256 fingerprint: 64 hexadecimal digits')
+        raise UnsafeDestination(PIN_FORMAT)
     return cleaned
 
 
