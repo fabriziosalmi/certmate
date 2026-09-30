@@ -8,6 +8,7 @@ the assertion, and the instance was healthy after a reboot. Two defects that
 run found, pinned below: minimal hosts have no curl for Docker's script, and a
 handler recreated the container a second time after `compose up` already had.
 """
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -61,7 +62,9 @@ def test_nothing_recreates_the_container_a_second_time():
 @pytest.mark.skipif(not shutil.which('ansible-playbook'), reason='ansible not installed')
 def test_the_example_playbook_parses():
     site = ROLE.parent.parent / 'site.yml'
-    result = subprocess.run(['ansible-playbook', '--syntax-check', '-i', 'localhost,', str(site)],
+    # The binary `which` found, and the inherited environment: a PATH written
+    # here for one machine hid ansible-playbook on the CI runner.
+    result = subprocess.run([shutil.which('ansible-playbook'), '--syntax-check', '-i', 'localhost,', str(site)],
                             capture_output=True, text=True,
-                            env={'ANSIBLE_ROLES_PATH': str(ROLE.parent), 'PATH': '/usr/bin:/bin:/opt/homebrew/bin'})
+                            env={**os.environ, 'ANSIBLE_ROLES_PATH': str(ROLE.parent)})
     assert result.returncode == 0, result.stderr
