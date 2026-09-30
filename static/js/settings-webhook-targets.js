@@ -164,6 +164,20 @@
         });
     }
 
+    // A consent is written by the server and only by it: it records who confirmed
+    // what, and a page that posted one back would be free to post a different one.
+    // Every webhook target leaves here without it; the server keeps the stored
+    // consent for a target whose host did not change and asks again for one whose
+    // host did.
+    function withoutConsent(list) {
+        return list.map(function (target) {
+            if (!target || target.type !== 'webhook' || !('delivery_consent' in target)) return target;
+            var copy = Object.assign({}, target);
+            delete copy.delivery_consent;
+            return copy;
+        });
+    }
+
     function webhookTargets() {
         return {
             open: false,
@@ -416,7 +430,7 @@
                     var list = Array.isArray(current.body.targets) ? current.body.targets.slice() : [];
                     return requestJson('/api/deploy/config', {
                         method: 'POST',
-                        body: JSON.stringify({ targets: change(list) })
+                        body: JSON.stringify({ targets: withoutConsent(change(list)) })
                     });
                 });
             },

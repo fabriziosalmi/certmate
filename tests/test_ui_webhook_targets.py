@@ -241,7 +241,23 @@ def test_the_enabled_switch_changes_only_that_flag(page):
     body = json.loads(posted.value.post_data)
 
     assert list(body) == ['targets']
-    assert body['targets'][0] == dict(target, enabled=False)
+    expected = dict(target, enabled=False)
+    del expected['delivery_consent']
+    assert body['targets'][0] == expected, (
+        'the switch should change `enabled` and nothing else, and post no consent: the server keeps the one it holds')
+
+
+def test_no_webhook_target_leaves_the_page_with_a_consent(page):
+    """Even the targets this save did not touch: the consent is the server's to write, never the page's."""
+    _open(page, targets=[_webhook(template=WITH_KEY, consent_host='lb.internal'),
+                         _webhook(id='wh-2', name='Another', template=WITH_KEY, consent_host='lb.internal')])
+    page.locator('[aria-label="Edit target Another"]').click()
+    page.fill('[aria-label="Target name"]', 'Another, renamed')
+    body = _save_and_capture(page)
+
+    assert [t['id'] for t in body['targets']] == ['wh-1', 'wh-2']
+    assert all('delivery_consent' not in t for t in body['targets']), (
+        f'a consent went back to the server: {[t.get("delivery_consent") for t in body["targets"]]}')
 
 
 def test_deleting_asks_first_and_removes_only_that_target(page):
@@ -310,6 +326,9 @@ def test_a_confirmation_the_server_holds_for_this_host_is_not_asked_again(page):
     body = _save_and_capture(page)
     assert 'acknowledge_key_delivery_to' not in body['targets'][0]['config'], (
         'a rename re-confirmed the key delivery: the confirmation is about the destination')
+    assert 'delivery_consent' not in body['targets'][0], (
+        'the page posted the consent it had loaded: the server owns it, and a page that posts one back '
+        'could post a different one')
 
 
 def test_changing_the_host_asks_again(page):
