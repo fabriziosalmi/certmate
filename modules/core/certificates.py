@@ -3561,7 +3561,8 @@ class CertificateManager:
             # releasing the domain lock and cleaning up credential files.
             logger.error(f"Certificate renewal timed out for {domain}")
             raise RuntimeError("Certificate renewal timed out")
-        except (FileNotFoundError, DomainOperationInProgress, ReissueRequired):
+        except (FileNotFoundError, DomainOperationInProgress, ReissueRequired,
+                RuntimeError):
             # These already say what they mean, and the routes map them to
             # 404 and 409. Re-wrapping them as RuntimeError turned both into
             # a 422 "renewal failed" — so the `except FileNotFoundError` arm
@@ -3569,13 +3570,11 @@ class CertificateManager:
             # to renew a certificate that is not there was told the CA had
             # refused. Measured on a real manager: RuntimeError("Exception:
             # No certificate found for domain: ...").
-            raise
-        except RuntimeError as e:
-            # Already a renewal failure with its own message ("Certificate
-            # renewal failed: ...", "Cannot renew ..."). Wrapping it again
-            # prefixed every webhook, notification and audit record with
-            # "Exception: " (#666, D8).
-            logger.error(f"Certificate renewal failed for {domain}: {e}")
+            #
+            # A RuntimeError is already a renewal failure with its own message
+            # ("Certificate renewal failed: ...", "Cannot renew ..."). Wrapping
+            # it again prefixed every webhook, notification and audit record
+            # with "Exception: " (#666, D8).
             raise
         except Exception as e:
             error_msg = str(e)

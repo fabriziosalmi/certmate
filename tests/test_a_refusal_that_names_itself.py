@@ -177,7 +177,7 @@ def test_an_unexpected_failure_is_still_wrapped():
     # ReissueRequired (#966) names itself too: the API maps it to its own
     # code, and wrapping it would turn "reissue this" into "renewal failed".
     assert ('except (FileNotFoundError, DomainOperationInProgress, '
-            'ReissueRequired):') in source
+            'ReissueRequired,\n                RuntimeError):') in source
 
 
 # --- a hook that backgrounds something is not a timeout ------------------
