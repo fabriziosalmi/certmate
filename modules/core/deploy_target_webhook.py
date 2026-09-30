@@ -32,6 +32,7 @@ What it holds itself to, each one checked by a test that breaks it:
 
 import hashlib
 import hmac
+import json
 import logging
 import re
 import time
@@ -181,7 +182,12 @@ def validate_webhook_target(target):
     try:
         render_payload_template(template, _example_variables())
     except ValueError as error:
-        return False, str(error)
+        # Only where the parser stopped, read as numbers: its own wording is not
+        # passed on to a caller.
+        cause = error.__context__
+        where = (f' (line {int(cause.lineno)}, column {int(cause.colno)})'
+                 if isinstance(cause, json.JSONDecodeError) else '')
+        return False, f'payload_template does not render to valid JSON with the example values{where}'
 
     if key_variables(template):
         consent = target.get('delivery_consent')

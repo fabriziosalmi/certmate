@@ -548,6 +548,17 @@ def test_an_invalid_target_is_refused_with_a_reason(pki, mutate, needle):
     assert ok is False and needle in reason, reason
 
 
+def test_a_template_that_is_not_json_is_located_without_passing_on_the_parsers_text(pki):
+    """The reason says WHERE, as numbers; the parser's own wording is not forwarded."""
+    target = _valid(pki)
+    target['config']['payload_template'] = '{"a": '
+    ok, reason = wh.validate_webhook_target(target)
+    assert ok is False
+    assert 'line 1, column 7' in reason
+    for parser_wording in ('Expecting', 'char 6', 'delimiter', 'Unterminated'):
+        assert parser_wording not in reason, reason
+
+
 def test_a_bare_privkey_is_refused_and_the_two_real_names_are_offered(pki):
     target = _valid(pki)
     target['config']['payload_template'] = '{"key": "{{privkey}}"}'

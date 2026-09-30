@@ -76,6 +76,7 @@ class TLSServer:
     def __init__(self, certfile, keyfile, handler):
         self.httpd = http.server.HTTPServer(('127.0.0.1', 0), handler)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.load_cert_chain(certfile, keyfile)
         self.httpd.socket = ctx.wrap_socket(self.httpd.socket, server_side=True)
         self.port = self.httpd.server_port
