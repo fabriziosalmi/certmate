@@ -152,3 +152,63 @@ jobs:
         with:
           packages-dir: dist
           repository-url: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi') && 'https://test.pypi.org/legacy/' || '' }}
+
+  bump-homebrew:
+    name: bump the Homebrew formula
+    # The tap (fabriziosalmi/homebrew-certmate) is where the formula lives.
+    # Tagged releases only, after both packages are on PyPI. Needs
+    # HOMEBREW_TAP_TOKEN: fine-grained, Contents read/write on the tap only.
+    needs: publish-cli
+    if: startsWith(github.ref, 'refs/tags/clients-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Check out the tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: fabriziosalmi/homebrew-certmate
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Point the formula at the release
+        # Waits for PyPI's JSON index, which lags the upload.
+        env:
+          REF: ${{ github.ref }}
+        run: python3 scripts/bump_homebrew_formula.py tap/Formula/certmate-cli.rb "${REF#refs/tags/clients-v}"
+
+      - name: Commit the bump locally
+        id: bump
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          cd tap
+          if git diff --quiet; then
+            echo "formula already current"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "certmate-cli ${REF#refs/tags/clients-v}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install and test it before pushing
+        # Tapped from the local checkout, so what is tested is exactly the
+        # commit about to be pushed. A release that adds a dependency makes
+        # this fail, and nothing broken reaches the tap.
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_FROM_API=1
+          brew tap fabriziosalmi/certmate "$PWD/tap"
+          brew install --build-from-source fabriziosalmi/certmate/certmate-cli
+          brew test fabriziosalmi/certmate/certmate-cli
+
+      - name: Push the bump
+        if: steps.bump.outputs.changed == 'true'
+        run: git -C tap push

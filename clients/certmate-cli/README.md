@@ -4,7 +4,7 @@ The [CertMate](https://github.com/fabriziosalmi/certmate) SSL certificate
 lifecycle from your terminal — built on `certmate-sdk`.
 
 ```bash
-pip install certmate-cli
+pip install certmate-cli     # or, on macOS/Linux: brew install fabriziosalmi/certmate/certmate-cli
 export CERTMATE_URL=http://localhost:8000
 export CERTMATE_TOKEN=...
 

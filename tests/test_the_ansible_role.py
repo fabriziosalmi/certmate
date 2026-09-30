@@ -68,3 +68,28 @@ def test_the_example_playbook_parses():
                             capture_output=True, text=True,
                             env={**os.environ, 'ANSIBLE_ROLES_PATH': str(ROLE.parent)})
     assert result.returncode == 0, result.stderr
+
+
+# --- the Galaxy collection ----------------------------------------------------
+
+GALAXY = ROLE.parent.parent / 'galaxy.yml'
+PUBLISH = ROLE.parents[3] / '.github' / 'workflows' / 'publish-galaxy.yml'
+
+
+def test_the_collection_is_fabriziosalmi_certmate_and_ships_only_the_role():
+    meta = yaml.safe_load(GALAXY.read_text())
+    assert (meta['namespace'], meta['name']) == ('fabriziosalmi', 'certmate')
+    # The example playbook is for this repository, not for the collection.
+    assert 'site.yml' in meta['build_ignore']
+
+
+def test_the_publish_workflow_gates_the_version_and_publishes_only_on_its_tag():
+    wf = yaml.safe_load(PUBLISH.read_text())
+    triggers = wf.get('on', wf.get(True))
+    assert triggers['push']['tags'] == ['ansible-v*']
+    steps = wf['jobs']['publish']['steps']
+    gate = next(s for s in steps if s.get('name') == 'Fail unless the tag matches galaxy.yml')
+    assert 'refs/tags/ansible-v*' in gate['run']
+    publish = next(s for s in steps if s.get('name') == 'Publish')
+    assert publish['if'] == "startsWith(github.ref, 'refs/tags/ansible-v')"
+    assert publish['env']['GALAXY_API_KEY'] == '${{ secrets.GALAXY_API_KEY }}'

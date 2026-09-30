@@ -1,22 +1,25 @@
-# Homebrew formula for certmate-cli
+# Homebrew
 
-`certmate-cli.rb` installs the CertMate command-line client (`certmate`) into its own virtualenv, with Homebrew's Python. Only the client: the server does not belong on Homebrew.
-
-It was verified with a local tap: `brew install --build-from-source` succeeds, `certmate health` reads a live instance, `brew test` passes, and `brew audit --strict --online` reports nothing.
-
-## Publishing it
-
-Homebrew installs third-party formulae from a tap, a GitHub repository named `homebrew-<name>`:
-
-1. Create `fabriziosalmi/homebrew-tap` and copy this file to `Formula/certmate-cli.rb`.
-2. Users then run `brew install fabriziosalmi/tap/certmate-cli`.
-
-## Updating it
-
-When a new certmate-cli or certmate-sdk is published to PyPI, update `url`/`sha256` (and the `certmate-sdk` resource), then regenerate the dependency blocks from a tap checkout:
+The `certmate` CLI is installable with Homebrew from the project's tap, [`fabriziosalmi/homebrew-certmate`](https://github.com/fabriziosalmi/homebrew-certmate):
 
 ```bash
-brew update-python-resources fabriziosalmi/tap/certmate-cli
+brew install fabriziosalmi/certmate/certmate-cli
 ```
 
-Keep the `certifi` resource out: the formula depends on Homebrew's `certifi` instead. `tests/test_the_homebrew_formula.py` fails when this file and the client versions in `clients/` disagree.
+Only the client: the CertMate server runs in Docker, Kubernetes or on a Linux host.
+
+## Where the formula lives
+
+In the tap, at `Formula/certmate-cli.rb`, and only there. A copy in this repository could never be updated in the same pull request as a client version bump: the sha256 it needs exists only once PyPI has the new sdist.
+
+## How it is kept current
+
+The `bump-homebrew` job in `.github/workflows/publish-clients.yml` runs after a `clients-v*` release has published both packages to PyPI. It:
+
+1. rewrites the formula's certmate-cli URL/sha256 and its certmate-sdk resource with `scripts/bump_homebrew_formula.py`, waiting for PyPI's index to list the version;
+2. commits that locally, taps the checkout, and runs `brew install --build-from-source` and `brew test`;
+3. pushes only if both pass.
+
+It uses the `HOMEBREW_TAP_TOKEN` secret: fine-grained, Contents read/write on the tap only.
+
+If a release adds a Python dependency, step 2 fails and nothing is pushed. Regenerate the resource blocks in a tap checkout with `brew update-python-resources fabriziosalmi/certmate/certmate-cli`, keep the `certifi` resource out (the formula depends on Homebrew's `certifi`), and push.

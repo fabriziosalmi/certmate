@@ -2,7 +2,17 @@
 
 Deploys [CertMate](https://github.com/fabriziosalmi/certmate) with its production Docker Compose bundle. It installs Docker when missing, writes `/srv/certmate/.env` from your variables (mode 600), starts CertMate and waits until it answers.
 
-It uses only `ansible.builtin` modules, so no collection is needed.
+It uses only `ansible.builtin` modules, so it depends on no other collection.
+
+## Install
+
+It ships in the `fabriziosalmi.certmate` collection on Ansible Galaxy:
+
+```bash
+ansible-galaxy collection install fabriziosalmi.certmate
+```
+
+and is used as `fabriziosalmi.certmate.certmate`.
 
 ## Variables
 
@@ -27,7 +37,7 @@ Generate each secret with `openssl rand -hex 32`.
 - hosts: certmate
   become: true
   roles:
-    - role: certmate
+    - role: fabriziosalmi.certmate.certmate
       vars:
         certmate_api_token: "{{ vault_certmate_api_token }}"
         certmate_secret_key: "{{ vault_certmate_secret_key }}"
