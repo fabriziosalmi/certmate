@@ -34,7 +34,8 @@
                                     <option value="private_ca">Private CA</option>
                                 </select>
                                 <label for="ca-account-name" class="block text-xs font-medium text-muted mt-3 mb-1">Account name</label>
-                                <input type="text" id="ca-account-name" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" placeholder="e.g. production or staging">
+                                <input type="text" id="ca-account-name" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-describedby="ca-account-name-help" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" placeholder="e.g. production or staging">
+                                <p id="ca-account-name-help" class="mt-1 text-xs text-muted">Letters, digits, dots, dashes and underscores.</p>
                             </div>
 
                             <!-- CA Provider Configurations -->

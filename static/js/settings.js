@@ -2321,6 +2321,10 @@
         var provider = document.getElementById('add-ca-type').value;
         var name = document.getElementById('ca-account-name').value.trim();
         if (!provider || !name) { showMessage('Choose a CA and enter an account name', 'error'); return; }
+        if (!editingCAAccount && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name)) {
+            showMessage('Account name: use letters, digits, dots, dashes and underscores', 'error');
+            return;
+        }
         editingCAProvider = provider;
         var config = collectCAProviderSettings()[provider];
         config.name = name;

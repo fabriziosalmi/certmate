@@ -179,10 +179,11 @@ The Private CA entry is also the generic escape hatch for any ACME CA without a 
 
 1. Navigate to **Settings**
 2. Scroll to **Certificate Authority (CA) Providers**
-3. Select your default CA provider
+3. Click **Add CA Account**, choose the CA and name the account (letters,
+   digits, dots, dashes and underscores)
 4. Configure the required fields
 5. Click **Test CA Connection** to check the fields
-6. Save settings
+6. Click **Save Account**
 
 **Test CA Connection** only contacts the CA for a Private CA: it fetches the
 ACME directory URL (using the CA certificate, if one is given). For every other
