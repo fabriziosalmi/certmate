@@ -1,10 +1,103 @@
-# Note di produzione Kubernetes
+# CertMate su Kubernetes
 
-<!-- CERTMATE-TRANSLATED-FROM db0f75b2a7a008f8 -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Questa traduzione non è aggiornata.** La versione inglese ([`docs/kubernetes.md`](../kubernetes.md)) è stata modificata da allora ed è quella che fa fede. In caso di discordanza vale il documento inglese.
+<!-- CERTMATE-TRANSLATED-FROM c0ef74162bfa4e87 -->
 
-Questa guida raccoglie la configurazione di dimensionamento di base per CertMate quando viene eseguito dietro un Ingress/HTTPRoute Kubernetes e utilizza un backend di certificati remoto come Azure Key Vault.
+Installa CertMate con il suo chart Helm, direttamente o tramite Argo CD o Flux, poi dimensionalo per la produzione. Il README del chart descrive ogni valore: [charts/certmate/README.md](../../charts/certmate/README.md).
+
+## Installazione con Helm
+
+Il chart viene pubblicato su GHCR come artefatto OCI a ogni rilascio, quindi non serve il passaggio `helm repo add` (Helm 3.8+). La sua versione coincide con quella di CertMate: senza `--version` Helm prende la più recente, mentre `--version X.Y.Z` ne fissa una.
+
+Crea prima il Secret, così l'istanza mantiene lo stesso token e la stessa chiave di sessione tra un riavvio e l'altro:
+
+```bash
+kubectl create namespace certmate
+kubectl -n certmate create secret generic certmate-secrets \
+  --from-literal=API_BEARER_TOKEN="$(openssl rand -hex 32)" \
+  --from-literal=SECRET_KEY="$(openssl rand -hex 32)" \
+  --from-literal=CERTMATE_BACKUP_PASSPHRASE="$(openssl rand -hex 32)"
+
+helm install certmate oci://ghcr.io/fabriziosalmi/charts/certmate \
+  --namespace certmate \
+  --set secrets.existingSecret=certmate-secrets
+
+kubectl -n certmate port-forward svc/certmate 8000:8000
+```
+
+Apri `http://127.0.0.1:8000`. La prima pagina crea l'account amministratore e chiede l'`API_BEARER_TOKEN` salvato nel Secret (`kubectl -n certmate get secret certmate-secrets -o jsonpath='{.data.API_BEARER_TOKEN}' | base64 -d`). Aggiungi `CLOUDFLARE_TOKEN` allo stesso Secret per creare all'avvio un account DNS Cloudflare; gli altri provider DNS si configurano dall'interfaccia web.
+
+Per aggiornare usa `helm upgrade certmate oci://ghcr.io/fabriziosalmi/charts/certmate --namespace certmate --reuse-values`. Per Ingress, persistenza e backup, vedi il README del chart.
+
+## GitOps con Argo CD
+
+Il Secret visto sopra si crea una sola volta, fuori da Git. Poi:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: certmate
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/fabriziosalmi/charts
+    chart: certmate
+    targetRevision: "2.*"
+    helm:
+      valuesObject:
+        secrets:
+          existingSecret: certmate-secrets
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: certmate
+  syncPolicy:
+    automated: {}
+```
+
+`repoURL` non ha il prefisso `oci://`: Argo CD riceve separatamente il percorso del registry e il nome del chart. `2.*` segue i nuovi rilasci 2.x; indica una versione esatta per fissarne una.
+
+## GitOps con Flux
+
+```yaml
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: certmate
+  namespace: certmate
+spec:
+  interval: 1h
+  url: oci://ghcr.io/fabriziosalmi/charts/certmate
+  ref:
+    semver: "2.x"
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: certmate
+  namespace: certmate
+spec:
+  interval: 1h
+  chartRef:
+    kind: OCIRepository
+    name: certmate
+  values:
+    secrets:
+      existingSecret: certmate-secrets
+```
+
+`semver: "2.x"` segue i nuovi rilasci 2.x; usa `tag: X.Y.Z` per fissarne uno.
+
+Questi tre metodi sono stati verificati su un cluster k3s 1.31, con Helm 4.1, Argo CD 3.5 e Flux (source-controller 1.9): ciascuno installa il chart e l'istanza risulta in salute.
+
+---
+
+# Note di produzione
+
+Questa parte raccoglie la configurazione di dimensionamento di base per CertMate quando viene eseguito dietro un Ingress/HTTPRoute Kubernetes e utilizza un backend di certificati remoto come Azure Key Vault.
 
 ## Risorse consigliate
 
@@ -27,9 +120,26 @@ env:
     value: "300"
 ```
 
+Con il chart Helm, imposta gli stessi valori nel tuo file di values. Il limite di memoria predefinito del chart è 512Mi, che, come spiega il paragrafo successivo, è troppo poco per l'emissione sotto carico:
+
+```yaml
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1536Mi
+extraEnv:
+  - name: CERTMATE_CERT_INFO_CACHE_TTL
+    value: "60"
+```
+
 Per il caso di errore specifico in cui un pod con `memory: 512Mi` si riavvia durante la creazione di un certificato, aumenta prima il limite di memoria. Il percorso del codice evita ora i sottoprocessi `openssl` della precedente vista elenco, utilizza letture leggere delle informazioni sui certificati tramite Azure Key Vault, ed esclude le directory temporanee/storiche di certbot dai backup di routine, ma certbot ha comunque bisogno di margine durante l'emissione dei certificati.
 
-## Esempio di applicazione del patch
+## Esempio di patch del Deployment
+
+Per un Deployment non gestito dal chart Helm (il chart etichetta i suoi pod con `app.kubernetes.io/name=certmate`, non con `app=certmate`). Con il chart, usa invece i values visti sopra.
 
 ```bash
 kubectl -n certificate-management patch deployment certmate --type='strategic' -p '
@@ -62,7 +172,9 @@ kubectl -n certificate-management top pod -l app=certmate
 
 ## Numero di repliche
 
-Esegui `replicas: 1` a meno che tutti i percorsi mutabili (`/app/data`, `/app/certificates`, `/app/backups`, `/app/logs`) non siano supportati da uno storage sicuro per scritture concorrenti e tu abbia validato il comportamento dello scheduler e del rinnovo per pod multipli. Azure Key Vault può archiviare i certificati in remoto, ma CertMate mantiene comunque localmente le impostazioni, i metadati, i backup e lo stato di esecuzione.
+Esegui `replicas: 1`. CertMate esegue lo scheduler di rinnovo dei certificati **all'interno del processo**, quindi ogni pod (e ogni worker gunicorn) avvia il controllo dei rinnovi in modo indipendente. Con più di uno scrittore questo significa ordini ACME duplicati e il rate limit della CA sui certificati duplicati, oltre a race condition sulle impostazioni locali, sui metadati, sui backup e sullo stato di esecuzione che CertMate mantiene anche quando i certificati risiedono in un backend remoto (Azure Key Vault, Vault, S3).
+
+Un `flock` locale all'host (`/app/data/.renewal.lock`) impedisce i rinnovi duplicati quando più worker/container condividono lo **stesso** volume di dati su un unico host, ma **non** coordina pod su volumi/nodi separati. Aumenta quindi il numero di repliche solo se ogni percorso mutabile (`/app/data`, `/app/certificates`, `/app/backups`, `/app/logs`) è un unico volume condiviso da tutti i pod E hai validato il comportamento dei rinnovi; altrimenti mantieni un solo scrittore e, per la disponibilità, metti davanti una singola istanza attiva invece di scalare questo Deployment.
 
 ## Il badge di stato del deployment mostra "Backend: Unreachable"
 
@@ -72,7 +184,7 @@ Il badge di stato del deployment nella dashboard è un indicatore di salute faco
 
 - **Deployed** — l'handshake ha avuto successo e l'impronta digitale corrisponde.
 - **Wrong Cert** — l'handshake ha avuto successo ma viene servito un certificato diverso.
-- **Unreachable** — il pod non ha potuto aprire una connessione TLS verso il dominio.
+- **Unreachable** — il pod non ha potuto aprire alcuna connessione TLS verso il dominio.
 
 Su Kubernetes, **Unreachable per ogni certificato è previsto** ogni volta che il pod CertMate non riesce a raggiungere direttamente il tuo IP pubblico/Ingress. Cause comuni:
 
@@ -89,12 +201,4 @@ env:
     value: "10"   # accepts 1–30 seconds; default is 3
 ```
 
-In caso contrario, il badge può essere ignorato in tutta sicurezza in una topologia Ingress/Kubernetes — i certificati vengono emessi e serviti correttamente anche quando CertMate non riesce a verificarli autonomamente.
-
----
-
-<div align="center">
-
-[← Torna alla documentazione](./README.md) • [Guida Docker →](./docker.md)
-
-</div>
+In caso contrario, il badge può essere ignorato in tutta sicurezza in una topologia Ingress/Kubernetes: i certificati vengono emessi e serviti correttamente anche quando CertMate non riesce a verificarli autonomamente.
