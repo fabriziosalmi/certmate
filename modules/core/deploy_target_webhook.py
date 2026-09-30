@@ -32,6 +32,7 @@ What it holds itself to, each one checked by a test that breaks it:
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import re
@@ -68,7 +69,7 @@ KEY_MATERIAL = {'privkey_pkcs8': private_key_pkcs8, 'privkey_traditional': priva
 ALLOWED_VARIABLES = frozenset(EVENT_VARIABLES) | frozenset(PUBLIC_MATERIAL) | frozenset(KEY_MATERIAL)
 
 _PLACEHOLDER_RE = re.compile(r'\{\{\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\s*\}\}')
-_HOST_RE = re.compile(r'^[A-Za-z0-9.-]+$|^\[[0-9A-Fa-f:.]+\]$')
+_HOST_RE = re.compile(r'^[A-Za-z0-9.-]+$')
 
 EXAMPLE_CERT = '-----BEGIN CERTIFICATE-----\nEXAMPLE-CERTIFICATE\n-----END CERTIFICATE-----\n'
 EXAMPLE_KEY = '-----BEGIN PRIVATE KEY-----\nEXAMPLE-NOT-A-REAL-KEY\n-----END PRIVATE KEY-----\n'
@@ -84,6 +85,17 @@ def referenced(template):
 def key_variables(template):
     """The private-key variables a template uses: the ones that make a target send the key."""
     return sorted(referenced(template) & set(KEY_MATERIAL))
+
+
+def _valid_host(hostname):
+    """A DNS name, or an IP literal. `urlparse().hostname` has no brackets, so an IPv6 literal is a bare address."""
+    if _HOST_RE.match(hostname):
+        return True
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+    return True
 
 
 def _url_host(url):
@@ -132,7 +144,7 @@ def validate_webhook_target(target):
     except ValueError:
         return False, 'url is not a valid URL (is the port a number from 1 to 65535?)'
     if (parsed is None or parsed.scheme != 'https' or not parsed.hostname
-            or not _HOST_RE.match(parsed.hostname)):
+            or not _valid_host(parsed.hostname)):
         return False, 'url must be an https:// address with a host: the request carries certificate material'
     if parsed.username or parsed.password:
         return False, 'url must not carry credentials; use the authentication fields'
@@ -412,7 +424,7 @@ class WebhookTarget:
             'body': body,
             'sends_private_key': self.sends_private_key(),
             'key_variables': key_variables(cfg.get('payload_template')),
-            'files_read': list(self.required_files()),
+            'files_needed': list(self.required_files()),
             'tls_verified_with': tls,
             'allow_internal': bool(cfg.get('allow_internal')),
             'note': 'Rendered with an example certificate and key; nothing was sent and no file was read.',
