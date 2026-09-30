@@ -1,0 +1,38 @@
+#cloud-config
+# CertMate on a fresh cloud VM (#1028): Docker, the production compose bundle
+# and generated secrets, from nothing but this user-data. Paste it into your
+# provider's "user data" / "cloud-init" field when creating the VM.
+#
+# After boot (a few minutes: Docker is installed first), CertMate listens on
+# 127.0.0.1:8000 inside the VM. Reach it through an SSH tunnel:
+#   ssh -L 8000:127.0.0.1:8000 <user>@<vm>
+# then open http://127.0.0.1:8000. The first page creates the administrator
+# account and asks for the API token:
+#   sudo grep API_BEARER_TOKEN /srv/certmate/.env
+#
+# Guide: docs/installation.md, "A cloud VM with cloud-init".
+
+# Optional: your SSH key, if the provider does not inject one.
+# ssh_authorized_keys:
+#   - ssh-ed25519 AAAA... you@laptop
+
+package_update: true
+packages:
+  - curl
+  - openssl
+
+runcmd:
+  # Docker Engine and the compose plugin, from Docker's own install script.
+  - curl -fsSL https://get.docker.com | sh
+  - mkdir -p /srv/certmate
+  - curl -fsSL -o /srv/certmate/docker-compose.yml https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/docker-compose.yml
+  # Secrets generated on the VM, never in this file. Only if absent, so a
+  # re-run of this user-data does not replace the keys of a running instance.
+  - |
+    if [ ! -f /srv/certmate/.env ]; then
+      umask 077
+      printf 'API_BEARER_TOKEN=%s\nSECRET_KEY=%s\nCERTMATE_BACKUP_PASSPHRASE=%s\n' \
+        "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" \
+        > /srv/certmate/.env
+    fi
+  - cd /srv/certmate && docker compose up -d

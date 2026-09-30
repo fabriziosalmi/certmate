@@ -1,6 +1,6 @@
 # Installationsanleitung
 
-<!-- CERTMATE-TRANSLATED-FROM f3699a5ee154fb19 -->
+<!-- CERTMATE-TRANSLATED-FROM 4632a0df7bb87f9c -->
 
 Diese Anleitung beschreibt alle Methoden zur Installation und zum Deployment von CertMate.
 
@@ -30,6 +30,16 @@ Was es tut:
 - **Anderswo lauschen:** Setzen Sie `CERTMATE_BIND` in `/etc/certmate/certmate.env` (zum Beispiel `0.0.0.0:8000`, oder bleiben Sie hinter einem Reverse Proxy auf Loopback und setzen `BEHIND_PROXY=true`), dann `sudo systemctl restart certmate`.
 - **Logs:** `journalctl -u certmate`.
 - **SELinux:** Der Installer wurde mit SELinux im Enforcing-Modus noch nicht verifiziert. Startet der Dienst auf einem solchen Host nicht, sagt das Journal warum; bitte melden Sie es.
+
+---
+
+## Eine Cloud-VM mit cloud-init
+
+Für eine neue VM bei jedem Anbieter, der User Data akzeptiert (Hetzner, DigitalOcean, AWS, Azure, GCP, OpenStack, Proxmox): Fügen Sie [`deploy/cloud-init/certmate.yaml`](../../deploy/cloud-init/certmate.yaml) beim Anlegen der VM in das Feld "User Data" bzw. "cloud-init" ein ([Rohdatei](https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/cloud-init/certmate.yaml)). Es installiert Docker, lädt das [Produktions-Compose-Bundle](docker.md#produktion-mit-docker-compose), erzeugt die Geheimnisse auf der VM in `/srv/certmate/.env` (Modus 600, nie in den User Data) und startet CertMate.
+
+CertMate lauscht innerhalb der VM auf `127.0.0.1:8000`. Erreichen Sie es über einen SSH-Tunnel, `ssh -L 8000:127.0.0.1:8000 <benutzer>@<vm>`, und öffnen Sie dann `http://127.0.0.1:8000`. Die erste Seite legt das Administratorkonto an und verlangt das Token: `sudo grep API_BEARER_TOKEN /srv/certmate/.env`.
+
+Verifiziert mit dem Ubuntu-24.04-Cloud-Image: cloud-init endet mit `done`, CertMate ist wenige Minuten nach dem Booten gesund und kommt nach einem Neustart zurück.
 
 ---
 
