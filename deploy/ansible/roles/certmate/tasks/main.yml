@@ -1,0 +1,86 @@
+---
+- name: Refuse to run without the required secrets
+  ansible.builtin.assert:
+    that:
+      - certmate_api_token | length >= 32
+      - certmate_secret_key | length >= 32
+    fail_msg: >-
+      Set certmate_api_token and certmate_secret_key (at least 32 characters,
+      e.g. `openssl rand -hex 32`), ideally from Ansible Vault.
+    quiet: true
+
+- name: Check for Docker
+  ansible.builtin.command: docker compose version
+  register: certmate_docker
+  changed_when: false
+  failed_when: false
+
+- name: Install what Docker's install script needs
+  ansible.builtin.package:
+    name: [curl, ca-certificates]
+    state: present
+  when: certmate_docker.rc != 0 and certmate_install_docker | bool
+
+- name: Install Docker Engine and the compose plugin
+  ansible.builtin.shell: set -o pipefail && curl -fsSL https://get.docker.com | sh
+  args:
+    executable: /bin/bash
+  when: certmate_docker.rc != 0 and certmate_install_docker | bool
+  changed_when: true
+
+- name: Fail when Docker is missing and may not be installed
+  ansible.builtin.fail:
+    msg: Docker with the compose plugin is required (or set certmate_install_docker true).
+  when: certmate_docker.rc != 0 and not certmate_install_docker | bool
+
+- name: Make sure the Docker service runs
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Create the CertMate directory
+  ansible.builtin.file:
+    path: "{{ certmate_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Download the compose bundle
+  ansible.builtin.get_url:
+    url: "{{ certmate_bundle_url }}"
+    dest: "{{ certmate_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Write the environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ certmate_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Start CertMate
+  ansible.builtin.command: docker compose up -d --wait
+  args:
+    chdir: "{{ certmate_dir }}"
+  register: certmate_up
+  # `up` recreates the container by itself when the compose file or the
+  # values it reads from .env change, so no handler is needed. Compose
+  # reports "Running" for a container it left alone, and "Created",
+  # "Recreated" or "Started" only when it did something.
+  changed_when: certmate_up.stderr is search('(Created|Recreated|Started)')
+
+- name: Wait until CertMate answers
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ certmate_port }}/health"
+    return_content: true
+  register: certmate_health
+  until: certmate_health.status == 200
+  retries: 40
+  delay: 3
+  changed_when: false
