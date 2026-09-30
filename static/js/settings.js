@@ -14,6 +14,9 @@
 
     // Global variables - properly initialized
     var currentSettings = {};
+    var configuredCAProviders = [];
+    var editingCAProvider = '';
+    var editingCAAccount = '';
     var dnsProviders = {};
     var isLoading = false;
 
@@ -191,35 +194,20 @@
 
         try {
             var formData = new FormData(form);
-            var caProviders = collectCAProviderSettings();
+            var caProviders = currentSettings.ca_providers || {};
             var defaultCA = formData.get('default_ca') || 'letsencrypt';
+            var defaultConfig = caProviders[defaultCA] || {};
+            var defaultAccounts = defaultConfig.accounts || {};
+            var defaultAccountId = (currentSettings.default_ca_accounts || {})[defaultCA] ||
+                (defaultAccounts.default ? 'default' : Object.keys(defaultAccounts)[0]);
+            var accountEmail = (defaultAccounts[defaultAccountId] || defaultConfig).email || '';
 
             // Get email from the selected CA provider
             var email = '';
-            if (defaultCA === 'letsencrypt') {
-                email = (caProviders.letsencrypt && caProviders.letsencrypt.email) || '';
-            } else if (defaultCA === 'letsencrypt_staging') {
-                // Staging shares the LE account shape; fall back to the
-                // production LE email when its own field is empty.
-                email = (caProviders.letsencrypt_staging && caProviders.letsencrypt_staging.email) ||
-                    (caProviders.letsencrypt && caProviders.letsencrypt.email) || '';
-            } else if (defaultCA === 'zerossl') {
-                email = (caProviders.zerossl && caProviders.zerossl.email) || '';
-            } else if (defaultCA === 'google') {
-                email = (caProviders.google && caProviders.google.email) || '';
-            } else if (defaultCA === 'actalis') {
-                email = (caProviders.actalis && caProviders.actalis.email) || '';
-            } else if (defaultCA === 'sslcom') {
-                email = (caProviders.sslcom && caProviders.sslcom.email) || '';
-            } else if (defaultCA === 'digicert') {
-                email = (caProviders.digicert && caProviders.digicert.email) || '';
-            } else if (defaultCA === 'sectigo') {
-                var sectigoSettings = caProviders.sectigo || {};
-                var sectigoAccounts = sectigoSettings.accounts || {};
-                var sectigoDefault = (currentSettings.default_ca_accounts || {}).sectigo || Object.keys(sectigoAccounts)[0];
-                email = sectigoSettings.email || (sectigoAccounts[sectigoDefault] || {}).email || '';
-            } else if (defaultCA === 'private_ca') {
-                email = (caProviders.private_ca && caProviders.private_ca.email) || '';
+            if (defaultCA === 'letsencrypt' || defaultCA === 'letsencrypt_staging') {
+                email = accountEmail || currentSettings.email || '';
+            } else if (['zerossl', 'google', 'actalis', 'sslcom', 'digicert', 'sectigo', 'private_ca'].indexOf(defaultCA) !== -1) {
+                email = accountEmail;
             }
 
             var domainsRaw = formData.get('domains');
@@ -247,7 +235,6 @@
                 cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
                 certificate_storage: collectStorageBackendSettings(),
                 default_ca: defaultCA,
-                ca_providers: caProviders,
                 default_key_type: defaultKeyType,
                 default_key_size: defaultKeyType === 'rsa' ? (defaultKeySize || 2048) : 2048,
                 default_elliptic_curve: defaultEllipticCurve
@@ -353,7 +340,7 @@
                 }
             }
 
-            addDebugLog('Settings to save: ' + JSON.stringify(settings, null, 2), 'info');
+            addDebugLog('Saving settings: ' + Object.keys(settings).join(', '), 'info');
 
             fetch('/api/web/settings', {
                 method: 'POST',
@@ -2131,7 +2118,7 @@
     }
 
     function toggleCAProviderConfig() {
-        var caProvider = document.getElementById('default-ca').value;
+        var caProvider = editingCAProvider;
 
         // Map CA provider values to config IDs
         var caProviderToConfigId = {
@@ -2213,12 +2200,181 @@
         }
     }
 
+    function renderConfiguredCAProviders() {
+        var list = document.getElementById('configured-ca-list');
+        var types = document.getElementById('add-ca-type');
+        list.replaceChildren();
+        configuredCAProviders.forEach(function (provider) {
+            var config = ((currentSettings.ca_providers || {})[provider]) || {};
+            var accounts = config.accounts || {default: config};
+            Object.keys(accounts).forEach(function (accountId) {
+                var account = accounts[accountId] || {};
+                var row = document.createElement('div');
+                row.className = 'flex flex-wrap items-center gap-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg px-4 py-3 border border-border';
+                var option = Array.from(types.options).find(function (item) { return item.value === provider; });
+                var name = document.createElement('span');
+                name.className = 'flex-1 text-sm font-medium text-foreground min-w-40';
+                name.textContent = (option ? option.textContent : provider) + ' - ' +
+                    (account.name || (accountId === 'default' ? 'Default account' : accountId));
+                row.appendChild(name);
+                var selectedAccount = ((currentSettings.default_ca_accounts || {})[provider]) ||
+                    (accounts.default ? 'default' : Object.keys(accounts)[0]);
+                var perCA = selectedAccount === accountId;
+                var globalDefault = document.getElementById('default-ca').value === provider && perCA;
+                var label = document.createElement('label');
+                label.className = 'flex items-center gap-1 text-xs text-muted cursor-pointer';
+                var radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'ca-default-' + provider;
+                radio.checked = perCA;
+                radio.addEventListener('change', function () {
+                    setDefaultCAAccount(provider, accountId, account, false);
+                });
+                label.appendChild(radio);
+                label.appendChild(document.createTextNode('Default for this CA'));
+                row.appendChild(label);
+                var global = document.createElement('button');
+                global.type = 'button';
+                global.textContent = globalDefault ? 'Global default' : 'Make global default';
+                global.className = globalDefault
+                    ? 'text-xs px-2 py-1 rounded bg-info-surface text-info-fg'
+                    : 'text-xs px-2 py-1 rounded bg-surface-2 text-label hover:bg-hover';
+                global.disabled = globalDefault;
+                global.addEventListener('click', function () {
+                    setDefaultCAAccount(provider, accountId, account, true);
+                });
+                row.appendChild(global);
+                var edit = document.createElement('button');
+                edit.type = 'button';
+                edit.textContent = 'Edit';
+                edit.className = 'text-xs px-2 py-1 rounded bg-info-surface text-info-fg hover:bg-blue-200 dark:hover:bg-blue-900/50';
+                edit.addEventListener('click', function () { openCAAccountModal(provider, accountId); });
+                row.appendChild(edit);
+                var remove = document.createElement('button');
+                remove.type = 'button';
+                remove.textContent = 'Delete';
+                remove.className = 'text-xs px-2 py-1 rounded bg-danger-surface text-danger-fg ' +
+                    (globalDefault ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-200 dark:hover:bg-red-900/40');
+                remove.disabled = globalDefault;
+                remove.title = globalDefault ? 'Choose another global default CA account before deleting this one' : '';
+                remove.addEventListener('click', function () { deleteCAAccount(provider, accountId); });
+                row.appendChild(remove);
+                list.appendChild(row);
+            });
+        });
+    }
+
+    function currentCAAccountConfig() {
+        var config = ((currentSettings.ca_providers || {})[editingCAProvider]) || {};
+        return (config.accounts || {})[editingCAAccount] ||
+            (editingCAAccount === 'default' ? config : {});
+    }
+
+    function fillCAAccountFields(provider, config) {
+        var fields = {
+            letsencrypt: {email: 'letsencrypt-email'},
+            letsencrypt_staging: {email: 'letsencrypt-staging-email'},
+            zerossl: {email: 'zerossl-email', eab_kid: 'zerossl-eab-kid', eab_hmac: 'zerossl-eab-hmac'},
+            google: {email: 'google-email', eab_kid: 'google-eab-kid', eab_hmac: 'google-eab-hmac'},
+            actalis: {email: 'actalis-email', eab_kid: 'actalis-eab-kid', eab_hmac: 'actalis-eab-hmac'},
+            digicert: {email: 'digicert-email', acme_url: 'digicert-acme-url', eab_kid: 'digicert-eab-kid', eab_hmac: 'digicert-eab-hmac'},
+            sectigo: {email: 'sectigo-email', acme_url: 'sectigo-acme-url', eab_kid: 'sectigo-eab-kid', eab_hmac: 'sectigo-eab-hmac'},
+            sslcom: {email: 'sslcom-email', eab_kid: 'sslcom-eab-kid', eab_hmac: 'sslcom-eab-hmac'},
+            private_ca: {email: 'private-ca-email', acme_url: 'private-ca-acme-url', ca_cert: 'private-ca-cert', eab_kid: 'private-ca-eab-kid', eab_hmac: 'private-ca-eab-hmac'}
+        };
+        Object.keys(fields[provider] || {}).forEach(function (key) {
+            var value = config[key] || (key === 'eab_kid' ? config.eab_key_id : '');
+            document.getElementById(fields[provider][key]).value = key === 'eab_hmac' ? '' : (value || '');
+        });
+    }
+
+    function openCAAccountModal(provider, accountId) {
+        editingCAProvider = provider || '';
+        editingCAAccount = accountId || '';
+        var type = document.getElementById('add-ca-type');
+        type.value = editingCAProvider;
+        type.disabled = Boolean(accountId);
+        var nameField = document.getElementById('ca-account-name');
+        nameField.value = editingCAAccount;
+        nameField.disabled = Boolean(accountId);
+        nameField.classList.toggle('opacity-60', Boolean(accountId));
+        nameField.classList.toggle('cursor-not-allowed', Boolean(accountId));
+        nameField.classList.toggle('bg-surface-2', Boolean(accountId));
+        if (editingCAProvider) {
+            var saved = currentCAAccountConfig();
+            if (editingCAProvider === 'letsencrypt' && editingCAAccount === 'default' && !saved.email) {
+                saved = {email: currentSettings.email};
+            }
+            fillCAAccountFields(editingCAProvider, saved);
+        }
+        toggleCAProviderConfig();
+        document.getElementById('caAccountModal').classList.remove('hidden');
+    }
+
+    function selectCAAccountType() {
+        editingCAProvider = document.getElementById('add-ca-type').value;
+        fillCAAccountFields(editingCAProvider, {});
+        toggleCAProviderConfig();
+    }
+
+    function saveCAAccount() {
+        var provider = document.getElementById('add-ca-type').value;
+        var name = document.getElementById('ca-account-name').value.trim();
+        if (!provider || !name) { showMessage('Choose a CA and enter an account name', 'error'); return; }
+        editingCAProvider = provider;
+        var config = collectCAProviderSettings()[provider];
+        config.name = name;
+        fetch('/api/web/settings/ca-providers/' + encodeURIComponent(provider) +
+            '/accounts/' + encodeURIComponent(name) + (editingCAAccount ? '' : '?create=1'), {
+            method: 'POST', headers: API_HEADERS, body: JSON.stringify(config)
+        }).then(function (response) {
+            return response.json().then(function (body) {
+                if (!response.ok) throw new Error(body.error || 'Unable to save CA account');
+                document.getElementById('caAccountModal').classList.add('hidden');
+                showMessage('CA account saved', 'success');
+                return loadSettings();
+            });
+        }).catch(function (error) { showMessage(error.message, 'error'); });
+    }
+
+    function setDefaultCAAccount(provider, accountId, account, globalDefault) {
+        var defaults = Object.assign({}, currentSettings.default_ca_accounts || {});
+        defaults[provider] = accountId;
+        var changes = {default_ca_accounts: defaults};
+        if (globalDefault) changes.default_ca = provider;
+        if (globalDefault || document.getElementById('default-ca').value === provider) {
+            changes.email = account.email || currentSettings.email || '';
+        }
+        fetch('/api/web/settings', {method: 'POST', headers: API_HEADERS,
+            body: JSON.stringify(changes)
+        }).then(function (response) {
+            if (!response.ok) throw new Error('Unable to change the default CA account');
+            return loadSettings();
+        }).catch(function (error) { showMessage(error.message, 'error'); });
+    }
+
+    function deleteCAAccount(provider, accountId) {
+        CertMate.confirm('Delete the ' + provider + ' account ' + accountId + '?', 'Delete CA Account',
+            { confirmText: 'Delete' }).then(function (confirmed) {
+            if (!confirmed) return;
+            return fetch('/api/web/settings/ca-providers/' + encodeURIComponent(provider) +
+                '/accounts/' + encodeURIComponent(accountId), {
+                method: 'DELETE', headers: API_HEADERS
+            }).then(function (response) {
+                return response.json().then(function (body) {
+                    if (!response.ok) throw new Error(body.error || 'Unable to delete CA account');
+                    return loadSettings();
+                });
+            }).catch(function (error) { showMessage(error.message, 'error'); });
+        });
+    }
+
     // =============================================
     // Test CA Provider
     // =============================================
 
     function testCAProvider() {
-        var caProvider = document.getElementById('default-ca').value;
+        var caProvider = editingCAProvider;
         var config = {};
         var missingFields = [];
 
@@ -2299,7 +2455,7 @@
             };
             if (!config.acme_url.trim()) missingFields.push('ACME Directory URL');
             if (!config.eab_kid.trim()) missingFields.push('EAB Key ID');
-            if (!config.eab_hmac.trim()) config.eab_hmac = sectigoAccountConfig().eab_hmac || '';
+            if (!config.eab_hmac.trim()) config.eab_hmac = currentCAAccountConfig().eab_hmac || '';
             if (!config.eab_hmac.trim()) missingFields.push('EAB HMAC Key');
             if (!config.email.trim()) missingFields.push('Email');
         } else if (caProvider === 'private_ca') {
@@ -2629,139 +2785,12 @@
     // =============================================
 
     function loadCAProviderSettings(settings) {
-        // Set default CA provider
-        var defaultCA = settings.default_ca || 'letsencrypt';
-        var defaultCASelect = document.getElementById('default-ca');
-        defaultCASelect.value = defaultCA;
-        if (defaultCASelect.value !== defaultCA) {
-            // Unknown CA key (e.g. cached old JS against a newer backend):
-            // append it as a raw option so the stored selection stays
-            // visible instead of the select silently flipping to another CA.
-            // (A save still requires an email source for the key, so the
-            // validation below blocks it rather than posting blind.)
-            var unknownOption = document.createElement('option');
-            unknownOption.value = defaultCA;
-            unknownOption.textContent = defaultCA;
-            defaultCASelect.appendChild(unknownOption);
-            defaultCASelect.value = defaultCA;
-        }
+        document.getElementById('default-ca').value = settings.default_ca || 'letsencrypt';
+        configuredCAProviders = CertMate.configuredCAProviders(settings);
+        renderConfiguredCAProviders();
+        editingCAProvider = '';
+        editingCAAccount = '';
         toggleCAProviderConfig();
-
-        // Load CA provider configurations
-        var caProviders = settings.ca_providers || {};
-
-        // Load Let's Encrypt settings (the legacy 'environment' field is
-        // migrated away server-side; see #279)
-        var letsencryptConfig = caProviders.letsencrypt || {};
-        if (letsencryptConfig.email) {
-            document.getElementById('letsencrypt-email').value = letsencryptConfig.email;
-        }
-
-        // Load ZeroSSL settings
-        var zerosslConfig = caProviders.zerossl || {};
-        if (zerosslConfig.eab_kid) {
-            document.getElementById('zerossl-eab-kid').value = zerosslConfig.eab_kid;
-        }
-        if (zerosslConfig.email) {
-            document.getElementById('zerossl-email').value = zerosslConfig.email;
-        }
-
-        // Load Google settings
-        var googleConfig = caProviders.google || {};
-        if (googleConfig.eab_kid) {
-            document.getElementById('google-eab-kid').value = googleConfig.eab_kid;
-        }
-        if (googleConfig.email) {
-            document.getElementById('google-email').value = googleConfig.email;
-        }
-
-        // Load Let's Encrypt (Staging) settings
-        var letsencryptStagingConfig = caProviders.letsencrypt_staging || {};
-        if (letsencryptStagingConfig.email) {
-            document.getElementById('letsencrypt-staging-email').value = letsencryptStagingConfig.email;
-        }
-
-        // Load Actalis settings
-        // Don't populate HMAC key for security reasons - user needs to re-enter
-        var actalisConfig = caProviders.actalis || {};
-        if (actalisConfig.eab_kid) {
-            document.getElementById('actalis-eab-kid').value = actalisConfig.eab_kid;
-        }
-        if (actalisConfig.email) {
-            document.getElementById('actalis-email').value = actalisConfig.email;
-        }
-
-        // Load DigiCert settings
-        var digicertConfig = caProviders.digicert || {};
-        if (digicertConfig.acme_url) {
-            document.getElementById('digicert-acme-url').value = digicertConfig.acme_url;
-        }
-        if (digicertConfig.eab_kid) {
-            document.getElementById('digicert-eab-kid').value = digicertConfig.eab_kid;
-        }
-
-        // Load SSL.com settings
-        var sslcomConfig = caProviders.sslcom || {};
-        if (sslcomConfig.eab_kid) {
-            document.getElementById('sslcom-eab-kid').value = sslcomConfig.eab_kid;
-        }
-        if (sslcomConfig.email) {
-            document.getElementById('sslcom-email').value = sslcomConfig.email;
-        }
-        // Don't populate HMAC key for security reasons - user needs to re-enter
-        if (digicertConfig.email) {
-            document.getElementById('digicert-email').value = digicertConfig.email;
-        }
-
-        var sectigoConfig = caProviders.sectigo || {};
-        var select = document.getElementById('sectigo-account-select');
-        select.replaceChildren();
-        var accounts = sectigoConfig.accounts || {};
-        if (!Object.keys(accounts).length && sectigoConfig.acme_url) {
-            select.add(new Option('Existing account', 'legacy'));
-        }
-        Object.keys(accounts).forEach(function (id) { select.add(new Option(id, id)); });
-        select.add(new Option('Add account...', 'new'));
-        select.value = (settings.default_ca_accounts || {}).sectigo || Object.keys(accounts)[0] ||
-            (sectigoConfig.acme_url ? 'legacy' : 'new');
-        select.onchange = loadSectigoAccount;
-        loadSectigoAccount();
-
-        // Load Private CA settings
-        var privateCaConfig = caProviders.private_ca || {};
-        if (privateCaConfig.acme_url) {
-            document.getElementById('private-ca-acme-url').value = privateCaConfig.acme_url;
-        }
-        syncPrivateCaPresetFromUrl(privateCaConfig.acme_url || '');
-        if (privateCaConfig.ca_cert) {
-            document.getElementById('private-ca-cert').value = privateCaConfig.ca_cert;
-        }
-        if (privateCaConfig.eab_kid) {
-            document.getElementById('private-ca-eab-kid').value = privateCaConfig.eab_kid;
-        }
-        // Don't populate HMAC key for security reasons - user needs to re-enter
-        if (privateCaConfig.email) {
-            document.getElementById('private-ca-email').value = privateCaConfig.email;
-        }
-    }
-
-    function sectigoAccountConfig() {
-        var config = ((currentSettings.ca_providers || {}).sectigo || {});
-        var id = document.getElementById('sectigo-account-select').value;
-        return id === 'legacy' ? config : (config.accounts || {})[id] || {};
-    }
-
-    function loadSectigoAccount() {
-        var id = document.getElementById('sectigo-account-select').value;
-        var config = sectigoAccountConfig();
-        document.getElementById('sectigo-name').value = id === 'new' ?
-            (Object.keys((((currentSettings.ca_providers || {}).sectigo || {}).accounts || {})).length ? '' : 'default') :
-            (id === 'legacy' ? config.name || '' : id);
-        document.getElementById('sectigo-name').readOnly = id !== 'new' && id !== 'legacy';
-        document.getElementById('sectigo-acme-url').value = config.acme_url || '';
-        document.getElementById('sectigo-eab-kid').value = config.eab_kid || '';
-        document.getElementById('sectigo-eab-hmac').value = '';
-        document.getElementById('sectigo-email').value = config.email || '';
     }
 
     function loadStorageBackendSettings(settings) {
@@ -2882,37 +2911,12 @@
             email: document.getElementById('digicert-email').value || ''
         };
 
-        var sectigoAccount = {
-            name: document.getElementById('sectigo-name').value || '',
+        caProviders.sectigo = {
             acme_url: document.getElementById('sectigo-acme-url').value || '',
             eab_kid: document.getElementById('sectigo-eab-kid').value || '',
             eab_hmac: document.getElementById('sectigo-eab-hmac').value || '',
             email: document.getElementById('sectigo-email').value || ''
         };
-        var sectigoExisting = (currentSettings.ca_providers || {}).sectigo || {};
-        var selectedSectigo = document.getElementById('sectigo-account-select').value;
-        if (!sectigoExisting.acme_url && !sectigoExisting.accounts && !sectigoAccount.acme_url &&
-            document.getElementById('default-ca').value !== 'sectigo') {
-            caProviders.sectigo = {};
-        } else if (selectedSectigo === 'legacy') {
-            caProviders.sectigo = sectigoAccount;
-        } else {
-            var sectigoAccounts = Object.assign({}, sectigoExisting.accounts || {});
-            if (selectedSectigo === 'new' && sectigoExisting.acme_url && !Object.keys(sectigoAccounts).length) {
-                throw new Error('Existing single-account Sectigo settings cannot be converted without re-entering the saved HMAC key');
-            }
-            var sectigoId = selectedSectigo === 'new' ? sectigoAccount.name.trim() : selectedSectigo;
-            if (!sectigoId || sectigoId === '__proto__' || sectigoId === 'constructor') {
-                throw new Error('Enter a valid Sectigo account name');
-            }
-            if (document.getElementById('default-ca').value === 'sectigo' &&
-                (!sectigoAccount.acme_url || !sectigoAccount.eab_kid ||
-                 !(sectigoAccount.eab_hmac || sectigoAccountConfig().eab_hmac))) {
-                throw new Error('Sectigo requires an ACME Directory URL and EAB Key ID and HMAC Key');
-            }
-            sectigoAccounts[sectigoId] = sectigoAccount;
-            caProviders.sectigo = { accounts: sectigoAccounts };
-        }
 
         // SSL.com configuration
         caProviders.sslcom = {
@@ -3536,6 +3540,12 @@
         if (addModalEl) addModalEl.addEventListener('modal:close', closeAddAccountModal);
         var editModalEl = document.getElementById('editAccountModal');
         if (editModalEl) editModalEl.addEventListener('modal:close', closeEditAccountModal);
+        document.getElementById('caAccountModal').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                e.preventDefault();
+                saveCAAccount();
+            }
+        });
 
         addDebugLog('DOM loaded, initializing settings page', 'info');
 
@@ -3618,6 +3628,9 @@
     window.saveEditAccount = saveEditAccount;
     window.deleteAccount = deleteAccount;
     window.toggleCAProviderConfig = toggleCAProviderConfig;
+    window.openCAAccountModal = openCAAccountModal;
+    window.selectCAAccountType = selectCAAccountType;
+    window.saveCAAccount = saveCAAccount;
     window.applyPrivateCaPreset = applyPrivateCaPreset;
     window.testCAProvider = testCAProvider;
     window.toggleTokenVisibility = toggleTokenVisibility;

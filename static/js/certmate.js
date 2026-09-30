@@ -18,6 +18,31 @@
             .replace(/'/g, '&#39;');
     };
 
+    CM.configuredCAProviders = function(settings, usableOnly) {
+        var providers = (settings && settings.ca_providers) || {};
+        var configured = Object.keys(providers).filter(function (id) {
+            var config = providers[id] || {};
+            if (usableOnly) {
+                var accounts = config.accounts ? Object.values(config.accounts) : [config];
+                return accounts.some(function (account) {
+                    var email = account.email || (settings && settings.email);
+                    if (id === 'letsencrypt' || id === 'letsencrypt_staging') return Boolean(email);
+                    if (id === 'private_ca') return Boolean(account.acme_url && email);
+                    return Boolean((account.eab_kid || account.eab_key_id) &&
+                        (account.eab_hmac || account.eab_hmac_key) && email &&
+                        ((id !== 'digicert' && id !== 'sectigo') || account.acme_url));
+                });
+            }
+            return Boolean(config.enabled || config.email || config.acme_url || config.eab_kid ||
+                config.eab_key_id || Object.keys(config.accounts || {}).length);
+        });
+        var defaultCA = (settings && settings.default_ca) || 'letsencrypt';
+        if (defaultCA === 'letsencrypt' && (!usableOnly || settings.email) && configured.indexOf(defaultCA) < 0) {
+            configured.unshift(defaultCA); // Let's Encrypt works without a saved CA account.
+        }
+        return configured;
+    };
+
     // ── Tagged-template HTML builder ─────────────────────────────
     // Usage:  el.innerHTML = CertMate.html`<div title="${userText}">...</div>`;
     // Each ${value} is auto-escaped. Pre-rendered fragments must be wrapped
