@@ -171,11 +171,13 @@ def test_an_unexpected_failure_is_still_wrapped():
 
     source = inspect.getsource(CertificateManager.renew_certificate)
 
-    assert 'raise RuntimeError(f"Exception: {error_msg}")' in source
+    # Wrapped without the "Exception: " prefix it used to add to every
+    # renewal failure (#666, D8), and with the original kept as the cause.
+    assert 'raise RuntimeError(error_msg) from e' in source
     # ReissueRequired (#966) names itself too: the API maps it to its own
     # code, and wrapping it would turn "reissue this" into "renewal failed".
     assert ('except (FileNotFoundError, DomainOperationInProgress, '
-            'ReissueRequired):') in source
+            'ReissueRequired,\n                RuntimeError):') in source
 
 
 # --- a hook that backgrounds something is not a timeout ------------------
