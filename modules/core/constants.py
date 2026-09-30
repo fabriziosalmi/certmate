@@ -439,6 +439,21 @@ METADATA_SCHEMA_VERSION = 1
 #                                   New answers to existing requests, counted
 #                                   as the security fix they are (2.7, 2.31).
 #
+#   GET /api/certificates, GET /api/certificates/<domain>
+#                                   `deployment_host`: the name the deployment
+#                                   probe connects to, which the PATCH has
+#                                   accepted and stored since #381 but the
+#                                   answer never returned. Settings -> Probe
+#                                   therefore opened its edit form with an
+#                                   empty host and saved `null`, deleting it.
+#                                   Also `notes` (free text) and `tags` (a list)
+#                                   on a server certificate: read on the same
+#                                   routes, written by PATCH /api/certificates/
+#                                   <domain> (#1043), which previously accepted
+#                                   the DNS and probe fields only. 2.33, MINOR:
+#                                   new fields on a response and two new
+#                                   optional request fields.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -458,7 +473,7 @@ METADATA_SCHEMA_VERSION = 1
 # already did — `url_hint` above went out in 2.19. If you are changing what a
 # response CONTAINS rather than which responses exist, this comment is the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.32'
+API_CONTRACT_VERSION = '2.33'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

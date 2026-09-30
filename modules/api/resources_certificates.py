@@ -67,6 +67,75 @@ def _guarded(fetch, item):
         return None
 
 
+_PROBE_KEYS = ('deployment_port', 'deployment_protocol', 'deployment_host')
+_LABEL_KEYS = ('notes', 'tags')
+
+
+def _config_changes(data):
+    """The change set a PATCH asks for, shaped for ``update_config``.
+
+    Probe and label keys are forwarded only when the caller SENT them: absent
+    means "leave it alone", an explicit null means "delete it", and the service
+    depends on telling the two apart. The DNS keys are plain values, where a
+    falsy one also means "leave it alone".
+    """
+    changes = {
+        'dns_provider': data.get('dns_provider'),
+        'account_id': data.get('account_id'),
+        'alias_dns_provider': data.get('alias_dns_provider'),
+    }
+    changes.update({k: data[k] for k in _PROBE_KEYS + _LABEL_KEYS if k in data})
+    return changes
+
+
+def _config_response(domain, metadata, sent):
+    """The PATCH answer: the DNS fields, plus whichever group was touched."""
+    response = {
+        'message': f'Certificate config updated for {domain}',
+        'domain': domain,
+        'dns_provider': metadata.get('dns_provider'),
+        'alias_dns_provider': metadata.get('alias_dns_provider'),
+        'account_id': metadata.get('account_id'),
+    }
+    if any(k in sent for k in _PROBE_KEYS):
+        response.update({k: metadata.get(k) for k in _PROBE_KEYS})
+    if any(k in sent for k in _LABEL_KEYS):
+        response['notes'] = metadata.get('notes')
+        response['tags'] = metadata.get('tags') or []
+    return response
+
+
+def _audit_labels(ctx, domain, sent, tags_before, metadata):
+    """Record a change to a certificate's notes or tags (#1043).
+
+    The tags go in whole, before and after: they are short, they are not
+    secret, and a reader of the log wants to see what changed. The note
+    does not go in at all, only whether it is now set and how long it is:
+    it is free text an operator may use for a ticket or an internal name,
+    and an audit trail that copies it becomes a second place that text can
+    leak from.
+    """
+    if not ctx.audit:
+        return
+    details = {'fields': [k for k in ('notes', 'tags') if k in sent]}
+    if 'tags' in sent:
+        details['tags_before'] = list(tags_before)
+        details['tags_after'] = metadata.get('tags') or []
+    if 'notes' in sent:
+        details['notes_set'] = bool(metadata.get('notes'))
+        details['notes_length'] = len(metadata.get('notes') or '')
+    user = getattr(request, 'current_user', None) or {}
+    ctx.audit.log_operation(
+        operation='update_labels',
+        resource_type='certificate',
+        resource_id=domain,
+        status='success',
+        details=details,
+        user=user.get('username'),
+        ip_address=request.remote_addr,
+    )
+
+
 def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
     """Build the certificates resources against *ctx*."""
 
@@ -169,10 +238,15 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
         @api.doc(security='Bearer')
         @ctx.auth.require_role('operator')
         def patch(self, domain):
-            """Update DNS provider or deployment probe config for an existing
-            certificate (issue #129 + deployment probe extension).
+            """Update DNS provider, deployment probe config, or the notes and
+            tags of an existing certificate (issue #129 + deployment probe
+            extension, #1043).
 
             DNS changes: ``dns_provider``, ``account_id``, ``alias_dns_provider``.
+            Labels: ``notes`` (free text, up to 2000 characters) and ``tags``
+            (a list of up to 20 short strings). Either is cleared by sending
+            null, an empty note or an empty list; a key that is not sent is
+            left alone.
             Probe changes: ``deployment_port`` (int, 1-65535),
             ``deployment_protocol`` ("https-tls" | "tls" | "smtp-starttls")
             and/or ``deployment_host`` (the hostname the deployment-status
@@ -203,17 +277,11 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             # (deployment_port / deployment_protocol / deployment_host) without
             # requiring a DNS provider change.
             has_dns_changes = bool(new_dns_provider or new_alias_dns_provider)
-            has_probe_changes = (
-                'deployment_port' in data
-                or 'deployment_protocol' in data
-                or 'deployment_host' in data
-            )
-
-            if not has_dns_changes and not has_probe_changes:
+            if not has_dns_changes and not any(k in data for k in _PROBE_KEYS + _LABEL_KEYS):
                 return {
                     'error': 'At least one of dns_provider, alias_dns_provider, '
-                             'deployment_port, deployment_protocol, or '
-                             'deployment_host is required',
+                             'deployment_port, deployment_protocol, '
+                             'deployment_host, notes, or tags is required',
                 }, 400
 
             # Both checks below run against the account the certificate will
@@ -264,18 +332,8 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                 # live in the service now (#672). This is the adapter: shape
                 # the request into a change set, map the service's errors onto
                 # status codes.
-                changes = {
-                    'dns_provider': new_dns_provider,
-                    'account_id': new_account_id,
-                    'alias_dns_provider': new_alias_dns_provider,
-                }
-                # Probe keys are forwarded only when the caller SENT them:
-                # absent means "leave it alone", explicit null means "delete
-                # it", and the service depends on telling them apart.
-                for key in ('deployment_port', 'deployment_protocol',
-                            'deployment_host'):
-                    if key in data:
-                        changes[key] = data[key]
+                changes = _config_changes(data)
+                before_tags = (ctx.cert_service.read_metadata(domain) or {}).get('tags') or []
 
                 try:
                     metadata, old_provider = ctx.cert_service.update_config(
@@ -303,17 +361,9 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                 # new one. Both writes now happen inside the lock, in
                 # CertificateService.update_config.
 
-                response = {
-                    'message': f'Certificate config updated for {domain}',
-                    'domain': domain,
-                    'dns_provider': metadata.get('dns_provider'),
-                    'alias_dns_provider': metadata.get('alias_dns_provider'),
-                    'account_id': metadata.get('account_id'),
-                }
-                if has_probe_changes:
-                    response['deployment_port'] = metadata.get('deployment_port')
-                    response['deployment_protocol'] = metadata.get('deployment_protocol')
-                    response['deployment_host'] = metadata.get('deployment_host')
+                response = _config_response(domain, metadata, data)
+                if any(k in data for k in _LABEL_KEYS):
+                    _audit_labels(ctx, domain, data, before_tags, metadata)
                 return response, 200
 
             except DomainOperationInProgress:

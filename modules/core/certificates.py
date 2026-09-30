@@ -30,6 +30,7 @@ import urllib.request
 from pathlib import Path
 from cryptography import x509
 from .ca_manager import CAManager
+from .cert_labels import tags_from_metadata
 from .shell import ShellExecutor
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
                              check_certbot_plugin_installed, clamp_propagation_seconds)
@@ -143,6 +144,8 @@ _REISSUE_OWNED_METADATA_KEYS = frozenset({
 _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
     'renewed_at', 'deployment_host', 'deployment_port', 'deployment_protocol',
     'deployment_status', 'key_type', 'key_size', 'elliptic_curve',
+    # Operator-written labels (#1043); they survive a reissue like the probe keys.
+    'notes', 'tags',
 })
 
 # What the renewal sweep last heard from the CA's ARI endpoint about one
@@ -2298,6 +2301,9 @@ class CertificateManager:
                 # or stale) is visible on GET, not just buried in the logs.
                 # None when the last issuance stored cleanly.
                 'storage_warning': metadata.get('storage_warning'),
+                'deployment_host': metadata.get('deployment_host'),
+                'notes': metadata.get('notes'),
+                'tags': tags_from_metadata(metadata),
                 'deployment_port': metadata.get('deployment_port'),
                 'deployment_protocol': metadata.get('deployment_protocol'),
                 # When the certificate was issued and last renewed (ISO text
@@ -2337,6 +2343,9 @@ class CertificateManager:
             'challenge_type': challenge_type,
             'account_id': account_id,
             'storage_warning': metadata.get('storage_warning'),
+            'deployment_host': metadata.get('deployment_host'),
+            'notes': metadata.get('notes'),
+            'tags': tags_from_metadata(metadata),
             'deployment_port': metadata.get('deployment_port'),
             'deployment_protocol': metadata.get('deployment_protocol'),
             # A certificate that cannot be parsed cannot be named in ARI, so

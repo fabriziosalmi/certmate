@@ -144,7 +144,11 @@
                         // read as 'Expired' here — the same defect the dashboard
                         // was fixed for in v2.2.4, in a file written after it.
                         // Unknown is its own state, as it is in the inventory.
-                        desc: describeExpiry(c),
+                        desc: describeExpiry(c) + ((c.tags && c.tags.length)
+                            ? ' · ' + c.tags.map(function (t) { return '#' + t; }).join(' ') : ''),
+                        // Searched but not shown (#1043): what an operator wrote
+                        // about a certificate finds it the same way its name does.
+                        keywords: ((c.tags || []).join(' ') + ' ' + (c.notes || '')).trim(),
                         domain: c.domain
                     };
                 }) : [];
@@ -182,7 +186,8 @@
         } else {
             currentResults = allItems.filter(function(item) {
                 return item.label.toLowerCase().indexOf(query) !== -1 ||
-                       (item.desc && item.desc.toLowerCase().indexOf(query) !== -1);
+                       (item.desc && item.desc.toLowerCase().indexOf(query) !== -1) ||
+                       (item.keywords && item.keywords.toLowerCase().indexOf(query) !== -1);
             }).slice(0, 10);
         }
 

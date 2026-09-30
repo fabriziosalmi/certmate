@@ -127,6 +127,7 @@ FLOORS = {
     'modules/core/cert_discovery.py': 95,
     'modules/core/cert_inventory.py': 95,
     'modules/core/cert_jobs.py': 90,
+    'modules/core/cert_labels.py': 95,
     'modules/core/cert_probe.py': 80,
     'modules/core/cert_service.py': 90,
     'modules/core/certificates.py': 85,

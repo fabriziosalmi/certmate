@@ -361,6 +361,9 @@
     // Active status filter (redesign phase 5). The status chips replaced the old
     // #statusFilter <select>; this is the single source of truth they drive.
     var currentStatusFilter = 'all';
+    // Active tag filter (#1043): one tag, or '' for none. Combined with the status
+    // chips, so "expiring" + "loadbalancer" is a question the page can answer.
+    var currentTagFilter = '';
 
     // Filter and search certificates
     function filterCertificates() {
@@ -392,10 +395,63 @@
                 }
             }
 
-            return matchesStatus;
+            var matchesTag = !currentTagFilter ||
+                (Array.isArray(cert.tags) && cert.tags.indexOf(currentTagFilter) !== -1);
+
+            return matchesStatus && matchesTag;
         });
 
         displayCertificates(filteredCerts);
+    }
+
+    // ---- Tags (#1043) ------------------------------------------------------
+    // A tag is 1-32 characters from a small charset the server enforces, so the
+    // chip text is escaped anyway but never needs quoting in an attribute.
+    function tagChipsHtml(tags) {
+        return tags.map(function (tag) {
+            var t = escapeHtml(tag);
+            return '<button type="button" data-tag-chip="' + t + '" title="Show only certificates tagged ' + t + '" ' +
+                'class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-surface-2 text-muted ring-1 ring-inset ring-border hover:text-foreground">#' + t + '</button>';
+        }).join('');
+    }
+
+    // The row above the table that lists every tag in use. Hidden when nothing
+    // is tagged, so an instance that does not use the feature sees no new chrome.
+    function renderTagFilterBar() {
+        var bar = document.getElementById('tagFilterBar');
+        if (!bar) return;
+        var seen = {};
+        (Array.isArray(allCertificates) ? allCertificates : []).forEach(function (cert) {
+            (Array.isArray(cert.tags) ? cert.tags : []).forEach(function (tag) { seen[tag] = (seen[tag] || 0) + 1; });
+        });
+        var tags = Object.keys(seen).sort();
+        // A filter on a tag nobody carries any more would leave an empty table
+        // and no way to see why; drop it.
+        if (currentTagFilter && !seen[currentTagFilter]) currentTagFilter = '';
+        if (!tags.length) {
+            bar.classList.add('hidden');
+            bar.classList.remove('flex');
+            bar.innerHTML = '';
+            return;
+        }
+        bar.innerHTML = '<span class="text-xs font-medium text-muted mr-1">Tags</span>' + tags.map(function (tag) {
+            var t = escapeHtml(tag);
+            return '<button type="button" data-tag-filter="' + t + '" aria-pressed="' + (tag === currentTagFilter ? 'true' : 'false') + '" ' +
+                'class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium text-muted ring-1 ring-inset ring-border hover:text-foreground aria-pressed:bg-primary/15 aria-pressed:text-foreground aria-pressed:ring-primary/40">' +
+                '#' + t + ' <span class="text-[10px] tabular-nums opacity-70">' + seen[tag] + '</span></button>';
+        }).join('');
+        bar.classList.remove('hidden');
+        bar.classList.add('flex');
+        bar.querySelectorAll('[data-tag-filter]').forEach(function (btn) {
+            btn.addEventListener('click', function () { setTagFilter(btn.getAttribute('data-tag-filter')); });
+        });
+    }
+
+    // Choosing the tag already chosen clears it, like pressing a pressed chip.
+    function setTagFilter(tag) {
+        currentTagFilter = (currentTagFilter === tag) ? '' : (tag || '');
+        renderTagFilterBar();
+        filterCertificates();
     }
 
     // Sorting state
@@ -840,6 +896,10 @@
             // Domain alias indicator (#122): when cert.domain_alias is set,
             // render a small "Alias: …" hint under the domain name so users
             // can spot rows that go through the CNAME-delegation flow.
+            var rowTags = Array.isArray(cert.tags) ? cert.tags : [];
+            var tagHint = rowTags.length
+                ? rowRaw('<div class="mt-1 flex flex-wrap gap-1">' + tagChipsHtml(rowTags) + '</div>')
+                : false;
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-info-fg min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
@@ -880,6 +940,7 @@
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${cert.domain}</div>
                             ${aliasHint}
+                            ${tagHint}
                             ${mobileMeta}
                         </div>
                     </div>
@@ -898,6 +959,14 @@
                 </td>
             </tr>`;
         }).join('');
+
+        // A tag on a row filters the list; it must not also open the detail panel.
+        container.querySelectorAll('[data-tag-chip]').forEach(function (chip) {
+            chip.addEventListener('click', function (event) {
+                event.stopPropagation();
+                setTagFilter(chip.getAttribute('data-tag-chip'));
+            });
+        });
 
         // Attach event listeners for cert action buttons
         container.querySelectorAll('button[data-action]').forEach(function (btn) {
@@ -1020,6 +1089,9 @@
     // opens the detail panel, matching the row's onclick. Space is prevented
     // from scrolling the page.
     function certRowKey(event, domain) {
+        // Only the row itself: a keypress that bubbles up from a control inside it
+        // (a tag chip, an action button) belongs to that control.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
             event.preventDefault();
             openCertDetail(domain);
@@ -1050,6 +1122,96 @@
             if (CertMate.toast) CertMate.toast('Domain copied to clipboard', 'info');
         });
     };
+
+    // ---- Notes and tags in the detail panel (#1043) -----------------------
+    // Read-only for a viewer; an operator gets an Edit control, because the
+    // PATCH behind it needs that role. The note is text, not HTML: it goes in
+    // through textContent-safe escaping and keeps its line breaks with CSS.
+    function labelsSectionHtml(cert) {
+        var tags = Array.isArray(cert.tags) ? cert.tags : [];
+        var notes = cert.notes || '';
+        var canEdit = roleAtLeast('operator');
+        var empty = '<span class="text-sm text-muted">' + (canEdit ? 'Nothing recorded yet.' : 'Nothing recorded.') + '</span>';
+        var body = (tags.length || notes)
+            ? (tags.length ? '<div class="flex flex-wrap gap-1 mb-2">' + tagChipsHtml(tags) + '</div>' : '') +
+              (notes ? '<p class="text-sm text-foreground whitespace-pre-wrap break-words">' + escapeHtml(notes) + '</p>' : '')
+            : empty;
+        return '<div class="flex items-center justify-between mb-3">' +
+            '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Notes &amp; tags</h4>' +
+            (canEdit ? '<button type="button" data-labels-edit="' + escapeHtml(cert.domain) + '" class="text-xs text-info-fg hover:underline">Edit</button>' : '') +
+            '</div>' + body;
+    }
+
+    function wireLabelsSection(domain) {
+        var section = document.getElementById('certLabelsSection');
+        if (!section) return;
+        var edit = section.querySelector('[data-labels-edit]');
+        if (edit) edit.addEventListener('click', function () { startEditLabels(domain); });
+        section.querySelectorAll('[data-tag-chip]').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                closeCertDetail();
+                setTagFilter(chip.getAttribute('data-tag-chip'));
+            });
+        });
+    }
+
+    function startEditLabels(domain) {
+        var cert = allCertificates.find(function (c) { return c.domain === domain; });
+        var section = document.getElementById('certLabelsSection');
+        if (!cert || !section) return;
+        section.innerHTML = '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Notes &amp; tags</h4>' +
+            '<label for="certLabelTags" class="block text-xs font-medium text-muted mb-1">Tags</label>' +
+            '<input id="certLabelTags" type="text" maxlength="700" autocomplete="off" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" ' +
+            'placeholder="production, customer-x, load-balancer" value="' + escapeHtml((cert.tags || []).join(', ')) + '">' +
+            '<p class="mt-1 text-xs text-muted">Comma-separated. Up to 20 tags of letters, digits, . _ - : / (max 32 characters each).</p>' +
+            '<label for="certLabelNotes" class="block text-xs font-medium text-muted mt-3 mb-1">Notes</label>' +
+            '<textarea id="certLabelNotes" rows="3" maxlength="2000" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" ' +
+            'placeholder="Where it is installed, which ticket it was issued for, who owns it">' + escapeHtml(cert.notes || '') + '</textarea>' +
+            '<div class="mt-3 flex items-center gap-2">' +
+            '<button type="button" data-labels-save class="px-3 py-1.5 bg-primary text-white rounded text-sm">Save</button>' +
+            '<button type="button" data-labels-cancel class="px-3 py-1.5 rounded border border-border text-sm text-muted hover:text-foreground">Cancel</button>' +
+            '</div>';
+        section.querySelector('[data-labels-save]').addEventListener('click', function () { saveLabels(domain); });
+        section.querySelector('[data-labels-cancel]').addEventListener('click', function () {
+            section.innerHTML = labelsSectionHtml(cert);
+            wireLabelsSection(domain);
+        });
+        document.getElementById('certLabelTags').focus();
+    }
+
+    function saveLabels(domain) {
+        var cert = allCertificates.find(function (c) { return c.domain === domain; });
+        if (!cert) return;
+        var tags = document.getElementById('certLabelTags').value.split(',')
+            .map(function (t) { return t.trim(); })
+            .filter(function (t) { return t; });
+        var notes = document.getElementById('certLabelNotes').value;
+        fetch('/api/certificates/' + encodeURIComponent(domain), {
+            method: 'PATCH',
+            headers: API_HEADERS,
+            credentials: 'same-origin',
+            body: JSON.stringify({ tags: tags, notes: notes })
+        }).then(function (r) {
+            return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+        }).then(function (res) {
+            if (!res.ok) {
+                showMessage((res.body && res.body.error) || 'Could not save notes and tags', 'error');
+                return;
+            }
+            cert.tags = res.body.tags || [];
+            cert.notes = res.body.notes || null;
+            var section = document.getElementById('certLabelsSection');
+            if (section) {
+                section.innerHTML = labelsSectionHtml(cert);
+                wireLabelsSection(domain);
+            }
+            renderTagFilterBar();
+            filterCertificates();
+            showMessage('Notes and tags saved', 'success');
+        }).catch(function (error) {
+            showMessage('Could not save notes and tags: ' + error.message, 'error');
+        });
+    }
 
     function openCertDetail(domain) {
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
@@ -1169,6 +1331,8 @@
                 (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
                 (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +
                 '</dl>' +
+                // Notes and tags (#1043): what CertMate cannot know by itself.
+                '<div id="certLabelsSection" class="pt-4 border-t border-border">' + labelsSectionHtml(cert) + '</div>' +
                 // Deployment + Actions side by side — two sections, one column
                 // each, every control a quick-action button (points 2 & 3).
                 '<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t border-border">' +
@@ -1201,6 +1365,8 @@
                 '</div>' +
                 '</div>';
         }
+
+        if (cert.exists) wireLabelsSection(cert.domain);
 
         // Reveal the backdrop and modal, then animate the card in (scale +
         // fade) on the next frame so the transition actually plays. Focus moves
@@ -1760,7 +1926,8 @@
 
             allCertificates = certificates;
             updateStats(certificates);
-            displayCertificates(certificates);
+            renderTagFilterBar();
+            filterCertificates();
             renderKeylessBanner(certificates);
 
             // Check deployment status for all certificates after a short delay.
@@ -3722,6 +3889,7 @@
     window.copyFromModal = copyFromModal;
     window.clearFilters = clearFilters;
     window.setStatusFilter = setStatusFilter;
+    window.setTagFilter = setTagFilter;
     window.sortCertificates = sortCertificates;
     window.filterCertificates = filterCertificates;
     window.toggleDebugConsole = toggleDebugConsole;

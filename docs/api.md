@@ -150,6 +150,9 @@ rather than written by hand:
   "challenge_type": "dns-01",
   "account_id": "default",
   "storage_warning": null,
+  "deployment_host": null,
+  "notes": null,
+  "tags": [],
   "deployment_port": null,
   "deployment_protocol": null,
   "created_at": "2026-09-01T10:14:02Z",
@@ -276,6 +279,49 @@ A missing `enabled` is `400 AUTO_RENEW_FLAG_REQUIRED`; a domain that is not
 tracked in settings is `404 DOMAIN_NOT_IN_SETTINGS`, because only those have a
 renewal flag to toggle. The change is audited and published on the event
 stream as `certificate_auto_renew_changed`.
+
+#### Change a certificate's probe, notes or tags
+
+**Endpoint**: `PATCH /api/certificates/<domain>` — operator
+
+```json
+{
+  "notes": "Order 4711, installed by hand on lb-2",
+  "tags": ["production", "customer-x", "loadbalancer"]
+}
+```
+
+Send only what should change. A key that is absent is left alone; `null` removes
+it. The same request also carries the DNS provider fields
+(`dns_provider`, `account_id`, `alias_dns_provider`) and the deployment probe
+(`deployment_host`, `deployment_port`, `deployment_protocol`), and at least one
+of them is required.
+
+`notes` and `tags` record what CertMate cannot know on its own: where a
+certificate was installed by hand, which ticket it was issued for, who owns it.
+They are returned by `GET /api/certificates` and `GET /api/certificates/<domain>`
+(`notes` is `null` and `tags` is `[]` when there is nothing), shown in the
+dashboard, and searched by the ⌘K palette. They stay with the certificate
+through renewal, Edit & Reissue and backup restore, and every change is written
+to the audit log.
+
+- `notes` is free text of up to 2,000 characters, with no control characters
+  other than a line break or a tab. An empty note removes it. The audit log
+  records that a note was set and how long it is, not what it says.
+- `tags` is a list of at most 20 tags. A tag is 1-32 characters from letters,
+  digits and `. _ - : /`, starting with a letter or a digit, and is stored in
+  lower case, so `Prod` and `prod` are one tag. The audit log records the tags
+  before and after. An empty list removes them.
+
+A value that does not fit is `400` with the reason, and nothing is changed,
+including the other keys in the same request. Answers
+`{"message", "domain", "dns_provider", "alias_dns_provider", "account_id"}` plus
+the probe fields or `notes` and `tags` when the request named them. Since API
+contract **2.33**; `deployment_host` is returned by the certificate reads from the
+same version, where it had been accepted here and never shown.
+
+Tags reach [deploy hooks](deploy-hooks.md#environment-variables-passed-to-your-command)
+as `CERTMATE_TAGS`.
 
 #### Check DNS-01 alias records
 
