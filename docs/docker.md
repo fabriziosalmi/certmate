@@ -201,7 +201,37 @@ docker-compose --env-file /path/to/.env up -d
 
 ---
 
-## Rootless podman / OpenShift (arbitrary UID)
+## Podman (Quadlet, rootless) and OpenShift
+
+### Quadlet: CertMate as a systemd service
+
+[`deploy/podman/certmate.container`](../deploy/podman/certmate.container) is a Quadlet unit: Podman turns it into a systemd service. It runs the published image with named volumes, the port on loopback only, the secrets as Podman secrets, a healthcheck, and `podman auto-update` support.
+
+Rootless, as your own user:
+
+```bash
+# The three secrets, created once. They never appear in a file.
+for s in certmate-api-token certmate-secret-key certmate-backup-passphrase; do
+  openssl rand -hex 32 | tr -d '\n' | podman secret create "$s" -
+done
+
+mkdir -p ~/.config/containers/systemd
+curl -fsSL -o ~/.config/containers/systemd/certmate.container \
+  https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/podman/certmate.container
+systemctl --user daemon-reload
+systemctl --user start certmate
+
+# Keep it running without a login session, and start it at boot.
+sudo loginctl enable-linger "$USER"
+```
+
+Rootful instead: put the file in `/etc/containers/systemd/`, create the secrets as root, then run `sudo systemctl daemon-reload && sudo systemctl start certmate`.
+
+Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the API token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
+
+Checked on Fedora 44 with Podman 5.8, rootful and rootless: the service starts healthy, the token authorises the API, and it comes back after a reboot (rootless through lingering).
+
+### Arbitrary UIDs (rootless Podman, OpenShift)
 
 The image runs as the non-root user `1000` by default, but it also follows the
 OpenShift **arbitrary-UID** pattern: the runtime-writable directories
@@ -214,18 +244,22 @@ private key, the audit-signing key, DNS credential files, `.secret_key`) are
 always created `0600` owner-only, so the group-writable directories never expose
 a key. (Issue [#380](https://github.com/fabriziosalmi/certmate/issues/380).)
 
-### Named volumes — works out of the box
+### Named volumes
 
-A fresh **named volume** inherits the image's group-0 permissions, so no host
-preparation is needed regardless of the UID podman assigns:
+A fresh **named volume** inherits the image's group-0 permissions under rootful
+Podman and Docker. Under **rootless** Podman it does not always: measured on
+Podman 5.8, the root of the `backups` volume, whose image directory is not
+empty, stayed owned by root, and CertMate refused to start with *"Required
+directories are not writable"*. Add `:U`, which gives each volume to the
+container's user:
 
 ```bash
 podman run -d --name certmate \
-  -p 8000:8000 \
-  -v certmate_data:/app/data \
-  -v certmate_certificates:/app/certificates \
-  -v certmate_logs:/app/logs \
-  -v certmate_backups:/app/backups \
+  -p 127.0.0.1:8000:8000 \
+  -v certmate_data:/app/data:U \
+  -v certmate_certificates:/app/certificates:U \
+  -v certmate_logs:/app/logs:U \
+  -v certmate_backups:/app/backups:U \
   docker.io/fabriziosalmi/certmate:latest
 ```
 
@@ -271,10 +305,10 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - certmate_data:/app/data
-      - certmate_certificates:/app/certificates
-      - certmate_logs:/app/logs
-      - certmate_backups:/app/backups
+      - certmate_data:/app/data:U
+      - certmate_certificates:/app/certificates:U
+      - certmate_logs:/app/logs:U
+      - certmate_backups:/app/backups:U
     restart: unless-stopped
 
 volumes:
@@ -285,8 +319,8 @@ volumes:
 ```
 
 If startup aborts with *"Required directories are not writable by the CertMate
-process"*, the mount is not group-0 writable — apply the `chgrp 0 … && chmod
-g+rwX …` above, switch to a named volume, or add `:U` to the bind mounts.
+process"*, the mount is not writable by the container's user — add `:U` to
+the volume, or for a bind mount apply the `chgrp 0 … && chmod g+rwX …` above.
 
 > **Kubernetes / OpenShift:** no changes needed. Set
 > `spec.securityContext.fsGroup: 0` (or rely on the default restricted SCC,

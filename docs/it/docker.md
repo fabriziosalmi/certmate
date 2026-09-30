@@ -1,6 +1,6 @@
 # Build e distribuzione con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 2083ed723fa4e1db -->
+<!-- CERTMATE-TRANSLATED-FROM 2fbf24622135f998 -->
 
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
 
@@ -197,6 +197,34 @@ docker-compose up -d
 # Oppure specifica un file .env diverso
 docker-compose --env-file /path/to/.env up -d
 ```
+
+---
+
+## Podman (Quadlet, rootless) e OpenShift
+
+[`deploy/podman/certmate.container`](../../deploy/podman/certmate.container) è una unit Quadlet: Podman la trasforma in un servizio systemd. Esegue l'immagine pubblicata con volumi con nome, la porta solo su loopback, i segreti come Podman secret, un healthcheck e il supporto a `podman auto-update`.
+
+Rootless, con il tuo utente (i tre segreti si creano una volta e non compaiono in nessun file; `enable-linger` lo tiene attivo senza sessione e lo avvia al boot):
+
+```bash
+for s in certmate-api-token certmate-secret-key certmate-backup-passphrase; do
+  openssl rand -hex 32 | tr -d '\n' | podman secret create "$s" -
+done
+
+mkdir -p ~/.config/containers/systemd
+curl -fsSL -o ~/.config/containers/systemd/certmate.container \
+  https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/podman/certmate.container
+systemctl --user daemon-reload
+systemctl --user start certmate
+
+sudo loginctl enable-linger "$USER"
+```
+
+Rootful: metti il file in `/etc/containers/systemd/`, crea i segreti come root, poi `sudo systemctl daemon-reload && sudo systemctl start certmate`.
+
+Apri `http://127.0.0.1:8000`. La prima pagina crea l'account amministratore e chiede il token API: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
+
+Verificato su Fedora 44 con Podman 5.8, rootful e rootless: il servizio parte sano, il token autorizza l'API e riparte dopo un riavvio (rootless tramite lingering). I volumi usano `:U`: in rootless Podman lasciava a root la radice del volume `backups` e CertMate non partiva. UID arbitrari, bind mount e podman-compose sono descritti nella [pagina inglese](../docker.md#podman-quadlet-rootless-and-openshift).
 
 ---
 
