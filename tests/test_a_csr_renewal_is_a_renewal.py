@@ -17,12 +17,12 @@ failed: ...".
 """
 import json
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from modules.core.certificates import CertificateManager
+from modules.core.csr_issuance import CSR_OUTPUT_DIRNAME
 from modules.core.shell import MockShellExecutor
 from tests.test_csr_only_issuance import _csr, _self_signed
 
@@ -44,8 +44,11 @@ def _manager(tmp_path, returncode=0):
 
     def run(cmd, **kwargs):
         result = original_run(cmd, **kwargs)
-        if '--cert-path' in cmd:        # certbot --csr writes where it is told
-            out = Path(cmd[cmd.index('--cert-path') + 1]).parent
+        if '--csr' in cmd:
+            # certbot --csr writes to the output directory CertMate names. The
+            # fake writes to the same place, known here rather than read back
+            # out of the command.
+            out = tmp_path / DOMAIN / CSR_OUTPUT_DIRNAME
             out.mkdir(parents=True, exist_ok=True)
             pem = _self_signed(DOMAIN)     # a new certificate every run
             for name in ('cert.pem', 'chain.pem', 'fullchain.pem'):
