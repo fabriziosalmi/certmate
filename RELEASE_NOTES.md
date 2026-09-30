@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.42.0 (a renewal that uses today's settings)
+
+[Read the notes](docs/releases/v2.42.0.md)
+
 ## v2.41.0 (setup that closes, tests that need the right role)
 
 [Read the notes](docs/releases/v2.41.0.md)
