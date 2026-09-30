@@ -180,3 +180,70 @@ def test_03_the_window_drives_a_real_renewal(instance):
 def test_04_the_old_window_is_not_shown_for_the_new_certificate(instance):
     info = instance.get_certificate_info(TEST_DOMAIN, use_cache=False)
     assert info['renewal_info'] is None, info['renewal_info']
+
+
+def test_05_a_webhook_target_delivers_the_real_renewed_certificate_and_its_key(instance, tmp_path, monkeypatch):
+    """The two things no synthetic certificate can show about the webhook target (#218).
+
+    What certbot actually leaves on disk: the real chain files, and a real
+    privkey.pem in whatever PEM form certbot wrote it. The target converts that to
+    PKCS#8 and to the traditional form; a conversion tested only on keys this
+    project generated could be wrong for the key certbot makes. So: a real
+    certificate, delivered over real TLS to a local receiver pinned by
+    fingerprint, and the key that arrives must be the key of the certificate that
+    arrives.
+    """
+    from unittest.mock import MagicMock
+
+    from cryptography.hazmat.primitives import serialization
+
+    from modules.core import pinned_https
+    from modules.core.deployer import DeployManager
+    from modules.core.shell import MockShellExecutor
+    from tests.tls_support import TLSServer, handler, key_pem, make_cert, pem
+
+    cert_dir = instance.cert_dir / TEST_DOMAIN
+    recv_cert, recv_key = make_cert('receiver.internal', san_dns=['receiver.internal'])
+    crt, key = tmp_path / 'recv.crt', tmp_path / 'recv.key'
+    crt.write_bytes(pem(recv_cert))
+    key.write_bytes(key_pem(recv_key))
+    pin = __import__('hashlib').sha256(recv_cert.public_bytes(serialization.Encoding.DER)).hexdigest()
+    seen = []
+    server = TLSServer(str(crt), str(key), handler(record=seen))
+    monkeypatch.setattr(pinned_https, 'resolve', lambda host, port, allow: '127.0.0.1')
+
+    template = ('{"domain": "{{domain}}", "fullchain": "{{fullchain}}", "chain": "{{chain}}", '
+                '"pkcs8": "{{privkey_pkcs8}}", "traditional": "{{privkey_traditional}}"}')
+    target = {'type': 'webhook', 'id': 'e2e', 'name': 'e2e receiver', 'enabled': True,
+              'domains': [TEST_DOMAIN],
+              'delivery_consent': {'host': 'receiver.internal', 'by': 'e2e', 'at': 'now'},
+              'config': {'url': f'https://receiver.internal:{server.port}/deliver',
+                         'payload_template': template, 'pin_sha256': pin}}
+    manager = DeployManager(settings_manager=MagicMock(), shell_executor=MockShellExecutor(),
+                            audit_logger=MagicMock(), event_bus=MagicMock(),
+                            cert_dir=instance.cert_dir, data_dir=str(tmp_path / 'data'))
+    manager._log_history = MagicMock()
+    try:
+        results = manager._execute_targets(TEST_DOMAIN, 'renewed', {'enabled': True, 'targets': [target]},
+                                           targets=[target])
+    finally:
+        server.close()
+
+    assert results and results[0]['success'] is True, results
+    body = json.loads(seen[0]['body'])
+    assert body['fullchain'] == (cert_dir / 'fullchain.pem').read_text()
+    assert body['chain'] == (cert_dir / 'chain.pem').read_text()
+    leaf = x509.load_pem_x509_certificate(body['fullchain'].encode())
+    public = leaf.public_key().public_bytes(serialization.Encoding.DER,
+                                            serialization.PublicFormat.SubjectPublicKeyInfo)
+    for shape, marker in (('pkcs8', '-----BEGIN PRIVATE KEY-----'),):
+        delivered = serialization.load_pem_private_key(body[shape].encode(), None)
+        assert body[shape].startswith(marker)
+        assert delivered.public_key().public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo) == public, (
+            'the key that arrived is not the key of the certificate that arrived')
+    traditional = serialization.load_pem_private_key(body['traditional'].encode(), None)
+    assert traditional.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo) == public
+    print('certbot wrote its key as:', (cert_dir / 'privkey.pem').read_text().splitlines()[0],
+          '-> delivered as', body['pkcs8'].splitlines()[0], 'and', body['traditional'].splitlines()[0])
