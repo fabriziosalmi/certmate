@@ -24,8 +24,8 @@ env:
   IMAGE_NAME: certmate
 
 # Default to read-only. The build job authenticates to Docker Hub via the
-# DOCKERHUB_TOKEN secret, not the workflow GITHUB_TOKEN, so no write
-# permission on the repo is needed for the push. The build publishes BuildKit
+# DOCKERHUB_TOKEN secret; its GHCR push uses the workflow GITHUB_TOKEN, which
+# is why that one job is granted `packages: write` and nothing else is. The build publishes BuildKit
 # SBOM and provenance attestations, which travel with the image in the registry
 # and need no extra token; a keyless-signing scheme (cosign / GitHub
 # attestations) would be what requires `id-token: write` at the job level.
@@ -34,7 +34,14 @@ permissions: read-all
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    # Job-level permissions REPLACE the workflow's read-all rather than adding
+    # to it, so `contents: read` is restated. `packages: write` is for the GHCR
+    # push below (#1016): GHCR takes the workflow's GITHUB_TOKEN, Docker Hub
+    # keeps its own DOCKERHUB_TOKEN secret.
+    permissions:
+      contents: read
+      packages: write
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -71,6 +78,14 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    - name: Log in to GHCR
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Compute image namespace
       id: ns
       # GitHub Actions doesn't pass secrets.* to workflows triggered by
@@ -88,7 +103,13 @@ jobs:
       id: meta
       uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6.2.0
       with:
-        images: ${{ env.REGISTRY }}/${{ steps.ns.outputs.namespace }}/${{ env.IMAGE_NAME }}
+        # Two registries, one tag set (#1016). The same multi-arch index, SBOM
+        # and provenance are pushed to both. GHCR avoids Docker Hub's pull
+        # limits and is linked to this repository through the
+        # org.opencontainers.image.source label the action sets.
+        images: |
+          ${{ env.REGISTRY }}/${{ steps.ns.outputs.namespace }}/${{ env.IMAGE_NAME }}
+          ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
         # latest = released: only v* tag builds (cut after the release.sh
         # real-cert e2e gate) may publish :latest; pushes to main get branch
         # tags only (e.g. :main), because CI performs no real-ACME validation.

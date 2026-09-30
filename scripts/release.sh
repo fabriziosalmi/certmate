@@ -270,6 +270,9 @@ if chart.exists():
     # Both: the chart versions with the application on purpose (see Chart.yaml).
     text = re.sub(r'(?m)^(appVersion:\s*")[^"]+(")', rf"\g<1>{v}\g<2>", text)
     text = re.sub(r'(?m)^(version:\s*)[0-9]+\.[0-9]+\.[0-9]+\s*$', rf"\g<1>{v}", text)
+    # The Artifact Hub image annotation names the image the chart deploys.
+    text = re.sub(r'(?m)^(\s+image: docker\.io/fabriziosalmi/certmate:)[0-9]+\.[0-9]+\.[0-9]+\s*$',
+                  rf"\g<1>{v}", text)
     chart.write_text(text, encoding="utf-8")
 # README.md, not index.md: `docs/index.md` was never a documentation index —
 # it was the client-certificate launch write-up wearing that filename, and it

@@ -1,0 +1,11 @@
+# Artifact Hub repository metadata (#1018), pushed next to the chart as the
+# `artifacthub.io` tag of oci://ghcr.io/fabriziosalmi/charts/certmate by
+# .github/workflows/publish-chart.yml.
+#
+# It lives here, outside charts/certmate/, so `helm package` does not ship it.
+#
+# repositoryID is assigned by Artifact Hub when the repository is added there
+# (Control Panel -> Repositories). With it set, the listing shows the
+# "Verified publisher" badge. Until then it is empty and the workflow skips
+# the push: an empty file would verify nothing.
+repositoryID: ""
