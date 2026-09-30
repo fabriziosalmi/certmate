@@ -1,43 +1,73 @@
-"""The Homebrew formula for certmate-cli (#1032) installs the client this
-repository ships.
+"""Homebrew: the formula lives in the tap and a release job keeps it current
+(#1032).
 
-Verified with a local tap: built from source, `certmate health` read a live
-instance, `brew test` and `brew audit --strict --online` passed. The formula
-pins sdists by URL and sha256, so it silently keeps installing the old client
-after a release unless something compares the two; this does.
+A copy of the formula in this repository, held to the client versions,
+blocked every client release: the version bump cannot carry an sha256 that
+only exists once PyPI has the new sdist. So the tap is the one place the
+formula lives, and `bump-homebrew` in publish-clients.yml updates it after
+publishing, installs it with brew, and pushes only if that works.
+
+Verified: the bump script leaves the current formula byte-identical, rewrites
+exactly the cli URL/sha256 and the certmate-sdk resource for another version,
+and the rewritten formula, tapped from a local checkout as the job does, built
+and passed `brew test`.
 """
-import re
-import tomllib
+import importlib.util
 from pathlib import Path
 
 import pytest
+import yaml
 
 pytestmark = [pytest.mark.unit]
 
 REPO = Path(__file__).resolve().parent.parent
-FORMULA = (REPO / 'deploy' / 'homebrew' / 'certmate-cli.rb').read_text()
+SPEC = importlib.util.spec_from_file_location('bump', REPO / 'scripts' / 'bump_homebrew_formula.py')
+bump = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(bump)
+
+FORMULA = '''class CertmateCli < Formula
+  url "https://files.pythonhosted.org/x/certmate_cli-0.1.5.tar.gz"
+  sha256 "''' + 'a' * 64 + '''"
+
+  resource "annotated-doc" do
+    url "https://files.pythonhosted.org/x/annotated_doc-0.0.4.tar.gz"
+    sha256 "''' + 'b' * 64 + '''"
+  end
+
+  resource "certmate-sdk" do
+    url "https://files.pythonhosted.org/x/certmate_sdk-0.1.5.tar.gz"
+    sha256 "''' + 'c' * 64 + '''"
+  end
+end
+'''
 
 
-def _version(package):
-    with open(REPO / 'clients' / package / 'pyproject.toml', 'rb') as f:
-        return tomllib.load(f)['project']['version']
+def test_the_bump_rewrites_the_cli_and_the_sdk_and_nothing_else():
+    cli = ('https://files.pythonhosted.org/y/certmate_cli-0.2.0.tar.gz', 'd' * 64)
+    sdk = ('https://files.pythonhosted.org/y/certmate_sdk-0.2.0.tar.gz', 'e' * 64)
+    out = bump.bump(FORMULA, cli, sdk)
+    assert f'  url "{cli[0]}"' in out and f'  sha256 "{cli[1]}"' in out
+    assert f'url "{sdk[0]}"' in out and f'sha256 "{sdk[1]}"' in out
+    # The other resource is untouched.
+    assert 'annotated_doc-0.0.4.tar.gz' in out and 'b' * 64 in out
 
 
-def test_the_formula_installs_the_current_cli():
-    url = re.search(r'^  url "([^"]+)"', FORMULA, re.M).group(1)
-    assert url.endswith(f"/certmate_cli-{_version('certmate-cli')}.tar.gz"), url
+def test_a_formula_it_does_not_recognise_is_refused():
+    with pytest.raises(SystemExit):
+        bump.bump(FORMULA.replace('resource "certmate-sdk"', 'resource "other"'),
+                  ('u', 'd' * 64), ('u', 'e' * 64))
 
 
-def test_the_formula_installs_the_current_sdk():
-    block = re.search(r'resource "certmate-sdk" do\n\s+url "([^"]+)"', FORMULA).group(1)
-    assert block.endswith(f"/certmate_sdk-{_version('certmate-sdk')}.tar.gz"), block
+def test_there_is_no_second_copy_of_the_formula_here():
+    assert not (REPO / 'deploy' / 'homebrew' / 'certmate-cli.rb').exists()
 
 
-def test_certifi_comes_from_homebrew_not_a_resource():
-    assert 'depends_on "certifi"' in FORMULA
-    assert 'resource "certifi"' not in FORMULA
-
-
-def test_every_resource_is_pinned_by_hash():
-    resources = re.findall(r'resource "[^"]+" do\n\s+url "[^"]+"\n\s+sha256 "[0-9a-f]{64}"', FORMULA)
-    assert len(resources) == FORMULA.count('resource "')
+def test_the_release_job_installs_before_it_pushes():
+    wf = yaml.safe_load((REPO / '.github' / 'workflows' / 'publish-clients.yml').read_text())
+    job = wf['jobs']['bump-homebrew']
+    assert job['needs'] == 'publish-cli'
+    assert job['if'] == "startsWith(github.ref, 'refs/tags/clients-v')"
+    names = [s.get('name') for s in job['steps']]
+    assert names.index('Install and test it before pushing') < names.index('Push the bump')
+    tap = next(s for s in job['steps'] if s.get('name') == 'Check out the tap')
+    assert tap['with']['token'] == '${{ secrets.HOMEBREW_TAP_TOKEN }}'
