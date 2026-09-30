@@ -15,6 +15,7 @@ import time
 import uuid
 from pathlib import Path
 
+from .cert_labels import tags_from_metadata
 from .structured_logging import sanitize_text, JSONFormatter
 from .utils import utc_now_iso
 from .deploy_targets import run_targets, target_applies, TARGET_TYPES
@@ -658,6 +659,19 @@ class DeployManager:
             'timestamp': utc_now_iso(),
         })
 
+    def _tags_of(self, domain):
+        """The certificate's tags, read from its metadata.json, or [].
+
+        Read on the file rather than through the certificate manager: the
+        deployer has no manager, and a hook must still fire when the metadata
+        is unreadable. A missing or malformed file means no tags, not no hook.
+        """
+        try:
+            with open(self.cert_dir / domain / 'metadata.json', encoding='utf-8') as f:
+                return tags_from_metadata(json.load(f))
+        except (OSError, ValueError):
+            return []
+
     def _run_hook(self, hook, domain, event_type, dry_run=False):
         """Execute a single deploy hook."""
         hook_id = hook.get('id', '')
@@ -696,6 +710,13 @@ class DeployManager:
         # (issue #232).
         deploy_env['CERTMATE_CHAIN_PATH'] = str(self.cert_dir / domain / 'chain.pem')
         deploy_env['CERTMATE_EVENT'] = event_type
+        # The tags an operator put on the certificate (#1043), comma-separated,
+        # so one hook can decide per certificate whether to act: `case
+        # ",$CERTMATE_TAGS," in *,loadbalancer,*)`. Always set, empty when there
+        # are none, so a hook can rely on it and never inherits a stale value
+        # from CertMate's own environment. The tag charset has no quote, space
+        # or `$`, which is what makes it safe to hand over.
+        deploy_env['CERTMATE_TAGS'] = ','.join(self._tags_of(domain))
         if dry_run:
             deploy_env['CERTMATE_DRY_RUN'] = '1'
 

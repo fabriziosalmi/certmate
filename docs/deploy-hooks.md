@@ -112,6 +112,7 @@ Every invocation sets these in the hook's process environment:
 | `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` — **not set** for a [CSR-only certificate](csr-only-certificates.md), whose key stays on the device |
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
 | `CERTMATE_CHAIN_PATH` | `/app/certificates/api.example.com/chain.pem` (intermediates only, no leaf — for targets that want the chain as a separate file) |
+| `CERTMATE_TAGS` | `loadbalancer,env:prod` — the certificate's [tags](api.md), comma-separated and lower case; **empty** when it has none, and always set, so a hook can rely on it (since API contract 2.33) |
 | `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` (Deploy Now) / `test` (per-hook test) |
 | `CERTMATE_DRY_RUN` | Set to `1` only for a per-hook test (`/api/deploy/test/<id>`, the **Test** button); absent otherwise, including for Deploy Now. The command still runs; this is only a signal your script can check. |
 
@@ -358,6 +359,21 @@ openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -subject -dates
 Mounted into the container, and written against what the container has. Use a
 script whenever you need `;` or `&&` — the command field rejects both, and the
 script is where that logic belongs anyway.
+
+### Act only on some certificates
+
+Tag a certificate (`PATCH /api/certificates/<domain>` with `tags`, or **Edit** in
+its detail panel) and one global hook can decide per certificate whether to
+act. `CERTMATE_TAGS` is always set, comma-separated and lower case, and a tag
+contains only letters, digits and `. _ - : /`, so it is safe to use unquoted. In
+your script:
+
+```sh
+echo ",$CERTMATE_TAGS," | grep -q ',loadbalancer,' || exit 0
+```
+
+The surrounding commas are what make the match exact: without them `loadbalancer`
+would also match a tag called `loadbalancer-old`.
 
 ### Skip real work during a Test run
 

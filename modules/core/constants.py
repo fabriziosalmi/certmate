@@ -446,7 +446,13 @@ METADATA_SCHEMA_VERSION = 1
 #                                   answer never returned. Settings -> Probe
 #                                   therefore opened its edit form with an
 #                                   empty host and saved `null`, deleting it.
-#                                   2.33, MINOR: a new field on a response.
+#                                   Also `notes` (free text) and `tags` (a list)
+#                                   on a server certificate: read on the same
+#                                   routes, written by PATCH /api/certificates/
+#                                   <domain> (#1043), which previously accepted
+#                                   the DNS and probe fields only. 2.33, MINOR:
+#                                   new fields on a response and two new
+#                                   optional request fields.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the

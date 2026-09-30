@@ -103,6 +103,15 @@ def test_01_issue_on_staging(instance):
     pem, _ = _leaf(instance)
     print('issuer:', assert_staging_issuer(pem.decode()))
 
+    # Notes and tags an operator attaches after issuing (#1043). Written the way
+    # the PATCH route writes them; the renewal in test_03 is what has to keep
+    # them, through the real certbot run that carries a pre-renewal snapshot of
+    # this file across the whole CA exchange.
+    metadata = instance._load_metadata(TEST_DOMAIN)
+    metadata['notes'] = 'kept across a real renewal'
+    metadata['tags'] = ['e2e', 'loadbalancer']
+    instance.write_metadata(TEST_DOMAIN, metadata)
+
 
 def test_02_the_sweep_records_what_staging_says(instance):
     """No renewal yet — the window is in the future — but the answer is
@@ -161,6 +170,9 @@ def test_03_the_window_drives_a_real_renewal(instance):
     pem_after, cert_after = _leaf(instance)
     assert cert_after.serial_number != cert_before.serial_number
     assert_staging_issuer(pem_after.decode())
+    kept = instance._load_metadata(TEST_DOMAIN)
+    assert kept.get('notes') == 'kept across a real renewal', kept
+    assert kept.get('tags') == ['e2e', 'loadbalancer'], kept
     print('renewed:', hex(cert_before.serial_number), '->',
           hex(cert_after.serial_number))
 

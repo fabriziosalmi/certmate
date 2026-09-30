@@ -19,6 +19,7 @@ import logging
 import time
 
 from .structured_logging import scrub_log_value
+from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
 from .utils import validate_domain, validate_key_options
@@ -525,6 +526,27 @@ class CertificateService:
                             '(no scheme, path, whitespace, or wildcard)')
                     metadata['deployment_host'] = host
 
+            # Notes and tags (#1043), under the same absent-versus-null rule as
+            # the probe keys: absent leaves them alone, null (or an empty note
+            # or list) removes them. They are validated in cert_labels, which the
+            # deploy-hook path also reads from, so the two cannot disagree on
+            # what a tag is.
+            if 'notes' in changes:
+                notes = changes['notes']
+                notes = normalize_notes(notes) if notes is not None else ''
+                if notes:
+                    metadata['notes'] = notes
+                else:
+                    metadata.pop('notes', None)
+
+            if 'tags' in changes:
+                tags = changes['tags']
+                tags = normalize_tags(tags) if tags is not None else []
+                if tags:
+                    metadata['tags'] = tags
+                else:
+                    metadata.pop('tags', None)
+
             # write_metadata, not _save_metadata: this is the one call site
             # whose outcome reaches a person, and the boolean threw the reason
             # away. "Failed to update metadata for domain: X" was produced by
@@ -552,9 +574,16 @@ class CertificateService:
             # callback anywhere acquires a domain lock, so the reverse order
             # does not exist and this cannot deadlock. Anything that adds one
             # would have to take the domain lock first.
-            self._settings.update(
-                lambda s: self._write_domain_provider(s, domain, changes),
-                'dns_provider_change')
+            #
+            # Only when a DNS field actually changed. Every settings save takes
+            # a backup and counts against retention, so a note or a tag edit,
+            # which has nothing to mirror, must not write settings.json at all:
+            # tagging fifty certificates would otherwise leave fifty backups
+            # named for a DNS provider change that never happened.
+            if changes.get('dns_provider') or changes.get('account_id'):
+                self._settings.update(
+                    lambda s: self._write_domain_provider(s, domain, changes),
+                    'dns_provider_change')
 
         return metadata, old_dns_provider
 
