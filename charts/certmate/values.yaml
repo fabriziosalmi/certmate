@@ -7,6 +7,8 @@
 # that happen quietly.
 
 image:
+  # Docker Hub. Releases after v2.42.0 are also published, identically, to
+  # ghcr.io/fabriziosalmi/certmate, which has no anonymous pull limit.
   repository: fabriziosalmi/certmate
   # Defaults to .Chart.AppVersion. Pin a digest in production if you want the
   # exact bytes rather than the tag.
