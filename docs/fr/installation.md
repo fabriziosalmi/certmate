@@ -1,6 +1,6 @@
 # Guide d'installation
 
-<!-- CERTMATE-TRANSLATED-FROM 90ab677cefc5616f -->
+<!-- CERTMATE-TRANSLATED-FROM 69476297b4091494 -->
 
 Ce guide couvre toutes les méthodes d'installation et de déploiement de CertMate.
 
@@ -59,11 +59,7 @@ python app.py
 
 ### Avec Docker Compose (recommandé)
 
-```bash
-git clone https://github.com/fabriziosalmi/certmate.git
-cd certmate
-docker-compose up -d
-```
+Téléchargez le bundle de production et démarrez-le : un seul fichier, l'image publiée, sans clone ni compilation. Les commandes et le rôle de chaque réglage sont dans [Docker : En production avec Docker Compose](docker.md#en-production-avec-docker-compose).
 
 ### Avec Docker Build
 

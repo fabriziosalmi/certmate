@@ -4,6 +4,36 @@ This guide covers building, deploying, and running CertMate in Docker — includ
 
 ---
 
+## Production with Docker Compose
+
+The shortest way to run CertMate in production: one file, the published image, nothing to build and no repository to clone.
+
+```bash
+mkdir certmate && cd certmate
+curl -fsSLO https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/docker-compose.yml
+printf 'API_BEARER_TOKEN=%s\nSECRET_KEY=%s\nCERTMATE_BACKUP_PASSPHRASE=%s\n' \
+  "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+chmod 600 .env
+docker compose up -d
+```
+
+Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the `API_BEARER_TOKEN` from `.env` to authorize it. Keep `.env`: it holds the token API clients use, the key that signs sessions, and the passphrase without which a backup cannot restore this instance.
+
+What the file does:
+
+- **Pins the image** of the latest release. The copy on `main` is updated with every release. To stay on a version, set `CERTMATE_VERSION=X.Y.Z` in `.env`.
+- **Keeps everything in named volumes** (`certificates`, `data`, `logs`, `backups`). Docker creates them with the ownership CertMate needs, so there is nothing to `chown`. `docker compose down` keeps them; `down -v` deletes them.
+- **Listens on 127.0.0.1 only.** For remote access, put a reverse proxy in front and set `BEHIND_PROXY=true`. Setting `CERTMATE_BIND=0.0.0.0` publishes it on every interface. `CERTMATE_PORT` changes the host port.
+- **Refuses to start without `API_BEARER_TOKEN` and `SECRET_KEY`**, instead of generating values that would change every time the container is recreated.
+
+Optional variables for `.env`: `CLOUDFLARE_TOKEN` (bootstraps a Cloudflare DNS account on first start), `LETSENCRYPT_EMAIL`, `BEHIND_PROXY`.
+
+**Upgrade:** download the file again (or change `CERTMATE_VERSION`), then run `docker compose pull && docker compose up -d`.
+
+The `docker-compose.yml` at the root of the repository builds the image from source and is meant for development.
+
+---
+
 ## Quick Start
 
 ### Pull and Run
