@@ -103,7 +103,7 @@ protobuf==7.36.2
 pyasn1==0.6.4
 pyasn1-modules==0.4.2
 pycparser==3.0
-pyjwt==2.14.0
+pyjwt==2.15.1
 pyopenssl==26.0.0
 pyotp==2.10.0
 pyparsing==3.3.3
