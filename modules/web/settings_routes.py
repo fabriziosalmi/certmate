@@ -265,6 +265,86 @@ def _ca_provider_account(managers, settings_manager, audit_logger, provider, acc
                             ca_manager, provider, account_id)
 
 
+def _stamp_key_delivery_consent(deploy_manager, audit_logger, data):
+    """Record, on the server, who confirmed where a webhook target sends the private key.
+
+    A webhook target whose template names the key sends it to the host in its URL.
+    The client only ACKNOWLEDGES that host (`acknowledge_key_delivery_to`); the
+    consent itself, with who and when, is written here and never read from the
+    request, so a client cannot confirm for itself. Returns ``(data, None)`` or
+    ``(None, reason)``.
+    """
+    if not isinstance(data, dict) or not isinstance(data.get('targets'), list):
+        return data, None
+    from modules.core.deploy_target_webhook import stamp_consent
+    actor = getattr(request, 'current_user', None) or {}
+    previous = (deploy_manager.get_config() or {}).get('targets') or []
+    targets, error = stamp_consent(data['targets'], previous, actor.get('username') or 'unknown')
+    if error:
+        return None, error
+    before = {(t.get('id'), (t.get('delivery_consent') or {}).get('at'))
+              for t in previous if isinstance(t, dict)}
+    if audit_logger:
+        for target in targets:
+            consent = target.get('delivery_consent') if isinstance(target, dict) else None
+            if consent and (target.get('id'), consent.get('at')) not in before:
+                audit_logger.log_operation(
+                    operation='confirm_key_delivery', resource_type='deploy_target',
+                    resource_id=str(target.get('id')), status='success',
+                    details={'host': consent.get('host'), 'target': target.get('name')},
+                    user=actor.get('username'), ip_address=request.remote_addr)
+    return dict(data, targets=targets), None
+
+
+def _save_deploy_config(deploy_manager, audit_logger):
+    """POST /api/deploy/config: confirm key delivery, validate, save, audit."""
+    data, err = _stamp_key_delivery_consent(deploy_manager, audit_logger, request.json or {})
+    if err:
+        return jsonify({'error': err}), 400
+    ok, err = deploy_manager.save_config(data)
+    if ok:
+        if audit_logger:
+            actor = getattr(request, 'current_user', {}) or {}
+            # Hook commands themselves are NEVER logged (would leak
+            # secrets + risk log-injection). We record that the
+            # configuration was touched, by whom, from where.
+            audit_logger.log_deploy_hook_changed(
+                scope='global',
+                hook_id='config',
+                operation='update',
+                user=actor.get('username'),
+                ip_address=request.remote_addr,
+            )
+        return jsonify({'message': 'Deploy configuration saved'})
+    # Surface the specific reason (issue #102) so users see *why*
+    # a hook was rejected rather than a generic save failure.
+    return jsonify({'error': err or 'Invalid configuration or save failed'}), 400
+
+
+def _register_target_preview_route(app, auth_manager, deploy_manager):
+    @app.route('/api/deploy/targets/preview', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def api_deploy_target_preview():
+        """Render what a webhook target would send. Reads no file and sends nothing."""
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 503
+        from modules.core.deploy_target_webhook import (
+            TARGET_WEBHOOK, WebhookTarget, _url_host, validate_webhook_target)
+        target = request.get_json(silent=True)
+        if not isinstance(target, dict) or target.get('type') != TARGET_WEBHOOK:
+            return jsonify({'error': 'send a target of type "webhook"'}), 400
+        target = dict(target, config=dict(target.get('config') or {}))
+        target['config'].pop('acknowledge_key_delivery_to', None)
+        # Validated as if the destination were confirmed: a preview is how an
+        # operator sees what they are about to confirm.
+        ok, error = validate_webhook_target(dict(
+            target, delivery_consent={'host': _url_host(target['config'].get('url'))}))
+        if not ok:
+            return jsonify({'error': error}), 400
+        return jsonify(WebhookTarget(target).preview(
+            domain=str(request.args.get('domain') or 'example.com')[:253]))
+
+
 def _register_ca_account_route(app, auth_manager, managers, settings_manager, audit_logger):
     @app.route('/api/web/settings/ca-providers/<string:provider>/accounts/<string:account_id>',
                methods=['POST', 'DELETE'])
@@ -368,6 +448,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': 'Failed to load settings'}), 500
 
     _register_ca_account_route(app, auth_manager, managers, settings_manager, audit_logger)
+    _register_target_preview_route(app, auth_manager, deploy_manager)
 
     @app.route('/api/settings', methods=['POST'])
     @app.route('/api/web/settings', methods=['POST'])
@@ -899,27 +980,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Failed to get deploy config'}), 500
 
         try:
-            data = request.json or {}
-            ok, err = deploy_manager.save_config(data)
-            if ok:
-                if audit_logger:
-                    actor = getattr(request, 'current_user', {}) or {}
-                    # Hook commands themselves are NEVER logged (would leak
-                    # secrets + risk log-injection). We record that the
-                    # configuration was touched, by whom, from where.
-                    audit_logger.log_deploy_hook_changed(
-                        scope='global',
-                        hook_id='config',
-                        operation='update',
-                        user=actor.get('username'),
-                        ip_address=request.remote_addr,
-                    )
-                return jsonify({'message': 'Deploy configuration saved'})
-            # Surface the specific reason (issue #102) so users see *why*
-            # a hook was rejected rather than a generic save failure.
-            return jsonify({
-                'error': err or 'Invalid configuration or save failed'
-            }), 400
+            return _save_deploy_config(deploy_manager, audit_logger)
         except Exception as e:
             logger.error(f"Failed to save deploy config: {e}")
             return jsonify({'error': 'Failed to save deploy config'}), 500

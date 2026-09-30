@@ -32,7 +32,11 @@ _SA_NAMESPACE = f'{_SA_DIR}/namespace'
 
 # Recognised target types.
 TARGET_KUBERNETES_SECRET = 'kubernetes-secret'
-TARGET_TYPES = (TARGET_KUBERNETES_SECRET,)
+# Delivers the certificate, and optionally the key, to an HTTPS endpoint (#218).
+# Its implementation lives in deploy_target_webhook and is imported where it is
+# built, so importing this module stays cheap.
+TARGET_WEBHOOK = 'webhook'
+TARGET_TYPES = (TARGET_KUBERNETES_SECRET, TARGET_WEBHOOK)
 
 
 class DeployTargetError(Exception):
@@ -129,6 +133,17 @@ class KubernetesSecretTarget:
                 'tls.key': base64.b64encode(key_pem).decode('ascii'),
             },
         }
+
+    # --- what it reads ----------------------------------------------------- #
+
+    @staticmethod
+    def required_files():
+        """The files a run reads: this target always publishes the key with the certificate."""
+        return ('fullchain.pem', 'privkey.pem')
+
+    def deploy_from(self, material, domain, event_type):
+        """Read what it needs through *material* and deploy it."""
+        return self.deploy(material('fullchain.pem'), material('privkey.pem'))
 
     # --- deploy ------------------------------------------------------------ #
 
@@ -249,7 +264,23 @@ def build_target(target, http_patch=None):
     ttype = (target or {}).get('type')
     if ttype == TARGET_KUBERNETES_SECRET:
         return KubernetesSecretTarget(target.get('config') or {}, http_patch=http_patch)
+    if ttype == TARGET_WEBHOOK:
+        from .deploy_target_webhook import WebhookTarget
+        return WebhookTarget(target)
     raise DeployTargetError(f'unknown deploy target type: {ttype!r}')
+
+
+def target_needs_key(target):
+    """Whether running *target* reads the private key.
+
+    Decided from the configuration, before any file is opened, because it is what
+    lets a certificate whose key lives on another device (a CSR issuance) still be
+    delivered by a target that only sends the certificate.
+    """
+    try:
+        return 'privkey.pem' in build_target(target).required_files()
+    except DeployTargetError:
+        return False
 
 
 def target_applies(target, domain, event_type):
@@ -267,12 +298,24 @@ def target_applies(target, domain, event_type):
     return event_type in on_events or event_type == 'manual'
 
 
-def run_targets(targets, domain, cert_pem, key_pem, event_type, http_patch=None):
+def run_targets(targets, domain, cert_pem, key_pem, event_type, http_patch=None, *, material=None):
     """Run every applicable typed target for *domain*, failure-isolated.
 
     Returns a list of per-target result dicts. A build/deploy error for one
     target is captured and never aborts the others (or the cert operation).
+
+    *material* is a callable ``name -> bytes`` that reads a file of the
+    certificate on demand, so a target that does not use the private key never
+    causes it to be opened. Without it the two byte strings given are used, which
+    is how the tests and the older callers supply them.
     """
+    if material is None:
+        given = {'fullchain.pem': cert_pem, 'cert.pem': cert_pem, 'privkey.pem': key_pem}
+
+        def material(name):
+            if given.get(name) is None:
+                raise FileNotFoundError(name)
+            return given[name]
     results = []
     for target in targets or []:
         if not target_applies(target, domain, event_type):
@@ -280,9 +323,13 @@ def run_targets(targets, domain, cert_pem, key_pem, event_type, http_patch=None)
         name = target.get('name') or target.get('id') or target.get('type')
         try:
             instance = build_target(target, http_patch=http_patch)
-            outcome = instance.deploy(cert_pem, key_pem)
+            outcome = instance.deploy_from(material, domain, event_type)
         except DeployTargetError as e:
             outcome = {'success': False, 'status_code': None, 'message': str(e)}
+        except OSError:
+            # Not the path: it names the certificate directory, and this message is recorded.
+            outcome = {'success': False, 'status_code': None,
+                       'message': 'certificate files unreadable'}
         except Exception as e:  # pragma: no cover - defensive isolation
             logger.exception('Deploy target %s crashed', name)
             outcome = {'success': False, 'status_code': None,

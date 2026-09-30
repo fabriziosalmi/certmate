@@ -18,7 +18,7 @@ from pathlib import Path
 from .cert_labels import tags_from_metadata
 from .structured_logging import sanitize_text, JSONFormatter
 from .utils import utc_now_iso
-from .deploy_targets import run_targets, target_applies, TARGET_TYPES
+from .deploy_targets import run_targets, target_applies, target_needs_key, TARGET_TYPES
 from .deploy_window import (
     STALE_AFTER_DAYS, WindowError, describe as describe_window, is_open,
     next_open, normalize_window,
@@ -543,38 +543,41 @@ class DeployManager:
         if not any(target_applies(t, domain, event_type) for t in targets):
             return []
 
-        cert_path = self.cert_dir / domain / 'fullchain.pem'
-        key_path = self.cert_dir / domain / 'privkey.pem'
+        domain_dir = self.cert_dir / domain
+        cert_path = domain_dir / 'fullchain.pem'
+        key_path = domain_dir / 'privkey.pem'
+        applicable = [t for t in targets if target_applies(t, domain, event_type)]
         if cert_path.exists() and not key_path.exists():
-            # A CSR-only certificate (#599). Every typed target ships the key
-            # along with the certificate, so none of them can serve one — and
-            # the generic "certificate files unreadable" this used to produce
-            # would fire on every renewal, reading as a broken instance rather
-            # than an incompatible pairing.
-            message = (
-                f'{domain} has no private key on this node: it was issued from '
-                f'a CSR and the key stays on the device that generated it. '
-                f'Typed deploy targets publish the key with the certificate, '
-                f'so use a shell hook that fetches only the certificate '
-                f'instead.')
-            logger.warning("Deploy targets skipped for %s: no local key", domain)
-            failure = {'success': False, 'target': None, 'type': None,
-                       'domain': domain, 'status_code': None,
-                       'message': message}
-            self._record_target(failure, domain, event_type)
-            return [failure]
-        try:
-            cert_pem = cert_path.read_bytes()
-            key_pem = key_path.read_bytes()
-        except OSError as e:
-            logger.error("Deploy targets: cannot read cert files for %s: %s", domain, e)
-            # An unreadable cert is an operational failure that affects deploy —
-            # record it (audit + history + failure alert), don't swallow it.
-            failure = {'success': False, 'target': None, 'type': None,
-                       'domain': domain, 'status_code': None,
-                       'message': f'certificate files unreadable: {e}'}
-            self._record_target(failure, domain, event_type)
-            return [failure]
+            # A CSR-only certificate (#599). A target that publishes the key
+            # cannot serve one, and the generic "certificate files unreadable"
+            # this used to produce would fire on every renewal, reading as a
+            # broken instance rather than an incompatible pairing. A target that
+            # sends only the certificate can, and is run.
+            keyed = [t for t in applicable if target_needs_key(t)]
+            if keyed:
+                message = (
+                    f'{domain} has no private key on this node: it was issued from '
+                    f'a CSR and the key stays on the device that generated it. '
+                    f'Typed deploy targets publish the key with the certificate, '
+                    f'so use a shell hook that fetches only the certificate '
+                    f'instead.')
+                logger.warning("Deploy targets skipped for %s: no local key", domain)
+                failure = {'success': False, 'target': None, 'type': None,
+                           'domain': domain, 'status_code': None,
+                           'message': message}
+                self._record_target(failure, domain, event_type)
+                if len(keyed) == len(applicable):
+                    return [failure]
+                targets = [t for t in targets if t not in keyed]
+                failures = [failure]
+            else:
+                failures = []
+        else:
+            failures = []
+
+        def material(name):
+            """One file of the certificate, read when a target asks for it."""
+            return (domain_dir / name).read_bytes()
 
         # Typed targets have the same gap shell hooks had: `run_targets`
         # publishes to every target and only then returns, so a process killed
@@ -600,10 +603,10 @@ class DeployManager:
             'timestamp': utc_now_iso(),
         })
         try:
-            results = run_targets(targets, domain, cert_pem, key_pem, event_type)
+            results = run_targets(targets, domain, None, None, event_type, material=material)
             for result in results:
                 self._record_target(result, domain, event_type)
-            return results
+            return failures + results
         finally:
             with self._in_flight_lock:
                 self._in_flight.discard(batch_id)
@@ -617,6 +620,26 @@ class DeployManager:
                 'targets': len(targets or []),
                 'timestamp': utc_now_iso(),
             })
+
+    @staticmethod
+    def _target_audit_details(result, event_type):
+        """What the audit log says about one target result.
+
+        A delivery that carried the private key says so: where, and which
+        certificate. The key itself, the body and the receiver's answer are never
+        in it.
+        """
+        details = {
+            'target': result.get('target'),
+            'type': result.get('type'),
+            'event': event_type,
+            'status_code': result.get('status_code'),
+            'message': result.get('message') or '',
+        }
+        for extra in ('key_sent_to', 'certificate_sha256', 'attempts'):
+            if result.get(extra) is not None:
+                details[extra] = result[extra]
+        return details
 
     def _record_target(self, result, domain, event_type):
         """Audit + history + failure-event for one typed-target result."""
@@ -633,13 +656,7 @@ class DeployManager:
                 resource_type='certificate',
                 resource_id=domain,
                 status=status,
-                details={
-                    'target': result.get('target'),
-                    'type': result.get('type'),
-                    'event': event_type,
-                    'status_code': result.get('status_code'),
-                    'message': result.get('message') or '',
-                },
+                details=self._target_audit_details(result, event_type),
                 error=None if result.get('success') else result.get('message'),
             )
         except Exception:  # pragma: no cover - audit must never break deploy
@@ -1154,6 +1171,9 @@ class DeployManager:
                 return False, "kubernetes-secret needs config.api_server + config.token (or in_cluster)"
             if not cfg.get('namespace'):
                 return False, "kubernetes-secret needs config.namespace"
+        if ttype == 'webhook':
+            from .deploy_target_webhook import validate_webhook_target
+            return validate_webhook_target(target)
         return True, None
 
     @staticmethod

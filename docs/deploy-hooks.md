@@ -499,6 +499,115 @@ things are held to:
 verify. It turns off the check that the server is the one you configured, so use
 it only on a network you control.
 
+### Webhook target: deliver the certificate, and optionally the key
+
+A **notification webhook** (Settings → Notifications) *announces* a renewal, and
+what it reports reaches alerts, mail and logs. It never carries the private key
+([webhooks.md](webhooks.md)). The **webhook target** *delivers*: it sends the
+certificate and chain, and, if the template asks for it, the private key, to a
+HTTPS endpoint you chose, typically an appliance or a service with an upload
+API. They are different things with different rules, so this is a deploy target
+and not another placeholder of the notification webhook.
+
+```jsonc
+{
+  "deploy_hooks": {
+    "enabled": true,
+    "targets": [
+      {
+        "id": "lb-cert",
+        "name": "Upload to the load balancer",
+        "type": "webhook",
+        "enabled": true,
+        "domains": ["shop.example.com"],      // required: never "all domains" by default
+        "on_events": ["created", "renewed"],
+        "config": {
+          "url": "https://lb.internal:8443/api/certificate",
+          "method": "POST",                   // POST, PUT or PATCH
+          "payload_template": "{\"name\": \"{{domain}}\", \"cert\": \"{{fullchain}}\", \"key\": \"{{privkey_pkcs8}}\"}",
+          "auth_type": "bearer", "auth_token": "<token>",   // none | bearer | basic | header
+          "ca_cert": "-----BEGIN CERTIFICATE-----\n…",     // or "pin_sha256": "<fingerprint>"
+          "allow_internal": true,             // the destination is on a private network
+          "acknowledge_key_delivery_to": "lb.internal"      // needed because the template names the key
+        }
+      }
+    ]
+  }
+}
+```
+
+**Template variables.** The payload is JSON you write. A placeholder inside a
+string is inserted escaped, so a PEM (which has newlines) cannot break the JSON.
+
+| Variable | What it is |
+|---|---|
+| `{{cert}}`, `{{fullchain}}`, `{{chain}}` | the certificate, the certificate with its chain, the chain alone (PEM) |
+| `{{privkey_pkcs8}}` | the private key as PKCS#8 (`BEGIN PRIVATE KEY`) |
+| `{{privkey_traditional}}` | the private key as PKCS#1 for RSA (`BEGIN RSA PRIVATE KEY`) or SEC1 for EC (`BEGIN EC PRIVATE KEY`). A key type with no such form, such as Ed25519, is refused with a message, not silently replaced |
+| `{{event}}`, `{{domain}}`, `{{timestamp}}`, `{{certificate_sha256}}` | the event, the certificate's name, the time, and the SHA-256 of the leaf certificate |
+
+There is no bare `privkey`: the two spellings make the choice visible, and a
+typo in a name is refused when you save instead of silently sending nothing. A
+name that is not in this table is refused.
+
+**Sending the key is a decision about a destination.** If the template names a
+private-key variable, the save must carry `config.acknowledge_key_delivery_to`
+set to the host in `url`. The server then records who confirmed it and when
+(`delivery_consent`, returned by `GET /api/deploy/config`); it is never read from
+what you send. If you later change the host, the confirmation no longer applies:
+the target refuses to send until it is given again, and a save without it is
+refused. Each confirmation is in the audit log.
+
+**How the server is verified.** Always. By default against the system store. With
+`ca_cert`, against that CA only (it replaces the system store). With
+`pin_sha256`, against the exact SHA-256 fingerprint of the server's own
+certificate, for an appliance that signs itself: give the fingerprint (colons
+allowed), not the certificate. There is no setting that turns verification off,
+and the URL must be `https://`.
+
+**Where it may send.** The host is resolved once, every address is checked, and
+the connection goes to that address. A loopback, link-local or cloud-metadata
+address is never a destination. A destination on a private network needs
+`allow_internal: true` **on this target**, which is deliberate and narrower than
+a switch for the whole instance. Redirects are not followed: a `3xx` is a
+failure that says so.
+
+**What it does when something goes wrong.** An error from the network, or `408`,
+`425`, `429` and `5xx`, is retried with backoff up to `attempts` (default 3,
+at most 5). Any other `4xx` is not: the request is wrong, and sending a key again
+to be told so again helps nobody. Every delivery carries an `Idempotency-Key`
+that is the same for the retries of one delivery and for the same certificate
+sent again, and different for the next certificate, so a receiver can tell a
+repeat from a new one. With `signing_secret` the body is signed in
+`X-CertMate-Signature`, as for the notification webhook.
+
+**What is recorded, and what is not.** A result is a status and one sentence that
+names the host: never the address, the query, the headers, the body you sent or
+the body the receiver answered, which can echo what it was sent. A delivery that
+carried the private key is marked in the audit log: where it went (`key_sent_to`),
+for which domain, the certificate's fingerprint, the status and the attempts, and
+never the key. A reset after the TLS handshake is recorded as possibly sent,
+because it cannot be told apart from one before it.
+
+**There is no "send a test" for a target that sends the key**, on purpose. A test
+that delivered a key to an appliance that accepts uploads would install it in
+place of the real one. Use the **preview** instead
+([`POST /api/deploy/targets/preview`](api.md)): it renders the request against an
+example certificate and key, reads no file and sends nothing. To deliver for real
+once, use *Run hooks for a domain* (admin), which is an explicit action.
+
+**What this protects against, and what it does not.**
+
+| It protects against | It does not |
+|---|---|
+| The key going to a host you did not confirm, including after the URL is edited | A receiver that is compromised or that logs what it is sent: it holds the key once it has it. Some automation platforms keep every request body in an execution history; do not point a key-carrying target at one |
+| A redirect, a rebound DNS answer or a metadata address taking the request elsewhere | An administrator: anyone who can save this configuration can already write a [shell hook](#sending-the-private-key-from-a-hook) that sends the key, without any of the checks above |
+| Sending over plain HTTP, or to a server nobody verified | Keeping the key out of the receiver's own backups and logs |
+| The receiver's answer carrying the key into the audit log | |
+
+Not in this version: a bundle as a file upload or PKCS#12, and custom request
+headers other than the authentication one. Say what a receiver needs.
+
 ---
 
 ## See also

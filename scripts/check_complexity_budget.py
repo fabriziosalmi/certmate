@@ -52,7 +52,7 @@ GENERAL_LIMIT = 40
 # is a decision to keep a function complex, and belongs in review.
 BUDGET = {
     # The twelve route-registration closures.
-    'modules/web/settings_routes.py::register_settings_routes': 115,
+    'modules/web/settings_routes.py::register_settings_routes': 113,
     'modules/web/misc_routes.py::register_misc_routes': 103,
     'modules/api/client_certificates.py::create_client_certificate_resources': 82,
     'modules/api/resources_storage.py::create_storage_resources': 68,
