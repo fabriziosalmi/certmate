@@ -55,11 +55,7 @@ python app.py
 
 ### Using Docker Compose (Recommended)
 
-```bash
-git clone https://github.com/fabriziosalmi/certmate.git
-cd certmate
-docker-compose up -d
-```
+Download the production bundle and start it: one file, the published image, no clone and no build. The commands and what each setting does are in [Docker: Production with Docker Compose](docker.md#production-with-docker-compose).
 
 ### Using Docker Build
 

@@ -176,30 +176,46 @@ README = REPO_ROOT / "README.md"
 
 
 def _readme_env_block():
-    """The fenced block the Quick Start tells operators to put in `.env`.
+    """What the Quick Start tells operators to put in `.env`.
 
     Located by the heading rather than by position: a block that moves should
     keep being checked, and a heading that is renamed should fail loudly here
-    rather than silently stop checking anything.
+    rather than silently stop checking anything. Since #1015 the Quick Start
+    writes `.env` with a `printf` and names the optional variables in prose,
+    so the whole section is read, not only its fenced blocks.
     """
     text = README.read_text(encoding="utf-8")
-    start = text.index("### 2. Configure Environment")
-    end = text.index("### 3.", start)
+    start = text.index("### 1. Download and configure")
+    end = text.index("### 2.", start)
     section = text[start:end]
-    fences = re.findall(r"```[a-z]*\n(.*?)```", section, re.S)
-    assert fences, (
-        "the Quick Start's Configure Environment section has no fenced block; "
+    assert "```" in section, (
+        "the Quick Start's Download and configure section has no fenced block; "
         "this check is no longer looking at anything"
     )
-    return "\n".join(fences)
+    return section
+
+
+BUNDLE = REPO_ROOT / "deploy" / "docker-compose.yml"
+
+
+def _bundle_environment():
+    """The variables the production compose bundle passes to the container."""
+    import yaml
+    service = yaml.safe_load(BUNDLE.read_text(encoding="utf-8"))["services"]["certmate"]
+    return [entry.split("=", 1)[0] for entry in service["environment"]]
 
 
 def _readme_declared():
-    return [
-        (match.group(1), line.strip())
-        for line in _readme_env_block().splitlines()
-        if (match := re.match(r"^\s*#?\s*([A-Z][A-Z0-9_]*)=", line))
-    ]
+    seen, out = set(), []
+    for match in re.finditer(r"\b([A-Z][A-Z0-9_]{2,})=", _readme_env_block()):
+        if match.group(1) not in seen:
+            seen.add(match.group(1))
+            out.append((match.group(1), match.group(0)))
+    for name in _bundle_environment():
+        if name not in seen:
+            seen.add(name)
+            out.append((name, f"{name}= (deploy/docker-compose.yml)"))
+    return out
 
 
 def test_the_quick_start_block_declares_something():

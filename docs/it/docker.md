@@ -1,8 +1,38 @@
 # Build e distribuzione con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 38dc004104e2e9da -->
+<!-- CERTMATE-TRANSLATED-FROM 34d8d8e5aa07a32c -->
 
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
+
+---
+
+## In produzione con Docker Compose
+
+Il modo più breve per eseguire CertMate in produzione: un solo file, l'immagine pubblicata, niente da compilare e nessun repository da clonare.
+
+```bash
+mkdir certmate && cd certmate
+curl -fsSLO https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/docker-compose.yml
+printf 'API_BEARER_TOKEN=%s\nSECRET_KEY=%s\nCERTMATE_BACKUP_PASSPHRASE=%s\n' \
+  "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+chmod 600 .env
+docker compose up -d
+```
+
+Apri `http://127.0.0.1:8000`. La prima pagina crea l'account amministratore e chiede l'`API_BEARER_TOKEN` del file `.env` per autorizzarlo. Conserva `.env`: contiene il token usato dai client API, la chiave che firma le sessioni e la passphrase senza la quale un backup non può ripristinare questa istanza.
+
+Cosa fa il file:
+
+- **Fissa l'immagine** dell'ultima release. La copia su `main` viene aggiornata a ogni release. Per restare su una versione, imposta `CERTMATE_VERSION=X.Y.Z` in `.env`.
+- **Tiene tutto in volumi con nome** (`certificates`, `data`, `logs`, `backups`). Docker li crea con la proprietà di cui CertMate ha bisogno, quindi non serve alcun `chown`. `docker compose down` li conserva; `down -v` li cancella.
+- **Ascolta solo su 127.0.0.1.** Per l'accesso remoto metti davanti un reverse proxy e imposta `BEHIND_PROXY=true`. Con `CERTMATE_BIND=0.0.0.0` lo pubblichi su tutte le interfacce. `CERTMATE_PORT` cambia la porta sull'host.
+- **Si rifiuta di partire senza `API_BEARER_TOKEN` e `SECRET_KEY`**, invece di generare valori che cambierebbero a ogni ricreazione del container.
+
+Variabili facoltative per `.env`: `CLOUDFLARE_TOKEN` (crea un account DNS Cloudflare al primo avvio), `LETSENCRYPT_EMAIL`, `BEHIND_PROXY`.
+
+**Aggiornamento:** scarica di nuovo il file (oppure cambia `CERTMATE_VERSION`), poi esegui `docker compose pull && docker compose up -d`.
+
+Il `docker-compose.yml` nella radice del repository compila l'immagine dai sorgenti ed è pensato per lo sviluppo.
 
 ---
 
