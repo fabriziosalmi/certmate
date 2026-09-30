@@ -1,6 +1,6 @@
 # Guide d'installation
 
-<!-- CERTMATE-TRANSLATED-FROM 136b32cac0189ce6 -->
+<!-- CERTMATE-TRANSLATED-FROM f3699a5ee154fb19 -->
 
 Ce guide couvre toutes les méthodes d'installation et de déploiement de CertMate.
 
@@ -18,7 +18,7 @@ Ce qu'il fait :
 
 - installe `curl`, `tar`, `gzip` et `openssl` seulement s'ils manquent ;
 - télécharge la dernière version dans `/opt/certmate`, propriété de root et en lecture seule pour le service ;
-- récupère avec [uv](https://docs.astral.sh/uv/) un Python 3.12 autonome dans `/opt/certmate` et installe `requirements.lock`, le même ensemble épinglé que celui de l'image conteneur. Le Python du système n'est pas utilisé, c'est pourquoi Debian 12 (Python 3.11) et RHEL 9 (Python 3.9) fonctionnent ;
+- récupère avec [uv](https://docs.astral.sh/uv/) un Python 3.12 autonome dans `/opt/certmate` et installe `requirements.lock`, le même ensemble épinglé que celui de l'image conteneur. Le Python du système n'est pas utilisé, c'est pourquoi les distributions livrant un Python plus ancien, comme Debian 12 et RHEL 9, fonctionnent aussi ;
 - crée l'utilisateur système `certmate`, propriétaire uniquement de `certificates`, `data`, `backups`, `logs` et `letsencrypt` ;
 - écrit `/etc/certmate/certmate.env` avec `API_BEARER_TOKEN`, `SECRET_KEY` et `CERTMATE_BACKUP_PASSPHRASE` générés, seulement si le fichier n'existe pas ;
 - installe et démarre le service systemd `certmate`, à l'écoute sur `127.0.0.1:8000`.

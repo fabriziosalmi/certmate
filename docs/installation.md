@@ -16,7 +16,7 @@ What it does:
 
 - installs `curl`, `tar`, `gzip` and `openssl` only if they are missing;
 - downloads the latest release into `/opt/certmate`, owned by root and read-only to the service;
-- fetches a standalone Python 3.12 with [uv](https://docs.astral.sh/uv/) into `/opt/certmate` and installs `requirements.lock`, the same pinned set the container image is built from. The system Python is not used, which is why Debian 12 (Python 3.11) and RHEL 9 (Python 3.9) work;
+- fetches a standalone Python 3.12 with [uv](https://docs.astral.sh/uv/) into `/opt/certmate` and installs `requirements.lock`, the same pinned set the container image is built from. The system Python is not used, which is why distributions that ship an older Python, such as Debian 12 and RHEL 9, work too;
 - creates the `certmate` system user, which owns only `certificates`, `data`, `backups`, `logs` and `letsencrypt`;
 - writes `/etc/certmate/certmate.env` with a generated `API_BEARER_TOKEN`, `SECRET_KEY` and `CERTMATE_BACKUP_PASSPHRASE`, only if the file does not exist;
 - installs and starts the `certmate` systemd service, listening on `127.0.0.1:8000`.
