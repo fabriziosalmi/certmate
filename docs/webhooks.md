@@ -123,12 +123,18 @@ certificate. A certificate and its chain are public material: they are what
 the server presents in every handshake, so this sends nothing an observer
 could not already collect.
 
-**The private key is not a placeholder.** `{{privkey}}` renders as an unknown
-name, and the key file is never opened. Whether the key should travel in the
-same request as the certificate — and under which conditions — is the open
-question in [#218](https://github.com/fabriziosalmi/certmate/issues/218). To
-deliver a key today, use a deploy hook, which runs on the machine that needs
-it and never puts the key in a request body.
+**The private key is not a placeholder, and will not become one.**
+`{{privkey}}` renders as an unknown name, and the key file is never opened. A
+notification webhook is fed by the event stream, and what it reports ends up in
+alerts, mail and logs; that is the wrong place for a key. Delivering a key to a
+remote endpoint is planned as a separate kind of
+[typed deploy target](deploy-hooks.md#typed-deploy-targets), with its own
+conditions ([#218](https://github.com/fabriziosalmi/certmate/issues/218)).
+
+Until that exists, a [deploy hook](deploy-hooks.md) can send the key: it runs
+inside the CertMate container, where `curl` and `$CERTMATE_KEY_PATH` are
+available. CertMate does not check what such a command does with the key, so
+see [Sending the private key](deploy-hooks.md#sending-the-private-key-from-a-hook).
 
 Two rules keep a template valid JSON whatever the values are:
 

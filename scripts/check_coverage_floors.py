@@ -199,6 +199,7 @@ FLOORS = {
     'modules/core/settings.py': 80,
     'modules/core/shell.py': 75,
     'modules/core/storage_backends.py': 70,
+    'modules/core/secret_scrub.py': 95,
     'modules/core/structured_logging.py': 70,
     'modules/core/utils.py': 80,
     'modules/core/zombie.py': 80,

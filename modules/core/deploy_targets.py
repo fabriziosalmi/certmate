@@ -20,6 +20,8 @@ import logging
 import os
 import tempfile
 
+from .secret_scrub import scrub
+
 logger = logging.getLogger(__name__)
 
 # Well-known in-cluster service-account locations (mounted into every pod).
@@ -160,14 +162,20 @@ class KubernetesSecretTarget:
         # inside the try/finally, so a config error can never leak a temp file.
         verify, ca_tempfile = _materialize_verify(verify_spec)
         try:
-            resp = patch(url, json=manifest, headers=headers, verify=verify, timeout=15)
+            # Redirects are refused, not followed. A 307/308 keeps the method
+            # and the body, so following one would send the private key to
+            # whichever host the answer names while the operator is told the
+            # deploy went to the server they configured.
+            resp = patch(url, json=manifest, headers=headers, verify=verify, timeout=15,
+                         allow_redirects=False)
         except Exception as e:
             # Broad because `requests` raises a family of them and they all
             # mean the same thing to the caller. The exception reaches the
-            # operator in `message`, scrubbed of the bearer token first —
-            # which is the reason this cannot simply propagate.
+            # operator in `message`, scrubbed of the bearer token AND the key
+            # first — which is the reason this cannot simply propagate.
             return {'success': False, 'status_code': None,
-                    'message': f'Kubernetes API request failed: {_scrub(str(e), token)}'}
+                    'message': 'Kubernetes API request failed: '
+                               + scrub(str(e), token=token, key_pem=key_pem)}
         finally:
             if ca_tempfile:
                 try:
@@ -179,7 +187,15 @@ class KubernetesSecretTarget:
         if status is not None and 200 <= status < 300:
             return {'success': True, 'status_code': status,
                     'message': f'Applied Secret {namespace}/{secret_name}'}
-        body = _scrub(_safe_body(resp), token)
+        if status is not None and 300 <= status < 400:
+            # Said plainly, and without the Location: it can carry credentials
+            # in its query, and it names a host the operator did not configure.
+            return {'success': False, 'status_code': status,
+                    'message': f'Kubernetes API answered with a redirect ({status}). '
+                               f'Redirects are not followed, so the request was not '
+                               f'repeated anywhere else; point api_server at the address '
+                               f'that answers directly.'}
+        body = _answer_excerpt(resp, token, key_pem)
         return {'success': False, 'status_code': status,
                 'message': f'Kubernetes API returned {status}: {body}'}
 
@@ -204,24 +220,28 @@ def _default_patch(url, timeout=15, **kwargs):
     return requests.patch(url, timeout=timeout, **kwargs)
 
 
-def _scrub(text, secret):
-    """Remove *secret* (the bearer token) from a diagnostic string before it is
-    returned/stored. The Kubernetes API never echoes the token, but scrubbing it
-    guarantees a token can never reach the deploy history/audit through an error
-    message or response body (and satisfies clear-text-storage analysis)."""
-    if secret and text:
-        return text.replace(secret, '[REDACTED]')
-    return text
+# How much of an answer is read before scrubbing, and how much of the scrubbed
+# text is kept. The first is large so the scrub sees the whole of what a
+# receiver could echo; the second is what reaches the records.
+_ANSWER_READ_LIMIT = 64 * 1024
+_ANSWER_KEEP = 300
 
 
-def _safe_body(resp):
+def _answer_excerpt(resp, token, key_pem):
+    """The start of a response body, for the operator, with no secret in it.
+
+    Scrubbed BEFORE it is shortened. The other order (cut to a few hundred
+    characters, then scrub) leaves whatever fragment of the key fell inside the
+    cut, because a fragment matches none of the whole forms the scrub looks for.
+    """
     try:
-        return (resp.text or '')[:300]
+        text = (resp.text or '')[:_ANSWER_READ_LIMIT]
     except Exception:
         # A response body is only ever quoted back to the operator here, so
         # any failure to read one has to be a string rather than an exception
         # that replaces the status code the caller is reporting.
         return '<unreadable response>'
+    return scrub(text, token=token, key_pem=key_pem)[:_ANSWER_KEEP]
 
 
 def build_target(target, http_patch=None):

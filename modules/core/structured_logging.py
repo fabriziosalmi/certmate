@@ -24,6 +24,8 @@ Usage:
         logger.info("Operation completed")  # Will include request_id and user
 """
 
+import base64
+import binascii
 import json
 import logging
 import time
@@ -95,6 +97,56 @@ def _redact_pem_blocks(s: str, placeholder: str = '[PEM REDACTED]') -> str:
     return ''.join(out)
 
 
+# A run of base64-alphabet characters long enough to hold a PEM marker. One
+# character class repeated, so the scan is linear and cannot backtrack.
+_B64_RUN_RE = re.compile(r'[A-Za-z0-9+/_-]{60,}={0,2}')
+_B64_RUN_LIMIT = 8 * 1024 * 1024
+_PEM_MARKER = b'-----BEGIN'
+
+
+def _run_holds_pem(run: str) -> bool:
+    """Whether a base64 (or URL-safe base64) run decodes to something holding a PEM block.
+
+    Tried at each of the four character offsets, because base64 is not
+    self-aligning: the same bytes encode to different text depending on where in
+    a stream they start, and a run that begins mid-stream (after text made of
+    base64 characters) is a shifted one. Four decodes of a linear-time function
+    is still linear.
+    """
+    flat = run.rstrip('=').replace('-', '+').replace('_', '/')
+    for offset in range(4):
+        chunk = flat[offset:]
+        chunk = chunk[:len(chunk) - (len(chunk) % 4 == 1)]     # a lone trailing char is unusable
+        try:
+            decoded = base64.b64decode(chunk + '=' * (-len(chunk) % 4))
+        except (binascii.Error, ValueError):
+            continue
+        if _PEM_MARKER in decoded:
+            return True
+    return False
+
+
+def _redact_encoded_pem(s: str, placeholder: str = '[PEM REDACTED]') -> str:
+    """Replace a PEM block that was base64-encoded, which ``_redact_pem_blocks`` cannot see.
+
+    A key comes back in this shape from a receiver that echoes its input (the
+    Kubernetes Secret format is exactly it) and from a JSON body that was
+    itself base64-wrapped. A run longer than the scan limit is replaced without
+    looking: nothing diagnostic is that long, and leaving it unread is the
+    failure that matters here.
+    """
+    if len(s) < 60:
+        return s
+
+    def replace(match):
+        run = match.group(0)
+        if len(run) > _B64_RUN_LIMIT or _run_holds_pem(run):
+            return placeholder
+        return run
+
+    return _B64_RUN_RE.sub(replace, s)
+
+
 def sanitize_text(s: str) -> str:
     """Replace PEM blocks and sensitive key=value assignments in unstructured
     text. Module-level so choke points that PERSIST free-form command output
@@ -103,6 +155,7 @@ def sanitize_text(s: str) -> str:
     if not isinstance(s, str):
         return s
     s = _redact_pem_blocks(s)
+    s = _redact_encoded_pem(s)
     s = JSONFormatter.SENSITIVE_KV_RE.sub(r'\1"[REDACTED]"', s)
     return s
 

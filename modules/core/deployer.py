@@ -621,6 +621,12 @@ class DeployManager:
     def _record_target(self, result, domain, event_type):
         """Audit + history + failure-event for one typed-target result."""
         status = 'success' if result.get('success') else 'failure'
+        # What a target reports is text from a remote system about a request
+        # that carried a private key. The audit log is a hash chain that cannot
+        # be edited afterwards, so whatever reaches it stays: every record of it
+        # (audit, history, the failure alert) gets the same pass, here, rather
+        # than each target being trusted to have scrubbed its own message.
+        result = dict(result, message=sanitize_text(result.get('message') or ''))
         try:
             self.audit_logger.log_operation(
                 operation='deploy_target',
