@@ -48,15 +48,23 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 command -v systemctl >/dev/null 2>&1 || die "systemd is required"
 
 # --- system packages ---------------------------------------------------------
-# Only what the installer itself needs. Python comes from uv, and every
-# Python dependency ships as a wheel.
+# Only what the installer itself needs, and only what is missing. Python comes
+# from uv, and every Python dependency ships as a wheel. Asking for `curl`
+# unconditionally breaks on minimal RHEL/Rocky/Alma installs, which ship
+# curl-minimal: dnf refuses the conflict and the install stops there.
+missing=""
+for cmd in curl tar gzip openssl; do
+  command -v "$cmd" >/dev/null 2>&1 || missing="$missing $cmd"
+done
 if command -v apt-get >/dev/null 2>&1; then
-  say "Installing curl, tar and openssl (apt)"
+  say "Installing${missing:- nothing new} (apt)"
   DEBIAN_FRONTEND=noninteractive apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates tar gzip openssl >/dev/null
+  # shellcheck disable=SC2086
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates $missing >/dev/null
 elif command -v dnf >/dev/null 2>&1; then
-  say "Installing curl, tar and openssl (dnf)"
-  dnf install -y -q curl ca-certificates tar gzip openssl >/dev/null
+  say "Installing${missing:- nothing new} (dnf)"
+  # shellcheck disable=SC2086
+  dnf install -y -q ca-certificates $missing >/dev/null
 else
   die "unsupported distribution: needs apt-get or dnf"
 fi
