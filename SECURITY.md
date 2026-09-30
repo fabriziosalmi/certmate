@@ -7,13 +7,13 @@ priority class of issue in this project.
 ## Supported versions
 
 Only the latest minor release line receives security fixes. Operators running
-older lines should upgrade to the latest patch on `2.42.x` before reporting —
+older lines should upgrade to the latest patch on `2.43.x` before reporting —
 fixes for retired lines are out of scope.
 
 | Version   | Supported           |
 | --------- | ------------------- |
-| `2.42.x`  | Yes                 |
-| `< 2.42`  | No (please upgrade) |
+| `2.43.x`  | Yes                 |
+| `< 2.43`  | No (please upgrade) |
 
 The supported line moves forward with each `2.x.0` release; everything below
 it is retired at that moment. This file is updated by the release tooling, so
