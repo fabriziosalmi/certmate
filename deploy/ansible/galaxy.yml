@@ -1,0 +1,25 @@
+# Ansible Galaxy collection `fabriziosalmi.certmate` (#1031), built from this
+# directory: `ansible-galaxy collection build deploy/ansible`. The role lives
+# in roles/certmate and is used as `fabriziosalmi.certmate.certmate`.
+namespace: fabriziosalmi
+name: certmate
+version: 1.0.0
+readme: README.md
+authors:
+  - Fabrizio Salmi
+description: Deploy CertMate, the self-hosted TLS certificate lifecycle manager, with Docker Compose
+license:
+  - MIT
+tags:
+  - certificates
+  - tls
+  - acme
+  - letsencrypt
+  - docker
+dependencies: {}
+repository: https://github.com/fabriziosalmi/certmate
+documentation: https://github.com/fabriziosalmi/certmate/blob/main/deploy/ansible/roles/certmate/README.md
+homepage: https://www.certmate.org
+issues: https://github.com/fabriziosalmi/certmate/issues
+build_ignore:
+  - site.yml
