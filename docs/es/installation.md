@@ -1,8 +1,35 @@
 # Guía de instalación
 
-<!-- CERTMATE-TRANSLATED-FROM 69476297b4091494 -->
+<!-- CERTMATE-TRANSLATED-FROM f3699a5ee154fb19 -->
 
 Esta guía cubre todos los métodos de instalación y despliegue de CertMate.
+
+---
+
+## Servidor Linux con systemd
+
+La forma recomendada en un host Linux sin Docker. Verificada en Debian 12, Ubuntu 24.04 y Rocky Linux 9; usa `apt` o `dnf`, así que Fedora, RHEL y Alma Linux siguen el mismo camino.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/install.sh | sudo sh
+```
+
+Qué hace:
+
+- instala `curl`, `tar`, `gzip` y `openssl` solo si faltan;
+- descarga la última versión en `/opt/certmate`, propiedad de root y de solo lectura para el servicio;
+- obtiene con [uv](https://docs.astral.sh/uv/) un Python 3.12 independiente en `/opt/certmate` e instala `requirements.lock`, el mismo conjunto fijado con el que se construye la imagen del contenedor. No se usa el Python del sistema, por eso funcionan también las distribuciones con un Python más antiguo, como Debian 12 y RHEL 9;
+- crea el usuario de sistema `certmate`, propietario solo de `certificates`, `data`, `backups`, `logs` y `letsencrypt`;
+- escribe `/etc/certmate/certmate.env` con `API_BEARER_TOKEN`, `SECRET_KEY` y `CERTMATE_BACKUP_PASSPHRASE` generados, solo si el archivo no existe;
+- instala e inicia el servicio systemd `certmate`, escuchando en `127.0.0.1:8000`.
+
+Abre `http://127.0.0.1:8000`. La primera página crea la cuenta de administrador y pide el token: `sudo grep API_BEARER_TOKEN /etc/certmate/certmate.env`.
+
+- **Una versión concreta:** `curl -fsSL …/install.sh | sudo sh -s -- --version X.Y.Z`. Las versiones hasta v2.42.0 son anteriores al instalador y se rechazan.
+- **Actualización:** ejecuta de nuevo el mismo comando. Se reemplazan el código y el virtualenv; certificados, datos, copias de seguridad y `certmate.env` se conservan.
+- **Escuchar en otra dirección:** define `CERTMATE_BIND` en `/etc/certmate/certmate.env` (por ejemplo `0.0.0.0:8000`, o mantén el loopback detrás de un proxy inverso y define `BEHIND_PROXY=true`), y luego `sudo systemctl restart certmate`.
+- **Registros:** `journalctl -u certmate`.
+- **SELinux:** el instalador aún no se ha verificado con SELinux en modo enforcing. Si el servicio no arranca en un host así, el journal dirá por qué; avísanos.
 
 ---
 
