@@ -377,14 +377,7 @@ Isolated, reproducible, and the way CertMate is tested and released. Run **one**
 container (see the single-instance note above); give it more CPU and memory
 rather than more replicas. **Published images cover two architectures**: AMD64 (Intel/AMD) and ARM64 (Apple Silicon, ARM servers). ARM v7 (32-bit Raspberry Pi) is not published; build it yourself with `./build-multiplatform.sh --platforms linux/arm/v7`.
 
-```bash
-# Quick start with Docker Compose
-git clone https://github.com/fabriziosalmi/certmate.git
-cd certmate
-cp .env.example .env
-# Edit .env with your configuration
-docker-compose up -d
-```
+The production Compose bundle is one file that runs the published image; the [Quick Start](#quick-start-with-docker) above shows the commands. To build the image yourself instead, clone the repository and run `docker compose up -d` with its root `docker-compose.yml`, after preparing its bind-mounted directories as its comments describe.
 
 **Multi-Platform Support:**
 ```bash
