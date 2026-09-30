@@ -38,6 +38,8 @@ The `docker-compose.yml` at the root of the repository builds the image from sou
 
 ### Pull and Run
 
+Images are published to Docker Hub as `fabriziosalmi/certmate`. Releases after v2.42.0 are also published, with the same tags, to GHCR as `ghcr.io/fabriziosalmi/certmate`, which avoids Docker Hub's anonymous pull limits: use either name below.
+
 ```bash
 # Docker automatically selects the right architecture
 docker run -d --name certmate \

@@ -1,6 +1,6 @@
 # Docker Build & Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM 34d8d8e5aa07a32c -->
+<!-- CERTMATE-TRANSLATED-FROM 2083ed723fa4e1db -->
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 
@@ -39,6 +39,8 @@ Die `docker-compose.yml` im Wurzelverzeichnis des Repositorys baut das Image aus
 ## Schnellstart
 
 ### Pull und Ausführen
+
+Die Images werden auf Docker Hub als `fabriziosalmi/certmate` veröffentlicht. Releases nach v2.42.0 werden mit denselben Tags zusätzlich auf GHCR als `ghcr.io/fabriziosalmi/certmate` veröffentlicht, was die anonymen Pull-Limits von Docker Hub vermeidet: Verwenden Sie unten einen der beiden Namen.
 
 ```bash
 # Docker wählt automatisch die richtige Architektur
