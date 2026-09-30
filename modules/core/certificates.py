@@ -2298,6 +2298,7 @@ class CertificateManager:
                 # or stale) is visible on GET, not just buried in the logs.
                 # None when the last issuance stored cleanly.
                 'storage_warning': metadata.get('storage_warning'),
+                'deployment_host': metadata.get('deployment_host'),
                 'deployment_port': metadata.get('deployment_port'),
                 'deployment_protocol': metadata.get('deployment_protocol'),
                 # When the certificate was issued and last renewed (ISO text
@@ -2337,6 +2338,7 @@ class CertificateManager:
             'challenge_type': challenge_type,
             'account_id': account_id,
             'storage_warning': metadata.get('storage_warning'),
+            'deployment_host': metadata.get('deployment_host'),
             'deployment_port': metadata.get('deployment_port'),
             'deployment_protocol': metadata.get('deployment_protocol'),
             # A certificate that cannot be parsed cannot be named in ARI, so

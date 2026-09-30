@@ -278,6 +278,10 @@ def create_api_models(api):
         'total_expired': fields.Integer(description='Total expired certificates'),
         'latest_issuance': fields.String(description='Latest issuance timestamp'),
         'oldest_active_issuance': fields.String(description='Oldest active issuance timestamp'),
+        'deployment_host': fields.String(description=(
+            'Hostname the deployment probe connects to and sends as SNI, when it is not the '
+            'certificate name (a wildcard is verified through a name it covers). Null when unset. '
+            'Since API contract 2.33.')),
         'deployment_port': fields.Integer(description='TCP port for deployment probe'),
         'deployment_protocol': fields.String(description='Protocol used by deployment probe (https-tls, tls, or smtp-starttls)')
     })
