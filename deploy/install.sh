@@ -107,12 +107,22 @@ find "$PREFIX" -mindepth 1 -maxdepth 1 $keep_args -exec rm -rf {} +
 (cd "$src" && tar -cf - --exclude=./.git --exclude=./node_modules --exclude=./.venv \
   --exclude=./certificates --exclude=./data --exclude=./backups --exclude=./logs \
   --exclude=./letsencrypt .) | (cd "$PREFIX" && tar -xf -)
-chown -R root:root "$PREFIX"
-chmod -R go-w "$PREFIX"
+
+# The code is root's and read-only to the service; the state is certmate's.
+# Ownership is set on each side separately: a recursive chown of PREFIX would
+# also take the files INSIDE the state directories, and on an upgrade the
+# service could then no longer read its own settings.json (it did, in the
+# first version of this script).
+keep_state=""
+for d in $STATE_DIRS $TOOL_DIRS; do keep_state="$keep_state ! -name $d"; done
+# shellcheck disable=SC2086
+find "$PREFIX" -mindepth 1 -maxdepth 1 $keep_state -exec chown -R root:root {} + -exec chmod -R go-w {} +
+chown root:root "$PREFIX"
+chmod 755 "$PREFIX"
 
 for d in $STATE_DIRS; do
   mkdir -p "$PREFIX/$d"
-  chown certmate:certmate "$PREFIX/$d"
+  chown -R certmate:certmate "$PREFIX/$d"
   chmod 750 "$PREFIX/$d"
 done
 
@@ -178,7 +188,7 @@ bind="${bind:-127.0.0.1:8000}"
 probe="http://127.0.0.1:${bind##*:}/health"
 say "Waiting for CertMate to answer on $probe"
 i=0
-until curl -fsS "$probe" >/dev/null 2>&1; do
+until curl -fsS --max-time 5 "$probe" >/dev/null 2>&1; do
   i=$((i + 1))
   if [ "$i" -gt 60 ]; then
     journalctl -u certmate -n 30 --no-pager >&2 || true

@@ -36,7 +36,10 @@ EnvironmentFile=-/etc/certmate/certmate.env
 # worker that handled the request (so ~3 requests in 4 still validated), the
 # login rate limit was multiplied by the worker count, and APScheduler ran a
 # duplicate renewal job per worker.
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind ${CERTMATE_BIND} --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
+# --no-control-socket: gunicorn 26 otherwise creates a control socket under
+# the service user's home, which is /opt/certmate and read-only here. CertMate
+# does not use that interface.
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind ${CERTMATE_BIND} --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} --no-control-socket app:app
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10
