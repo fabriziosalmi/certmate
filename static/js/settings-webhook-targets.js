@@ -192,6 +192,12 @@
             preview: null,
             previewedFor: '',
             previewError: '',
+            // How many reads/writes are in flight, and which editor/read is the current
+            // one. An answer that arrives after the editor it belongs to was closed or
+            // replaced, or after a newer read, must not act on what is on screen now.
+            pendingOps: 0,
+            draftSerial: 0,
+            loadSerial: 0,
 
             eventChoices: EVENT_CHOICES,
             methodChoices: METHOD_CHOICES,
@@ -201,9 +207,16 @@
 
             // --- reading ---------------------------------------------------
 
+            busy: function () {
+                return this.pendingOps > 0;
+            },
+
             load: function () {
                 var self = this;
+                var serial = ++this.loadSerial;
+                this.pendingOps++;
                 return requestJson('/api/deploy/config').then(function (res) {
+                    if (serial !== self.loadSerial) return;      // a newer read is on its way or done
                     if (res.ok && res.body && !res.body.error) {
                         self.targets = Array.isArray(res.body.targets) ? res.body.targets : [];
                         self.loadError = '';
@@ -212,8 +225,11 @@
                     }
                     self.loaded = true;
                 }).catch(function () {
+                    if (serial !== self.loadSerial) return;
                     self.loadError = 'Could not load the deploy targets.';
                     self.loaded = true;
+                }).then(function () {
+                    self.pendingOps--;
                 });
             },
 
@@ -277,16 +293,19 @@
             // --- the editor ------------------------------------------------
 
             startNew: function () {
+                this.draftSerial++;
                 this.draft = emptyDraft();
                 this._resetEditorState();
             },
 
             edit: function (target) {
+                this.draftSerial++;
                 this.draft = toDraft(target);
                 this._resetEditorState();
             },
 
             cancel: function () {
+                this.draftSerial++;
                 this.draft = null;
                 this._resetEditorState();
             },
@@ -423,6 +442,18 @@
             // it back. See the note at the top of the file for why the list this
             // page loaded earlier is never the thing that gets written.
             _write: function (change) {
+                var self = this;
+                this.pendingOps++;
+                return this._writeOnce(change).then(function (res) {
+                    self.pendingOps--;
+                    return res;
+                }, function (err) {
+                    self.pendingOps--;
+                    throw err;
+                });
+            },
+
+            _writeOnce: function (change) {
                 return requestJson('/api/deploy/config').then(function (current) {
                     if (!current.ok || !current.body || current.body.error) {
                         return { ok: false, body: { error: 'Could not read the current configuration, so nothing was changed.' } };
@@ -449,6 +480,7 @@
                 }
                 this.saving = true;
                 this.formError = '';
+                var serial = this.draftSerial;
                 this._write(function (list) {
                     var at = -1;
                     list.forEach(function (t, i) { if (t && t.id === target.id) at = i; });
@@ -457,13 +489,19 @@
                 }).then(function (res) {
                     if (res.ok) {
                         CertMate.toast('Deploy target saved', 'success');
-                        self.draft = null;
-                        self._resetEditorState();
+                        // Close the editor that was saved, not one opened since.
+                        if (serial === self.draftSerial) {
+                            self.draftSerial++;
+                            self.draft = null;
+                            self._resetEditorState();
+                        }
                         return self.load();
                     }
-                    self.formError = (res.body && res.body.error) || 'The target could not be saved.';
+                    if (serial === self.draftSerial) {
+                        self.formError = (res.body && res.body.error) || 'The target could not be saved.';
+                    }
                 }).catch(function () {
-                    self.formError = 'The save request failed.';
+                    if (serial === self.draftSerial) self.formError = 'The save request failed.';
                 }).then(function () {
                     self.saving = false;
                 });

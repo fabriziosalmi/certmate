@@ -74,16 +74,38 @@ class FakeConfigServer:
         self.state = {'enabled': enabled, 'global_hooks': [], 'domain_hooks': {},
                       'targets': targets or []}
         self.posts = []
+        # While `hold` is set, answers are kept instead of sent, to be released by
+        # the test: how a test makes an answer arrive AFTER the page has moved on.
+        self.hold = False
+        self.held = []
 
     def handle(self, route, request):
         if request.method == 'GET':
-            route.fulfill(status=200, content_type='application/json', body=json.dumps(self.state))
+            answer = (route, 200, json.dumps(self.state))
+        else:
+            body = json.loads(request.post_data or '{}')
+            self.posts.append(body)
+            self.state.update(body)
+            answer = (route, 200, json.dumps({'message': 'Deploy configuration saved'}))
+        if self.hold:
+            self.held.append(answer)
             return
-        body = json.loads(request.post_data or '{}')
-        self.posts.append(body)
-        self.state.update(body)
-        route.fulfill(status=200, content_type='application/json',
-                      body=json.dumps({'message': 'Deploy configuration saved'}))
+        self._send(answer)
+
+    @staticmethod
+    def _send(answer):
+        route, status, body = answer
+        route.fulfill(status=status, content_type='application/json', body=body)
+
+    def wait_until_held(self, page, count=1):
+        for _ in range(100):
+            if len(self.held) >= count:
+                return
+            page.wait_for_timeout(50)
+        raise AssertionError(f'expected {count} held answer(s), have {len(self.held)}')
+
+    def release(self, index=0):
+        self._send(self.held.pop(index))
 
 
 @pytest.fixture(scope='module')
@@ -101,6 +123,17 @@ def page(browser_page):
     fresh = browser_page.context.new_page()
     fresh.add_init_script(
         "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); } catch (e) {}")
+    delay = os.environ.get('CERTMATE_UI_SLOW_RESPONSES')
+    if delay:
+        # Answers that arrive late, as they do on a busy CI runner: how a test that
+        # returns when the request is SENT, and not when the page has finished
+        # handling the answer, gets found on a laptop.
+        fresh.add_init_script(
+            "(function () { var real = window.fetch; window.fetch = function (url, init) {"
+            " var p = real.apply(this, arguments);"
+            " if (String(url).indexOf('/api/deploy/config') === -1 || !init || init.method !== 'POST') return p;"
+            " return p.then(function (r) { return new Promise(function (ok) { setTimeout(function () { ok(r); }, %d); }); });"
+            " }; })();" % int(delay))
     yield fresh
     fresh.close()
 
@@ -113,6 +146,19 @@ _RELOAD = """async () => {
 }"""
 
 
+def _settle(page):
+    """Wait until the component has no read or write in flight.
+
+    A test that returns when a request is SENT leaves the page's handling of the
+    answer running into the next test: the save that closes the editor, for one,
+    closed the editor the next test had just opened. That only showed on the CI
+    runner, where answers arrive later than on a laptop; it reproduces locally with
+    CERTMATE_UI_SLOW_RESPONSES=800 (milliseconds).
+    """
+    page.wait_for_function(
+        "() => { const c = Alpine.$data(document.getElementById('deploy-targets')); return !c.busy(); }")
+
+
 def _open(page, server=None, targets=None):
     """Settings -> Deploy -> Deploy Targets, expanded, against a fake config endpoint.
 
@@ -121,6 +167,8 @@ def _open(page, server=None, targets=None):
     """
     if server is None:
         server = FakeConfigServer(targets)
+    if getattr(page, '_webhook_targets_open', False):
+        _settle(page)            # the previous test may have an answer still on its way
     page.unroute('**/api/deploy/config')
     page.route('**/api/deploy/config', server.handle)
     if getattr(page, '_webhook_targets_open', False):
@@ -147,7 +195,10 @@ def _fill_new_target(page, template=CERT_ONLY, url='https://lb.internal:8443/api
 def _save_and_capture(page):
     with page.expect_request(lambda r: r.method == 'POST' and '/api/deploy/config' in r.url) as posted:
         page.locator('#webhook-target-editor button:has-text("Save target")').click()
-    return json.loads(posted.value.post_data)
+    body = json.loads(posted.value.post_data)
+    page.wait_for_selector('#webhook-target-editor', state='detached')   # the save finished, not just started
+    _settle(page)
+    return body
 
 
 # --------------------------------------------------------------------------
@@ -258,6 +309,45 @@ def test_no_webhook_target_leaves_the_page_with_a_consent(page):
     assert [t['id'] for t in body['targets']] == ['wh-1', 'wh-2']
     assert all('delivery_consent' not in t for t in body['targets']), (
         f'a consent went back to the server: {[t.get("delivery_consent") for t in body["targets"]]}')
+
+
+def test_a_save_that_finishes_late_does_not_close_the_editor_opened_since(page):
+    """The answer to a save arrives after the operator cancelled and started another target."""
+    server = _open(page)
+    _fill_new_target(page)
+    server.hold = True
+    page.locator('#webhook-target-editor button:has-text("Save target")').click()
+    server.wait_until_held(page, 1)                      # a save starts by reading the current list
+    server.release()
+    server.wait_until_held(page, 1)                      # ...and then writes: keep that answer back
+    page.locator('#webhook-target-editor button:has-text("Cancel")').click()
+    page.locator('#deploy-targets button:has-text("Add Webhook Target")').click()
+    page.fill('[aria-label="Target name"]', 'Second target')
+
+    server.hold = False
+    server.release()                                     # the first save's answer, late
+    _settle(page)
+
+    assert page.locator('#webhook-target-editor').count() == 1, (
+        'the late answer to the first save closed the editor the operator had opened since')
+    assert page.input_value('[aria-label="Target name"]') == 'Second target'
+
+
+def test_an_older_read_does_not_overwrite_a_newer_one(page):
+    server = _open(page, targets=[_webhook(name='Old name')])
+    server.hold = True
+    page.evaluate("() => { Alpine.$data(document.getElementById('deploy-targets')).load(); }")
+    server.wait_until_held(page, 1)                      # a read that will answer with 'Old name'
+    server.state['targets'] = [_webhook(name='New name')]
+    server.hold = False
+    page.evaluate(_RELOAD)                               # a newer read, answered at once
+    assert 'New name' in page.locator('[data-target-row]').first.inner_text()
+
+    server.release()                                     # the older answer arrives last
+    _settle(page)
+    text = page.locator('[data-target-row]').first.inner_text()
+    assert 'New name' in text and 'Old name' not in text, (
+        'an answer to an older read replaced the list from a newer one')
 
 
 def test_deleting_asks_first_and_removes_only_that_target(page):
