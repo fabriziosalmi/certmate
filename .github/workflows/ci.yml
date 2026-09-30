@@ -704,6 +704,17 @@ jobs:
           exit 1
         }
 
+    # Needs hvac, which only this job installs, so it runs here. Four of its
+    # fourteen tests skip without hvac; the count is asserted so they cannot
+    # be the ones that quietly did not run.
+    - name: A redirect does not carry the key to another host
+      run: |
+        pytest tests/test_a_redirect_does_not_carry_the_key_to_another_host.py -v | tee /tmp/redirect.log
+        grep -q "14 passed" /tmp/redirect.log || {
+          echo "::error::the redirect tests did not all run (hvac missing?)"
+          exit 1
+        }
+
   # The acme-dns hook against a real acme-dns, including the DNS answer.
   #
   # This is the one path in the product with a documented history of never
