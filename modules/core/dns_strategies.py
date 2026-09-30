@@ -52,16 +52,16 @@ def clamp_propagation_seconds(value, default):
 def check_certbot_plugin_installed(plugin_name: str) -> bool:
     """Check if a certbot plugin is installed and registered.
 
-    Runs ``certbot plugins`` and looks for the given *plugin_name*
-    (e.g. ``dns-route53``) in the output.  Returns ``True`` when found.
+    List plugins without preparing them: --prepare initializes every plugin,
+    so an unrelated provider's missing credentials can hide this one.
     """
     try:
         result = subprocess.run(
-            ['certbot', 'plugins', '--prepare'],
+            ['certbot', 'plugins'],
             capture_output=True, text=True, timeout=30,
         )
-        # Plugin names appear as "* dns-route53" or "PluginEntryPoint#dns-route53"
-        return plugin_name in result.stdout or plugin_name in result.stderr
+        return result.returncode == 0 and any(
+            line.strip() == f'* {plugin_name}' for line in result.stdout.splitlines())
     except Exception:
         # If we can't check, assume it's available and let certbot fail
         # with its own error message.
