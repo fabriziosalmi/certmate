@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: certmate
+  namespace: fabriziosalmi
+  author: Fabrizio Salmi
+  description: Deploy CertMate, the self-hosted TLS certificate lifecycle manager, with Docker Compose
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Debian
+      versions: [bookworm]
+    - name: Ubuntu
+      versions: [noble, jammy]
+    - name: EL
+      versions: ["9"]
+  galaxy_tags: [certificates, tls, ssl, acme, letsencrypt, docker]
+dependencies: []
