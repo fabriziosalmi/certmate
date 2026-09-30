@@ -1,0 +1,79 @@
+# CertMate: production Docker Compose bundle.
+#
+# Runs the PUBLISHED image; nothing is built. Download this file on its own:
+#
+#   mkdir certmate && cd certmate
+#   curl -fsSLO https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/docker-compose.yml
+#   printf 'API_BEARER_TOKEN=%s\nSECRET_KEY=%s\nCERTMATE_BACKUP_PASSPHRASE=%s\n' \
+#     "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+#   chmod 600 .env
+#   docker compose up -d
+#
+# Then open http://127.0.0.1:8000: the first page creates the administrator
+# account and asks for the API_BEARER_TOKEN from .env to authorize it. Full
+# guide: docs/docker.md, "Production with Docker Compose".
+#
+# The version below is the latest release: scripts/release.sh moves it on
+# every release, so the copy on `main` always pins the newest published image.
+# Set CERTMATE_VERSION in .env to hold an installation on a version of your
+# choosing; change it and `docker compose up -d` again to upgrade.
+#
+# This file is for running CertMate. The docker-compose.yml at the repository
+# root builds the image from source and is for development.
+
+services:
+  certmate:
+    image: fabriziosalmi/certmate:${CERTMATE_VERSION:-2.42.0}
+    ports:
+      # Loopback only by default. Put a reverse proxy in front for remote
+      # access (then set BEHIND_PROXY=true), or set CERTMATE_BIND=0.0.0.0 in
+      # .env if you really mean to publish it on every interface.
+      - "${CERTMATE_BIND:-127.0.0.1}:${CERTMATE_PORT:-8000}:8000"
+    environment:
+      # Required. Without them the app would invent values at startup that
+      # change on every recreate, so sessions and API clients would break.
+      - API_BEARER_TOKEN=${API_BEARER_TOKEN:?set API_BEARER_TOKEN in .env (see the header of this file)}
+      - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY in .env (see the header of this file)}
+      # Without it, automatic backups are masked and cannot restore this
+      # instance. With it, they are complete and encrypted at rest.
+      - CERTMATE_BACKUP_PASSPHRASE=${CERTMATE_BACKUP_PASSPHRASE:-}
+      # Optional: bootstraps the default Cloudflare account on first run. Every
+      # other DNS provider is configured in the web UI.
+      - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN:-}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+      # true when a trusted reverse proxy sits in front and sets X-Forwarded-*.
+      - BEHIND_PROXY=${BEHIND_PROXY:-false}
+      - FLASK_ENV=production
+    volumes:
+      # Named volumes: Docker seeds them from the image, with the ownership
+      # and permissions CertMate needs, so there is nothing to prepare.
+      - certificates:/app/certificates
+      - data:/app/data
+      - logs:/app/logs
+      - backups:/app/backups
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  certificates:
+  data:
+  logs:
+  backups:

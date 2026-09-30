@@ -1,8 +1,38 @@
 # Construction et déploiement Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 38dc004104e2e9da -->
+<!-- CERTMATE-TRANSLATED-FROM 34d8d8e5aa07a32c -->
 
 Ce guide couvre la construction, le déploiement et l'exécution de CertMate dans Docker — incluant le support multi-plateforme pour ARM et AMD64.
+
+---
+
+## En production avec Docker Compose
+
+Le moyen le plus court d'exécuter CertMate en production : un seul fichier, l'image publiée, rien à compiler et aucun dépôt à cloner.
+
+```bash
+mkdir certmate && cd certmate
+curl -fsSLO https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/docker-compose.yml
+printf 'API_BEARER_TOKEN=%s\nSECRET_KEY=%s\nCERTMATE_BACKUP_PASSPHRASE=%s\n' \
+  "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+chmod 600 .env
+docker compose up -d
+```
+
+Ouvrez `http://127.0.0.1:8000`. La première page crée le compte administrateur et demande l'`API_BEARER_TOKEN` du fichier `.env` pour l'autoriser. Conservez `.env` : il contient le jeton utilisé par les clients API, la clé qui signe les sessions et la phrase secrète sans laquelle une sauvegarde ne peut pas restaurer cette instance.
+
+Ce que fait le fichier :
+
+- **Épingle l'image** de la dernière version. La copie sur `main` est mise à jour à chaque version. Pour rester sur une version, définissez `CERTMATE_VERSION=X.Y.Z` dans `.env`.
+- **Conserve tout dans des volumes nommés** (`certificates`, `data`, `logs`, `backups`). Docker les crée avec les droits dont CertMate a besoin, il n'y a donc aucun `chown` à faire. `docker compose down` les conserve ; `down -v` les supprime.
+- **N'écoute que sur 127.0.0.1.** Pour un accès distant, placez un reverse proxy devant et définissez `BEHIND_PROXY=true`. `CERTMATE_BIND=0.0.0.0` le publie sur toutes les interfaces. `CERTMATE_PORT` change le port de l'hôte.
+- **Refuse de démarrer sans `API_BEARER_TOKEN` et `SECRET_KEY`**, au lieu de générer des valeurs qui changeraient à chaque recréation du conteneur.
+
+Variables facultatives pour `.env` : `CLOUDFLARE_TOKEN` (crée un compte DNS Cloudflare au premier démarrage), `LETSENCRYPT_EMAIL`, `BEHIND_PROXY`.
+
+**Mise à jour :** téléchargez de nouveau le fichier (ou changez `CERTMATE_VERSION`), puis exécutez `docker compose pull && docker compose up -d`.
+
+Le `docker-compose.yml` à la racine du dépôt construit l'image à partir des sources et sert au développement.
 
 ---
 

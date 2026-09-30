@@ -309,79 +309,41 @@ For supported providers, you can configure multiple accounts to enable:
 
 ## Quick Start with Docker
 
-Get CertMate running in under 5 minutes with Docker Compose:
+Get CertMate running in under 5 minutes with Docker Compose. One file, the published image, nothing to clone or build.
 
 ### Prerequisites
-- Docker 20.10+
-- Docker Compose 2.0+
-- Domain with DNS managed by supported provider
+- Docker 20.10+ with Docker Compose v2 (`docker compose`)
+- A domain with DNS managed by a supported provider
 
-### 1. Clone and Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/fabriziosalmi/certmate.git
-cd certmate
-
-# Copy environment template
-cp .env.example .env
-```
-
-### 2. Configure Environment
-
-Edit `.env` file with your credentials:
+### 1. Download and configure
 
 ```bash
-# Recommended for any network-exposed deployment: API Security.
-# Auto-generated if unset, but a not-yet-onboarded instance serves the
-# first-run setup bypass to anyone who can reach it — set this (or bind to
-# localhost) before exposing CertMate. When set, the first-run screen asks
-# you to paste this same token once to create the initial admin.
-API_BEARER_TOKEN=your_super_secure_api_token_here_change_this
-
-# DNS Provider Configuration
-#
-# Cloudflare is the only provider configured from the environment: this token
-# bootstraps the default Cloudflare account on first run. Route53, Azure,
-# Google Cloud DNS, PowerDNS and every other provider are configured in the
-# web UI (Settings -> DNS Providers) or through the API — CertMate reads no
-# environment variable for any of them, so setting AWS_ACCESS_KEY_ID or
-# AZURE_CLIENT_ID here does nothing at all.
-CLOUDFLARE_TOKEN=your_cloudflare_api_token_here
-
-# Backups. Without a passphrase, automatic backups are written with their
-# secrets masked and CANNOT restore this instance — they are configuration
-# snapshots. With one, every automatic backup is complete and encrypted at
-# rest. Set it before you need it; see Backup and Recovery below.
-# CERTMATE_BACKUP_PASSPHRASE=a_long_random_passphrase
-
-# Optional: Application Settings
-SECRET_KEY=your_flask_secret_key_here
-FLASK_ENV=production
-PORT=8000
-# Note: there is no HOST variable. The container binds 0.0.0.0 in its own
-# namespace — publish it as 127.0.0.1:8000:8000 to reach it on loopback only,
-# and front it with a reverse proxy for external access.
+mkdir certmate && cd certmate
+curl -fsSLO https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/docker-compose.yml
+printf 'API_BEARER_TOKEN=%s\nSECRET_KEY=%s\nCERTMATE_BACKUP_PASSPHRASE=%s\n' \
+  "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+chmod 600 .env
 ```
+
+`.env` now holds the three secrets CertMate needs: the API token (also asked once by the first-run screen to create the admin), the session signing key, and the backup passphrase. Optionally add `CLOUDFLARE_TOKEN=...` to bootstrap a Cloudflare DNS account; every other DNS provider is configured in the web UI. What each setting does, and how to upgrade: [docs/docker.md](docs/docker.md#production-with-docker-compose).
 
 > **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, or any S3-compatible object storage via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
 
 > **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. **Set `CERTMATE_BACKUP_PASSPHRASE`.** With it, every automatic backup is complete and encrypted at rest, so it can actually restore this instance; without it, automatic backups keep their credentials masked and are configuration snapshots that cannot. The backup list marks which archives can restore, and Settings disables Restore on the ones that cannot. Then keep a copy off the host — archives on the host are pruned after 30 days, and a lost volume takes them with it. `POST /api/backups/upload` brings one back.
 
-### 3. Deploy
+### 2. Start
 
 ```bash
-# Start all services
-docker-compose up -d
-
-# Check status
-docker-compose ps
-
-# View logs
-docker-compose logs -f certmate
+docker compose up -d
+docker compose ps
+docker compose logs -f certmate
 ```
 
-### 4. Access CertMate
+CertMate listens on `127.0.0.1:8000` only. For remote access, put a reverse proxy in front and set `BEHIND_PROXY=true` in `.env`.
+
+To build from source instead, clone the repository and use its root `docker-compose.yml` (development).
+
+### 3. Access CertMate
 
 | Service                  | URL                          | Description                           |
 | ------------------------ | ---------------------------- | ------------------------------------- |
@@ -390,7 +352,7 @@ docker-compose logs -f certmate
 | **Alternative API Docs** | http://localhost:8000/redoc/ | ReDoc documentation                   |
 | **Health Check**         | http://localhost:8000/health | Service health monitoring             |
 
-### 5. Create Your First Certificate
+### 4. Create Your First Certificate
 
 Using the Web Interface:
 1. Navigate to http://localhost:8000
@@ -415,14 +377,7 @@ Isolated, reproducible, and the way CertMate is tested and released. Run **one**
 container (see the single-instance note above); give it more CPU and memory
 rather than more replicas. **Published images cover two architectures**: AMD64 (Intel/AMD) and ARM64 (Apple Silicon, ARM servers). ARM v7 (32-bit Raspberry Pi) is not published; build it yourself with `./build-multiplatform.sh --platforms linux/arm/v7`.
 
-```bash
-# Quick start with Docker Compose
-git clone https://github.com/fabriziosalmi/certmate.git
-cd certmate
-cp .env.example .env
-# Edit .env with your configuration
-docker-compose up -d
-```
+The production Compose bundle is one file that runs the published image; the [Quick Start](#quick-start-with-docker) above shows the commands. To build the image yourself instead, clone the repository and run `docker compose up -d` with its root `docker-compose.yml`, after preparing its bind-mounted directories as its comments describe.
 
 **Multi-Platform Support:**
 ```bash
