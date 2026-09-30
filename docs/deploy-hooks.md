@@ -536,6 +536,27 @@ and not another placeholder of the notification webhook.
 }
 ```
 
+**In the UI.** Settings → Deploy → **Deploy Targets** lists every target and
+edits the webhook ones: name, domains (required), events, URL, method,
+authentication, signing secret, how the server is verified, a private-network
+switch, timeout and attempts, and the payload with the variables as buttons. The
+key variables are red, and adding one is what triggers the confirmation below. **Preview what would be
+sent** calls the preview endpoint below and shows the destination with its port,
+how the server is verified, the files a delivery reads, the headers (credentials
+masked) and the body rendered with an example certificate and key. A preview
+disappears as soon as the form changes, so what is on screen is always what would
+be saved.
+
+If the payload names a private-key variable, the form shows a red box with the
+destination host and keeps **Save target** disabled until you have typed that host.
+A target already confirmed for its host is not asked again when you rename it or
+change its domains; a different host asks again and says which host it was
+confirmed for. Saving writes only `targets`, from the list the server holds at that
+moment with this one target changed, so it cannot overwrite an edit made through
+the API in between, and it leaves the other target types (Kubernetes secrets)
+exactly as they are. They are listed there and edited through the API. The page
+never sends a consent: the server writes it.
+
 **Template variables.** The payload is JSON you write. A placeholder inside a
 string is inserted escaped, so a PEM (which has newlines) cannot break the JSON.
 
@@ -604,6 +625,7 @@ once, use *Run hooks for a domain* (admin), which is an explicit action.
 | A redirect, a rebound DNS answer or a metadata address taking the request elsewhere | An administrator: anyone who can save this configuration can already write a [shell hook](#sending-the-private-key-from-a-hook) that sends the key, without any of the checks above |
 | Sending over plain HTTP, or to a server nobody verified | Keeping the key out of the receiver's own backups and logs |
 | The receiver's answer carrying the key into the audit log | |
+| | The target's own credentials: `auth_token`, `auth_password` and `signing_secret` are kept in `settings.json` (mode `0600`) and returned to an administrator by `GET /api/deploy/config`, exactly as a Kubernetes target's token is. The form shows them as password fields. Give the receiver a token that can do this one thing |
 
 Not in this version: a bundle as a file upload or PKCS#12, and custom request
 headers other than the authentication one. Say what a receiver needs.
