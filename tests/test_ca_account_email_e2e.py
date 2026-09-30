@@ -92,7 +92,9 @@ def _contacts_sent_to_the_ca(manager):
     logs = sorted((manager.cert_dir / TEST_DOMAIN / 'logs').rglob('letsencrypt.log*'))
     assert logs, 'certbot left no log for this domain'
     text = '\n'.join(f.read_text(errors='replace') for f in logs)
-    return re.findall(r'"contact":\s*\[\s*"(mailto:[^"]+)"', text)
+    # The payload is logged as the repr of a bytes object, so its newlines are
+    # the two characters backslash-n, not whitespace.
+    return re.findall(r'"contact":(?:\s|\\n)*\[(?:\s|\\n)*"(mailto:[^"]+)"', text)
 
 
 def test_01_issue_under_the_second_account(instance):
