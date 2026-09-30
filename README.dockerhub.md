@@ -28,46 +28,36 @@
 
 ## Quick Start
 
-### Docker Compose (Recommended)
+### Docker Compose (recommended)
+
+One file, this image, nothing to build:
 
 ```bash
-# 1. Create docker-compose.yml
-version: '3.8'
-services:
- certmate:
- image: fabriziosalmi/certmate:latest
- container_name: certmate
- ports:
- - "8000:8000"
- environment:
- - API_BEARER_TOKEN=your_secure_token_here
- - CLOUDFLARE_TOKEN=your_cloudflare_token # Or other DNS provider
- volumes:
- - ./data:/app/data
- - ./certificates:/app/certificates
- - ./letsencrypt:/app/letsencrypt
- restart: unless-stopped
-
-# 2. Start the service
-docker-compose up -d
-
-# 3. Access the dashboard
-open http://localhost:8000
+mkdir certmate && cd certmate
+curl -fsSLO https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/docker-compose.yml
+printf 'API_BEARER_TOKEN=%s\nSECRET_KEY=%s\nCERTMATE_BACKUP_PASSPHRASE=%s\n' \
+  "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+chmod 600 .env
+docker compose up -d
 ```
+
+Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the `API_BEARER_TOKEN` from `.env` to authorize it. The file pins the latest release, keeps its data in named volumes and listens on loopback only. [What each setting does, and how to upgrade.](https://github.com/fabriziosalmi/certmate/blob/main/docs/docker.md#production-with-docker-compose)
 
 ### Standalone Docker
 
 ```bash
-docker run -d \
- --name certmate \
- -p 8000:8000 \
- -e API_BEARER_TOKEN=your_secure_token_here \
- -e CLOUDFLARE_TOKEN=your_token \
- -v $(pwd)/data:/app/data \
- -v $(pwd)/certificates:/app/certificates \
- -v $(pwd)/letsencrypt:/app/letsencrypt \
- fabriziosalmi/certmate:latest
+docker run -d --name certmate \
+  -p 127.0.0.1:8000:8000 \
+  -e API_BEARER_TOKEN="$(openssl rand -hex 32)" \
+  -e SECRET_KEY="$(openssl rand -hex 32)" \
+  -v certmate_certificates:/app/certificates \
+  -v certmate_data:/app/data \
+  -v certmate_logs:/app/logs \
+  -v certmate_backups:/app/backups \
+  fabriziosalmi/certmate:latest
 ```
+
+Write the two values down (or use an env file): the first-run screen asks for the token, and a new `SECRET_KEY` signs everyone out.
 
 ## Supported DNS Providers
 
@@ -138,23 +128,18 @@ curl "http://localhost:8000/api/certificates" \
 
 ## Environment Variables
 
-### DNS Provider (choose one)
-- **Cloudflare**: `CLOUDFLARE_TOKEN`
-- **AWS Route53**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`
-- **Azure**: `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
-- **GCP**: `GOOGLE_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`
-- **DigitalOcean**: `DIGITALOCEAN_TOKEN`
-- **Hetzner**: `HETZNER_API_TOKEN`
-- See [documentation](https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md) for all providers
-
-### Optional
-- `API_BEARER_TOKEN` - Bearer token for API authentication (auto-generated if unset)
-- `API_BEARER_TOKEN_FILE` - Path to a file containing the bearer token; takes precedence over `API_BEARER_TOKEN` when set
-- `SECRET_KEY` - Flask secret key (auto-generated if not set)
-- `SECRET_KEY_FILE` - Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`)
+- `API_BEARER_TOKEN` - Bearer token for the API; the first-run screen asks for it to create the admin. `API_BEARER_TOKEN_FILE` reads it from a file instead and takes precedence
+- `SECRET_KEY` - Key that signs login sessions. `SECRET_KEY_FILE` reads it from a file instead and takes precedence
+- `CERTMATE_BACKUP_PASSPHRASE` - Without it, automatic backups are masked and cannot restore the instance; with it they are complete and encrypted at rest
+- `CLOUDFLARE_TOKEN` - Optional: creates a Cloudflare DNS account on first start
+- `LETSENCRYPT_EMAIL` - Optional: overrides the ACME contact email set in the UI
+- `BEHIND_PROXY` - `true` when a trusted reverse proxy sets `X-Forwarded-*`
+- `PORT` - Listen port inside the container (default 8000)
 - `FLASK_ENV` - Environment mode (default: production)
-- The bind address is fixed to `0.0.0.0` inside the container; publish it as `-p 127.0.0.1:8000:8000` to reach it on loopback only
-- `PORT` - Listen port (default: 8000)
+
+**DNS providers other than Cloudflare are not configured through environment variables.** Route53, Azure, Google Cloud DNS, DigitalOcean, Hetzner and the rest are added in the web UI (Settings → DNS Providers) or through the API. See the [DNS provider guide](https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md).
+
+The bind address is fixed to `0.0.0.0` inside the container; publish it as `-p 127.0.0.1:8000:8000` to reach it on loopback only.
 
 ## Security Best Practices
 
@@ -166,14 +151,14 @@ curl "http://localhost:8000/api/certificates" \
 
 ## Volume Mounts
 
-```yaml
-volumes:
- - ./data:/app/data # Settings, cache, audit logs
- - ./certificates:/app/certificates # SSL certificates
- - ./letsencrypt:/app/letsencrypt # Let's Encrypt config
- - ./backups:/app/backups # Backup files (optional)
- - ./logs:/app/logs # Application logs (optional)
-```
+| Path | Holds |
+| --- | --- |
+| `/app/certificates` | Certificates and their private keys |
+| `/app/data` | Settings, users, inventory, audit chain |
+| `/app/backups` | Backup archives |
+| `/app/logs` | Application logs |
+
+Use named volumes: Docker creates them with the ownership CertMate needs. A bind mount to a host directory must be prepared first (`chgrp -R 0 <dir> && chmod -R g+rwX <dir>`), because CertMate runs as a non-root user and refuses to start on a directory it cannot write.
 
 ## Multi-Platform Support
 

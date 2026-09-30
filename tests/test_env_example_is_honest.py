@@ -235,3 +235,33 @@ def test_every_variable_the_quick_start_offers_is_read_by_something(name, line):
         f"than nothing: the operator believes the provider is configured. "
         f"Every provider except Cloudflare is configured in the UI or the API."
     )
+
+
+# --- and of the Docker Hub page --------------------------------------------
+#
+# README.dockerhub.md is what the Docker Hub page shows, and it listed AWS,
+# Azure, GCP, DigitalOcean and Hetzner variables under "DNS Provider (choose
+# one)" long after the README had stopped: the same defect as above, on the
+# page people reach by searching for the image (#1015).
+
+DOCKERHUB = REPO_ROOT / "README.dockerhub.md"
+
+
+def _dockerhub_declared():
+    text = DOCKERHUB.read_text(encoding="utf-8")
+    start = text.index("## Environment Variables")
+    end = text.index("\n## ", start + 1)
+    return sorted(set(re.findall(r"`([A-Z][A-Z0-9_]{2,})`", text[start:end])))
+
+
+def test_the_dockerhub_page_declares_something():
+    assert len(_dockerhub_declared()) >= 5, _dockerhub_declared()
+
+
+@pytest.mark.parametrize("name", _dockerhub_declared())
+def test_every_variable_the_dockerhub_page_offers_is_read_by_something(name):
+    assert _readers(name, _blobs()), (
+        f"README.dockerhub.md offers `{name}`, which nothing in the application "
+        f"reads. Every DNS provider except Cloudflare is configured in the UI "
+        f"or the API."
+    )
