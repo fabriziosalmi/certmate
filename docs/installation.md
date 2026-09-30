@@ -31,6 +31,16 @@ Open `http://127.0.0.1:8000`. The first page creates the administrator account a
 
 ---
 
+## A cloud VM with cloud-init
+
+For a fresh VM on any provider that accepts user data (Hetzner, DigitalOcean, AWS, Azure, GCP, OpenStack, Proxmox): paste [`deploy/cloud-init/certmate.yaml`](../deploy/cloud-init/certmate.yaml) into the VM's "user data" or "cloud-init" field when you create it ([raw file](https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/cloud-init/certmate.yaml)). It installs Docker, downloads the [production compose bundle](docker.md#production-with-docker-compose), generates the secrets on the VM into `/srv/certmate/.env` (mode 600, never in the user data) and starts CertMate.
+
+CertMate listens on `127.0.0.1:8000` inside the VM. Reach it through an SSH tunnel, `ssh -L 8000:127.0.0.1:8000 <user>@<vm>`, then open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the token: `sudo grep API_BEARER_TOKEN /srv/certmate/.env`.
+
+Verified on the Ubuntu 24.04 cloud image: cloud-init finishes `done`, CertMate is healthy a few minutes after boot, and it comes back after a reboot.
+
+---
+
 ## Prerequisites
 
 - Python 3.12
