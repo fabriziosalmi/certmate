@@ -1,0 +1,54 @@
+# CertMate as a Podman Quadlet unit (#1026).
+#
+# Rootless (recommended): ~/.config/containers/systemd/certmate.container
+#   then: systemctl --user daemon-reload && systemctl --user start certmate
+#   and, so it runs without a login session and after a reboot:
+#   sudo loginctl enable-linger $USER
+# Rootful: /etc/containers/systemd/certmate.container
+#   then: sudo systemctl daemon-reload && sudo systemctl start certmate
+#
+# The three secrets must exist first, as Podman secrets (never in this file):
+#   for s in certmate-api-token certmate-secret-key certmate-backup-passphrase; do
+#     openssl rand -hex 32 | tr -d '\n' | podman secret create "$s" -
+#   done
+#
+# Guide: docs/docker.md, "Podman (Quadlet)".
+
+[Unit]
+Description=CertMate certificate lifecycle manager
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=docker.io/fabriziosalmi/certmate:latest
+ContainerName=certmate
+# Loopback only. Put a reverse proxy in front for remote access (and add
+# Environment=BEHIND_PROXY=true), or change the address deliberately.
+PublishPort=127.0.0.1:8000:8000
+# Named volumes, with :U. Podman seeds a new volume from the image, but
+# rootless it left the root of a volume whose image directory is not empty
+# (backups/, which holds unified/) owned by root, and CertMate refused to
+# start: "Required directories are not writable". :U makes Podman give each
+# volume to the container's user, rootful and rootless alike.
+Volume=certmate-certificates:/app/certificates:U
+Volume=certmate-data:/app/data:U
+Volume=certmate-backups:/app/backups:U
+Volume=certmate-logs:/app/logs:U
+Secret=certmate-api-token,type=env,target=API_BEARER_TOKEN
+Secret=certmate-secret-key,type=env,target=SECRET_KEY
+Secret=certmate-backup-passphrase,type=env,target=CERTMATE_BACKUP_PASSPHRASE
+HealthCmd=curl -fsS http://localhost:8000/health
+HealthInterval=30s
+HealthStartPeriod=40s
+# `podman auto-update` (or its timer) pulls a newer :latest and restarts.
+AutoUpdate=registry
+DropCapability=ALL
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+# The first start pulls the image.
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target default.target
