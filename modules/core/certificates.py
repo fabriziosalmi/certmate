@@ -2909,7 +2909,7 @@ class CertificateManager:
             return ''
         return f"\n\n{sentence}" if sentence else ''
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -2947,6 +2947,12 @@ class CertificateManager:
                 stays on the appliance that made it. These certificates have no
                 certbot lineage, so ``certbot renew`` will not touch them —
                 renewal re-runs this command with the stored CSR.
+            renewal: Keyword-only, and passed by one caller:
+                `_renew_from_stored_csr`, which renews a CSR-only certificate
+                by re-running issuance. The certificate is not new, so its
+                `created_at` is kept, `renewed_at` is stamped, and the run is
+                not counted as a creation; the caller counts the renewal
+                (#666, D4).
             replace: Reissue over the existing certbot lineage (#267). The
                 same ``--cert-name`` with a different ``-d`` set makes
                 certbot replace the lineage's domain set (expand AND
@@ -3188,11 +3194,20 @@ class CertificateManager:
             # store below rewrites it (see _commit_certificate).
             if replace:
                 metadata = self._merge_reissue_metadata(domain, metadata)
+            if renewal:
+                # A renewal, not a new certificate: it keeps the day it was
+                # created and says when it was renewed. Every CSR renewal used
+                # to reset created_at and never set renewed_at (#666, D4).
+                previous = self._load_metadata(domain).get('created_at')
+                if previous:
+                    metadata['created_at'] = previous
+                metadata['renewed_at'] = utc_now_iso()
             storage_warning = self._commit_certificate(domain, cert_files, metadata)
 
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
-            self._record_creation_metrics(domain, dns_provider, True, duration)
+            if not renewal:
+                self._record_creation_metrics(domain, dns_provider, True, duration)
 
             result = {
                 'success': True,
@@ -3208,15 +3223,17 @@ class CertificateManager:
             
         except subprocess.TimeoutExpired as e:
             logger.error(f"Certificate creation timeout for {domain}")
-            self._record_creation_metrics(
-                domain, dns_provider, False, time.time() - start_time, error=e)
+            if not renewal:
+                self._record_creation_metrics(
+                    domain, dns_provider, False, time.time() - start_time, error=e)
             raise RuntimeError("Certificate creation timed out")
 
         except Exception as e:
             duration = time.time() - start_time
             logger.error(f"Certificate creation failed for {domain}: {str(e)} (duration: {duration:.2f}s)")
-            self._record_creation_metrics(
-                domain, dns_provider, False, duration, error=e)
+            if not renewal:
+                self._record_creation_metrics(
+                    domain, dns_provider, False, duration, error=e)
             raise
         finally:
             domain_lock.release()
@@ -3318,6 +3335,7 @@ class CertificateManager:
             challenge_type=metadata.get('challenge_type'),
             csr_pem=request['csr_pem'],
             replace=True,
+            renewal=True,
         )
 
         # The SAME dict shape the ordinary renewal returns. The route reads
@@ -3538,8 +3556,8 @@ class CertificateManager:
                 self._renewal_failed(domain, result, metadata,
                                      challenge_type)
         except subprocess.TimeoutExpired:
-            # Explicit, clean message before the generic handler below re-wraps
-            # every exception as "Exception: ...". The finally block still runs,
+            # Explicit, clean message before the generic handler below wraps
+            # what is not already a RuntimeError. The finally block still runs,
             # releasing the domain lock and cleaning up credential files.
             logger.error(f"Certificate renewal timed out for {domain}")
             raise RuntimeError("Certificate renewal timed out")
@@ -3552,10 +3570,17 @@ class CertificateManager:
             # refused. Measured on a real manager: RuntimeError("Exception:
             # No certificate found for domain: ...").
             raise
+        except RuntimeError as e:
+            # Already a renewal failure with its own message ("Certificate
+            # renewal failed: ...", "Cannot renew ..."). Wrapping it again
+            # prefixed every webhook, notification and audit record with
+            # "Exception: " (#666, D8).
+            logger.error(f"Certificate renewal failed for {domain}: {e}")
+            raise
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
-            raise RuntimeError(f"Exception: {error_msg}")
+            raise RuntimeError(error_msg) from e
         finally:
             _remove_temp_files(artifacts)
             domain_lock.release()
