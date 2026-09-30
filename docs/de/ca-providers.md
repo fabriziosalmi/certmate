@@ -95,10 +95,11 @@ Der Private-CA-Eintrag ist auch der generische Ausweg für jede ACME-CA ohne ded
 
 1. Navigieren Sie zu **Einstellungen**
 2. Scrollen Sie zu **Zertifizierungsstellen (CA) Anbieter**
-3. Wählen Sie Ihren Standard-CA-Anbieter aus
+3. Klicken Sie auf **Add CA Account**, wählen Sie die CA und benennen Sie das
+   Konto (Buchstaben, Ziffern, Punkte, Binde- und Unterstriche)
 4. Konfigurieren Sie die erforderlichen Felder
 5. Klicken Sie auf **CA-Verbindung testen**, um die Verbindung zu prüfen
-6. Einstellungen speichern
+6. Klicken Sie auf **Save Account**
 
 ### Standard-CA vs. CA pro Zertifikat
 

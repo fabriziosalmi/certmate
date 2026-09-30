@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from tests.conftest import _REQUIRE_BROWSER
+from tests.conftest import _REQUIRE_BROWSER, BASE_URL as _API_URL, TEST_EMAIL
 
 if _REQUIRE_BROWSER:
     import importlib.util
@@ -38,6 +38,25 @@ CSR = (
     "MIHxMIGYAgEAMBkxFzAVBgNVBAMMDmFwaS5leGFtcGxlLmNvbTBZMBMGByqGSM49\n"
     "-----END CERTIFICATE REQUEST-----"
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _a_usable_ca(docker_container, ui_session_cookie):
+    """The form refuses to submit while no CA is usable (#1045), as the server
+    refuses a create without an ACME email. Give the instance one, and put the
+    settings back afterwards so the other UI modules see what they expect."""
+    import requests
+    session = requests.Session()
+    session.cookies.set("certmate_session", ui_session_cookie)
+    # A cookie-authenticated write must say where it comes from (CSRF).
+    session.headers["Origin"] = _API_URL
+    url = f"{_API_URL}/api/web/settings"
+    before = session.get(url).json().get("email") or ""
+    response = session.post(url, json={"email": TEST_EMAIL})
+    assert response.ok, response.text
+    yield
+    restored = session.post(url, json={"email": before})
+    assert restored.ok, restored.text
 
 
 def _open_create_drawer(page):

@@ -3,6 +3,7 @@ Settings management module for CertMate
 Handles loading/saving settings, migrations, and configuration management
 """
 
+import copy
 import os
 import re
 import secrets
@@ -592,6 +593,65 @@ def _deep_merge_dict(base, overlay):
     return merged
 
 
+# A CA provider entry has two shapes: the legacy flat one ({email, eab_kid,
+# eab_hmac, ...}) and the multi-account one ({accounts: {id: {...}}}). Once
+# `accounts` exists, get_ca_config reads ONLY the accounts, so any flat key
+# left beside it is a credential copy nothing reads and nothing updates:
+# rotating the EAB secret in the account leaves the old one on disk for good,
+# and deleting the account leaves its secret behind. These two helpers keep
+# `accounts` the single home of an account's data.
+def _default_ca_account_id(accounts, default_ca_accounts, provider):
+    """The account get_ca_config uses when no account is named."""
+    chosen = (default_ca_accounts or {}).get(provider, 'default')
+    if chosen in accounts:
+        return chosen
+    return next(iter(accounts), 'default')
+
+
+def _drop_shadowed_ca_credentials(ca_providers):
+    """Remove the flat keys sitting beside `accounts`; return the providers
+    that had any. Behaviour-preserving: get_ca_config never reads them."""
+    cleaned = []
+    if not isinstance(ca_providers, dict):
+        return cleaned
+    for provider, config in ca_providers.items():
+        if isinstance(config, dict) and isinstance(config.get('accounts'), dict):
+            shadowed = [key for key in config if key != 'accounts']
+            for key in shadowed:
+                del config[key]
+            if shadowed:
+                cleaned.append(provider)
+    return cleaned
+
+
+def _fold_legacy_ca_write(existing_ca, incoming_ca, default_ca_accounts):
+    """Move flat keys of a settings write into the account they address.
+
+    A client that still writes the flat shape (an API script, a pre-accounts
+    settings tab) onto a provider that has accounts means "the account used
+    by default", which is what get_ca_config would pick. Merged beside
+    `accounts` instead, the write would be accepted and then never read.
+    """
+    if not isinstance(incoming_ca, dict):
+        return
+    for provider, config in incoming_ca.items():
+        if not isinstance(config, dict):
+            continue
+        legacy = {key: value for key, value in config.items() if key != 'accounts'}
+        current = (existing_ca or {}).get(provider)
+        known = current.get('accounts') if isinstance(current, dict) else None
+        if not legacy or not (isinstance(known, dict) or isinstance(config.get('accounts'), dict)):
+            continue
+        accounts = {**(known or {}), **(config.get('accounts') or {})}
+        target = _default_ca_account_id(accounts, default_ca_accounts, provider)
+        logger.info("Settings write for CA provider %s used the flat shape; "
+                    "applying it to account %s", provider, target)
+        folded = config.setdefault('accounts', {}).setdefault(target, {})
+        for key, value in legacy.items():
+            folded[key] = value
+            del config[key]
+
+
 def validate_settings_post(payload, current=None):
     """Filter a POST /api/settings payload against the writable whitelist.
 
@@ -923,6 +983,11 @@ class SettingsManager:
             # so a cached `existing` made the protection restore a stale copy:
             # it protected the snapshot, not the file.
             existing = self.load_settings(use_cache=False)
+            if isinstance(incoming.get('ca_providers'), dict):
+                incoming = {**incoming, 'ca_providers': copy.deepcopy(incoming['ca_providers'])}
+                _fold_legacy_ca_write(
+                    existing.get('ca_providers'), incoming['ca_providers'],
+                    incoming.get('default_ca_accounts', existing.get('default_ca_accounts')))
             merged = {**existing, **incoming}
             for key, value in incoming.items():
                 if (key in _DEEP_MERGE_SETTINGS_KEYS
@@ -1969,6 +2034,16 @@ class SettingsManager:
                     for account in accounts.values():
                         if isinstance(account, dict) and account.pop('environment', None) is not None:
                             migrated = True
+
+        # Migration 5: a CA provider with `accounts` keeps its data only there.
+        # Flat credential keys beside it are copies get_ca_config never reads
+        # (see _drop_shadowed_ca_credentials); left in place, a rotated or
+        # deleted secret survives on disk.
+        cleaned = _drop_shadowed_ca_credentials(settings.get('ca_providers'))
+        if cleaned:
+            logger.info("Migrating settings: dropping credential copies shadowed by "
+                        "accounts for CA provider(s) %s", ', '.join(sorted(cleaned)))
+            migrated = True
 
         # Migration 3: Ensure metadata exists for existing certificates
         if migrated:

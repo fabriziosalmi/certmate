@@ -68,15 +68,13 @@ def test_models_enum_matches_ca_manager():
 
 def test_settings_select_offers_every_provider():
     html = _read('templates/partials/settings_ca.html')
-    # Scope to the default-ca select: the file also contains the
-    # private-ca preset select, whose options are not CA provider keys.
-    match = re.search(r'<select id="default-ca".*?</select>', html, re.S)
-    assert match, 'default-ca select not found in settings_ca.html'
+    match = re.search(r'<select id="add-ca-type".*?</select>', html, re.S)
+    assert match, 'Add CA type select not found in settings_ca.html'
     offered = set(re.findall(r'<option value="([\w-]+)"', match.group(0)))
     providers = _ca_providers()
     missing = providers - offered
     assert not missing, (
-        f"CA providers missing from the default-ca select in "
+        f"CA providers missing from the Add CA type select in "
         f"templates/partials/settings_ca.html: {sorted(missing)}"
     )
     # Reverse direction: no phantom CA options.
@@ -93,18 +91,9 @@ def test_dashboard_cert_form_offers_every_provider():
         r'<select id="ca_provider_select".*?</select>', html, re.S,
     )
     assert match, 'ca_provider_select not found in templates/index.html'
-    offered = set(re.findall(r'<option value="([\w-]+)"', match.group(0)))
-    providers = _ca_providers()
-    missing = providers - offered
-    assert not missing, (
-        f"CA providers missing from the per-certificate CA dropdown in "
-        f"templates/index.html: {sorted(missing)}"
-    )
-    phantom = offered - providers
-    assert not phantom, (
-        f"templates/index.html offers CA options with no CAManager "
-        f"entry: {sorted(phantom)}"
-    )
+    assert not re.findall(r'<option value="[\w-]+"', match.group(0)), (
+        'The create form must only show configured CAs, loaded from settings')
+    assert 'CertMate.configuredCAProviders(settings, true)' in _read('static/js/dashboard.js')
 
 
 def test_settings_js_panel_wiring_complete():
@@ -146,9 +135,8 @@ def test_settings_js_save_load_and_test_cover_every_provider():
             f"collectCAProviderSettings does not save '{provider}' — "
             f"its panel fields would be silently dropped on save"
         )
-        assert re.search(rf'caProviders\.{provider}\s*\|\|', js), (
-            f"loadCAProviderSettings does not load '{provider}' — "
-            f"saved values would not repopulate the form"
+        assert re.search(rf'{provider}:\s*\{{email:', js), (
+            f"fillCAAccountFields does not load '{provider}' account fields"
         )
         assert re.search(rf"caProvider === '{provider}'", js), (
             f"testCAProvider has no branch for '{provider}' — the Test "

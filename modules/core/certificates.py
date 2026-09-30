@@ -3008,6 +3008,7 @@ class CertificateManager:
                 key_type=key_type, key_size=key_size,
                 elliptic_curve=elliptic_curve, replace=replace,
             )
+            email = (prepared.ca_account_config or {}).get('email') or email
             ca_provider = prepared.ca_provider
             staging = prepared.staging
             used_ca_account_id = prepared.used_ca_account_id

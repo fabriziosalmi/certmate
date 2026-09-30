@@ -1847,6 +1847,80 @@
     // Multi-account support functions
     var providerAccounts = {};
     var accountSelectProvider = '';  // provider the account list was built for
+    var caAccounts = {};
+    var caAccountSelectProvider = '';
+    var configuredCAs = [];
+    var defaultCAProvider = 'letsencrypt';
+    var defaultCAAccounts = {};
+    var globalCAEmail = '';
+    var CA_NAMES = {
+        letsencrypt: "Let's Encrypt", letsencrypt_staging: "Let's Encrypt (Staging)",
+        zerossl: 'ZeroSSL', google: 'Google Trust Services', actalis: 'Actalis',
+        digicert: 'DigiCert', sectigo: 'Sectigo', sslcom: 'SSL.com', private_ca: 'Private CA'
+    };
+
+    function caAccountLabel(provider, id, config) {
+        var accounts = config.accounts || {};
+        var account = accounts[id] || (id === 'default' ? config : {});
+        return provider === 'sectigo' ? (account.name || id) :
+            (account.email || account.name || (provider === 'letsencrypt' ? globalCAEmail : '') || id);
+    }
+
+    function loadCAProviders() {
+        return fetch('/api/web/settings', { headers: API_HEADERS })
+            .then(function (response) { if (!response.ok) throw new Error('CA settings unavailable'); return response.json(); })
+            .then(function (settings) {
+                configuredCAs = CertMate.configuredCAProviders(settings, true);
+                caAccounts = settings.ca_providers || {};
+                defaultCAAccounts = settings.default_ca_accounts || {};
+                globalCAEmail = settings.email || '';
+                var select = document.getElementById('ca_provider_select');
+                var previous = select.value;
+                select.replaceChildren();
+                var defaultCA = settings.default_ca || 'letsencrypt';
+                defaultCAProvider = defaultCA;
+                if (configuredCAs.indexOf(defaultCA) !== -1) {
+                    var config = caAccounts[defaultCA] || {};
+                    var ids = Object.keys(config.accounts || {});
+                    var id = defaultCAAccounts[defaultCA] ||
+                        (ids.indexOf('default') !== -1 ? 'default' : (ids[0] || 'default'));
+                    select.add(new Option('Global default: ' + (CA_NAMES[defaultCA] || defaultCA) + ' — ' +
+                        caAccountLabel(defaultCA, id, config), ''));
+                }
+                configuredCAs.forEach(function (id) {
+                    select.add(new Option(CA_NAMES[id] || id, id));
+                });
+                if (!configuredCAs.length) select.add(new Option('Configure a CA in Settings', ''));
+                select.value = configuredCAs.indexOf(previous) !== -1 ? previous : '';
+                updateCAProviderInfo();
+            })
+            .catch(function () { showMessage('Could not load configured certificate authorities', 'error'); });
+    }
+
+    function updateCAAccountSelection() {
+        var provider = document.getElementById('ca_provider_select').value || defaultCAProvider;
+        var select = document.getElementById('ca_account_id');
+        var container = document.getElementById('ca-account-container');
+        var previous = provider === caAccountSelectProvider ? select.value : '';
+        caAccountSelectProvider = provider;
+        select.replaceChildren();
+        var config = caAccounts[provider] || {};
+        var accounts = config.accounts || {};
+        var ids = Object.keys(accounts);
+        var defaultId = defaultCAAccounts[provider] ||
+            (ids.indexOf('default') !== -1 ? 'default' : (ids[0] || 'default'));
+        select.add(new Option('Default for ' + (CA_NAMES[provider] || provider) + ': ' +
+            caAccountLabel(provider, defaultId, config), ''));
+        Object.keys(config.accounts || {}).forEach(function (id) {
+            select.add(new Option(caAccountLabel(provider, id, config) +
+                (id === defaultId ? ' (default for this CA)' : ''), id));
+        });
+        if (!config.accounts && (config.email || config.eab_kid || config.acme_url)) {
+            select.add(new Option(caAccountLabel(provider, 'default', config), 'default'));
+        }
+        container.classList.toggle('hidden', !configuredCAs.length);
+        if (previous) select.value = previous;
+    }
 
     // One request for every provider: /api/dns/accounts answers with a plain
     // list of {provider, account_id, name, ...}, grouped by provider here.
@@ -1954,6 +2028,7 @@
             infoDiv.classList.add('hidden');
         }
         toggleDnsProviderVisibility();
+        updateCAAccountSelection();
     }
 
     function toggleDnsProviderVisibility() {
@@ -2512,6 +2587,7 @@
         // are rebuilt by updateAccountSelection).
         toggleDnsProviderVisibility();
         updateCAProviderInfo();
+        if (cert.ca_account_id) document.getElementById('ca_account_id').value = cert.ca_account_id;
         updateDnsAliasHelp();
         if (typeof updateAccountSelection === 'function') updateAccountSelection();
         if (cert.account_id) {
@@ -2627,6 +2703,11 @@
         var dnsAliasDomain = (document.getElementById('dns_alias_domain') || {}).value;
         dnsAliasDomain = dnsAliasDomain ? normalizeDnsAliasName(dnsAliasDomain) : '';
 
+        if (!configuredCAs.length) {
+            showMessage('Configure a certificate authority in Settings before issuing', 'error');
+            return;
+        }
+
         // Parse SAN domains from comma-separated input
         var sanDomains = parseSanDomainsInput(sanDomainsInput);
         if (wildcardEnabled) {
@@ -2730,7 +2811,7 @@
         if (caProvider) {
             requestBody.ca_provider = caProvider;
         }
-        var caAccountId = document.getElementById('ca_account_id').value.trim();
+        var caAccountId = document.getElementById('ca_account_id').value;
         if (caAccountId) requestBody.ca_account_id = caAccountId;
 
         // A CSR generated on the device that will serve the certificate
@@ -3536,6 +3617,7 @@
             });
         });
         loadProviderAccounts();
+        loadCAProviders();
 
         // Status filtering is driven by the chips (onclick -> setStatusFilter);
         // free-text search moved to the ⌘K palette. No select listener needed.
@@ -3652,6 +3734,7 @@
     window.toggleDnsProviderVisibility = toggleDnsProviderVisibility;
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
+    window.loadCAProviders = loadCAProviders;
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
     window.copyAliasValueToClipboard = copyAliasValueToClipboard;

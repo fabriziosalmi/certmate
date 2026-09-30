@@ -94,10 +94,11 @@ L'entrée CA privée est aussi la porte de sortie générique pour toute CA ACME
 
 1. Allez dans **Paramètres**
 2. Descendez jusqu'à **Fournisseurs d'autorité de certification (CA)**
-3. Sélectionnez votre fournisseur CA par défaut
+3. Cliquez sur **Add CA Account**, choisissez la CA et nommez le compte
+   (lettres, chiffres, points, tirets et tirets bas)
 4. Configurez les champs requis
 5. Cliquez sur **Tester la connexion CA** pour vérifier
-6. Sauvegardez les paramètres
+6. Cliquez sur **Save Account**
 
 ### CA par défaut vs par certificat
 

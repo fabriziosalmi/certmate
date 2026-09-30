@@ -165,7 +165,9 @@ class TestSettingsUI:
 
     def test_save_settings_button(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
-        save_btn = browser_page.locator('button:has-text("Save")')
+        # :visible — the CA account modal's hidden "Save Account" button is
+        # now the first "Save" in the DOM.
+        save_btn = browser_page.locator('button:has-text("Save"):visible')
         expect(save_btn.first).to_be_visible()
 
     def test_no_console_errors(self, browser_page):
@@ -196,7 +198,10 @@ class TestCAAndChallengeToggles:
         browser_page.locator('button[role="tab"][aria-label="CA"]').click(timeout=10000)
         browser_page.wait_for_timeout(300)
 
-        browser_page.select_option('#default-ca', 'google')
+        # CAs are configured per account: the panel lives in the account
+        # modal, reached from "Add account" (#1045).
+        browser_page.locator('button[onclick="openCAAccountModal()"]').click(timeout=10000)
+        browser_page.select_option('#add-ca-type', 'google')
         browser_page.wait_for_timeout(300)
 
         expect(browser_page.locator('#google-ca-config')).to_be_visible(timeout=5000)
