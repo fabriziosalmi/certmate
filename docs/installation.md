@@ -4,6 +4,33 @@ This guide covers all methods of installing and deploying CertMate.
 
 ---
 
+## Linux server with systemd
+
+The recommended way on a Linux host without Docker. Verified on Debian 12, Ubuntu 24.04 and Rocky Linux 9; it uses `apt` or `dnf`, so Fedora, RHEL and Alma Linux follow the same path.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/install.sh | sudo sh
+```
+
+What it does:
+
+- installs `curl`, `tar`, `gzip` and `openssl` only if they are missing;
+- downloads the latest release into `/opt/certmate`, owned by root and read-only to the service;
+- fetches a standalone Python 3.12 with [uv](https://docs.astral.sh/uv/) into `/opt/certmate` and installs `requirements.lock`, the same pinned set the container image is built from. The system Python is not used, which is why Debian 12 (Python 3.11) and RHEL 9 (Python 3.9) work;
+- creates the `certmate` system user, which owns only `certificates`, `data`, `backups`, `logs` and `letsencrypt`;
+- writes `/etc/certmate/certmate.env` with a generated `API_BEARER_TOKEN`, `SECRET_KEY` and `CERTMATE_BACKUP_PASSPHRASE`, only if the file does not exist;
+- installs and starts the `certmate` systemd service, listening on `127.0.0.1:8000`.
+
+Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the token: `sudo grep API_BEARER_TOKEN /etc/certmate/certmate.env`.
+
+- **A specific version:** `curl -fsSL …/install.sh | sudo sh -s -- --version X.Y.Z`. Releases up to v2.42.0 predate the installer and are refused.
+- **Upgrade:** run the same command again. The code and the virtualenv are replaced; certificates, data, backups and `certmate.env` stay.
+- **Listen elsewhere:** set `CERTMATE_BIND` in `/etc/certmate/certmate.env` (for example `0.0.0.0:8000`, or keep loopback behind a reverse proxy and set `BEHIND_PROXY=true`), then `sudo systemctl restart certmate`.
+- **Logs:** `journalctl -u certmate`.
+- **SELinux:** the installer has not yet been verified with SELinux enforcing. If the service does not start on such a host, the journal will say why; please report it.
+
+---
+
 ## Prerequisites
 
 - Python 3.12

@@ -434,27 +434,16 @@ helm install certmate oci://ghcr.io/fabriziosalmi/charts/certmate \
 
 [CertMate on Kubernetes](docs/kubernetes.md) covers the first login, Argo CD and Flux, production sizing and OOM troubleshooting. Every chart value is in the [chart README](charts/certmate/README.md).
 
-### System Package Installation
-For system-wide installation on Linux distributions.
+### Linux server with systemd
+One command on Debian, Ubuntu, Fedora, RHEL, Rocky or Alma Linux:
 
 ```bash
-# Install system dependencies (Ubuntu/Debian)
-sudo apt update
-sudo apt install python3 python3-pip python3-venv certbot openssl
-
-# Clone and install
-git clone https://github.com/fabriziosalmi/certmate.git
-sudo mv certmate /opt/
-cd /opt/certmate
-sudo pip3 install -r requirements.txt
-
-# Create systemd service (see Service Setup section below for detailed instructions)
-sudo cp certmate.service /etc/systemd/system/
-sudo systemctl enable certmate
-sudo systemctl start certmate
+curl -fsSL https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/install.sh | sudo sh
 ```
 
-> **Detailed Instructions**: See [Installation Guide](docs/installation.md) for complete setup guides for each method.
+The installer puts CertMate in `/opt/certmate` with its own Python 3.12 (fetched by [uv](https://docs.astral.sh/uv/), so the system Python is not touched), generates the secrets into `/etc/certmate/certmate.env`, and starts the `certmate` systemd service on `127.0.0.1:8000`. Run it again to upgrade: certificates, data and configuration stay. Details and options: [docs/installation.md](docs/installation.md#linux-server-with-systemd).
+
+To set the service up by hand instead, follow the next section.
 
 ## Service Setup
 

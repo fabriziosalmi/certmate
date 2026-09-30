@@ -92,6 +92,13 @@ else
   src="$work/src"
 fi
 
+# The unit comes from the release being installed. Releases before this
+# installer existed ship a unit that listens on every interface whatever
+# CERTMATE_BIND says, and whose sandbox made DNS credential files unwritable.
+# Detected by content rather than by version number, so it is exact.
+grep -q 'CERTMATE_BIND' "$src/certmate.service" \
+  || die "CertMate $version predates this installer; install a newer release (--version)"
+
 if ! id certmate >/dev/null 2>&1; then
   say "Creating the certmate system user"
   nologin="$(command -v nologin || echo /usr/sbin/nologin)"
