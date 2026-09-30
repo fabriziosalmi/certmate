@@ -188,6 +188,7 @@ $(echo "$changed" | grep -E "$SENSITIVE_RE" | sed 's/^/  /')"
       CERTMATE_E2E_CA_PROVIDER=letsencrypt_staging "'"$PY"'" -m pytest -q -m e2e \
         tests/test_health_ready_e2e.py tests/test_cert_lifecycle.py tests/test_async_issuance_e2e.py \
         tests/test_ari_staging_e2e.py tests/test_renewal_uses_todays_settings_e2e.py \
+        tests/test_ca_account_email_e2e.py \
         -p no:cacheprovider'
   fi
   gate "Docker build" docker build -t certmate:release-check .
