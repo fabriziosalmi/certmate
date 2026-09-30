@@ -465,53 +465,19 @@ For container orchestration and managed rollouts. **`replicas: 1` is not an
 example value** — it is the supported configuration, and the Helm chart fails at
 template time if you change it.
 
-```yaml
-# Example Kubernetes deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: certmate
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: certmate
-  template:
-    metadata:
-      labels:
-        app: certmate
-    spec:
-      containers:
-        - name: certmate
-          image: certmate:latest
-          ports:
-            - containerPort: 8000
-          resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: "1"
-              memory: 1536Mi
-          env:
-            - name: API_BEARER_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: certmate-secrets
-                  key: api-token
-            - name: CERTMATE_CERT_INFO_CACHE_TTL
-              value: "60"
-          volumeMounts:
-            - name: certificates
-              mountPath: /app/certificates
-      volumes:
-        - name: certificates
-          persistentVolumeClaim:
-            claimName: certmate-certificates
+Install the Helm chart, published to GHCR on every release:
+
+```bash
+kubectl create namespace certmate
+kubectl -n certmate create secret generic certmate-secrets \
+  --from-literal=API_BEARER_TOKEN="$(openssl rand -hex 32)" \
+  --from-literal=SECRET_KEY="$(openssl rand -hex 32)" \
+  --from-literal=CERTMATE_BACKUP_PASSPHRASE="$(openssl rand -hex 32)"
+helm install certmate oci://ghcr.io/fabriziosalmi/charts/certmate \
+  --namespace certmate --set secrets.existingSecret=certmate-secrets
 ```
 
-For production sizing, OOM troubleshooting, and a `kubectl patch` example, see
-[Kubernetes Production Notes](docs/kubernetes.md).
+[CertMate on Kubernetes](docs/kubernetes.md) covers the first login, Argo CD and Flux, production sizing and OOM troubleshooting. Every chart value is in the [chart README](charts/certmate/README.md).
 
 ### System Package Installation
 For system-wide installation on Linux distributions.
@@ -2516,7 +2482,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[docs/csr-only-certificates.md](docs/csr-only-certificates.md)** | Issuing from a CSR when the key stays on the device | Appliance operators |
 | **[docs/webhooks.md](docs/webhooks.md)**           | Generic webhooks: payload templates, auth, signature verification | Integrators |
 | **[docs/compliance.md](docs/compliance.md)**       | Audit chain, attribution, NIS2/eIDAS posture | Compliance, security |
-| **[docs/kubernetes.md](docs/kubernetes.md)**       | Pod sizing, OOM troubleshooting, Helm chart | SRE              |
+| **[docs/kubernetes.md](docs/kubernetes.md)**       | Install with Helm, Argo CD or Flux; pod sizing, OOM troubleshooting | SRE              |
 | **[docs/probes.en.md](docs/probes.en.md)**         | Deployment probe configuration      | DevOps engineers      |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)**             | Development and contribution guide  | Developers            |
 | **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**       | Community guidelines                | Contributors          |

@@ -13,6 +13,9 @@ is no `helm repo add` step — Helm 3.8 and later pull `oci://` URLs directly.
 It lives under `charts/` rather than beside the container image, because a
 chart and an image in one OCI repository would fight over the same tags.
 
+Argo CD `Application` and Flux `HelmRelease` examples, the first login and
+production sizing are in [CertMate on Kubernetes](https://github.com/fabriziosalmi/certmate/blob/main/docs/kubernetes.md).
+
 Or from a checkout, which is the same chart:
 
 ```bash
