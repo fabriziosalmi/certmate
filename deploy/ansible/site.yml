@@ -1,0 +1,11 @@
+---
+# Example playbook. Put the secrets in a vault file, e.g. group_vars/certmate/vault.yml:
+#   certmate_api_token: "..."          # openssl rand -hex 32
+#   certmate_secret_key: "..."
+#   certmate_backup_passphrase: "..."
+# then: ansible-playbook -i inventory site.yml --ask-vault-pass
+- name: CertMate
+  hosts: certmate
+  become: true
+  roles:
+    - role: certmate

@@ -1,0 +1,31 @@
+---
+# Where the compose bundle and its .env live on the host.
+certmate_dir: /srv/certmate
+
+# The compose bundle (deploy/docker-compose.yml) at this Git ref. `main`
+# always pins the newest release; a tag such as v2.43.0 pins that one.
+certmate_bundle_ref: main
+certmate_bundle_url: "https://raw.githubusercontent.com/fabriziosalmi/certmate/{{ certmate_bundle_ref }}/deploy/docker-compose.yml"
+
+# Image version. Empty keeps whatever the bundle pins.
+certmate_version: ""
+
+# Where CertMate listens on the host. Loopback by default: put a reverse
+# proxy in front, or set 0.0.0.0 deliberately.
+certmate_bind: 127.0.0.1
+certmate_port: 8000
+certmate_behind_proxy: false
+
+# Required. Keep them in Ansible Vault. Each must be a long random string,
+# e.g. `openssl rand -hex 32`. They are written to {{ certmate_dir }}/.env
+# (mode 600); changing one recreates the container.
+certmate_api_token: ""
+certmate_secret_key: ""
+# Without it, automatic backups are masked and cannot restore the instance.
+certmate_backup_passphrase: ""
+
+# Optional: bootstraps a Cloudflare DNS account on first start.
+certmate_cloudflare_token: ""
+
+# Install Docker Engine with Docker's own script when `docker` is missing.
+certmate_install_docker: true
