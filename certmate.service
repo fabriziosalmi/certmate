@@ -25,6 +25,10 @@ Environment=GUNICORN_TIMEOUT=300
 # ships no credential of its own: a value committed here would be identical on
 # every installation that never changed it. Leading '-' means the file is
 # optional; with no token supplied the application derives one at startup.
+# Where gunicorn listens. Loopback unless certmate.env says otherwise (it is
+# read after this line, so its value wins): put a reverse proxy in front, or
+# set CERTMATE_BIND=0.0.0.0:8000 to listen on every interface.
+Environment=CERTMATE_BIND=127.0.0.1:8000
 EnvironmentFile=-/etc/certmate/certmate.env
 # Single worker + threads, matching the Dockerfile (#411). Sessions, session
 # revocation and the login rate limiter are per-process in-memory state: with
@@ -32,7 +36,7 @@ EnvironmentFile=-/etc/certmate/certmate.env
 # worker that handled the request (so ~3 requests in 4 still validated), the
 # login rate limit was multiplied by the worker count, and APScheduler ran a
 # duplicate renewal job per worker.
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind ${CERTMATE_BIND} --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10
@@ -47,7 +51,11 @@ ProtectHome=true
 # certificates, data, backups AND logs and raises at boot if any is not
 # writable, so omitting the last two under ProtectSystem=strict stopped the
 # service from starting at all.
-ReadWritePaths=/opt/certmate/certificates /opt/certmate/data /opt/certmate/backups /opt/certmate/logs
+# letsencrypt/ holds the DNS provider credential files CertMate writes for
+# each certbot run (relative to WorkingDirectory). Without it, ProtectSystem=
+# strict made every issuance with a file-based DNS provider fail on a
+# read-only filesystem.
+ReadWritePaths=/opt/certmate/certificates /opt/certmate/data /opt/certmate/backups /opt/certmate/logs /opt/certmate/letsencrypt
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
