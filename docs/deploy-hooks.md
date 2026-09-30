@@ -259,6 +259,24 @@ Certificate files are not on the list: installing the certificate and its key (`
 
 The check matches those names **as written**. It catches a hook that names one of those files by mistake. It does not stop a command that reaches the same file without spelling its name: a glob (`settings*`), a `?` wildcard, or a name split by quotes (`settings"."json`) all get past it. It is a guard against accidents, not a security boundary. Only an admin can save or run a hook, and an admin who can save a hook can already run any command as CertMate. The same holds for the shell patterns above.
 
+### Sending the private key from a hook
+
+A hook can send the key to a URL: `CERTMATE_KEY_PATH` is not on the blocked list
+and `curl` is in the image, so `curl --data-binary @"$CERTMATE_KEY_PATH" …`
+saves. CertMate does not look at what such a command does with the key. The
+checks are yours to make:
+
+- use `https://`, never `http://`: the key would cross the network in clear;
+- do not add `-k`/`--insecure`, which turns off the check that the server is the
+  one you meant;
+- do not add `-L`/`--location`, which repeats the request, key included, at
+  whatever address the answer names;
+- do not let the command print what the server answers into the output: hook
+  output is kept in the history, and the audit log cannot be edited.
+
+For Kubernetes use the [typed target](#typed-deploy-targets) instead, which holds
+to the first three for you.
+
 ### What's allowed
 
 - **Plain commands**: `curl -fsS https://lb.internal/api/reload`, `openssl x509 -in "$CERTMATE_FULLCHAIN_PATH" -noout -dates`
@@ -462,6 +480,24 @@ shell hooks). The service-account token used should be scoped to
 > **Security:** the deploy config is admin-only, and — like a secret embedded in
 > a shell hook — the Kubernetes `token` is stored in settings and returned to
 > admins on `GET /api/deploy/config`. Keep the token minimally scoped.
+
+A target sends the private key to the address it is configured with, so two
+things are held to:
+
+- **Redirects are not followed.** A redirect would repeat the request, key
+  included, at whatever address the answer names. A `3xx` from the API server is
+  reported as a failure that says so (without the address it named); point
+  `api_server` at the address that answers directly.
+- **What comes back is never copied into the records.** The answer to a failed
+  request is shown to the operator, and also lands in the audit log, the deploy
+  history and the failure alert. The audit log is a hash chain and cannot be
+  edited afterwards, so the answer is stripped of the bearer token and of the key
+  (as PEM, JSON-escaped, base64, URL-encoded, or a line of it) before it is
+  shortened and kept.
+
+`verify_ssl: false` is still accepted for a cluster with a certificate you cannot
+verify. It turns off the check that the server is the one you configured, so use
+it only on a network you control.
 
 ---
 

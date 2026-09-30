@@ -38,9 +38,10 @@ class _CapturePatch:
         self.raises = raises
         self.calls = []
 
-    def __call__(self, url, json=None, headers=None, verify=None, timeout=None):
+    def __call__(self, url, json=None, headers=None, verify=None, timeout=None,
+                 allow_redirects=True):
         self.calls.append({'url': url, 'json': json, 'headers': headers,
-                           'verify': verify})
+                           'verify': verify, 'allow_redirects': allow_redirects})
         if self.raises:
             raise self.raises
         return _Resp(self.status_code, self.text)
