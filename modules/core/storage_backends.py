@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from .constants import CERTIFICATE_FILES
 from .domain_paths import STORAGE_DOMAIN_RE, reject_unsafe_domain
+from .redirect_guard import GuardedSession
 
 logger = logging.getLogger(__name__)
 
@@ -1472,6 +1473,14 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
         return "aws_secrets_manager"
 
 
+# Vault answers 307 from a standby node that is not forwarding requests to the
+# active one. That is the one legitimate redirect off the configured address, and
+# it is not followed: the request holds the key and the token.
+_VAULT_REDIRECT_HINT = (
+    'If Vault runs without request forwarding, set vault_url to the active node, '
+    'or to a load balancer that routes to it.')
+
+
 class HashiCorpVaultBackend(CertificateStorageBackend):
     """HashiCorp Vault storage backend"""
     
@@ -1495,7 +1504,14 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
         if self._client is None:
             try:
                 import hvac
-                self._client = hvac.Client(url=self.vault_url, token=self.vault_token)
+                # A session that refuses a redirect to another host. hvac follows
+                # them by default and `requests` drops only `Authorization` on a
+                # host change, while Vault authenticates with `X-Vault-Token`:
+                # so a redirect took the private key AND the token that opens the
+                # vault to whatever host the answer named.
+                self._client = hvac.Client(
+                    url=self.vault_url, token=self.vault_token,
+                    session=GuardedSession(hint=_VAULT_REDIRECT_HINT))
                 if not self._client.is_authenticated():
                     raise ValueError("Failed to authenticate with HashiCorp Vault")
                 self._token_renewed_at = time.time()

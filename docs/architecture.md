@@ -219,6 +219,18 @@ All backends implement `CertificateStorageBackend`:
 | **Infisical** | Infisical secrets |
 | **S3-compatible** | Any S3 API: MinIO/Ceph self-hosted, or Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
 
+#### HashiCorp Vault — redirects
+
+The request to Vault carries the private key and the Vault token. CertMate
+follows a redirect only within the address it was configured with (same scheme,
+host and port) and **refuses** one to another host, or from https to http,
+before anything is sent there. It says so in the error, naming the host.
+
+A standby node that is not forwarding requests answers with exactly such a
+redirect to the active node. With request forwarding on (the default) that never
+happens. If your Vault runs without it, set `vault_url` to the active node, or to
+a load balancer that routes to it.
+
 #### Azure Key Vault — storage modes
 
 The Azure Key Vault backend can persist certificates as Secrets (the

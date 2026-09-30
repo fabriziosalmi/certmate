@@ -188,6 +188,7 @@ FLOORS = {
     'modules/core/oidc.py': 75,
     'modules/core/private_ca.py': 80,
     'modules/core/rate_limit.py': 70,
+    'modules/core/redirect_guard.py': 95,
     # 100% when it arrived: 32 statements of pure parsing, plus the decorator,
     # with no I/O. A boolean this refuses is one a caller sent by mistake, so
     # there is no honest reason for a branch of it to go unreached.
