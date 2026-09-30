@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.44.0 (CA accounts you can manage, and the email the CA is told)
+
+[Read the notes](docs/releases/v2.44.0.md)
+
 ## v2.43.0 (install it where you already are)
 
 [Read the notes](docs/releases/v2.43.0.md)
