@@ -31,6 +31,7 @@ pytestmark = [pytest.mark.unit]
 KEY = (b'-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgBENCHMARKKEY0123\n'
        b'-----END PRIVATE KEY-----\n')
 TOKEN = 'hvs.SECRET-VAULT-TOKEN'
+LOCATION_SECRET = 'access_token=SECRET-IN-THE-LOCATION-QUERY'
 
 
 class _Server:
@@ -79,8 +80,12 @@ def servers():
                 if n:
                     self.rfile.read(n)
                 Redirect.hits.append(self.path)
-                target = location(self.path) if callable(location) else (
-                    location or f'http://127.0.0.1:{elsewhere.port}{self.path}')
+                # Nothing from the request goes into the answer: the address is
+                # fixed, so this test server cannot be made to split a response.
+                # The query carries a stand-in credential, to check the refusal
+                # never quotes what a Location can hold.
+                target = location() if callable(location) else (
+                    location or f'http://127.0.0.1:{elsewhere.port}/landing?{LOCATION_SECRET}')
                 self.send_response(status)
                 self.send_header('Location', target)
                 self.send_header('Content-Length', '0')
@@ -115,8 +120,10 @@ def test_a_redirect_to_another_host_is_refused_before_anything_is_sent_there(ser
 
     assert received == [], 'the request was repeated at the address the answer named'
     # It names the host, not the path or query (which can carry credentials).
-    assert '127.0.0.1' in str(refused.value)
-    assert '/v1/secret' not in str(refused.value) and TOKEN not in str(refused.value)
+    message = str(refused.value)
+    assert '127.0.0.1' in message
+    assert 'SECRET-IN-THE-LOCATION-QUERY' not in message and '/landing' not in message
+    assert '/v1/secret' not in message and TOKEN not in message
 
 
 def test_a_redirect_to_the_same_origin_is_followed(servers):
@@ -124,7 +131,7 @@ def test_a_redirect_to_the_same_origin_is_followed(servers):
     configured, _, received = servers
     port_holder = {}
 
-    def to_same_origin(path):
+    def to_same_origin():
         return f'http://127.0.0.1:{port_holder["port"]}/final'
     server = configured(307, location=to_same_origin)
     port_holder['port'] = server.port
