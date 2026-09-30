@@ -12,7 +12,7 @@
             <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg mb-6">
                 <div>
                     <p class="font-medium text-foreground">Enable Deploy Hooks</p>
-                    <p class="text-sm text-muted">Run shell commands after certificate issuance or renewal</p>
+                    <p class="text-sm text-muted">Run shell commands, and deliver to deploy targets, after certificate issuance or renewal</p>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable deploy hooks">
@@ -312,6 +312,309 @@
                                 <i class="fas fa-plus mr-1"></i>Add Domain
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Deploy Targets (#218). Webhook targets are edited here; targets of another
+                     type are listed and left alone. Everything below is bound with x-text / x-model,
+                     never x-html: a target name or a template is operator input. -->
+                <div class="border border-border rounded-lg overflow-hidden" id="deploy-targets"
+                     x-data="webhookTargets()" x-init="load()">
+                    <button type="button" @click="open = !open" :aria-expanded="open"
+                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
+                        <span class="font-medium text-foreground text-sm">
+                            <i class="fas fa-paper-plane mr-2 text-green-500"></i>Deploy Targets
+                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + targets.length + ')'"></span>
+                        </span>
+                        <i class="fas text-gray-400" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    </button>
+                    <div x-show="open" x-cloak class="p-4 space-y-3">
+                        <p class="text-xs text-muted">
+                            A target hands the certificate to a service after issuance or renewal. A <strong>webhook target</strong>
+                            sends it to an HTTPS endpoint you name, and sends the private key too <em>only</em> if you put a key
+                            variable in the payload and confirm the destination. Each confirmation is in the audit log.
+                            The threat model and every field are in
+                            <a href="https://github.com/fabriziosalmi/certmate/blob/main/docs/deploy-hooks.md#webhook-target-deliver-the-certificate-and-optionally-the-key"
+                               target="_blank" rel="noopener" class="text-primary underline">docs/deploy-hooks.md</a>.
+                        </p>
+                        <p x-show="loadError" x-text="loadError" role="alert" class="text-xs text-danger-fg"></p>
+                        <p x-show="loaded && !loadError && targets.length === 0 && !draft" class="text-xs text-muted">No deploy targets yet.</p>
+
+                        <!-- The list -->
+                        <template x-for="target in targets" :key="target.id">
+                            <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 border border-border flex items-start justify-between gap-3"
+                                 data-target-row>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center flex-wrap gap-2">
+                                        <span class="font-medium text-sm text-foreground" x-text="target.name || target.id"></span>
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-2 text-label" x-text="target.type"></span>
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                              :class="target.enabled ? 'bg-success-surface text-success-fg' : 'bg-surface-2 text-label'"
+                                              x-text="target.enabled ? 'enabled' : 'disabled'"></span>
+                                        <template x-if="keyStatus(target) === 'confirmed'">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-danger-surface text-danger-fg" data-key-badge
+                                                  x-text="'sends the private key to ' + targetHost(target)"></span>
+                                        </template>
+                                        <template x-if="keyStatus(target) === 'unconfirmed'">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-warning-surface text-warning-fg" data-key-badge
+                                                  x-text="'names the private key, not confirmed for ' + targetHost(target) + ': it will not send'"></span>
+                                        </template>
+                                    </div>
+                                    <p class="text-xs text-muted mt-1 truncate" x-text="describe(target)"></p>
+                                    <template x-if="target.delivery_consent && keyStatus(target) === 'confirmed'">
+                                        <p class="text-xs text-muted mt-0.5"
+                                           x-text="'Key delivery to ' + target.delivery_consent.host + ' confirmed by ' + (target.delivery_consent.by || 'unknown') + ' on ' + (target.delivery_consent.at || 'an unknown date')"></p>
+                                    </template>
+                                </div>
+                                <template x-if="isWebhook(target)">
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" :checked="target.enabled" @change="toggleEnabled(target)" class="sr-only peer"
+                                                   :aria-label="'Enable target ' + (target.name || target.id)">
+                                            <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                        <button type="button" @click="edit(target)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
+                                                :aria-label="'Edit target ' + (target.name || target.id)">
+                                            <i class="fas fa-pen mr-1"></i>Edit
+                                        </button>
+                                        <button type="button" @click="remove(target)" class="inline-flex items-center justify-center p-2 rounded text-red-400 hover:text-red-600 hover:bg-hover transition"
+                                                :aria-label="'Delete target ' + (target.name || target.id)">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <button type="button" x-show="!draft" @click="startNew()"
+                                class="w-full py-1.5 border-2 border-dashed text-muted border-border rounded text-xs hover:border-primary hover:text-primary transition">
+                            <i class="fas fa-plus mr-1"></i>Add Webhook Target
+                        </button>
+
+                        <!-- The editor. x-if, not x-show: with no draft there is nothing to bind. -->
+                        <template x-if="draft">
+                            <div class="rounded-lg border border-primary p-4 space-y-4" id="webhook-target-editor">
+                                <h4 class="text-sm font-semibold text-foreground"
+                                    x-text="draft.isNew ? 'New webhook target' : 'Edit webhook target'"></h4>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label class="block text-xs text-muted">Name
+                                        <input type="text" x-model="draft.name" aria-label="Target name" placeholder="Upload to the load balancer"
+                                               class="mt-1 w-full text-sm border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    </label>
+                                    <label class="flex items-center gap-2 text-xs text-muted md:mt-6">
+                                        <input type="checkbox" x-model="draft.enabled" aria-label="Target enabled" class="rounded border-gray-300 text-primary focus:ring-primary">
+                                        <span>Enabled</span>
+                                    </label>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label class="block text-xs text-muted">Domains it applies to (one per line)
+                                        <textarea x-model="draft.domainsText" rows="3" aria-label="Target domains" placeholder="shop.example.com"
+                                                  class="mt-1 w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"></textarea>
+                                        <span class="block mt-1">Required. A target that sends certificate material is never applied to all domains by default.</span>
+                                    </label>
+                                    <fieldset class="text-xs text-muted">
+                                        <legend class="mb-1">Send on</legend>
+                                        <div class="flex flex-wrap items-center gap-4">
+                                            <template x-for="evt in eventChoices" :key="evt">
+                                                <label class="flex items-center gap-1">
+                                                    <input type="checkbox" x-model="draft.events[evt]" :aria-label="'Send on ' + evt"
+                                                           class="rounded border-gray-300 text-primary focus:ring-primary">
+                                                    <span x-text="evt"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                        <span class="block mt-1">A manual deploy from the certificate list always runs it.</span>
+                                    </fieldset>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <label class="block text-xs text-muted md:col-span-3">URL (https only)
+                                        <input type="url" x-model="draft.url" aria-label="Target URL" placeholder="https://lb.internal:8443/api/certificate" autocomplete="off"
+                                               class="mt-1 w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    </label>
+                                    <label class="block text-xs text-muted">Method
+                                        <select x-model="draft.method" aria-label="Target method"
+                                                class="mt-1 w-full text-sm border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary">
+                                            <template x-for="m in methodChoices" :key="m"><option :value="m" x-text="m"></option></template>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label class="block text-xs text-muted">Authentication
+                                        <select x-model="draft.auth_type" aria-label="Target authentication"
+                                                class="mt-1 w-full text-sm border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary">
+                                            <option value="none">None</option>
+                                            <option value="bearer">Bearer token</option>
+                                            <option value="basic">Basic (user and password)</option>
+                                            <option value="header">Custom header</option>
+                                        </select>
+                                    </label>
+                                    <div class="space-y-2">
+                                        <label class="block text-xs text-muted" x-show="draft.auth_type === 'header'">Header name
+                                            <input type="text" x-model="draft.auth_header" aria-label="Target auth header name" placeholder="X-API-Key" autocomplete="off"
+                                                   class="mt-1 w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2">
+                                        </label>
+                                        <span class="block text-xs text-muted" x-show="draft.auth_type === 'bearer' || draft.auth_type === 'header'"
+                                              x-text="draft.auth_type === 'bearer' ? 'Token' : 'Header value'"></span>
+                                        <input type="password" x-model="draft.auth_token" aria-label="Target auth token" autocomplete="new-password"
+                                               x-show="draft.auth_type === 'bearer' || draft.auth_type === 'header'"
+                                               class="w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2">
+                                        <input type="text" x-model="draft.auth_username" aria-label="Target auth username" placeholder="Username" autocomplete="off"
+                                               x-show="draft.auth_type === 'basic'"
+                                               class="w-full text-sm border border-border bg-input text-foreground rounded px-3 py-2">
+                                        <input type="password" x-model="draft.auth_password" aria-label="Target auth password" placeholder="Password" autocomplete="new-password"
+                                               x-show="draft.auth_type === 'basic'"
+                                               class="w-full text-sm border border-border bg-input text-foreground rounded px-3 py-2">
+                                    </div>
+                                </div>
+
+                                <label class="block text-xs text-muted">Signing secret (optional)
+                                    <input type="password" x-model="draft.signing_secret" aria-label="Target signing secret" autocomplete="new-password"
+                                           class="mt-1 w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2">
+                                    <span class="block mt-1">When set, each request carries an HMAC-SHA256 signature the receiver can check.</span>
+                                </label>
+
+                                <!-- How the server is verified. There is no option to skip it. -->
+                                <fieldset class="text-xs text-muted space-y-2">
+                                    <legend class="mb-1">How the server is verified (TLS is always checked)</legend>
+                                    <label class="flex items-center gap-2">
+                                        <input type="radio" value="system" x-model="draft.trust" aria-label="Trust the system store" class="text-primary focus:ring-primary">
+                                        <span>The system trust store</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input type="radio" value="ca" x-model="draft.trust" aria-label="Trust a CA I provide" class="text-primary focus:ring-primary">
+                                        <span>A CA I provide (replaces the system store for this target)</span>
+                                    </label>
+                                    <textarea x-show="draft.trust === 'ca'" x-model="draft.ca_cert" rows="4" aria-label="Target CA certificate" placeholder="PEM certificate of the CA"
+                                              class="w-full text-xs font-mono border border-border bg-input text-foreground rounded px-3 py-2"></textarea>
+                                    <label class="flex items-center gap-2">
+                                        <input type="radio" value="pin" x-model="draft.trust" aria-label="Pin the server certificate" class="text-primary focus:ring-primary">
+                                        <span>Pin the server's own certificate (an appliance that signs itself)</span>
+                                    </label>
+                                    <input type="text" x-show="draft.trust === 'pin'" x-model="draft.pin_sha256" aria-label="Target pinned SHA-256 fingerprint"
+                                           placeholder="SHA-256 fingerprint: 64 hex digits, colons allowed" autocomplete="off" spellcheck="false"
+                                           class="w-full text-xs font-mono border border-border bg-input text-foreground rounded px-3 py-2">
+                                </fieldset>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-muted">
+                                    <label class="flex items-start gap-2 md:col-span-3">
+                                        <input type="checkbox" x-model="draft.allow_internal" aria-label="Allow a private-network destination" class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary">
+                                        <span>The destination is on a private network (10.x, 172.16-31.x, 192.168.x). Loopback, link-local and cloud-metadata addresses are never allowed, whatever this says.</span>
+                                    </label>
+                                    <label class="block">Timeout (seconds, 1-60)
+                                        <input type="number" x-model.number="draft.timeout" min="1" max="60" aria-label="Target timeout"
+                                               class="mt-1 w-full text-sm border border-border bg-input text-foreground rounded px-3 py-2">
+                                    </label>
+                                    <label class="block">Attempts (1-5)
+                                        <input type="number" x-model.number="draft.attempts" min="1" max="5" aria-label="Target attempts"
+                                               class="mt-1 w-full text-sm border border-border bg-input text-foreground rounded px-3 py-2">
+                                    </label>
+                                </div>
+
+                                <!-- The payload -->
+                                <div class="space-y-2">
+                                    <label class="block text-xs text-muted" for="webhook-target-template">Payload template (JSON)</label>
+                                    <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Insert a variable">
+                                        <template x-for="v in eventVariables" :key="v">
+                                            <button type="button" @click="insertVariable(v)" class="px-1.5 py-0.5 rounded text-[11px] font-mono bg-surface-2 text-label hover:bg-hover"
+                                                    x-text="placeholder(v)"></button>
+                                        </template>
+                                        <template x-for="v in certVariables" :key="v">
+                                            <button type="button" @click="insertVariable(v)" class="px-1.5 py-0.5 rounded text-[11px] font-mono bg-info-surface text-info-fg hover:bg-blue-200"
+                                                    x-text="placeholder(v)"></button>
+                                        </template>
+                                        <template x-for="v in keyVariables" :key="v">
+                                            <button type="button" @click="insertVariable(v)" data-key-variable
+                                                    class="px-1.5 py-0.5 rounded text-[11px] font-mono bg-danger-surface text-danger-fg hover:bg-red-200"
+                                                    title="Sends the private key to the destination: you will be asked to confirm it">
+                                                <i class="fas fa-key mr-1" aria-hidden="true"></i><span x-text="placeholder(v)"></span>
+                                            </button>
+                                        </template>
+                                        <button type="button" x-show="!draft.payload_template.trim()" @click="useStarter()"
+                                                class="ml-2 text-[11px] text-primary underline">Start from an example (certificate only)</button>
+                                    </div>
+                                    <textarea id="webhook-target-template" x-ref="template" x-model="draft.payload_template" rows="7" aria-label="Target payload template"
+                                              spellcheck="false"
+                                              class="w-full text-xs font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"></textarea>
+                                    <p class="text-xs text-muted">A variable inside a string is inserted escaped, so a certificate's line breaks cannot break the JSON. The key variables are the only way the private key leaves CertMate through this target.</p>
+                                </div>
+
+                                <!-- The decision. Shown only when the template names the key and the server holds no
+                                     confirmation for this host; the save stays disabled until the host is typed. -->
+                                <template x-if="needsConfirmation()">
+                                    <div class="p-3 rounded-lg border border-danger-line bg-danger-surface space-y-2" id="key-delivery-confirmation"
+                                         role="group" aria-labelledby="key-delivery-title">
+                                        <p id="key-delivery-title" class="text-sm font-medium text-danger-strong"><i class="fas fa-key mr-1"></i>This target sends the private key</p>
+                                        <p class="text-xs text-danger-fg">
+                                            On every matching issuance, renewal or manual deploy, CertMate will send the <strong>private key</strong>
+                                            of the domains listed above (<span x-text="draftKeyVariables().join(', ')"></span>) to
+                                            <strong x-text="draftHost() || 'the destination (enter a valid URL first)'"></strong>.
+                                            Whoever controls that host, or can read that request, can impersonate those domains.
+                                            The server is verified with TLS and the key is never logged, but what the receiver does with it is outside CertMate.
+                                            CertMate records who confirmed this, and when.
+                                        </p>
+                                        <p x-show="consentWasForAnotherHost()" class="text-xs text-danger-fg">
+                                            The destination was <strong x-text="draft.consent && draft.consent.host"></strong> when this was last confirmed:
+                                            a confirmation applies to one host, so it has to be given again.
+                                        </p>
+                                        <label class="block text-xs text-danger-fg">Type the host to confirm
+                                            <input type="text" x-model="confirmHost" aria-label="Type the destination host to confirm key delivery"
+                                                   autocomplete="off" spellcheck="false"
+                                                   class="mt-1 w-full text-sm font-mono border border-danger-line bg-input text-foreground rounded px-3 py-2">
+                                        </label>
+                                    </div>
+                                </template>
+                                <p x-show="draftSendsKey() && consentCoversDraft()" class="text-xs text-muted" id="key-delivery-confirmed"
+                                   x-text="draft.consent ? ('Key delivery to ' + draft.consent.host + ' was confirmed by ' + (draft.consent.by || 'unknown') + ' on ' + (draft.consent.at || 'an unknown date') + '.') : ''"></p>
+
+                                <p x-show="formError" x-text="formError" role="alert" class="text-xs text-danger-fg" id="webhook-target-error"></p>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="button" @click="runPreview()" :disabled="previewing"
+                                            class="px-3 py-1.5 bg-info-surface text-info-fg rounded text-sm hover:bg-blue-200 dark:hover:bg-blue-900/50 transition disabled:opacity-50">
+                                        <i class="fas fa-eye mr-1"></i>Preview what would be sent
+                                    </button>
+                                    <button type="button" @click="save()" :disabled="!canSave()"
+                                            class="px-3 py-1.5 bg-primary text-white rounded text-sm hover:bg-secondary transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <i class="fas fa-save mr-1"></i>Save target
+                                    </button>
+                                    <button type="button" @click="cancel()" class="px-3 py-1.5 bg-surface-2 text-label rounded text-sm hover:bg-hover transition">Cancel</button>
+                                </div>
+
+                                <p x-show="previewError" x-text="previewError" role="alert" class="text-xs text-danger-fg" id="webhook-target-preview-error"></p>
+                                <template x-if="previewVisible()">
+                                    <div class="rounded-lg border border-border bg-surface p-3 space-y-2 text-xs" id="webhook-target-preview">
+                                        <p class="text-muted" x-text="preview.note"></p>
+                                        <p x-show="preview.sends_private_key" class="font-medium text-danger-fg">
+                                            This payload carries the private key (an example one here) to <span x-text="preview.host"></span>.
+                                        </p>
+                                        <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                                            <dt class="text-muted">Destination</dt>
+                                            <dd class="font-mono text-foreground" x-text="previewDestination()"></dd>
+                                            <dt class="text-muted">Server verified with</dt>
+                                            <dd class="text-foreground" x-text="preview.tls_verified_with"></dd>
+                                            <dt class="text-muted">Private network</dt>
+                                            <dd class="text-foreground" x-text="preview.allow_internal ? 'allowed for this target' : 'not allowed'"></dd>
+                                            <dt class="text-muted">Files a delivery reads</dt>
+                                            <dd class="font-mono text-foreground" x-text="(preview.files_needed || []).join(', ')"></dd>
+                                        </dl>
+                                        <div>
+                                            <p class="text-muted mb-1">Headers</p>
+                                            <template x-for="pair in previewHeaders()" :key="pair[0]">
+                                                <p class="font-mono text-foreground break-all" x-text="pair[0] + ': ' + pair[1]"></p>
+                                            </template>
+                                        </div>
+                                        <div>
+                                            <p class="text-muted mb-1">Body</p>
+                                            <pre class="font-mono text-foreground bg-surface-2 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-64" x-text="preview.body"></pre>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </div>
 

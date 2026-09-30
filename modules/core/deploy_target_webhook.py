@@ -105,6 +105,14 @@ def _url_host(url):
         return ''
 
 
+def _url_port(url):
+    """The port the request goes to: the one in the URL, else 443 (the scheme is https)."""
+    try:
+        return urlparse(url or '').port or 443
+    except ValueError:
+        return 443
+
+
 def _example_variables(event='renewed', domain='example.com'):
     variables = {'event': event, 'domain': domain, 'certificate_sha256': '0' * 64,
                  'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
@@ -419,6 +427,7 @@ class WebhookTarget:
         return {
             'method': (cfg.get('method') or 'POST').upper(),
             'host': _url_host(url),
+            'port': _url_port(url),
             'path': (urlparse(url).path or '/') if url else '/',
             'headers': headers,
             'body': body,

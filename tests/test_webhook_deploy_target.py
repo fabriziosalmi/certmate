@@ -493,6 +493,17 @@ def test_the_preview_shows_the_request_without_a_network_or_a_file(pki):
     assert json.loads(preview['body'])
 
 
+@pytest.mark.parametrize('url,port', [
+    ('https://lb.internal:8443/api/cert', 8443),
+    ('https://lb.internal/api/cert', 443),
+    ('https://[2001:db8::1]:9443/api/cert', 9443),
+])
+def test_the_preview_names_the_port_the_request_goes_to(pki, url, port):
+    """A preview that left the port out showed a destination that was not the real one."""
+    preview = wh.WebhookTarget(_target(443, pki, url=url)).preview()
+    assert preview['port'] == port
+
+
 def test_the_preview_of_a_certificate_only_target_says_no_key_is_sent(pki):
     preview = wh.WebhookTarget(_target(443, pki, template=CERT_ONLY)).preview()
     assert preview['sends_private_key'] is False and 'privkey.pem' not in preview['files_needed']
