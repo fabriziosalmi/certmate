@@ -7,11 +7,13 @@ true, and none of it is the line that breaks. The plugin builds its client as
 
     DnsManagementClient(credential, subscription_id, None, arm_endpoint, credential_scopes=[...])
 
-five positional arguments, and 9.0.0 takes four, so the first Azure challenge died
-with a TypeError. Every release from v2.26.1 to v2.45.1 shipped it. Nothing in the
-suite ever ran the plugin's own code against the SDK it is installed with: the
-provider was covered by tests of CertMate's side (credentials file, zone
-discovery), and the point where the two meet was read, not run.
+four positional arguments, the third being api_version, and 9.0.0 accepts three,
+so the first Azure challenge died with a TypeError (whose message counts `self`
+too: "takes from 3 to 4 positional arguments but 5 were given"). Every release
+from v2.26.1 to v2.45.1 shipped it. Nothing in the suite ever ran the plugin's
+own code against the SDK it is installed with: the provider was covered by
+tests of CertMate's side (credentials file, zone discovery), and the point
+where the two meet was read, not run.
 
 These tests run it. The plugin's own `_perform` and `_cleanup` execute against the
 installed SDK, with the HTTP layer replaced, so a change on either side of the pin
