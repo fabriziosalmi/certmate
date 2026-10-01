@@ -593,10 +593,10 @@ address is never a destination. A destination on a private network needs
 a switch for the whole instance. Redirects are not followed: a `3xx` is a
 failure that says so.
 
-**What it does when something goes wrong.** An error from the network, or `408`,
-`425`, `429` and `5xx`, is retried with backoff up to `attempts` (default 3,
-at most 5). Any other `4xx` is not: the request is wrong, and sending a key again
-to be told so again helps nobody. Every delivery carries an `Idempotency-Key`
+**What it does when something goes wrong.** An error from the network, or a
+status of `408`, `425`, `429`, `500`, `502`, `503` or `504`, is retried with backoff
+up to `attempts` (default 3, at most 5). Any other status is not: a `4xx` says the
+request is wrong, and sending a key again to be told so again helps nobody. Every delivery carries an `Idempotency-Key`
 that is the same for the retries of one delivery and for the same certificate
 sent again, and different for the next certificate, so a receiver can tell a
 repeat from a new one. With `signing_secret` the body is signed in
