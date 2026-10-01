@@ -3,3 +3,13 @@
 
 google-cloud-dns==0.37.1
 certbot-dns-google==5.8.0
+
+# The window the ACME stack works in: certbot and acme 5.8.0 require
+# cryptography>=47 and pyopenssl 26.4.0 requires >=49,<51. Layered on the stack
+# the main file fixes it, but CI resolves every requirements file on its own for
+# both published architectures, and standalone nothing else bounds cryptography:
+# pip tried every release it could find before giving up, two minutes per
+# architecture for this file and the step went from 30 seconds to 13 minutes in
+# the job that gates every merge. The authoritative reason lives beside the pin
+# in requirements.txt; move this window when that moves.
+cryptography>=49,<51
