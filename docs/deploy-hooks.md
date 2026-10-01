@@ -630,6 +630,46 @@ once, use *Run hooks for a domain* (admin), which is an explicit action.
 Not in this version: a bundle as a file upload or PKCS#12, and custom request
 headers other than the authentication one. Say what a receiver needs.
 
+#### Receiving it in n8n
+
+Checked against n8n 2.41.4 with a real certificate, a Webhook node and the payload
+below; the three steps are what had to be done, not what is generally true of n8n.
+
+```json
+{"domain": "{{domain}}", "event": "{{event}}",
+ "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "rsa_key": "{{privkey_traditional}}",
+                  "fullchain": "{{fullchain}}", "intermediate": "{{chain}}"}}
+```
+
+1. **n8n has to answer over HTTPS.** A default n8n listens on plain HTTP, and a target
+   refuses that (`url must be https://`). Put a TLS terminator in front of it, or give n8n
+   a certificate itself with `N8N_PROTOCOL=https`, `N8N_SSL_KEY=/path/key.pem` and
+   `N8N_SSL_CERT=/path/cert.pem`. For a certificate n8n signed itself, set `pin_sha256` on
+   the target to its fingerprint: the digits only, not the label. The command
+   `openssl x509 -in cert.pem -noout -fingerprint -sha256` prints
+   `SHA256 Fingerprint=AA:BB:...`; paste what follows the `=`, because the field refuses the
+   label. If n8n is at a private address, also set `allow_internal: true` on the target.
+2. **The Webhook node:** HTTP Method `POST`, a Path such as `certmate`, Respond
+   *Immediately*, and publish the workflow. The target must call the **production** URL
+   (`https://host:5678/webhook/certmate`), not the test one.
+3. **What the node receives.** `$json.body` is the payload you wrote, so the example above
+   gives `{{ $json.body.certificates.fullchain }}` and so on, as an ordinary multi-line
+   PEM string. The headers are in `$json.headers`: `x-certmate-event`, `idempotency-key`
+   (the same for a retry of one delivery, so a workflow can ignore a repeat) and
+   `user-agent: CertMate-Deploy/1`. In the check, every certificate arrived identical to
+   the file, the PKCS#8 key identical to `privkey.pem`, and the key in the traditional
+   form (`RSA PRIVATE KEY` or `EC PRIVATE KEY`) was the key of the certificate, for an RSA
+   and an EC certificate.
+
+**n8n keeps what it receives.** With its default settings n8n stored every request body
+in its own database, and in the check the private key could be read out of that
+execution data. Treat n8n's database and its backups as holding the key, or leave the key
+variables out of an n8n target and fetch the key some other way. Setting the workflow not
+to save executions did **not** behave as expected in the same check (the executions stayed
+in the `running` state with their data), so do not rely on that setting without looking at
+what your own instance stores. This is the case the table above means by "a receiver that
+keeps what it is sent".
+
 ---
 
 ## See also

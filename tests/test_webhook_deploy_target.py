@@ -8,6 +8,7 @@ import base64
 import hashlib
 import hmac
 import json
+import pathlib
 import re
 from unittest.mock import MagicMock
 
@@ -585,6 +586,17 @@ def test_the_destination_host_may_be_a_name_or_an_address(pki, url, accepted):
     target['config']['url'] = url
     ok, reason = wh.validate_webhook_target(target)
     assert ok is accepted, reason
+
+
+def test_a_plain_http_receiver_is_refused_with_a_way_out(pki):
+    """A receiver that listens on plain HTTP by default is the first thing a user meets: the refusal says
+    what to do, and the documentation it points at has that section."""
+    target = _valid(pki)
+    target['config']['url'] = 'http://n8n.lan:5678/webhook/certmate'
+    ok, reason = wh.validate_webhook_target(target)
+    assert ok is False and 'https://' in reason and 'TLS' in reason and 'n8n' in reason
+    docs = (pathlib.Path(__file__).resolve().parent.parent / 'docs' / 'deploy-hooks.md').read_text()
+    assert 'Receiving it in n8n' in docs, 'the message points at a section that does not exist'
 
 
 def test_a_bare_privkey_is_refused_and_the_two_real_names_are_offered(pki):
