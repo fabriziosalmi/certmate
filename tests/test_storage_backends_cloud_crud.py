@@ -262,6 +262,61 @@ class TestInfisicalCrud:
         assert _infisical(infisical_sdk).get_backend_name() == 'infisical'
 
 
+class _UpdateThatFails(FakeInfisicalClient):
+    """A client whose first `fail_times` updates raise `error`, then behave."""
+
+    def __init__(self, sdk, store, fail_times, error):
+        super().__init__(sdk)
+        self.store = dict(store)
+        self.fail_times, self.error, self.update_calls = fail_times, error, 0
+
+    def updateSecret(self, options):
+        self.update_calls += 1
+        if self.update_calls <= self.fail_times:
+            raise self.error
+        return super().updateSecret(options)
+
+
+def _sleeps(monkeypatch):
+    """The retry layer waits between attempts; record it instead of waiting."""
+    waited = []
+    monkeypatch.setattr('time.sleep', waited.append)
+    return waited
+
+
+class TestInfisicalUpsert:
+    def test_a_transient_update_failure_on_an_existing_secret_is_retried(self, infisical_sdk, monkeypatch):
+        """The update fails for a reason that passes; the create then says 'already exists', which is
+        permanent. That must not bury the retryable error: the write is retried and lands."""
+        waited = _sleeps(monkeypatch)
+        b = _infisical(infisical_sdk)
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is True      # the secrets exist now
+        b._client = _UpdateThatFails(infisical_sdk, b._client.store, 1, Exception('rate limit exceeded (429)'))
+
+        renewed = dict(SAMPLE_FILES, **{'cert.pem': b'RENEWED'})
+        assert b.store_certificate('example.com', renewed, SAMPLE_META) is True
+        assert waited, 'the failed attempt was not retried'
+        assert b.retrieve_certificate('example.com')[0]['cert.pem'] == b'RENEWED'
+
+    def test_a_domain_whose_name_looks_like_a_rate_limit_still_gets_its_first_write(self, infisical_sdk, monkeypatch):
+        """`_is_transient` reads keywords out of the message and a not-found message contains the secret's
+        name: for corporate.example.com it looks like a rate limit. Raising on that before trying the
+        create would make this domain's first write fail forever."""
+        waited = _sleeps(monkeypatch)
+        b = _infisical(infisical_sdk)
+        assert b.store_certificate('corporate.example.com', SAMPLE_FILES, {'domain': 'corporate.example.com'}) is True
+        assert waited == [], 'a plain not-found was treated as transient and retried'
+        assert b.retrieve_certificate('corporate.example.com') is not None
+
+    def test_a_permanent_failure_is_not_retried(self, infisical_sdk, monkeypatch):
+        waited = _sleeps(monkeypatch)
+        b = _infisical(infisical_sdk)
+        b._client.updateSecret = MagicMock(side_effect=Exception('forbidden'))
+        b._client.createSecret = MagicMock(side_effect=Exception('denied by policy'))
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is False
+        assert waited == [] and b._client.createSecret.call_count == 1
+
+
 @pytest.mark.parametrize('site_url', [
     'https://app.infisical.com',
     'https://infisical.internal:8443',

@@ -1801,6 +1801,33 @@ class InfisicalBackend(CertificateStorageBackend):
         return getattr(infisical_client, kind)(
             project_id=self.project_id, environment=self.environment, **fields)
     
+    def _upsert_secret(self, client, name: str, value: str) -> None:
+        """Update the secret, and create it when there was nothing to update.
+
+        The SDK offers no upsert and no typed not-found (a missing secret is a bare
+        `Exception` whose message names the secret), so absence cannot be told from
+        any other failure without depending on wording. Update first, then create.
+
+        If the create fails too, the UPDATE's error is the one to act on when it is
+        the kind that passes (a rate limit, a timeout): a create over a secret that
+        exists answers "already exists", which is permanent and would hide the
+        retryable failure from `_with_retry`, turning a blip into a lost write.
+        The create is still ALWAYS tried first, rather than raising a transient-looking
+        update error up front, because `_is_transient` also reads keywords out of the
+        message and the not-found message contains the secret's name: for
+        `corporate.example.com` a plain "not found" looks like a rate limit, and
+        raising on it would make the first write of such a domain fail forever.
+        """
+        try:
+            client.updateSecret(self._options(
+                'UpdateSecretOptions', secret_name=name, secret_value=value))
+        except Exception as update_error:
+            try:
+                client.createSecret(self._options(
+                    'CreateSecretOptions', secret_name=name, secret_value=value))
+            except Exception as create_error:
+                raise (update_error if _is_transient(update_error) else create_error)
+
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to Infisical"""
         try:
@@ -1817,29 +1844,10 @@ class InfisicalBackend(CertificateStorageBackend):
         # Store certificate files as individual secrets (upsert: update if exists, create otherwise)
         for filename, content in cert_files.items():
             secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"
-            secret_value = _as_text(filename, content)
-            try:
-                client.updateSecret(self._options(
-                    'UpdateSecretOptions', secret_name=secret_key, secret_value=secret_value))
-            except Exception:
-                # Update-then-create: the SDK does not offer an upsert, and it
-                # does not document a distinct not-found error either, so the
-                # absence cannot be told from anything else without depending
-                # on an undocumented type. A create that also fails raises,
-                # which is the honest outcome.
-                client.createSecret(self._options(
-                    'CreateSecretOptions', secret_name=secret_key, secret_value=secret_value))
+            self._upsert_secret(client, secret_key, _as_text(filename, content))
 
         # Store metadata (upsert)
-        metadata_key = f"certmate-{domain}-metadata"
-        metadata_value = json.dumps(metadata)
-        try:
-            client.updateSecret(self._options(
-                'UpdateSecretOptions', secret_name=metadata_key, secret_value=metadata_value))
-        except Exception:
-            # Same update-then-create as above, for the metadata secret.
-            client.createSecret(self._options(
-                'CreateSecretOptions', secret_name=metadata_key, secret_value=metadata_value))
+        self._upsert_secret(client, f"certmate-{domain}-metadata", json.dumps(metadata))
 
         logger.info(f"Certificate stored successfully in Infisical for {domain}")
         return True

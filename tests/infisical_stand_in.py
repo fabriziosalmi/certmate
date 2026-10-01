@@ -75,7 +75,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._reply(401, {'message': 'not authenticated'})
         if REDIRECT_TO:
             return self._reply(307, {'message': 'moved'},
-                               {'Location': f'http://127.0.0.1:{REDIRECT_TO}{self.path}'})
+                               {'Location': f'http://127.0.0.1:{REDIRECT_TO}'
+                                            f'{urllib.parse.quote(self.path, safe="/?=&%:,")}'})
 
         workspace = body.get('workspaceId') or query.get('workspaceId', '')
         environment = body.get('environment') or query.get('environment', '')

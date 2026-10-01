@@ -36,6 +36,8 @@ from modules.core.storage_backends import (  # noqa: E402
     CertificateExistenceUnknown, InfisicalBackend)
 from tests.infisical_sdk_stub import OPTION_FIELDS  # noqa: E402
 
+pytestmark = [pytest.mark.unit]
+
 REPO = Path(__file__).resolve().parent.parent
 FILES = {'cert.pem': b'CERT-PEM', 'chain.pem': b'CHAIN-PEM', 'fullchain.pem': b'FULLCHAIN-PEM',
          'privkey.pem': b'-----BEGIN PRIVATE KEY-----\nTHE-KEY\n-----END PRIVATE KEY-----\n'}
