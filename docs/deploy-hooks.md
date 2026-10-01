@@ -158,6 +158,7 @@ The queue lives at `data/pending_deploys.json` and survives a restart — the wi
 - A second renewal before the window opens does **not** queue a second deploy. The hook reads the certificate from disk when it runs, so one deferred run always publishes the newest one.
 - If the hook is deleted or disabled, or deploy hooks are switched off entirely, the queued deploy is **dropped** at the next drain. Your current configuration says not to run it.
 - If you remove the window, the deploy is released at the next drain rather than waiting one more time.
+- **Deploy Now consumes the deploy that was waiting.** If the hook (or typed target) you run by hand succeeds, its queued entry for that domain is removed: the certificate has been delivered, and running it again when the window opens would be an unannounced second deploy. If the manual run **fails**, the entry stays, so the window deploy is the retry. A renewal that happens *while* Deploy Now is running keeps its entry, because that certificate is newer than the one the manual run read. The two never run the same deploy at the same time: if the window opens while Deploy Now is running a hook, the scheduled run skips it and the next tick finds it either delivered or still owed, and if the scheduled run is already in the hook when you press the button, Deploy Now waits for it to finish and then runs. A queued deploy you do not want can still only be removed by disabling or deleting the hook (it is then dropped at the next drain).
 - A hook that fails inside its window is **not** re-queued. It is recorded in the history like any other failure; re-queuing would retry every minute for as long as the window stayed open.
 - A deploy still waiting after seven days is logged as a warning. That is not a limit — waiting is the feature — but a week means the window has not opened at all, which usually means the days or the timezone are not what you meant.
 
@@ -180,7 +181,7 @@ curl -H "Authorization: Bearer $TOKEN" https://certmate.local/api/deploy/pending
 
 ### What ignores the window
 
-**Deploy Now** does. Pressing it is choosing this moment; holding the deploy until 02:00 would make the button do nothing visible. The same is true of `POST /api/deploy/test/<id>`.
+**Deploy Now** does. Pressing it is choosing this moment; holding the deploy until 02:00 would make the button do nothing visible. What it delivers is not delivered again: see *What happens while a deploy is held*. The same ignoring of the window is true of `POST /api/deploy/test/<id>`, which never touches the queue.
 
 ---
 
