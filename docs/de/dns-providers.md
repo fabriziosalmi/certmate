@@ -1,6 +1,6 @@
 # DNS-Anbieter
 
-<!-- CERTMATE-TRANSLATED-FROM 4dcc9496784670bc -->
+<!-- CERTMATE-TRANSLATED-FROM c06f294fe10125c1 -->
 
 CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt DNS-01-Challenges über individuelle certbot-Plugins. Die vollständige Liste befindet sich in der nachstehenden Tabelle.
 
@@ -11,7 +11,7 @@ CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt D
 | Anbieter | Plugin | Erforderliche Zugangsdaten | Kategorie |
 |---|---|---|---|
 | **Cloudflare** | `certbot-dns-cloudflare` | API-Token | Großer Cloud-Anbieter |
-| **AWS Route53** | `certbot-dns-route53` | Access Key, Secret Key | Großer Cloud-Anbieter |
+| **AWS Route53** | `certbot-dns-route53` | Access Keys oder AWS-Anmeldekette / IAM-Rolle | Großer Cloud-Anbieter |
 | **Azure DNS** | Eigener CertMate-Hook (`azure-mgmt-dns`) | Service Principal | Großer Cloud-Anbieter |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Großer Cloud-Anbieter |
 | **PowerDNS** | `certbot-dns-powerdns` | API-URL, API-Schlüssel | Enterprise |
@@ -84,6 +84,16 @@ curl -X POST http://localhost:8000/api/settings \
 ```
 
 ### AWS Route53
+
+Bestehende Konten verwenden standardmäßig weiterhin Zugriffsschlüssel. Um die AWS-Anmeldekette zu nutzen (eine EC2-/ECS-Task-Rolle, EKS Pod Identity oder IRSA), wählen Sie unter Einstellungen → DNS-Provider **AWS credentials / IAM role (no keys)** oder setzen Sie `auth_mode` im Route53-DNS-Konto auf `iam_role`:
+
+```json
+{"dns_providers": {"route53": {"accounts": {"default": {
+  "auth_mode": "iam_role", "region": "eu-west-3"
+}}}}}
+```
+
+Optional können Sie `assume_role_arn` setzen, um eine andere Rolle mit Route53-DNS-Berechtigungen anzunehmen. Das funktioniert sowohl mit der AWS-Anmeldekette als auch mit gespeicherten Zugriffsschlüsseln als Quellidentität; diese Identität benötigt `sts:AssumeRole`, und die Zielrolle muss ihr vertrauen. CertMate übergibt bei jeder Ausstellung oder Erneuerung temporäre STS-Zugangsdaten an Certbot. Der DNS-Alias-Modus verwendet dieselbe Identität. Ohne `auth_mode` bleibt das bisherige Verhalten mit Zugriffsschlüsseln bestehen.
 
 ```json
 {

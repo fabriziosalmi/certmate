@@ -1,6 +1,6 @@
 # Fournisseurs DNS
 
-<!-- CERTMATE-TRANSLATED-FROM 4dcc9496784670bc -->
+<!-- CERTMATE-TRANSLATED-FROM c06f294fe10125c1 -->
 
 CertMate supporte une large gamme de fournisseurs DNS pour les défis Let's Encrypt DNS-01 via des plugins certbot individuels. La liste complète est dans le tableau ci-dessous.
 
@@ -11,7 +11,7 @@ CertMate supporte une large gamme de fournisseurs DNS pour les défis Let's Encr
 | Fournisseur | Plugin | Identifiants requis | Catégorie |
 |---|---|---|---|
 | **Cloudflare** | `certbot-dns-cloudflare` | Jeton API | Cloud majeur |
-| **AWS Route53** | `certbot-dns-route53` | Access Key, Secret Key | Cloud majeur |
+| **AWS Route53** | `certbot-dns-route53` | Clés d'accès ou chaîne d'identification AWS / rôle IAM | Cloud majeur |
 | **Azure DNS** | Hook propre à CertMate (`azure-mgmt-dns`) | Service Principal | Cloud majeur |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Cloud majeur |
 | **PowerDNS** | `certbot-dns-powerdns` | URL API, Clé API | Entreprise |
@@ -84,6 +84,16 @@ curl -X POST http://localhost:8000/api/settings \
 ```
 
 ### AWS Route53
+
+Les comptes existants continuent d'utiliser des clés d'accès par défaut. Pour utiliser la chaîne d'identification AWS (un rôle de tâche EC2/ECS, EKS Pod Identity ou IRSA), sélectionnez **AWS credentials / IAM role (no keys)** dans Paramètres → Fournisseurs DNS, ou définissez `auth_mode` sur `iam_role` pour le compte DNS Route53 :
+
+```json
+{"dns_providers": {"route53": {"accounts": {"default": {
+  "auth_mode": "iam_role", "region": "eu-west-3"
+}}}}}
+```
+
+Vous pouvez aussi définir `assume_role_arn` pour assumer un autre rôle disposant des permissions DNS Route53. Cela fonctionne avec la chaîne d'identification AWS comme avec des clés d'accès stockées comme identité source ; cette identité a besoin de `sts:AssumeRole`, et le rôle cible doit lui faire confiance. CertMate transmet des identifiants STS temporaires à Certbot pour chaque émission ou renouvellement. Le mode alias DNS utilise la même identité. Sans `auth_mode`, le comportement actuel avec clés d'accès reste en vigueur.
 
 ```json
 {
