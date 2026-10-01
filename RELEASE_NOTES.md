@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.46.0 (certbot 5.8, and Azure DNS without a plugin)
+
+[Read the notes](docs/releases/v2.46.0.md)
+
 ## v2.45.2 (Azure DNS issues and renews again)
 
 [Read the notes](docs/releases/v2.45.2.md)
