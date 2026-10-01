@@ -230,6 +230,55 @@ def test_a_finished_target_batch_supersedes_its_start(manager, monkeypatch):
     assert batches[0]['status'] == 'success'
 
 
+def _batch_outcome(manager, monkeypatch, results, targets=None):
+    domain = 'example.com'
+    domain_dir = manager.cert_dir / domain
+    domain_dir.mkdir(parents=True, exist_ok=True)
+    (domain_dir / 'fullchain.pem').write_bytes(b'cert')
+    (domain_dir / 'privkey.pem').write_bytes(b'key')
+    monkeypatch.setattr('modules.core.deployer.run_targets', lambda *a, **k: list(results))
+    manager._execute_targets(domain, 'renewed', targets=targets or [TARGET])
+    batches = [e for e in manager.get_history() if e.get('kind') == 'target-batch']
+    assert len(batches) == 1
+    return batches[0]
+
+
+def _result(success, name='k8s-prod'):
+    return {'success': success, 'target': name, 'type': 'kubernetes-secret', 'domain': 'example.com',
+            'status_code': 200 if success else 500, 'message': 'ok' if success else 'refused'}
+
+
+def test_a_batch_in_which_a_target_failed_is_not_recorded_as_a_success(manager, monkeypatch):
+    """The per-target record was red and the batch beside it was green."""
+    batch = _batch_outcome(manager, monkeypatch, [_result(False)])
+    assert batch['success'] is False and batch['status'] == 'failure'
+
+
+def test_a_batch_in_which_every_target_succeeded_is_a_success(manager, monkeypatch):
+    """CONTROL: the fix must not turn every batch red."""
+    batch = _batch_outcome(manager, monkeypatch, [_result(True)])
+    assert batch['success'] is True and batch['status'] == 'success'
+
+
+def test_one_failure_among_several_targets_fails_the_batch(manager, monkeypatch):
+    batch = _batch_outcome(manager, monkeypatch, [_result(True, 'a'), _result(False, 'b'), _result(True, 'c')])
+    assert batch['success'] is False and batch['status'] == 'failure'
+
+
+def test_a_target_skipped_for_want_of_a_key_fails_the_batch_even_if_the_others_succeed(manager, monkeypatch):
+    """A CSR-only certificate: the keyed target is refused up front (recorded on its own) and the
+    certificate-only one runs. That batch is not a success: something was not delivered."""
+    webhook = {'type': 'webhook', 'id': 'w', 'name': 'cert-only', 'enabled': True,
+               'config': {'url': 'https://r.example/x', 'payload_template': '{"c": "{{cert}}"}'}}
+    domain_dir = manager.cert_dir / 'example.com'
+    domain_dir.mkdir(parents=True)
+    (domain_dir / 'fullchain.pem').write_bytes(b'cert')            # no privkey.pem
+    monkeypatch.setattr('modules.core.deployer.run_targets', lambda *a, **k: [_result(True, 'cert-only')])
+    manager._execute_targets('example.com', 'renewed', targets=[TARGET, webhook])
+    batches = [e for e in manager.get_history() if e.get('kind') == 'target-batch']
+    assert len(batches) == 1 and batches[0]['success'] is False and batches[0]['status'] == 'failure'
+
+
 def test_a_target_batch_that_raises_still_closes_its_record(manager,
                                                             monkeypatch):
     """CONTROL: an exception inside run_targets must not leave a record that
@@ -249,6 +298,9 @@ def test_a_target_batch_that_raises_still_closes_its_record(manager,
     assert manager._in_flight == set()
     batches = [e for e in manager.get_history() if e.get('kind') == 'target-batch']
     assert batches[0]['status'] != 'interrupted'
+    # ...and it is not a success either: the batch raised, which is the opposite of what
+    # `success` says.
+    assert batches[0]['status'] == 'failure' and batches[0]['success'] is False
 
 
 # --- the history the reader hands out -----------------------------------
