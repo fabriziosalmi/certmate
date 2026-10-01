@@ -74,6 +74,12 @@ class DeployManager:
         # the EventBus listener threads and read by the scheduler's drain.
         self._pending_path = Path(data_dir) / 'pending_deploys.json'
         self._pending_lock = threading.Lock()
+        # Queued deploys that are running right now, by queue key, claimed by
+        # whoever runs them: the window drain, or Deploy Now. One deploy is never
+        # run by both at once. Shares `_pending_lock`, so a claim and the queue
+        # always change together.
+        self._claimed = set()
+        self._claims_changed = threading.Condition(self._pending_lock)
         # Run ids of hooks this process has started and not yet finished. A
         # `running` record in the history belongs to one of two situations,
         # and only this set tells them apart: the run is still going (its id
@@ -220,28 +226,39 @@ class DeployManager:
                 ),
             }
 
-        # What was queued for this domain, as it stands BEFORE anything reads the
-        # certificate. A deploy that was held for its window and is then run by hand
-        # has been delivered; left in the queue it would run again when the window
-        # opens (#1058). Only what succeeded is consumed (a failed manual run leaves
-        # the window deploy as the retry), and only entries nobody queued again since
-        # this snapshot: a renewal that lands while the hooks run is a newer
-        # certificate than the one they read, and its deploy is still owed.
-        queued = self._pending_stamps(domain)
+        # The queue keys of what is about to run. A deploy that was held for its
+        # window is the same deploy as the one run by hand, so the two must not run
+        # at the same time: when the window opens during a manual run the drain
+        # leaves the entry for the next tick (and finds it gone if this run
+        # delivered it). Held until the entry has been dealt with, below.
+        keys = [f"hook:{h['id']}:{domain}" for h in hooks if h.get('id')]
+        keys += [f"target:{t['name']}:{domain}" for t in targets if t.get('name')]
+        self._claim_all(keys)
+        try:
+            # What was queued for this domain, as it stands BEFORE anything reads the
+            # certificate. A deploy that was held for its window and is then run by hand
+            # has been delivered; left in the queue it would run again when the window
+            # opens (#1058). Only what succeeded is consumed (a failed manual run leaves
+            # the window deploy as the retry), and only entries nobody queued again since
+            # this snapshot: a renewal that lands while the hooks run is a newer
+            # certificate than the one they read, and its deploy is still owed.
+            queued = self._pending_stamps(domain)
 
-        hook_results = [self._run_hook(h, domain, 'manual') for h in hooks]
-        target_results = self._execute_targets(domain, 'manual', config)
-        results = hook_results + target_results
+            hook_results = [self._run_hook(h, domain, 'manual') for h in hooks]
+            target_results = self._execute_targets(domain, 'manual', config)
+            results = hook_results + target_results
 
-        handled = {}
-        for hook, result in zip(hooks, hook_results):
-            if result.get('success') and hook.get('id'):
-                handled[f"hook:{hook['id']}:{domain}"] = None
-        for result in target_results:
-            if result.get('success') and result.get('target'):
-                handled[f"target:{result['target']}:{domain}"] = None
-        handled = {key: queued[key] for key in handled if key in queued}
-        dropped = self._drop_unchanged(handled)
+            handled = {}
+            for hook, result in zip(hooks, hook_results):
+                if result.get('success') and hook.get('id'):
+                    handled[f"hook:{hook['id']}:{domain}"] = None
+            for result in target_results:
+                if result.get('success') and result.get('target'):
+                    handled[f"target:{result['target']}:{domain}"] = None
+            handled = {key: queued[key] for key in handled if key in queued}
+            dropped = self._drop_unchanged(handled)
+        finally:
+            self._release(keys)
         if dropped:
             logger.info(
                 "Deploy Now for %s delivered %d deploy(s) that were held for a "
@@ -390,6 +407,31 @@ class DeployManager:
             return {}
         return data if isinstance(data, dict) else {}
 
+    def _try_claim(self, key):
+        """Claim one queue key without waiting. False if someone is running it."""
+        with self._claims_changed:
+            if key in self._claimed:
+                return False
+            self._claimed.add(key)
+            return True
+
+    def _claim_all(self, keys):
+        """Wait until none of `keys` is being run, then hold all of them.
+
+        All at once, never one by one while holding others, so two callers cannot
+        wait on each other.
+        """
+        keys = set(keys)
+        with self._claims_changed:
+            while keys & self._claimed:
+                self._claims_changed.wait()
+            self._claimed |= keys
+
+    def _release(self, keys):
+        with self._claims_changed:
+            self._claimed -= set(keys)
+            self._claims_changed.notify_all()
+
     def _pending_stamps(self, domain=None):
         """The queue as {key: entry}, for one domain or all, to be handed back to
         `_drop_unchanged` once the deploys that read the certificate have finished."""
@@ -527,6 +569,13 @@ class DeployManager:
                 remaining[key] = entry
                 continue
 
+            if not self._try_claim(key):
+                # Deploy Now is running this very deploy. It takes the entry off
+                # the queue if it delivers it; if it fails, the entry is still
+                # here and the next tick is the retry.
+                remaining[key] = entry
+                continue
+
             domain, event_type = entry.get('domain'), entry.get('event')
             try:
                 if entry.get('kind') == 'hook':
@@ -541,6 +590,8 @@ class DeployManager:
                 logger.error("Queued deploy %s failed: %s", key, e)
                 results.append({'success': False, 'hook': entry.get('id'),
                                 'domain': domain, 'error': str(e)})
+            finally:
+                self._release([key])
 
         with self._pending_lock:
             current = self._read_pending()
@@ -553,8 +604,10 @@ class DeployManager:
             for key, entry in pending.items():
                 if key not in remaining and current.get(key) == entry:
                     del current[key]
-            for key, entry in remaining.items():
-                current.setdefault(key, entry)
+            # What stays is whatever the queue holds now, not this drain's old
+            # copy of it: an entry it left for later may have been delivered by
+            # Deploy Now in the meantime, and putting the copy back would run it
+            # a second time when the window opens.
             self._write_pending(current)
 
         succeeded = sum(1 for r in results if r.get('success'))

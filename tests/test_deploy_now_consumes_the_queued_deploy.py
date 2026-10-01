@@ -213,7 +213,8 @@ def test_deploy_now_and_renewals_racing_never_lose_a_newer_entry_or_keep_a_handl
 
     A re-queues the key `n` times with increasing stamps while B runs Deploy Now. Two moments of B are observed
     from outside, without naming anything inside it: the first time B reads the queue, and the moment its hook
-    starts (which is when the certificate is read from disk). Then:
+    starts (which is when the certificate is read from disk). A re-queue counts from the moment it COMMITS to
+    the queue, not from the moment it was attempted. Then:
 
     * a re-queue AFTER the hook started is a certificate B cannot have read: its entry must survive, with the
       last stamp A wrote. Losing it is a deploy that never happens;
@@ -238,8 +239,21 @@ def _check_one_round(rng, round_):
         manager.get_config = lambda: config
 
         guard = threading.Lock()
-        written = []                  # the stamp of every re-queue, in the order it was made
-        seen = {}                     # 'first_read' / 'hook_start' -> how many re-queues had happened by then
+        written = []                  # the stamp of every re-queue that COMMITTED, in commit order
+        seen = {}                     # 'first_read' / 'hook_start' -> how many re-queues had committed by then
+
+        # A re-queue is recorded in the same critical section as the write that commits it (`guard` is
+        # taken around both), and Deploy Now's observations take `guard` too, so a count of `written` is
+        # exactly the number of renewals the queue held at that moment: a renewal blocked behind
+        # Deploy Now's lock has not committed and is not counted.
+        real_write = manager._write_pending
+
+        def write_pending(pending):
+            with guard:
+                real_write(pending)
+                if threading.current_thread().name == 'renewals':
+                    written.append(pending['hook:h1:example.com']['last_event_at'])
+        manager._write_pending = write_pending
 
         real_read = manager._read_pending
 
@@ -265,10 +279,7 @@ def _check_one_round(rng, round_):
             start.wait()
             for i in range(1, n + 1):
                 time.sleep(rng.random() * 0.002)
-                now = _at(8, 13, 0, i)
-                with guard:
-                    written.append(now.isoformat())
-                manager._defer_if_closed('hook', hook, DOMAIN, 'renewed', now)
+                manager._defer_if_closed('hook', hook, DOMAIN, 'renewed', _at(8, 13, 0, i))
 
         def deploy_now():
             start.wait()
@@ -330,3 +341,151 @@ def test_a_drain_that_ran_an_entry_nobody_touched_drops_it(manager, monkeypatch)
     manager._execute_hooks(DOMAIN, 'renewed')
     manager.drain_pending(now=_at(9, 3))
     assert _queue(manager) == {}
+
+
+# --------------------------------------------------------------------------
+# One deploy is never run by Deploy Now and by the drain at the same time
+# --------------------------------------------------------------------------
+
+class _Concurrency:
+    """Counts how many runs of a hook are inside it at once, and lets a test hold one open."""
+
+    def __init__(self, manager):
+        self.lock = threading.Lock()
+        self.active = 0
+        self.most = 0
+        self.runs = []
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.hold_first = False
+        manager._run_hook = self.run_hook
+
+    def run_hook(self, hook, domain, event, dry_run=False):
+        with self.lock:
+            self.active += 1
+            self.most = max(self.most, self.active)
+            self.runs.append(event)
+            first = len(self.runs) == 1
+        try:
+            if self.hold_first and first:
+                self.entered.set()
+                assert self.release.wait(10), 'the test never released the held run'
+            return {'success': True, 'hook': hook['id'], 'domain': domain}
+        finally:
+            with self.lock:
+                self.active -= 1
+
+
+def _queue_one(manager, monkeypatch):
+    _configure(manager, [_hook()])
+    _closed(monkeypatch)
+    manager._execute_hooks(DOMAIN, 'renewed')
+    assert 'hook:h1:example.com' in _queue(manager)
+
+
+def test_the_window_opening_during_deploy_now_does_not_run_the_same_deploy_twice_at_once(manager, monkeypatch):
+    _queue_one(manager, monkeypatch)
+    probe = _Concurrency(manager)
+    probe.hold_first = True
+
+    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,))
+    manual.start()
+    assert probe.entered.wait(10), 'Deploy Now never reached the hook'
+
+    summary = manager.drain_pending(now=_at(9, 3))        # the window opens while it runs
+    assert summary['ran'] == 0 and summary['held'] == 1, summary
+    assert probe.runs == ['manual'], f'the drain ran the deploy Deploy Now was running: {probe.runs}'
+
+    probe.release.set()
+    manual.join(10)
+    assert not manual.is_alive()
+    assert _queue(manager) == {}, 'Deploy Now delivered it and the entry is still queued'
+    assert manager.drain_pending(now=_at(9, 3, 1))['ran'] == 0
+    assert probe.runs == ['manual'] and probe.most == 1
+
+
+def test_a_failed_deploy_now_leaves_the_entry_the_drain_skipped_for_the_next_tick(manager, monkeypatch):
+    _queue_one(manager, monkeypatch)
+    release, entered = threading.Event(), threading.Event()
+    runs = []
+
+    def failing_then_ok(hook, domain, event, dry_run=False):
+        runs.append(event)
+        if event == 'manual':
+            entered.set()
+            assert release.wait(10)
+            return {'success': False, 'hook': hook['id'], 'domain': domain}
+        return {'success': True, 'hook': hook['id'], 'domain': domain}
+    manager._run_hook = failing_then_ok
+
+    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,))
+    manual.start()
+    assert entered.wait(10)
+    assert manager.drain_pending(now=_at(9, 3))['ran'] == 0
+    release.set()
+    manual.join(10)
+
+    assert 'hook:h1:example.com' in _queue(manager), 'the failed manual run lost the retry'
+    assert manager.drain_pending(now=_at(9, 3, 1))['ran'] == 1
+    assert runs == ['manual', 'renewed'] and _queue(manager) == {}
+
+
+def test_deploy_now_waits_for_the_drain_that_is_already_running_the_same_deploy(manager, monkeypatch):
+    _queue_one(manager, monkeypatch)
+    probe = _Concurrency(manager)
+    probe.hold_first = True
+
+    drain = threading.Thread(target=manager.drain_pending, kwargs={'now': _at(9, 3)})
+    drain.start()
+    assert probe.entered.wait(10), 'the drain never reached the hook'
+
+    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,))
+    manual.start()
+    time.sleep(0.3)                                       # long enough for a broken Deploy Now to start
+    assert probe.runs == ['renewed'], f'Deploy Now ran alongside the drain: {probe.runs}'
+
+    probe.release.set()
+    drain.join(10)
+    manual.join(10)
+    assert not drain.is_alive() and not manual.is_alive()
+    assert probe.runs == ['renewed', 'manual'], 'an explicit Deploy Now after the drain must still run'
+    assert probe.most == 1, 'the two runs overlapped'
+    assert _queue(manager) == {}
+
+
+def test_a_claim_is_released_when_the_run_raises(manager, monkeypatch):
+    _queue_one(manager, monkeypatch)
+
+    def boom(hook, domain, event, dry_run=False):
+        raise RuntimeError('hook exploded')
+    manager._run_hook = boom
+    with pytest.raises(RuntimeError):
+        manager.run_manual_deploy(DOMAIN)
+
+    probe = _Concurrency(manager)
+    assert manager.drain_pending(now=_at(9, 3))['ran'] == 1, 'the key stayed claimed after the failure'
+    assert probe.runs == ['renewed']
+
+
+def test_an_entry_the_drain_left_for_its_closed_window_is_not_put_back_after_deploy_now_consumed_it(
+        manager, monkeypatch):
+    """The drain reads the queue, finds the window closed and keeps the entry. If Deploy Now delivers that
+    deploy before the drain writes the queue back, the drain must not write its old copy: the window then
+    opens and the hook runs a second time, which is #1058 through the drain's own write."""
+    _queue_one(manager, monkeypatch)
+    real_find = manager._find_windowed
+    state = {'done': False}
+
+    def find_then_deploy_now_runs(config, entry):
+        entity = real_find(config, entry)
+        if not state['done']:
+            state['done'] = True
+            assert manager.run_manual_deploy(DOMAIN)['ok']
+        return entity
+    manager._find_windowed = find_then_deploy_now_runs
+
+    summary = manager.drain_pending(now=_at(9, 1))        # 01:00, closed
+    assert summary['held'] == 1 and summary['ran'] == 0
+    assert _queue(manager) == {}, 'the drain wrote back the entry Deploy Now had consumed'
+    assert manager.drain_pending(now=_at(9, 3))['ran'] == 0
+    assert manager.ran == [('h1', DOMAIN, 'manual')]
