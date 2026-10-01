@@ -32,4 +32,4 @@ packaging==26.3
 # to measure the tree's worst cyclomatic complexity and compares it with the
 # number CI enforces. Pinned to the version the lint step installs so the test
 # job and the lint job cannot disagree about what "too complex" means.
-flake8==7.3.0
+flake8==7.4.1

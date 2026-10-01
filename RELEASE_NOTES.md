@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.45.2 (Azure DNS issues and renews again)
+
+[Read the notes](docs/releases/v2.45.2.md)
+
 ## v2.45.1 (random tokens are no longer refused for repeating by chance)
 
 [Read the notes](docs/releases/v2.45.1.md)
