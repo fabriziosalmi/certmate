@@ -388,7 +388,7 @@ def test_the_window_opening_during_deploy_now_does_not_run_the_same_deploy_twice
     probe = _Concurrency(manager)
     probe.hold_first = True
 
-    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,))
+    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,), daemon=True)
     manual.start()
     assert probe.entered.wait(10), 'Deploy Now never reached the hook'
 
@@ -418,7 +418,7 @@ def test_a_failed_deploy_now_leaves_the_entry_the_drain_skipped_for_the_next_tic
         return {'success': True, 'hook': hook['id'], 'domain': domain}
     manager._run_hook = failing_then_ok
 
-    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,))
+    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,), daemon=True)
     manual.start()
     assert entered.wait(10)
     assert manager.drain_pending(now=_at(9, 3))['ran'] == 0
@@ -435,11 +435,11 @@ def test_deploy_now_waits_for_the_drain_that_is_already_running_the_same_deploy(
     probe = _Concurrency(manager)
     probe.hold_first = True
 
-    drain = threading.Thread(target=manager.drain_pending, kwargs={'now': _at(9, 3)})
+    drain = threading.Thread(target=manager.drain_pending, kwargs={'now': _at(9, 3)}, daemon=True)
     drain.start()
     assert probe.entered.wait(10), 'the drain never reached the hook'
 
-    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,))
+    manual = threading.Thread(target=manager.run_manual_deploy, args=(DOMAIN,), daemon=True)
     manual.start()
     time.sleep(0.3)                                       # long enough for a broken Deploy Now to start
     assert probe.runs == ['renewed'], f'Deploy Now ran alongside the drain: {probe.runs}'
