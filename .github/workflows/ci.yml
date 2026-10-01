@@ -627,6 +627,9 @@ jobs:
         # as a real Vault deployment; a bare `pip install hvac` would make this
         # job the one place the version floats (Copilot, #559).
         pip install -r requirements-vault-storage.txt
+        # The Infisical SDK, for the one test file that runs the backend against it
+        # (a compiled core: 2.3.5 is the last release with an x86_64 Linux wheel).
+        pip install -r requirements-infisical-storage.txt
 
     # Started here rather than under `services:` because a service container
     # cannot be given a command, and the readiness wait below wants to be
@@ -712,6 +715,19 @@ jobs:
         pytest tests/test_a_redirect_does_not_carry_the_key_to_another_host.py -v | tee /tmp/redirect.log
         grep -q "14 passed" /tmp/redirect.log || {
           echo "::error::the redirect tests did not all run (hvac missing?)"
+          exit 1
+        }
+
+    # The backend ran in no release that shipped its SDK pin: it imported a module
+    # the package does not have and called methods the client does not have, and the
+    # tests agreed with the backend because they put a fake in its way (#1054). This
+    # runs it against the real package, so the count is asserted: a skipped module
+    # (importorskip, no SDK) is "0 passed" and must not read as green.
+    - name: The Infisical backend runs against its real SDK
+      run: |
+        pytest tests/test_infisical_backend_matches_its_sdk.py -v | tee /tmp/infisical.log
+        grep -q "12 passed" /tmp/infisical.log || {
+          echo "::error::the Infisical SDK tests did not all run (infisical-python missing?)"
           exit 1
         }
 

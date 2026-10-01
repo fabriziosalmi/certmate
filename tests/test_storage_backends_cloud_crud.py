@@ -215,78 +215,132 @@ class TestHashiCorpVaultCrud:
 # Infisical
 # ---------------------------------------------------------------------------
 
-class _InfisicalSecret:
-    def __init__(self, name, value):
-        self.secret_name = name
-        self.secret_value = value
+from tests.infisical_sdk_stub import FakeInfisicalClient  # noqa: E402
 
 
-class _FakeInfisicalClient:
-    def __init__(self):
-        self.store = {}  # secret_name -> secret_value
-
-    def update_secret(self, secret_name, secret_value, project_id=None, environment=None):
-        if secret_name not in self.store:
-            raise KeyError(secret_name)  # drives the create_secret upsert fallback
-        self.store[secret_name] = secret_value
-
-    def create_secret(self, secret_name, secret_value, project_id=None, environment=None):
-        self.store[secret_name] = secret_value
-
-    def get_secret(self, secret_name, project_id=None, environment=None):
-        if secret_name not in self.store:
-            raise KeyError(secret_name)
-        return _InfisicalSecret(secret_name, self.store[secret_name])
-
-    def list_secrets(self, project_id=None, environment=None):
-        return [_InfisicalSecret(n, v) for n, v in self.store.items()]
-
-    def delete_secret(self, secret_name, project_id=None, environment=None):
-        self.store.pop(secret_name, None)
-
-
-def _infisical():
+def _infisical(sdk):
     backend = InfisicalBackend({
         'client_id': 'cid', 'client_secret': 'csecret', 'project_id': 'proj',
     })
-    backend._client = _FakeInfisicalClient()  # bypass lazy infisical SDK init
+    backend._client = FakeInfisicalClient(sdk)  # bypass the lazy SDK client; the options come from the stub module
     return backend
 
 
 class TestInfisicalCrud:
-    def test_store_then_retrieve_round_trip(self):
-        b = _infisical()
+    def test_store_then_retrieve_round_trip(self, infisical_sdk):
+        b = _infisical(infisical_sdk)
         assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is True
         files, meta = b.retrieve_certificate('example.com')
         assert files == SAMPLE_FILES
         assert meta == SAMPLE_META
 
-    def test_list_reads_domain_from_metadata(self):
-        b = _infisical()
+    def test_list_reads_domain_from_metadata(self, infisical_sdk):
+        b = _infisical(infisical_sdk)
         b.store_certificate('a.example.com', SAMPLE_FILES, {'domain': 'a.example.com'})
         b.store_certificate('b.example.com', SAMPLE_FILES, {'domain': 'b.example.com'})
         assert b.list_certificates() == ['a.example.com', 'b.example.com']
 
-    def test_delete_then_retrieve_returns_none(self):
-        b = _infisical()
+    def test_delete_then_retrieve_returns_none(self, infisical_sdk):
+        b = _infisical(infisical_sdk)
         b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META)
         assert b.delete_certificate('example.com') is True
         assert b.retrieve_certificate('example.com') is None
 
-    def test_retrieve_missing_returns_none(self):
-        assert _infisical().retrieve_certificate('nope.example.com') is None
+    def test_retrieve_missing_returns_none(self, infisical_sdk):
+        assert _infisical(infisical_sdk).retrieve_certificate('nope.example.com') is None
 
-    def test_store_maps_client_error_to_false(self):
-        b = _infisical()
-        b._client.update_secret = MagicMock(side_effect=KeyError('x'))
-        b._client.create_secret = MagicMock(side_effect=RuntimeError('infisical down'))
+    def test_store_maps_client_error_to_false(self, infisical_sdk):
+        b = _infisical(infisical_sdk)
+        b._client.updateSecret = MagicMock(side_effect=Exception("Secret with name 'x' not found."))
+        b._client.createSecret = MagicMock(side_effect=RuntimeError('infisical down'))
         assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is False
 
-    def test_invalid_domain_rejected(self):
-        assert _infisical().store_certificate('../evil', SAMPLE_FILES, SAMPLE_META) is False
+    def test_invalid_domain_rejected(self, infisical_sdk):
+        assert _infisical(infisical_sdk).store_certificate('../evil', SAMPLE_FILES, SAMPLE_META) is False
 
-    def test_get_backend_name(self):
-        assert _infisical().get_backend_name() == 'infisical'
+    def test_get_backend_name(self, infisical_sdk):
+        assert _infisical(infisical_sdk).get_backend_name() == 'infisical'
+
+
+class _UpdateThatFails(FakeInfisicalClient):
+    """A client whose first `fail_times` updates raise `error`, then behave."""
+
+    def __init__(self, sdk, store, fail_times, error):
+        super().__init__(sdk)
+        self.store = dict(store)
+        self.fail_times, self.error, self.update_calls = fail_times, error, 0
+
+    def updateSecret(self, options):
+        self.update_calls += 1
+        if self.update_calls <= self.fail_times:
+            raise self.error
+        return super().updateSecret(options)
+
+
+def _sleeps(monkeypatch):
+    """The retry layer waits between attempts; record it instead of waiting."""
+    waited = []
+    monkeypatch.setattr('time.sleep', waited.append)
+    return waited
+
+
+class TestInfisicalUpsert:
+    def test_a_transient_update_failure_on_an_existing_secret_is_retried(self, infisical_sdk, monkeypatch):
+        """The update fails for a reason that passes; the create then says 'already exists', which is
+        permanent. That must not bury the retryable error: the write is retried and lands."""
+        waited = _sleeps(monkeypatch)
+        b = _infisical(infisical_sdk)
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is True      # the secrets exist now
+        b._client = _UpdateThatFails(infisical_sdk, b._client.store, 1, Exception('rate limit exceeded (429)'))
+
+        renewed = dict(SAMPLE_FILES, **{'cert.pem': b'RENEWED'})
+        assert b.store_certificate('example.com', renewed, SAMPLE_META) is True
+        assert waited, 'the failed attempt was not retried'
+        assert b.retrieve_certificate('example.com')[0]['cert.pem'] == b'RENEWED'
+
+    def test_a_domain_whose_name_looks_like_a_rate_limit_still_gets_its_first_write(self, infisical_sdk, monkeypatch):
+        """`_is_transient` reads keywords out of the message and a not-found message contains the secret's
+        name: for corporate.example.com it looks like a rate limit. Raising on that before trying the
+        create would make this domain's first write fail forever."""
+        waited = _sleeps(monkeypatch)
+        b = _infisical(infisical_sdk)
+        assert b.store_certificate('corporate.example.com', SAMPLE_FILES, {'domain': 'corporate.example.com'}) is True
+        assert waited == [], 'a plain not-found was treated as transient and retried'
+        assert b.retrieve_certificate('corporate.example.com') is not None
+
+    def test_a_permanent_failure_is_not_retried(self, infisical_sdk, monkeypatch):
+        waited = _sleeps(monkeypatch)
+        b = _infisical(infisical_sdk)
+        b._client.updateSecret = MagicMock(side_effect=Exception('forbidden'))
+        b._client.createSecret = MagicMock(side_effect=Exception('denied by policy'))
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is False
+        assert waited == [] and b._client.createSecret.call_count == 1
+
+
+@pytest.mark.parametrize('site_url', [
+    'https://app.infisical.com',
+    'https://infisical.internal:8443',
+    'http://localhost:8080',                # nobody stands between a process and itself
+    'http://127.0.0.1:18080',
+    'http://[::1]:8080',
+    None, '',                               # unset: the default, which is https
+])
+def test_infisical_accepts_an_https_site_or_a_loopback_one(site_url):
+    InfisicalBackend({'client_id': 'c', 'client_secret': 's', 'project_id': 'p', 'site_url': site_url})
+
+
+@pytest.mark.parametrize('site_url', [
+    'http://app.infisical.com',             # plain HTTP: anyone on the path can answer, and the SDK follows a redirect with the body
+    'http://10.0.0.5:8080',
+    'http://localhost.evil.example',        # a name that merely starts like localhost
+    'http://127.0.0.1.evil.example',
+    'ftp://infisical.internal',
+    'app.infisical.com',                    # no scheme
+    'https://',                             # no host
+])
+def test_infisical_refuses_a_site_that_is_not_https_unless_it_is_loopback(site_url):
+    with pytest.raises(ValueError, match='https'):
+        InfisicalBackend({'client_id': 'c', 'client_secret': 's', 'project_id': 'p', 'site_url': site_url})
 
 
 # ---------------------------------------------------------------------------

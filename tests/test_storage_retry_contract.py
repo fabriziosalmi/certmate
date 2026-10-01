@@ -145,38 +145,40 @@ def _infisical():
     backend = InfisicalBackend({
         'client_id': 'cid', 'client_secret': 'cs', 'project_id': 'pid',
     })
-    client = MagicMock()
+    # spec'd to the SDK's real method names: a call to a method the SDK does not have
+    # is an AttributeError here, not a silently-accepted attribute of a MagicMock.
+    client = MagicMock(spec=['createSecret', 'updateSecret', 'getSecret', 'listSecrets', 'deleteSecret'])
     backend._client = client
     return backend, client
 
 
 class TestInfisicalRetryContract:
-    def test_store_retries_transient_then_succeeds(self):
+    def test_store_retries_transient_then_succeeds(self, infisical_sdk):
         b, client = _infisical()
-        # The upsert swallows update_secret errors and falls back to
-        # create_secret; only a create failure escapes to the retry layer.
-        client.update_secret.side_effect = Exception('secret not found')
+        # The upsert swallows updateSecret errors and falls back to
+        # createSecret; only a create failure escapes to the retry layer.
+        client.updateSecret.side_effect = Exception('secret not found')
         # Attempt 1: cert.pem create raises transient -> retry.
         # Attempt 2: cert.pem create ok, metadata create ok.
-        client.create_secret.side_effect = [TRANSIENT, None, None]
+        client.createSecret.side_effect = [TRANSIENT, None, None]
         assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is True
-        assert client.create_secret.call_count == 3
+        assert client.createSecret.call_count == 3
 
-    def test_list_retries_transient_then_succeeds(self):
+    def test_list_retries_transient_then_succeeds(self, infisical_sdk):
         b, client = _infisical()
         secret = MagicMock()
-        secret.secret_name = 'certmate-example-com-metadata'
+        secret.secret_key = 'certmate-example-com-metadata'
         secret.secret_value = json.dumps({'domain': 'example.com'})
-        client.get_secret.return_value = secret
-        client.list_secrets.side_effect = [TRANSIENT, [secret]]
+        client.getSecret.return_value = secret
+        client.listSecrets.side_effect = [TRANSIENT, [secret]]
         assert b.list_certificates() == ['example.com']
-        assert client.list_secrets.call_count == 2
+        assert client.listSecrets.call_count == 2
 
-    def test_list_exhausted_retries_return_empty_list(self):
+    def test_list_exhausted_retries_return_empty_list(self, infisical_sdk):
         b, client = _infisical()
-        client.list_secrets.side_effect = TRANSIENT
+        client.listSecrets.side_effect = TRANSIENT
         assert b.list_certificates() == []
-        assert client.list_secrets.call_count == 3
+        assert client.listSecrets.call_count == 3
 
     def test_retrieve_non_transient_client_failure_returns_none(self):
         b, client = _infisical()
