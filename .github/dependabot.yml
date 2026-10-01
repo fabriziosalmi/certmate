@@ -76,6 +76,13 @@ updates:
       # that can only install on one of the two published architectures is
       # not a bump this project can take.
       - dependency-name: "infisical-python"
+      # azure-mgmt-dns 9.0.0 removed a positional parameter that
+      # certbot-dns-azure 2.5.0 still passes, so every Azure DNS challenge
+      # raised TypeError. The bump (#586) merged green because nothing ran the
+      # plugin against the SDK, and shipped in v2.26.1 through v2.45.1. Held
+      # entirely until #103 replaces the plugin; the plugin declares only
+      # `azure-mgmt-dns>=8.0.0`, so pip will not refuse the break either.
+      - dependency-name: "azure-mgmt-dns"
 
   - package-ecosystem: "npm"
     directories:
