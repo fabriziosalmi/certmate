@@ -128,6 +128,7 @@ def test_the_same_for_a_target(manager, monkeypatch):
     assert 'target:k8s:example.com' in _queue(manager)
 
     manager.run_manual_deploy(DOMAIN)
+    assert calls[-1] == (DOMAIN, 'manual'), 'the target was not delivered by Deploy Now: the test is not about the case it names'
     assert _queue(manager) == {}
 
 
