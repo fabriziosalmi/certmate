@@ -100,6 +100,8 @@ permissions. This works with either the AWS credential chain or stored access
 keys as the source identity; that identity needs `sts:AssumeRole`, and the
 destination role must trust it. CertMate passes temporary STS credentials to
 Certbot for each issuance or renewal. DNS alias mode uses the same identity.
+In IAM mode, anyone allowed to edit DNS settings can make CertMate use the host's
+AWS identity and its Route53 permissions.
 No `auth_mode` means the existing access-key behavior remains in effect.
 
 ```json

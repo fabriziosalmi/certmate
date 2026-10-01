@@ -1,6 +1,6 @@
 # Proveedores DNS
 
-<!-- CERTMATE-TRANSLATED-FROM c06f294fe10125c1 -->
+<!-- CERTMATE-TRANSLATED-FROM ec6ce2fc0c36db8b -->
 
 CertMate soporta una amplia gama de proveedores DNS para los desafíos Let's Encrypt DNS-01 mediante plugins de certbot individuales. La lista completa se encuentra en la tabla a continuación.
 
@@ -93,7 +93,7 @@ Las cuentas existentes siguen usando claves de acceso por defecto. Para usar la 
 }}}}}
 ```
 
-Opcionalmente, establezca `assume_role_arn` para asumir otro rol con permisos DNS de Route53. Funciona tanto con la cadena de credenciales de AWS como con claves de acceso almacenadas como identidad de origen; esa identidad necesita `sts:AssumeRole`, y el rol de destino debe confiar en ella. CertMate entrega credenciales temporales de STS a Certbot en cada emisión o renovación. El modo de alias DNS usa la misma identidad. Sin `auth_mode`, se mantiene el comportamiento actual con claves de acceso.
+Opcionalmente, establezca `assume_role_arn` para asumir otro rol con permisos DNS de Route53. Funciona tanto con la cadena de credenciales de AWS como con claves de acceso almacenadas como identidad de origen; esa identidad necesita `sts:AssumeRole`, y el rol de destino debe confiar en ella. CertMate entrega credenciales temporales de STS a Certbot en cada emisión o renovación. El modo de alias DNS usa la misma identidad. En modo IAM, cualquier persona autorizada a editar la configuración DNS puede hacer que CertMate utilice la identidad AWS del host y sus permisos de Route53. Sin `auth_mode`, se mantiene el comportamiento actual con claves de acceso.
 
 ```json
 {
