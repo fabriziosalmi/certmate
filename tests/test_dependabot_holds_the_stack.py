@@ -41,16 +41,12 @@ pytestmark = [pytest.mark.unit]
 HELD = {
     "certbot": "Certificate management",
     "josepy": "josepy",
-    "pyopenssl": "Do not bump to 26.2.0+",
-    # Not a GHSA id any more. This entry used to be "GHSA-537c-gmf6-5ccf",
-    # and the requirements comment named that one advisory — which is how the
-    # record drifted: three more were published on 2026-08-03 against the same
-    # pin and the comment still named the first. The list of advisories now
-    # lives in exactly one place (SECURITY.md, checked weekly against the live
-    # alerts by scripts/check_advisories.py), and what has to sit next to the
-    # pin is the pointer to it. A pointer does not go stale when an advisory
-    # arrives; an enumeration does.
-    "cryptography": 'SECURITY.md "Known dependency constraint"',
+    # `pyopenssl` and `cryptography` were held here until certbot 5.8.0 (#103).
+    # The hold existed because a newer cryptography installed cleanly on the old
+    # stack and then killed `certbot --version`; with certbot/acme 5.8.0 requiring
+    # cryptography>=47 and pyopenssl 26.4.0 requiring >=49,<51, pip refuses what
+    # does not fit and the image build runs `certbot --version`. A hold whose
+    # reason has gone is the same drift the original one was written to stop.
     "dns-lexicon": "dns-lexicon",
     "cloudflare": "#568",
     # Added after dependabot proposed 2.3.6 in #795, past a comment sitting

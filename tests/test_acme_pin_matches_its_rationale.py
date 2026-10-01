@@ -2,14 +2,16 @@
 must reason about the version actually pinned.
 
 ``acme`` is the most protocol- and security-sensitive package in the tree, and
-certbot 2.10.0 declares a bare unbounded ``Requires: acme`` — so its version was
-whatever PyPI happened to serve, and a clean install was not guaranteed to
-reproduce the one that had been tested.
+certbot declares it without an upper bound (``Requires: acme`` on 2.10.0, which
+this test was written against; ``acme>=5.8.0`` on the 5.8.0 that replaced it) —
+so its version would be whatever PyPI happened to serve, and a clean install
+would not be guaranteed to reproduce the one that had been tested.
 
-That is load-bearing rather than tidy. The rationale written on the
+That is load-bearing rather than tidy. A rationale written on the
 ``cryptography`` and ``pyopenssl`` pins is stated in terms of a specific acme
-version (it import-evaluates ``OpenSSL.crypto.X509Extension``, which is why
-pyopenssl may not move). So the two most carefully reasoned pins in the file
+version (on the 2.10.0 stack: it import-evaluated ``OpenSSL.crypto.X509Extension``,
+which is why pyopenssl could not move; on 5.8.0: the ``cryptography`` window
+certbot and acme declare). So the two most carefully reasoned pins in the file
 depended on a version nothing enforced, and a silent acme bump would have
 invalidated their reasoning while leaving the prose looking authoritative
 (#657).

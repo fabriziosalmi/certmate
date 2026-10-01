@@ -93,7 +93,7 @@ and this cannot, whatever you do to it:
 
 ## The contract your script is called with
 
-certbot puts these in the environment. Verified against certbot 2.10.0
+certbot puts these in the environment. Verified against certbot 5.8.0
 (`certbot/_internal/plugins/manual.py`), which is the version CertMate pins:
 
 | variable | auth hook | cleanup hook | what it holds |

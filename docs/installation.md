@@ -541,16 +541,17 @@ pip install -r requirements-aws.txt        # Route53, on top of either
 ```
 
 > This page used to publish its own pinned list, and it had drifted to
-> `certbot==4.1.1` in all five languages while the project is pinned to
-> `2.10.0` — the 5.x migration is still a plan (issue #103), not a release.
+> `certbot==4.1.1` in all five languages while the project was pinned to
+> `2.10.0`. The project now runs certbot `5.8.0` (issue #103).
 >
 > Correcting those numbers is not enough, which is why the list is gone rather
 > than fixed. What holds the stack together is not the plugin versions but
-> `cryptography`, `pyopenssl`, `josepy` and `acme` holding each other in place:
-> newer pyOpenSSL drops `OpenSSL.crypto.X509Extension`, which `acme` evaluates
-> at import. Assembled by hand, certbot dies before it can issue anything —
-> measured four times, adding one pin at a time. See SECURITY.md, "Known
-> dependency constraint".
+> certbot, `acme`, `josepy`, the official plugins, `cryptography` and
+> `pyopenssl` agreeing with each other: certbot and `acme` 5.8.0 need
+> `cryptography>=47`, and pyOpenSSL 26.4.0 needs `>=49,<51`. Assembled by hand,
+> one pin lands outside that window; the file CertMate ships is the set that is
+> resolved, built and booted in CI. See SECURITY.md, "Known dependency
+> constraint".
 >
 > `certbot-dns-powerdns` needs its own environment: it requires
 > `dns-lexicon<=3.5.6` while the Linode, OVH, RFC2136, DNSMadeEasy and NS1
