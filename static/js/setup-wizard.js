@@ -13,7 +13,16 @@
     // posted verbatim to /api/web/settings and consumed by certbot plugins.
     var PROVIDERS = {
         cloudflare:    { label: 'Cloudflare', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
-        route53:       { label: 'AWS Route 53', icon: 'fa-cloud-upload-alt', fields: [{ key: 'access_key_id', label: 'Access Key ID', type: 'text' }, { key: 'secret_access_key', label: 'Secret Access Key', type: 'password' }, { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1' }] },
+        route53:       { label: 'AWS Route 53', icon: 'fa-cloud-upload-alt', fields: [
+            { key: 'auth_mode', label: 'Authentication', type: 'select', options: [
+                { value: 'access_keys', label: 'Access keys' },
+                { value: 'iam_role', label: 'AWS credentials / IAM role (no keys)' }
+            ], defaultValue: 'access_keys' },
+            { key: 'access_key_id', label: 'Access Key ID', type: 'text' },
+            { key: 'secret_access_key', label: 'Secret Access Key', type: 'password' },
+            { key: 'region', label: 'Region', type: 'text', defaultValue: 'us-east-1' },
+            { key: 'assume_role_arn', label: 'Assume role ARN (optional)', type: 'text', optional: true }
+        ] },
         digitalocean:  { label: 'DigitalOcean', icon: 'fa-water', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         hetzner:       { label: 'Hetzner', icon: 'fa-server', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         gandi:         { label: 'Gandi', icon: 'fa-globe', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
@@ -330,6 +339,16 @@
                 renderStep(); // re-render to show credentials
             });
         });
+        var route53Mode = document.getElementById('wiz_auth_mode');
+        if (route53Mode) {
+            function toggleKeys() {
+                body.querySelectorAll('.wiz-route53-key').forEach(function (row) {
+                    row.classList.toggle('hidden', route53Mode.value === 'iam_role');
+                });
+            }
+            route53Mode.addEventListener('change', toggleKeys);
+            toggleKeys();
+        }
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
@@ -350,7 +369,9 @@
             providerDef.fields.forEach(function(f) {
                 var el = document.getElementById('wiz_' + f.key);
                 var val = el ? el.value.trim() : '';
-                if (!val) {
+                if (!val && !f.optional && !(state.provider === 'route53' &&
+                        (f.key === 'access_key_id' || f.key === 'secret_access_key') &&
+                        document.getElementById('wiz_auth_mode').value === 'iam_role')) {
                     if (el) el.classList.add('border-red-500');
                     valid = false;
                 }
@@ -369,12 +390,21 @@
             '<h4 class="text-sm font-medium text-label mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
 
         pDef.fields.forEach(function(f) {
-            var savedVal = state.credentials[f.key] || '';
+            var savedVal = state.credentials[f.key] || f.defaultValue || '';
+            var extraClass = provider === 'route53' &&
+                (f.key === 'access_key_id' || f.key === 'secret_access_key') ? ' wiz-route53-key' : '';
             if (f.type === 'textarea') {
                 html += '<div><label class="block text-xs font-medium text-muted mb-1">' + escapeHtml(f.label) + '</label>' +
                     '<textarea id="wiz_' + f.key + '" rows="3" class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="' + escapeHtml(f.placeholder || '') + '">' + escapeHtml(savedVal) + '</textarea></div>';
-            } else {
+            } else if (f.type === 'select') {
                 html += '<div><label class="block text-xs font-medium text-muted mb-1">' + escapeHtml(f.label) + '</label>' +
+                    '<select id="wiz_' + f.key + '" class="w-full px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm">' +
+                    f.options.map(function (opt) {
+                        return '<option value="' + escapeHtml(opt.value) + '"' +
+                            (savedVal === opt.value ? ' selected' : '') + '>' + escapeHtml(opt.label) + '</option>';
+                    }).join('') + '</select></div>';
+            } else {
+                html += '<div class="' + extraClass + '"><label class="block text-xs font-medium text-muted mb-1">' + escapeHtml(f.label) + '</label>' +
                     '<input type="' + f.type + '" id="wiz_' + f.key + '" value="' + escapeHtml(savedVal) + '" placeholder="' + escapeHtml(f.placeholder || '') + '" ' +
                     'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>';
             }

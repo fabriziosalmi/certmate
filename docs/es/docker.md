@@ -151,7 +151,7 @@ docker run -d --name certmate \
 | `API_BEARER_TOKEN_FILE` | No | Ruta a un archivo que contiene el bearer token de la API (tiene prioridad sobre `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | No | `INFO` (por defecto), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | No | Cuando se define, las copias de seguridad unificadas se cifran en reposo (`.zip.enc`, PBKDF2-SHA256 + Fernet). Se requiere la misma frase de contraseña para restaurarlas. Sin definir = copias de seguridad en texto claro `.zip` (comportamiento heredado) |
-| `CLOUDFLARE_TOKEN` | No | Token de API de la cuenta DNS de Cloudflare predeterminada. Cloudflare es el único proveedor DNS que se lee del entorno: Route53 y los demás se configuran en Ajustes → Proveedores DNS o a través de la API, y definir `AWS_ACCESS_KEY_ID` en el contenedor no tiene ningún efecto |
+| `CLOUDFLARE_TOKEN` | No | Token de API de la cuenta DNS predeterminada de Cloudflare. Route53 utiliza las credenciales configuradas en Ajustes → Proveedores DNS, salvo que la cuenta seleccione explícitamente el modo IAM: entonces Certbot utiliza la cadena de credenciales AWS del contenedor (incluidos los roles IAM). |
 
 Consulta la [Guía de instalación](./installation.md#environment-variables) para ver la lista completa.
 

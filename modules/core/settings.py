@@ -1835,7 +1835,8 @@ class SettingsManager:
             # Define credential keys for each provider (same as used later)
             old_config_keys = {
                 'cloudflare': ['api_token'],
-                'route53': ['access_key_id', 'secret_access_key', 'region'],
+                'route53': ['access_key_id', 'secret_access_key', 'region',
+                            'auth_mode', 'assume_role_arn'],
                 'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
                 'google': ['project_id', 'service_account_key'],
                 'powerdns': ['api_url', 'api_key'],

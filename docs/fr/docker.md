@@ -149,7 +149,7 @@ docker run -d --name certmate \
 | `API_BEARER_TOKEN_FILE` | Non | Chemin vers un fichier contenant le token bearer API (prioritaire sur `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | Non | `INFO` (défaut), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | Non | Quand défini, sauvegardes chiffrées au repos (`.zip.enc`, PBKDF2-SHA256 + Fernet) |
-| `CLOUDFLARE_TOKEN` | Non | Token API du compte DNS Cloudflare par défaut. Cloudflare est le seul fournisseur DNS lu depuis l'environnement : Route53 et les autres se configurent dans Paramètres → Fournisseurs DNS ou via l'API, et définir `AWS_ACCESS_KEY_ID` dans le conteneur n'a aucun effet |
+| `CLOUDFLARE_TOKEN` | Non | Token API du compte DNS Cloudflare par défaut. Route53 utilise les identifiants configurés dans Paramètres → Fournisseurs DNS, sauf si le compte choisit explicitement le mode IAM : Certbot utilise alors la chaîne d'identification AWS du conteneur (y compris les rôles IAM). |
 
 Voir le [Guide d'installation](./installation.md#variables-denvironnement) pour la liste complète.
 

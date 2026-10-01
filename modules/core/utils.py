@@ -913,6 +913,20 @@ def validate_dns_provider_account(provider: str, account_id: str, account_config
         # than making it a node in that graph.
         from .secret_refs import has_value
 
+        if provider == 'route53' and account_config.get('auth_mode') == 'iam_role':
+            from .storage_backends import _aws_storage_auth
+            try:
+                _aws_storage_auth(account_config, 'Route53 DNS')
+            except ValueError as exc:
+                return False, str(exc)
+            return True, 'Valid configuration.'
+        if provider == 'route53' and account_config.get('auth_mode') not in (None, '', 'access_keys'):
+            return False, 'Route53 DNS auth_mode must be access_keys or iam_role'
+        if provider == 'route53' and account_config.get('assume_role_arn'):
+            from .storage_backends import _valid_aws_role_arn
+            if not _valid_aws_role_arn(str(account_config['assume_role_arn']).strip()):
+                return False, 'assume_role_arn must be an IAM role ARN'
+
         required_fields = _DNS_PROVIDER_CREDENTIALS[provider]
         missing_fields = [f for f in required_fields
                           if not has_value(account_config, f)]

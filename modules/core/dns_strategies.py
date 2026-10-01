@@ -186,13 +186,7 @@ class CloudflareStrategy(DNSProviderStrategy):
 
 class Route53Strategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
-        # Route53 uses env vars, but we might create a file for Consistency or future use
-        # For now, return None as the implementation in CertificateManager handles env vars specially
-        # OR better: Refactor CertificateManager to ask the strategy to set up the environment!
-        # But to avoid massive breakage now, we'll keep the specialized handling in CertificateManager for Route53
-        # unless we refactor that part too.
-        # The prompt asked to refactor the if/elif switch.
-        return None 
+        return None  # Route53 uses the AWS SDK credential chain / subprocess environment.
     
     @property
     def plugin_name(self) -> str:
@@ -209,13 +203,24 @@ class Route53Strategy(DNSProviderStrategy):
         return 60
 
     def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
-        env['AWS_ACCESS_KEY_ID'] = config_data.get('access_key_id', '')
-        env['AWS_SECRET_ACCESS_KEY'] = config_data.get('secret_access_key', '')
-        if config_data.get('region'):
-            env['AWS_DEFAULT_REGION'] = config_data['region']
+        from .storage_backends import _aws_storage_auth, _aws_storage_client
+
+        mode, key, secret, role_arn = _aws_storage_auth(config_data, 'Route53 DNS')
+        region = (config_data.get('region') or env.get('AWS_REGION') or
+                  env.get('AWS_DEFAULT_REGION') or 'us-east-1')
+        if mode == 'access_keys':
+            env.update(AWS_ACCESS_KEY_ID=key, AWS_SECRET_ACCESS_KEY=secret)
+            env.pop('AWS_SESSION_TOKEN', None)  # Never mix explicit keys with an inherited session token.
+        if role_arn:
+            sts = _aws_storage_client('sts', region, mode, key, secret)
+            credentials = sts.assume_role(RoleArn=role_arn, RoleSessionName='certmate-route53-dns')['Credentials']
+            env.update(AWS_ACCESS_KEY_ID=credentials['AccessKeyId'],
+                       AWS_SECRET_ACCESS_KEY=credentials['SecretAccessKey'],
+                       AWS_SESSION_TOKEN=credentials['SessionToken'])
+        env['AWS_DEFAULT_REGION'] = region
 
     def cleanup_environment(self, env: Dict[str, str]) -> None:
-        for key in ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_DEFAULT_REGION']:
+        for key in ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_DEFAULT_REGION']:
             if key in env:
                 del env[key]
 

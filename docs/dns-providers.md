@@ -9,7 +9,7 @@ CertMate supports a wide range of DNS providers for Let's Encrypt DNS-01 challen
 | Provider | Plugin | Credentials Required | Category |
 |----------|--------|---------------------|----------|
 | **Cloudflare** | `certbot-dns-cloudflare` | API Token | Major Cloud |
-| **AWS Route53** | `certbot-dns-route53` | Access Key, Secret Key | Major Cloud |
+| **AWS Route53** | `certbot-dns-route53` | Access keys or AWS credential chain / IAM role | Major Cloud |
 | **Azure DNS** | CertMate's own hook (`azure-mgmt-dns`) | Service Principal | Major Cloud |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Major Cloud |
 | **PowerDNS** | `certbot-dns-powerdns` | API URL, API Key | Enterprise |
@@ -83,6 +83,24 @@ curl -X POST http://localhost:8000/api/settings \
 ```
 
 ### AWS Route53
+
+Existing accounts continue to use access keys by default. To use the AWS
+credential chain (an EC2/ECS task role, EKS Pod Identity or IRSA), select
+**AWS credentials / IAM role (no keys)** in Settings → DNS Providers, or set
+`auth_mode` to `iam_role` on the Route53 DNS account:
+
+```json
+{"dns_providers": {"route53": {"accounts": {"default": {
+  "auth_mode": "iam_role", "region": "eu-west-3"
+}}}}}
+```
+
+Optionally set `assume_role_arn` to assume another role with Route53 DNS
+permissions. This works with either the AWS credential chain or stored access
+keys as the source identity; that identity needs `sts:AssumeRole`, and the
+destination role must trust it. CertMate passes temporary STS credentials to
+Certbot for each issuance or renewal. DNS alias mode uses the same identity.
+No `auth_mode` means the existing access-key behavior remains in effect.
 
 ```json
 {

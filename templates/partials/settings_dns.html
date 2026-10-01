@@ -467,8 +467,13 @@
                             
                             <!-- Legacy single account fields (hidden when multi-account mode is active) -->
                             <div id="route53-legacy-config">
+                                <label for="route53_auth_mode" class="block text-sm font-medium text-label">Authentication</label>
+                                <select id="route53_auth_mode" name="route53_auth_mode" onchange="toggleRoute53LegacyAuthMode()" class="mt-1 mb-4 block w-full border border-border rounded-md py-2 px-3 bg-input text-foreground">
+                                    <option value="access_keys">Access keys</option>
+                                    <option value="iam_role">AWS credentials / IAM role (no keys)</option>
+                                </select>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
+                                    <div class="route53-legacy-key">
                                         <label for="route53_access_key_id" class="block text-sm font-medium text-label">
                                             Access Key ID
                                         </label>
@@ -479,7 +484,7 @@
                                                spellcheck="false"
                                                data-lpignore="true">
                                     </div>
-                                    <div>
+                                    <div class="route53-legacy-key">
                                         <label for="route53_secret_access_key" class="block text-sm font-medium text-label">
                                             Secret Access Key
                                         </label>
@@ -498,9 +503,15 @@
                                                class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="us-east-1" value="us-east-1">
                                     </div>
+                                    <div>
+                                        <label for="route53_assume_role_arn" class="block text-sm font-medium text-label">Assume role ARN (optional)</label>
+                                        <input type="text" id="route53_assume_role_arn" name="route53_assume_role_arn"
+                                               class="mt-1 block w-full border border-border rounded-md py-2 px-3 bg-input text-foreground"
+                                               placeholder="arn:aws:iam::123456789012:role/CertMateRoute53">
+                                    </div>
                                 </div>
                                 <p class="mt-2 text-sm text-muted">
-                                    Create IAM credentials with <strong>Route53FullAccess</strong> policy or a custom policy with Route53 DNS permissions.
+                                    Use access keys or the container's AWS credential chain (EC2/ECS/EKS role). Optionally assume a role with Route53 permissions.
                                 </p>
                             </div>
                         </div>
@@ -1555,5 +1566,3 @@
                     </div>
                     </div><!-- /#dns-config-section -->
                     </div><!-- /tab: dns -->
-
-                    

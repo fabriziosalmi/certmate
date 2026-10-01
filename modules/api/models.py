@@ -33,7 +33,10 @@ def create_api_models(api):
     route53_model = api.model('Route53Config', {
         'access_key_id': fields.String(description='AWS Access Key ID'),
         'secret_access_key': MaskedString(description='AWS Secret Access Key'),
-        'region': fields.String(description='AWS Region', default='us-east-1')
+        'region': fields.String(description='AWS Region', default='us-east-1'),
+        'auth_mode': fields.String(description='access_keys (default) or iam_role',
+                                   enum=['access_keys', 'iam_role']),
+        'assume_role_arn': fields.String(description='Optional AWS role ARN to assume via STS')
     })
 
     azure_model = api.model('AzureConfig', {
