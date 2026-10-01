@@ -151,6 +151,12 @@ def validate_webhook_target(target):
         port = parsed.port if parsed else None
     except ValueError:
         return False, 'url is not a valid URL (is the port a number from 1 to 65535?)'
+    if parsed is not None and parsed.scheme == 'http' and parsed.hostname:
+        # The case a first user hits: a receiver that listens on plain HTTP by default
+        # (n8n does). Say how to get out of it, not only that it is refused.
+        return False, ('url must be https://: the request carries certificate material. A receiver '
+                       'that answers over plain HTTP (n8n does by default) needs TLS enabled on it '
+                       'or in front of it; see docs/deploy-hooks.md, "Receiving it in n8n"')
     if (parsed is None or parsed.scheme != 'https' or not parsed.hostname
             or not _valid_host(parsed.hostname)):
         return False, 'url must be an https:// address with a host: the request carries certificate material'
