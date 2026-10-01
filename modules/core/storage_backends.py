@@ -5,6 +5,7 @@ local filesystem, Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisic
 and S3-compatible object storage
 """
 
+import ipaddress
 import os
 import json
 import logging
@@ -17,6 +18,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
+from urllib.parse import urlparse
 
 from .constants import CERTIFICATE_FILES
 from .domain_paths import STORAGE_DOMAIN_RE, reject_unsafe_domain
@@ -1724,7 +1726,7 @@ class InfisicalBackend(CertificateStorageBackend):
     """Infisical storage backend"""
     
     def __init__(self, config: Dict[str, str]):
-        self.site_url = config.get('site_url', 'https://app.infisical.com')
+        self.site_url = config.get('site_url') or 'https://app.infisical.com'
         self.client_id = config.get('client_id')
         self.client_secret = config.get('client_secret')
         self.project_id = config.get('project_id')
@@ -1735,16 +1737,49 @@ class InfisicalBackend(CertificateStorageBackend):
         self.project_id = (self.project_id or '').strip()
         if not all([self.client_id, self.client_secret, self.project_id]):
             raise ValueError("Infisical backend requires client_id, client_secret, and project_id")
-        
+        self._require_https(self.site_url)
+
         self._client = None
         logger.info(f"InfisicalBackend initialized for project: {self.project_id}")
+
+    @staticmethod
+    def _require_https(site_url: str) -> None:
+        """The SDK talks to `site_url` with a client CertMate cannot configure.
+
+        It is a compiled core that FOLLOWS a 307/308 and sends the request body on:
+        measured against a server that answered a secret write with a redirect, the
+        secret value (here a certificate and its private key) arrived at the other
+        host, with the credentials header stripped and the body not. Nothing in
+        `ClientSettings` turns that off, so what can be refused is the network
+        position that makes a redirect likely: plain HTTP, where anyone on the path
+        can answer instead of the server. Loopback may use HTTP, since nobody
+        stands between a process and itself (this is also what lets the tests run
+        the real SDK against a local server).
+        """
+        parsed = urlparse(site_url or '')
+        if parsed.scheme == 'https' and parsed.hostname:
+            return
+        host = (parsed.hostname or '').lower()
+        loopback = host == 'localhost'
+        if not loopback:
+            try:
+                loopback = ipaddress.ip_address(host).is_loopback
+            except ValueError:
+                loopback = False
+        if parsed.scheme == 'http' and loopback:
+            return
+        raise ValueError("Infisical site_url must be an https:// address (http:// is accepted only "
+                         "for localhost): the SDK follows redirects with the request body, which "
+                         "carries the private key")
     
     def _get_client(self):
         """Get Infisical client with lazy initialization"""
         if self._client is None:
             try:
-                from infisical import InfisicalClient, ClientSettings
-                
+                # The package is `infisical-python`; the MODULE it installs is
+                # `infisical_client` (there is no `infisical`).
+                from infisical_client import InfisicalClient, ClientSettings
+
                 settings = ClientSettings(
                     client_id=self.client_id,
                     client_secret=self.client_secret,
@@ -1752,8 +1787,19 @@ class InfisicalBackend(CertificateStorageBackend):
                 )
                 self._client = InfisicalClient(settings)
             except ImportError:
-                raise ImportError("Infisical backend requires 'infisical-python' package")
+                raise ImportError("Infisical backend requires the 'infisical-python' package "
+                                  "(imported as 'infisical_client')")
         return self._client
+
+    def _options(self, kind: str, **fields):
+        """The SDK's options object for one call: its methods take ONE such object.
+
+        `kind` is the class name in `infisical_client` (`GetSecretOptions`, ...). The
+        project and environment are the same for every call this backend makes.
+        """
+        import infisical_client
+        return getattr(infisical_client, kind)(
+            project_id=self.project_id, environment=self.environment, **fields)
     
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to Infisical"""
@@ -1773,43 +1819,27 @@ class InfisicalBackend(CertificateStorageBackend):
             secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"
             secret_value = _as_text(filename, content)
             try:
-                client.update_secret(
-                    secret_name=secret_key,
-                    secret_value=secret_value,
-                    project_id=self.project_id,
-                    environment=self.environment
-                )
+                client.updateSecret(self._options(
+                    'UpdateSecretOptions', secret_name=secret_key, secret_value=secret_value))
             except Exception:
                 # Update-then-create: the SDK does not offer an upsert, and it
                 # does not document a distinct not-found error either, so the
                 # absence cannot be told from anything else without depending
                 # on an undocumented type. A create that also fails raises,
                 # which is the honest outcome.
-                client.create_secret(
-                    secret_name=secret_key,
-                    secret_value=secret_value,
-                    project_id=self.project_id,
-                    environment=self.environment
-                )
+                client.createSecret(self._options(
+                    'CreateSecretOptions', secret_name=secret_key, secret_value=secret_value))
 
         # Store metadata (upsert)
         metadata_key = f"certmate-{domain}-metadata"
         metadata_value = json.dumps(metadata)
         try:
-            client.update_secret(
-                secret_name=metadata_key,
-                secret_value=metadata_value,
-                project_id=self.project_id,
-                environment=self.environment
-            )
+            client.updateSecret(self._options(
+                'UpdateSecretOptions', secret_name=metadata_key, secret_value=metadata_value))
         except Exception:
             # Same update-then-create as above, for the metadata secret.
-            client.create_secret(
-                secret_name=metadata_key,
-                secret_value=metadata_value,
-                project_id=self.project_id,
-                environment=self.environment
-            )
+            client.createSecret(self._options(
+                'CreateSecretOptions', secret_name=metadata_key, secret_value=metadata_value))
 
         logger.info(f"Certificate stored successfully in Infisical for {domain}")
         return True
@@ -1832,11 +1862,7 @@ class InfisicalBackend(CertificateStorageBackend):
         for filename in standard_files:
             try:
                 secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"
-                secret = client.get_secret(
-                    secret_name=secret_key,
-                    project_id=self.project_id,
-                    environment=self.environment
-                )
+                secret = client.getSecret(self._options('GetSecretOptions', secret_name=secret_key))
                 cert_files[filename] = secret.secret_value.encode('utf-8')
             except Exception as e:
                 # Log the PEM filename, not the storage key or the SDK error
@@ -1852,11 +1878,7 @@ class InfisicalBackend(CertificateStorageBackend):
         metadata = {}
         try:
             metadata_key = f"certmate-{domain}-metadata"
-            secret = client.get_secret(
-                secret_name=metadata_key,
-                project_id=self.project_id,
-                environment=self.environment
-            )
+            secret = client.getSecret(self._options('GetSecretOptions', secret_name=metadata_key))
             metadata = json.loads(secret.secret_value)
         except Exception as e:
             logger.debug(f"Metadata not found in Infisical for {domain}: {e}")
@@ -1876,22 +1898,18 @@ class InfisicalBackend(CertificateStorageBackend):
         client = self._get_client()
         domains = set()
 
-        secrets = client.list_secrets(
-            project_id=self.project_id,
-            environment=self.environment
-        )
+        secrets = client.listSecrets(self._options('ListSecretsOptions'))
 
         for secret in secrets:
-            if not (secret.secret_name.startswith('certmate-') and secret.secret_name.endswith('-metadata')):
+            # A result's name is `secret_key` (not `secret_name`, which is what the
+            # option objects call it).
+            if not (secret.secret_key.startswith('certmate-') and secret.secret_key.endswith('-metadata')):
                 continue
             # Read each metadata secret to get the authoritative domain name instead
             # of reversing the sanitized key (which is lossy for hyphenated domains).
             try:
-                meta_secret = client.get_secret(
-                    secret_name=secret.secret_name,
-                    project_id=self.project_id,
-                    environment=self.environment
-                )
+                meta_secret = client.getSecret(
+                    self._options('GetSecretOptions', secret_name=secret.secret_key))
                 meta = json.loads(meta_secret.secret_value)
                 domain = meta.get('domain')
                 if domain:
@@ -1911,11 +1929,7 @@ class InfisicalBackend(CertificateStorageBackend):
             for filename in standard_files:
                 try:
                     secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"
-                    client.delete_secret(
-                        secret_name=secret_key,
-                        project_id=self.project_id,
-                        environment=self.environment
-                    )
+                    client.deleteSecret(self._options('DeleteSecretOptions', secret_name=secret_key))
                 except Exception as e:
                     logger.debug(f"Could not delete secret {secret_key} for {domain}: {e}")
                     continue
@@ -1923,11 +1937,7 @@ class InfisicalBackend(CertificateStorageBackend):
             # Delete metadata
             try:
                 metadata_key = f"certmate-{domain}-metadata"
-                client.delete_secret(
-                    secret_name=metadata_key,
-                    project_id=self.project_id,
-                    environment=self.environment
-                )
+                client.deleteSecret(self._options('DeleteSecretOptions', secret_name=metadata_key))
             except Exception as e:
                 logger.debug(f"Could not delete metadata for {domain} from Infisical: {e}")
             
@@ -1943,13 +1953,12 @@ class InfisicalBackend(CertificateStorageBackend):
 
         Answered by listing rather than by fetching one secret, which is the
         opposite of what the other backends do, and deliberate. The other four
-        narrow to the exception their SDK raises for "no such thing"; the
-        shapes are verifiable here because azure-core, hvac and botocore are
-        installed. `infisical-python` is NOT: the pin is held back on purpose
-        (it has no manylinux x86_64 wheel and no sdist), so it cannot be
-        imported, and its not-found exception cannot be read off the library.
-        Guessing a class name is how a contract gets invented instead of
-        copied.
+        narrow to the exception their SDK raises for "no such thing". This one
+        has none: measured against the real SDK, a missing secret raises a bare
+        `Exception` whose only distinguishing mark is its message ("Secret with
+        name 'x' not found."), the same type as "Failed to authenticate". Matching
+        on that wording is how a contract gets invented instead of copied, and it
+        would read an authentication failure as an absence.
 
         `_list_certificates_attempt()` needs no such guess. It is the
         unswallowed form of `list_certificates()`, so a listing that returns

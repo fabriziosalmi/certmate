@@ -1493,6 +1493,15 @@ pip install -r requirements-infisical-storage.txt
 }
 ```
 
+**`site_url` must be `https://`** (plain `http://` is accepted only for `localhost`). The Infisical
+SDK follows a redirect and sends the request body on, and here the body is the certificate and its
+private key; its HTTP client cannot be configured from CertMate, so the one thing CertMate can
+refuse is the position where anyone on the path could answer with a redirect. Point it at a server
+you trust with the key, which is what storing it there means anyway.
+
+**This backend did not work in v2.44.0 or earlier.** It could not run at all: it imported a module
+name the pinned `infisical-python` does not have, and called methods that SDK does not have.
+
 **Benefits:**
 - Open-source secret management with transparency
 - End-to-end encryption for maximum security

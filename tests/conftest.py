@@ -624,3 +624,13 @@ def browser_page(docker_container, ui_session_cookie):
     context.close()
     browser.close()
     pw.stop()
+
+
+@pytest.fixture
+def infisical_sdk(monkeypatch):
+    """`infisical_client` replaced by a stub with the SDK's real shape (see tests/infisical_sdk_stub.py)."""
+    import sys
+    from tests.infisical_sdk_stub import make_sdk_stub
+    stub = make_sdk_stub()
+    monkeypatch.setitem(sys.modules, 'infisical_client', stub)
+    return stub
