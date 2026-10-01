@@ -645,10 +645,10 @@ below; the three steps are what had to be done, not what is generally true of n8
    refuses that (`url must be https://`). Put a TLS terminator in front of it, or give n8n
    a certificate itself with `N8N_PROTOCOL=https`, `N8N_SSL_KEY=/path/key.pem` and
    `N8N_SSL_CERT=/path/cert.pem`. For a certificate n8n signed itself, set `pin_sha256` on
-   the target to its fingerprint, only the digits and not the label
-   (`openssl x509 -in cert.pem -noout -fingerprint -sha256 | cut -d= -f2`; the command
-   alone prints `SHA256 Fingerprint=AA:BB:...`, which the field refuses), and, if n8n is at
-   a private address, `allow_internal: true` on the target.
+   the target to its fingerprint: the digits only, not the label. The command
+   `openssl x509 -in cert.pem -noout -fingerprint -sha256` prints
+   `SHA256 Fingerprint=AA:BB:...`; paste what follows the `=`, because the field refuses the
+   label. If n8n is at a private address, also set `allow_internal: true` on the target.
 2. **The Webhook node:** HTTP Method `POST`, a Path such as `certmate`, Respond
    *Immediately*, and publish the workflow. The target must call the **production** URL
    (`https://host:5678/webhook/certmate`), not the test one.
