@@ -11,52 +11,22 @@ certbot-dns-azure exposes several --dns-azure-* options
 
 The fix selects the plugin via ``--authenticator <name>`` in the base
 ``DNSProviderStrategy.configure_certbot_arguments``, which sidesteps
-argparse's prefix matching entirely. This test pins that contract for
-Azure and also for the generic strategy so the same class of bug cannot
-silently regress for any future plugin that grows additional sub-flags.
+argparse's prefix matching entirely. This test pins that contract on the
+generic strategy so the same class of bug cannot silently regress for any
+plugin that grows additional sub-flags.
+
+Azure was the provider that reported it and no longer goes through a plugin
+at all (#103): its hook is tested in test_azure_dns_goes_through_its_hook.py.
 """
 import pytest
 
 from modules.core.dns_strategies import (
-    AzureStrategy,
     CloudflareStrategy,
     GoogleStrategy,
 )
 
 
 pytestmark = [pytest.mark.unit]
-
-
-class TestAzureStrategyAvoidsAmbiguousFlag:
-    def test_azure_uses_authenticator_not_shorthand(self, tmp_path, monkeypatch):
-        """The Azure command must use ``--authenticator dns-azure`` and must
-        not contain the bare ``--dns-azure`` shorthand."""
-        monkeypatch.chdir(tmp_path)
-        strategy = AzureStrategy()
-        creds = strategy.create_config_file({
-            'subscription_id': 'sub',
-            'resource_group': 'rg',
-            'tenant_id': 'tenant',
-            'client_id': 'client',
-            'client_secret': 'shhh',
-            '_zone_domain': 'example.com',
-        })
-
-        cmd = []
-        strategy.configure_certbot_arguments(cmd, creds)
-
-        assert '--authenticator' in cmd
-        auth_idx = cmd.index('--authenticator')
-        assert cmd[auth_idx + 1] == 'dns-azure'
-
-        # The bare --dns-azure shorthand is exactly what certbot rejected.
-        assert '--dns-azure' not in cmd, (
-            f"--dns-azure is ambiguous for this plugin; use --authenticator instead: {cmd}"
-        )
-
-        assert '--dns-azure-credentials' in cmd
-        cred_idx = cmd.index('--dns-azure-credentials')
-        assert cmd[cred_idx + 1] == str(creds)
 
 
 class TestBaseStrategyAvoidsAmbiguousFlag:
@@ -88,15 +58,8 @@ class TestBaseStrategyAvoidsAmbiguousFlag:
         """The CNAME hint logged for DNS alias validation must still fire
         after the --authenticator switch."""
         monkeypatch.chdir(tmp_path)
-        strategy = AzureStrategy()
-        creds = strategy.create_config_file({
-            'subscription_id': 'sub',
-            'resource_group': 'rg',
-            'tenant_id': 'tenant',
-            'client_id': 'client',
-            'client_secret': 'shhh',
-            '_zone_domain': 'example.com',
-        })
+        strategy = CloudflareStrategy()
+        creds = strategy.create_config_file({'api_token': 'tok'})
 
         cmd = []
         with caplog.at_level('INFO'):

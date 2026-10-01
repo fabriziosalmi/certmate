@@ -36,7 +36,6 @@ README = REPO_ROOT / "README.md"
 DISTRIBUTIONS = {
     "Cloudflare": "certbot-dns-cloudflare",
     "AWS Route53": "certbot-dns-route53",
-    "Azure DNS": "certbot-dns-azure",
     "Google Cloud DNS": "certbot-dns-google",
     "DigitalOcean": "certbot-dns-digitalocean",
     "PowerDNS": "certbot-dns-powerdns",
@@ -63,7 +62,8 @@ DISTRIBUTIONS = {
 }
 
 # Providers CertMate implements itself, with no certbot plugin involved.
-NATIVE = {"EfficientIP SOLIDserver", "ACME-DNS", "Custom Script"}
+# Azure DNS joined them in #103: certbot-dns-azure has no release for certbot 4+.
+NATIVE = {"EfficientIP SOLIDserver", "ACME-DNS", "Custom Script", "Azure DNS"}
 
 
 def _requirements(name):

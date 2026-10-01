@@ -1,6 +1,6 @@
 # Proveedores DNS
 
-<!-- CERTMATE-TRANSLATED-FROM b1fb9435446a84d3 -->
+<!-- CERTMATE-TRANSLATED-FROM 4dcc9496784670bc -->
 
 CertMate soporta una amplia gama de proveedores DNS para los desafíos Let's Encrypt DNS-01 mediante plugins de certbot individuales. La lista completa se encuentra en la tabla a continuación.
 
@@ -12,7 +12,7 @@ CertMate soporta una amplia gama de proveedores DNS para los desafíos Let's Enc
 |---|---|---|---|
 | **Cloudflare** | `certbot-dns-cloudflare` | Token API | Cloud principal |
 | **AWS Route53** | `certbot-dns-route53` | Access Key, Secret Key | Cloud principal |
-| **Azure DNS** | `certbot-dns-azure` | Service Principal | Cloud principal |
+| **Azure DNS** | Hook propio de CertMate (`azure-mgmt-dns`) | Service Principal | Cloud principal |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Cloud principal |
 | **PowerDNS** | `certbot-dns-powerdns` | URL API, Clave API | Empresa |
 | **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | Clave API, Secret Key | Empresa |
@@ -114,6 +114,8 @@ curl -X POST http://localhost:8000/api/settings \
   }
 }
 ```
+
+Azure DNS no se resuelve con un plugin de certbot: CertMate escribe el registro del desafío por sí mismo con el SDK de Azure, usando el mismo service principal. El principal necesita permiso para leer y escribir registros TXT en la zona (el rol `DNS Zone Contributor` sobre el grupo de recursos lo cubre). Los certificados emitidos antes mediante `certbot-dns-azure` pasan a este método en su próxima renovación; no hay nada que cambiar. La espera antes de la validación es el ajuste de propagación del proveedor (180 segundos por defecto).
 
 ### Google Cloud DNS
 

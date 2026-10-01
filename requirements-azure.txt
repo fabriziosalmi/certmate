@@ -1,15 +1,10 @@
 # Azure DNS specific requirements
-# Install this in addition to requirements-minimal.txt for Azure support
+# Install this in addition to requirements-minimal.txt for Azure support.
+#
+# Azure DNS-01 is answered by CertMate's own manual hook
+# (modules/core/azure_dns_hook.py), which needs only these two packages.
+# certbot-dns-azure is no longer used: it has no release for certbot 4 or
+# later (#103).
 
 azure-identity==1.25.3
-# Held below 9: certbot-dns-azure 2.5.0 passes four positional arguments to
-# DnsManagementClient (the third is api_version) and 9.0.0 accepts three
-# (TypeError at the first challenge).
-# See requirements.txt and tests/test_the_azure_plugin_works_with_the_pinned_sdk.py.
 azure-mgmt-dns==8.1.0
-# 2.5.0 is the latest certbot-dns-azure that still supports certbot 2.x
-# (the rest of CertMate is pinned to certbot==2.10.0 via requirements.txt).
-# 2.6.0 / 2.6.1 require certbot>=3.0,<4.0 and would break the install.
-# The previous pin (2.11.0) was a non-existent PyPI version that broke
-# `pip install -r requirements-azure.txt` outright (reported in issue #113).
-certbot-dns-azure==2.5.0

@@ -425,7 +425,7 @@ _CERTBOT_STDERR_CREDENTIAL_LINE_RE = re.compile(
 # client-facing error message is consistent with the general policy of
 # not echoing internal paths.
 _CERTBOT_CONFIG_PATH_RE = re.compile(
-    r'(?i)(?:[\w\-./]+/)?letsencrypt/config/[A-Za-z0-9_\-.]+\.ini'
+    r'(?i)(?:[\w\-./]+/)?letsencrypt/config/[A-Za-z0-9_\-.]+\.(?:ini|json)'
 )
 
 # Hard cap on the sanitized stderr we surface to API clients. Certbot's
@@ -618,7 +618,7 @@ def generate_secure_token(length: int = 40) -> str:
 # CERTBOT CONFIGURATION FILE CREATORS
 # =============================================
 
-def _create_config_file(plugin_name: str, content: str) -> Path:
+def _create_config_file(plugin_name: str, content: str, suffix: str = ".ini") -> Path:
     """Generic helper to create a per-operation credentials file.
 
     The filename carries a random suffix so two concurrent operations on the
@@ -631,7 +631,7 @@ def _create_config_file(plugin_name: str, content: str) -> Path:
     config_dir = Path("letsencrypt/config")
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    config_file = config_dir / f"{plugin_name}-{secrets.token_hex(8)}.ini"
+    config_file = config_dir / f"{plugin_name}-{secrets.token_hex(8)}{suffix}"
     # Create the file 0600 ATOMICALLY: O_EXCL never follows a pre-planted
     # symlink at this (world-writable-dir) path, and the mode is set at open()
     # so the DNS-provider secret is never briefly world-readable under the
@@ -651,36 +651,24 @@ def create_route53_config(access_key_id: str, secret_access_key: str) -> Path:
     return _create_config_file("route53", content)
 
 def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str, zone_domain: Union[str, List[str]]) -> Path:
-    """Create Azure DNS credentials file for certbot-dns-azure (terrycain).
+    """Write the config ``azure_dns_hook`` reads, and return its path.
 
-    The plugin (certbot-dns-azure >= 2.x) expects:
+    Azure DNS-01 is answered by CertMate's own manual hook (``azure_dns_hook``),
+    not by ``certbot-dns-azure``, which has no release for certbot 4 or later
+    (#103). The file is JSON, 0600, one per operation, and removed by the caller
+    when the operation ends, like every other credentials file here.
 
-    * ``dns_azure_sp_client_id`` / ``dns_azure_sp_client_secret`` /
-      ``dns_azure_tenant_id`` — service principal credentials. Note the
-      ``sp_`` prefix; the older bare ``dns_azure_client_id`` keys that
-      certmate used previously are ignored and the plugin reports
-      "No authentication methods have been configured for Azure DNS".
-    * ``dns_azure_zoneN = <zone>:<azure-resource-id>`` — at least one
-      zone mapping. ``subscription_id`` and ``resource_group`` are NOT
-      top-level keys; they live inside the resource id of the zone line.
+    * the service principal: ``tenant_id``, ``client_id``, ``client_secret``;
+    * ``subscription_id`` and ``resource_group`` of the hosted zones;
+    * ``zones``: the hosted zones to choose from. The hook takes the longest one a
+      challenge name falls under, which is what lets a wildcard under a parent
+      hosted zone (``*.example2.example.com`` under ``example.com``) land in the
+      parent.
 
-    See ``certbot_dns_azure/_internal/dns_azure.py:_validate_credentials``
-    in v2.5.0 for the validation that drives this format.
-
-    ``zone_domain`` accepts two shapes:
-
-    * **str** — legacy single-zone usage. Writes one ``dns_azure_zone1``
-      line. Kept for callers (and tests) that haven't migrated to the
-      list form.
-    * **list[str]** — one ``dns_azure_zoneN`` per entry, in the order
-      given. The cert-issuance path passes the deduplicated longest-first
-      list returned by ``resolve_zones_for_domains`` so the plugin's
-      longest-prefix match selects the most specific hosted zone per
-      ACME challenge — that's what enables nested-subdomain wildcards
-      against a parent hosted zone (e.g. ``*.example2.example.com``
-      issued under hosted zone ``example.com``).
+    ``zone_domain`` is a single zone (``str``, the legacy shape kept for callers
+    that predate discovery) or a list of zones as
+    ``resolve_zones_for_domains`` returns them.
     """
-    zone_resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
     if isinstance(zone_domain, str):
         zone_list = [zone_domain]
     else:
@@ -689,18 +677,15 @@ def create_azure_config(subscription_id: str, resource_group: str, tenant_id: st
         raise ValueError(
             "create_azure_config requires at least one zone (received empty list)"
         )
-    zone_lines = ''.join(
-        f"dns_azure_zone{idx} = {zone}:{zone_resource_id}\n"
-        for idx, zone in enumerate(zone_list, start=1)
-    )
-    content = (
-        f"dns_azure_sp_client_id = {client_id}\n"
-        f"dns_azure_sp_client_secret = {client_secret}\n"
-        f"dns_azure_tenant_id = {tenant_id}\n"
-        f"dns_azure_environment = AzurePublicCloud\n"
-        f"{zone_lines}"
-    )
-    return _create_config_file("azure", content)
+    content = json.dumps({
+        'tenant_id': tenant_id,
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'subscription_id': subscription_id,
+        'resource_group': resource_group,
+        'zones': zone_list,
+    })
+    return _create_config_file("azure", content, suffix=".json")
 
 def create_google_config(project_id: str, service_account_key: str) -> Path:
     """Write the Google Cloud DNS service-account JSON and return its path.

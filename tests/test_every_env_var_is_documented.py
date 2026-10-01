@@ -63,6 +63,11 @@ NOT_OPERATOR_CONFIGURATION = {
     'CERTBOT_VALIDATION':
         'set BY certbot when it invokes the DNS hook, carrying the challenge '
         'value. Documenting it as a knob would invite someone to set it.',
+    'CERTMATE_DNS_PROPAGATION_SECONDS':
+        'set BY CertMate, in the environment of the manual DNS hooks it runs '
+        '(Custom Script, Azure), carrying the propagation wait configured for '
+        'the provider. The knob is the provider\'s propagation setting; '
+        'exporting this one by hand would be overwritten.',
     'KUBERNETES_SERVICE_HOST':
         'injected by Kubernetes into every pod. Read to detect that the '
         'process is running in-cluster, so the deploy target can use the '

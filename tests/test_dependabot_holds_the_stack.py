@@ -66,10 +66,6 @@ HELD = {
     # are stated in terms of a specific acme version. The two most carefully
     # reasoned pins in the tree rested on a number nothing enforced.
     "acme": "ACME protocol client",
-    # The one held for a break that SHIPPED: 9.0.0 (#586) dropped a positional
-    # parameter certbot-dns-azure 2.5.0 still passes, and Azure DNS issuance raised
-    # TypeError from v2.26.1 to v2.45.1 with every check green.
-    "azure-mgmt-dns": "DnsManagementClient",
 }
 
 # Ignored defensively rather than held: entries for packages that carry no
