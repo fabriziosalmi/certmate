@@ -23,7 +23,7 @@
 
 services:
   certmate:
-    image: fabriziosalmi/certmate:${CERTMATE_VERSION:-2.44.0}
+    image: fabriziosalmi/certmate:${CERTMATE_VERSION:-2.45.0}
     ports:
       # Loopback only by default. Put a reverse proxy in front for remote
       # access (then set BEHIND_PROXY=true), or set CERTMATE_BIND=0.0.0.0 in
