@@ -360,8 +360,14 @@ def test_reissue_alias_hook_runs_with_alias_provider(tmp_path):
     shell.set_next_result(returncode=0)
     mgr = _manager(tmp_path, shell)
 
+    # A Route53 account with credentials, as one that issues certificates has:
+    # prepare_environment refuses an access-keys account without them (it used
+    # to export two empty strings and let certbot fail later).
+    account = {'provider': 'route53', 'access_key_id': 'AKIAEXAMPLEEXAMPLE0',
+               'secret_access_key': 'example-secret-access-key'}
+
     def per_provider_config(provider, account_id=None, settings=None):
-        return ({'provider': provider}, 'default')
+        return (dict(account) if provider == 'route53' else {'provider': provider}, 'default')
 
     mgr.dns_manager.get_dns_provider_account_config.side_effect = per_provider_config
 
@@ -384,7 +390,7 @@ def test_reissue_alias_hook_runs_with_alias_provider(tmp_path):
         )
 
     assert captured['provider'] == 'route53'
-    assert captured['config'] == {'provider': 'route53'}
+    assert captured['config'] == account
     metadata = json.loads((tmp_path / DOMAIN / 'metadata.json').read_text())
     assert metadata['alias_dns_provider'] == 'route53'
 
