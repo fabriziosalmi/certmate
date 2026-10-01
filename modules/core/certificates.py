@@ -8,9 +8,7 @@ import copy
 import hashlib
 import json
 import re
-import shlex
 import subprocess
-import sys
 import tempfile
 import time
 import logging
@@ -33,7 +31,8 @@ from .ca_manager import CAManager
 from .cert_labels import tags_from_metadata
 from .shell import ShellExecutor
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
-                             check_certbot_plugin_installed, clamp_propagation_seconds)
+                             check_certbot_plugin_installed, clamp_propagation_seconds,
+                             manual_hook_arguments)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS)
 from .inventory_sources import collect_domain_sources
@@ -1508,13 +1507,12 @@ class CertificateManager:
     def _dns_config_for_strategy(dns_provider, dns_config, domain, san_domains=None):
         """Return a strategy-ready copy of dns_config with provider-specific extras.
 
-        Azure DNS is currently the only provider whose certbot plugin
-        cannot self-discover the hosted zone for an ACME challenge — it
-        wants explicit ``dns_azure_zoneN`` lines in its ini file. We hand
-        it the list of hosted zones the account actually owns (looked up
-        via :func:`modules.core.dns_zone_discovery.resolve_zones_for_domains`)
-        so the plugin's longest-match selects the right zone per
-        challenge. This is what unlocks nested-subdomain wildcards
+        Azure DNS is currently the only provider that cannot self-discover
+        the hosted zone for an ACME challenge: its hook (``azure_dns_hook``)
+        chooses among explicit zones. We hand it the list of hosted zones the
+        account actually owns (looked up via
+        :func:`modules.core.dns_zone_discovery.resolve_zones_for_domains`)
+        so its longest-match selects the right zone per challenge. This is what unlocks nested-subdomain wildcards
         against a parent hosted zone — e.g. issuing
         ``*.example2.example.com`` when Azure only hosts ``example.com``.
 
@@ -1668,21 +1666,8 @@ class CertificateManager:
     @staticmethod
     def _configure_dns_alias_arguments(cmd, hook_config):
         """Configure certbot manual DNS hooks for DNS alias validation."""
-        hook_script = Path(__file__).with_name('dns_alias_hook.py')
-        auth_hook = (
-            f"{shlex.quote(sys.executable)} {shlex.quote(str(hook_script))} "
-            f"--config {shlex.quote(str(hook_config))} --action auth"
-        )
-        cleanup_hook = (
-            f"{shlex.quote(sys.executable)} {shlex.quote(str(hook_script))} "
-            f"--config {shlex.quote(str(hook_config))} --action cleanup"
-        )
-        cmd.extend([
-            '--manual',
-            '--preferred-challenges', 'dns',
-            '--manual-auth-hook', auth_hook,
-            '--manual-cleanup-hook', cleanup_hook,
-        ])
+        cmd.extend(manual_hook_arguments(
+            Path(__file__).with_name('dns_alias_hook.py'), hook_config))
 
     @staticmethod
     def _normalize_dns_name(value):
@@ -2728,10 +2713,10 @@ class CertificateManager:
         if strategy.supports_propagation_seconds_flag:
             cmd.extend([f'--{strategy.plugin_name}-propagation-seconds',
                         str(propagation)])
-        if provider == 'custom-script':
+        if strategy.propagation_via_environment:
             # --manual has no propagation flag: surface the configured
-            # per-provider value to custom-script hooks via env instead.
-            # An account-level propagation_seconds (exported by
+            # per-provider value to the hooks (Custom Script, Azure) via env
+            # instead. An account-level propagation_seconds (exported by
             # prepare_environment above) wins over the global setting.
             process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS',
                                    str(propagation))
