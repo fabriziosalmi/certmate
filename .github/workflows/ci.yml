@@ -44,13 +44,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 3.12 matches the production Dockerfile. Python 3.14 is still out of
-        # the matrix. What kept it out was josepy 1.13.0 (certbot 2.10.0 → acme
+        # 3.12 matches the production Dockerfile and is the gating leg. 3.14 is
+        # back (#103): what kept it out was josepy 1.13.0 (certbot 2.10.0 → acme
         # 3.3.0), which raises ValueError at class definition under PEP 649
-        # evaluation; josepy 2.2.0 came with the certbot 5.8 stack. Restoring the
-        # leg is the one item left in #103: it needs the rest of the
-        # dependencies to be run on 3.14, which that change did not do.
-        python-version: ['3.12']
+        # evaluation, and josepy 2.2.0 came with the certbot 5.8 stack. It
+        # reports rather than gates (.github/required-checks.yml) until it has
+        # been green for a while. Running it found two things 3.12 could not
+        # show: the shared TLS fixtures were refused by the strict verification
+        # 3.13 turned on, and the probe never read the served chain on 3.13+.
+        python-version: ['3.12', '3.14']
 
     steps:
     - name: Checkout code

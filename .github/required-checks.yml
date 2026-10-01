@@ -98,6 +98,18 @@ gating:
       hosted, and there is no reason for it to be advisory.
 
 advisory:
+  - context: test (3.14)
+    workflow: ci.yml
+    job: test
+    why: >-
+      The same suite on Python 3.14, which the image does not run. It exists to
+      keep the stack honest about a newer interpreter (#103): a dependency that
+      stops installing there, a standard-library behaviour that changed under
+      the code. Advisory, not gating, because a failure here is usually news about
+      an interpreter or a wheel rather than about the change under review, and
+      the shipped runtime is the 3.12 leg, which does gate. Promote it once it
+      has been green for a few weeks.
+
   - context: translations
     workflow: ci.yml
     job: translations
