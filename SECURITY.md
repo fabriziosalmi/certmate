@@ -152,13 +152,25 @@ deployment already keeps secrets, instead of in the file that travels.
 
 ## Known dependency constraint
 
-CertMate pins `cryptography==46.0.7` and `pyopenssl==26.0.0`. Every version
-that would clear the advisories below needs a pyOpenSSL that breaks the pinned
-ACME stack, so the pins are held deliberately: the alerts are open by choice,
-not by oversight. One reason blocks all of them, and one fix clears all of
-them (issue #103); both are described once, after the advisories.
+**Status: resolved by the certbot 5.8 stack (#103).** CertMate now pins
+`certbot==5.8.0`, `acme==5.8.0`, `josepy==2.2.0`, `cryptography==50.0.2` and
+`pyopenssl==26.4.0`. certbot and acme 5.8.0 require `cryptography>=47`, and
+pyOpenSSL 26.4.0 requires `>=49,<51`, so pip refuses a pin outside that window.
+None of the four advisories below applies to `cryptography` 50.0.2: measured
+with `pip-audit` against the installed set, `46.0.7` carried four advisories
+and `50.0.2` carries none. The text below stays as the record of why the pins were
+held for as long as they were, and as the assessment of what was reachable in
+the meantime; an advisory against `cryptography` that is not listed here has
+not been assessed, and should be treated as new.
 
-**Four advisories are held by this constraint.** The first is a flaw in the
+Until that migration, CertMate pinned `cryptography==46.0.7` and
+`pyopenssl==26.0.0`. Every version that would clear the advisories below
+needed a pyOpenSSL that broke the then-pinned ACME stack, so the pins were held
+deliberately: the alerts were open by choice, not by oversight. One reason
+blocked all of them, and one fix cleared all of them (issue #103); both are
+described once, after the advisories.
+
+**Four advisories were held by that constraint.** The first is a flaw in the
 OpenSSL statically linked into the `cryptography` wheel; the other three,
 published 2026-08-03, are in `cryptography`'s own code and are reached only
 through specific APIs. That difference is what makes the reachability argument
@@ -174,8 +186,8 @@ link an OpenSSL vulnerable to CVE-2026-45447 (heap use-after-free in
 versions are `48.0.1` and later; there is no backported fix on the `46.x`
 or `47.x` lines (`46.0.7` is the final `46.x` release).
 
-**Why the bump is blocked.** The constraint chain, verified against PyPI
-metadata and a clean-room install on 2026-07-07:
+**Why the bump was blocked (on the 2.10.0 stack).** The constraint chain,
+verified against PyPI metadata and a clean-room install on 2026-07-07:
 
 - `acme==3.3.0` requires `pyOpenSSL>=25.0.0`; `josepy==1.13.0` also depends
   on pyOpenSSL. These pins, together with `certbot==2.10.0`, are
@@ -216,10 +228,11 @@ the situation has become more dangerous, not less.**
   certbot as a CLI subprocess, so this is the entire issuance path, not a
   library nicety.
 
-So the pin is now doing more work than it was, not less: nothing upstream
-enforces it any more. Do not relax `cryptography` or `pyopenssl` here without
-re-running that clean-room install and confirming `certbot --version` still
-answers. The real fix remains the certbot 5.x stack migration (#103).
+So the pin was doing more work than it had, not less: nothing upstream
+enforced it any more. The real fix was the certbot 5.x stack migration (#103),
+which is what removed the hazard rather than guarding it: acme 5.8.0 does not
+reference the removed pyOpenSSL API, and certbot/acme/pyOpenSSL now state the
+window they work in.
 
 **Mitigation / actual exposure.** The vulnerable code path is
 `PKCS7_verify()` (PKCS#7 / S/MIME signature verification):
@@ -279,19 +292,22 @@ is PKCS#12 — a different structure and a different code path again. CertMate
 never decrypts PKCS#7; it reads certificate bundles from it and writes
 PKCS#12.
 
-**The constraint has tightened, not loosened.** Clearing all three needs
-`cryptography>=50.0.0`, and 50.0.0 is the exact version the re-verification
-above proves fatal: it installs cleanly and then `certbot --version` dies on
-`X509Req`. The version that would close these alerts is the version that
-breaks issuance.
+**The constraint had tightened, not loosened.** Clearing all three needed
+`cryptography>=50.0.0`, and 50.0.0 was the exact version the re-verification
+above proved fatal on the old stack: it installed cleanly and then
+`certbot --version` died on `X509Req`. The version that would close these
+alerts was the version that broke issuance.
 
-**Fix path.** The certbot 5.x migration epic (issue #103): newer `acme`
-releases drop the removed pyOpenSSL API but require `josepy>=2` and a newer
-certbot line. Once that migration lands, `pyopenssl>=26.2.0` and
-`cryptography>=48.0.1` unblock together, and all four Dependabot alerts above
-can be closed. Until then they remain open by choice, not by oversight, and
-this section is the record of that choice: an advisory against `cryptography`
-that is not listed here has not been assessed, and should be treated as new.
+**Resolution.** The certbot 5.x migration (issue #103) moved `acme` to a release
+that drops the removed pyOpenSSL API, with `josepy>=2` and a newer certbot line,
+and `pyopenssl>=26.2.0` and `cryptography>=48.0.1` unblocked together. Measured
+on the stack that ships: the real-certificate end-to-end suite passes against
+Let's Encrypt staging, a certificate issued by certbot 2.10.0 renews under 5.8.0
+and the reverse, and `pip-audit` reports no advisory against `cryptography`.
+Dependabot no longer holds `cryptography` or `pyopenssl`: a bump is tested (the
+image build runs `certbot --version`) instead of held. The reachability
+arguments above are kept because they were the assessment while the alerts were
+open; they are not what protects the image now.
 
 ### How this list is kept complete
 
