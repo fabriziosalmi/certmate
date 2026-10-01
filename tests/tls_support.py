@@ -28,12 +28,26 @@ def make_cert(common_name, san_dns=None, san_ip=None, issuer=None, issuer_key=No
                .public_key(key.public_key()).serial_number(x509.random_serial_number())
                .not_valid_before(now - datetime.timedelta(days=1))
                .not_valid_after(now + datetime.timedelta(days=30)))
+    # Python 3.13 turned VERIFY_X509_STRICT on in ssl.create_default_context(): a
+    # certificate that names no issuer key is refused ("Missing Authority Key
+    # Identifier"), and a CA needs a subject key identifier and a key usage
+    # extension that allows signing certificates. Real CAs issue all of these; a
+    # fixture that did not made every test that verified against it fail on 3.13+
+    # while passing on the 3.12 the image runs.
+    builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), False)
+    if issuer is not None:
+        builder = builder.add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), False)
     alt = [x509.DNSName(n) for n in (san_dns or [])] + [
         x509.IPAddress(ipaddress.ip_address(i)) for i in (san_ip or [])]
     if alt:
         builder = builder.add_extension(x509.SubjectAlternativeName(alt), False)
     if is_ca:
         builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=None), True)
+        builder = builder.add_extension(x509.KeyUsage(
+            digital_signature=True, key_cert_sign=True, crl_sign=True, content_commitment=False,
+            key_encipherment=False, data_encipherment=False, key_agreement=False,
+            encipher_only=False, decipher_only=False), True)
     cert = builder.sign(issuer_key or key, hashes.SHA256())
     return cert, key
 
