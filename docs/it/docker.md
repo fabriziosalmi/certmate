@@ -1,6 +1,6 @@
 # Build e distribuzione con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 875370d723412467 -->
+<!-- CERTMATE-TRANSLATED-FROM 813d7648b913adcf -->
 
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
 
@@ -151,7 +151,7 @@ docker run -d --name certmate \
 | `API_BEARER_TOKEN_FILE` | No | Percorso di un file contenente il token bearer API (ha precedenza su `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | No | `INFO` (predefinito), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | No | Se impostata, i backup unificati vengono cifrati a riposo (`.zip.enc`, PBKDF2-SHA256 + Fernet). La stessa passphrase è richiesta per il ripristino. Non impostata = backup in chiaro `.zip` (comportamento precedente) |
-| `CLOUDFLARE_TOKEN` | No | Token API dell'account DNS Cloudflare predefinito. Cloudflare è l'unico provider DNS letto dall'ambiente: Route53 e gli altri si configurano in Impostazioni → Provider DNS o tramite l'API, e impostare `AWS_ACCESS_KEY_ID` nel container non ha alcun effetto |
+| `CLOUDFLARE_TOKEN` | No | Token API dell'account DNS Cloudflare predefinito. Route53 usa le credenziali configurate in Impostazioni → Provider DNS, salvo quando l'account seleziona esplicitamente la modalità IAM: allora Certbot usa la catena di credenziali AWS del container (inclusi i ruoli IAM). |
 
 Consulta la [Guida all'installazione](./installation.md#environment-variables) per l'elenco completo.
 

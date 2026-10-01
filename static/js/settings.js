@@ -64,6 +64,27 @@
         });
     }
 
+    function toggleRoute53LegacyAuthMode() {
+        var mode = document.getElementById('route53_auth_mode').value;
+        document.querySelectorAll('.route53-legacy-key').forEach(function (field) {
+            field.classList.toggle('hidden', mode === 'iam_role');
+        });
+    }
+
+    function toggleRoute53ModalAuthMode(container) {
+        var mode = container.querySelector('[name="auth_mode"]');
+        if (!mode) return;
+        function update() {
+            ['access_key_id', 'secret_access_key'].forEach(function (name) {
+                var field = container.querySelector('[name="' + name + '"]');
+                field.required = mode.value !== 'iam_role';
+                field.parentElement.classList.toggle('hidden', mode.value === 'iam_role');
+            });
+        }
+        mode.addEventListener('change', update);
+        update();
+    }
+
     // =============================================
     // API Token helper functions
     // =============================================
@@ -317,11 +338,16 @@
             var provider = settings.dns_provider;
             var legacyFields = getLegacyFieldsForProvider(provider);
 
+            var legacyRoute53 = document.getElementById('route53-legacy-config');
+            if (provider === 'route53' && legacyRoute53 && legacyRoute53.style.display === 'none') {
+                legacyFields = []; // Multi-account Route53 is edited in its own account modal.
+            }
             legacyFields.forEach(function (fieldName) {
                 var value = formData.get(fieldName);
-                if (value && value.trim()) {
+                if ((value && value.trim()) ||
+                        (provider === 'route53' && fieldName === 'route53_assume_role_arn')) {
                     var configKey = fieldName.replace(provider + '_', '');
-                    legacyConfig[configKey] = value.trim();
+                    legacyConfig[configKey] = (value || '').trim();
                 }
             });
 
@@ -335,7 +361,10 @@
                     return typeof val === 'object' && val.name;
                 });
 
-                if (!hasMultiAccount) {
+                var existingAccounts = ((currentSettings.dns_providers || {}).route53 || {}).accounts;
+                if (provider === 'route53' && existingAccounts && existingAccounts.default) {
+                    settings.dns_providers.route53 = {accounts: {default: legacyConfig}};
+                } else if (!hasMultiAccount) {
                     Object.assign(settings.dns_providers[provider], legacyConfig);
                 }
             }
@@ -413,7 +442,8 @@
     function getLegacyFieldsForProvider(provider) {
         var fieldMappings = {
             'cloudflare': ['cloudflare_api_token'],
-            'route53': ['route53_access_key_id', 'route53_secret_access_key', 'route53_region'],
+            'route53': ['route53_access_key_id', 'route53_secret_access_key', 'route53_region',
+                        'route53_auth_mode', 'route53_assume_role_arn'],
             'azure': ['azure_subscription_id', 'azure_resource_group', 'azure_tenant_id', 'azure_client_id', 'azure_client_secret'],
             'google': ['google_project_id', 'google_service_account_key'],
             'powerdns': ['powerdns_api_url', 'powerdns_api_key'],
@@ -867,8 +897,12 @@
                 var config = localDnsProviders[provider];
                 if (typeof config === 'object' && config !== null) {
                     // Check if this is old single-account format
-                    if (config.api_token || config.access_key_id || config.api_key || config.client_token) {
-                        populateLegacyProviderFields(provider, config);
+                    var route53Default = provider === 'route53' && config.accounts &&
+                        Object.keys(config.accounts).length === 1 && config.accounts.default;
+                    if (route53Default || config.api_token || config.access_key_id ||
+                            config.api_key || config.client_token ||
+                            (provider === 'route53' && config.auth_mode === 'iam_role')) {
+                        populateLegacyProviderFields(provider, route53Default || config);
                     }
                 }
             });
@@ -903,7 +937,9 @@
                 'route53': [
                     { field: 'route53_access_key_id', config: 'access_key_id' },
                     { field: 'route53_secret_access_key', config: 'secret_access_key' },
-                    { field: 'route53_region', config: 'region' }
+                    { field: 'route53_region', config: 'region' },
+                    { field: 'route53_auth_mode', config: 'auth_mode' },
+                    { field: 'route53_assume_role_arn', config: 'assume_role_arn' }
                 ],
                 'digitalocean': [
                     { field: 'digitalocean_api_token', config: 'api_token' }
@@ -941,11 +977,15 @@
             var mappings = fieldMappings[provider] || [];
             mappings.forEach(function (mapping) {
                 var field = document.getElementById(mapping.field);
-                if (field && config[mapping.config]) {
+                if (field && provider === 'route53' && mapping.config === 'assume_role_arn') {
+                    // An empty saved ARN must clear the previous value in the form.
+                    field.value = config.assume_role_arn || '';
+                } else if (field && config[mapping.config]) {
                     field.value = config[mapping.config];
                     addDebugLog('Field ' + mapping.field + ' populated', 'info');
                 }
             });
+            if (provider === 'route53') toggleRoute53LegacyAuthMode();
         } catch (error) {
             addDebugLog('Error populating legacy fields for ' + provider + ': ' + error.message, 'warn');
         }
@@ -1015,6 +1055,7 @@
         // Generate provider-specific fields
         var fields = getProviderFields(provider);
         providerFields.innerHTML = fields;
+        if (provider === 'route53') toggleRoute53ModalAuthMode(providerFields);
 
         // Store current provider
         modal.dataset.provider = provider;
@@ -1107,6 +1148,7 @@
         // Generate provider-specific fields with current values
         var fields = getProviderFields(provider, account);
         editProviderFields.innerHTML = fields;
+        if (provider === 'route53') toggleRoute53ModalAuthMode(editProviderFields);
 
         // Show modal
         modal.classList.remove('hidden');
@@ -1161,9 +1203,14 @@
                 { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Enter your Cloudflare API token', required: true }
             ],
             'route53': [
+                { name: 'auth_mode', label: 'Authentication', type: 'select', options: [
+                    { value: 'access_keys', label: 'Access keys' },
+                    { value: 'iam_role', label: 'AWS credentials / IAM role (no keys)' }
+                ], defaultValue: 'access_keys', required: true },
                 { name: 'access_key_id', label: 'Access Key ID', type: 'password', placeholder: 'AKIAIOSFODNN7EXAMPLE', required: true },
                 { name: 'secret_access_key', label: 'Secret Access Key', type: 'password', placeholder: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', required: true },
-                { name: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1', defaultValue: 'us-east-1', required: false }
+                { name: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1', defaultValue: 'us-east-1', required: false },
+                { name: 'assume_role_arn', label: 'Assume role ARN (optional)', type: 'text', placeholder: 'arn:aws:iam::123456789012:role/CertMateRoute53', required: false }
             ],
             'azure': [
                 { name: 'subscription_id', label: 'Subscription ID', type: 'text', placeholder: '12345678-1234-1234-1234-123456789012', required: true },
@@ -1433,7 +1480,8 @@
         var providerFieldElements = providerFieldsContainer.querySelectorAll('input, select, textarea');
 
         providerFieldElements.forEach(function (field) {
-            if (field.name && field.value) {
+            if (field.name && (field.value ||
+                    (provider === 'route53' && field.name === 'assume_role_arn'))) {
                 accountData[field.name] = field.value;
             }
         });
@@ -3661,6 +3709,7 @@
     window.clearSettingsDebugConsole = clearSettingsDebugConsole;
     window.toggleSettingsDebugConsole = toggleSettingsDebugConsole;
     window.toggleChallengeType = toggleChallengeType;
+    window.toggleRoute53LegacyAuthMode = toggleRoute53LegacyAuthMode;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;
     window.deleteUser = deleteUser;

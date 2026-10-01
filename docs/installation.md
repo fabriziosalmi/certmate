@@ -144,9 +144,9 @@ Quick setup for common providers:
 
 ### AWS Route53
 
-1. Create IAM user with Route53 permissions
-2. Generate access keys
-3. Add credentials in CertMate Settings
+1. Grant Route53 DNS permissions to an IAM role attached to the host/pod, or to an IAM user.
+2. In CertMate Settings → DNS Providers, select **AWS credentials / IAM role** to use the AWS credential chain, or enter the user's access keys.
+3. Optionally set **Assume role ARN** if the source identity can assume a different Route53 role. See [DNS providers](./dns-providers.md#aws-route53).
 
 ### Azure DNS
 

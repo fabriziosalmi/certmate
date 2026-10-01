@@ -1,6 +1,6 @@
 # Docker Build & Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM 875370d723412467 -->
+<!-- CERTMATE-TRANSLATED-FROM 813d7648b913adcf -->
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 
@@ -151,7 +151,7 @@ docker run -d --name certmate \
 | `API_BEARER_TOKEN_FILE` | Nein | Pfad zu einer Datei mit dem API-Bearer-Token (hat Vorrang vor `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | Nein | `INFO` (Standard), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | Nein | Wenn gesetzt, werden einheitliche Backups im Ruhezustand verschlüsselt (`.zip.enc`, PBKDF2-SHA256 + Fernet). Dieselbe Passphrase wird zur Wiederherstellung benötigt. Nicht gesetzt = ältere unverschlüsselte `.zip`-Backups |
-| `CLOUDFLARE_TOKEN` | Nein | API-Token für das Standard-Cloudflare-DNS-Konto. Cloudflare ist der einzige DNS-Provider, der aus der Umgebung gelesen wird: Route53 und die übrigen werden unter Einstellungen → DNS-Provider oder über die API konfiguriert, und `AWS_ACCESS_KEY_ID` im Container zu setzen bewirkt nichts |
+| `CLOUDFLARE_TOKEN` | Nein | API-Token für das Standard-Cloudflare-DNS-Konto. Route53 nutzt die unter Einstellungen → DNS-Provider konfigurierten Zugangsdaten, außer wenn für das Konto ausdrücklich der IAM-Modus gewählt wird: Dann nutzt Certbot die AWS-Anmeldekette des Containers (einschließlich IAM-Rollen). |
 
 Siehe den [Installationsleitfaden](./installation.md#environment-variables) für die vollständige Liste.
 

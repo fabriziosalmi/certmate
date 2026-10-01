@@ -1,6 +1,6 @@
 # Installationsanleitung
 
-<!-- CERTMATE-TRANSLATED-FROM 14e1cd875cef2d5f -->
+<!-- CERTMATE-TRANSLATED-FROM 43c1d4c62fbc16b4 -->
 
 Diese Anleitung beschreibt alle Methoden zur Installation und zum Deployment von CertMate.
 
@@ -146,9 +146,9 @@ Schnelleinrichtung für gängige Provider:
 
 ### AWS Route53
 
-1. Erstellen Sie einen IAM-Benutzer mit Route53-Berechtigungen
-2. Generieren Sie Zugriffsschlüssel
-3. Fügen Sie die Zugangsdaten in den CertMate-Einstellungen hinzu
+1. Erteilen Sie einer an den Host/Pod angehängten IAM-Rolle oder einem IAM-Benutzer Route53-DNS-Berechtigungen.
+2. Wählen Sie in den CertMate-Einstellungen → DNS-Provider **AWS credentials / IAM role**, um die AWS-Anmeldekette zu nutzen, oder geben Sie die Zugriffsschlüssel des Benutzers ein.
+3. Setzen Sie optional **Assume role ARN**, wenn die Quellidentität eine andere Route53-Rolle annehmen kann. Siehe [DNS-Provider](./dns-providers.md#aws-route53).
 
 ### Azure DNS
 

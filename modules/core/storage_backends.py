@@ -98,6 +98,11 @@ def _looks_absent(error, *, codes=(), names=()) -> bool:
     return code in codes or status == 404
 
 
+def _valid_aws_role_arn(role_arn):
+    return bool(re.fullmatch(
+        r'arn:aws(?:-us-gov|-cn)?:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+', role_arn))
+
+
 def _aws_storage_auth(config, backend_name):
     """Resolve legacy key-pair settings or an explicit AWS credential-chain mode."""
     key = (config.get('access_key_id') or '').strip()
@@ -108,8 +113,7 @@ def _aws_storage_auth(config, backend_name):
         raise ValueError(f"{backend_name} auth_mode must be access_keys or iam_role")
     if mode == 'access_keys' and not (key and secret):
         raise ValueError(f"{backend_name} requires access_key_id and secret_access_key in access_keys mode")
-    if role_arn and not re.fullmatch(
-            r'arn:aws(?:-us-gov|-cn)?:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+', role_arn):
+    if role_arn and not _valid_aws_role_arn(role_arn):
         raise ValueError("assume_role_arn must be an IAM role ARN")
     return mode, key, secret, role_arn
 

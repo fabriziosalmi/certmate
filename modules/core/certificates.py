@@ -1622,10 +1622,16 @@ class CertificateManager:
         if dns_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
             raise RuntimeError(f"DNS alias mode is not implemented for provider '{dns_provider}'")
 
+        if dns_provider == 'route53':
+            from .storage_backends import _aws_storage_auth
+            _aws_storage_auth(dns_config, 'Route53 DNS')
+            if dns_config.get('auth_mode') == 'iam_role':
+                dns_config = {k: v for k, v in dns_config.items()
+                              if k not in ('access_key_id', 'secret_access_key')}
         missing_fields = [
             field for field in DNS_ALIAS_REQUIRED_FIELDS[dns_provider]
             if not str(dns_config.get(field) or '').strip()
-        ]
+        ] if dns_provider != 'route53' else []
         if missing_fields:
             raise ValueError(
                 f"{dns_provider} DNS alias mode requires: {', '.join(missing_fields)}"

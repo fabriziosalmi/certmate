@@ -1,6 +1,6 @@
 # Provider DNS
 
-<!-- CERTMATE-TRANSLATED-FROM 4dcc9496784670bc -->
+<!-- CERTMATE-TRANSLATED-FROM ec6ce2fc0c36db8b -->
 
 CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let's Encrypt tramite plugin certbot individuali. La lista completa si trova nella tabella seguente.
 
@@ -11,7 +11,7 @@ CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let'
 | Provider | Plugin | Credenziali richieste | Categoria |
 |----------|--------|-----------------------|-----------|
 | **Cloudflare** | `certbot-dns-cloudflare` | API Token | Cloud principale |
-| **AWS Route53** | `certbot-dns-route53` | Access Key, Secret Key | Cloud principale |
+| **AWS Route53** | `certbot-dns-route53` | Chiavi di accesso o catena di credenziali AWS / ruolo IAM | Cloud principale |
 | **Azure DNS** | Hook proprio di CertMate (`azure-mgmt-dns`) | Service Principal | Cloud principale |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Cloud principale |
 | **PowerDNS** | `certbot-dns-powerdns` | URL API, Chiave API | Enterprise |
@@ -84,6 +84,16 @@ curl -X POST http://localhost:8000/api/settings \
 ```
 
 ### AWS Route53
+
+Gli account esistenti continuano a usare le chiavi di accesso per impostazione predefinita. Per usare la catena di credenziali AWS (un ruolo di task EC2/ECS, EKS Pod Identity o IRSA), selezionare **AWS credentials / IAM role (no keys)** in Impostazioni → Provider DNS, oppure impostare `auth_mode` su `iam_role` nell'account DNS Route53:
+
+```json
+{"dns_providers": {"route53": {"accounts": {"default": {
+  "auth_mode": "iam_role", "region": "eu-west-3"
+}}}}}
+```
+
+Facoltativamente, impostare `assume_role_arn` per assumere un altro ruolo con permessi DNS Route53. Funziona sia con la catena di credenziali AWS sia con chiavi di accesso memorizzate come identità di origine; tale identità richiede `sts:AssumeRole` e il ruolo di destinazione deve fidarsi di essa. CertMate passa a Certbot credenziali STS temporanee a ogni emissione o rinnovo. La modalità alias DNS usa la stessa identità. In modalità IAM, chiunque possa modificare le impostazioni DNS può far usare a CertMate l'identità AWS dell'host e i relativi permessi Route53. Senza `auth_mode`, resta in vigore il comportamento attuale con chiavi di accesso.
 
 ```json
 {

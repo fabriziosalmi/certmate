@@ -141,9 +141,15 @@ def _lexicon_config(provider, alias_domain, provider_config):
         _require({'api_token': token}, 'api_token')
         base['auth_token'] = token
     elif provider == 'route53':
-        _require(provider_config, 'access_key_id', 'secret_access_key')
-        base['auth_access_key'] = provider_config['access_key_id']
-        base['auth_access_secret'] = provider_config['secret_access_key']
+        mode = provider_config.get('auth_mode') or 'access_keys'
+        if mode not in ('access_keys', 'iam_role'):
+            raise DNSAliasError('Route53 auth_mode must be access_keys or iam_role')
+        if mode == 'access_keys' and not provider_config.get('assume_role_arn'):
+            _require(provider_config, 'access_key_id', 'secret_access_key')
+            base['auth_access_key'] = provider_config['access_key_id']
+            base['auth_access_secret'] = provider_config['secret_access_key']
+        # For IAM / STS, Lexicon's boto3 client reads the full credentials,
+        # including the session token, from the hook subprocess environment.
     elif provider == 'azure':
         _require(provider_config, 'subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret')
         base.update({
