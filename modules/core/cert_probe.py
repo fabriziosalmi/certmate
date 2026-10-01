@@ -541,6 +541,14 @@ def _served_chain_der(tls_sock):
         return []
     out = []
     for entry in chain:
+        # Python 3.13+ returns DER bytes already. This read the entries as objects
+        # with public_bytes(), raised AttributeError on every bytes entry, skipped
+        # it, and so returned [] for every server: the served chain never showed on
+        # 3.13+ and nothing said so. 3.12 has no getter at all, so the image never
+        # ran this line and the 3.13+ branch of the probe test was never exercised.
+        if isinstance(entry, (bytes, bytearray)):
+            out.append(bytes(entry))
+            continue
         try:
             out.append(entry.public_bytes(_DER_ENCODING))
         except (ValueError, TypeError, AttributeError):
