@@ -489,13 +489,24 @@ def test_the_preview_shows_the_request_without_a_network_or_a_file(pki):
     assert preview['headers']['Authorization'] == '[masked]' and 'tok' not in json.dumps(preview)
     assert 'sig' not in json.dumps(preview['headers']).replace('X-CertMate-Signature', '')
     assert 'EXAMPLE-NOT-A-REAL-KEY' in preview['body']
-    assert preview['files_read'] == ['cert.pem', 'fullchain.pem', 'privkey.pem']
+    assert preview['files_needed'] == ['cert.pem', 'fullchain.pem', 'privkey.pem']
     assert json.loads(preview['body'])
+
+
+@pytest.mark.parametrize('url,port', [
+    ('https://lb.internal:8443/api/cert', 8443),
+    ('https://lb.internal/api/cert', 443),
+    ('https://[2001:db8::1]:9443/api/cert', 9443),
+])
+def test_the_preview_names_the_port_the_request_goes_to(pki, url, port):
+    """A preview that left the port out showed a destination that was not the real one."""
+    preview = wh.WebhookTarget(_target(443, pki, url=url)).preview()
+    assert preview['port'] == port
 
 
 def test_the_preview_of_a_certificate_only_target_says_no_key_is_sent(pki):
     preview = wh.WebhookTarget(_target(443, pki, template=CERT_ONLY)).preview()
-    assert preview['sends_private_key'] is False and 'privkey.pem' not in preview['files_read']
+    assert preview['sends_private_key'] is False and 'privkey.pem' not in preview['files_needed']
 
 
 # --------------------------------------------------------------------------
@@ -557,6 +568,23 @@ def test_a_template_that_is_not_json_is_located_without_passing_on_the_parsers_t
     assert 'line 1, column 7' in reason
     for parser_wording in ('Expecting', 'char 6', 'delimiter', 'Unterminated'):
         assert parser_wording not in reason, reason
+
+
+@pytest.mark.parametrize('url,accepted', [
+    ('https://[2001:db8::1]:8443/api/cert', True),     # an IPv6 literal is a valid destination
+    ('https://[::1]/x', True),                           # valid here; the delivery still refuses loopback
+    ('https://10.0.0.5:8443/x', True),
+    ('https://lb.internal/x', True),
+    ('https://[2001:db8::zz]/x', False),                 # not an address
+    ('https://bad_host/x', False),                       # underscore: neither a name nor an address
+])
+def test_the_destination_host_may_be_a_name_or_an_address(pki, url, accepted):
+    """The validator matched IPv6 against a bracketed pattern that `urlparse().hostname` never produces,
+    so a valid IPv6 literal was refused with a message that blamed the URL's shape."""
+    target = _valid(pki)
+    target['config']['url'] = url
+    ok, reason = wh.validate_webhook_target(target)
+    assert ok is accepted, reason
 
 
 def test_a_bare_privkey_is_refused_and_the_two_real_names_are_offered(pki):

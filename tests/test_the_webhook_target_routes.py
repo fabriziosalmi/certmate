@@ -25,7 +25,9 @@ def instance(tmp_path, monkeypatch):
                      ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
         (tmp_path / sub).mkdir()
         monkeypatch.setenv(var, str(tmp_path / sub))
-    token = secrets.token_hex(32)
+    # urlsafe, not hex: a random 64-hex token is refused by validate_api_token about 0.17% of the time
+    # (a 3-character run that happens to occur three times), which fails a fixture at random.
+    token = secrets.token_urlsafe(48)
     monkeypatch.setenv('API_BEARER_TOKEN', token)
     from modules.factory import create_app
     app, container = create_app()
@@ -183,7 +185,7 @@ def test_the_preview_renders_the_request_and_sends_nothing(instance, monkeypatch
     assert body['sends_private_key'] is True and body['host'] == HOST
     assert body['headers']['Authorization'] == '[masked]' and 'tok-123' not in json.dumps(body)
     assert 'EXAMPLE-NOT-A-REAL-KEY' in body['body']
-    assert body['files_read'] == ['cert.pem', 'fullchain.pem', 'privkey.pem']
+    assert body['files_needed'] == ['cert.pem', 'fullchain.pem', 'privkey.pem']
 
 
 def test_the_preview_works_before_the_destination_is_confirmed(instance):

@@ -1412,8 +1412,9 @@ What ran, when, and whether it succeeded.
 Send a target of type `webhook` (the body you would put in `deploy_hooks.targets`)
 and get back what it would send: the method, the destination host and path, the
 header names (credentials masked), the body rendered against an **example**
-certificate and key, which files it would read, how the server is verified, and
-whether the private key is part of it. It sends nothing and reads no file, so it
+certificate and key (`body`), the destination (`host`, `port`, `path`), the files a
+delivery would read (`files_needed`), how the server is verified, and whether the
+private key is part of it (`sends_private_key`, `key_variables`). It sends nothing and reads no file, so it
 is safe to call before confirming a destination. The target is validated first,
 and a refusal is a `400` with the reason. See
 [Webhook target](deploy-hooks.md#webhook-target-deliver-the-certificate-and-optionally-the-key).
