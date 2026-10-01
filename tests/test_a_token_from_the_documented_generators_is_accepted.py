@@ -32,8 +32,10 @@ HEX = '0123456789abcdef'
 ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 URLSAFE = ALNUM + '-_'
 
-# generator as the documentation words it -> (alphabet, length). Each command is checked below to
-# exist where it is claimed to, so this list cannot drift from what users are told to run.
+# generator as the documentation words it -> (alphabet, length). The ones in DOCUMENTED below are the
+# commands users are told to run, and each is checked, WHOLE, against the files that say so. The others
+# are the same commands at other lengths: `-hex 16` is the shortest token the length floor allows,
+# `-hex 24` sits between, and `token_urlsafe(48)` is the longer variant of the documented one.
 GENERATORS = {
     'openssl rand -hex 32': (HEX, 64),
     'openssl rand -hex 24': (HEX, 48),
@@ -43,6 +45,13 @@ GENERATORS = {
     'secrets.token_urlsafe(48)': (URLSAFE, 64),
 }
 SAMPLES = 20000
+
+# generator -> the files that tell users to run it
+DOCUMENTED = {
+    'openssl rand -hex 32': ['README.md', 'deploy/install.sh'],
+    'openssl rand -base64 32 | tr -d "=+/" | cut -c1-32': ['start-certmate.sh'],
+    'secrets.token_urlsafe(32)': ['.env.example'],
+}
 
 
 def _tokens(generator, seed=1057):
@@ -114,12 +123,10 @@ def test_the_threshold_sits_between_random_tokens_and_the_weak_ones_with_room():
         f'({_MIN_TRIGRAM_VARIETY}): a weak token could be accepted')
 
 
-@pytest.mark.parametrize('command,where', [
-    ('openssl rand -hex 32', 'README.md'),
-    ('openssl rand -hex 32', 'deploy/install.sh'),
-    ('openssl rand -base64 32', 'start-certmate.sh'),
-    ('secrets.token_urlsafe(32)', '.env.example'),
-])
+@pytest.mark.parametrize('command,where', [(c, w) for c, files in sorted(DOCUMENTED.items()) for w in files])
 def test_the_generators_named_here_are_the_ones_users_are_told_to_run(command, where):
+    """The WHOLE command, not its first word: a pipeline whose `tr` or `cut` stage changes produces a
+    different alphabet and length, and the model above would go on describing the old one."""
+    assert command in GENERATORS, f'{command!r} is documented but is not sampled above'
     assert command in (REPO / where).read_text(encoding='utf-8'), (
         f'`{command}` is not in {where}: the list of generators above has drifted from the instructions')
