@@ -12,7 +12,8 @@ that is not there is a 404, a create over an existing name is a 400, as on the r
 Beside that it answers two paths of its own for the tests: `GET /__state` (the stored
 secrets, name -> value) and `GET /__requests` (every request received, with its body and the headers a
 credential could ride in). With `--redirect-to PORT` the secret endpoints answer
-`307 Location: http://127.0.0.1:PORT/...` instead of serving, which is how a test asks
+`307 Location: http://127.0.0.1:PORT/api/v3/secrets/raw/redirected` (a FIXED address: nothing the
+request said is echoed into a header) instead of serving, which is how a test asks
 what the SDK does with its access token when the server sends it somewhere else. With
 `--accept-any` it serves without checking the credentials header, as a host that was never
 meant to receive the request (and does not care who sent it) would.
@@ -75,8 +76,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._reply(401, {'message': 'not authenticated'})
         if REDIRECT_TO:
             return self._reply(307, {'message': 'moved'},
-                               {'Location': f'http://127.0.0.1:{REDIRECT_TO}'
-                                            f'{urllib.parse.quote(self.path, safe="/?=&%:,")}'})
+                               {'Location': f'http://127.0.0.1:{REDIRECT_TO}/api/v3/secrets/raw/redirected'})
 
         workspace = body.get('workspaceId') or query.get('workspaceId', '')
         environment = body.get('environment') or query.get('environment', '')
