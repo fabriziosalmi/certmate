@@ -1,6 +1,8 @@
 # CertMate Helm chart
 
 Run [CertMate](https://github.com/fabriziosalmi/certmate) in Kubernetes.
+The chart is listed on [Artifact Hub](https://artifacthub.io/packages/helm/certmate/certmate),
+where the current version, the values and the image security report are shown.
 
 ```bash
 helm install certmate oci://ghcr.io/fabriziosalmi/charts/certmate \
