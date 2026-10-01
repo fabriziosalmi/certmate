@@ -89,7 +89,7 @@ jobs:
       run: |
         # Pinned so the build pulls a known version (OpenSSF Scorecard
         # Pinned-Dependencies flags bare, unversioned pip installs).
-        pip install flake8==7.3.0
+        pip install flake8==7.4.1
         # stop the build if there are Python syntax errors or undefined names
         # Fails the build. E9/F63/F7/F82 are syntax errors and undefined
         # names; the rest are bug classes that are already clean in this

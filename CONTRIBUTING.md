@@ -35,7 +35,7 @@ The linters are **not** in `requirements-test.txt`; CI pins them explicitly and
 so should you:
 
 ```bash
-pip install flake8==7.3.0 bandit==1.9.4
+pip install flake8==7.4.1 bandit==1.9.4
 ```
 
 ## Running the tests
