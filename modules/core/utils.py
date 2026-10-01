@@ -43,7 +43,19 @@ def utc_now_iso() -> str:
 # Constants for API token validation
 _MIN_TOKEN_LENGTH = 32  # Increased minimum for better security
 _MAX_TOKEN_LENGTH = 512
-_MIN_UNIQUE_CHARS = 12  # Increased for better entropy
+# Distinct characters, a floor and not a measure of strength. It used to be 12,
+# which a RANDOM token over a 16-symbol alphabet fails by chance: 1.70% of the
+# 32-character hex tokens `openssl rand -hex 16` makes have fewer than 12 (exact:
+# 1.7e-2), and a token refused here is refused at startup, so the service does not
+# come up. At 8 the same figure is 3.6e-8, and what the floor is for, a token built
+# from a handful of symbols, is still refused (and by the repetition check below).
+_MIN_UNIQUE_CHARS = 8
+# Share of a token's 3-character windows that must differ from each other. A token
+# made of a short unit repeated has few distinct windows (`abc` x21: 5%, a phrase
+# said twice: 53%); a random one has nearly all of them different (never under
+# 82.6% in 200,000 samples of each generator the documentation names, mostly
+# above 90%). 0.7 sits between the two with room on both sides.
+_MIN_TRIGRAM_VARIETY = 0.7
 # Placeholder and classic-weak values, matched as substrings anywhere in the
 # token. Deliberately NOT generic nouns: 'api', 'key', 'token', 'secret',
 # 'admin', 'test', 'demo', 'default' and 'example' used to be in this set, and
@@ -305,12 +317,16 @@ def validate_api_token(token: str) -> Tuple[bool, str]:
         return False, f"API token lacks character variety (must have at least {_MIN_UNIQUE_CHARS} unique characters)."
     
     # Additional security checks
-    # Check for repeating patterns
-    if len(token) >= 6:
-        for i in range(len(token) - 5):
-            pattern = token[i:i+3]
-            if token.count(pattern) > 2:
-                return False, "API token contains too many repeating patterns."
+    # Check for repetition. This counted how many times any one 3-character window
+    # occurs and refused the token at a third occurrence, which is not a property of
+    # a weak token: in 64 hex characters (62 windows over 4096 possible ones) some
+    # window turns up three times by chance in about 1 token in 580, and the token
+    # `openssl rand -hex 32` makes was refused at startup. What distinguishes a
+    # repetitive token is how FEW of its windows are different, so that is measured.
+    windows = len(token) - 2
+    distinct = len({token[i:i + 3] for i in range(windows)})
+    if distinct < windows * _MIN_TRIGRAM_VARIETY:
+        return False, "API token contains too many repeating patterns."
     
     # Check character type distribution for better entropy
     has_upper = any(c.isupper() for c in token)
