@@ -97,9 +97,10 @@ def test_a_wildcard_domain_is_validated_under_its_base_name_and_zone_case_is_ign
 
 
 def test_a_name_with_no_configured_zone_lists_the_zones_it_had():
-    with pytest.raises(hook.AzureDNSHookError) as err:
+    message = (r'No Azure DNS zone is configured for www\.other\.net; '
+               r'configured zones: example\.org, example\.com')
+    with pytest.raises(hook.AzureDNSHookError, match=f'^{message}$'):
         hook.zone_for('www.other.net', ['example.org', 'example.com'])
-    assert 'www.other.net' in str(err.value) and 'example.org' in str(err.value)
 
 
 @pytest.mark.parametrize('domain, zone, expected', [

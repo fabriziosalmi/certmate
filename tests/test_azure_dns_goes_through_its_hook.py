@@ -14,6 +14,7 @@ pin the seams the hook's own tests (test_azure_dns_hook.py) cannot see:
 """
 import json
 import os
+import re
 import shlex
 import stat
 from pathlib import Path
@@ -153,7 +154,8 @@ def test_the_cname_hint_for_a_domain_alias_is_still_logged(caplog):
     path = strategy.create_config_file(_config())
     with caplog.at_level('INFO'):
         strategy.configure_certbot_arguments([], path, domain_alias='delegated.example.com')
-    assert any('delegated.example.com' in record.message for record in caplog.records)
+    assert any(re.fullmatch(r"DNS alias 'delegated\.example\.com' requested.*", record.message, re.DOTALL)
+               for record in caplog.records)
 
 
 def test_the_alias_hook_builds_its_arguments_the_same_way():
