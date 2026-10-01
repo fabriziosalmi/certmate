@@ -602,19 +602,28 @@ class DeployManager:
             'targets': len(targets or []),
             'timestamp': utc_now_iso(),
         })
+        # What the closing record says is whether the batch FINISHED WITHOUT A
+        # FAILURE, not merely that it finished. It said `success` whatever the
+        # targets did: a delivery that failed read as a green batch beside its own
+        # red per-target record, and an exception out of `run_targets` was closed as
+        # a success too. Unknown until the results are in, so an exception leaves it
+        # false.
+        batch_ok = False
         try:
             results = run_targets(targets, domain, None, None, event_type, material=material)
             for result in results:
                 self._record_target(result, domain, event_type)
-            return failures + results
+            outcome = failures + results
+            batch_ok = all(r.get('success') for r in outcome)
+            return outcome
         finally:
             with self._in_flight_lock:
                 self._in_flight.discard(batch_id)
             self._log_history({
                 'run_id': batch_id,
                 'kind': 'target-batch',
-                'status': STATUS_SUCCESS,
-                'success': True,
+                'status': STATUS_SUCCESS if batch_ok else STATUS_FAILURE,
+                'success': batch_ok,
                 'domain': domain,
                 'event': event_type,
                 'targets': len(targets or []),
