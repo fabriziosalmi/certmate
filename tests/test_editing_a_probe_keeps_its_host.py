@@ -37,7 +37,7 @@ def _manager_with_probe_metadata(tmp_path, monkeypatch, metadata):
                      ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
         (tmp_path / sub).mkdir()
         monkeypatch.setenv(var, str(tmp_path / sub))
-    monkeypatch.setenv('API_BEARER_TOKEN', secrets.token_hex(32))
+    monkeypatch.setenv('API_BEARER_TOKEN', secrets.token_urlsafe(48))
 
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, '*.example.com')])

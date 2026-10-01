@@ -25,7 +25,9 @@ def instance(tmp_path, monkeypatch):
                      ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
         (tmp_path / sub).mkdir()
         monkeypatch.setenv(var, str(tmp_path / sub))
-    token = secrets.token_hex(32)
+    # urlsafe, not hex: a random 64-hex token is refused by validate_api_token about 0.17% of the time
+    # (a 3-character run that happens to occur three times), which fails a fixture at random.
+    token = secrets.token_urlsafe(48)
     monkeypatch.setenv('API_BEARER_TOKEN', token)
     from modules.factory import create_app
     app, container = create_app()
