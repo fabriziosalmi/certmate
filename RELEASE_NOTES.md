@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.45.1 (a token made the way the documentation says is no longer refused)
+
+[Read the notes](docs/releases/v2.45.1.md)
+
 ## v2.45.0 (webhook deploy targets, tags and notes on certificates, and an Infisical backend that runs)
 
 [Read the notes](docs/releases/v2.45.0.md)
