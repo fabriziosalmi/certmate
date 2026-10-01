@@ -24,11 +24,17 @@ certificate. That needs the certbot 5.x stack for the profiles that issue
 them (#395, blocked on #103), so it is not guesswork we have to do now.
 
 **Why this is native rather than certbot's.** `acme` 3.3.0, the version the
-pinned stack ships, has no ARI method at all: `ClientV2` exposes nothing for
-`renewalInfo`, and the `certbot` half is 2.10.0. But ARI is an unauthenticated
-GET that only informs *when* — issuance stays exactly where it is, on certbot.
-So this does not wait for #103, and the issue that said it was a child of
-#103 was reading the dependency the wrong way round.
+stack shipped when this was written, had no ARI method at all: `ClientV2`
+exposed nothing for `renewalInfo`, and the `certbot` half was 2.10.0. But ARI
+is an unauthenticated GET that only informs *when* — issuance stays exactly
+where it is, on certbot. So this did not wait for #103, and the issue that
+said it was a child of #103 was reading the dependency the wrong way round.
+
+Since the certbot 5.8 stack (#103), `acme` has `ClientV2.renewal_time` and
+`certbot renew` consults ARI itself (it records `[acme_renewal_info]` in the
+renewal config). Both exist now and this module still decides when CertMate
+brings a renewal forward; whether the two should stay separate is a question
+about the scheduler, not something the migration changed.
 """
 
 import base64

@@ -1,6 +1,6 @@
 # Guide d'installation
 
-<!-- CERTMATE-TRANSLATED-FROM 4632a0df7bb87f9c -->
+<!-- CERTMATE-TRANSLATED-FROM 14e1cd875cef2d5f -->
 
 Ce guide couvre toutes les méthodes d'installation et de déploiement de CertMate.
 
@@ -371,18 +371,17 @@ pip install -r requirements-aws.txt        # Route53, par-dessus l'un ou l'autre
 ```
 
 > Cette page publiait sa propre liste de versions, qui avait dérivé jusqu'à
-> `certbot==4.1.1` dans les cinq langues alors que le projet est épinglé à
-> `2.10.0` : la migration vers 5.x reste un plan (ticket #103), pas une version
-> publiée.
+> `certbot==4.1.1` dans les cinq langues alors que le projet était épinglé à
+> `2.10.0`. Le projet utilise maintenant certbot `5.8.0` (ticket #103).
 >
 > Corriger ces numéros ne suffit pas, et c'est pourquoi la liste a été supprimée
 > plutôt que mise à jour. Ce qui tient la pile ensemble, ce ne sont pas les
-> versions des plugins mais `cryptography`, `pyopenssl`, `josepy` et `acme` qui
-> se tiennent mutuellement : les versions récentes de pyOpenSSL suppriment
-> `OpenSSL.crypto.X509Extension`, que `acme` évalue à l'import. Assemblé à la
-> main, certbot meurt avant de pouvoir émettre quoi que ce soit — mesuré quatre
-> fois, en ajoutant un pin à la fois. Voir SECURITY.md, « Known dependency
-> constraint ».
+> versions des plugins mais le fait que certbot, `acme`, `josepy`, les plugins
+> officiels, `cryptography` et `pyopenssl` s'accordent entre eux : certbot et
+> `acme` 5.8.0 exigent `cryptography>=47`, et pyOpenSSL 26.4.0 exige `>=49,<51`.
+> Assemblé à la main, un pin finit hors de cette fenêtre ; le fichier fourni par
+> CertMate est l'ensemble résolu, construit et démarré en CI. Voir SECURITY.md,
+> « Known dependency constraint ».
 >
 > `certbot-dns-powerdns` demande son propre environnement : il requiert
 > `dns-lexicon<=3.5.6` alors que les plugins Linode, OVH, RFC2136, DNSMadeEasy

@@ -24,9 +24,11 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      # The ACME stack is deliberately held (issue #103): certbot 3.x/4.x and
-      # josepy 2.x break the pinned resolver set, so dependabot must not keep
-      # reopening bumps for it. Core packages: ignore ALL updates.
+      # The ACME stack moves as one set and by hand (#103): certbot, acme, josepy
+      # and the official DNS plugins each declare `certbot>=` / `acme>=` their own
+      # version, so one of them bumped alone either fails to install or drags the
+      # others. Dependabot must not keep reopening bumps for it. Core packages:
+      # ignore ALL updates.
       - dependency-name: "certbot"
       - dependency-name: "josepy"
       - dependency-name: "acme"
@@ -36,36 +38,32 @@ updates:
       # `certbot>=` its own version, so a MINOR bump drags certbot off the pin
       # just as surely as a major one.
       #
-      #   certbot-dns-route53 2.10.0 -> 2.11.0  requires certbot>=2.11.0
+      #   certbot-dns-route53 5.8.0 -> 5.9.0  requires certbot>=5.9.0
       #
-      # Measured: layering such a plugin moved certbot 2.10.0 -> 3.3.0 in a
-      # build that reported success (fixed in #533; PR #387 had proposed
-      # certbot-dns-azure 2.6.1, which also asks for certbot>=3.0 — Azure no
-      # longer uses a plugin, see requirements.txt).
+      # Measured while the stack was on 2.10.0: layering such a plugin moved
+      # certbot 2.10.0 -> 3.3.0 in a build that reported success (fixed in #533).
       - dependency-name: "certbot-dns-*"
       - dependency-name: "certbot-plugin-*"
-      # The pins that actually hold the stack together, and that the previous
-      # list left entirely exposed. Each is documented in requirements.txt at
-      # the line it appears on; tests/test_dependabot_holds_the_stack.py fails
-      # if one is pinned-and-documented but missing here.
+      # The pins that hold the rest of the stack together. Each is documented in
+      # requirements.txt at the line it appears on;
+      # tests/test_dependabot_holds_the_stack.py fails if one is
+      # pinned-and-documented but missing here.
       #
-      #   pyopenssl    26.2.0+ removes OpenSSL.crypto.X509Extension, which
-      #                acme 3.3.0 evaluates at import — certbot crashes before
-      #                it can issue anything.
-      #   cryptography 48.0.1 requires pyopenssl>=26.2.0, i.e. the same crash
-      #                by another route. GHSA-537c-gmf6-5ccf is open by choice
-      #                until the certbot 5.x epic; see SECURITY.md.
       #   dns-lexicon  the resolver set is balanced around 3.25.1; moving it
       #                breaks the lexicon-based plugins against each other.
-      - dependency-name: "pyopenssl"
-      - dependency-name: "cryptography"
+      #
+      # `cryptography` and `pyopenssl` were held here until certbot 5.8.0 (#103):
+      # on the old stack a newer cryptography installed cleanly and then killed
+      # `certbot --version`. Now certbot/acme 5.8.0 require cryptography>=47 and
+      # pyopenssl 26.4.0 requires >=49,<51, so pip refuses what does not fit,
+      # and the image build runs `certbot --version`. A bump is tested instead of
+      # held; it still needs the lock regenerated, like every exact pin.
       - dependency-name: "dns-lexicon"
-      # python-cloudflare 3.x+ is a different SDK under the same name.
-      # certbot-dns-cloudflare 2.10.0 imports the 2.x client and declares
-      # only `cloudflare>=1.5.1`, so pip resolves a 5.x bump happily and
-      # certbot dies at import — tests/test_requirements_sets.py caught it
-      # on #568. Moves with #103. Ignored entirely, like the rest of the
-      # held set: 2.19.4 is where the 2.x line the plugin understands ends.
+      # python-cloudflare changes its shape between majors. certbot-dns-cloudflare
+      # declares only a lower bound on it (5.8.0: `cloudflare>=4.0`), so pip
+      # resolves any newer bump happily and certbot can die at import —
+      # tests/test_requirements_sets.py caught that on #568. It moves with the
+      # plugin, by hand. Ignored entirely, like the rest of the held set.
       - dependency-name: "cloudflare"
       # infisical-python 2.3.6 ships no manylinux x86_64 wheel and no sdist,
       # so the amd64 image cannot install it while the arm64 image can. The

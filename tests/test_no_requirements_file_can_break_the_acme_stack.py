@@ -1,19 +1,21 @@
 """No requirements file may admit a cryptography the ACME stack rejects.
 
-`cryptography` is held at an exact version because moving it kills
-`certbot --version`: the versions that clear the open advisories need
-pyopenssl>=26.2.0, which removes `OpenSSL.crypto.X509Extension` that acme
-evaluates at import.
+`cryptography` is pinned exactly in requirements.txt, and the stack states the
+window it works in: certbot and acme 5.8.0 require `cryptography>=47`, and
+pyopenssl 26.4.0 requires `>=49,<51`. pip enforces that window when the main file
+is installed, so the pin cannot silently leave it.
 
-The optional storage sets carried a bare floor (`cryptography>=41.0.0`) with no
-ceiling. They are documented as installable on their own, and standalone
-nothing else constrains the package — it resolves to the newest release, which
-breaks issuance. That it had not yet bitten was an accident of Docker's install
-order (the main file goes first, and the held version already satisfies the
-floor), not a property anything enforced (#658).
+The optional storage sets carry their own `cryptography` constraint, and they are
+documented as installable on their own. Standalone nothing else bounds the
+package, so a floor with no ceiling resolves to the newest release, which
+pyopenssl then refuses. On the stack that preceded this one it was worse: such a
+release installed cleanly and then killed `certbot --version`, and only Docker's
+install order (the main file goes first, and the held version already satisfies
+the floor) had kept it from biting (#658). So the check stays, and it is
+stated for the window above.
 
 This checks the property directly: every constraint in every requirements file
-must accept the held version and reject the versions known to break the stack.
+must accept the pinned version and reject the versions the stack does not accept.
 """
 import re
 from pathlib import Path
@@ -27,10 +29,11 @@ pytestmark = [pytest.mark.unit]
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = 'cryptography'
 
-# Versions that are known to kill `certbot --version` through the pyopenssl
-# route. If the stack is ever moved (#103) these stop being forbidden — which
-# is a deliberate change, and this list is where it gets made.
-BREAKS_THE_STACK = ['47.0.0', '48.0.1', '49.0.0', '50.0.0', '50.0.1']
+# Versions the stack does not accept: below the `>=49` pyopenssl 26.4.0 needs, or
+# below the `>=47` certbot and acme need. They are what a constraint with a low
+# floor would still let a standalone install pick over time, and what a future
+# change to the window has to make a deliberate edit to.
+BREAKS_THE_STACK = ['41.0.0', '46.0.7', '47.0.0', '48.0.1']
 
 
 def _requirements_files():
@@ -57,7 +60,7 @@ def _held_version():
 
 @pytest.mark.parametrize('path', _requirements_files(), ids=lambda p: p.name)
 def test_every_file_accepts_the_held_version(path):
-    """A file that rejects the held version cannot be installed alongside the
+    """A file that rejects the pinned version cannot be installed alongside the
     others, whatever the order."""
     spec = _constraint(path)
     if spec is None:
