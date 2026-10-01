@@ -37,12 +37,11 @@ updates:
       # just as surely as a major one.
       #
       #   certbot-dns-route53 2.10.0 -> 2.11.0  requires certbot>=2.11.0
-      #   certbot-dns-azure   2.5.0  -> 2.6.1   requires certbot>=3.0,<4.0
       #
-      # Both are minor bumps. The second is the one requirements-azure.txt
-      # already documents as breaking the install — and PR #387 proposed it.
       # Measured: layering such a plugin moved certbot 2.10.0 -> 3.3.0 in a
-      # build that reported success (fixed in #533).
+      # build that reported success (fixed in #533; PR #387 had proposed
+      # certbot-dns-azure 2.6.1, which also asks for certbot>=3.0 — Azure no
+      # longer uses a plugin, see requirements.txt).
       - dependency-name: "certbot-dns-*"
       - dependency-name: "certbot-plugin-*"
       # The pins that actually hold the stack together, and that the previous
@@ -76,13 +75,6 @@ updates:
       # that can only install on one of the two published architectures is
       # not a bump this project can take.
       - dependency-name: "infisical-python"
-      # azure-mgmt-dns 9.0.0 removed a positional parameter that
-      # certbot-dns-azure 2.5.0 still passes, so every Azure DNS challenge
-      # raised TypeError. The bump (#586) merged green because nothing ran the
-      # plugin against the SDK, and shipped in v2.26.1 through v2.45.1. Held
-      # entirely until #103 replaces the plugin; the plugin declares only
-      # `azure-mgmt-dns>=8.0.0`, so pip will not refuse the break either.
-      - dependency-name: "azure-mgmt-dns"
 
   - package-ecosystem: "npm"
     directories:
