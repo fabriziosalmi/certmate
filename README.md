@@ -1493,7 +1493,7 @@ pip install -r requirements-infisical-storage.txt
 }
 ```
 
-**`site_url` must be `https://`** (plain `http://` is accepted only for `localhost`). The Infisical
+**`site_url` must be `https://`** (plain `http://` is accepted only for a loopback address: `localhost`, `127.0.0.1` or `::1`). The Infisical
 SDK follows a redirect and sends the request body on, and here the body is the certificate and its
 private key; its HTTP client cannot be configured from CertMate, so the one thing CertMate can
 refuse is the position where anyone on the path could answer with a redirect. Point it at a server

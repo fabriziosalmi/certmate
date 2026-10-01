@@ -1769,7 +1769,8 @@ class InfisicalBackend(CertificateStorageBackend):
         if parsed.scheme == 'http' and loopback:
             return
         raise ValueError("Infisical site_url must be an https:// address (http:// is accepted only "
-                         "for localhost): the SDK follows redirects with the request body, which "
+                         "for a loopback address: localhost, 127.0.0.1 or ::1): the SDK follows "
+                         "redirects with the request body, which "
                          "carries the private key")
     
     def _get_client(self):
