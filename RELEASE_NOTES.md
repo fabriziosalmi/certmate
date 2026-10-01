@@ -4,7 +4,7 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
-## v2.45.1 (a token made the way the documentation says is no longer refused)
+## v2.45.1 (random tokens are no longer refused for repeating by chance)
 
 [Read the notes](docs/releases/v2.45.1.md)
 
