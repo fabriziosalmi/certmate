@@ -89,6 +89,9 @@ def test_what_the_plan_could_not_see_is_recorded_as_it_is_now(outcome, snapshot)
     assert snapshot['not_called'] == dict(sorted(routes.NOT_CALLED.items()))
     assert snapshot['no_success'] == dict(sorted(routes.NO_SUCCESS.items()))
     assert snapshot['opaque'] == {k: sorted(v) for k, v in sorted(routes.OPAQUE_BY_ROUTE.items())}
+    assert snapshot['maps'] == {k: sorted(v) for k, v in sorted(routes.MAPS_BY_ROUTE.items())}
+    assert snapshot['catalogues'] == {k: dict(sorted(v.items()))
+                                      for k, v in sorted(routes.CATALOGUES_BY_ROUTE.items())}
 
 
 def test_every_route_is_called_or_explained(built, outcome):
@@ -179,6 +182,31 @@ def test_no_answer_has_a_status_and_a_body_that_disagree(report):
     `"success": true` in the body (#1107). A client that reads the status and one that reads
     the body disagree about what happened, and each is right by its own reading."""
     assert report['contradictions'] == []
+
+
+def test_no_answer_records_a_name_from_the_data_as_a_field(report):
+    """`GET /api/client-certs/stats` was recorded with `by_organization.CertMate` and the zombie
+    scan with `results[].domains.shop.example.test`: the seeded organization and domains as if
+    they were fields, so seeding another name moved the snapshot with no change to the API. A key
+    that is not snake_case is a name from the data unless the object is declared a map (keys
+    collapse to `*`) or a catalogue (keys fixed by the code), with the reason (#1105)."""
+    assert report['data_keys'] == [], (
+        'These answers have keys that are not field names. Declare the object in MAPS_BY_ROUTE '
+        '(keyed by data) or CATALOGUES_BY_ROUTE (keyed by the code, with the reason) in '
+        'tests/contract_routes.py:\n  ' + '\n  '.join(report['data_keys']))
+
+
+def test_every_map_and_catalogue_is_one_the_plan_sees(outcome):
+    """A declaration for an object no answer has is an exemption waiting for the wrong thing."""
+    stale = []
+    for route, paths in routes.MAPS_BY_ROUTE.items():
+        recorded = {p for shape in outcome[0].get(route, {}).values() for p in shape}
+        stale += [f'map {route} {path}' for path in paths
+                  if f'{path}.*' not in recorded and not (path == '.' and '*' in recorded)]
+    for route, paths in routes.CATALOGUES_BY_ROUTE.items():
+        recorded = {p for shape in outcome[0].get(route, {}).values() for p in shape}
+        stale += [f'catalogue {route} {path}' for path in paths if path not in recorded]
+    assert stale == []
 
 
 def test_every_known_defect_still_shows_the_defect(report, snapshot):
@@ -342,6 +370,23 @@ def test_a_uuid_key_and_a_named_map_collapse_to_one_shape():
     assert first == second == {'.': {'dict'}, '*': {'dict'}, '*.name': {'str'}}
     mapped = routes.flatten({'users': {'alice': {'role': 'x'}, 'bob': {'role': 'y'}}}, maps={'users'})
     assert set(mapped) == {'.', 'users', 'users.*', 'users.*.role'}
+
+
+@pytest.mark.parametrize('payload, maps, catalogues, expected', [
+    ({'domains': {'shop.example.test': 'ok'}}, (), {}, [('domains', 'shop.example.test')]),
+    ({'by_org': {'CertMate': 1}}, (), {}, [('by_org', 'CertMate')]),
+    ({'r': [{'by_usage': {'api-mtls': 1}}]}, (), {}, [('r[].by_usage', 'api-mtls')]),
+    ({'domains': {'shop.example.test': 'ok'}}, {'domains'}, {}, []),
+    ({'expiry': {'7': 0, '30': 1}}, (), {'expiry': 'buckets'}, []),
+    ({'6e783249-b1da-4321-bbd8-ebb40055684d': {'name': 'a'}}, (), {}, []),
+    ({'field_name': 1, 'other2': {'nested_one': True}}, (), {}, []),
+])
+def test_a_key_from_the_data_is_found_on_the_raw_key(payload, maps, catalogues, expected):
+    assert routes.data_keys(payload, maps, catalogues) == expected
+
+
+def test_an_opaque_subtree_has_no_data_keys_to_find():
+    assert routes.data_keys({'details': {'Some Key': 1}}, opaque={'details'}) == []
 
 
 def test_an_opaque_subtree_is_an_object_and_nothing_below_it():

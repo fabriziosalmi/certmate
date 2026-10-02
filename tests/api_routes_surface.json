@@ -1,6 +1,52 @@
 {
+ "catalogues": {
+  "GET /api/inventory": {
+   "summary.expiry": "the expiry buckets, 7/30/90 days, are constants of inventory_view"
+  },
+  "GET /api/inventory/domains": {
+   "summary.expiry": "the expiry buckets, 30/60/90 days, are constants of inventory_view"
+  },
+  "GET /api/settings": {
+   "dns_propagation_seconds": "one entry per supported DNS provider",
+   "dns_providers": "one entry per supported DNS provider"
+  },
+  "GET /api/settings/dns-providers": {
+   ".": "one entry per supported DNS provider"
+  },
+  "POST /api/deploy/targets/preview": {
+   "headers": "the HTTP headers the delivery sends, set by the code"
+  },
+  "POST /api/notifications/webhook/preview": {
+   "headers": "the HTTP headers the delivery sends, set by the code"
+  }
+ },
  "contract_version": "2.39",
  "known_defects": {},
+ "maps": {
+  "GET /api/client-certs/stats": [
+   "by_organization",
+   "by_usage"
+  ],
+  "GET /api/deploy/config": [
+   "domain_hooks"
+  ],
+  "GET /api/diagnostics/snapshot": [
+   "active_dns_providers"
+  ],
+  "GET /api/inventory/crypto-report": [
+   "by_key_algorithm",
+   "by_signature_algorithm"
+  ],
+  "GET /api/users": [
+   "users"
+  ],
+  "POST /api/certificates/zombies/scan": [
+   "results[].domains"
+  ],
+  "POST /api/storage/migrate": [
+   "migration_results"
+  ]
+ },
  "no_success": {
   "POST /api/storage/azure-keyvault/backfill-certificates": "it copies the certificates into a real Azure Key Vault, which needs the Azure SDK and the vault"
  },
@@ -1416,13 +1462,13 @@
     "by_organization": [
      "dict"
     ],
-    "by_organization.CertMate": [
+    "by_organization.*": [
      "int"
     ],
     "by_usage": [
      "dict"
     ],
-    "by_usage.api-mtls": [
+    "by_usage.*": [
      "int"
     ],
     "ca_status": [
@@ -1491,6 +1537,33 @@
     ],
     "domain_hooks": [
      "dict"
+    ],
+    "domain_hooks.*": [
+     "list"
+    ],
+    "domain_hooks.*[]": [
+     "dict"
+    ],
+    "domain_hooks.*[].command": [
+     "str"
+    ],
+    "domain_hooks.*[].enabled": [
+     "bool"
+    ],
+    "domain_hooks.*[].id": [
+     "str"
+    ],
+    "domain_hooks.*[].name": [
+     "str"
+    ],
+    "domain_hooks.*[].on_events": [
+     "list"
+    ],
+    "domain_hooks.*[].on_events[]": [
+     "str"
+    ],
+    "domain_hooks.*[].timeout": [
+     "int"
     ],
     "enabled": [
      "bool"
@@ -1630,244 +1703,19 @@
     "active_dns_providers": [
      "dict"
     ],
-    "active_dns_providers.acme-dns": [
+    "active_dns_providers.*": [
      "list"
     ],
-    "active_dns_providers.acme-dns[]": [
+    "active_dns_providers.*[]": [
      "dict"
     ],
-    "active_dns_providers.acme-dns[].description": [
+    "active_dns_providers.*[].description": [
      "str"
     ],
-    "active_dns_providers.acme-dns[].id": [
+    "active_dns_providers.*[].id": [
      "str"
     ],
-    "active_dns_providers.acme-dns[].name": [
-     "str"
-    ],
-    "active_dns_providers.arvancloud": [
-     "list"
-    ],
-    "active_dns_providers.arvancloud[]": [
-     "dict"
-    ],
-    "active_dns_providers.arvancloud[].description": [
-     "str"
-    ],
-    "active_dns_providers.arvancloud[].id": [
-     "str"
-    ],
-    "active_dns_providers.arvancloud[].name": [
-     "str"
-    ],
-    "active_dns_providers.azure": [
-     "list"
-    ],
-    "active_dns_providers.azure[]": [
-     "dict"
-    ],
-    "active_dns_providers.azure[].description": [
-     "str"
-    ],
-    "active_dns_providers.azure[].id": [
-     "str"
-    ],
-    "active_dns_providers.azure[].name": [
-     "str"
-    ],
-    "active_dns_providers.cloudflare": [
-     "list"
-    ],
-    "active_dns_providers.cloudflare[]": [
-     "dict"
-    ],
-    "active_dns_providers.cloudflare[].description": [
-     "str"
-    ],
-    "active_dns_providers.cloudflare[].id": [
-     "str"
-    ],
-    "active_dns_providers.cloudflare[].name": [
-     "str"
-    ],
-    "active_dns_providers.digitalocean": [
-     "list"
-    ],
-    "active_dns_providers.digitalocean[]": [
-     "dict"
-    ],
-    "active_dns_providers.digitalocean[].description": [
-     "str"
-    ],
-    "active_dns_providers.digitalocean[].id": [
-     "str"
-    ],
-    "active_dns_providers.digitalocean[].name": [
-     "str"
-    ],
-    "active_dns_providers.duckdns": [
-     "list"
-    ],
-    "active_dns_providers.duckdns[]": [
-     "dict"
-    ],
-    "active_dns_providers.duckdns[].description": [
-     "str"
-    ],
-    "active_dns_providers.duckdns[].id": [
-     "str"
-    ],
-    "active_dns_providers.duckdns[].name": [
-     "str"
-    ],
-    "active_dns_providers.edgedns": [
-     "list"
-    ],
-    "active_dns_providers.edgedns[]": [
-     "dict"
-    ],
-    "active_dns_providers.edgedns[].description": [
-     "str"
-    ],
-    "active_dns_providers.edgedns[].id": [
-     "str"
-    ],
-    "active_dns_providers.edgedns[].name": [
-     "str"
-    ],
-    "active_dns_providers.gandi": [
-     "list"
-    ],
-    "active_dns_providers.gandi[]": [
-     "dict"
-    ],
-    "active_dns_providers.gandi[].description": [
-     "str"
-    ],
-    "active_dns_providers.gandi[].id": [
-     "str"
-    ],
-    "active_dns_providers.gandi[].name": [
-     "str"
-    ],
-    "active_dns_providers.google": [
-     "list"
-    ],
-    "active_dns_providers.google[]": [
-     "dict"
-    ],
-    "active_dns_providers.google[].description": [
-     "str"
-    ],
-    "active_dns_providers.google[].id": [
-     "str"
-    ],
-    "active_dns_providers.google[].name": [
-     "str"
-    ],
-    "active_dns_providers.hetzner-cloud": [
-     "list"
-    ],
-    "active_dns_providers.hetzner-cloud[]": [
-     "dict"
-    ],
-    "active_dns_providers.hetzner-cloud[].description": [
-     "str"
-    ],
-    "active_dns_providers.hetzner-cloud[].id": [
-     "str"
-    ],
-    "active_dns_providers.hetzner-cloud[].name": [
-     "str"
-    ],
-    "active_dns_providers.infomaniak": [
-     "list"
-    ],
-    "active_dns_providers.infomaniak[]": [
-     "dict"
-    ],
-    "active_dns_providers.infomaniak[].description": [
-     "str"
-    ],
-    "active_dns_providers.infomaniak[].id": [
-     "str"
-    ],
-    "active_dns_providers.infomaniak[].name": [
-     "str"
-    ],
-    "active_dns_providers.linode": [
-     "list"
-    ],
-    "active_dns_providers.linode[]": [
-     "dict"
-    ],
-    "active_dns_providers.linode[].description": [
-     "str"
-    ],
-    "active_dns_providers.linode[].id": [
-     "str"
-    ],
-    "active_dns_providers.linode[].name": [
-     "str"
-    ],
-    "active_dns_providers.namecheap": [
-     "list"
-    ],
-    "active_dns_providers.namecheap[]": [
-     "dict"
-    ],
-    "active_dns_providers.namecheap[].description": [
-     "str"
-    ],
-    "active_dns_providers.namecheap[].id": [
-     "str"
-    ],
-    "active_dns_providers.namecheap[].name": [
-     "str"
-    ],
-    "active_dns_providers.ovh": [
-     "list"
-    ],
-    "active_dns_providers.ovh[]": [
-     "dict"
-    ],
-    "active_dns_providers.ovh[].description": [
-     "str"
-    ],
-    "active_dns_providers.ovh[].id": [
-     "str"
-    ],
-    "active_dns_providers.ovh[].name": [
-     "str"
-    ],
-    "active_dns_providers.powerdns": [
-     "list"
-    ],
-    "active_dns_providers.powerdns[]": [
-     "dict"
-    ],
-    "active_dns_providers.powerdns[].description": [
-     "str"
-    ],
-    "active_dns_providers.powerdns[].id": [
-     "str"
-    ],
-    "active_dns_providers.powerdns[].name": [
-     "str"
-    ],
-    "active_dns_providers.route53": [
-     "list"
-    ],
-    "active_dns_providers.route53[]": [
-     "dict"
-    ],
-    "active_dns_providers.route53[].description": [
-     "str"
-    ],
-    "active_dns_providers.route53[].id": [
-     "str"
-    ],
-    "active_dns_providers.route53[].name": [
+    "active_dns_providers.*[].name": [
      "str"
     ],
     "backup_count": [
@@ -2492,13 +2340,13 @@
     "by_key_algorithm": [
      "dict"
     ],
-    "by_key_algorithm.ECDSA secp256r1": [
+    "by_key_algorithm.*": [
      "int"
     ],
     "by_signature_algorithm": [
      "dict"
     ],
-    "by_signature_algorithm.ecdsa-with-SHA256": [
+    "by_signature_algorithm.*": [
      "int"
     ],
     "generated_at": [
@@ -4161,25 +4009,7 @@
     "results[].domains": [
      "dict"
     ],
-    "results[].domains.alias.example.test": [
-     "str"
-    ],
-    "results[].domains.held.example.test": [
-     "str"
-    ],
-    "results[].domains.keyless.example.test": [
-     "str"
-    ],
-    "results[].domains.new.example.test": [
-     "str"
-    ],
-    "results[].domains.queued.example.test": [
-     "str"
-    ],
-    "results[].domains.shop.example.test": [
-     "str"
-    ],
-    "results[].domains.www.shop.example.test": [
+    "results[].domains.*": [
      "str"
     ],
     "results[].status": [
@@ -5377,22 +5207,7 @@
     "migration_results": [
      "dict"
     ],
-    "migration_results.alias.example.test": [
-     "bool"
-    ],
-    "migration_results.held.example.test": [
-     "bool"
-    ],
-    "migration_results.keyless.example.test": [
-     "bool"
-    ],
-    "migration_results.legacy.example.test": [
-     "bool"
-    ],
-    "migration_results.queued.example.test": [
-     "bool"
-    ],
-    "migration_results.shop.example.test": [
+    "migration_results.*": [
      "bool"
     ],
     "source_backend": [
