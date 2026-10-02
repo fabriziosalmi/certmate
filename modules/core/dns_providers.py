@@ -455,6 +455,18 @@ class DNSManager:
         """Alias for delete_dns_account with consistent naming"""
         return self.delete_dns_account(provider, account_id, settings)
 
+    def has_account(self, provider, account_id):
+        """Does *provider* have an account called *account_id*?
+
+        `delete_dns_account` answers False both when there is no such account and when the
+        settings could not be written, so a caller that must tell "not found" (a 404) from
+        "could not save" (a 500) asks this first (#1106).
+        """
+        settings = self.settings_manager.migrate_dns_providers_to_multi_account(
+            self.settings_manager.load_settings())
+        accounts = (settings.get('dns_providers', {}).get(provider) or {}).get('accounts') or {}
+        return account_id in accounts
+
     def test_provider(self, provider, config):
         """Validate a DNS provider configuration payload.
 

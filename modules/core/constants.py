@@ -502,6 +502,35 @@ METADATA_SCHEMA_VERSION = 1
 #                                   OpenAPI document, so no gate sees the
 #                                   field: this entry and the number are by hand.
 #
+#   Answers that were wrong        seven answers now say what they mean (#1105:
+#                                   found by calling every route). DELETE
+#                                   /api/dns/<provider>/accounts/<id> answers
+#                                   404, not 500, for an account that does not
+#                                   exist (#1106). POST
+#                                   /api/deploy/test/<hook_id> answers 200 for a
+#                                   hook that ran, pass or fail, where it
+#                                   answered 404 for every hook that existed,
+#                                   with `success: true` in the body (#1107); a
+#                                   hook that does not exist stays a 404. POST
+#                                   /api/client-certs/<id>/renew and /revoke
+#                                   answer 404, not 400, for a certificate that
+#                                   does not exist (#1111). GET /api/backups
+#                                   sends `size` and `created` on each entry,
+#                                   declared by the model and always null; POST
+#                                   /api/certificates/<domain>/renew sends
+#                                   `duration` and `dns_provider`, also always
+#                                   null; the model declares `certificate_match`
+#                                   as the boolean it is sent as (#1108). 2.37,
+#                                   MINOR, by decision: three status codes change
+#                                   for an existing condition, which the rule
+#                                   below calls MAJOR. The answers they replace
+#                                   were a 500, a 404 on a success and a 400 for
+#                                   a missing resource, none of them one a caller
+#                                   can have been asked to depend on, so the
+#                                   number moves by a MINOR and this line is for
+#                                   whoever did branch on them. (#1089, the same
+#                                   kind of change, moved nothing.)
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -526,7 +555,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.36'
+API_CONTRACT_VERSION = '2.37'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

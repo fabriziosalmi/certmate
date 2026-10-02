@@ -81,7 +81,9 @@ def client_cert_app():
     auth_manager.require_session_role = MagicMock(
         side_effect=require_role_factory)
     cert_manager = MagicMock()
-    cert_manager.get_certificate_metadata.return_value = None          # unknown id
+    # `nope` is an unknown id; anything else exists, so a refusal by the manager is what it meets.
+    cert_manager.get_certificate_metadata.side_effect = (
+        lambda identifier: None if identifier.startswith('nope') else {'identifier': identifier})
     cert_manager.get_certificate_file.return_value = None              # no such file
     cert_manager.revoke_certificate.return_value = (False, 'already revoked')
     cert_manager.renew_certificate.return_value = (False, 'revoked certificates cannot be renewed', None)
@@ -114,8 +116,10 @@ def client_cert_app():
     ('post', '/api/client-certs/create', {'common_name': 'ok', 'days_valid': 'soon'}, 400),
     ('get', '/api/client-certs/nope/download/crt', None, 404),
     ('get', '/api/client-certs/abc/download/exe', None, 400),
-    ('post', '/api/client-certs/abc/revoke', {}, 400),
-    ('post', '/api/client-certs/abc/renew', None, 400),
+    ('post', '/api/client-certs/abc/revoke', {}, 400),         # exists; the manager refuses
+    ('post', '/api/client-certs/abc/renew', None, 400),        # exists; the manager refuses
+    ('post', '/api/client-certs/nope/revoke', {}, 404),        # does not exist (#1111)
+    ('post', '/api/client-certs/nope/renew', None, 404),       # does not exist (#1111)
 ])
 def test_client_cert_handlers_send_the_status_they_meant(client_cert_app, method, path, body, expected):
     call = getattr(client_cert_app, method)

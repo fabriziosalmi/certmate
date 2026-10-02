@@ -929,6 +929,9 @@ class CertificateService:
         if bool(result.get('renewed', True)):
             self._publish('certificate_renewed', {'domain': domain})
             self._record_renewal(domain, True, started)
+        # The renew answer has always carried `duration`, and create's has a value for it; only
+        # renew's was null (#1108). The same clock `_record_renewal` reads.
+        result.setdefault('duration', time.monotonic() - started)
         return result
 
     def _record_renewal(self, domain, success, started, error=None):

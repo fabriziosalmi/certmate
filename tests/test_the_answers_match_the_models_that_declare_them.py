@@ -38,10 +38,6 @@ WALKED = {'string': {'str'}, 'integer': {'int'}, 'number': {'int', 'number'}, 'b
 # Declared fields that are `null` in every answer, route -> {path: why}. A reason that is an
 # issue number is a promise nothing keeps; any other reason is state the plan does not build.
 NEVER_FILLED = {
-    'GET /api/backups': {
-        'unified[].created': '#1108',
-        'unified[].size': '#1108',
-    },
     'GET /api/certificates': {
         '[].total_issued': '#1108', '[].total_active': '#1108', '[].total_expired': '#1108',
         '[].total_revoked': '#1108', '[].latest_issuance': '#1108', '[].oldest_active_issuance': '#1108',
@@ -64,12 +60,7 @@ NULLS_NOT_COMPARED = {
 }
 
 # Declared with one type and sent with another, route -> {path: why}.
-WRONG_TYPE = {
-    'GET /api/certificates/<X>/deployment-status': {
-        'certificate_match': '#1108: declared with fields.Raw, which the document renders as '
-                             '`object`, and sent as a boolean',
-    },
-}
+WRONG_TYPE = {}
 
 
 def _declared(models, schema, prefix=''):
@@ -91,6 +82,26 @@ def _declared(models, schema, prefix=''):
     return out
 
 
+def _compare(models, schema, walked, unseen=()):
+    """What differs between a declared schema and the types a route was seen to send."""
+    declared = _declared(models, schema)
+    free = [p for p, (_kind, loose) in declared.items() if loose]
+    below_unseen = [f'{u}[]' for u in unseen]
+
+    def skipped(path):
+        return any(path == f or path.startswith(f + '.') for f in free) or any(
+            path == b or path.startswith((b + '.', b + '[')) for b in below_unseen)
+
+    return {
+        'undeclared': sorted(p for p in walked if p not in declared and not skipped(p)),
+        'unsent': sorted(p for p in declared if p not in walked and not skipped(p)),
+        'wrong_type': sorted(p for p, types in walked.items()
+                             if p in declared and types != ['null']
+                             and not set(types) <= WALKED.get(declared[p][0], {declared[p][0]})),
+        'never_filled': sorted(p for p, types in walked.items() if p in declared and types == ['null']),
+    }
+
+
 @pytest.fixture(scope='module')
 def comparison():
     models_doc = json.loads(MODELS.read_text(encoding='utf-8'))
@@ -102,24 +113,8 @@ def comparison():
             continue
         verb, path = key.split(' ', 1)
         route = f'{verb} /api{path}'.replace('{X}', '<X>')
-        walked = walked_doc['routes'][route]['200']
-        declared = _declared(models_doc['models'], schema)
-        free = [p for p, (_kind, loose) in declared.items() if loose]
-        unseen = walked_doc['unseen_items'].get(route, [])
-        below_unseen = [f'{u}[]' for u in unseen]
-
-        def skipped(path, free=free, below_unseen=below_unseen):
-            return any(path == f or path.startswith(f + '.') for f in free) or any(
-                path == b or path.startswith((b + '.', b + '[')) for b in below_unseen)
-
-        found[route] = {
-            'undeclared': sorted(p for p in walked if p not in declared and not skipped(p)),
-            'unsent': sorted(p for p in declared if p not in walked and not skipped(p)),
-            'wrong_type': sorted(p for p, types in walked.items()
-                                 if p in declared and types != ['null']
-                                 and not set(types) <= WALKED.get(declared[p][0], {declared[p][0]})),
-            'never_filled': sorted(p for p, types in walked.items() if p in declared and types == ['null']),
-        }
+        found[route] = _compare(models_doc['models'], schema, walked_doc['routes'][route]['200'],
+                                walked_doc['unseen_items'].get(route, []))
     return found
 
 
@@ -204,3 +199,22 @@ def test_declared_paths_follow_references_arrays_and_free_form_objects():
                      'items[].a': ('string', False), 'items[].b': ('integer', False),
                      'items[].bag': ('object', True)}
     assert _declared(_MODELS, {'items': {'$ref': '#/definitions/Item'}, 'type': 'array'})['[].a'] == ('string', False)
+
+
+@pytest.mark.parametrize('label, walked, expected', [
+    ('nothing differs', {'.': ['dict'], 'a': ['str'], 'b': ['int'], 'bag': ['dict']}, {}),
+    ('a field the model does not declare', {'.': ['dict'], 'a': ['str'], 'b': ['int'], 'bag': ['dict'], 'c': ['str']},
+     {'undeclared': ['c']}),
+    ('a declared field never sent', {'.': ['dict'], 'a': ['str'], 'bag': ['dict']}, {'unsent': ['b']}),
+    ('a field sent with another type', {'.': ['dict'], 'a': ['int'], 'b': ['int'], 'bag': ['dict']},
+     {'wrong_type': ['a']}),
+    ('a declared field that is always null', {'.': ['dict'], 'a': ['null'], 'b': ['int'], 'bag': ['dict']},
+     {'never_filled': ['a']}),
+    ('anything below a free-form object is allowed', {'.': ['dict'], 'a': ['str'], 'b': ['int'], 'bag': ['dict'],
+                                                    'bag.x': ['str']}, {}),
+    ('an int is a number', {'.': ['dict'], 'a': ['str'], 'b': ['int'], 'bag': ['dict']}, {}),
+])
+def test_each_clause_of_the_comparison_has_a_case_it_must_catch(label, walked, expected):
+    models = {'Thing': {'properties': {'a': {'type': 'string'}, 'b': {'type': 'integer'}, 'bag': {'type': 'object'}}}}
+    found = _compare(models, {'$ref': '#/definitions/Thing'}, walked)
+    assert {key: value for key, value in found.items() if value} == expected, label

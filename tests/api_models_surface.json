@@ -1,5 +1,5 @@
 {
- "contract_version": "2.36",
+ "contract_version": "2.37",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -601,7 +601,7 @@
    "properties": {
     "browser": {},
     "certificate_match": {
-     "type": "object"
+     "type": "boolean"
     },
     "code": {
      "type": "string"

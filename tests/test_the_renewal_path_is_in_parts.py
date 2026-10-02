@@ -203,13 +203,25 @@ def test_the_renewed_branch_publishes_stamps_and_reports(tmp_path):
 
     result = manager._publish_renewed_certificate(domain, domain_dir, metadata)
 
-    assert result == {'success': True, 'renewed': True, 'domain': domain,
+    assert result == {'success': True, 'renewed': True, 'domain': domain, 'dns_provider': None,
                       'message': 'Certificate renewed successfully'}
     assert (domain_dir / 'cert.pem').read_bytes() == b'NEW-cert.pem'
     assert metadata['renewed_at'], 'the renewal was not stamped'
     on_disk = json.loads((domain_dir / 'metadata.json').read_text())
     assert on_disk['renewed_at'] == metadata['renewed_at'], (
         'the stamp reached the caller but not the file')
+
+
+def test_the_renewed_branch_says_which_provider_the_certificate_was_issued_through(tmp_path):
+    """`dns_provider` was always null in the renew answer (#1108): the route read it from a
+    result that never carried it."""
+    domain, domain_dir = _certificate_on_disk(tmp_path)
+    manager = _manager(tmp_path)
+
+    result = manager._publish_renewed_certificate(
+        domain, domain_dir, {'domain': domain, 'dns_provider': 'route53'})
+
+    assert result['dns_provider'] == 'route53'
 
 
 def test_the_failure_branch_always_raises(tmp_path):

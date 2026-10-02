@@ -22,11 +22,6 @@ BROKEN = 'broken.example.test'
 ASYNC = 'queued.example.test'
 UNKNOWN = 'unknown.example.test'
 
-# Calls that show a defect the walk found. Each is made, compared with the status it is known to
-# answer, and NOT recorded: the test fails when the answer changes, which is the fix arriving.
-DEFECT_DNS_DELETE = '#1106'
-DEFECT_DEPLOY_TEST = '#1107'
-
 
 def walk(plan):
     """All of it, in an order where each area leaves the state the next needs."""
@@ -68,8 +63,7 @@ def dns_accounts(plan):
          body={'api_token': 'z' * 24})
     call('delete', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/walk')
     call('delete', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/walk2')
-    call('delete', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/never-existed',
-         defect=(DEFECT_DNS_DELETE, 500))
+    call('delete', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/never-existed')
 
 
 def certificates(plan):

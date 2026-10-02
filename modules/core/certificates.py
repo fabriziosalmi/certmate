@@ -3781,6 +3781,7 @@ class CertificateManager:
             'success': True,
             'renewed': False,
             'domain': domain,
+            'dns_provider': metadata.get('dns_provider'),
             'repaired': stale or None,
             'message': 'Certificate not yet due for renewal',
         }
@@ -3815,6 +3816,7 @@ class CertificateManager:
             'success': True,
             'renewed': True,
             'domain': domain,
+            'dns_provider': metadata.get('dns_provider'),
             'message': "Certificate renewed successfully"
         }
         if storage_warning:
