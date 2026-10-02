@@ -39,6 +39,7 @@ All API endpoints require Bearer token authentication.
 
 ### Header Format
 
+<!-- illustration: the header every authenticated request carries -->
 ```
 Authorization: Bearer YOUR_TOKEN
 ```
@@ -76,6 +77,7 @@ The limits are configurable per instance (admin only), so a trusted automation f
 
 The same configuration is available over the API:
 
+<!-- illustration: a sketch of the two rate-limit calls, with elisions; the fields are listed below it -->
 ```
 GET /api/settings/rate-limits
   -> { "enabled": true,
@@ -90,11 +92,10 @@ Each limit is requests per minute (1–100000). Only the endpoint keys returned 
 
 ### Rate Limit Response
 
-When rate limited, you'll receive:
+When rate limited, you'll receive `429 Too Many Requests` with:
 
-```
-HTTP 429 Too Many Requests
-
+<!-- response: GET /api/health 429 -->
+```json
 {
  "error": "Rate limit exceeded",
  "message": "Too many requests. Please try again later.",
@@ -128,6 +129,7 @@ Returns an array of the objects described below, one per managed domain.
 **Response** (200 OK). This example is the real shape, taken from the code
 rather than written by hand:
 
+<!-- response: GET /api/certificates/<domain> 200 -->
 ```json
 {
   "domain": "app.example.com",
@@ -257,12 +259,14 @@ for each of them, with the configuration its metadata records, at a pace: at
 most `limit` per call (default 10, at most 50) on the async executor, which
 runs two at a time. Call it again for the rest once the queued jobs finish.
 
+<!-- request: POST /api/certificates/reissue-keyless -->
 ```json
 { "limit": 10 }
 ```
 
 Answers `202` when something was queued, `200` when there was nothing to do:
 
+<!-- response: POST /api/certificates/reissue-keyless 202 -->
 ```json
 {
   "queued": [{"domain": "a.example.com", "job_id": "…", "status_url": "/api/certificates/jobs/…"}],
@@ -285,6 +289,7 @@ off by default, because a reissue changes the key and deploy hooks ship it.
 
 **Endpoint**: `PUT /api/certificates/<domain>/auto-renew` — operator
 
+<!-- request: PUT /api/certificates/<domain>/auto-renew -->
 ```json
 { "enabled": false }
 ```
@@ -299,6 +304,7 @@ stream as `certificate_auto_renew_changed`.
 
 **Endpoint**: `PATCH /api/certificates/<domain>` — operator
 
+<!-- request: PATCH /api/certificates/<domain> -->
 ```json
 {
   "notes": "Order 4711, installed by hand on lb-2",
@@ -348,6 +354,7 @@ With DNS alias mode the `_acme-challenge` record of each name is a CNAME into a
 zone CertMate can write. These check that every CNAME is in place, before the
 order rather than after the CA fails to find the TXT record.
 
+<!-- request: POST /api/certificates/check-dns-alias -->
 ```json
 {
   "domain": "example.com",
@@ -362,6 +369,7 @@ order rather than after the CA fails to find the TXT record.
 `400` when it does not use alias mode. Every name is checked against the
 caller's scope.
 
+<!-- response: POST /api/certificates/check-dns-alias 200 -->
 ```json
 {
   "domain": "example.com",
@@ -394,6 +402,7 @@ CA. A CAA record names the CAs allowed to issue for a domain, and a CA must
 refuse when it is not named — so a record that names a different CA turns
 into a failed order, or a failed renewal weeks later.
 
+<!-- request: POST /api/certificates/check-caa -->
 ```json
 {
   "domain": "example.com",
@@ -409,6 +418,7 @@ outside its scope, as the DNS-alias check does.
 
 **Response** (200 OK):
 
+<!-- response: POST /api/certificates/check-caa 200 -->
 ```json
 {
   "status": "forbidden",
@@ -454,6 +464,7 @@ refuses the CA, the same sentence as `message` is appended to the error.
 The private CA that signs client certificates is generated once, on first
 start, and its subject comes from `client_ca_subject` in settings:
 
+<!-- illustration: the client_ca_subject object of the settings file -->
 ```json
 {
   "client_ca_subject": {
@@ -480,6 +491,7 @@ afterwards is this endpoint.
 
 **Request**:
 
+<!-- request: POST /api/client-certs/ca/reset -->
 ```json
 {
   "confirm": "reset-client-ca",
@@ -511,6 +523,7 @@ OCSP response published for the previous CA can no longer be verified.
 Create a new client certificate.
 
 **Request**:
+<!-- request: POST /api/client-certs/create -->
 ```json
 {
  "common_name": "user@example.com",
@@ -535,6 +548,7 @@ Create a new client certificate.
 - `notes` (optional) - Additional notes
 
 **Response** (201 Created):
+<!-- response: POST /api/client-certs/create 201 -->
 ```json
 {
  "identifier": "cert-abc123",
@@ -575,6 +589,7 @@ List all client certificates with optional filtering.
 - `search` (optional) - Search in common name
 
 **Response** (200 OK):
+<!-- response: GET /api/client-certs 200 -->
 ```json
 {
  "certificates": [{
@@ -630,6 +645,7 @@ curl "http://localhost:8000/api/client-certs?search=user1" \
 Get complete metadata for a certificate.
 
 **Response** (200 OK):
+<!-- response: GET /api/client-certs/<identifier> 200 -->
 ```json
 {
  "type": "client_certificate",
@@ -705,6 +721,7 @@ Revoke a certificate with optional reason. A certificate that does not exist is 
 (a `400` before API contract **2.37**).
 
 **Request** (optional):
+<!-- request: POST /api/client-certs/<identifier>/revoke -->
 ```json
 {
  "reason": "compromised"
@@ -712,6 +729,7 @@ Revoke a certificate with optional reason. A certificate that does not exist is 
 ```
 
 **Response** (200 OK):
+<!-- response: POST /api/client-certs/<identifier>/revoke 200 -->
 ```json
 {
  "message": "Certificate revoked: cert-001",
@@ -740,6 +758,7 @@ Renew a certificate (same CN, new serial). A certificate that does not exist is 
 `404` (a `400` before API contract **2.37**).
 
 **Response** (201 Created):
+<!-- response: POST /api/client-certs/<identifier>/renew 201 -->
 ```json
 {
  "identifier": "cert-001-renewed",
@@ -766,6 +785,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/renew \
 Get certificate usage statistics.
 
 **Response** (200 OK):
+<!-- response: GET /api/client-certs/stats 200 -->
 ```json
 {
  "total": 100,
@@ -797,6 +817,7 @@ curl http://localhost:8000/api/client-certs/stats \
 Create multiple certificates from CSV data in single request.
 
 **Request**:
+<!-- request: POST /api/client-certs/batch -->
 ```json
 {
  "headers": ["common_name", "email", "organization", "cert_usage", "days_valid"],
@@ -808,6 +829,7 @@ Create multiple certificates from CSV data in single request.
 ```
 
 **Response** (201 Created):
+<!-- response: POST /api/client-certs/batch 201 -->
 ```json
 {
  "total": 3,
@@ -854,6 +876,7 @@ curl -X POST http://localhost:8000/api/client-certs/batch \
 Query certificate status via OCSP.
 
 **Response** (200 OK):
+<!-- response: GET /api/ocsp/status/<serial_number> 200 -->
 ```json
 {
  "response_status": "successful",
@@ -933,6 +956,7 @@ curl http://localhost:8000/api/crl/download/info \
 ```
 
 **CRL Info Response**:
+<!-- response: GET /api/crl/download/info 200 -->
 ```json
 {
  "status": "available",
@@ -1014,6 +1038,7 @@ served until the reissue succeeds. The key shape is preserved unless
 explicitly changed (no key flags are sent and certbot keeps the lineage key).
 
 **Request Body** (all fields optional):
+<!-- request: POST /api/certificates/<domain>/reissue -->
 ```json
 {
   "san_domains": ["www.example.com", "api.example.com"],
@@ -1064,6 +1089,7 @@ progress, 422 renewal failed (`RENEWAL_FAILED`, or `REISSUE_REQUIRED` when no pr
 
 ### Log stream (admin, debugging)
 
+<!-- illustration: GET /api/web/logs/stream is a dashboard route, outside the route walk -->
 ```
 GET /api/web/logs/stream
 ```
@@ -1104,6 +1130,7 @@ It answers `200` when the instance is healthy or degraded, and `500` when it is
 unhealthy, so a liveness check can read the status line alone. The body names
 each subsystem:
 
+<!-- response: GET /api/health 200 -->
 ```json
 {
  "status": "degraded",
@@ -1183,6 +1210,7 @@ path on this site, so it cannot be used as an open redirect.
 
 **Endpoint**: `POST /api/probe` — viewer, since API contract **2.8**
 
+<!-- request: POST /api/probe -->
 ```json
 { "host": "shop.example.com", "port": 443, "server_name": "shop.example.com", "check_revocation": true }
 ```
@@ -1319,6 +1347,7 @@ When each tracked domain's *registration* expires, from RDAP, or WHOIS where
 the TLD has no RDAP. One row per registrable domain, soonest expiry first; a
 scoped key sees only the domains its scope covers.
 
+<!-- response: GET /api/inventory/domains 200 -->
 ```json
 {
   "domains": [
@@ -1362,6 +1391,7 @@ what its response discloses about the software behind it, and — when it is
 switched on — whether it still accepts TLS 1.0 or 1.1. Worst first, so the
 answer opens on what is wrong; a scoped key sees only its own names.
 
+<!-- response: GET /api/inventory/health 200 -->
 ```json
 {
   "names": [
@@ -1434,6 +1464,7 @@ answer gains a `domain_health` summary. What each check means:
 
 **Endpoint**: `GET /api/web/update-check` — session, viewer
 
+<!-- illustration: GET /api/web/update-check is a dashboard route, outside the route walk -->
 ```json
 { "status": "outdated", "running": "2.34.0", "latest": "v2.35.0" }
 ```
@@ -1503,8 +1534,33 @@ Runs every enabled hook and deploy target that applies to the domain, with
 `CERTMATE_EVENT=manual`. The `on_events` filter and maintenance windows are
 ignored: pressing the button is the decision to deploy now.
 
+<!-- response: POST /api/certificates/<domain>/deploy 200 excerpt -->
 ```json
-{ "ok": true, "total": 2, "succeeded": 2, "failed": 0, "results": [ ... ] }
+{
+  "ok": true,
+  "total": 1,
+  "succeeded": 1,
+  "failed": 0,
+  "results": [
+    {
+      "run_id": "5b0e6c1a2f7d4c399a610d4c2b7e9f13",
+      "timestamp": "2026-10-03T09:12:44Z",
+      "domain": "shop.example.com",
+      "event": "manual",
+      "hook_id": "reload-nginx",
+      "hook_name": "Reload nginx",
+      "command": "systemctl reload nginx",
+      "status": "success",
+      "success": true,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "duration_ms": 184,
+      "dry_run": false,
+      "error": null
+    }
+  ]
+}
 ```
 
 It answers **200 even when `ok` is false**, so the summary can be read: deploy
@@ -1729,6 +1785,7 @@ request.
 
 **Endpoint**: `PATCH /api/keys/<key_id>` — admin, since API contract **2.7**
 
+<!-- request: PATCH /api/keys/<key_id> -->
 ```json
 { "confirmed": true }
 ```
@@ -1898,6 +1955,7 @@ one live SAN makes the certificate `alive` whether or not a probe host is set.
 
 Every failure carries a human-readable `error` and a machine-readable `code`:
 
+<!-- illustration: the error envelope every route uses -->
 ```json
 {
  "error": "Certificate not found for domain: example.com",
@@ -1910,6 +1968,7 @@ the application — an unmatched path, a wrong method, a body over the size limi
 — carry two more fields, `message` (the framework's description) and `status`
 (the numeric status, which is also the status line):
 
+<!-- illustration: the error envelope of a URL no route serves -->
 ```json
 {
  "error": "Not Found",
@@ -2011,6 +2070,7 @@ that performed it and the trigger that caused it.
 The audit log is written to `logs/audit/certificate_audit.log`. Each line is a
 standard Python log line whose message is the JSON audit entry:
 
+<!-- illustration: a line of the audit log file -->
 ```
 2026-06-15 18:00:00 - certmate.audit - INFO - {"timestamp": "...", ...}
 ```
@@ -2025,6 +2085,7 @@ tail -f logs/audit/certificate_audit.log
 
 ### Entry shape
 
+<!-- illustration: an entry of the audit log file -->
 ```json
 {
   "timestamp": "2026-06-15T18:00:00.000000+00:00",
@@ -2114,6 +2175,7 @@ detectable and localizable. It is on by default; disable with
 **Verify from the API:** `GET /api/audit/verify` (admin) returns the verifier
 result and HTTP `200` when intact or `409` when broken:
 
+<!-- response: GET /api/audit/verify 200 -->
 ```json
 {"ok": true, "count": 128, "first_seq": 0, "last_seq": 127, "head_hash": "5ee1…", "reason": "intact"}
 ```
@@ -2184,6 +2246,7 @@ with them.
 
 For API client authentication via mutual TLS.
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "api-mtls"
 ```
@@ -2192,6 +2255,7 @@ cert_usage: "api-mtls"
 
 For VPN client authentication.
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "vpn"
 ```
@@ -2200,6 +2264,7 @@ cert_usage: "vpn"
 
 You can use any custom usage type string:
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "custom-application"
 ```

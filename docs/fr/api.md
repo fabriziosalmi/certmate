@@ -20,6 +20,7 @@ Tous les endpoints API nécessitent une authentification par Bearer token.
 
 ### Format de l'en-tête
 
+<!-- illustration: the header every authenticated request carries -->
 ```
 Authorization: Bearer VOTRE_TOKEN
 ```
@@ -50,9 +51,10 @@ Les endpoints API ont des limites de débit pour prévenir les abus :
 
 Lorsque la limite est dépassée, vous recevez :
 
-```
-HTTP 429 Too Many Requests
+`HTTP 429 Too Many Requests`
 
+<!-- response: GET /api/health 429 -->
+```json
 {
   "error": "Rate limit exceeded",
   "message": "Too many requests. Please try again later.",
@@ -73,6 +75,7 @@ HTTP 429 Too Many Requests
 Crée un nouveau certificat client.
 
 **Requête** :
+<!-- request: POST /api/client-certs/create -->
 ```json
 {
   "common_name": "user@example.com",
@@ -97,6 +100,7 @@ Crée un nouveau certificat client.
 - `notes` (optionnel) — Notes supplémentaires
 
 **Réponse** (201 Created) :
+<!-- response: POST /api/client-certs/create 201 -->
 ```json
 {
   "identifier": "cert-abc123",
@@ -137,6 +141,7 @@ Liste tous les certificats clients avec filtrage optionnel.
 - `search` (optionnel) — Rechercher dans le nom commun
 
 **Réponse** (200 OK) :
+<!-- response: GET /api/client-certs 200 -->
 ```json
 {
   "certificates": [{
@@ -192,6 +197,7 @@ curl "http://localhost:8000/api/client-certs?search=user1" \
 Récupère les métadonnées complètes d'un certificat.
 
 **Réponse** (200 OK) :
+<!-- response: GET /api/client-certs/<identifier> 200 -->
 ```json
 {
   "type": "client_certificate",
@@ -266,6 +272,7 @@ curl http://localhost:8000/api/client-certs/cert-001/download/csr \
 Révoque un certificat avec une raison optionnelle.
 
 **Requête** (optionnelle) :
+<!-- request: POST /api/client-certs/<identifier>/revoke -->
 ```json
 {
   "reason": "compromised"
@@ -273,6 +280,7 @@ Révoque un certificat avec une raison optionnelle.
 ```
 
 **Réponse** (200 OK) :
+<!-- response: POST /api/client-certs/<identifier>/revoke 200 -->
 ```json
 {
   "message": "Certificate revoked: cert-001",
@@ -300,6 +308,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/revoke \
 Renouvelle un certificat (même CN, nouveau numéro de série).
 
 **Réponse** (201 Created) :
+<!-- response: POST /api/client-certs/<identifier>/renew 201 -->
 ```json
 {
   "identifier": "cert-001-renewed",
@@ -326,6 +335,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/renew \
 Récupère les statistiques d'utilisation des certificats.
 
 **Réponse** (200 OK) :
+<!-- response: GET /api/client-certs/stats 200 -->
 ```json
 {
   "total": 100,
@@ -357,6 +367,7 @@ curl http://localhost:8000/api/client-certs/stats \
 Crée plusieurs certificats à partir de données CSV en une seule requête.
 
 **Requête** :
+<!-- request: POST /api/client-certs/batch -->
 ```json
 {
   "headers": ["common_name", "email", "organization", "cert_usage", "days_valid"],
@@ -368,6 +379,7 @@ Crée plusieurs certificats à partir de données CSV en une seule requête.
 ```
 
 **Réponse** (201 Created) :
+<!-- response: POST /api/client-certs/batch 201 -->
 ```json
 {
   "total": 3,
@@ -414,6 +426,7 @@ curl -X POST http://localhost:8000/api/client-certs/batch \
 Interroge le statut d'un certificat via OCSP.
 
 **Réponse** (200 OK) :
+<!-- response: GET /api/ocsp/status/<serial_number> 200 -->
 ```json
 {
   "response_status": "successful",
@@ -464,6 +477,7 @@ curl http://localhost:8000/api/crl/download/info \
 ```
 
 **Réponse des infos CRL** :
+<!-- response: GET /api/crl/download/info 200 -->
 ```json
 {
   "status": "available",
@@ -532,6 +546,7 @@ curl "http://localhost:8000/api/certificates/example.com/download?format=json" \
 Modifie la configuration d'un certificat et le réémet sur place — permet d'étendre ou de supprimer des entrées SAN sans supprimer + recréer. Les champs omis conservent les valeurs avec lesquelles le certificat a été émis (lues depuis ses métadonnées), évitant ainsi de ressaisir la configuration DNS/alias/CA. Le certificat actuel continue d'être servi jusqu'à ce que la réémission réussisse. La forme de la clé est préservée sauf modification explicite (aucun indicateur de clé n'est envoyé et certbot conserve la clé de la lignée).
 
 **Corps de la requête** (tous les champs sont optionnels) :
+<!-- request: POST /api/certificates/<domain>/reissue -->
 ```json
 {
   "san_domains": ["www.example.com", "api.example.com"],
@@ -564,6 +579,7 @@ curl -X POST http://localhost:8000/api/certificates/example.com/reissue \
 
 ### Format de la réponse d'erreur
 
+<!-- illustration: the error envelope every route uses -->
 ```json
 {
   "error": "Error message",
@@ -609,6 +625,7 @@ Les opérations du cycle de vie des certificats ainsi que les modifications de c
 
 Le journal d'audit est écrit dans `logs/audit/certificate_audit.log`. Chaque ligne est une ligne de log Python standard dont le message est l'entrée d'audit JSON :
 
+<!-- illustration: a line of the audit log file -->
 ```
 2026-06-15 18:00:00 - certmate.audit - INFO - {"timestamp": "...", ...}
 ```
@@ -621,6 +638,7 @@ tail -f logs/audit/certificate_audit.log
 
 ### Structure de l'entrée
 
+<!-- illustration: an entry of the audit log file -->
 ```json
 {
   "timestamp": "2026-06-15T18:00:00.000000+00:00",
@@ -660,6 +678,7 @@ Parallèlement au journal lisible par l'homme, chaque entrée est ajoutée à un
 
 **Vérification depuis l'API** : `GET /api/audit/verify` (admin) renvoie le résultat du vérificateur et HTTP `200` quand elle est intacte ou `409` quand elle est cassée :
 
+<!-- response: GET /api/audit/verify 200 -->
 ```json
 {"ok": true, "count": 128, "first_seq": 0, "last_seq": 127, "head_hash": "5ee1…", "reason": "intact"}
 ```
@@ -697,6 +716,7 @@ Le vérificateur contrôle la structure de la chaîne, que le manifeste correspo
 
 Pour l'authentification des clients API via TLS mutuel.
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "api-mtls"
 ```
@@ -705,6 +725,7 @@ cert_usage: "api-mtls"
 
 Pour l'authentification des clients VPN.
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "vpn"
 ```
@@ -713,6 +734,7 @@ cert_usage: "vpn"
 
 Vous pouvez utiliser n'importe quelle chaîne de type d'usage personnalisé :
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "custom-application"
 ```
