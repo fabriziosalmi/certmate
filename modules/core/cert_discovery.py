@@ -22,6 +22,7 @@ import threading
 from .domain_entries import entry_domain
 
 from .cert_probe import probe_certificate, STATUS_OK
+from .request_fields import json_list
 from .utils import exclusive_run
 
 logger = logging.getLogger(__name__)
@@ -230,15 +231,16 @@ class CertDiscoveryManager:
         config.update(settings.get('monitored_endpoints') or {})
         return config
 
-    def save_config(self, config):
-        """Validate and persist the ``monitored_endpoints`` config.
+    def clean_config(self, config):
+        """The ``monitored_endpoints`` config, validated and normalised, and not saved.
 
-        Endpoints are normalised (stripped, blanks dropped) and each is parsed
-        to reject a malformed ``host:port`` at save time rather than silently at
-        sweep time. Returns the cleaned config.
+        Endpoints are stripped, blanks dropped, and each is parsed to reject a malformed
+        ``host:port`` at save time rather than silently at sweep time. Raises ValueError. Split
+        from `save_config` so a request that carries several sections can check all of them
+        before it writes any (#1109).
         """
         endpoints = []
-        for raw in (config.get('endpoints') or []):
+        for raw in json_list(config, 'endpoints'):
             spec = str(raw).strip()
             if not spec:
                 continue
@@ -251,6 +253,11 @@ class CertDiscoveryManager:
             'include_managed': bool(config.get('include_managed', True)),
             'check_revocation': bool(config.get('check_revocation', True)),
         }
+        return clean
+
+    def save_config(self, config):
+        """Validate and persist the ``monitored_endpoints`` config. Returns it cleaned."""
+        clean = self.clean_config(config)
         self.settings_manager.update(
             lambda s: s.__setitem__('monitored_endpoints', clean),
             'monitored_endpoints_save',

@@ -239,7 +239,10 @@ def inventory(plan):
     call('get', '/api/inventory/crypto-report')
     call('get', '/api/inventory/config')
     call('post', '/api/inventory/config', body={})
-    call('post', '/api/inventory/config', body={'domain_registration': {'extra_domains': ['example.test']}})   # 400
+    # 400, and nothing saved: the valid section before the refused one is not applied (#1109)
+    call('post', '/api/inventory/config',
+         body={'ct_monitoring': {'domains': ['unsaved.example.test']},
+               'domain_registration': {'extra_domains': ['example.test']}})
     call('post', '/api/inventory/config',
          body={'ct_monitoring': {'domains': ['ct.example.test']}, 'dns_resolver': {'nameservers': ['192.0.2.53']},
                'domain_registration': {'extra_domains': ['example.com']},

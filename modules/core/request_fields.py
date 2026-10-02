@@ -45,6 +45,37 @@ def _describe(value):
     return f'{type(value).__name__} {value!r}'
 
 
+def json_list(data, field):
+    """*field* of *data* as a list. Absent, null and empty are an empty list; a value that is not
+    a list raises ValueError, which a route answers as a 400.
+
+    `for raw in (config.get('endpoints') or [])` iterates whatever it is given, so a number was a
+    500 (TypeError) and a string was read one character at a time ("empty host in endpoint ':'").
+    """
+    value = data.get(field)
+    if not value:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f'{field} must be a list, not {_describe(value)}')
+    return list(value)
+
+
+def json_number(data, field, default, cast=float):
+    """*field* of *data* as a number, with *default* when it is absent.
+
+    null, a string that is not a number and anything else *cast* refuses raise ValueError with a
+    message that names the field; `int(None)` was a 500, and `int('many')` a 400 that said
+    "invalid literal for int() with base 10".
+    """
+    value = data.get(field, default)
+    try:
+        if value is None:
+            raise TypeError
+        return cast(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{field} must be a number, not {_describe(value)}') from None
+
+
 def json_booleans(**fields):
     """Decorator: refuse a request whose boolean fields are not booleans.
 

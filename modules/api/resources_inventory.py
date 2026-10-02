@@ -50,6 +50,25 @@ def _config_view(discovery, ct_monitor, registration, health=None, settings=None
     return view
 
 
+def _check_config_payload(payload, discovery, ct_monitor, registration, health):
+    """Validate every section of a config POST before any of them is written.
+
+    Each section is saved through its own manager, which validates what it is given, so a body with
+    a good `ct_monitoring` and a bad `domain_registration` saved the first and answered 400 for
+    the second: a 400 that had changed the configuration (#1109). Every section is checked here
+    first, with the same code that will save it, so a request is applied entirely or not at all.
+    Raises ValueError.
+    """
+    from ..core.dns_resolver import parse_nameservers
+
+    for section, manager in (('discovery', discovery), ('ct_monitoring', ct_monitor),
+                             ('domain_registration', registration), ('domain_health', health)):
+        if manager is not None and isinstance(payload.get(section), dict):
+            manager.clean_config(payload[section])
+    if isinstance(payload.get('dns_resolver'), dict):
+        parse_nameservers(payload['dns_resolver'].get('nameservers'))
+
+
 def _save_registration_config(registration, payload):
     """Persist the ``domain_registration`` section of a config POST, if any.
     Raises ValueError for a name no registry holds, like the other sections."""
@@ -326,10 +345,11 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
 
             Body may carry a ``discovery``, ``ct_monitoring``,
             ``domain_registration`` and/or ``domain_health`` object; each is
-            validated and persisted by its own manager, and anything it
-            refuses — a bad endpoint spec, a name no registry holds, an extra
-            name that is not a domain — is a 400. Returns the effective
-            configuration after the update.
+            validated by its own manager, every section before any is
+            persisted, and anything refused — a bad endpoint spec, a name no
+            registry holds, an extra name that is not a domain — is a 400 that
+            has changed nothing. Returns the effective configuration after
+            the update.
             """
             discovery = ctx.managers.get('cert_discovery')
             ct_monitor = ctx.managers.get('ct_monitor')
@@ -339,6 +359,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             registration = ctx.managers.get('domain_registration')
             health = ctx.managers.get('domain_health')
             try:
+                _check_config_payload(payload, discovery, ct_monitor, registration, health)
                 if isinstance(payload.get('discovery'), dict):
                     discovery.save_config(payload['discovery'])
                 if isinstance(payload.get('ct_monitoring'), dict):
