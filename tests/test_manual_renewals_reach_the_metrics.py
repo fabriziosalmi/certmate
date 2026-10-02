@@ -91,6 +91,9 @@ def test_telemetry_cannot_fail_a_renewal_that_happened(tmp_path):
     domain = 'd7-unreadable.example.com'
     service = _service(tmp_path, domain, {'renewed': True})
     service._certs._load_metadata = MagicMock(side_effect=PermissionError('metadata.json'))
-    assert _renew(service, domain) == {'renewed': True}
+    result = _renew(service, domain)
+    assert result['renewed'] is True and result.keys() == {'renewed', 'duration'}, (
+        'the manager result comes back, with the duration the service adds (#1108), and nothing '
+        'telemetry did to it')
     assert REGISTRY.get_sample_value(
         RENEWALS, {'domain': domain, 'dns_provider': 'unknown', 'status': 'success'}) == 1

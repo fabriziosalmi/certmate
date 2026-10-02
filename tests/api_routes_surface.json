@@ -1,11 +1,7 @@
 {
- "contract_version": "2.36",
- "known_defects": {
-  "DELETE /api/dns/<X>/accounts/<X> /api/dns/cloudflare/accounts/never-existed": "#1106",
-  "POST /api/deploy/test/<X> /api/deploy/test/h1": "#1107"
- },
+ "contract_version": "2.37",
+ "known_defects": {},
  "no_success": {
-  "POST /api/deploy/test/<X>": "the only answer a hook that ran can get today is a 404 (#1107); the call that shows it is a known defect and is not recorded",
   "POST /api/storage/azure-keyvault/backfill-certificates": "it copies the certificates into a real Azure Key Vault, which needs the Azure SDK and the vault"
  },
  "not_called": {
@@ -106,6 +102,17 @@
     ],
     "success": [
      "bool"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
     ]
    }
   },
@@ -527,7 +534,7 @@
      "bool"
     ],
     "unified[].created": [
-     "null"
+     "str"
     ],
     "unified[].filename": [
      "str"
@@ -593,7 +600,7 @@
      "str"
     ],
     "unified[].size": [
-     "null"
+     "int"
     ]
    }
   },
@@ -3837,13 +3844,13 @@
      "dict"
     ],
     "dns_provider": [
-     "null"
+     "str"
     ],
     "domain": [
      "str"
     ],
     "duration": [
-     "null"
+     "number"
     ],
     "message": [
      "str"
@@ -4297,7 +4304,7 @@
      "str"
     ]
    },
-   "400": {
+   "404": {
     ".": [
      "dict"
     ],
@@ -4324,7 +4331,7 @@
      "str"
     ]
    },
-   "400": {
+   "404": {
     ".": [
      "dict"
     ],
@@ -4629,6 +4636,56 @@
    }
   },
   "POST /api/deploy/test/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "command": [
+     "str"
+    ],
+    "domain": [
+     "str"
+    ],
+    "dry_run": [
+     "bool"
+    ],
+    "duration_ms": [
+     "int"
+    ],
+    "error": [
+     "null"
+    ],
+    "event": [
+     "str"
+    ],
+    "exit_code": [
+     "int"
+    ],
+    "hook_id": [
+     "str"
+    ],
+    "hook_name": [
+     "str"
+    ],
+    "run_id": [
+     "str"
+    ],
+    "status": [
+     "str"
+    ],
+    "stderr": [
+     "str"
+    ],
+    "stdout": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ],
+    "timestamp": [
+     "str"
+    ]
+   },
    "404": {
     ".": [
      "dict"

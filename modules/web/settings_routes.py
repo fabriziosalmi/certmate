@@ -1048,7 +1048,10 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                     user=actor.get('username'),
                     ip_address=request.remote_addr,
                 )
-            if 'error' in result:
+            # A hook that does not exist is a 404. A hook that ran is a 200 whether it passed or
+            # not: the run record carries `success` and `error`, and its `error` key is there
+            # (null) on a pass, so testing for the key answered 404 for every hook that ran (#1107).
+            if result.get('reason') == 'hook_missing_from_config':
                 return jsonify(result), 404
             return jsonify(result)
         except Exception as e:

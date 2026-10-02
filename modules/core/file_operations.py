@@ -910,6 +910,10 @@ class FileOperations:
                         key_files = self._archive_key_files(backup_file)
                         backups["unified"].append({
                             "filename": backup_file.name,
+                            # Declared on the entry by the OpenAPI model and sent as null
+                            # until now: both were only inside `metadata` (#1108).
+                            "size": stat.st_size,
+                            "created": metadata["created"],
                             # Whether this archive carries private keys, read
                             # from the archive itself rather than from its
                             # manifest — every backup made before v2.26.0 says

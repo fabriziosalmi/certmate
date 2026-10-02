@@ -22,6 +22,19 @@ from ..core.domain_entries import entry_domain
 logger = logging.getLogger(__name__)
 
 
+def _failed_delete(dns, provider, account_id):
+    """The answer for a delete that did not delete: 404 when there was nothing to delete.
+
+    `delete_account` returns False for an account that does not exist and for a settings file
+    that could not be written, and both were a 500 (#1106). A 500 is for the second. Module
+    level: `create_settings_resources` is a closure with a complexity budget that only comes down.
+    """
+    if not dns.has_account(provider, account_id):
+        return {'error': f"No DNS account called '{account_id}' for provider '{provider}'",
+                'code': 'DNS_ACCOUNT_NOT_FOUND'}, 404
+    return {'error': 'Failed to delete account'}, 500
+
+
 def create_settings_resources(api, models, ctx: ApiContext) -> dict:
     """Build the settings and DNS-account resources against *ctx*."""
 
@@ -338,7 +351,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                         user=user.get('username'),
                         ip_address=request.remote_addr,
                     )
-                return {'error': 'Failed to delete account'}, 500
+                return _failed_delete(ctx.dns, provider, account_id)
             except Exception as e:
                 logger.error(f"Error deleting DNS account: {e}")
                 if ctx.audit:

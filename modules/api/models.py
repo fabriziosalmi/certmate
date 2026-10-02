@@ -465,7 +465,7 @@ def create_api_models(api):
         'domain': fields.String(description='Domain name'),
         'deployed': fields.Boolean(description='Whether the domain is serving a certificate'),
         'reachable': fields.Boolean(description='Whether the domain responds over HTTPS'),
-        'certificate_match': fields.Raw(description='Whether the served certificate matches the local certificate'),
+        'certificate_match': fields.Boolean(description='Whether the served certificate matches the local certificate'),
         'method': fields.String(description='Check method'),
         'port': fields.Integer(description='TCP port probed', default=443),
         'protocol': fields.String(description='Probe protocol (https-tls, tls, smtp-starttls)'),

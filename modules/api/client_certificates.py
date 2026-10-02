@@ -231,6 +231,17 @@ def _build_ca_cert_resource(client_cert_manager):
     return ClientCertificateAuthorityCert
 
 
+def _require_certificate(client_cert_manager, identifier):
+    """A 404 for a certificate that does not exist, like the detail route says.
+
+    Renew and revoke answered 400 for it, with the code BAD_REQUEST, because the manager hands
+    back `(False, error)` for a missing certificate and for a refusal alike (#1111). Raised
+    rather than inlined: `create_client_certificate_resources` is a budgeted closure.
+    """
+    if not client_cert_manager.get_certificate_metadata(identifier):
+        abort(404, f"Certificate not found: {identifier}")
+
+
 def _build_ca_reset_resource(auth_manager, client_cert_manager, crl_manager):
     """The CA reset resource, built outside create_client_certificate_resources.
 
@@ -499,6 +510,7 @@ def create_client_certificate_resources(api, managers):
             try:
                 if not _validate_identifier(identifier):
                     abort(400, "Invalid certificate identifier")
+                _require_certificate(client_cert_manager, identifier)
                 data = request.get_json() or {}
                 reason = data.get('reason', 'unspecified')
 
@@ -544,6 +556,7 @@ def create_client_certificate_resources(api, managers):
             try:
                 if not _validate_identifier(identifier):
                     abort(400, "Invalid certificate identifier")
+                _require_certificate(client_cert_manager, identifier)
                 # Renew certificate
                 success, error, cert_data = client_cert_manager.renew_certificate(
                     identifier

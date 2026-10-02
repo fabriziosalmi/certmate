@@ -67,8 +67,6 @@ OPAQUE_BY_ROUTE = {
 # recorded is a route whose success shape is not compared with anything, and that has to be said.
 # The entry goes when the route gets a 2xx (the test fails if it stays).
 NO_SUCCESS = {
-    'POST /api/deploy/test/<X>': 'the only answer a hook that ran can get today is a 404 (#1107); the call that '
-                                 'shows it is a known defect and is not recorded',
     'POST /api/storage/azure-keyvault/backfill-certificates': 'it copies the certificates into a real Azure Key '
                                                               'Vault, which needs the Azure SDK and the vault',
 }
@@ -342,8 +340,7 @@ def _walk(app, token, trace, certbot, container, seeded, report):
     call('post', '/api/deploy/targets/preview', body=keyed)
     call('post', '/api/deploy/targets/preview', body={'type': 'nope'})                       # 400
     call('post', '/api/deploy/test/<hook_id>', path='/api/deploy/test/unknown', body={})
-    call('post', '/api/deploy/test/<hook_id>', path='/api/deploy/test/h1', body={},          # runs: nothing launched
-         defect=(contract_plan.DEFECT_DEPLOY_TEST, 404))
+    call('post', '/api/deploy/test/<hook_id>', path='/api/deploy/test/h1', body={})          # runs: nothing launched
 
     # --- notifications. `test` sends a real message when the channel is real, so it
     # is only called with a channel type that does not exist.

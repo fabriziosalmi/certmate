@@ -686,7 +686,8 @@ curl http://localhost:8000/api/client-certs/cert-001/download/csr \
 
 **Endpoint**: `POST /api/client-certs/<identifier>/revoke`
 
-Revoke a certificate with optional reason.
+Revoke a certificate with optional reason. A certificate that does not exist is a `404`
+(a `400` before API contract **2.37**).
 
 **Request** (optional):
 ```json
@@ -720,7 +721,8 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/revoke \
 
 **Endpoint**: `POST /api/client-certs/<identifier>/renew`
 
-Renew a certificate (same CN, new serial).
+Renew a certificate (same CN, new serial). A certificate that does not exist is a
+`404` (a `400` before API contract **2.37**).
 
 **Response** (201 Created):
 ```json
@@ -1024,6 +1026,20 @@ curl -X POST http://localhost:8000/api/certificates/example.com/reissue \
  -H "Content-Type: application/json" \
  -d '{"san_domains": ["www.example.com", "api.example.com"]}'
 ```
+
+#### Renew a certificate
+
+**Endpoint**: `POST /api/certificates/<domain>/renew` — operator
+
+Renews through certbot, which renews only what is due unless `force` is true.
+
+**Response** (200 OK, or 202 Accepted with `async`): `message`, `domain`, `renewed`
+(`false` when the certificate was not yet due and nothing was replaced), `dns_provider`
+(the provider recorded for the certificate) and `duration` (seconds). The last two were
+always `null` before API contract **2.37**.
+
+**Errors**: 404 when no certificate exists for the domain, 403 scope, 409 operation in
+progress, 422 renewal failed (`RENEWAL_FAILED`, or `REISSUE_REQUIRED` when no private key is left).
 
 ---
 
@@ -1446,6 +1462,12 @@ configured maintenance window opens.
 Runs the hook without a real certificate change, so a broken hook is found
 before a renewal depends on it.
 
+Answers **200** for a hook that ran, whether it passed or not: the body is the run
+record, with `success`, `exit_code`, `stdout`, `stderr` and `error` (null on a pass).
+A hook that is not in the configuration is a **404**, with `reason:
+"hook_missing_from_config"`. Before API contract **2.37** every answer was a 404, the
+run record included.
+
 #### Run a certificate's deploy hooks now
 
 **Endpoint**: `POST /api/certificates/<domain>/deploy` — admin
@@ -1539,6 +1561,10 @@ the account id has to belong to exactly one provider. An id no provider has is a
 that is not ambiguous, `/api/dns/<provider>/accounts/<account_id>`; every provider
 has an account called `default`, so that one always needs the long form. Neither
 refusal writes anything.
+
+`DELETE /api/dns/<provider>/accounts/<account_id>` is a `404` when that provider has
+no account with that id, and a `500` only when the settings could not be written.
+Before API contract **2.37** both were a `500`.
 
 #### Provider configuration
 
@@ -1760,6 +1786,10 @@ domains that already exist as secrets. It does not re-issue anything.
 #### List backups
 
 **Endpoint**: `GET /api/backups` — viewer
+
+Each entry has `filename`, `size` (bytes) and `created`, and the archive's own
+`metadata`. `size` and `created` were declared on the entry and always `null` before
+API contract **2.37**; they were only inside `metadata`.
 
 #### Create one
 

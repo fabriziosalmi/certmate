@@ -185,7 +185,6 @@ def test_every_known_defect_still_shows_the_defect(report, snapshot):
     """The calls that show a wrong answer are made and not recorded. They are checked
     here, so the entry cannot outlive the defect: when the answer changes, the fix has
     arrived, and the call goes back to being an ordinary one."""
-    assert report['defects'], 'CONTROL: the plan makes no call that shows a defect; this test is not testing'
     fixed = [f'{call} answered {got}, which is no longer the {expected} that {issue} is about: '
              f'drop `defect=` from the call and regenerate'
              for call, issue, expected, got in report['defects'] if got != expected]
