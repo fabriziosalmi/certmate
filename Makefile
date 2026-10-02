@@ -17,7 +17,7 @@
 
 .PHONY: help setup install-dev \
         run test test-unit test-integration test-coverage test-ci test-ui test-network test-e2e test-watch \
-        lint typecheck security check ci coverage-floors \
+        lint typecheck security check ci coverage-floors lock \
         docker-build docker-run docker-stop \
         clean clean-venv clean-all
 
@@ -71,6 +71,9 @@ help:
 	@echo "    make security         bandit (medium and above)"
 	@echo "    make check            lint + typecheck + security + test"
 	@echo "    make ci               lint + typecheck + security + test-ci + coverage floors"
+	@echo ""
+	@echo "  Dependencies"
+	@echo "    make lock             Regenerate requirements*.lock with uv (after changing a pin)"
 	@echo ""
 	@echo "  Docker"
 	@echo "    make docker-build     Build Docker image ($(DOCKER_IMAGE):$(DOCKER_TAG))"
@@ -175,6 +178,13 @@ check: lint typecheck security test
 ci: lint typecheck security test-ci
 	@echo ""
 	@echo "✅ CI simulated: lint, typecheck, security, tests with coverage, coverage floors"
+
+# ── Dependencies ───────────────────────────────────────────────────────
+# Needs uv. Starts from the pins already in the locks, so it moves what a changed pin needs and
+# nothing else; scripts/lockfile.py check (in the unit suite and the image build) fails if you forget.
+
+lock:
+	scripts/regenerate_lockfiles.sh
 
 # ── Docker ─────────────────────────────────────────────────────────────
 
