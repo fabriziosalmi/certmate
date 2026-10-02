@@ -28,7 +28,11 @@ and not left out of it:
     wrong, and NOT recorded: a snapshot of a wrong answer is a test that guards it;
   * `unseen_items`: answers that held an empty list, whose elements were not seen;
   * `opaque`: sub-objects that change with what happened rather than with the code
-    (an audit entry's `details`), recorded as "an object" and nothing below.
+    (an audit entry's `details`), recorded as "an object" and nothing below;
+  * `maps`: objects keyed by data (a domain, an organization), recorded as `*`, and
+    `catalogues`: objects whose keys are not snake_case but are fixed by the code (a
+    provider name, an expiry bucket), recorded key by key. Any other key that is not a
+    field name fails the test: it is a name from the data, recorded as if it were a field.
 
 Regenerate after moving the version:
 
@@ -44,12 +48,37 @@ SNAPSHOT = REPO / 'tests' / 'api_routes_surface.json'
 
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 
-# Paths whose children are keyed by something the caller chooses (a username, a
-# domain): the keys are not part of the shape. (A key that is a UUID is collapsed
-# wherever it is.)
+# Paths whose children are keyed by something the caller chooses or the instance holds (a
+# username, a domain, an organization, a configured provider, a key algorithm): the keys are
+# not part of the shape. Without the entry the snapshot records the world's data as fields
+# (`by_organization.CertMate`, and a domain key `shop.example.test` as three nested fields),
+# and seeding another name would move it with no change to the API (#1105). (A key that is a
+# UUID is collapsed wherever it is.)
 MAPS_BY_ROUTE = {
     'GET /api/users': {'users'},
     'GET /api/deploy/config': {'domain_hooks'},
+    'GET /api/client-certs/stats': {'by_organization', 'by_usage'},
+    'GET /api/diagnostics/snapshot': {'active_dns_providers'},
+    'GET /api/inventory/crypto-report': {'by_key_algorithm', 'by_signature_algorithm'},
+    'POST /api/certificates/zombies/scan': {'results[].domains'},
+    'POST /api/storage/migrate': {'migration_results'},
+}
+
+# A field name is snake_case. A key that is not (a dot, a hyphen, a capital, a space) is a
+# name from the data unless it sits under a map above or under one of these, whose keys are
+# fixed by the code and so ARE the shape: a key added there is a field added.
+FIELD_NAME = re.compile(r'^[a-z][a-z0-9_]*$')
+# What `Plan.call` writes in place of a body that is not JSON: the walk's own words, not a key.
+MARKERS = {'<stream>', '<non-json>'}
+CATALOGUES_BY_ROUTE = {
+    'GET /api/inventory': {'summary.expiry': 'the expiry buckets, 7/30/90 days, are constants of inventory_view'},
+    'GET /api/inventory/domains': {'summary.expiry': 'the expiry buckets, 30/60/90 days, are constants of '
+                                                     'inventory_view'},
+    'GET /api/settings': {'dns_propagation_seconds': 'one entry per supported DNS provider',
+                          'dns_providers': 'one entry per supported DNS provider'},
+    'GET /api/settings/dns-providers': {'.': 'one entry per supported DNS provider'},
+    'POST /api/deploy/targets/preview': {'headers': 'the HTTP headers the delivery sends, set by the code'},
+    'POST /api/notifications/webhook/preview': {'headers': 'the HTTP headers the delivery sends, set by the code'},
 }
 
 # Sub-objects whose fields depend on which operation happened, not on the code: an
@@ -118,6 +147,27 @@ def flatten(value, maps=(), opaque=(), prefix='', out=None):
     return out
 
 
+def data_keys(value, maps=(), catalogues=(), opaque=(), prefix=''):
+    """[(path, key)] for every dict key that is not a field name and is not under a map, a
+    catalogue or a UUID collapse: a name from the data recorded as if it were a field. Checked
+    on the raw key, because once joined into a path `shop.example.test` reads as three fields."""
+    found = []
+    if prefix in opaque:
+        return found
+    if isinstance(value, dict):
+        for key, child in value.items():
+            collapsed = prefix in maps or (isinstance(key, str) and UUID.match(key))
+            name = '*' if collapsed else key
+            if (not collapsed and key not in MARKERS and (prefix or '.') not in catalogues
+                    and not FIELD_NAME.match(str(key))):
+                found.append((prefix or '.', key))
+            found += data_keys(child, maps, catalogues, opaque, f'{prefix}.{name}' if prefix else name)
+    elif isinstance(value, list):
+        for child in value:
+            found += data_keys(child, maps, catalogues, opaque, f'{prefix}[]')
+    return found
+
+
 def finish(paths):
     """Types as sorted lists. `null` is kept only where nothing else was ever seen.
 
@@ -145,6 +195,7 @@ class Plan:
         self.world = None
         self.defects = []           # (call, issue, expected status, status it answered)
         self.contradictions = []    # answers whose status and body disagree
+        self.data_keys = []         # names from the data that the shape would record as fields
 
     def call(self, verb, template, path=None, body=None, client=None, headers=None,
              stream=False, query=None, data=None, keep=False, limited=False, defect=None):
@@ -182,10 +233,12 @@ class Plan:
             return response, payload
         if says_success(response.status_code, payload):
             self.contradictions.append(f'{key} [{response.status_code}] {path}')
+        maps, opaque = MAPS_BY_ROUTE.get(key, ()), OPAQUE_BY_ROUTE.get(key, ())
+        for where, name in data_keys(payload, maps, CATALOGUES_BY_ROUTE.get(key, {}), opaque):
+            self.data_keys.append(f'{key} [{response.status_code}] {where}: {name!r}')
         by_status = self.seen.setdefault(key, {})
         entry = by_status.setdefault(str(response.status_code), {})
-        for found, types in flatten(payload, MAPS_BY_ROUTE.get(key, ()),
-                                    OPAQUE_BY_ROUTE.get(key, ())).items():
+        for found, types in flatten(payload, maps, opaque).items():
             entry.setdefault(found, set()).update(types)
         return response, payload
 
@@ -326,8 +379,10 @@ def _walk(app, token, trace, certbot, container, seeded, report):
 
     # --- deploy
     call('get', '/api/deploy/config')
-    call('post', '/api/deploy/config',
-         body={'enabled': False, 'domain_hooks': {}, 'targets': [_target()],
+    call('post', '/api/deploy/config',                  # a per-domain hook, so `domain_hooks.*` is seen
+         body={'enabled': False, 'targets': [_target()],
+               'domain_hooks': {'shop.example.com': [{'id': 'd1', 'name': 'd1', 'command': 'echo hi',
+                                                      'enabled': True, 'on_events': ['renewed']}]},
                'global_hooks': [{'id': 'h1', 'name': 'h1', 'command': 'echo hi', 'enabled': True,
                                  'on_events': ['created', 'renewed']}]})
     call('get', '/api/deploy/config')
@@ -388,6 +443,7 @@ def _walk(app, token, trace, certbot, container, seeded, report):
     if report is not None:
         report['defects'] = list(plan.defects)
         report['contradictions'] = list(plan.contradictions)
+        report['data_keys'] = sorted(set(plan.data_keys))
     return routes, {key: paths for key, paths in unseen.items() if paths}
 
 
@@ -445,7 +501,9 @@ def document(routes, unseen, defects=()):
             'no_success': dict(sorted(NO_SUCCESS.items())),
             'known_defects': {call: issue for call, issue, _expected, _got in sorted(defects)},
             'unseen_items': unseen,
-            'opaque': {k: sorted(v) for k, v in sorted(OPAQUE_BY_ROUTE.items())}}
+            'opaque': {k: sorted(v) for k, v in sorted(OPAQUE_BY_ROUTE.items())},
+            'maps': {k: sorted(v) for k, v in sorted(MAPS_BY_ROUTE.items())},
+            'catalogues': {k: dict(sorted(v.items())) for k, v in sorted(CATALOGUES_BY_ROUTE.items())}}
 
 
 def sys_path_fix():
