@@ -14,7 +14,7 @@ the one that was reviewed. This does the first and does not claim the second.
 
 Two modes, both pure functions over text so they are testable without pip:
 
-    write   turn a `pip install --report` JSON into a lockfile
+    write   turn the pins `uv pip compile` resolved into a lockfile
     check   assert every direct pin is present in the lock at the same version
 
 `check` is the one that matters day to day. Installing from a lock means a
@@ -31,7 +31,6 @@ who needs it is looking):
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
 import re
 import sys
@@ -46,14 +45,18 @@ HEADER = """\
 #
 #     scripts/regenerate_lockfiles.sh
 #
-# The fully resolved install set for {source}, produced by pip's own resolver
-# inside the base image this project publishes from. {direct} of these are
+# The fully resolved install set for {source}, resolved by uv for the two
+# published architectures. {direct} of these are
 # pinned by {source}; the other {transitive} are transitive and were chosen by
-# the resolver, which is exactly why they are written down here.
+# the resolver, which is exactly why they are written down here. The image
+# installs them with pip.
 #
 # The two published architectures resolve this set identically, which is what
 # makes one file sufficient. `scripts/regenerate_lockfiles.sh` re-checks that
 # before writing, so the day it stops being true is the day it is noticed.
+#
+# A regeneration starts from the pins already in this file and moves only what
+# the change under review requires: it does not re-resolve the transitive set.
 #
 # No hashes: this makes the build repeatable, not the artifacts verified. See
 # "Supply-chain posture for Python dependencies" in SECURITY.md.
@@ -79,12 +82,9 @@ def read_pins(text: str) -> dict[str, str]:
     return pins
 
 
-def render(report: dict, source: str, direct: dict[str, str]) -> str:
-    """A lockfile from a `pip install --report` document."""
-    resolved = {
-        normalize(item['metadata']['name']): item['metadata']['version']
-        for item in report.get('install', [])
-    }
+def render(resolved: dict[str, str], source: str, direct: dict[str, str]) -> str:
+    """A lockfile from `name -> version` pins, with the header that says how to regenerate it."""
+    resolved = {normalize(name): version for name, version in resolved.items()}
     transitive = sorted(set(resolved) - set(direct))
     body = ''.join(f'{name}=={resolved[name]}\n' for name in sorted(resolved))
     return HEADER.format(source=source, direct=len(direct),
@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
 
     writer = sub.add_parser('write')
     writer.add_argument('requirements')
-    writer.add_argument('report')
+    writer.add_argument('pins', help='the `name==version` lines `uv pip compile` wrote')
     writer.add_argument('lock')
 
     checker = sub.add_parser('check')
@@ -131,10 +131,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.mode == 'write':
         requirements = pathlib.Path(args.requirements)
-        report = json.loads(pathlib.Path(args.report).read_text('utf-8'))
+        resolved = read_pins(pathlib.Path(args.pins).read_text('utf-8'))
         direct = read_pins(requirements.read_text(encoding='utf-8'))
+        missing = sorted(set(direct) - set(resolved))
+        if missing:
+            print(f'::error::the resolution is missing pinned packages: {missing}', file=sys.stderr)
+            return 1
         pathlib.Path(args.lock).write_text(
-            render(report, requirements.name, direct), encoding='utf-8')
+            render(resolved, requirements.name, direct), encoding='utf-8')
         print(f'wrote {args.lock}')
         return 0
 

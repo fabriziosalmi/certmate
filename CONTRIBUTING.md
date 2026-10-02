@@ -104,6 +104,20 @@ without its entry coming down, and an entry that matches nothing. Adding an
 entry is a decision to keep a function complex — decompose it instead, or argue
 for the entry in review.
 
+### Changing a dependency
+
+Pins live in `requirements.txt` (and `requirements-minimal.txt`); the image installs the
+**locks** (`requirements.lock`, `requirements-minimal.lock`), which also record every transitive
+package. So a pin changed alone does nothing: after editing it, run
+
+```bash
+make lock        # needs uv: pip install uv, or brew install uv
+```
+
+and commit the locks with it. It starts from the pins already in the locks, so it moves what your
+change needs moved and nothing else; the unit suite (`tests/test_the_transitive_set_is_written_down.py`)
+fails when a pin and its lock disagree. A Dependabot bump to `requirements.txt` needs the same.
+
 ### Editing templates or CSS
 
 Rebuild the bundle and commit it — CI fails if the committed
