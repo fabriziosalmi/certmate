@@ -65,9 +65,7 @@ Dockerfile
 tests/
 scratch/
 
-# Exclude setup and validation scripts
-setup.sh
-start.sh
+# Exclude validation scripts
 validate_dependencies.py
 api_client_example.py
 

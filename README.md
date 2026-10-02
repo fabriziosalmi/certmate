@@ -375,17 +375,17 @@ Choose the installation method that best fits your environment:
 ### Docker (Recommended)
 Isolated, reproducible, and the way CertMate is tested and released. Run **one**
 container (see the single-instance note above); give it more CPU and memory
-rather than more replicas. **Published images cover two architectures**: AMD64 (Intel/AMD) and ARM64 (Apple Silicon, ARM servers). ARM v7 (32-bit Raspberry Pi) is not published; build it yourself with `./build-multiplatform.sh --platforms linux/arm/v7`.
+rather than more replicas. **Published images cover two architectures**: AMD64 (Intel/AMD) and ARM64 (Apple Silicon, ARM servers). ARM v7 (32-bit Raspberry Pi) is not published; build it yourself with `docker buildx build --platform linux/arm/v7 -t YOUR_DOCKERHUB_USERNAME/certmate:armv7 --push .` (see [Docker](docs/docker.md#manual-docker-buildx)).
 
 The production Compose bundle is one file that runs the published image; the [Quick Start](#quick-start-with-docker) above shows the commands. To build the image yourself instead, clone the repository and run `docker compose up -d` with its root `docker-compose.yml`, after preparing its bind-mounted directories as its comments describe.
 
 **Multi-Platform Support:**
 ```bash
-# Build for multiple architectures (ARM64 + AMD64)
-./build-multiplatform.sh
+# Build for multiple architectures (ARM64 + AMD64); add --push to publish the result
+docker buildx build --platform linux/amd64,linux/arm64 -t YOUR_DOCKERHUB_USERNAME/certmate:latest .
 
 # Build and push to Docker Hub for all platforms
-./build-multiplatform.sh -r YOUR_DOCKERHUB_USERNAME -p
+docker buildx build --platform linux/amd64,linux/arm64 -t YOUR_DOCKERHUB_USERNAME/certmate:latest --push .
 
 # Use pre-built multi-platform image (bound to localhost; put it behind a
 # reverse proxy and enable authentication before exposing it externally)

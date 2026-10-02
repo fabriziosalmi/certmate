@@ -389,25 +389,6 @@ CertMate supports multi-platform Docker images for both ARM and AMD64 architectu
 | `linux/arm/v7` | ARM 32-bit v7 | Raspberry Pi 3+ — **not published**: buildable on request (see below), the release images are amd64 + arm64 |
 | `linux/arm/v6` | ARM 32-bit v6 | Raspberry Pi 1, Zero |
 
-### Build Scripts
-
-```bash
-# Build for current platform only
-./build-docker.sh
-
-# Build for multiple platforms (ARM64 + AMD64)
-./build-docker.sh -m
-
-# Build and push to Docker Hub
-./build-docker.sh -m -p -r YOUR_DOCKERHUB_USERNAME
-
-# Dedicated multi-platform script
-./build-multiplatform.sh -r USERNAME -v v1.0.0 -p
-
-# Build for Raspberry Pi
-./build-multiplatform.sh --platforms linux/arm/v7 -r USERNAME -p
-```
-
 ### Manual Docker Buildx
 
 ```bash
@@ -421,6 +402,16 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # Build and push
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t USERNAME/certmate:latest --push .
+
+# Build for the current platform only
+docker build -t certmate:latest .
+
+# Tag a version and push it
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t USERNAME/certmate:v1.0.0 -t USERNAME/certmate:latest --push .
+
+# Raspberry Pi 3+ (linux/arm/v7, not published)
+docker buildx build --platform linux/arm/v7 -t USERNAME/certmate:armv7 --push .
 ```
 
 ### Prerequisites for Multi-Platform
