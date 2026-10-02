@@ -27,15 +27,19 @@ pip install -r requirements-test.txt   # pytest + playwright, and the in-repo SD
 python app.py
 ```
 
+`make setup` does the same from `requirements.lock` (what the image and the installer run, with
+the test requirements on top under it as a constraint) and installs bandit as well. `make help`
+lists what else it can do; `make check` is the everyday gate and `make ci` is the CI test job.
+
 `requirements-test.txt` installs `clients/certmate-sdk` and `clients/certmate-cli`
 editable, in that order — the CLI depends on the SDK — so the end-to-end tests
 exercise the real clients against the server they wrap.
 
-The linters are **not** in `requirements-test.txt`; CI pins them explicitly and
-so should you:
+flake8 is pinned in `requirements-test.txt`, to the version CI pins. bandit is not in it;
+CI pins it explicitly and so should you:
 
 ```bash
-pip install flake8==7.4.1 bandit==1.9.4
+pip install bandit==1.9.4
 ```
 
 ## Running the tests
@@ -65,18 +69,22 @@ catch something:
 |---|---|
 | Syntax + bug-class lint (**fails CI**) | `flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714,F401,F841,E722 --show-source` |
 | Complexity budget (**fails CI**) | `python scripts/check_complexity_budget.py` |
+| Broad-exception budget (**fails CI**) | `python scripts/check_exception_budget.py` |
 | Security scan (**fails CI**) | `bandit -r modules/ app.py --severity-level medium` |
 | Tests + coverage floor of 75% on `modules/` | `pytest -m "not ui and not network" --cov=modules --cov-fail-under=75` |
+| Coverage floors per HTTP module | `python scripts/check_coverage_floors.py coverage.json` (after the tests, with `--cov-report=json:coverage.json`) |
 | Theme tokens | `python3 scripts/theme_codemod.py --check` |
 | CSS bundle freshness | `npm ci && npm run css:build`, then commit `static/css/tailwind.min.css` |
 | No emoji in the release notes (`RELEASE_NOTES.md` + `docs/releases/`) | `.github/workflows/lint-emoji.yml` |
 | Image builds | `docker build -t certmate:test .` |
 
-The gated commands are the ones `ci.yml` runs, character for character. They had
-drifted — the lint row was missing `F401,F841,E722` and the test row was
-missing `not network` — which is the worst way for this table to be wrong: it
-passes locally and fails on the PR, or it fails locally on the CA-reachability
-tier that CI deliberately does not gate on.
+The gated commands are the ones `ci.yml` runs, character for character, and
+`tests/test_the_makefile_runs_what_ci_runs.py` fails when this table or the Makefile stops
+matching them. Both had drifted. The table was missing `F401,F841,E722` on the lint row,
+`not network` on the test row, and later the exception budget and the coverage floors; the
+Makefile's `make lint` ran neither budget. That is the worst way for a table like this to be
+wrong: it passes locally and fails on the PR, or it fails locally on the CA-reachability tier
+that CI deliberately does not gate on. `make lint`, `make security` and `make ci` run these rows.
 
 The full style pass (`flake8 .` with no `--select`) is informational — the
 codebase is not clean against it and CI runs it with `--exit-zero`. Do not

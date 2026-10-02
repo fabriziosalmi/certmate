@@ -2489,23 +2489,19 @@ We love contributions! CertMate is an open-source project and we welcome:
 git clone https://github.com/fabriziosalmi/certmate.git
 cd certmate
 
-# Create development environment
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pip install -r requirements-test.txt
+# Create the development environment (.venv, from requirements.lock + the test requirements)
+make setup
+source .venv/bin/activate
 
-# Lint, format, and security-scan (the same tools CI runs)
-make lint
-make format
-make security
-
-# Run tests
-pytest
+# Lint, security-scan and test: the checks CI gates on (`make help` lists the rest)
+make check
 
 # Start development server
 python app.py
 ```
+
+A bare `pytest` is not the way to run the suite: it includes the Playwright `ui` tests, which
+need Docker. `make test` runs the selection [CONTRIBUTING.md](CONTRIBUTING.md) documents.
 
 ### Contribution Guidelines
 
