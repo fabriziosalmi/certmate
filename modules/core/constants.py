@@ -470,6 +470,21 @@ METADATA_SCHEMA_VERSION = 1
 #                                   new value of an existing request field, and
 #                                   a new field on a response.
 #
+#   Route53 DNS accounts            two optional fields on the account (#1071):
+#                                   `auth_mode` (`access_keys`, the default, or
+#                                   `iam_role`, which uses the AWS credential
+#                                   chain of the host and needs no stored keys)
+#                                   and `assume_role_arn`. They are read and
+#                                   written wherever a Route53 account is, so
+#                                   the two access-key fields are no longer
+#                                   needed for an account in `iam_role` mode.
+#                                   2.35, MINOR: two new optional request
+#                                   fields and the matching fields on a
+#                                   response. Merged without the number moving,
+#                                   because nothing compared a model with it;
+#                                   tests/test_the_contract_moves_with_the_
+#                                   models.py does now.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -480,16 +495,20 @@ METADATA_SCHEMA_VERSION = 1
 # rather than removing. It is announced with the Deprecation and Sunset headers
 # (see modules/api/deprecation.py) and the removal is what bumps the major.
 #
-# WHAT CHECKS THIS, AND WHAT DOES NOT. tests/test_the_contract_moves_with_the_
-# surface.py compares a snapshot of the ROUTES against the tree, so it catches
-# an endpoint appearing or going away and nothing else. The rule above has six
-# clauses and that gate sees two. A new field on a response, a field removed or
-# retyped, a request field becoming required, a status code changing for an
-# existing condition: all of those can ship with this number unmoved, and one
-# already did — `url_hint` above went out in 2.19. If you are changing what a
-# response CONTAINS rather than which responses exist, this comment is the only
+# WHAT CHECKS THIS, AND WHAT DOES NOT. Two snapshots, both of the OpenAPI
+# document the app serves, each recorded at the version it names.
+# tests/test_the_contract_moves_with_the_surface.py compares the ROUTES and
+# catches an endpoint appearing or going away. tests/test_the_contract_moves_
+# with_the_models.py compares the STRUCTURE under them: a field added to or
+# removed from a model, a field retyped, an enum that gains or loses a value, a
+# parameter that appears or becomes required, a status code that appears or
+# goes, a response that changes shape. Each difference is printed with the way
+# the version has to move. What neither sees: an operation the OpenAPI document
+# does not describe (the dashboard's /api/web/ calls are outside it on purpose,
+# and some documented-in-prose routes are not in the document), and a change of
+# MEANING with the structure unchanged. For those this comment is still the only
 # thing that will stop you, so read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.34'
+API_CONTRACT_VERSION = '2.35'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

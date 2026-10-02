@@ -1507,6 +1507,13 @@ client speaks.
 Deprecating does not move the contract version, which is the point of
 deprecating rather than removing; the removal is what would bump the major.
 
+A **Route53** account takes two optional fields, since API contract **2.35**:
+`auth_mode` (`access_keys`, the default, or `iam_role`) and `assume_role_arn`. In
+`iam_role` mode CertMate uses the AWS credential chain of the host and the two
+access-key fields are not needed; `assume_role_arn` makes it assume that role
+first. Accounts that set neither behave as before. See
+[DNS providers](dns-providers.md#aws-route53).
+
 #### Update or remove an account
 
 **Endpoint**: `PUT /api/dns/<provider>/accounts/<account_id>` — admin
