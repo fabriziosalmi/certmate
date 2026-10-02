@@ -204,6 +204,8 @@ def client_certificates(plan):
         call('post', '/api/client-certs/<identifier>/revoke', path=f'/api/client-certs/{ident}/revoke',
              body={'reason': 'unspecified'})
         call('post', '/api/client-certs/<identifier>/revoke', path=f'/api/client-certs/{ident}/revoke', body={})
+        call('get', '/api/client-certs')                    # a revoked one listed: `revoked_at` is a string
+        call('get', '/api/client-certs/<identifier>', path=f'/api/client-certs/{ident}')
     call('get', '/api/client-certs/<identifier>', path='/api/client-certs/no-such-certificate')       # 404
     call('get', '/api/client-certs/<identifier>/download/<file_type>',
          path='/api/client-certs/no-such-certificate/download/crt')

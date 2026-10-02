@@ -1273,7 +1273,7 @@
      "str"
     ],
     "certificates[].reason_revoked": [
-     "null"
+     "str"
     ],
     "certificates[].renewal_enabled": [
      "bool"
@@ -1285,9 +1285,15 @@
      "bool"
     ],
     "certificates[].revoked_at": [
-     "null"
+     "str"
     ],
     "certificates[].serial_number": [
+     "str"
+    ],
+    "certificates[].superseded_at": [
+     "str"
+    ],
+    "certificates[].superseded_by": [
      "str"
     ],
     "certificates[].type": [
@@ -1355,7 +1361,7 @@
      "str"
     ],
     "reason_revoked": [
-     "null"
+     "str"
     ],
     "renewal_enabled": [
      "bool"
@@ -1367,9 +1373,15 @@
      "bool"
     ],
     "revoked_at": [
-     "null"
+     "str"
     ],
     "serial_number": [
+     "str"
+    ],
+    "superseded_at": [
+     "str"
+    ],
+    "superseded_by": [
      "str"
     ],
     "type": [
