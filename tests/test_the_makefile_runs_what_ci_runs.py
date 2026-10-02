@@ -65,6 +65,19 @@ def test_every_check_script_the_test_job_runs_is_in_the_makefile_and_contributin
             f'ci.yml runs scripts/{script} and the gate table in CONTRIBUTING.md does not list it.')
 
 
+def test_the_release_gate_runs_every_check_script_ci_runs():
+    """The same drift, in the script a release goes through first: `release.sh prepare` ran flake8
+    and bandit but neither budget, so a release could pass it and open a PR whose CI failed. The
+    coverage floors are the one exception: they read coverage.json, which a release run does not
+    produce."""
+    scripts = sorted({m for c in _commands() for m in re.findall(r'python scripts/(check_[a-z_]+\.py)', c)})
+    for script in scripts:
+        if script == 'check_coverage_floors.py':
+            continue
+        assert f'scripts/{script}' in RELEASE, (
+            f'ci.yml runs scripts/{script} and the release gate in scripts/release.sh does not')
+
+
 def test_the_flake8_selection_is_the_one_ci_enforces():
     ci_select = next(re.search(r'--select=(\S+)', c).group(1) for c in _commands()
                      if c.startswith('flake8 .') and '--select=' in c)

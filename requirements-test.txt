@@ -33,3 +33,8 @@ packaging==26.3
 # number CI enforces. Pinned to the version the lint step installs so the test
 # job and the lint job cannot disagree about what "too complex" means.
 flake8==7.4.1
+# Read by scripts/check_ruff_budget.py, the ruff ratchet CI and `make lint` run (#1093). Pinned
+# exactly, and to the version the baseline in that script was measured with: rules change between
+# releases, so a bump (Dependabot proposes one) fails that check until the baseline is re-measured
+# (`python scripts/check_ruff_budget.py --print`) and RUFF_VERSION moves with this pin.
+ruff==0.16.10

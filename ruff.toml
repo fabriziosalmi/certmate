@@ -1,0 +1,20 @@
+# ruff, with the rule families the project wants and a RATCHET instead of an ignore list.
+#
+# `scripts/check_ruff_budget.py` is the gate: every (area, rule) the tree violates today has a
+# recorded count that can only go down, and every other rule is enforced at zero. An `ignore`
+# list here would free a rule to grow; the budget does not. See #1093.
+#
+# This file and not pyproject.toml: a pyproject without a [project] table is read by pip and by
+# Dependabot (which guards the ACME stack, #1077), and what it does to them was not measured.
+# The tables move into pyproject.toml together with the dependency consolidation (#1096, #1097).
+
+target-version = "py312"
+line-length = 127
+
+[lint]
+select = ["E", "F", "W", "B", "I", "S", "C4", "UP", "RUF"]
+
+[lint.per-file-ignores]
+# A pytest suite is made of `assert`, throwaway credentials and subprocess calls; bandit's rules
+# describe production code. (S101 alone is 10,420 of the 12,780 findings these families give.)
+"tests/**" = ["S"]
