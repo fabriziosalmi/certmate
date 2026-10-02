@@ -121,6 +121,31 @@ def _confirm_setup_key(auth_manager, audit_logger, key_id):
     return jsonify({'message': msg, 'key_id': key_id})
 
 
+def _provider_owning(dns_manager, account_id):
+    """The provider an account id belongs to, for a path that does not say.
+
+    `/api/dns-providers/accounts/<id>` and `/api/web/settings/accounts/<id>` carry no
+    provider, and the handler used to run with `provider=None`: a DELETE answered 500
+    for an account that exists, and a PUT answered 200 after writing the credentials it
+    was sent under a provider called `null`, for an id that did not exist too (#1088).
+
+    The id alone names an account only when exactly one provider has it. Returns
+    `(provider, None)` then, and `(None, (response, status))` when it names nothing (404)
+    or several (409, naming the provider-qualified path that is not ambiguous). Every
+    provider has an account called `default`, so that one always needs the long form.
+    """
+    owners = sorted({account.get('provider') for account in dns_manager.list_accounts()
+                     if account.get('account_id') == account_id and account.get('provider')})
+    if not owners:
+        return None, (jsonify({'error': f"No DNS account called '{account_id}'"}), 404)
+    if len(owners) > 1:
+        return None, (jsonify({
+            'error': f"'{account_id}' exists under several providers ({', '.join(owners)}); "
+                     f"name the provider: /api/dns/<provider>/accounts/{account_id}",
+            'providers': owners}), 409)
+    return owners[0], None
+
+
 # A CA account ID is chosen by the operator and ends up in the URL, in
 # certificate metadata and in log lines ("Using CA account: <id>"), so a new
 # one is held to a plain charset. IDs that already exist are still accepted
@@ -749,6 +774,10 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @auth_manager.require_role('admin')
     def api_dns_account_detail(account_id, provider=None):
         """Route for updating or deleting a DNS provider account"""
+        if provider is None:
+            provider, refusal = _provider_owning(dns_manager, account_id)
+            if refusal:
+                return refusal
         if request.method == 'DELETE':
             if dns_manager.delete_account(provider, account_id):
                 if audit_logger:
