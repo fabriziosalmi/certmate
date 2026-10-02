@@ -308,6 +308,21 @@ class TestCRLLifecycle:
         assert info['revoked_count'] == 2
         assert 'CertMate CA' in info['issuer']
 
+    def test_the_crl_issuer_is_the_name_and_not_the_representation_of_the_name_object(
+            self, real_ca, cert_manager_with, tmp_path):
+        """`str(crl.issuer)` is `<Name(CN=...)>`, a library's debug text, and that was what the
+        answer carried (#1111). The form RFC 4514 gives is the one the inventory uses and
+        docs/api.md shows."""
+        from cryptography import x509
+        crl_mgr = CRLManager(real_ca, cert_manager_with([{'serial_number': '1', 'revoked': True}]),
+                             tmp_path / "crl")
+        crl_mgr.update_crl()
+        info = crl_mgr.get_crl_info()
+        signed_by = x509.load_pem_x509_crl(crl_mgr.get_crl_pem()).issuer
+        assert info['issuer'] == signed_by.rfc4514_string()
+        assert '<' not in info['issuer'] and 'Name(' not in info['issuer']
+        assert info['issuer'].startswith(('CN=', 'C=')) and 'CN=CertMate CA' in info['issuer']
+
     def test_get_crl_der_returns_none_when_no_crl(self, real_ca, tmp_path):
         """When neither disk nor regeneration can produce a CRL, get_crl_der
         must return None — never a partial / placeholder DER blob that

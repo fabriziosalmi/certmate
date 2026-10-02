@@ -549,6 +549,22 @@ METADATA_SCHEMA_VERSION = 1
 #                                   replaces were not ones a caller can have
 #                                   depended on.
 #
+#
+#   CRL information                GET /api/crl/download/info sends `issuer` as
+#                                   the name in the form RFC 4514 gives
+#                                   (`CN=CertMate CA,O=CertMate,C=CH`), where it
+#                                   sent the Python representation of the name
+#                                   object (`<Name(CN=CertMate
+#                                   CA,O=CertMate,C=CH)>`: a library's debug
+#                                   text) (#1111). The content is the same,
+#                                   without the wrapper, and it is the form
+#                                   docs/api.md already showed and the
+#                                   inventory's `issuer` already uses. 2.39,
+#                                   MINOR, on the terms of 2.37: a value changes
+#                                   for an existing field, and nothing in the
+#                                   repository (dashboard, clients, tests) read
+#                                   it.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -573,7 +589,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.38'
+API_CONTRACT_VERSION = '2.39'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

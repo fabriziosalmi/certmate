@@ -1,5 +1,5 @@
 {
- "contract_version": "2.38",
+ "contract_version": "2.39",
  "known_defects": {},
  "no_success": {
   "POST /api/storage/azure-keyvault/backfill-certificates": "it copies the certificates into a real Azure Key Vault, which needs the Azure SDK and the vault"

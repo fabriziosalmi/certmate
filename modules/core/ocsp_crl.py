@@ -321,7 +321,10 @@ class CRLManager:
 
             return {
                 'status': 'available',
-                'issuer': str(crl.issuer),
+                # The name, as RFC 4514 writes it. `str()` of a cryptography Name is its repr,
+                # `<Name(CN=...)>`: a library's debug text in an API answer (#1111). The
+                # inventory and the probe already say it this way.
+                'issuer': crl.issuer.rfc4514_string(),
                 'last_update': crl.last_update_utc.isoformat() if crl.last_update_utc else None,
                 'next_update': crl.next_update_utc.isoformat() if crl.next_update_utc else None,
                 'revoked_count': len(revoked_serials),
