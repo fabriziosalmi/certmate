@@ -35,6 +35,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 from .cert_probe import parse_certificate
+from .request_fields import json_list, json_number
 from .utils import exclusive_run
 
 logger = logging.getLogger(__name__)
@@ -174,10 +175,10 @@ class CTMonitorManager:
         config.update(settings.get('ct_monitoring') or {})
         return config
 
-    def save_config(self, config):
-        """Validate and persist the ``ct_monitoring`` config. Returns it cleaned."""
+    def clean_config(self, config):
+        """The ``ct_monitoring`` config, validated and normalised, and not saved (#1109)."""
         domains = []
-        for raw in (config.get('domains') or []):
+        for raw in json_list(config, 'domains'):
             name = str(raw).strip().lower()
             if name:
                 domains.append(name)
@@ -186,11 +187,14 @@ class CTMonitorManager:
             'domains': domains,
             'include_managed': bool(config.get('include_managed', True)),
             'only_valid': bool(config.get('only_valid', True)),
-            'max_new_per_run': max(0, int(config.get('max_new_per_run', 100))),
-            'min_request_interval': max(
-                0.0, float(config.get('min_request_interval', 2.0))
-            ),
+            'max_new_per_run': max(0, json_number(config, 'max_new_per_run', 100, int)),
+            'min_request_interval': max(0.0, json_number(config, 'min_request_interval', 2.0)),
         }
+        return clean
+
+    def save_config(self, config):
+        """Validate and persist the ``ct_monitoring`` config. Returns it cleaned."""
+        clean = self.clean_config(config)
         self.settings_manager.update(
             lambda s: s.__setitem__('ct_monitoring', clean),
             'ct_monitoring_save',

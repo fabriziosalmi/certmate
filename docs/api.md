@@ -1259,6 +1259,14 @@ inventory record as adopted.
 
 Reads and updates discovery and CT-log monitoring settings.
 
+The body may carry any of `discovery`, `ct_monitoring`, `domain_registration`,
+`domain_health` and `dns_resolver`; the ones it leaves out are left alone. **A request
+is applied entirely or not at all**: every section is validated before any is
+saved, and a `400` names the field and has changed nothing. Before API contract
+**2.38** the sections ahead of the one that was refused had already been saved. A
+field of the wrong type (`null` where a number goes, a number or a string where a list
+goes) is a `400` too; it was a `500`.
+
 #### Run discovery now
 
 **Endpoint**: `POST /api/inventory/scan` — admin

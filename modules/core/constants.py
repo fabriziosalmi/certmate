@@ -531,6 +531,24 @@ METADATA_SCHEMA_VERSION = 1
 #                                   whoever did branch on them. (#1089, the same
 #                                   kind of change, moved nothing.)
 #
+#
+#   Inventory configuration        POST /api/inventory/config is applied
+#                                   entirely or not at all: every section
+#                                   (discovery, ct_monitoring,
+#                                   domain_registration, domain_health,
+#                                   dns_resolver) is validated before any is
+#                                   saved, where a refused section answered 400
+#                                   after the sections ahead of it had been saved
+#                                   (#1109). A field of the wrong type (null
+#                                   where a number goes, a number or a string
+#                                   where a list goes) is a 400 that names the
+#                                   field, where it was a 500. 2.38, MINOR, on
+#                                   the same terms as 2.37: the status code of an
+#                                   existing condition changes (a 500 for a body
+#                                   the caller got wrong), and the answers it
+#                                   replaces were not ones a caller can have
+#                                   depended on.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -555,7 +573,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.37'
+API_CONTRACT_VERSION = '2.38'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
