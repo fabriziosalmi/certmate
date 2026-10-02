@@ -1,12 +1,20 @@
-"""What the routes outside the OpenAPI document actually answer.
+"""What every route of the API actually answers.
 
-`tests/contract_support.py` compares the OpenAPI document with the version. A route
-that is a plain Flask route is not in that document: its fields are described in
-docs/api.md and nowhere a test can read, so nothing compared them with the version
-(#1086). This module calls each of them on the real app, in a fixed order and on a
-state it builds itself (a user, a key, a DNS account, a webhook target), and records
-the STRUCTURE of every answer: which fields, of which type, under which status
-code. Values are never recorded.
+`tests/contract_support.py` compares the OpenAPI document with the version, and the
+document declares a response schema for 7 of its 69 operations (#1105): what the other 62
+send, and under which status codes, was described in docs/api.md and nowhere a test could
+read. The 42 routes that are plain Flask routes were not in the document at all (#1086).
+This module calls ALL of them (108 of the 111; 3 cannot be called, see `NOT_CALLED`) on the
+real app, in a fixed order and on a state it builds itself, and records the STRUCTURE of
+every answer: which fields, of which type, under which status code. Values are never
+recorded.
+
+The world it runs in is built by `tests/contract_world.py`: a seeded instance, certbot
+replaced by a stand-in that writes what certbot writes, and a seal that refuses every
+connection beyond the loopback interface, every DNS query and every child process, so a
+route that would reach the world can be called and answers as it does when the world does not
+answer. The plan itself is `tests/contract_plan.py` (the routes the OpenAPI document
+describes) and `_walk` below (the plain Flask routes).
 
 It characterizes, it does not specify: it records what the routes do today, so that
 a change to it is a change somebody reads and, by the rule beside
@@ -15,6 +23,9 @@ and not left out of it:
 
   * the REQUEST side (the fields a route accepts live in the handlers and the docs);
   * `not_called`: routes this plan does not call, each with the reason;
+  * `no_success`: routes whose plan reaches no 2xx answer, each with the reason;
+  * `known_defects`: calls that showed a wrong answer. They are made, checked to still be
+    wrong, and NOT recorded: a snapshot of a wrong answer is a test that guards it;
   * `unseen_items`: answers that held an empty list, whose elements were not seen;
   * `opaque`: sub-objects that change with what happened rather than with the code
     (an audit entry's `details`), recorded as "an object" and nothing below.
@@ -25,6 +36,7 @@ Regenerate after moving the version:
 """
 import json
 import re
+import time
 
 from tests.contract_support import MAJOR, MINOR, ORDER, REPO, REVIEW
 
@@ -51,11 +63,30 @@ OPAQUE_BY_ROUTE = {
 # Routes deliberately not called, each with the reason. A route outside the OpenAPI
 # document that is in neither the plan nor this table fails the test, so a new one
 # has to be decided about.
+# Routes whose plan reaches no 2xx answer, each with the reason. A route with only error answers
+# recorded is a route whose success shape is not compared with anything, and that has to be said.
+# The entry goes when the route gets a 2xx (the test fails if it stays).
+NO_SUCCESS = {
+    'POST /api/deploy/test/<X>': 'the only answer a hook that ran can get today is a 404 (#1107); the call that '
+                                 'shows it is a known defect and is not recorded',
+    'POST /api/storage/azure-keyvault/backfill-certificates': 'it copies the certificates into a real Azure Key '
+                                                              'Vault, which needs the Azure SDK and the vault',
+}
+
 NOT_CALLED = {
     'GET /api/swagger.json': 'it is the OpenAPI document itself; tests/test_the_contract_moves_with_the_models.py compares it',
     'GET /api/auth/oidc/callback': 'the return leg of a login at an identity provider; needs one',
     'GET /api/auth/oidc/login': 'redirects to an identity provider; needs one',
 }
+
+
+def says_success(status, payload):
+    """An error status whose body says it worked. A client that reads the status and one that
+    reads the body then disagree about what happened, and `POST /api/deploy/test/<id>` answered
+    404 for every hook that ran and succeeded (#1107)."""
+    return (status >= 400 and isinstance(payload, dict)
+            and (payload.get('success') is True or payload.get('ok') is True
+                 or payload.get('status') == 'success'))
 
 
 def _type(value):
@@ -105,26 +136,38 @@ def unseen_items(paths):
 
 
 class Plan:
-    def __init__(self, app, token, trace=None):
+    def __init__(self, app, token, trace=None, certbot=None, container=None):
         self.app, self.token, self.trace = app, token, trace
         self.admin = app.test_client()
         self.headers = {'Authorization': f'Bearer {token}'}
         self.seen = {}
         self.context = {}
+        self.certbot, self.container = certbot, container
+        self.last_body = None
+        self.world = None
+        self.defects = []           # (call, issue, expected status, status it answered)
+        self.contradictions = []    # answers whose status and body disagree
 
     def call(self, verb, template, path=None, body=None, client=None, headers=None,
-             stream=False, query=None):
+             stream=False, query=None, data=None, keep=False, limited=False, defect=None):
         path = path or template
+        if not limited:
+            self.forget_the_rate()
         key = f'{verb.upper()} {re.sub(r"<[^>]+>", "<X>", template)}'
         client = client or self.admin
         kwargs = {'headers': self.headers if headers is None else headers}
         if body is not None:
             kwargs['json'] = body
+        if data is not None:
+            kwargs.update(data=data, content_type='multipart/form-data')
         if query:
             kwargs['query_string'] = query
         response = getattr(client, verb)(path, **kwargs)
+        self.last_body = None
         if stream:
             payload = {'<stream>': response.content_type.split(';')[0]}
+            if keep:        # never for an event stream: it has no end
+                self.last_body = response.get_data()
             response.close()
         else:
             payload = response.get_json(silent=True)
@@ -132,12 +175,42 @@ class Plan:
                 payload = {'<non-json>': (response.content_type or '').split(';')[0]}
         if self.trace is not None:
             self.trace.append((key, path, response.status_code))
+        if defect is not None:
+            # A call that shows a known defect is not recorded: a snapshot of a wrong answer is a
+            # test that guards the wrong answer. It is kept here, with its issue, and the test
+            # fails when the answer stops being the wrong one, so the entry cannot go stale.
+            issue, expected = defect
+            self.defects.append((f'{key} {path}', issue, expected, response.status_code))
+            return response, payload
+        if says_success(response.status_code, payload):
+            self.contradictions.append(f'{key} [{response.status_code}] {path}')
         by_status = self.seen.setdefault(key, {})
         entry = by_status.setdefault(str(response.status_code), {})
         for found, types in flatten(payload, MAPS_BY_ROUTE.get(key, ()),
                                     OPAQUE_BY_ROUTE.get(key, ())).items():
             entry.setdefault(found, set()).update(types)
         return response, payload
+
+    def forget_the_rate(self):
+        """Every call arrives in a minute of its own. The plan makes hundreds of calls and the API
+        answers 429 after 100 a minute: a plan that counted on the clock would record 429 for
+        whatever route happened to be called after the hundredth. `limited=True` leaves the
+        count alone, which is how the rate-limit answer itself is reached on purpose."""
+        limiter = (self.container.managers.get('rate_limiter') if self.container else None)
+        if limiter is not None:
+            limiter.requests.clear()
+
+    def wait_job(self, job_id, until=('succeeded', 'failed'), seconds=30):
+        """Wait for an async issuance job to reach one of the states `until`. The job runs on a
+        thread of its own; a walk that went on without it would record answers that depend on
+        who got there first."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            response = self.admin.get(f'/api/certificates/jobs/{job_id}', headers=self.headers)
+            if (response.get_json(silent=True) or {}).get('status') in until:
+                return
+            time.sleep(0.02)
+        raise AssertionError(f'job {job_id} did not reach {until} in {seconds}s')
 
 
 def _target():
@@ -147,9 +220,15 @@ def _target():
                        'payload_template': '{"domain": "{{domain}}"}', 'allow_internal': True}}
 
 
-def run(app, token, trace=None):
+def run(app, token, trace=None, report=None):
     """Call the plan. Returns (routes, unseen) where routes is
     {route: {status: {path: [types]}}}.
+
+    The plan runs in a sealed world (tests/contract_world.py): nothing leaves the process, and
+    certbot is a stand-in that writes what certbot writes. `report`, when given, is a dict that
+    receives `escapes` (what the seal refused, so a caller can see how close the plan came),
+    `defects` (calls that showed a known defect and were not recorded), `contradictions` and
+    `cwds` (where certbot was run from).
 
     The plan logs in (a wrong password and a right one) and the login rate limiter is a module
     global of the PROCESS, not of the app: left as it is, the plan spends the budget of every
@@ -158,20 +237,37 @@ def run(app, token, trace=None):
     nothing behind.
     """
     from modules.web import routes as web_routes
+    from tests import contract_world as world
     buckets = (web_routes._login_attempts_by_ip, web_routes._login_attempts_by_user)
     for bucket in buckets:
         bucket.clear()
     try:
-        return _walk(app, token, trace)
+        container = app.extensions['certmate_container']
+        world.warm_up()
+        certbot = world.Certbot()
+        with world.sealed() as seal, world.certbot_standing_in(certbot), world.working_directory(), \
+                world.serving() as port, world.environment():
+            seeded = world.seed(container, port)
+            try:
+                return _walk(app, token, trace, certbot, container, seeded, report)
+            finally:
+                if report is not None:
+                    report['escapes'] = list(seal.attempts)
+                    report['cwds'] = list(certbot.cwds)
     finally:
         for bucket in buckets:
             bucket.clear()
 
 
-def _walk(app, token, trace):
-    plan = Plan(app, token, trace)
+def _walk(app, token, trace, certbot, container, seeded, report):
+    from tests import contract_plan
+    plan = Plan(app, token, trace, certbot, container)
+    plan.world = seeded
     call = plan.call
     password = 'correct-horse-9-battery'
+
+    # --- the routes the OpenAPI document describes (tests/contract_plan.py)
+    contract_plan.walk(plan)
 
     # --- users, and a login and a logout. The browser is a client of its own so its
     # session cookie touches nothing else; local authentication has to be on for a
@@ -199,14 +295,18 @@ def _walk(app, token, trace):
     call('delete', '/api/users/<username>', path='/api/users/alice')                         # 404
 
     # --- API keys
-    _, created = call('post', '/api/keys', body={'name': 'ci', 'role': 'viewer'})
+    _, created = call('post', '/api/keys', body={'name': 'ci', 'role': 'viewer', 'allowed_domains': ['*.example.test'],
+                                                  'expires_at': '2099-01-01T00:00:00+00:00'})
     key_id = (created or {}).get('id')
     call('post', '/api/keys', body={})                                                       # 400
     call('get', '/api/keys')
     if key_id:
-        call('patch', '/api/keys/<key_id>', path=f'/api/keys/{key_id}', body={'confirmed': True})
+        call('patch', '/api/keys/<key_id>', path=f'/api/keys/{key_id}', body={'confirmed': True})  # 400: not from setup
         call('patch', '/api/keys/<key_id>', path=f'/api/keys/{key_id}', body={})             # 400
         call('delete', '/api/keys/<key_id>', path=f'/api/keys/{key_id}')
+    setup_key = plan.world.setup_key
+    call('patch', '/api/keys/<key_id>', path=f'/api/keys/{setup_key}', body={'confirmed': True})  # vouched for
+    call('patch', '/api/keys/<key_id>', path=f'/api/keys/{setup_key}', body={'confirmed': True})  # already
     call('patch', '/api/keys/<key_id>', path='/api/keys/does-not-exist', body={'confirmed': True})
     call('delete', '/api/keys/<key_id>', path='/api/keys/does-not-exist')
 
@@ -242,6 +342,8 @@ def _walk(app, token, trace):
     call('post', '/api/deploy/targets/preview', body=keyed)
     call('post', '/api/deploy/targets/preview', body={'type': 'nope'})                       # 400
     call('post', '/api/deploy/test/<hook_id>', path='/api/deploy/test/unknown', body={})
+    call('post', '/api/deploy/test/<hook_id>', path='/api/deploy/test/h1', body={},          # runs: nothing launched
+         defect=(contract_plan.DEFECT_DEPLOY_TEST, 404))
 
     # --- notifications. `test` sends a real message when the channel is real, so it
     # is only called with a channel type that does not exist.
@@ -259,6 +361,12 @@ def _walk(app, token, trace):
     call('get', '/api/settings/rate-limits')
     call('put', '/api/settings/rate-limits', body={'enabled': True})
     call('put', '/api/settings/rate-limits', body={'limits': {'nope': 1}})                   # 400
+    # The 429 every route can answer: a limit of one, then two calls in the same minute.
+    call('put', '/api/settings/rate-limits', body={'limits': {'default': 1}})
+    plan.forget_the_rate()
+    call('get', '/api/health', limited=True)
+    call('get', '/api/health', limited=True)                                                 # 429
+    call('put', '/api/settings/rate-limits', body={'limits': {'default': 100}})
 
     # --- single sign-on and authentication settings (last of the writers: they change auth)
     call('get', '/api/auth/oidc/config')
@@ -280,6 +388,9 @@ def _walk(app, token, trace):
               for key, by_status in sorted(plan.seen.items())}
     unseen = {key: sorted({path for paths in by_status.values() for path in unseen_items(paths)})
               for key, by_status in sorted(plan.seen.items())}
+    if report is not None:
+        report['defects'] = list(plan.defects)
+        report['contradictions'] = list(plan.contradictions)
     return routes, {key: paths for key, paths in unseen.items() if paths}
 
 
@@ -329,11 +440,14 @@ def compare(recorded, current):
     return sorted(found, key=lambda item: (ORDER[item[0]], item[1]))
 
 
-def document(routes, unseen):
+def document(routes, unseen, defects=()):
     sys_path_fix()
     from modules.core.constants import API_CONTRACT_VERSION
     return {'contract_version': API_CONTRACT_VERSION, 'routes': routes,
-            'not_called': dict(sorted(NOT_CALLED.items())), 'unseen_items': unseen,
+            'not_called': dict(sorted(NOT_CALLED.items())),
+            'no_success': dict(sorted(NO_SUCCESS.items())),
+            'known_defects': {call: issue for call, issue, _expected, _got in sorted(defects)},
+            'unseen_items': unseen,
             'opaque': {k: sorted(v) for k, v in sorted(OPAQUE_BY_ROUTE.items())}}
 
 
@@ -344,9 +458,11 @@ def sys_path_fix():
 
 
 def write_snapshot(built):
-    routes, unseen = run(*built)
-    SNAPSHOT.write_text(json.dumps(document(routes, unseen), indent=1, sort_keys=True) + '\n',
+    report = {}
+    routes, unseen = run(*built, report=report)
+    SNAPSHOT.write_text(json.dumps(document(routes, unseen, report['defects']), indent=1, sort_keys=True) + '\n',
                         encoding='utf-8')
     statuses = sum(len(v) for v in routes.values())
     print(f'wrote {SNAPSHOT.relative_to(REPO)}: {len(routes)} routes, {statuses} answers, '
-          f'{len(NOT_CALLED)} not called, {len(unseen)} with elements unseen')
+          f'{len(NOT_CALLED)} not called, {len(NO_SUCCESS)} with no success, '
+          f'{len(report["defects"])} known defects, {len(unseen)} with elements unseen')
