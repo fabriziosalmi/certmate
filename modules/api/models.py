@@ -284,12 +284,19 @@ def create_api_models(api):
         # nothing computes them. Deprecated, and removed by the next MAJOR of the API contract
         # (#1114); they are sent, as null, until then. `latest_issuance` is `created_at` or
         # `renewed_at`; the rest have no counterpart, because CertMate keeps no ledger of issuances.
-        'total_issued': fields.Integer(description=_NEVER_FILLED + 'Was meant to be the total of certificates issued.'),
-        'total_active': fields.Integer(description=_NEVER_FILLED + 'Was meant to be the total of active certificates.'),
-        'total_revoked': fields.Integer(description=_NEVER_FILLED + 'Was meant to be the total of revoked certificates.'),
-        'total_expired': fields.Integer(description=_NEVER_FILLED + 'Was meant to be the total of expired certificates.'),
-        'latest_issuance': fields.String(description=_NEVER_FILLED + 'Was meant to be the latest issuance timestamp: read `renewed_at`, or `created_at`.'),
-        'oldest_active_issuance': fields.String(description=_NEVER_FILLED + 'Was meant to be the oldest active issuance timestamp.'),
+        'total_issued': fields.Integer(
+            description=_NEVER_FILLED + 'Was meant to be the total of certificates issued.'),
+        'total_active': fields.Integer(
+            description=_NEVER_FILLED + 'Was meant to be the total of active certificates.'),
+        'total_revoked': fields.Integer(
+            description=_NEVER_FILLED + 'Was meant to be the total of revoked certificates.'),
+        'total_expired': fields.Integer(
+            description=_NEVER_FILLED + 'Was meant to be the total of expired certificates.'),
+        'latest_issuance': fields.String(
+            description=_NEVER_FILLED + 'Was meant to be the latest issuance timestamp: read '
+                                        '`renewed_at`, or `created_at`.'),
+        'oldest_active_issuance': fields.String(
+            description=_NEVER_FILLED + 'Was meant to be the oldest active issuance timestamp.'),
         'notes': fields.String(description=(
             'Free-text note an operator attached to the certificate, or null. '
             'Since API contract 2.33.')),
