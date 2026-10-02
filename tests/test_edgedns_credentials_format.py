@@ -109,3 +109,28 @@ def test_certbot_credentials_parser_reads_all_four_keys(edgedns_ini):
     assert creds.conf('client_secret') == 'secretsecretsecret=='
     assert creds.conf('access_token') == 'akab-ACCESSTOKEN-yyy'
     assert creds.conf('host') == 'akab-host-zzz.luna.akamaiapis.net'
+
+
+def test_the_installed_plugin_itself_accepts_our_file(edgedns_ini, monkeypatch):
+    """The test above replicates what 0.1.0 does with certbot's parser; it never imports the
+    plugin, so it would pass unchanged on a plugin that reads the file differently. 0.3.0 is
+    exactly that: it reads `client_token` where 0.1.0 reads `edgedns_client_token`, finds nothing
+    in the file CertMate writes, and stops before any API call with "Either an edgerc_path or
+    individual edgegrid credentials are required" (#1079). This runs the INSTALLED plugin's own
+    credential reading over our file, so a pin that moves to such a version fails here and not in
+    the first issuance of the first Akamai user.
+    """
+    plugin = pytest.importorskip('certbot_plugin_edgedns.edgedns')
+    import argparse
+
+    # The module keeps what it read in a global dict; work on a copy so no other test sees it.
+    monkeypatch.setattr(plugin, 'EDGEGRID_CREDS', dict(plugin.EDGEGRID_CREDS))
+    config = argparse.Namespace(edgedns_credentials=str(edgedns_ini), edgedns_propagation_seconds=10)
+    authenticator = plugin.Authenticator(config, 'edgedns')
+
+    authenticator._setup_credentials()          # a PluginError here is the failure this test is for
+
+    assert plugin.EDGEGRID_CREDS['client_token'] == 'akab-CLIENTTOKEN-xxx'
+    assert plugin.EDGEGRID_CREDS['client_secret'] == 'secretsecretsecret=='
+    assert plugin.EDGEGRID_CREDS['access_token'] == 'akab-ACCESSTOKEN-yyy'
+    assert plugin.EDGEGRID_CREDS['host'] == 'akab-host-zzz.luna.akamaiapis.net'
