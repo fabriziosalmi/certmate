@@ -1,0 +1,521 @@
+{
+ "docs/api.md GET /api/audit/verify 200": {
+  "omitted": [
+   "checkpoint_reason",
+   "checkpoint_verified",
+   "error_seq"
+  ]
+ },
+ "docs/api.md GET /api/certificates/<X> 200": {
+  "omitted": [
+   "auto_renew",
+   "tags[]"
+  ],
+  "unverified": [
+   "renewal_info"
+  ]
+ },
+ "docs/api.md GET /api/client-certs 200": {
+  "never_seen": [
+   "certificates[].status"
+  ],
+  "omitted": [
+   "certificates[].ca_used",
+   "certificates[].crl_entry_serial",
+   "certificates[].csr_required",
+   "certificates[].days_valid",
+   "certificates[].email",
+   "certificates[].extended_key_usage",
+   "certificates[].key_usage",
+   "certificates[].notes",
+   "certificates[].organizational_unit",
+   "certificates[].reason_revoked",
+   "certificates[].renewal_enabled",
+   "certificates[].renewal_threshold_days",
+   "certificates[].revoked_at",
+   "certificates[].serial_number",
+   "certificates[].type"
+  ]
+ },
+ "docs/api.md GET /api/client-certs/<X> 200": {
+  "never_seen": [
+   "renewal",
+   "revocation"
+  ],
+  "omitted": [
+   "ca_used",
+   "crl_entry_serial",
+   "csr_required",
+   "days_valid",
+   "extended_key_usage",
+   "key_usage",
+   "reason_revoked",
+   "renewal_enabled",
+   "renewal_threshold_days",
+   "revoked",
+   "revoked_at"
+  ]
+ },
+ "docs/api.md GET /api/client-certs/stats 200": {
+  "never_seen": [
+   "created_count",
+   "expiring_soon",
+   "renewal_enabled"
+  ],
+  "omitted": [
+   "by_organization",
+   "ca_status"
+  ]
+ },
+ "docs/api.md GET /api/inventory/domains 200": {
+  "unverified": [
+   "domains[]"
+  ]
+ },
+ "docs/api.md GET /api/inventory/health 200": {
+  "unverified": [
+   "names[]"
+  ]
+ },
+ "docs/api.md POST /api/certificates/check-caa 200": {
+  "unverified": [
+   "domains[].records[]",
+   "suggested_record"
+  ]
+ },
+ "docs/api.md POST /api/certificates/reissue-keyless 202": {
+  "never_seen": [
+   "next_step"
+  ],
+  "unverified": [
+   "refused[]",
+   "remaining[]"
+  ]
+ },
+ "docs/api.md POST /api/client-certs/<X>/renew 201": {
+  "never_seen": [
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/api.md POST /api/client-certs/<X>/revoke 200": {
+  "never_seen": [
+   "reason",
+   "revoked_at"
+  ]
+ },
+ "docs/api.md POST /api/client-certs/batch 201": {
+  "omitted": [
+   "errors[]"
+  ]
+ },
+ "docs/api.md POST /api/client-certs/create 201": {
+  "never_seen": [
+   "cert_usage",
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/de/api.md GET /api/audit/verify 200": {
+  "omitted": [
+   "checkpoint_reason",
+   "checkpoint_verified",
+   "error_seq"
+  ]
+ },
+ "docs/de/api.md GET /api/client-certs 200": {
+  "never_seen": [
+   "certificates[].status"
+  ],
+  "omitted": [
+   "certificates[].ca_used",
+   "certificates[].crl_entry_serial",
+   "certificates[].csr_required",
+   "certificates[].days_valid",
+   "certificates[].email",
+   "certificates[].extended_key_usage",
+   "certificates[].key_usage",
+   "certificates[].notes",
+   "certificates[].organizational_unit",
+   "certificates[].reason_revoked",
+   "certificates[].renewal_enabled",
+   "certificates[].renewal_threshold_days",
+   "certificates[].revoked_at",
+   "certificates[].serial_number",
+   "certificates[].type"
+  ]
+ },
+ "docs/de/api.md GET /api/client-certs/<X> 200": {
+  "never_seen": [
+   "renewal",
+   "revocation"
+  ],
+  "omitted": [
+   "ca_used",
+   "crl_entry_serial",
+   "csr_required",
+   "days_valid",
+   "extended_key_usage",
+   "key_usage",
+   "reason_revoked",
+   "renewal_enabled",
+   "renewal_threshold_days",
+   "revoked",
+   "revoked_at"
+  ]
+ },
+ "docs/de/api.md GET /api/client-certs/stats 200": {
+  "never_seen": [
+   "created_count",
+   "expiring_soon",
+   "renewal_enabled"
+  ],
+  "omitted": [
+   "by_organization",
+   "ca_status"
+  ]
+ },
+ "docs/de/api.md POST /api/client-certs/<X>/renew 201": {
+  "never_seen": [
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/de/api.md POST /api/client-certs/<X>/revoke 200": {
+  "never_seen": [
+   "reason",
+   "revoked_at"
+  ]
+ },
+ "docs/de/api.md POST /api/client-certs/batch 201": {
+  "omitted": [
+   "errors[]"
+  ]
+ },
+ "docs/de/api.md POST /api/client-certs/create 201": {
+  "never_seen": [
+   "cert_usage",
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/es/api.md GET /api/audit/verify 200": {
+  "omitted": [
+   "checkpoint_reason",
+   "checkpoint_verified",
+   "error_seq"
+  ]
+ },
+ "docs/es/api.md GET /api/client-certs 200": {
+  "never_seen": [
+   "certificates[].status"
+  ],
+  "omitted": [
+   "certificates[].ca_used",
+   "certificates[].crl_entry_serial",
+   "certificates[].csr_required",
+   "certificates[].days_valid",
+   "certificates[].email",
+   "certificates[].extended_key_usage",
+   "certificates[].key_usage",
+   "certificates[].notes",
+   "certificates[].organizational_unit",
+   "certificates[].reason_revoked",
+   "certificates[].renewal_enabled",
+   "certificates[].renewal_threshold_days",
+   "certificates[].revoked_at",
+   "certificates[].serial_number",
+   "certificates[].type"
+  ]
+ },
+ "docs/es/api.md GET /api/client-certs/<X> 200": {
+  "never_seen": [
+   "renewal",
+   "revocation"
+  ],
+  "omitted": [
+   "ca_used",
+   "crl_entry_serial",
+   "csr_required",
+   "days_valid",
+   "extended_key_usage",
+   "key_usage",
+   "reason_revoked",
+   "renewal_enabled",
+   "renewal_threshold_days",
+   "revoked",
+   "revoked_at"
+  ]
+ },
+ "docs/es/api.md GET /api/client-certs/stats 200": {
+  "never_seen": [
+   "created_count",
+   "expiring_soon",
+   "renewal_enabled"
+  ],
+  "omitted": [
+   "by_organization",
+   "ca_status"
+  ]
+ },
+ "docs/es/api.md POST /api/client-certs/<X>/renew 201": {
+  "never_seen": [
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/es/api.md POST /api/client-certs/<X>/revoke 200": {
+  "never_seen": [
+   "reason",
+   "revoked_at"
+  ]
+ },
+ "docs/es/api.md POST /api/client-certs/batch 201": {
+  "omitted": [
+   "errors[]"
+  ]
+ },
+ "docs/es/api.md POST /api/client-certs/create 201": {
+  "never_seen": [
+   "cert_usage",
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/fr/api.md GET /api/audit/verify 200": {
+  "omitted": [
+   "checkpoint_reason",
+   "checkpoint_verified",
+   "error_seq"
+  ]
+ },
+ "docs/fr/api.md GET /api/client-certs 200": {
+  "never_seen": [
+   "certificates[].status"
+  ],
+  "omitted": [
+   "certificates[].ca_used",
+   "certificates[].crl_entry_serial",
+   "certificates[].csr_required",
+   "certificates[].days_valid",
+   "certificates[].email",
+   "certificates[].extended_key_usage",
+   "certificates[].key_usage",
+   "certificates[].notes",
+   "certificates[].organizational_unit",
+   "certificates[].reason_revoked",
+   "certificates[].renewal_enabled",
+   "certificates[].renewal_threshold_days",
+   "certificates[].revoked_at",
+   "certificates[].serial_number",
+   "certificates[].type"
+  ]
+ },
+ "docs/fr/api.md GET /api/client-certs/<X> 200": {
+  "never_seen": [
+   "renewal",
+   "revocation"
+  ],
+  "omitted": [
+   "ca_used",
+   "crl_entry_serial",
+   "csr_required",
+   "days_valid",
+   "extended_key_usage",
+   "key_usage",
+   "reason_revoked",
+   "renewal_enabled",
+   "renewal_threshold_days",
+   "revoked",
+   "revoked_at"
+  ]
+ },
+ "docs/fr/api.md GET /api/client-certs/stats 200": {
+  "never_seen": [
+   "created_count",
+   "expiring_soon",
+   "renewal_enabled"
+  ],
+  "omitted": [
+   "by_organization",
+   "ca_status"
+  ]
+ },
+ "docs/fr/api.md POST /api/client-certs/<X>/renew 201": {
+  "never_seen": [
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/fr/api.md POST /api/client-certs/<X>/revoke 200": {
+  "never_seen": [
+   "reason",
+   "revoked_at"
+  ]
+ },
+ "docs/fr/api.md POST /api/client-certs/batch 201": {
+  "omitted": [
+   "errors[]"
+  ]
+ },
+ "docs/fr/api.md POST /api/client-certs/create 201": {
+  "never_seen": [
+   "cert_usage",
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/it/api.md GET /api/audit/verify 200": {
+  "omitted": [
+   "checkpoint_reason",
+   "checkpoint_verified",
+   "error_seq"
+  ]
+ },
+ "docs/it/api.md GET /api/client-certs 200": {
+  "never_seen": [
+   "certificates[].status"
+  ],
+  "omitted": [
+   "certificates[].ca_used",
+   "certificates[].crl_entry_serial",
+   "certificates[].csr_required",
+   "certificates[].days_valid",
+   "certificates[].email",
+   "certificates[].extended_key_usage",
+   "certificates[].key_usage",
+   "certificates[].notes",
+   "certificates[].organizational_unit",
+   "certificates[].reason_revoked",
+   "certificates[].renewal_enabled",
+   "certificates[].renewal_threshold_days",
+   "certificates[].revoked_at",
+   "certificates[].serial_number",
+   "certificates[].type"
+  ]
+ },
+ "docs/it/api.md GET /api/client-certs/<X> 200": {
+  "never_seen": [
+   "renewal",
+   "revocation"
+  ],
+  "omitted": [
+   "ca_used",
+   "crl_entry_serial",
+   "csr_required",
+   "days_valid",
+   "extended_key_usage",
+   "key_usage",
+   "reason_revoked",
+   "renewal_enabled",
+   "renewal_threshold_days",
+   "revoked",
+   "revoked_at"
+  ]
+ },
+ "docs/it/api.md GET /api/client-certs/stats 200": {
+  "never_seen": [
+   "created_count",
+   "expiring_soon",
+   "renewal_enabled"
+  ],
+  "omitted": [
+   "by_organization",
+   "ca_status"
+  ]
+ },
+ "docs/it/api.md POST /api/client-certs/<X>/renew 201": {
+  "never_seen": [
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ },
+ "docs/it/api.md POST /api/client-certs/<X>/revoke 200": {
+  "never_seen": [
+   "reason",
+   "revoked_at"
+  ]
+ },
+ "docs/it/api.md POST /api/client-certs/batch 201": {
+  "omitted": [
+   "errors[]"
+  ]
+ },
+ "docs/it/api.md POST /api/client-certs/create 201": {
+  "never_seen": [
+   "cert_usage",
+   "common_name",
+   "created_at",
+   "expires_at",
+   "serial_number",
+   "status"
+  ],
+  "omitted": [
+   "metadata",
+   "paths"
+  ]
+ }
+}

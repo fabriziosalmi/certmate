@@ -20,6 +20,7 @@ Tutti gli endpoint API richiedono l'autenticazione tramite Bearer token.
 
 ### Formato dell'header
 
+<!-- illustration: the header every authenticated request carries -->
 ```
 Authorization: Bearer IL_TUO_TOKEN
 ```
@@ -50,9 +51,10 @@ Gli endpoint API hanno limiti di frequenza per prevenire gli abusi:
 
 Quando il limite viene superato, si riceve:
 
-```
-HTTP 429 Too Many Requests
+`HTTP 429 Too Many Requests`
 
+<!-- response: GET /api/health 429 -->
+```json
 {
  "error": "Rate limit exceeded",
  "message": "Too many requests. Please try again later.",
@@ -73,6 +75,7 @@ HTTP 429 Too Many Requests
 Crea un nuovo certificato client.
 
 **Richiesta**:
+<!-- request: POST /api/client-certs/create -->
 ```json
 {
  "common_name": "user@example.com",
@@ -97,6 +100,7 @@ Crea un nuovo certificato client.
 - `notes` (opzionale) — Note aggiuntive
 
 **Risposta** (201 Created):
+<!-- response: POST /api/client-certs/create 201 -->
 ```json
 {
  "identifier": "cert-abc123",
@@ -137,6 +141,7 @@ Elenca tutti i certificati client con filtro opzionale.
 - `search` (opzionale) — Cerca nel common name
 
 **Risposta** (200 OK):
+<!-- response: GET /api/client-certs 200 -->
 ```json
 {
  "certificates": [{
@@ -192,6 +197,7 @@ curl "http://localhost:8000/api/client-certs?search=user1" \
 Recupera i metadati completi di un certificato.
 
 **Risposta** (200 OK):
+<!-- response: GET /api/client-certs/<identifier> 200 -->
 ```json
 {
  "type": "client_certificate",
@@ -266,6 +272,7 @@ curl http://localhost:8000/api/client-certs/cert-001/download/csr \
 Revoca un certificato con motivo opzionale.
 
 **Richiesta** (opzionale):
+<!-- request: POST /api/client-certs/<identifier>/revoke -->
 ```json
 {
  "reason": "compromised"
@@ -273,6 +280,7 @@ Revoca un certificato con motivo opzionale.
 ```
 
 **Risposta** (200 OK):
+<!-- response: POST /api/client-certs/<identifier>/revoke 200 -->
 ```json
 {
  "message": "Certificate revoked: cert-001",
@@ -300,6 +308,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/revoke \
 Rinnova un certificato (stesso CN, nuovo numero seriale).
 
 **Risposta** (201 Created):
+<!-- response: POST /api/client-certs/<identifier>/renew 201 -->
 ```json
 {
  "identifier": "cert-001-renewed",
@@ -326,6 +335,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/renew \
 Recupera le statistiche di utilizzo dei certificati.
 
 **Risposta** (200 OK):
+<!-- response: GET /api/client-certs/stats 200 -->
 ```json
 {
  "total": 100,
@@ -357,6 +367,7 @@ curl http://localhost:8000/api/client-certs/stats \
 Crea piu certificati da dati CSV in un'unica richiesta.
 
 **Richiesta**:
+<!-- request: POST /api/client-certs/batch -->
 ```json
 {
  "headers": ["common_name", "email", "organization", "cert_usage", "days_valid"],
@@ -368,6 +379,7 @@ Crea piu certificati da dati CSV in un'unica richiesta.
 ```
 
 **Risposta** (201 Created):
+<!-- response: POST /api/client-certs/batch 201 -->
 ```json
 {
  "total": 3,
@@ -414,6 +426,7 @@ curl -X POST http://localhost:8000/api/client-certs/batch \
 Interroga lo stato di un certificato tramite OCSP.
 
 **Risposta** (200 OK):
+<!-- response: GET /api/ocsp/status/<serial_number> 200 -->
 ```json
 {
  "response_status": "successful",
@@ -464,6 +477,7 @@ curl http://localhost:8000/api/crl/download/info \
 ```
 
 **Risposta informazioni CRL**:
+<!-- response: GET /api/crl/download/info 200 -->
 ```json
 {
  "status": "available",
@@ -532,6 +546,7 @@ curl "http://localhost:8000/api/certificates/example.com/download?format=json" \
 Modifica la configurazione di un certificato e lo riemette sul posto — estende o rimuove le voci SAN senza cancellare e ricreare. I campi omessi mantengono i valori con cui il certificato e stato emesso (letti dai suoi metadati), evitando cosi di dover reinserire la configurazione DNS/alias/CA. Il certificato attuale continua ad essere servito fino al completamento della riemissione. La forma della chiave e preservata salvo modifica esplicita (nessun flag di chiave viene inviato e certbot mantiene la chiave della lineage).
 
 **Corpo della richiesta** (tutti i campi sono opzionali):
+<!-- request: POST /api/certificates/<domain>/reissue -->
 ```json
 {
   "san_domains": ["www.example.com", "api.example.com"],
@@ -564,6 +579,7 @@ curl -X POST http://localhost:8000/api/certificates/example.com/reissue \
 
 ### Formato della risposta di errore
 
+<!-- illustration: the error envelope every route uses -->
 ```json
 {
  "error": "Error message",
@@ -609,6 +625,7 @@ Le operazioni del ciclo di vita dei certificati e le modifiche alla configurazio
 
 Il log di audit viene scritto in `logs/audit/certificate_audit.log`. Ogni riga e una riga di log Python standard il cui messaggio e la voce di audit JSON:
 
+<!-- illustration: a line of the audit log file -->
 ```
 2026-06-15 18:00:00 - certmate.audit - INFO - {"timestamp": "...", ...}
 ```
@@ -621,6 +638,7 @@ tail -f logs/audit/certificate_audit.log
 
 ### Struttura della voce
 
+<!-- illustration: an entry of the audit log file -->
 ```json
 {
   "timestamp": "2026-06-15T18:00:00.000000+00:00",
@@ -660,6 +678,7 @@ Parallelamente al log leggibile dall'utente, ogni voce viene aggiunta a una **ha
 
 **Verifica tramite API:** `GET /api/audit/verify` (admin) restituisce il risultato del verificatore e HTTP `200` quando integra o `409` quando corrotta:
 
+<!-- response: GET /api/audit/verify 200 -->
 ```json
 {"ok": true, "count": 128, "first_seq": 0, "last_seq": 127, "head_hash": "5ee1…", "reason": "intact"}
 ```
@@ -697,6 +716,7 @@ Il verificatore controlla la struttura della chain, che il manifest corrisponda 
 
 Per l'autenticazione dei client API tramite TLS mutuale.
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "api-mtls"
 ```
@@ -705,6 +725,7 @@ cert_usage: "api-mtls"
 
 Per l'autenticazione dei client VPN.
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "vpn"
 ```
@@ -713,6 +734,7 @@ cert_usage: "vpn"
 
 E possibile utilizzare qualsiasi stringa di tipo di utilizzo personalizzato:
 
+<!-- illustration: a value of cert_usage -->
 ```
 cert_usage: "custom-application"
 ```
