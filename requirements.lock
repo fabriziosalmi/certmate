@@ -2,14 +2,18 @@
 #
 #     scripts/regenerate_lockfiles.sh
 #
-# The fully resolved install set for requirements.txt, produced by pip's own resolver
-# inside the base image this project publishes from. 43 of these are
+# The fully resolved install set for requirements.txt, resolved by uv for the two
+# published architectures. 43 of these are
 # pinned by requirements.txt; the other 80 are transitive and were chosen by
-# the resolver, which is exactly why they are written down here.
+# the resolver, which is exactly why they are written down here. The image
+# installs them with pip.
 #
 # The two published architectures resolve this set identically, which is what
 # makes one file sufficient. `scripts/regenerate_lockfiles.sh` re-checks that
 # before writing, so the day it stops being true is the day it is noticed.
+#
+# A regeneration starts from the pins already in this file and moves only what
+# the change under review requires: it does not re-resolve the transitive set.
 #
 # No hashes: this makes the build repeatable, not the artifacts verified. See
 # "Supply-chain posture for Python dependencies" in SECURITY.md.
