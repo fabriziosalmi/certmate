@@ -1,5 +1,5 @@
 {
- "contract_version": "2.35",
+ "contract_version": "2.36",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -1425,7 +1425,26 @@
    }
   },
   "GET /inventory": {
-   "parameters": {},
+   "parameters": {
+    "query:include_superseded": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    },
+    "query:managed": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    },
+    "query:source": {
+     "required": false,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
    "responses": {
     "200": null
    }
@@ -1437,7 +1456,23 @@
    }
   },
   "GET /inventory/crypto-report": {
-   "parameters": {},
+   "parameters": {
+    "query:format": {
+     "required": false,
+     "shape": {
+      "enum": [
+       "csv"
+      ],
+      "type": "string"
+     }
+    },
+    "query:include_superseded": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    }
+   },
    "responses": {
     "200": null
    }

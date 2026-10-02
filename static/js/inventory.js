@@ -128,7 +128,13 @@
         var sans = (r.san_dns || []).slice(0, 3).join(', ');
         var extra = (r.san_dns || []).length > 3 ? ' +' + ((r.san_dns.length) - 3) : '';
         var cn = r.subject_cn || '(no CN)';
-        var s = '<div class="font-medium text-foreground">' + escapeHtml(cn) + '</div>';
+        var s = '<div class="font-medium text-foreground">' + escapeHtml(cn);
+        // Replaced on every endpoint it was seen on (#1044): kept in the history, and said so.
+        if (r.superseded) {
+            s += ' <span class="inline-block px-1.5 py-0.5 rounded text-xs bg-surface-2 text-muted" '
+                + 'title="Every endpoint this was seen on has since been seen serving a different certificate">superseded</span>';
+        }
+        s += '</div>';
         if (sans) { s += '<div class="text-xs text-muted truncate max-w-xs">' + escapeHtml(sans) + escapeHtml(extra) + '</div>'; }
         return s;
     }
@@ -186,14 +192,26 @@
         return true;
     }
 
+    // How many superseded certificates the last load left out of the list (0 when they are shown).
+    var hiddenSuperseded = 0;
+
+    function showSuperseded() {
+        var box = el('invSuperseded');
+        return !!(box && box.checked);
+    }
+
     function render() {
         var body = el('inventoryBody');
         var rows = records.filter(passesFilters);
-        el('invCount').textContent = rows.length + ' of ' + records.length;
+        el('invCount').textContent = rows.length + ' of ' + records.length
+            + (hiddenSuperseded ? ' · ' + hiddenSuperseded + ' superseded hidden' : '');
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-muted">'
-                + (records.length ? 'No certificates match the filters.' : 'Inventory is empty. Configure discovery or CT-log monitoring, then Scan now.')
-                + '</td></tr>';
+            var empty = records.length
+                ? 'No certificates match the filters.'
+                : (hiddenSuperseded
+                    ? 'Every certificate in the inventory has been superseded. Tick \u201cShow superseded\u201d to see them.'
+                    : 'Inventory is empty. Configure discovery or CT-log monitoring, then Scan now.');
+            body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-muted">' + empty + '</td></tr>';
             return;
         }
         body.innerHTML = rows.map(function (r) {
@@ -280,10 +298,14 @@
     }
 
     function load() {
-        fetch('/api/inventory', { headers: API_HEADERS, credentials: 'same-origin' })
+        // Superseded certificates are left out by the server unless asked for, so the summary cards
+        // describe what the list shows; the API itself returns them, marked, by default.
+        var url = '/api/inventory' + (showSuperseded() ? '' : '?include_superseded=false');
+        fetch(url, { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (data) {
                 records = data.certificates || [];
+                hiddenSuperseded = showSuperseded() ? 0 : ((data.summary || {}).superseded || 0);
                 setSummary(data.summary);
                 render();
             })
@@ -399,7 +421,9 @@
     }
 
     function loadCryptoSummary() {
-        fetch('/api/inventory/crypto-report', { headers: API_HEADERS, credentials: 'same-origin' })
+        // The readiness cards describe what the list shows: they leave out superseded certificates too.
+        var url = '/api/inventory/crypto-report' + (showSuperseded() ? '' : '?include_superseded=false');
+        fetch(url, { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (rep) {
                 var c = rep.by_classification || {};
@@ -554,8 +578,14 @@
         forget(fp, match && match.subject_cn);
     }
 
+    // The one control that changes what both the list and the readiness cards describe.
+    function toggleSuperseded() {
+        load();
+        loadCryptoSummary();
+    }
+
     window.InventoryPage = {
-        load: load, render: render, saveConfig: saveConfig,
+        load: load, render: render, saveConfig: saveConfig, toggleSuperseded: toggleSuperseded,
         runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl,
         forget: forget, forgetFromEl: forgetFromEl
     };

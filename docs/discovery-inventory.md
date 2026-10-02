@@ -245,6 +245,21 @@ a verified answer says are **revoked**. Each row shows its revocation answer
 under the expiry badge; a certificate that could not be checked says so in grey
 and gives the reason on hover, rather than looking fine.
 
+After a renewal the inventory holds both certificates of a host: the old one with
+its last sighting and the new one with today's. That is on purpose, because it is how
+"a renewed certificate that was never deployed" shows up (the endpoint still serves
+the old one). To keep the list readable, a certificate is **superseded** when every
+endpoint it was seen on has since been seen serving a different certificate, and the
+dashboard hides superseded certificates until you tick **Show superseded**; a count
+next to the total says how many are hidden, and the summary cards describe what the
+list shows. It is worked out from what is already stored, nothing is deleted, and it
+corrects itself on the next scan. A certificate still served on any endpoint is never
+superseded, and neither is one with no endpoint to compare (found in a CT log, or
+issued here and never probed). An endpoint that alternates between two certificates
+(a rollout behind a load balancer) marks whichever it served earlier, until the next
+scan says otherwise. The API marks them too: see
+[List the inventory](api.md#list-the-inventory).
+
 Admins get an inline configuration panel for the monitored endpoints and CT-log
 domains, plus **Scan now**.
 

@@ -1,5 +1,5 @@
 {
- "contract_version": "2.35",
+ "contract_version": "2.36",
  "not_called": {
   "GET /api/auth/oidc/callback": "the return leg of a login at an identity provider; needs one",
   "GET /api/auth/oidc/login": "redirects to an identity provider; needs one",
