@@ -66,7 +66,7 @@ help:
 	@echo "    make test-e2e         Real certificates against Let's Encrypt staging (needs .env)"
 	@echo ""
 	@echo "  Code Quality"
-	@echo "    make lint             flake8 (CI selection) + complexity budget + exception budget"
+	@echo "    make lint             flake8 (CI selection) + complexity, exception and ruff budgets"
 	@echo "    make security         bandit (medium and above)"
 	@echo "    make check            lint + security + test"
 	@echo "    make ci               lint + security + test-ci + coverage floors"
@@ -160,6 +160,7 @@ lint: $(VENV)/bin/activate
 	$(VENV)/bin/flake8 . --count --select=$(FLAKE8_SELECT) --show-source --statistics
 	$(PYTHON) scripts/check_complexity_budget.py
 	$(PYTHON) scripts/check_exception_budget.py
+	$(PYTHON) scripts/check_ruff_budget.py
 
 security: $(VENV)/bin/activate
 	$(VENV)/bin/bandit -r modules/ app.py --severity-level medium

@@ -117,6 +117,10 @@ jobs:
         # The same shape for broad exception handlers. #671 counted 397 and
         # nothing measured it again, so it reached 425 with the issue open.
         python scripts/check_exception_budget.py
+        # ruff, as a ratchet per (area, rule) rather than an ignore list (#1093): the rules in
+        # ruff.toml are enforced at zero except for the counts the baseline records, which only
+        # go down. The ruff version is pinned in requirements-test.txt, installed above.
+        python scripts/check_ruff_budget.py
         # Style is reported, never enforced: line length is not a defect class.
         flake8 . --count --exit-zero --max-line-length=127 --statistics
 

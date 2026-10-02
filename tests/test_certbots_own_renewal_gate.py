@@ -103,7 +103,7 @@ class FakeCA:
 
     def open_window(self, days_from_now, width_days=1):
         """The window opens that many days from now; negative means it is already over."""
-        start = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=days_from_now)
+        start = dt.datetime.now(dt.UTC) + dt.timedelta(days=days_from_now)
         self.window = (start, start + dt.timedelta(days=width_days))
 
     def close(self):
@@ -113,7 +113,7 @@ class FakeCA:
 
 def _lineage(root, ca, lifetime_days, age_days, renew_before_expiry=None):
     key = ec.generate_private_key(ec.SECP256R1())
-    not_before = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=age_days)
+    not_before = dt.datetime.now(dt.UTC) - dt.timedelta(days=age_days)
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'gate.example.test')])
     cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject)
             .public_key(key.public_key()).serial_number(x509.random_serial_number())
