@@ -224,6 +224,8 @@ def write_snapshot():
     print(f'wrote {SNAPSHOT.relative_to(REPO)}: contract {API_CONTRACT_VERSION}, '
           f'{len(document["models"])} models, {len(document["operations"])} operations, '
           f'{len(document["outside_openapi"])} routes outside the document')
+    from tests import contract_routes
+    contract_routes.write_snapshot(built)
 
 
 if __name__ == '__main__':
