@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.47.0 (Route 53 with an IAM role, a quieter inventory, and the API's answers under test)
+
+[Read the notes](docs/releases/v2.47.0.md)
+
 ## v2.46.0 (certbot 5.8, and Azure DNS without a plugin)
 
 [Read the notes](docs/releases/v2.46.0.md)
