@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.47.1 (a base image a month newer, and a release that will not ship an old one)
+
+[Read the notes](docs/releases/v2.47.1.md)
+
 ## v2.47.0 (Route 53 with an IAM role, a quieter inventory, and the API's answers under test)
 
 [Read the notes](docs/releases/v2.47.0.md)
