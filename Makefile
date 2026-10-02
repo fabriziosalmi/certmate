@@ -16,7 +16,7 @@
 # ========================================================================
 
 .PHONY: help setup install-dev \
-        test test-unit test-integration test-coverage test-ci test-ui test-network test-e2e test-watch \
+        run test test-unit test-integration test-coverage test-ci test-ui test-network test-e2e test-watch \
         lint security check ci coverage-floors \
         docker-build docker-run docker-stop \
         clean clean-venv clean-all
@@ -51,6 +51,9 @@ help:
 	@echo "  Setup"
 	@echo "    make setup            Create .venv (Python 3.12), install requirements.lock + test deps"
 	@echo "    make install-dev      Install into an existing .venv"
+	@echo ""
+	@echo "  Run"
+	@echo "    make run              Start CertMate from the .venv on http://localhost:8000"
 	@echo ""
 	@echo "  Testing"
 	@echo "    make test             Unit + integration, no UI, no e2e (what scripts/release.sh runs)"
@@ -98,6 +101,11 @@ install-dev: $(VENV)/bin/activate
 	$(PIP) install -r requirements.lock
 	$(PIP) install -c requirements.lock -r requirements-test.txt
 	$(PIP) install bandit==$(BANDIT_VERSION)
+
+# ── Run ────────────────────────────────────────────────────────────────
+
+run: $(VENV)/bin/activate
+	$(PYTHON) app.py
 
 # ── Testing ────────────────────────────────────────────────────────────
 # `test` is the selection CONTRIBUTING.md documents and scripts/release.sh runs.

@@ -128,24 +128,6 @@ first-boot state, so reuse across runs causes auth-dependent failures.
 
 ## API Endpoint Testing
 
-### Quick Test Script
-
-Use `quick_test.sh` for fast pre-commit endpoint validation:
-
-```bash
-# Run before every commit
-./quick_test.sh
-
-# Test only public endpoints
-./quick_test.sh --public-only
-```
-
-This script:
-- Checks if the server is running
-- Auto-loads API token from `data/settings.json`
-- Tests all endpoint categories
-- Provides clear pass/fail output
-
 ### Running the test suite
 
 The suite is pytest, split by marker (see `pytest.ini`): `unit`,
@@ -260,8 +242,10 @@ There is no pre-commit configuration in this repository; run the same gates CI
 runs:
 
 ```bash
-make lint                              # flake8, failing set only
-pytest -m "not ui and not network" -q  # what CI runs
+make lint      # flake8 (the set CI fails on) and the complexity and exception budgets
+make security  # bandit, medium severity and above
+make check     # lint + security + tests (the selection the release gate runs)
+make ci        # the CI test job: needs Docker and Node
 ```
 
 A release runs considerably more — see `scripts/release.sh`, which gates on

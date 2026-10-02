@@ -1,6 +1,6 @@
 # Docker Build & Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM 813d7648b913adcf -->
+<!-- CERTMATE-TRANSLATED-FROM e7c97bf8776edb69 -->
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 
@@ -256,25 +256,6 @@ CertMate unterstützt Multi-Plattform-Docker-Images für ARM- und AMD64-Architek
 | `linux/arm/v7` | ARM 32-Bit v7 | Raspberry Pi 3+ |
 | `linux/arm/v6` | ARM 32-Bit v6 | Raspberry Pi 1, Zero |
 
-### Build-Skripte
-
-```bash
-# Nur für die aktuelle Plattform bauen
-./build-docker.sh
-
-# Für mehrere Plattformen bauen (ARM64 + AMD64)
-./build-docker.sh -m
-
-# Bauen und zu Docker Hub pushen
-./build-docker.sh -m -p -r YOUR_DOCKERHUB_USERNAME
-
-# Dediziertes Multi-Plattform-Skript
-./build-multiplatform.sh -r USERNAME -v v1.0.0 -p
-
-# Für Raspberry Pi bauen
-./build-multiplatform.sh --platforms linux/arm/v7 -r USERNAME -p
-```
-
 ### Manuelles Docker Buildx
 
 ```bash
@@ -288,6 +269,16 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 # Bauen und pushen
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t USERNAME/certmate:latest --push .
+
+# Nur für die aktuelle Plattform bauen
+docker build -t certmate:latest .
+
+# Eine Version taggen und pushen
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t USERNAME/certmate:v1.0.0 -t USERNAME/certmate:latest --push .
+
+# Raspberry Pi 3+ (linux/arm/v7, nicht veröffentlicht)
+docker buildx build --platform linux/arm/v7 -t USERNAME/certmate:armv7 --push .
 ```
 
 ### Voraussetzungen für Multi-Plattform

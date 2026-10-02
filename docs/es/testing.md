@@ -1,6 +1,6 @@
 # Guía de pruebas
 
-<!-- CERTMATE-TRANSLATED-FROM 46e5abd7dddb3f1c -->
+<!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
 
 Esta guía cubre el framework de pruebas de CertMate, incluyendo pruebas unitarias, pruebas de integración y validación de endpoints API.
 
@@ -131,42 +131,21 @@ provoca fallos relacionados con la autenticación.
 
 ## Pruebas de endpoints API
 
-### Script de prueba rápida
+### Ejecutar la suite de pruebas
 
-Use `quick_test.sh` para una validación rápida de endpoints antes de cada commit:
-
-```bash
-# Ejecutar antes de cada commit
-./quick_test.sh
-
-# Probar solo los endpoints públicos
-./quick_test.sh --public-only
-```
-
-Este script:
-- Comprueba si el servidor está en ejecución
-- Carga automáticamente el token API desde `data/settings.json`
-- Prueba todas las categorías de endpoints
-- Proporciona una salida clara de éxito/fallo
-
-### Suite de pruebas API completa
+La suite es pytest, dividida por marcadores (véase `pytest.ini`): `unit`, `integration`, `api`, `dns`, `e2e` (requiere un servidor en ejecución), `ui` (Playwright, requiere un navegador y un contenedor).
 
 ```bash
-# Carga automática del token desde los ajustes
-python3 test_all_endpoints.py --auto-token
+make test                # unitarias + integración
+make test-unit
+make test-coverage       # --cov=modules, informes HTML y XML
 
-# Con URL de servidor personalizada
-python3 test_all_endpoints.py --url http://192.168.1.100:8000
-
-# Con token API manual
-python3 test_all_endpoints.py --token your-api-bearer-token
-
-# Prueba rápida solo de lo esencial
-python3 test_all_endpoints.py --quick --auto-token
-
-# Solo endpoints públicos (sin autenticación requerida)
-python3 test_all_endpoints.py --public-only
+# O directamente, p. ej. todo lo que no necesita navegador:
+pytest -m "not ui"
+pytest -m "not ui and not e2e" -q
 ```
+
+La CI ejecuta `pytest -m "not ui and not network"` con un mínimo de cobertura; la suite de UI se ejecuta en su propio workflow, las comprobaciones de accesibilidad de las CA se ejecutan cada semana (como comprobación obligatoria pondrían en rojo cada PR por la caída de un tercero), y la puerta de extremo a extremo con certificados reales se ejecuta contra Let's Encrypt staging antes de una release.
 
 ### Endpoints probados
 
@@ -254,25 +233,18 @@ El pipeline de CI se ejecuta en cada push y pull request:
 5. **Docker**: Prueba del build de Docker
 6. **Cobertura**: Envío a Codecov
 
-### Hook Pre-Commit
+### Antes de hacer push
+
+Este repositorio no tiene configuración de pre-commit; ejecute las mismas puertas que la CI:
 
 ```bash
-pip install pre-commit
-pre-commit install
+make lint      # flake8 (el conjunto con el que falla la CI) y los presupuestos de complejidad y de excepciones
+make security  # bandit, severidad media y superior
+make check     # lint + security + pruebas (la selección de la puerta de release)
+make ci        # el job de pruebas de la CI: requiere Docker y Node
 ```
 
-Los hooks incluyen: formateo de código (black, isort), linting (flake8), verificaciones de seguridad (bandit).
-
-### Pruebas de API en CI/CD
-
-```yaml
-# Ejemplo de GitHub Actions
-- name: Test API Endpoints
-  run: |
-    python app.py &
-    sleep 5
-    python3 test_all_endpoints.py --auto-token
-```
+Una release ejecuta bastante más: véase `scripts/release.sh`, que exige flake8, bandit, las suites unitaria y de integración, la suite de UI con Playwright, un certificado real emitido contra Let's Encrypt staging y una build de Docker.
 
 ---
 

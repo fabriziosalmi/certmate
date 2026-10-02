@@ -45,7 +45,7 @@ pip install bandit==1.9.4
 ## Running the tests
 
 ```bash
-./run-tests.sh                                   # or, equivalently:
+make test                                        # or, equivalently:
 pytest -v --tb=short -m "not ui and not e2e"
 ```
 

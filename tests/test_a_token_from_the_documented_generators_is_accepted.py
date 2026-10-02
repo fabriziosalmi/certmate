@@ -33,9 +33,10 @@ ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 URLSAFE = ALNUM + '-_'
 
 # generator as the documentation words it -> (alphabet, length). The ones in DOCUMENTED below are the
-# commands users are told to run, and each is checked, WHOLE, against the files that say so. The others
-# are the same commands at other lengths: `-hex 16` is the shortest token the length floor allows,
-# `-hex 24` sits between, and `token_urlsafe(48)` is the longer variant of the documented one.
+# commands users are told to run, and each is checked, WHOLE, against the files that say so. The others are
+# sampled too: the base64 pipeline (an alphanumeric alphabet, unlike the hex ones; start-certmate.sh told users to
+# run it, and nothing documents it now), and other lengths of the documented commands: `-hex 16` is the shortest
+# token the length floor allows, `-hex 24` sits between, and `token_urlsafe(48)` is the longer variant.
 GENERATORS = {
     'openssl rand -hex 32': (HEX, 64),
     'openssl rand -hex 24': (HEX, 48),
@@ -49,7 +50,6 @@ SAMPLES = 20000
 # generator -> the files that tell users to run it
 DOCUMENTED = {
     'openssl rand -hex 32': ['README.md', 'deploy/install.sh'],
-    'openssl rand -base64 32 | tr -d "=+/" | cut -c1-32': ['start-certmate.sh'],
     'secrets.token_urlsafe(32)': ['.env.example'],
 }
 

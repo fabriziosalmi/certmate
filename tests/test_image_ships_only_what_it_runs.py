@@ -88,12 +88,6 @@ MUST_NOT_SHIP = [
     ('pytest.ini', "pytest's own configuration"),
     ('codecov.yml', 'coverage reporting configuration'),
     ('Makefile', 'developer targets'),
-    ('build-docker.sh', 'a build script, already consumed by the builder'),
-    ('build-multiplatform.sh', 'a build script'),
-    ('run-tests.sh', 'a test runner'),
-    ('quick_test.sh', 'a test runner'),
-    ('test-multiplatform.sh', 'a test runner'),
-    ('debug-docker.sh', 'a debugging script'),
 ]
 
 
