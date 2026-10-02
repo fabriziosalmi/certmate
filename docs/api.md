@@ -1520,7 +1520,12 @@ first. Accounts that set neither behave as before. See
 **Endpoint**: `DELETE /api/dns/<provider>/accounts/<account_id>` — admin
 
 The `/api/dns-providers/accounts/<account_id>` forms of these are deprecated on
-the same terms as the listing above.
+the same terms as the listing above. They carry no provider, so CertMate finds it:
+the account id has to belong to exactly one provider. An id no provider has is a
+`404`. An id several providers have is a `409` that lists them and names the path
+that is not ambiguous, `/api/dns/<provider>/accounts/<account_id>`; every provider
+has an account called `default`, so that one always needs the long form. Neither
+refusal writes anything.
 
 #### Provider configuration
 

@@ -3,7 +3,7 @@ import re
 from functools import partial, wraps
 from pathlib import Path
 
-from flask import request, jsonify
+from flask import abort, request, jsonify
 
 from modules.core.request_fields import json_booleans
 from modules.core.constants import iter_cert_domain_dirs
@@ -119,6 +119,44 @@ def _confirm_setup_key(auth_manager, audit_logger, key_id):
             user=user.get('username'), ip_address=request.remote_addr,
         )
     return jsonify({'message': msg, 'key_id': key_id})
+
+
+def _refuse(status, body):
+    """Answer *body* with *status* and stop the request, from anywhere in a handler."""
+    response = jsonify(body)
+    response.status_code = status
+    abort(response)
+
+
+def _provider_of_account(dns_manager, account_id, provider):
+    """The provider an account belongs to: *provider* when the path named one, else found.
+
+    `/api/dns-providers/accounts/<id>` and `/api/web/settings/accounts/<id>` carry no
+    provider, and the handler used to run with `provider=None`: a DELETE answered 500
+    for an account that exists, and a PUT answered 200 after writing the credentials it
+    was sent under a provider called `null`, for an id that did not exist too (#1088).
+
+    The id alone names an account only when exactly one provider has it. When it names
+    nothing the request stops with a 404; when it names several, with a 409 that lists
+    them and names the provider-qualified path, which is not ambiguous. Every provider
+    has an account called `default`, so that one always needs the long form.
+
+    The refusal is raised rather than returned so the handler, which is a closure inside
+    `register_settings_routes`, gains no branch: that function's complexity is a budget
+    that only comes down (scripts/check_complexity_budget.py).
+    """
+    if provider is not None:
+        return provider
+    owners = sorted({account.get('provider') for account in dns_manager.list_accounts()
+                     if account.get('account_id') == account_id and account.get('provider')})
+    if not owners:
+        _refuse(404, {'error': f"No DNS account called '{account_id}'"})
+    if len(owners) > 1:
+        _refuse(409, {
+            'error': f"'{account_id}' exists under several providers ({', '.join(owners)}); "
+                     f"name the provider: /api/dns/<provider>/accounts/{account_id}",
+            'providers': owners})
+    return owners[0]
 
 
 # A CA account ID is chosen by the operator and ends up in the URL, in
@@ -749,6 +787,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @auth_manager.require_role('admin')
     def api_dns_account_detail(account_id, provider=None):
         """Route for updating or deleting a DNS provider account"""
+        provider = _provider_of_account(dns_manager, account_id, provider)
         if request.method == 'DELETE':
             if dns_manager.delete_account(provider, account_id):
                 if audit_logger:

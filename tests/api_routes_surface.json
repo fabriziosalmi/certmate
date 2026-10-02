@@ -1,0 +1,1205 @@
+{
+ "contract_version": "2.35",
+ "not_called": {
+  "GET /api/auth/oidc/callback": "the return leg of a login at an identity provider; needs one",
+  "GET /api/auth/oidc/login": "redirects to an identity provider; needs one",
+  "GET /api/swagger.json": "it is the OpenAPI document itself; tests/test_the_contract_moves_with_the_models.py compares it"
+ },
+ "opaque": {
+  "GET /api/activity": [
+   "entries[].details"
+  ],
+  "GET /api/audit/export": [
+   "entries[].entry.details"
+  ]
+ },
+ "routes": {
+  "DELETE /api/dns-providers/accounts/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "DELETE /api/keys/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "DELETE /api/users/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/activity": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "complete": [
+     "bool"
+    ],
+    "count": [
+     "int"
+    ],
+    "entries": [
+     "list"
+    ],
+    "entries[]": [
+     "dict"
+    ],
+    "entries[].actor": [
+     "dict"
+    ],
+    "entries[].actor.kind": [
+     "str"
+    ],
+    "entries[].actor.label": [
+     "str"
+    ],
+    "entries[].details": [
+     "dict"
+    ],
+    "entries[].error": [
+     "null"
+    ],
+    "entries[].ip_address": [
+     "str"
+    ],
+    "entries[].operation": [
+     "str"
+    ],
+    "entries[].resource_id": [
+     "str"
+    ],
+    "entries[].resource_type": [
+     "str"
+    ],
+    "entries[].status": [
+     "str"
+    ],
+    "entries[].timestamp": [
+     "str"
+    ],
+    "entries[].trigger": [
+     "dict"
+    ],
+    "entries[].trigger.cause": [
+     "str"
+    ],
+    "entries[].user": [
+     "str"
+    ],
+    "limit": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/audit/export": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "bundle_signature": [
+     "str"
+    ],
+    "entries": [
+     "list"
+    ],
+    "entries[]": [
+     "dict"
+    ],
+    "entries[].entry": [
+     "dict"
+    ],
+    "entries[].entry.actor": [
+     "dict"
+    ],
+    "entries[].entry.actor.kind": [
+     "str"
+    ],
+    "entries[].entry.actor.label": [
+     "str"
+    ],
+    "entries[].entry.details": [
+     "dict"
+    ],
+    "entries[].entry.error": [
+     "null"
+    ],
+    "entries[].entry.ip_address": [
+     "str"
+    ],
+    "entries[].entry.operation": [
+     "str"
+    ],
+    "entries[].entry.resource_id": [
+     "str"
+    ],
+    "entries[].entry.resource_type": [
+     "str"
+    ],
+    "entries[].entry.status": [
+     "str"
+    ],
+    "entries[].entry.timestamp": [
+     "str"
+    ],
+    "entries[].entry.trigger": [
+     "dict"
+    ],
+    "entries[].entry.trigger.cause": [
+     "str"
+    ],
+    "entries[].entry.user": [
+     "str"
+    ],
+    "entries[].hash": [
+     "str"
+    ],
+    "entries[].prev_hash": [
+     "str"
+    ],
+    "entries[].seq": [
+     "int"
+    ],
+    "manifest": [
+     "dict"
+    ],
+    "manifest.algorithm": [
+     "str"
+    ],
+    "manifest.count": [
+     "int"
+    ],
+    "manifest.exported_at": [
+     "str"
+    ],
+    "manifest.format_version": [
+     "int"
+    ],
+    "manifest.head_hash": [
+     "str"
+    ],
+    "manifest.instance_fingerprint": [
+     "str"
+    ],
+    "manifest.public_key_pem": [
+     "str"
+    ],
+    "manifest.seq_first": [
+     "int"
+    ],
+    "manifest.seq_last": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/audit/public-key": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "algorithm": [
+     "str"
+    ],
+    "fingerprint": [
+     "str"
+    ],
+    "public_key_pem": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/audit/verify": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "checkpoint_reason": [
+     "str"
+    ],
+    "checkpoint_verified": [
+     "bool"
+    ],
+    "count": [
+     "int"
+    ],
+    "error_seq": [
+     "null"
+    ],
+    "first_seq": [
+     "int"
+    ],
+    "head_hash": [
+     "str"
+    ],
+    "last_seq": [
+     "int"
+    ],
+    "ok": [
+     "bool"
+    ],
+    "reason": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/auth/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "has_users": [
+     "bool"
+    ],
+    "local_auth_enabled": [
+     "bool"
+    ]
+   }
+  },
+  "GET /api/auth/me": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "auth_mode": [
+     "str"
+    ],
+    "user": [
+     "dict"
+    ],
+    "user.role": [
+     "str"
+    ],
+    "user.source": [
+     "str"
+    ],
+    "user.username": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/auth/oidc/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "enabled": [
+     "bool"
+    ],
+    "login_url": [
+     "str"
+    ],
+    "post_logout_redirect_uri": [
+     "str"
+    ],
+    "provider_name": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/auth/oidc/settings": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "auto_create_users": [
+     "bool"
+    ],
+    "client_id": [
+     "str"
+    ],
+    "client_secret": [
+     "str"
+    ],
+    "default_role": [
+     "str"
+    ],
+    "email_claim": [
+     "str"
+    ],
+    "enabled": [
+     "bool"
+    ],
+    "issuer_url": [
+     "str"
+    ],
+    "link_by_email": [
+     "bool"
+    ],
+    "post_logout_redirect_uri": [
+     "str"
+    ],
+    "provider_name": [
+     "str"
+    ],
+    "redirect_uri_override": [
+     "str"
+    ],
+    "require_verified_email": [
+     "bool"
+    ],
+    "role_claim": [
+     "str"
+    ],
+    "role_mappings": [
+     "list"
+    ],
+    "role_mappings[]": [
+     "dict"
+    ],
+    "role_mappings[].claim_value": [
+     "str"
+    ],
+    "role_mappings[].role": [
+     "str"
+    ],
+    "scopes": [
+     "list"
+    ],
+    "scopes[]": [
+     "str"
+    ],
+    "sync_role_on_login": [
+     "bool"
+    ],
+    "username_claim": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/deploy/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "domain_hooks": [
+     "dict"
+    ],
+    "enabled": [
+     "bool"
+    ],
+    "global_hooks": [
+     "list"
+    ],
+    "global_hooks[]": [
+     "dict"
+    ],
+    "global_hooks[].command": [
+     "str"
+    ],
+    "global_hooks[].enabled": [
+     "bool"
+    ],
+    "global_hooks[].id": [
+     "str"
+    ],
+    "global_hooks[].name": [
+     "str"
+    ],
+    "global_hooks[].on_events": [
+     "list"
+    ],
+    "global_hooks[].on_events[]": [
+     "str"
+    ],
+    "global_hooks[].timeout": [
+     "int"
+    ],
+    "targets": [
+     "list"
+    ],
+    "targets[]": [
+     "dict"
+    ],
+    "targets[].config": [
+     "dict"
+    ],
+    "targets[].config.allow_internal": [
+     "bool"
+    ],
+    "targets[].config.payload_template": [
+     "str"
+    ],
+    "targets[].config.url": [
+     "str"
+    ],
+    "targets[].domains": [
+     "list"
+    ],
+    "targets[].domains[]": [
+     "str"
+    ],
+    "targets[].enabled": [
+     "bool"
+    ],
+    "targets[].id": [
+     "str"
+    ],
+    "targets[].name": [
+     "str"
+    ],
+    "targets[].type": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/deploy/history": {
+   "200": {
+    ".": [
+     "list"
+    ]
+   }
+  },
+  "GET /api/deploy/pending": {
+   "200": {
+    ".": [
+     "list"
+    ]
+   }
+  },
+  "GET /api/dns-providers/accounts": {
+   "200": {
+    ".": [
+     "list"
+    ],
+    "[]": [
+     "dict"
+    ],
+    "[].account_id": [
+     "str"
+    ],
+    "[].configured": [
+     "bool"
+    ],
+    "[].description": [
+     "str"
+    ],
+    "[].name": [
+     "str"
+    ],
+    "[].provider": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/events/stream": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/keys": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "keys": [
+     "dict"
+    ],
+    "keys.*": [
+     "dict"
+    ],
+    "keys.*.allowed_domains": [
+     "null"
+    ],
+    "keys.*.created_at": [
+     "str"
+    ],
+    "keys.*.created_by": [
+     "str"
+    ],
+    "keys.*.created_during_setup": [
+     "bool"
+    ],
+    "keys.*.expires_at": [
+     "null"
+    ],
+    "keys.*.is_agent": [
+     "bool"
+    ],
+    "keys.*.is_expired": [
+     "bool"
+    ],
+    "keys.*.last_used_at": [
+     "null"
+    ],
+    "keys.*.name": [
+     "str"
+    ],
+    "keys.*.needs_review": [
+     "bool"
+    ],
+    "keys.*.revoked": [
+     "bool"
+    ],
+    "keys.*.role": [
+     "str"
+    ],
+    "keys.*.setup_origin_confirmed_at": [
+     "null"
+    ],
+    "keys.*.setup_origin_confirmed_by": [
+     "null"
+    ],
+    "keys.*.token_prefix": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/notifications/config": {
+   "200": {
+    ".": [
+     "dict"
+    ]
+   }
+  },
+  "GET /api/settings/rate-limits": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "defaults": [
+     "dict"
+    ],
+    "defaults.certificate_batch": [
+     "int"
+    ],
+    "defaults.certificate_create": [
+     "int"
+    ],
+    "defaults.certificate_list": [
+     "int"
+    ],
+    "defaults.certificate_renew": [
+     "int"
+    ],
+    "defaults.certificate_revoke": [
+     "int"
+    ],
+    "defaults.crl_download": [
+     "int"
+    ],
+    "defaults.default": [
+     "int"
+    ],
+    "defaults.ip_ceiling": [
+     "int"
+    ],
+    "defaults.ocsp_status": [
+     "int"
+    ],
+    "defaults.probe": [
+     "int"
+    ],
+    "enabled": [
+     "bool"
+    ],
+    "limits": [
+     "dict"
+    ],
+    "limits.certificate_batch": [
+     "int"
+    ],
+    "limits.certificate_create": [
+     "int"
+    ],
+    "limits.certificate_list": [
+     "int"
+    ],
+    "limits.certificate_renew": [
+     "int"
+    ],
+    "limits.certificate_revoke": [
+     "int"
+    ],
+    "limits.crl_download": [
+     "int"
+    ],
+    "limits.default": [
+     "int"
+    ],
+    "limits.ip_ceiling": [
+     "int"
+    ],
+    "limits.ocsp_status": [
+     "int"
+    ],
+    "limits.probe": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/users": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "users": [
+     "dict"
+    ],
+    "users.*": [
+     "dict"
+    ],
+    "users.*.created_at": [
+     "str"
+    ],
+    "users.*.email": [
+     "null"
+    ],
+    "users.*.enabled": [
+     "bool"
+    ],
+    "users.*.last_login": [
+     "null"
+    ],
+    "users.*.oidc_issuer": [
+     "null"
+    ],
+    "users.*.role": [
+     "str"
+    ],
+    "users.*.sso": [
+     "bool"
+    ]
+   }
+  },
+  "GET /api/webhooks/deliveries": {
+   "200": {
+    ".": [
+     "list"
+    ]
+   }
+  },
+  "PATCH /api/keys/<X>": {
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/auth/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/auth/login": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ],
+    "user": [
+     "dict"
+    ],
+    "user.email": [
+     "null"
+    ],
+    "user.role": [
+     "str"
+    ],
+    "user.username": [
+     "str"
+    ]
+   },
+   "401": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/auth/logout": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/auth/oidc/settings": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/deploy/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/deploy/targets/preview": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "allow_internal": [
+     "bool"
+    ],
+    "body": [
+     "str"
+    ],
+    "files_needed": [
+     "list"
+    ],
+    "files_needed[]": [
+     "str"
+    ],
+    "headers": [
+     "dict"
+    ],
+    "headers.Content-Type": [
+     "str"
+    ],
+    "headers.Idempotency-Key": [
+     "str"
+    ],
+    "headers.User-Agent": [
+     "str"
+    ],
+    "headers.X-CertMate-Event": [
+     "str"
+    ],
+    "host": [
+     "str"
+    ],
+    "key_variables": [
+     "list"
+    ],
+    "key_variables[]": [
+     "str"
+    ],
+    "method": [
+     "str"
+    ],
+    "note": [
+     "str"
+    ],
+    "path": [
+     "str"
+    ],
+    "port": [
+     "int"
+    ],
+    "sends_private_key": [
+     "bool"
+    ],
+    "tls_verified_with": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/deploy/test/<X>": {
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ],
+    "hook_id": [
+     "str"
+    ],
+    "reason": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/digest/send": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "skipped": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/dns-providers/accounts": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "id": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/keys": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "allowed_domains": [
+     "null"
+    ],
+    "created_at": [
+     "str"
+    ],
+    "expires_at": [
+     "null"
+    ],
+    "id": [
+     "str"
+    ],
+    "is_agent": [
+     "bool"
+    ],
+    "name": [
+     "str"
+    ],
+    "role": [
+     "str"
+    ],
+    "token": [
+     "str"
+    ],
+    "token_prefix": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/notifications/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/notifications/test": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/notifications/webhook/preview": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "body": [
+     "str"
+    ],
+    "headers": [
+     "dict"
+    ],
+    "headers.Content-Type": [
+     "str"
+    ],
+    "headers.User-Agent": [
+     "str"
+    ],
+    "method": [
+     "str"
+    ],
+    "url": [
+     "str"
+    ],
+    "variables": [
+     "list"
+    ],
+    "variables[]": [
+     "dict"
+    ],
+    "variables[].description": [
+     "str"
+    ],
+    "variables[].name": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/users": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "409": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "PUT /api/dns-providers/accounts/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "id": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "409": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ],
+    "providers": [
+     "list"
+    ],
+    "providers[]": [
+     "str"
+    ]
+   }
+  },
+  "PUT /api/settings/rate-limits": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "enabled": [
+     "bool"
+    ],
+    "limits": [
+     "dict"
+    ],
+    "limits.certificate_batch": [
+     "int"
+    ],
+    "limits.certificate_create": [
+     "int"
+    ],
+    "limits.certificate_list": [
+     "int"
+    ],
+    "limits.certificate_renew": [
+     "int"
+    ],
+    "limits.certificate_revoke": [
+     "int"
+    ],
+    "limits.crl_download": [
+     "int"
+    ],
+    "limits.default": [
+     "int"
+    ],
+    "limits.ip_ceiling": [
+     "int"
+    ],
+    "limits.ocsp_status": [
+     "int"
+    ],
+    "limits.probe": [
+     "int"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "PUT /api/users/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  }
+ },
+ "unseen_items": {
+  "GET /api/deploy/history": [
+   "."
+  ],
+  "GET /api/deploy/pending": [
+   "."
+  ],
+  "GET /api/webhooks/deliveries": [
+   "."
+  ]
+ }
+}
