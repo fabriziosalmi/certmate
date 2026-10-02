@@ -188,27 +188,20 @@ def test_the_opener_still_honours_the_proxy(monkeypatch):
 
     tunnelled = []
 
-    class _Conn:
-        sock = 'a-socket'
-
-        def __init__(self, host, port, timeout=None):
-            tunnelled.append((host, port))
-
-        def set_tunnel(self, host, port, headers=None):
-            tunnelled.append(('tunnel', host, port))
-
-        def connect(self):
-            pass
-
+    class _Socket:
         def close(self):
             pass
 
+    def fake_tunnel(proxy_host, proxy_port, headers, host, port, timeout):
+        tunnelled.append((proxy_host, proxy_port, host, port))
+        return _Socket()
+
     monkeypatch.setattr(tls_probe, '_https_proxy_for',
                         lambda host: ('proxy.internal', 3128, {}))
-    monkeypatch.setattr(tls_probe.http.client, 'HTTPConnection', _Conn)
+    monkeypatch.setattr(tls_probe, 'open_connect_tunnel', fake_tunnel)
 
     sock, closer = tls_probe._open_probe_socket('169.254.169.254', 443, 2)
     closer()
 
-    assert sock == 'a-socket'
-    assert ('proxy.internal', 3128) in tunnelled
+    assert isinstance(sock, _Socket)
+    assert ('proxy.internal', 3128, '169.254.169.254', 443) in tunnelled

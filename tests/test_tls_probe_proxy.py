@@ -90,20 +90,18 @@ def test_probe_tunnels_via_connect_when_proxy_set(monkeypatch):
     monkeypatch.delenv('no_proxy', raising=False)
     monkeypatch.setenv('https_proxy', 'http://proxy.internal:3128')
 
-    mock_conn = MagicMock()
-    mock_conn.sock = MagicMock()
+    tunnelled = MagicMock()
 
-    with patch('modules.api.tls_probe.http.client.HTTPConnection',
-               return_value=mock_conn) as mock_http, \
+    with patch('modules.api.tls_probe.open_connect_tunnel',
+               return_value=tunnelled) as mock_tunnel, \
             patch('modules.api.tls_probe.ssl.create_default_context',
                   return_value=_mock_tls_context(b'tunnelled-cert')), \
             patch('modules.api.tls_probe.socket.create_connection') as mock_direct:
         result = _probe_tls_certificate('example.com', timeout=2)
 
-    mock_http.assert_called_once_with('proxy.internal', 3128, timeout=2)
-    mock_conn.set_tunnel.assert_called_once_with('example.com', 443, headers={})
-    mock_conn.connect.assert_called_once()
-    mock_conn.close.assert_called_once()
+    mock_tunnel.assert_called_once_with(
+        'proxy.internal', 3128, {}, 'example.com', 443, 2)
+    tunnelled.close.assert_called_once()
     mock_direct.assert_not_called()  # never a direct connection when proxied
     assert result == {
         'reachable': True,
@@ -119,16 +117,14 @@ def test_proxy_tunnel_uses_configured_port(monkeypatch):
     monkeypatch.delenv('no_proxy', raising=False)
     monkeypatch.setenv('https_proxy', 'http://proxy.internal:3128')
 
-    mock_conn = MagicMock()
-    mock_conn.sock = MagicMock()
-
-    with patch('modules.api.tls_probe.http.client.HTTPConnection',
-               return_value=mock_conn), \
+    with patch('modules.api.tls_probe.open_connect_tunnel',
+               return_value=MagicMock()) as mock_tunnel, \
             patch('modules.api.tls_probe.ssl.create_default_context',
                   return_value=_mock_tls_context(b'cert')):
         result = _probe_tls_certificate('example.com', port=8443, protocol='tls', timeout=2)
 
-    mock_conn.set_tunnel.assert_called_once_with('example.com', 8443, headers={})
+    mock_tunnel.assert_called_once_with(
+        'proxy.internal', 3128, {}, 'example.com', 8443, 2)
     assert result['port'] == 8443
     assert result['protocol'] == 'tls'
 
@@ -146,10 +142,10 @@ def test_probe_direct_when_no_proxy(monkeypatch):
                return_value=mock_sock), \
             patch('modules.api.tls_probe.ssl.create_default_context',
                   return_value=_mock_tls_context(b'direct-cert')), \
-            patch('modules.api.tls_probe.http.client.HTTPConnection') as mock_http:
+            patch('modules.api.tls_probe.open_connect_tunnel') as mock_tunnel:
         result = _probe_tls_certificate('example.com', timeout=2)
 
-    mock_http.assert_not_called()
+    mock_tunnel.assert_not_called()
     assert result == {
         'reachable': True,
         'certificate_bytes': b'direct-cert',

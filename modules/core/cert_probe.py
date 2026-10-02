@@ -42,7 +42,6 @@ CertMate dependency).
 """
 
 import base64
-import http.client
 import ipaddress
 import logging
 import os
@@ -256,6 +255,67 @@ def proxy_for(host, scheme='https'):
     return parts.hostname, parts.port or 8080, headers
 
 
+# The most a proxy's answer to CONNECT may be before it is not an answer. The
+# standard library's own limit for one header line, times a generous few.
+_MAX_CONNECT_ANSWER = 64 * 1024
+
+
+def open_connect_tunnel(proxy_host, proxy_port, headers, host, port, timeout):
+    """A socket tunnelled through an HTTP proxy to *host*:*port*, by CONNECT.
+
+    Written out instead of ``http.client.HTTPConnection.set_tunnel`` because that
+    reads the proxy's answer through a buffered reader and then hands back the
+    BARE socket: whatever the far end sent in the same read as the answer is in a
+    buffer nobody can reach. A client that speaks first never notices, which is
+    the TLS legs. A server that speaks first does: a mail server sends its banner
+    the moment it is connected, a proxy can deliver it in the same read as its
+    own ``200``, and the probe then waited out its read timeout for a banner it
+    had already been sent (measured on 3.12, 3.13 and 3.14).
+
+    The answer is read one byte at a time, up to the blank line that ends it, so
+    that nothing past it is consumed. A proxy's answer is a status line and a few
+    headers; the cost is not measurable.
+
+    Raises ``OSError`` for anything but a ``200`` (the stdlib's own wording,
+    "Tunnel connection failed: 407 ...", so what an operator reads has not
+    changed) and ``ConnectionError`` for a proxy that closes or babbles before
+    answering. A timeout is raised as itself: the callers classify it apart.
+    """
+    target_host = host.encode('idna').decode('ascii')
+    target = f'[{target_host}]:{port}' if ':' in target_host else f'{target_host}:{port}'
+    request = [f'CONNECT {target} HTTP/1.1', f'Host: {target}']
+    request.extend(f'{name}: {value}' for name, value in (headers or {}).items()
+                   if name.lower() != 'host')
+    sock = socket.create_connection((proxy_host, proxy_port), timeout=timeout)
+    tunnelled = False
+    try:
+        sock.sendall(('\r\n'.join(request) + '\r\n\r\n').encode('latin-1'))
+        answer = b''
+        while not answer.endswith(b'\r\n\r\n'):
+            byte = sock.recv(1)
+            if not byte:
+                raise ConnectionError('the proxy closed the connection before answering CONNECT')
+            answer += byte
+            if len(answer) > _MAX_CONNECT_ANSWER:
+                raise ConnectionError('the proxy answered CONNECT with more than '
+                                      f'{_MAX_CONNECT_ANSWER} bytes of headers')
+        status = answer.split(b'\r\n', 1)[0].decode('latin-1').split(None, 2)
+        if len(status) < 2 or not status[0].startswith('HTTP/') or not status[1].isdigit():
+            raise ConnectionError(f'the proxy answered CONNECT with {answer[:80]!r}')
+        if status[1] != '200':
+            raise OSError(f'Tunnel connection failed: {status[1]} '
+                          f'{status[2].strip() if len(status) > 2 else ""}'.rstrip())
+        tunnelled = True
+    finally:
+        # Closed on every way out but success, not left to the collector. A
+        # `finally` and a flag rather than a broad `except ... raise`: the point is
+        # the close, and a handler that catches everything to re-raise it is one
+        # more on the budget `tests/test_exception_budget_is_tight.py` pins.
+        if not tunnelled:
+            sock.close()
+    return sock
+
+
 def open_probe_transport(host, port, family, connect_ip, timeout):
     """Open the TCP leg to *host*:*port*. Returns ``(sock, closer, via)``.
 
@@ -300,25 +360,19 @@ def open_probe_transport(host, port, family, connect_ip, timeout):
         return sock, sock.close, None
 
     proxy_host, proxy_port, proxy_headers = proxy
-    conn = http.client.HTTPConnection(proxy_host, proxy_port, timeout=timeout)
     try:
-        conn.set_tunnel(host, port, headers=proxy_headers)
-        conn.connect()
+        sock = open_connect_tunnel(proxy_host, proxy_port, proxy_headers,
+                                   host, port, timeout)
     except socket.timeout:
         # Re-raised as itself: the callers classify a timeout apart from a
         # refusal, and wrapping it would relabel a slow proxy as a broken one.
-        conn.close()
         raise
-    except (OSError, http.client.HTTPException) as e:
-        # HTTPException is not an OSError, so without this arm a malformed
-        # proxy answer would escape every caller's except clause — and all
-        # three callers promise never to raise. The proxy is named because
-        # "connection refused" on its own sends an operator looking at the
-        # wrong host.
-        conn.close()
+    except (OSError, UnicodeError) as e:
+        # The proxy is named because "connection refused" on its own sends an
+        # operator looking at the wrong host.
         raise ConnectionError(f'via proxy {proxy_host}:{proxy_port}: {e}') from e
-    conn.sock.settimeout(timeout)
-    return conn.sock, conn.close, f'{proxy_host}:{proxy_port}'
+    sock.settimeout(timeout)
+    return sock, sock.close, f'{proxy_host}:{proxy_port}'
 
 
 def _detail(message, via):
