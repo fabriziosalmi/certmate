@@ -17,7 +17,7 @@
 
 .PHONY: help setup install-dev \
         run test test-unit test-integration test-coverage test-ci test-ui test-network test-e2e test-watch \
-        lint security check ci coverage-floors \
+        lint typecheck security check ci coverage-floors \
         docker-build docker-run docker-stop \
         clean clean-venv clean-all
 
@@ -67,9 +67,10 @@ help:
 	@echo ""
 	@echo "  Code Quality"
 	@echo "    make lint             flake8 (CI selection) + complexity, exception and ruff budgets"
+	@echo "    make typecheck        mypy ratchet (default mode, per-file baseline; on the locked set)"
 	@echo "    make security         bandit (medium and above)"
-	@echo "    make check            lint + security + test"
-	@echo "    make ci               lint + security + test-ci + coverage floors"
+	@echo "    make check            lint + typecheck + security + test"
+	@echo "    make ci               lint + typecheck + security + test-ci + coverage floors"
 	@echo ""
 	@echo "  Docker"
 	@echo "    make docker-build     Build Docker image ($(DOCKER_IMAGE):$(DOCKER_TAG))"
@@ -162,14 +163,18 @@ lint: $(VENV)/bin/activate
 	$(PYTHON) scripts/check_exception_budget.py
 	$(PYTHON) scripts/check_ruff_budget.py
 
+# On the locked set, under Python 3.12: what mypy reports depends on the packages it reads (#1094).
+typecheck: $(VENV)/bin/activate
+	$(PYTHON) scripts/check_mypy_budget.py
+
 security: $(VENV)/bin/activate
 	$(VENV)/bin/bandit -r modules/ app.py --severity-level medium
 
-check: lint security test
+check: lint typecheck security test
 
-ci: lint security test-ci
+ci: lint typecheck security test-ci
 	@echo ""
-	@echo "✅ CI test job simulated: lint, security, tests with coverage, coverage floors"
+	@echo "✅ CI simulated: lint, typecheck, security, tests with coverage, coverage floors"
 
 # ── Docker ─────────────────────────────────────────────────────────────
 

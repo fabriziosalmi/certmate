@@ -465,6 +465,32 @@ jobs:
     - name: Every stale translation says it is stale
       run: python scripts/check_translation_freshness.py
 
+  # mypy as a ratchet (#1094): errors per file that only go down, in default mode. A job of its own,
+  # and on the LOCKED set, because what mypy reports depends on the versions of the packages it reads:
+  # the test job installs requirements.txt, whose transitive dependencies float on purpose, and a
+  # typed library's release would turn this red for a reason that is not the change under review.
+  # Python 3.12: the baseline was measured there, and it is the interpreter the image runs.
+  typecheck:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Install the locked set and the pinned tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.lock
+        pip install -c requirements.lock -r requirements-test.txt
+
+    - name: mypy ratchet
+      run: python scripts/check_mypy_budget.py
+
   ca-endpoints:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

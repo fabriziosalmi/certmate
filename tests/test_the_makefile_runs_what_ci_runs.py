@@ -55,8 +55,9 @@ def test_the_instrument_finds_the_job_and_its_checks():
 
 
 def test_every_check_script_the_test_job_runs_is_in_the_makefile_and_contributing():
-    scripts = sorted({m for c in _commands() for m in re.findall(r'python scripts/(check_[a-z_]+\.py)', c)})
-    assert len(scripts) >= 3, scripts
+    scripts = sorted({m for c in _commands() + _commands('typecheck')
+                      for m in re.findall(r'python scripts/(check_[a-z_]+\.py)', c)})
+    assert len(scripts) >= 4, scripts
     for script in scripts:
         assert f'scripts/{script}' in MAKEFILE, (
             f'ci.yml runs scripts/{script} and the Makefile does not: `make lint`/`make ci` would '
@@ -70,7 +71,8 @@ def test_the_release_gate_runs_every_check_script_ci_runs():
     and bandit but neither budget, so a release could pass it and open a PR whose CI failed. The
     coverage floors are the one exception: they read coverage.json, which a release run does not
     produce."""
-    scripts = sorted({m for c in _commands() for m in re.findall(r'python scripts/(check_[a-z_]+\.py)', c)})
+    scripts = sorted({m for c in _commands() + _commands('typecheck')
+                      for m in re.findall(r'python scripts/(check_[a-z_]+\.py)', c)})
     for script in scripts:
         if script == 'check_coverage_floors.py':
             continue
