@@ -432,7 +432,10 @@ def _walk(app, token, trace, certbot, container, seeded, report):
 
     # --- audit, activity, the event stream
     call('get', '/api/audit/public-key')
-    call('get', '/api/audit/verify')
+    call('get', '/api/audit/verify')                     # no checkpoint yet: one is written every 100 entries
+    audit = plan.container.managers.get('audit') if plan.container else None
+    if audit is not None and audit.write_checkpoint():   # what a running instance has, and a clean stop writes
+        call('get', '/api/audit/verify')                 # `checkpoint_seq`, `checkpoint_verified` true
     call('get', '/api/audit/export')
     call('get', '/api/activity')
 

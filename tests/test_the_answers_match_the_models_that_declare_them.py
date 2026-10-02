@@ -41,7 +41,6 @@ NEVER_FILLED = {
     'GET /api/certificates': {
         '[].total_issued': '#1108', '[].total_active': '#1108', '[].total_expired': '#1108',
         '[].total_revoked': '#1108', '[].latest_issuance': '#1108', '[].oldest_active_issuance': '#1108',
-        '[].renewal_info': 'the ARI window, filled once the renewal-info check has run',
         '[].storage_warning': 'set only when the external storage backend failed',
     },
     'GET /api/certificates/<X>/deployment-status': {

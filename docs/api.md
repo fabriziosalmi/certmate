@@ -154,11 +154,11 @@ rather than written by hand:
   "storage_warning": null,
   "deployment_host": null,
   "notes": null,
-  "tags": [],
+  "tags": ["production"],
   "deployment_port": null,
   "deployment_protocol": null,
-  "created_at": "2026-09-01T10:14:02Z",
-  "renewed_at": "2026-09-14T02:31:55Z",
+  "created_at": "2026-09-01T10:14:02.118402",
+  "renewed_at": "2026-09-14T02:31:55.902114",
   "renewal_info": {
     "status": "window",
     "checked_at": "2026-09-27T02:00:04Z",
@@ -166,9 +166,14 @@ rather than written by hand:
     "window_end": "2026-11-04T12:29:25Z",
     "renew_at": "2026-11-03T08:41:10Z",
     "explanation_url": null
-  }
+  },
+  "auto_renew": true
 }
 ```
+
+`created_at`, `renewed_at` and `expiry_date` are UTC, written without an offset
+([#1127](https://github.com/fabriziosalmi/certmate/issues/1127)). The instants in `renewal_info`
+carry an explicit `Z`, because a browser reads an instant without one as local time.
 
 ##### Is it still valid?
 
@@ -756,6 +761,12 @@ Get complete metadata for a certificate. This one was renewed: a certificate a r
 replaced carries `superseded_by` (the identifier of its successor) and `superseded_at`,
 and its `renewal_enabled` is `false`, so the renewal sweep never picks it again. A
 certificate that was never replaced has neither field.
+
+`crl_entry_serial` is **deprecated**, and **removed by the next major of the API contract
+(3.0)** ([#1114](https://github.com/fabriziosalmi/certmate/issues/1114)). It is written as `null`
+when the certificate is created and nothing has ever set it, revocation included; the CRL
+lists a revoked certificate by its `serial_number`. Until then it is still sent, as `null`;
+stop reading it.
 
 **Response** (200 OK):
 <!-- response: GET /api/client-certs/<identifier> 200 -->
@@ -2362,8 +2373,28 @@ result and HTTP `200` when intact or `409` when broken:
 
 <!-- response: GET /api/audit/verify 200 -->
 ```json
-{"ok": true, "count": 128, "first_seq": 0, "last_seq": 127, "head_hash": "5ee1…", "reason": "intact"}
+{
+  "ok": true,
+  "count": 128,
+  "first_seq": 0,
+  "last_seq": 127,
+  "head_hash": "5ee1c0d9a8f46b02e7c3d51f9a20b8e4c6f7d3a1b9e05c28d4f6a7b3e1c9d02f",
+  "error_seq": null,
+  "reason": "intact",
+  "checkpoint_verified": true,
+  "checkpoint_seq": 99,
+  "checkpoint_reason": "consistent with signed checkpoint at seq 99"
+}
 ```
+
+`checkpoint_*` is the cross-check against the newest signed checkpoint: one is written
+every 100 entries and on every clean stop, so a new instance answers
+`checkpoint_verified: false`, no `checkpoint_seq`, and a `checkpoint_reason` that says
+why (`no checkpoints written yet`). A broken chain has `ok: false`, the offending
+`error_seq`, and a `409`. After a prune the chain starts from a signed anchor that
+attests the entries removed, and the answer also carries `anchored` and `anchor_seq`,
+with `anchor_signature_ok: true` when the anchor's signature verifies (when it does not,
+`ok` is false and `reason` says so).
 
 **Verify off-box:** the standalone verifier depends only on the Python standard
 library, so an auditor can run it without installing or trusting CertMate:

@@ -168,7 +168,8 @@ def certificates(plan):
          body={'domain': DOMAIN, 'domain_alias': 'alias.example.test'})
     call('post', '/api/certificates/check-dns-alias', body={})                              # 400
     call('post', '/api/certificates/deployment-status/browser', body={})                   # 400
-    call('post', '/api/certificates/reissue-keyless', body={})                              # one queued
+    call('post', '/api/certificates/reissue-keyless', body={'limit': 1})                    # one queued, one left
+    call('post', '/api/certificates/reissue-keyless', body={})                              # the one left
     call('post', '/api/certificates/zombies/scan', body={})
 
     call('get', '/api/cache/stats')                                  # what the reads above left in it

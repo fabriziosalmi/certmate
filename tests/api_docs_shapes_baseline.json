@@ -1,20 +1,4 @@
 {
- "docs/api.md GET /api/audit/verify 200": {
-  "omitted": [
-   "checkpoint_reason",
-   "checkpoint_verified",
-   "error_seq"
-  ]
- },
- "docs/api.md GET /api/certificates/<X> 200": {
-  "omitted": [
-   "auto_renew",
-   "tags[]"
-  ],
-  "unverified": [
-   "renewal_info"
-  ]
- },
  "docs/api.md GET /api/inventory/domains 200": {
   "unverified": [
    "domains[]"
@@ -32,40 +16,8 @@
   ]
  },
  "docs/api.md POST /api/certificates/reissue-keyless 202": {
-  "never_seen": [
-   "next_step"
-  ],
   "unverified": [
-   "refused[]",
-   "remaining[]"
-  ]
- },
- "docs/de/api.md GET /api/audit/verify 200": {
-  "omitted": [
-   "checkpoint_reason",
-   "checkpoint_verified",
-   "error_seq"
-  ]
- },
- "docs/es/api.md GET /api/audit/verify 200": {
-  "omitted": [
-   "checkpoint_reason",
-   "checkpoint_verified",
-   "error_seq"
-  ]
- },
- "docs/fr/api.md GET /api/audit/verify 200": {
-  "omitted": [
-   "checkpoint_reason",
-   "checkpoint_verified",
-   "error_seq"
-  ]
- },
- "docs/it/api.md GET /api/audit/verify 200": {
-  "omitted": [
-   "checkpoint_reason",
-   "checkpoint_verified",
-   "error_seq"
+   "refused[]"
   ]
  }
 }

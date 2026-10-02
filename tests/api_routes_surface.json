@@ -412,6 +412,9 @@
     "checkpoint_reason": [
      "str"
     ],
+    "checkpoint_seq": [
+     "int"
+    ],
     "checkpoint_verified": [
      "bool"
     ],
@@ -765,7 +768,25 @@
      "bool"
     ],
     "[].renewal_info": [
-     "null"
+     "dict"
+    ],
+    "[].renewal_info.checked_at": [
+     "str"
+    ],
+    "[].renewal_info.explanation_url": [
+     "str"
+    ],
+    "[].renewal_info.renew_at": [
+     "str"
+    ],
+    "[].renewal_info.status": [
+     "str"
+    ],
+    "[].renewal_info.window_end": [
+     "str"
+    ],
+    "[].renewal_info.window_start": [
+     "str"
     ],
     "[].renewed_at": [
      "str"
@@ -877,7 +898,25 @@
      "bool"
     ],
     "renewal_info": [
-     "null"
+     "dict"
+    ],
+    "renewal_info.checked_at": [
+     "str"
+    ],
+    "renewal_info.explanation_url": [
+     "str"
+    ],
+    "renewal_info.renew_at": [
+     "str"
+    ],
+    "renewal_info.status": [
+     "str"
+    ],
+    "renewal_info.window_end": [
+     "str"
+    ],
+    "renewal_info.window_start": [
+     "str"
     ],
     "renewed_at": [
      "str"
@@ -3981,6 +4020,9 @@
     ".": [
      "dict"
     ],
+    "next_step": [
+     "str"
+    ],
     "queued": [
      "list"
     ],
@@ -4001,6 +4043,9 @@
     ],
     "remaining": [
      "list"
+    ],
+    "remaining[]": [
+     "str"
     ]
    }
   },
@@ -5515,8 +5560,7 @@
    "skipped"
   ],
   "POST /api/certificates/reissue-keyless": [
-   "refused",
-   "remaining"
+   "refused"
   ],
   "POST /api/inventory/scan": [
    "domain_health.results",
