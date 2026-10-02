@@ -921,7 +921,7 @@ curl http://localhost:8000/api/crl/download/info \
 ```json
 {
  "status": "available",
- "issuer": "CN=CertMate CA, O=CertMate",
+ "issuer": "CN=CertMate CA,OU=Certificate Authority,O=CertMate,ST=Switzerland,C=CH",
  "last_update": "2024-10-30T18:00:00Z",
  "next_update": "2024-10-31T18:00:00Z",
  "revoked_count": 5,
@@ -930,6 +930,10 @@ curl http://localhost:8000/api/crl/download/info \
  ]
 }
 ```
+
+`issuer` is the name of the CA that signed the list, in the form RFC 4514 gives (the one
+`openssl` and the inventory's `issuer` also use). Before API contract **2.39** it was the
+Python representation of the name, `<Name(CN=CertMate CA,...)>`.
 
 ---
 
