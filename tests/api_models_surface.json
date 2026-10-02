@@ -1,0 +1,1925 @@
+{
+ "contract_version": "2.35",
+ "models": {
+  "ACMEDNSConfig": {
+   "properties": {
+    "api_url": {
+     "type": "string"
+    },
+    "password": {
+     "type": "string"
+    },
+    "subdomain": {
+     "type": "string"
+    },
+    "username": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AWSSecretsManagerStorage": {
+   "properties": {
+    "access_key_id": {
+     "type": "string"
+    },
+    "assume_role_arn": {
+     "type": "string"
+    },
+    "auth_mode": {
+     "enum": [
+      "access_keys",
+      "iam_role"
+     ],
+     "type": "string"
+    },
+    "region": {
+     "type": "string"
+    },
+    "secret_access_key": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "ArvanCloudConfig": {
+   "properties": {
+    "api_key": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AzureConfig": {
+   "properties": {
+    "client_id": {
+     "type": "string"
+    },
+    "client_secret": {
+     "type": "string"
+    },
+    "resource_group": {
+     "type": "string"
+    },
+    "subscription_id": {
+     "type": "string"
+    },
+    "tenant_id": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AzureKeyVaultStorage": {
+   "properties": {
+    "client_id": {
+     "type": "string"
+    },
+    "client_secret": {
+     "type": "string"
+    },
+    "storage_mode": {
+     "enum": [
+      "both",
+      "certificate",
+      "secrets"
+     ],
+     "type": "string"
+    },
+    "tenant_id": {
+     "type": "string"
+    },
+    "vault_url": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "BackupCreateRequest": {
+   "properties": {
+    "include_secrets": {
+     "type": "boolean"
+    },
+    "reason": {
+     "type": "string"
+    },
+    "type": {
+     "enum": [
+      "both",
+      "certificates",
+      "settings",
+      "unified"
+     ],
+     "type": "string"
+    }
+   },
+   "required": [
+    "type"
+   ]
+  },
+  "BackupList": {
+   "properties": {
+    "unified": {
+     "items": {
+      "$ref": "#/definitions/BackupMetadata"
+     },
+     "type": "array"
+    }
+   },
+   "required": []
+  },
+  "BackupMetadata": {
+   "properties": {
+    "can_restore": {
+     "type": "boolean"
+    },
+    "contains_key_material": {
+     "type": "boolean"
+    },
+    "created": {
+     "type": "string"
+    },
+    "filename": {
+     "type": "string"
+    },
+    "key_file_count": {
+     "type": "integer"
+    },
+    "metadata": {
+     "type": "object"
+    },
+    "restore_blocked_reason": {
+     "type": "string"
+    },
+    "size": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  },
+  "BackupRestoreRequest": {
+   "properties": {
+    "create_backup_before_restore": {
+     "type": "boolean"
+    },
+    "filename": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "filename"
+   ]
+  },
+  "BrowserDeploymentReport": {
+   "properties": {
+    "checked_at": {
+     "type": "string"
+    },
+    "domain": {
+     "type": "string"
+    },
+    "method": {
+     "type": "string"
+    },
+    "reachable": {
+     "type": "boolean"
+    },
+    "source": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "domain",
+    "reachable"
+   ]
+  },
+  "BrowserDeploymentReports": {
+   "properties": {
+    "reports": {
+     "items": {
+      "$ref": "#/definitions/BrowserDeploymentReport"
+     },
+     "type": "array"
+    }
+   },
+   "required": [
+    "reports"
+   ]
+  },
+  "BrowserDeploymentStatus": {
+   "properties": {
+    "checked_at": {
+     "type": "string"
+    },
+    "method": {
+     "type": "string"
+    },
+    "reachable": {
+     "type": "boolean"
+    },
+    "source": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "CATestConfig": {
+   "properties": {
+    "ca_provider": {
+     "type": "string"
+    },
+    "config": {
+     "type": "object"
+    }
+   },
+   "required": [
+    "ca_provider",
+    "config"
+   ]
+  },
+  "CacheClearResponse": {
+   "properties": {
+    "cleared_entries": {
+     "type": "integer"
+    },
+    "message": {
+     "type": "string"
+    },
+    "success": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "CacheEntry": {
+   "properties": {
+    "age": {
+     "type": "integer"
+    },
+    "domain": {
+     "type": "string"
+    },
+    "remaining": {
+     "type": "integer"
+    },
+    "status": {
+     "enum": [
+      "deployed",
+      "not-deployed"
+     ],
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "CacheStats": {
+   "properties": {
+    "current_ttl": {
+     "type": "integer"
+    },
+    "entries": {
+     "items": {
+      "$ref": "#/definitions/CacheEntry"
+     },
+     "type": "array"
+    },
+    "total_entries": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  },
+  "Certificate": {
+   "properties": {
+    "account_id": {
+     "type": "string"
+    },
+    "alias_dns_provider": {
+     "type": "string"
+    },
+    "auto_renew": {
+     "type": "boolean"
+    },
+    "ca_provider": {
+     "type": "string"
+    },
+    "challenge_type": {
+     "type": "string"
+    },
+    "created_at": {
+     "type": "string"
+    },
+    "days_left": {
+     "type": "integer"
+    },
+    "days_until_expiry": {
+     "type": "integer"
+    },
+    "deployment_host": {
+     "type": "string"
+    },
+    "deployment_port": {
+     "type": "integer"
+    },
+    "deployment_protocol": {
+     "type": "string"
+    },
+    "dns_provider": {
+     "type": "string"
+    },
+    "domain": {
+     "type": "string"
+    },
+    "domain_alias": {
+     "type": "string"
+    },
+    "exists": {
+     "type": "boolean"
+    },
+    "expired": {
+     "type": "boolean"
+    },
+    "expiry_date": {
+     "type": "string"
+    },
+    "latest_issuance": {
+     "type": "string"
+    },
+    "needs_renewal": {
+     "type": "boolean"
+    },
+    "notes": {
+     "type": "string"
+    },
+    "oldest_active_issuance": {
+     "type": "string"
+    },
+    "private_key_present": {
+     "type": "boolean"
+    },
+    "private_key_state": {
+     "type": "string"
+    },
+    "reissue_required": {
+     "type": "boolean"
+    },
+    "renewal_info": {},
+    "renewed_at": {
+     "type": "string"
+    },
+    "san_domains": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "seconds_left": {
+     "type": "integer"
+    },
+    "storage_warning": {
+     "type": "string"
+    },
+    "tags": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "total_active": {
+     "type": "integer"
+    },
+    "total_expired": {
+     "type": "integer"
+    },
+    "total_issued": {
+     "type": "integer"
+    },
+    "total_revoked": {
+     "type": "integer"
+    },
+    "usable": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "domain"
+   ]
+  },
+  "CloudflareConfig": {
+   "properties": {
+    "api_token": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "CreateCertificate": {
+   "properties": {
+    "account_id": {
+     "type": "string"
+    },
+    "alias_dns_provider": {
+     "type": "string"
+    },
+    "async": {
+     "type": "boolean"
+    },
+    "ca_account_id": {
+     "type": "string"
+    },
+    "ca_provider": {
+     "enum": [
+      "actalis",
+      "digicert",
+      "google",
+      "letsencrypt",
+      "letsencrypt_staging",
+      "private_ca",
+      "sectigo",
+      "sslcom",
+      "zerossl"
+     ],
+     "type": "string"
+    },
+    "challenge_type": {
+     "enum": [
+      "dns-01",
+      "http-01",
+      "prevalidated"
+     ],
+     "type": "string"
+    },
+    "csr": {
+     "type": "string"
+    },
+    "dns_provider": {
+     "enum": [
+      "acme-dns",
+      "arvancloud",
+      "azure",
+      "cloudflare",
+      "custom-script",
+      "desec",
+      "digitalocean",
+      "dnsmadeeasy",
+      "duckdns",
+      "dynudns",
+      "edgedns",
+      "gandi",
+      "godaddy",
+      "google",
+      "he-ddns",
+      "hetzner",
+      "hetzner-cloud",
+      "infomaniak",
+      "linode",
+      "namecheap",
+      "nsone",
+      "ovh",
+      "porkbun",
+      "powerdns",
+      "rfc2136",
+      "route53",
+      "scaleway",
+      "solidserver",
+      "vultr"
+     ],
+     "type": "string"
+    },
+    "domain": {
+     "type": "string"
+    },
+    "domain_alias": {
+     "type": "string"
+    },
+    "elliptic_curve": {
+     "enum": [
+      "secp256r1",
+      "secp384r1"
+     ],
+     "type": "string"
+    },
+    "key_size": {
+     "type": "integer"
+    },
+    "key_type": {
+     "enum": [
+      "ecdsa",
+      "rsa"
+     ],
+     "type": "string"
+    },
+    "san_domains": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "required": [
+    "domain"
+   ]
+  },
+  "DNSProviders": {
+   "properties": {
+    "acme-dns": {
+     "$ref": "#/definitions/ACMEDNSConfig"
+    },
+    "arvancloud": {
+     "$ref": "#/definitions/ArvanCloudConfig"
+    },
+    "azure": {
+     "$ref": "#/definitions/AzureConfig"
+    },
+    "cloudflare": {
+     "$ref": "#/definitions/CloudflareConfig"
+    },
+    "digitalocean": {
+     "$ref": "#/definitions/DigitalOceanConfig"
+    },
+    "dnsmadeeasy": {
+     "$ref": "#/definitions/DigitalOceanConfig"
+    },
+    "duckdns": {
+     "$ref": "#/definitions/DuckDNSConfig"
+    },
+    "dynudns": {
+     "$ref": "#/definitions/DynuConfig"
+    },
+    "edgedns": {
+     "$ref": "#/definitions/EdgeDNSConfig"
+    },
+    "gandi": {
+     "$ref": "#/definitions/GandiConfig"
+    },
+    "godaddy": {
+     "$ref": "#/definitions/GoDaddyConfig"
+    },
+    "google": {
+     "$ref": "#/definitions/GoogleConfig"
+    },
+    "he-ddns": {
+     "$ref": "#/definitions/HurricaneElectricConfig"
+    },
+    "hetzner": {
+     "$ref": "#/definitions/HetznerConfig"
+    },
+    "linode": {
+     "$ref": "#/definitions/LinodeConfig"
+    },
+    "multi": {
+     "type": "object"
+    },
+    "namecheap": {
+     "$ref": "#/definitions/NamecheapConfig"
+    },
+    "nsone": {
+     "$ref": "#/definitions/DigitalOceanConfig"
+    },
+    "ovh": {
+     "$ref": "#/definitions/OvhConfig"
+    },
+    "porkbun": {
+     "$ref": "#/definitions/PorkbunConfig"
+    },
+    "powerdns": {
+     "$ref": "#/definitions/PowerDNSConfig"
+    },
+    "rfc2136": {
+     "$ref": "#/definitions/PowerDNSConfig"
+    },
+    "route53": {
+     "$ref": "#/definitions/Route53Config"
+    },
+    "vultr": {
+     "$ref": "#/definitions/LinodeConfig"
+    }
+   },
+   "required": []
+  },
+  "DeploymentStatus": {
+   "properties": {
+    "browser": {},
+    "certificate_match": {
+     "type": "object"
+    },
+    "code": {
+     "type": "string"
+    },
+    "deployed": {
+     "type": "boolean"
+    },
+    "domain": {
+     "type": "string"
+    },
+    "error": {
+     "type": "string"
+    },
+    "expected_fingerprint": {
+     "type": "string"
+    },
+    "method": {
+     "type": "string"
+    },
+    "mismatch_reason": {
+     "type": "string"
+    },
+    "port": {
+     "type": "integer"
+    },
+    "probe_host": {
+     "type": "string"
+    },
+    "probe_status": {
+     "type": "string"
+    },
+    "protocol": {
+     "type": "string"
+    },
+    "reachable": {
+     "type": "boolean"
+    },
+    "served_fingerprint": {
+     "type": "string"
+    },
+    "served_subject": {
+     "type": "string"
+    },
+    "timestamp": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "DigitalOceanConfig": {
+   "properties": {
+    "api_token": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "DuckDNSConfig": {
+   "properties": {
+    "api_token": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "DynuConfig": {
+   "properties": {
+    "token": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "EdgeDNSConfig": {
+   "properties": {
+    "access_token": {
+     "type": "string"
+    },
+    "client_secret": {
+     "type": "string"
+    },
+    "client_token": {
+     "type": "string"
+    },
+    "host": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "GandiConfig": {
+   "properties": {
+    "api_token": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "GoDaddyConfig": {
+   "properties": {
+    "api_key": {
+     "type": "string"
+    },
+    "secret": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "GoogleConfig": {
+   "properties": {
+    "project_id": {
+     "type": "string"
+    },
+    "service_account_key": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "HashiCorpVaultStorage": {
+   "properties": {
+    "engine_version": {
+     "type": "string"
+    },
+    "mount_point": {
+     "type": "string"
+    },
+    "vault_token": {
+     "type": "string"
+    },
+    "vault_url": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "HetznerConfig": {
+   "properties": {
+    "api_token": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "HurricaneElectricConfig": {
+   "properties": {
+    "password": {
+     "type": "string"
+    },
+    "username": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "InfisicalStorage": {
+   "properties": {
+    "client_id": {
+     "type": "string"
+    },
+    "client_secret": {
+     "type": "string"
+    },
+    "environment": {
+     "type": "string"
+    },
+    "project_id": {
+     "type": "string"
+    },
+    "site_url": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "LinodeConfig": {
+   "properties": {
+    "api_key": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "NamecheapConfig": {
+   "properties": {
+    "api_key": {
+     "type": "string"
+    },
+    "username": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "OvhConfig": {
+   "properties": {
+    "application_key": {
+     "type": "string"
+    },
+    "application_secret": {
+     "type": "string"
+    },
+    "consumer_key": {
+     "type": "string"
+    },
+    "endpoint": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "PorkbunConfig": {
+   "properties": {
+    "api_key": {
+     "type": "string"
+    },
+    "secret_key": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "PowerDNSConfig": {
+   "properties": {
+    "api_key": {
+     "type": "string"
+    },
+    "api_url": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "ReissueCertificate": {
+   "properties": {
+    "account_id": {
+     "type": "string"
+    },
+    "alias_dns_provider": {
+     "type": "string"
+    },
+    "async": {
+     "type": "boolean"
+    },
+    "ca_provider": {
+     "type": "string"
+    },
+    "challenge_type": {
+     "enum": [
+      "dns-01",
+      "http-01",
+      "prevalidated"
+     ],
+     "type": "string"
+    },
+    "csr": {
+     "type": "string"
+    },
+    "dns_provider": {
+     "type": "string"
+    },
+    "domain_alias": {
+     "type": "string"
+    },
+    "elliptic_curve": {
+     "enum": [
+      "secp256r1",
+      "secp384r1"
+     ],
+     "type": "string"
+    },
+    "key_size": {
+     "type": "integer"
+    },
+    "key_type": {
+     "enum": [
+      "ecdsa",
+      "rsa"
+     ],
+     "type": "string"
+    },
+    "san_domains": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "required": []
+  },
+  "RenewalInfo": {
+   "properties": {
+    "checked_at": {
+     "type": "string"
+    },
+    "explanation_url": {
+     "type": "string"
+    },
+    "renew_at": {
+     "type": "string"
+    },
+    "status": {
+     "enum": [
+      "disabled",
+      "no_identifier",
+      "unavailable",
+      "unsupported",
+      "window"
+     ],
+     "type": "string"
+    },
+    "window_end": {
+     "type": "string"
+    },
+    "window_start": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "Route53Config": {
+   "properties": {
+    "access_key_id": {
+     "type": "string"
+    },
+    "assume_role_arn": {
+     "type": "string"
+    },
+    "auth_mode": {
+     "enum": [
+      "access_keys",
+      "iam_role"
+     ],
+     "type": "string"
+    },
+    "region": {
+     "type": "string"
+    },
+    "secret_access_key": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "S3CompatibleStorage": {
+   "properties": {
+    "access_key_id": {
+     "type": "string"
+    },
+    "assume_role_arn": {
+     "type": "string"
+    },
+    "auth_mode": {
+     "enum": [
+      "access_keys",
+      "iam_role"
+     ],
+     "type": "string"
+    },
+    "bucket": {
+     "type": "string"
+    },
+    "endpoint_url": {
+     "type": "string"
+    },
+    "prefix": {
+     "type": "string"
+    },
+    "region": {
+     "type": "string"
+    },
+    "secret_access_key": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "Settings": {
+   "properties": {
+    "api_bearer_token": {
+     "type": "string"
+    },
+    "auto_renew": {
+     "type": "boolean"
+    },
+    "cloudflare_token": {
+     "type": "string"
+    },
+    "default_elliptic_curve": {
+     "enum": [
+      "secp256r1",
+      "secp384r1"
+     ],
+     "type": "string"
+    },
+    "default_key_size": {
+     "type": "integer"
+    },
+    "default_key_type": {
+     "enum": [
+      "ecdsa",
+      "rsa"
+     ],
+     "type": "string"
+    },
+    "dns_propagation_seconds": {
+     "type": "object"
+    },
+    "dns_provider": {
+     "enum": [
+      "acme-dns",
+      "arvancloud",
+      "azure",
+      "cloudflare",
+      "custom-script",
+      "desec",
+      "digitalocean",
+      "dnsmadeeasy",
+      "duckdns",
+      "dynudns",
+      "edgedns",
+      "gandi",
+      "godaddy",
+      "google",
+      "he-ddns",
+      "hetzner",
+      "hetzner-cloud",
+      "infomaniak",
+      "linode",
+      "namecheap",
+      "nsone",
+      "ovh",
+      "porkbun",
+      "powerdns",
+      "rfc2136",
+      "route53",
+      "scaleway",
+      "solidserver",
+      "vultr"
+     ],
+     "type": "string"
+    },
+    "dns_providers": {},
+    "domains": {
+     "items": {
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "email": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "StorageConfig": {
+   "properties": {
+    "aws_secrets_manager": {
+     "$ref": "#/definitions/AWSSecretsManagerStorage"
+    },
+    "azure_keyvault": {
+     "$ref": "#/definitions/AzureKeyVaultStorage"
+    },
+    "backend": {
+     "enum": [
+      "aws_secrets_manager",
+      "azure_keyvault",
+      "hashicorp_vault",
+      "infisical",
+      "local_filesystem",
+      "s3_compatible"
+     ],
+     "type": "string"
+    },
+    "cert_dir": {
+     "type": "string"
+    },
+    "hashicorp_vault": {
+     "$ref": "#/definitions/HashiCorpVaultStorage"
+    },
+    "infisical": {
+     "$ref": "#/definitions/InfisicalStorage"
+    },
+    "s3_compatible": {
+     "$ref": "#/definitions/S3CompatibleStorage"
+    }
+   },
+   "required": []
+  },
+  "StorageMigrationConfig": {
+   "properties": {
+    "source_backend": {
+     "type": "string"
+    },
+    "source_config": {
+     "type": "object"
+    },
+    "target_backend": {
+     "type": "string"
+    },
+    "target_config": {
+     "type": "object"
+    }
+   },
+   "required": [
+    "target_config"
+   ]
+  },
+  "StorageTestConfig": {
+   "properties": {
+    "backend": {
+     "type": "string"
+    },
+    "config": {
+     "type": "object"
+    }
+   },
+   "required": [
+    "backend",
+    "config"
+   ]
+  }
+ },
+ "operations": {
+  "DELETE /backups/delete/{X}/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "DELETE /certificates/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "DELETE /dns/{X}/accounts/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "DELETE /inventory/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /backups": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/BackupList"
+    }
+   }
+  },
+  "GET /backups/download/{X}/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /cache/stats": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/CacheStats"
+    }
+   }
+  },
+  "GET /certificates": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "items": {
+      "$ref": "#/definitions/Certificate"
+     },
+     "type": "array"
+    }
+   }
+  },
+  "GET /certificates/jobs": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /certificates/jobs/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /certificates/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /certificates/{X}/deployment-status": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    },
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/DeploymentStatus"
+    }
+   }
+  },
+  "GET /certificates/{X}/dns-alias-check": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /certificates/{X}/download": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /certificates/{X}/download/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /client-certs": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /client-certs/ca": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /client-certs/stats": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /client-certs/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /client-certs/{X}/download/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /crl/download/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /diagnostics/snapshot": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /dns/accounts": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /dns/{X}/accounts": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /health": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /inventory": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /inventory/config": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /inventory/crypto-report": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /inventory/domains": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /inventory/health": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /inventory/{X}/adopt": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /metrics": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /ocsp/status/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "integer"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "GET /settings": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/Settings"
+    }
+   }
+  },
+  "GET /settings/dns-providers": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/DNSProviders"
+    }
+   }
+  },
+  "GET /storage/info": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "PATCH /certificates/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /backups/create": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/BackupCreateRequest"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /backups/restore/{X}": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/BackupRestoreRequest"
+     }
+    },
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /backups/upload": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /cache/clear": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/CacheClearResponse"
+    }
+   }
+  },
+  "POST /certificates/check-caa": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/check-dns-alias": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/create": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/CreateCertificate"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/deployment-status/browser": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/BrowserDeploymentReports"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/reissue-keyless": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/zombies/scan": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/{X}/deploy": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/{X}/reissue": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/ReissueCertificate"
+     }
+    },
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /certificates/{X}/renew": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /client-certs/batch": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /client-certs/ca/reset": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /client-certs/create": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /client-certs/{X}/renew": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /client-certs/{X}/revoke": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /dns/accounts": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /dns/{X}/accounts": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /inventory/config": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /inventory/scan": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /inventory/{X}/adopt": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /probe": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /settings": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/Settings"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /settings/test-ca-provider": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/CATestConfig"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /storage/azure-keyvault/backfill-certificates": {
+   "parameters": {},
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /storage/config": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/StorageConfig"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /storage/migrate": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/StorageMigrationConfig"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /storage/test": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/StorageTestConfig"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "PUT /certificates/{X}/auto-renew": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "PUT /dns/{X}/accounts/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  }
+ },
+ "outside_openapi": [
+  "DELETE /api/dns-providers/accounts/<X>",
+  "DELETE /api/keys/<X>",
+  "DELETE /api/users/<X>",
+  "GET /api/activity",
+  "GET /api/audit/export",
+  "GET /api/audit/public-key",
+  "GET /api/audit/verify",
+  "GET /api/auth/config",
+  "GET /api/auth/me",
+  "GET /api/auth/oidc/callback",
+  "GET /api/auth/oidc/config",
+  "GET /api/auth/oidc/login",
+  "GET /api/auth/oidc/settings",
+  "GET /api/deploy/config",
+  "GET /api/deploy/history",
+  "GET /api/deploy/pending",
+  "GET /api/dns-providers/accounts",
+  "GET /api/events/stream",
+  "GET /api/keys",
+  "GET /api/notifications/config",
+  "GET /api/settings/rate-limits",
+  "GET /api/swagger.json",
+  "GET /api/users",
+  "GET /api/webhooks/deliveries",
+  "PATCH /api/keys/<X>",
+  "POST /api/auth/config",
+  "POST /api/auth/login",
+  "POST /api/auth/logout",
+  "POST /api/auth/oidc/settings",
+  "POST /api/deploy/config",
+  "POST /api/deploy/targets/preview",
+  "POST /api/deploy/test/<X>",
+  "POST /api/digest/send",
+  "POST /api/dns-providers/accounts",
+  "POST /api/keys",
+  "POST /api/notifications/config",
+  "POST /api/notifications/test",
+  "POST /api/notifications/webhook/preview",
+  "POST /api/users",
+  "PUT /api/dns-providers/accounts/<X>",
+  "PUT /api/settings/rate-limits",
+  "PUT /api/users/<X>"
+ ]
+}
