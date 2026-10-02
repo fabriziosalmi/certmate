@@ -88,8 +88,12 @@ certbot-dns-infomaniak==0.2.4
 certbot-dns-duckdns==1.8.0
 # Akamai Edge DNS (enterprise) — separate from certbot-dns-linode (Akamai Connected Cloud).
 # Pinned at 0.1.0, as it was when certbot was held at 2.10.0 (0.2.0 needs certbot>=5.2.2). That
-# reason is gone with #103; moving to 0.2.0 or later is a separate change with its own check
-# (0.3.0 reads the credentials without the `edgedns_` prefix, so it is not a pin bump: #1079).
+# reason is gone with #103, and the pin STAYS, by decision (#1079): 0.3.0 reads the credentials
+# without the `edgedns_` prefix (so it is not a pin bump) and needs Python 3.12 or later, which
+# would raise the install floor of this whole file from 3.11, for a plugin whose one new feature
+# (the Akamai account switch key) CertMate does not expose. Dependabot ignores `certbot-plugin-*`,
+# and tests/test_edgedns_credentials_format.py runs the INSTALLED plugin over the file CertMate
+# writes, so a pin that moves to 0.3.0 fails there (proved in a venv built from the lock).
 certbot-plugin-edgedns==0.1.0
 # deSEC: free German DNSSEC provider. Official plugin, no certbot upper bound, no lexicon dep
 # (it loads under the certbot pinned above). Writes _acme-challenge TXT via the deSEC REST API.
