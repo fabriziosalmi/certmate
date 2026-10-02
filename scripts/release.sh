@@ -180,10 +180,11 @@ $(echo "$changed" | grep -E "$SENSITIVE_RE" | sed 's/^/  /')"
   # The checks ci.yml's lint step runs after flake8. They were not here, so a release that passed
   # prepare could still open a release PR whose CI failed on a budget; tests/test_the_makefile_runs_
   # what_ci_runs.py now fails when a check CI runs is missing from this list.
-  gate "budgets (complexity, broad exceptions, ruff)" bash -c '
+  gate "budgets (complexity, broad exceptions, ruff, mypy)" bash -c '
     "'"$PY"'" scripts/check_complexity_budget.py &&
     "'"$PY"'" scripts/check_exception_budget.py &&
-    "'"$PY"'" scripts/check_ruff_budget.py'
+    "'"$PY"'" scripts/check_ruff_budget.py &&
+    "'"$PY"'" scripts/check_mypy_budget.py'
   gate "bandit (medium+)" bash -c '"'"$PY"'" -m bandit -r modules/ app.py --severity-level medium -q'
   gate "unit + integration suite (incl. version + marker-coverage guards)" \
     "$PY" -m pytest -q -m "not ui and not e2e" -p no:cacheprovider

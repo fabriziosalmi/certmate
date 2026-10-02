@@ -98,6 +98,16 @@ gating:
       hosted, and there is no reason for it to be advisory.
 
 advisory:
+  - context: typecheck
+    workflow: ci.yml
+    job: typecheck
+    why: >-
+      The mypy ratchet (#1094): errors per file that may only go down. New, and
+      it reads the dependencies' type information, which moves with their
+      releases, so it runs on the locked set in a job of its own. Advisory until
+      it has run green for a few weeks and its failures have proved to be about
+      the change under review; then promote it.
+
   - context: test (3.14)
     workflow: ci.yml
     job: test

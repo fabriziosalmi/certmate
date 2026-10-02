@@ -38,3 +38,8 @@ flake8==7.4.1
 # releases, so a bump (Dependabot proposes one) fails that check until the baseline is re-measured
 # (`python scripts/check_ruff_budget.py --print`) and RUFF_VERSION moves with this pin.
 ruff==0.16.10
+# Read by scripts/check_mypy_budget.py, the mypy ratchet (#1094). Pinned exactly, to the version its
+# baseline was measured with: what mypy reports changes between releases, so a bump (Dependabot
+# proposes one) fails that check until the baseline is re-measured (`python scripts/check_mypy_budget.py
+# --print`) and MYPY_VERSION moves with this pin.
+mypy==2.4.0

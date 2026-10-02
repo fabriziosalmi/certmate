@@ -120,3 +120,4 @@ UI_REDESIGN_PLAN.md
 # fill in your domain. The copy is yours; the example is tracked (#576).
 nginx.conf
 tls-erros.md
+.mypy_cache/

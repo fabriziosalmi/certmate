@@ -71,6 +71,7 @@ catch something:
 | Complexity budget (**fails CI**) | `python scripts/check_complexity_budget.py` |
 | Broad-exception budget (**fails CI**) | `python scripts/check_exception_budget.py` |
 | ruff ratchet (**fails CI**) | `python scripts/check_ruff_budget.py` |
+| mypy ratchet (**fails CI**, advisory until it has run green for a while) | `python scripts/check_mypy_budget.py` |
 | Security scan (**fails CI**) | `bandit -r modules/ app.py --severity-level medium` |
 | Tests + coverage floor of 75% on `modules/` | `pytest -m "not ui and not network" --cov=modules --cov-fail-under=75` |
 | Coverage floors per HTTP module | `python scripts/check_coverage_floors.py coverage.json` (after the tests, with `--cov-report=json:coverage.json`) |
