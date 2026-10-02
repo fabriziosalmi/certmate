@@ -232,6 +232,21 @@ CA attached to the window, when it gave one; only `https` URLs are kept. The
 window can only bring a renewal forward: the threshold stays the backstop.
 Available since API contract **2.23**.
 
+##### Deprecated fields
+
+Six fields of a certificate have always been `null`: `total_issued`, `total_active`,
+`total_expired`, `total_revoked`, `latest_issuance` and `oldest_active_issuance`.
+They were declared when the models were rewritten for 2.2 and nothing has ever
+filled them: CertMate keeps no ledger of issuances for them to summarise, it does not
+revoke public certificates (so `total_revoked` is not something it can know), and the
+date of the latest issuance is `renewed_at`, or `created_at` for a certificate that has
+not been renewed.
+
+They are **deprecated**, and **removed by the next major of the API contract (3.0)**,
+which is tracked in [#1114](https://github.com/fabriziosalmi/certmate/issues/1114). Until then they are
+still sent, as `null`, so nothing that reads them breaks; stop reading them. Deprecating
+does not move the contract version; the removal does.
+
 #### Reissue every certificate that lost its key
 
 **Endpoint**: `POST /api/certificates/reissue-keyless` — operator

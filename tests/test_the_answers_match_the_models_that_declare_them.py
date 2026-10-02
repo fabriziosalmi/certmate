@@ -218,3 +218,34 @@ def test_each_clause_of_the_comparison_has_a_case_it_must_catch(label, walked, e
     models = {'Thing': {'properties': {'a': {'type': 'string'}, 'b': {'type': 'integer'}, 'bag': {'type': 'object'}}}}
     found = _compare(models, {'$ref': '#/definitions/Thing'}, walked)
     assert {key: value for key, value in found.items() if value} == expected, label
+
+
+# --- the fields nothing fills are announced where a caller reads (#1114) ----------
+
+ANNOUNCED = ('total_issued', 'total_active', 'total_expired', 'total_revoked',
+             'latest_issuance', 'oldest_active_issuance')
+
+
+def test_the_fields_nothing_fills_say_so_in_the_document_a_client_is_generated_from():
+    spec = support.swagger_spec()
+    properties = spec['definitions']['Certificate']['properties']
+    for name in ANNOUNCED:
+        description = properties[name]['description']
+        assert description.startswith('DEPRECATED'), (name, description)
+        assert '#1114' in description and '3.0' in description, (name, description)
+
+
+def test_the_fields_nothing_fills_are_the_ones_written_down_as_never_filled():
+    """If one of the six gets a value, or one more is found that never has, the two lists
+    differ, and the announcement is wrong in one direction or the other."""
+    written_down = {path.split('.', 1)[1] for path, why in NEVER_FILLED['GET /api/certificates'].items()
+                    if why == '#1108'}
+    assert written_down == set(ANNOUNCED)
+
+
+def test_the_documentation_announces_them_and_names_the_issue_that_tracks_the_removal():
+    text = (support.REPO / 'docs' / 'api.md').read_text(encoding='utf-8')
+    section = text.split('##### Deprecated fields', 1)[1].split('####', 1)[0]
+    for name in ANNOUNCED:
+        assert f'`{name}`' in section, name
+    assert '#1114' in section and 'next major' in section
