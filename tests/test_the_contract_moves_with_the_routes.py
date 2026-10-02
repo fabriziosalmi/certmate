@@ -95,6 +95,14 @@ def test_every_route_outside_the_document_is_called_or_explained(built, outcome)
     assert not both, f'Called and listed as not called: {both}'
 
 
+def test_the_plan_leaves_the_login_limiter_empty(outcome):
+    """The plan logs in; the limiter is per process. CI failed a dozen unrelated tests with "Too many
+    attempts" because the first version left its attempts behind."""
+    from modules.web import routes as web_routes
+    assert outcome[0]['POST /api/auth/login'], 'CONTROL: the plan did log in'
+    assert not web_routes._login_attempts_by_ip and not web_routes._login_attempts_by_user
+
+
 def test_every_route_not_called_says_why():
     for route, reason in routes.NOT_CALLED.items():
         assert isinstance(reason, str) and len(reason) > 20, route

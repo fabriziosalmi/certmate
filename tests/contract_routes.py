@@ -149,7 +149,26 @@ def _target():
 
 def run(app, token, trace=None):
     """Call the plan. Returns (routes, unseen) where routes is
-    {route: {status: {path: [types]}}}."""
+    {route: {status: {path: [types]}}}.
+
+    The plan logs in (a wrong password and a right one) and the login rate limiter is a module
+    global of the PROCESS, not of the app: left as it is, the plan spends the budget of every
+    test that logs in after it (CI saw "Too many attempts" in a dozen unrelated tests, #1098).
+    It is emptied before, so the plan does not depend on who ran first, and after, so it leaves
+    nothing behind.
+    """
+    from modules.web import routes as web_routes
+    buckets = (web_routes._login_attempts_by_ip, web_routes._login_attempts_by_user)
+    for bucket in buckets:
+        bucket.clear()
+    try:
+        return _walk(app, token, trace)
+    finally:
+        for bucket in buckets:
+            bucket.clear()
+
+
+def _walk(app, token, trace):
     plan = Plan(app, token, trace)
     call = plan.call
     password = 'correct-horse-9-battery'
