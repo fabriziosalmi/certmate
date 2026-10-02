@@ -19,7 +19,7 @@ import logging
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import DomainOperationInProgress
-from ..core.inventory_view import build_inventory_view, build_registrations_view
+from ..core.inventory_view import build_inventory_view, build_registrations_view, superseded_fingerprints
 from ..core.utils import ALREADY_RUNNING, utc_now_iso
 from .resource_context import (
     ApiContext,
@@ -158,6 +158,24 @@ def _health_response(ctx):
     return {'names': records, 'summary': summary}
 
 
+_FALSY = ('0', 'false', 'no', 'off')
+
+
+def _include_superseded(args):
+    """`?include_superseded`: every certificate unless it is explicitly false (#1044)."""
+    return args.get('include_superseded', '').strip().lower() not in _FALSY
+
+
+def _visible(records, everything, include_superseded):
+    """*records* without the certificates the WHOLE inventory *everything* shows to be superseded,
+    unless they are wanted. Worked out from everything and not from *records*: a newer certificate
+    that a filter or a scope hides still replaced the old one."""
+    if include_superseded:
+        return records
+    gone = superseded_fingerprints(everything)
+    return [record for record in records if record.get('fingerprint') not in gone]
+
+
 def _inventory_health_resource(api, ctx):
     """Build the GET /api/inventory/health resource.
 
@@ -215,11 +233,22 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
         return scope_filter_records(ctx, records)
 
     class InventoryList(Resource):
-        @api.doc(security='Bearer')
+        @api.doc(security='Bearer', params={
+            'managed': {'in': 'query', 'type': 'boolean',
+                        'description': 'Only issued (true) or only discovered (false) certificates'},
+            'source': {'in': 'query', 'type': 'string',
+                       'description': 'Only certificates found by this source'},
+            'include_superseded': {
+                'in': 'query', 'type': 'boolean', 'default': True,
+                'description': 'false leaves out certificates replaced everywhere they were seen; every '
+                               'certificate carries a `superseded` flag either way'},
+        })
         @ctx.auth.require_role('viewer')
         def get(self):
             """List the certificate inventory (issued + discovered) with an
-            expiry forecast. Optional filters: ?managed=true/false, ?source=."""
+            expiry forecast. Optional filters: ?managed=true/false, ?source=,
+            ?include_superseded=false (leaves out certificates that every
+            endpoint has since stopped serving; they are marked either way)."""
             inventory = ctx.managers.get('cert_inventory')
             if inventory is None:
                 return {'error': 'Certificate inventory not available'}, 503
@@ -230,7 +259,12 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                     managed_filter = managed.strip().lower() in ('1', 'true', 'yes', 'on')
                 source = request.args.get('source') or None
                 records = inventory.list_all(managed=managed_filter, source=source)
-                return build_inventory_view(_scope_filter_records(records))
+                # Worked out from the WHOLE inventory: a newer certificate that a source or scope
+                # filter hides still replaced the old one.
+                superseded = superseded_fingerprints(inventory.list_all())
+                return build_inventory_view(_scope_filter_records(records),
+                                            include_superseded=_include_superseded(request.args),
+                                            superseded=superseded)
             except Exception as e:
                 logger.error(f"Error listing inventory: {e}")
                 return {'error': 'Failed to list inventory'}, 500
@@ -352,18 +386,27 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
     InventoryHealth = _inventory_health_resource(api, ctx)
 
     class InventoryCryptoReport(Resource):
-        @api.doc(security='Bearer')
+        @api.doc(security='Bearer', params={
+            'format': {'in': 'query', 'type': 'string', 'enum': ['csv'],
+                       'description': 'csv downloads a CSV; otherwise JSON is returned'},
+            'include_superseded': {
+                'in': 'query', 'type': 'boolean', 'default': True,
+                'description': 'false leaves out certificates replaced everywhere they were seen'},
+        })
         @ctx.auth.require_role('viewer')
         def get(self):
             """Cryptographic algorithm inventory & readiness report over every
             managed + discovered certificate. ``?format=csv`` downloads a CSV;
-            otherwise JSON is returned."""
+            otherwise JSON is returned. ``?include_superseded=false`` leaves out
+            the certificates every endpoint has since stopped serving."""
             from ..core.crypto_report import build_crypto_report, report_to_csv
             inventory = ctx.managers.get('cert_inventory')
             if inventory is None:
                 return {'error': 'Certificate inventory not available'}, 503
             try:
-                records = _scope_filter_records(inventory.list_all())
+                everything = inventory.list_all()
+                records = _visible(_scope_filter_records(everything), everything,
+                                   _include_superseded(request.args))
                 report = build_crypto_report(records, generated_at=utc_now_iso())
             except Exception as e:
                 logger.error(f"Error building crypto report: {e}")

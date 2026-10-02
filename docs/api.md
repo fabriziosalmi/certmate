@@ -1190,7 +1190,20 @@ logs. Discovery is what fills the second half.
 **Endpoint**: `GET /api/inventory` — viewer
 
 Returns managed and discovered certificates with an expiry forecast. Filters:
-`?managed=true|false`, and the usual paging.
+`?managed=true|false`, `?source=`, `?include_superseded=false`, and the usual paging.
+
+Since API contract **2.36** every certificate carries `superseded`, and the summary
+carries a `superseded` count. A certificate is superseded when **every endpoint it
+was seen on has since been seen serving a different certificate**: the old
+certificate of a host that now serves its renewal. One still served on any endpoint
+is never superseded, and neither is one with no endpoint (found in a Certificate
+Transparency log, or issued here and never probed). Nothing is deleted: the inventory
+stays a history, which is how a renewal that was never deployed is caught. By default
+the answer still lists every certificate, with the flag; `?include_superseded=false`
+leaves the superseded ones out of the list **and** of the summary, so the counts
+describe what the list shows, and `summary.superseded` says how many were left out.
+`GET /api/inventory/crypto-report` takes the same `?include_superseded=false`, and
+the dashboard sends it to both, so its readiness cards agree with its list.
 
 Since API contract **2.4** every record carries `revocation`: the last verified
 OCSP/CRL answer for that certificate, as `{status, method, reason, revoked_at,

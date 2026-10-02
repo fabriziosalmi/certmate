@@ -485,6 +485,23 @@ METADATA_SCHEMA_VERSION = 1
 #                                   tests/test_the_contract_moves_with_the_
 #                                   models.py does now.
 #
+#   Inventory: list and crypto    `superseded` on every certificate of
+#   report (#1044)                  GET /api/inventory and in its summary, and
+#                                   an optional `include_superseded` query
+#                                   parameter on it and on
+#                                   GET /api/inventory/crypto-report. A
+#                                   certificate is superseded when every
+#                                   endpoint it was seen on has since been
+#                                   seen serving a different one. The default
+#                                   answer is unchanged (everything, now with
+#                                   the flag); `include_superseded=false`
+#                                   leaves them out of the list, the summary
+#                                   and the report. 2.36, MINOR: a new response
+#                                   field and a new optional parameter. Neither
+#                                   operation has a response schema in the
+#                                   OpenAPI document, so no gate sees the
+#                                   field: this entry and the number are by hand.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -513,7 +530,7 @@ METADATA_SCHEMA_VERSION = 1
 # purpose), and a change of MEANING with the structure unchanged. For those this
 # comment is still the only thing that will stop you, so read the rule and move
 # the number yourself.
-API_CONTRACT_VERSION = '2.35'
+API_CONTRACT_VERSION = '2.36'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

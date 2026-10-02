@@ -87,21 +87,79 @@ def expiry_status(days):
     return EXPIRY_OK
 
 
-def build_inventory_view(records, now=None):
+def superseded_fingerprints(records):
+    """The certificates that have been replaced everywhere they were seen (#1044).
+
+    The inventory is a history by fingerprint, on purpose: it is how "a renewed
+    certificate that was never deployed" is caught (the new one exists and the
+    endpoint still serves the old one). So nothing is forgotten when a renewal
+    arrives. What an operator wants from the list is to tell the certificates in
+    use from the ones that are not any more, and the data for that is already
+    stored: each endpoint records when it last served each certificate.
+
+    A certificate is superseded when it has at least one endpoint and, at EVERY
+    endpoint it was seen on, a different certificate has been seen more recently.
+    So:
+
+    * one still served on any endpoint is never superseded;
+    * one with no endpoint (found in a CT log, or issued here and never probed)
+      is never superseded: there is nothing to compare;
+    * two certificates last seen at the same instant on an endpoint are both
+      current, and a ``last_seen`` that cannot be read is never taken as evidence
+      of replacement;
+    * the latest sighting decides, so an endpoint that alternates between two
+      certificates (a rollout across a load balancer) marks whichever it served
+      earlier. That is what "has since been seen serving a different certificate"
+      says, and it corrects itself on the next scan.
+
+    Computed from the records it is given, so the caller passes the whole
+    inventory and filters afterwards: a newer certificate that a ``source`` or
+    scope filter would hide still replaced the old one. Host names compare
+    case-insensitively.
+    """
+    def key(endpoint):
+        return (str(endpoint.get('host') or '').lower(), endpoint.get('port'))
+
+    seen = {}
+    for record in records:
+        for endpoint in record.get('endpoints') or []:
+            seen.setdefault(key(endpoint), {})[record.get('fingerprint')] = _parse_iso(endpoint.get('last_seen'))
+
+    def replaced_at(fingerprint, endpoint):
+        sightings = seen[key(endpoint)]
+        mine = sightings[fingerprint]
+        newest = max((t for t in sightings.values() if t is not None), default=None)
+        return mine is not None and newest is not None and mine < newest
+
+    return {record.get('fingerprint') for record in records
+            if record.get('endpoints')
+            and all(replaced_at(record.get('fingerprint'), endpoint) for endpoint in record['endpoints'])}
+
+
+def build_inventory_view(records, now=None, include_superseded=True, superseded=None):
     """Return ``{'certificates': [...], 'summary': {...}}`` for the dashboard.
 
     Each certificate is the stored record plus a live ``days_until_expiry``,
-    ``expiry_status`` and ``group`` (``issued`` when managed, else
-    ``discovered``). The summary rolls up totals, source breakdown, an
-    expiry forecast (expired + within 7/30/90 days) and the revocation answers
-    across every record.
+    ``expiry_status``, ``group`` (``issued`` when managed, else ``discovered``)
+    and ``superseded`` (:func:`superseded_fingerprints`). The summary rolls up
+    totals, source breakdown, an expiry forecast (expired + within 7/30/90 days)
+    and the revocation answers across every record it counts.
+
+    With ``include_superseded=False`` the superseded certificates are left out of
+    the list AND of the summary, so the cards describe what the list shows;
+    ``summary['superseded']`` is how many of the given records are superseded,
+    whether they were left out or not. *superseded* is the set to use when the
+    caller worked it out from the whole inventory before filtering ``records``.
     """
     now = now or datetime.utcnow()
+    if superseded is None:
+        superseded = superseded_fingerprints(records)
     certificates = []
     summary = {
         'total': 0,
         'issued': 0,
         'discovered': 0,
+        'superseded': sum(1 for record in records if record.get('fingerprint') in superseded),
         'by_source': {},
         'expiry': {'expired': 0, '7': 0, '30': 0, '90': 0, 'unknown': 0},
         # Last revocation answer per certificate; 'unchecked' = never asked.
@@ -110,6 +168,9 @@ def build_inventory_view(records, now=None):
     }
 
     for record in records:
+        is_superseded = record.get('fingerprint') in superseded
+        if is_superseded and not include_superseded:
+            continue
         days = days_until_expiry(record.get('not_after'), now)
         status = expiry_status(days)
         group = 'issued' if record.get('managed') else 'discovered'
@@ -117,6 +178,7 @@ def build_inventory_view(records, now=None):
         item['days_until_expiry'] = days
         item['expiry_status'] = status
         item['group'] = group
+        item['superseded'] = is_superseded
         certificates.append(item)
 
         summary['total'] += 1

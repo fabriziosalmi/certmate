@@ -232,6 +232,11 @@
                 <option value="ok">Healthy</option>
                 <option value="revoked">Revoked</option>
             </select>
+            <label class="inline-flex items-center gap-2 text-xs text-muted cursor-pointer"
+                   title="A certificate is superseded when every endpoint it was seen on has since been seen serving a different one. Nothing is deleted; they are hidden until you ask.">
+                <input type="checkbox" id="invSuperseded" onchange="InventoryPage.toggleSuperseded()" aria-label="Show superseded certificates">
+                Show superseded
+            </label>
             <span class="text-xs text-muted ml-auto" id="invCount"></span>
         </div>
 
