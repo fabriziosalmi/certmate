@@ -514,22 +514,18 @@ METADATA_SCHEMA_VERSION = 1
 #
 # WHAT CHECKS THIS, AND WHAT DOES NOT. Three snapshots, each recorded at the
 # version it names. tests/test_the_contract_moves_with_the_surface.py compares the
-# ROUTES and catches an endpoint appearing or going away. tests/test_the_contract_
-# moves_with_the_models.py compares the STRUCTURE of the OpenAPI document under
-# them: a field added to or removed from a model, a field retyped, an enum that
-# gains or loses a value, a parameter that appears or becomes required, a status
-# code that appears or goes, a response that changes shape. tests/test_the_
-# contract_moves_with_the_routes.py covers the routes that document does not
-# describe (users, API keys, deploy configuration, authentication, the audit
-# trail: plain Flask routes, 42 of 111): it calls each on the real app and
-# compares the fields, types and status codes of the ANSWER. Each difference is
-# printed with the way the version has to move. What none of them sees: the
-# REQUEST side of a route outside the document (its accepted fields live in the
-# handler and docs/api.md), a route whose answer is an empty list in the plan
-# (the snapshot lists these), the dashboard's /api/web/ calls (outside it on
-# purpose), and a change of MEANING with the structure unchanged. For those this
-# comment is still the only thing that will stop you, so read the rule and move
-# the number yourself.
+# ROUTES; tests/test_the_contract_moves_with_the_models.py the STRUCTURE of the
+# OpenAPI document (models, enums, parameters, status codes);
+# tests/test_the_contract_moves_with_the_routes.py CALLS 108 of the 111 routes on
+# the real app, sealed from the network, and compares the fields, types and status
+# codes of the ANSWER, which is the only thing that sees the 62 operations the
+# document declares without a schema (#1105) and the 42 it does not describe. It
+# refuses a server error and an answer whose status and body disagree. Each
+# difference is printed with the way the version has to move. Nothing sees the
+# REQUEST side (handlers and docs/api.md), a list that is empty in the plan (the
+# snapshot lists these), a route with no 2xx answer (listed with its reason), the
+# dashboard's /api/web/ calls, or a change of MEANING with the structure
+# unchanged: for those, read the rule and move the number yourself.
 API_CONTRACT_VERSION = '2.36'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the

@@ -34,11 +34,19 @@ MAJOR, MINOR, REVIEW, NOTE = 'MAJOR', 'MINOR', 'REVIEW', 'NOTE'
 ORDER = {MAJOR: 0, REVIEW: 1, MINOR: 2, NOTE: 3}
 
 
+RUNTIME_DIR_VARIABLES = ('CERTMATE_CERT_DIR', 'CERTMATE_DATA_DIR', 'CERTMATE_BACKUP_DIR', 'CERTMATE_LOGS_DIR')
+
+
 def build_app():
     """The app, built the way the route-surface test builds it, with its token."""
-    saved = {k: os.environ.get(k) for k in ('TESTING', 'FLASK_ENV', 'API_BEARER_TOKEN')}
+    saved = {k: os.environ.get(k) for k in ('TESTING', 'FLASK_ENV', 'API_BEARER_TOKEN', *RUNTIME_DIR_VARIABLES)}
     token = secrets.token_urlsafe(32)
     os.environ.update(TESTING='true', FLASK_ENV='testing', API_BEARER_TOKEN=token)
+    # The route walk creates and deletes certificates, backups and accounts and restores a backup
+    # over the instance. A developer with these exported (pointing at a running instance) would
+    # have it done to that instance: they take precedence over the anchor the app is built on.
+    for name in RUNTIME_DIR_VARIABLES:
+        os.environ.pop(name, None)
     try:
         root = pathlib.Path(tempfile.mkdtemp()) / 'certmate'
         (root / 'modules' / 'core').mkdir(parents=True)
@@ -50,6 +58,10 @@ def build_app():
         with mock.patch('modules.factory.__file__', str(anchor)):
             result = create_app()
         app = result[0] if isinstance(result, tuple) else result
+        if isinstance(result, tuple):
+            # The route walk seeds state and needs to reach the managers; the app does
+            # not otherwise hand its container out.
+            app.extensions['certmate_container'] = result[1]
         return app, token
     finally:
         for key, value in saved.items():

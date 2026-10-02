@@ -1,29 +1,34 @@
-"""The routes the OpenAPI document does not describe move the contract too (#1086).
+"""What every route answers moves the contract too (#1086, #1105).
 
-42 of the API's 111 routes are plain Flask routes: users, API keys, deploy
-configuration, authentication, the audit trail. They are described in docs/api.md and
-nowhere a test can read, so `tests/test_the_contract_moves_with_the_models.py`, which
-compares the OpenAPI document with the version, cannot see them: a field added to one
-of those answers, or removed, moved nothing.
+The OpenAPI document declares a response schema for 7 of its 69 operations, and 42 more
+routes are plain Flask routes it does not describe at all: users, API keys, deploy
+configuration, authentication, the audit trail. What 104 of the API's 111 routes send was
+written in docs/api.md and nowhere a test could read, so
+`tests/test_the_contract_moves_with_the_models.py`, which compares the OpenAPI document
+with the version, could not see a field added to one of those answers, or removed, or a
+status code that changed: nothing moved the version.
 
-`tests/contract_routes.py` calls each of them on the real app, in a fixed order and on a
-state it builds, and records the structure of every answer (fields, types, status
-codes; never values) in `tests/api_routes_surface.json`. This test fails when an answer
-no longer matches, saying for each difference which way the contract version has to
+`tests/contract_routes.py` calls every route it can (108 of 111) on the real app, in a
+fixed order, on a state it builds, in a world sealed from the network
+(`tests/contract_world.py`), and records the structure of every answer (fields, types,
+status codes; never values) in `tests/api_routes_surface.json`. This test fails when an
+answer no longer matches, saying for each difference which way the contract version has to
 move by the rule beside `API_CONTRACT_VERSION`.
 
 It characterizes; it does not specify. It records what the routes do today, so a change
 is read and classified. What it cannot see is recorded in the snapshot rather than left
-out of it: the request side, the routes not called (each with its reason), answers that
-held an empty list, and the sub-objects that change with what happened rather than with
-the code. A route that answers wrongly today is listed as not called with the issue, not
-recorded: a snapshot of a 500 is a test that guards the defect.
+out of it: the request side, the routes not called and the routes with no success answer
+(each with its reason), answers that held an empty list, and the sub-objects that change
+with what happened rather than with the code. A call that shows a wrong answer is listed
+under `known_defects` with its issue, made and checked, and not recorded: a snapshot of a
+wrong answer is a test that guards the wrong answer.
 
 Regenerate after moving the version:
 
     python tests/contract_support.py write
 """
 import json
+import re
 
 import pytest
 
@@ -40,8 +45,19 @@ def built():
 
 
 @pytest.fixture(scope='module')
-def outcome(built):
-    return routes.run(*built)
+def ran(built):
+    report = {}
+    return routes.run(*built, report=report), report
+
+
+@pytest.fixture(scope='module')
+def outcome(ran):
+    return ran[0]
+
+
+@pytest.fixture(scope='module')
+def report(ran):
+    return ran[1]
 
 
 @pytest.fixture(scope='module')
@@ -55,7 +71,7 @@ def test_the_recorded_answers_are_the_ones_the_routes_give(outcome, snapshot):
         return
     lines = [f'  [{severity}] {text}' for severity, text in differences]
     pytest.fail(
-        'The routes outside the OpenAPI document no longer answer what '
+        'The routes no longer answer what '
         f'{routes.SNAPSHOT.relative_to(support.REPO)} records at contract '
         f'{snapshot["contract_version"]}. The rule is beside API_CONTRACT_VERSION in '
         'modules/core/constants.py: a new field on an answer, a new route are a MINOR; '
@@ -71,28 +87,46 @@ def test_what_the_plan_could_not_see_is_recorded_as_it_is_now(outcome, snapshot)
         'something is good: its fields are compared from now on). Regenerate: '
         'python tests/contract_support.py write')
     assert snapshot['not_called'] == dict(sorted(routes.NOT_CALLED.items()))
+    assert snapshot['no_success'] == dict(sorted(routes.NO_SUCCESS.items()))
     assert snapshot['opaque'] == {k: sorted(v) for k, v in sorted(routes.OPAQUE_BY_ROUTE.items())}
 
 
-def test_every_route_outside_the_document_is_called_or_explained(built, outcome):
+def test_every_route_is_called_or_explained(built, outcome):
     """A route added to the app and to neither the plan nor the table is noticed here,
-    and a table entry for a route that is gone or now inside the document is stale."""
+    and a table entry for a route that is gone is stale."""
     app, _token = built
-    spec = support.reduce(support.swagger_spec(built))
-    outside = set(support.outside_openapi(support.route_surface(app), spec['operations']))
+    surface = support.route_surface(app)
     called = set(outcome[0])
 
-    undecided = sorted(outside - called - set(routes.NOT_CALLED))
+    undecided = sorted(surface - called - set(routes.NOT_CALLED))
     assert not undecided, (
-        'Routes outside the OpenAPI document that the plan neither calls nor explains. '
-        'Add a call to tests/contract_routes.py:run, or an entry (with the reason) to '
-        'NOT_CALLED:\n  ' + '\n  '.join(undecided))
-    stale = sorted((set(routes.NOT_CALLED) | called) - outside)
-    assert not stale, (
-        'Routes the plan knows that are not outside the document any more (gone, or '
-        'described in it now, which is where they should be compared):\n  ' + '\n  '.join(stale))
+        'Routes the plan neither calls nor explains. Add a call to tests/contract_plan.py '
+        '(the routes the OpenAPI document describes) or to tests/contract_routes.py:_walk '
+        '(the others), or an entry (with the reason) to NOT_CALLED:\n  ' + '\n  '.join(undecided))
+    stale = sorted((set(routes.NOT_CALLED) | called) - surface)
+    assert not stale, ('Routes the plan knows that the app does not serve any more:\n  '
+                       + '\n  '.join(stale))
     both = sorted(called & set(routes.NOT_CALLED))
     assert not both, f'Called and listed as not called: {both}'
+
+
+def test_a_route_with_no_success_answer_says_why(outcome):
+    """A route whose recorded answers are all errors has a success shape nothing compares.
+    That is allowed, but it has to be written down, and the entry has to go the day the
+    route gets a 2xx."""
+    without = {route for route, by_status in outcome[0].items()
+               if not any(status.startswith('2') for status in by_status)}
+    unexplained = sorted(without - set(routes.NO_SUCCESS))
+    assert not unexplained, (
+        'Routes the plan reaches only with error answers. Reach a 2xx (a state to seed, a '
+        'body to send) or add the route, with the reason, to NO_SUCCESS in '
+        'tests/contract_routes.py:\n  ' + '\n  '.join(unexplained))
+    stale = sorted(set(routes.NO_SUCCESS) - without)
+    assert not stale, (
+        'NO_SUCCESS lists routes that now have a 2xx answer in the plan; remove them:\n  '
+        + '\n  '.join(stale))
+    for route, reason in routes.NO_SUCCESS.items():
+        assert len(reason) > 20, route
 
 
 def test_the_plan_leaves_the_login_limiter_empty(outcome):
@@ -125,7 +159,7 @@ def test_the_instrument_sees_the_routes(outcome):
     compare nothing with nothing."""
     answers = sum(len(by_status) for by_status in outcome[0].values())
     fields = sum(len(paths) for by_status in outcome[0].values() for paths in by_status.values())
-    assert len(outcome[0]) >= 30 and answers >= 45 and fields >= 250, (
+    assert len(outcome[0]) >= 100 and answers >= 160 and fields >= 700, (
         f'{len(outcome[0])} routes, {answers} answers, {fields} fields: too few to be this API')
 
 
@@ -136,15 +170,108 @@ def test_no_answer_in_the_plan_is_a_server_error(outcome):
                     for status in by_status if status.startswith('5'))
     assert not errors, (
         'The plan reaches a server error. If the route is wrong, fix it and keep it in '
-        'the plan; if it is a known defect, take the call out and list the route in '
-        'NOT_CALLED with its issue:\n  ' + '\n  '.join(errors))
+        'the plan; if it is a known defect, pass `defect=(issue, status)` to the call so '
+        'that it is checked and not recorded:\n  ' + '\n  '.join(errors))
 
 
-def test_the_plan_gives_the_same_answer_on_a_fresh_instance(outcome):
-    """CONTROL on repeatability: a second app, built from nothing, answers the same."""
-    again = routes.run(*support.build_app())
+def test_no_answer_has_a_status_and_a_body_that_disagree(report):
+    """`POST /api/deploy/test/<id>` answered 404 for every hook that ran and succeeded, with
+    `"success": true` in the body (#1107). A client that reads the status and one that reads
+    the body disagree about what happened, and each is right by its own reading."""
+    assert report['contradictions'] == []
+
+
+def test_every_known_defect_still_shows_the_defect(report, snapshot):
+    """The calls that show a wrong answer are made and not recorded. They are checked
+    here, so the entry cannot outlive the defect: when the answer changes, the fix has
+    arrived, and the call goes back to being an ordinary one."""
+    assert report['defects'], 'CONTROL: the plan makes no call that shows a defect; this test is not testing'
+    fixed = [f'{call} answered {got}, which is no longer the {expected} that {issue} is about: '
+             f'drop `defect=` from the call and regenerate'
+             for call, issue, expected, got in report['defects'] if got != expected]
+    assert not fixed, '\n'.join(fixed)
+    for call, issue, _expected, _got in report['defects']:
+        assert re.fullmatch(r'#\d+', issue), f'{call}: {issue!r} is not an issue number'
+    assert snapshot['known_defects'] == {call: issue for call, issue, _e, _g in sorted(report['defects'])}
+
+
+def test_the_plan_gives_the_same_answer_on_a_fresh_instance(outcome, report):
+    """CONTROL on repeatability: a second app, built from nothing, answers the same. A snapshot
+    that is not repeatable fails for nothing, and people learn to regenerate it without reading it."""
+    second = {}
+    again = routes.run(*support.build_app(), report=second)
     assert routes.compare(outcome[0], again[0]) == [], 'the plan depends on something it does not build'
     assert outcome[1] == again[1]
+    assert second['defects'] == report['defects']
+
+
+def test_the_plan_does_not_depend_on_what_ran_in_the_process_before_it(outcome, report):
+    """The full suite was where the walk disagreed with its own snapshot, twice: the platform
+    module remembers `uname -p` for the life of the process (a fresh one failed under the seal
+    and answered with an `errors` block, a used one did not), and the metrics collector reports
+    `0`, an int, until someone collects and a float after. Run alone, or twice in a row, the
+    walk agreed with itself. So the process is made fresh in one way and used in the other, and
+    the answers have to be the same as the ones recorded."""
+    import platform
+    import time
+
+    from modules.core import metrics
+    saved = platform._uname_cache, metrics.metrics_collector.last_collection
+    try:
+        platform._uname_cache = None                          # a process that never asked
+        cold = routes.run(*support.build_app(), report={})
+        platform._uname_cache = None
+        metrics.metrics_collector.last_collection = time.time()   # a process where something collected
+        used = routes.run(*support.build_app(), report={})
+    finally:
+        platform._uname_cache, metrics.metrics_collector.last_collection = saved
+    assert routes.compare(outcome[0], cold[0]) == [], 'the answers depend on a cold process'
+    assert routes.compare(outcome[0], used[0]) == [], 'the answers depend on a used process'
+    assert metrics.metrics_collector.last_collection == saved[1], 'the walk left the collector changed'
+
+
+def _inside_temp(container):
+    import tempfile
+    from pathlib import Path
+    temp = Path(tempfile.gettempdir()).resolve()
+    stray = []
+    for name in ('cert_dir', 'data_dir', 'backup_dir', 'logs_dir'):
+        path = Path(getattr(container, name)).resolve()
+        if temp not in path.parents or support.REPO in path.parents:
+            stray.append(f'{name} is {path}')
+    return stray
+
+
+def test_the_plan_leaves_nothing_outside_the_instance_it_built(built):
+    """The plan creates certificates, backups, accounts and users, and restores a backup over
+    the instance. All of it has to land in the directory the app was built in."""
+    assert _inside_temp(built[0].extensions['certmate_container']) == []
+
+
+def test_the_plan_issues_from_a_directory_of_its_own(report):
+    """The credentials file certbot reads is written relative to the working directory. The plan
+    issues certificates, so with the checkout as the working directory it would put a credential
+    file in the repository tree (measured), and the tree is not the instance it built."""
+    import tempfile
+    from pathlib import Path
+    assert report['cwds'], 'CONTROL: the plan ran certbot, so there is a working directory to check'
+    temp = Path(tempfile.gettempdir()).resolve()
+    for cwd in set(report['cwds']):
+        assert temp in Path(cwd).resolve().parents and support.REPO not in Path(cwd).resolve().parents, cwd
+
+
+def test_an_instance_pointing_at_a_real_tree_is_not_the_one_the_plan_runs_on(tmp_path, monkeypatch):
+    """CONTROL. CERTMATE_*_DIR take precedence over the anchor the app is built on, and a developer
+    with them exported would have the plan delete their certificates and restore a backup over
+    them. `build_app` must not read them."""
+    for name in support.RUNTIME_DIR_VARIABLES:
+        monkeypatch.setenv(name, str(tmp_path / name.lower()))
+    container = support.build_app()[0].extensions['certmate_container']
+    assert _inside_temp(container) == []
+    assert not any(tmp_path.iterdir()), 'the app wrote into a directory named by the environment'
+    import os
+    assert all(os.environ[name] == str(tmp_path / name.lower()) for name in support.RUNTIME_DIR_VARIABLES), (
+        'build_app did not put the environment back')
 
 
 def test_what_changes_with_the_event_is_not_recorded(snapshot):
@@ -233,3 +360,48 @@ def test_a_list_none_of_whose_elements_were_seen_is_reported():
     seen = routes.flatten({'items': [], 'full': [{'a': 1}]})
     assert routes.unseen_items(seen) == ['items']
     assert routes.unseen_items(routes.flatten([])) == ['.']
+
+
+# --------------------------------------------------------------------------
+# The rules the plan applies to what it sees, on small apps: each has a case that fires.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize('status, payload, expected', [
+    (404, {'success': True}, True),
+    (500, {'ok': True}, True),
+    (400, {'status': 'success'}, True),
+    (200, {'success': True}, False),            # the ordinary case
+    (404, {'success': False}, False),
+    (404, {'error': 'no such hook'}, False),
+    (404, ['success'], False),
+    (404, None, False),
+])
+def test_an_error_status_with_a_body_that_says_it_worked_is_found(status, payload, expected):
+    assert routes.says_success(status, payload) is expected
+
+
+def _tiny_app():
+    from flask import Flask, jsonify
+    app = Flask(__name__)
+    app.add_url_rule('/wrong', 'wrong', lambda: (jsonify({'error': 'boom'}), 500))
+    app.add_url_rule('/liar', 'liar', lambda: (jsonify({'success': True}), 404))
+    app.add_url_rule('/fine', 'fine', lambda: jsonify({'a': 'x'}))
+    return app
+
+
+def test_a_call_that_shows_a_known_defect_is_checked_and_not_recorded():
+    plan = routes.Plan(_tiny_app(), 'token')
+    plan.call('get', '/wrong', defect=('#1', 500))
+    assert plan.seen == {}, 'a defect was recorded, so the snapshot would guard it'
+    assert plan.defects == [('GET /wrong /wrong', '#1', 500, 500)]
+
+    plan.call('get', '/fine')
+    assert 'GET /fine' in plan.seen and plan.defects == plan.defects[:1]
+
+
+def test_a_call_whose_status_and_body_disagree_is_reported_unless_it_is_a_known_defect():
+    plan = routes.Plan(_tiny_app(), 'token')
+    plan.call('get', '/liar')
+    assert plan.contradictions == ['GET /liar [404] /liar']
+    plan.call('get', '/liar', defect=('#2', 404))
+    assert len(plan.contradictions) == 1, 'a known defect is reported once, in its own list'

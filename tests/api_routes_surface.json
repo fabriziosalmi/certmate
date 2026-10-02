@@ -1,5 +1,13 @@
 {
  "contract_version": "2.36",
+ "known_defects": {
+  "DELETE /api/dns/<X>/accounts/<X> /api/dns/cloudflare/accounts/never-existed": "#1106",
+  "POST /api/deploy/test/<X> /api/deploy/test/h1": "#1107"
+ },
+ "no_success": {
+  "POST /api/deploy/test/<X>": "the only answer a hook that ran can get today is a 404 (#1107); the call that shows it is a known defect and is not recorded",
+  "POST /api/storage/azure-keyvault/backfill-certificates": "it copies the certificates into a real Azure Key Vault, which needs the Azure SDK and the vault"
+ },
  "not_called": {
   "GET /api/auth/oidc/callback": "the return leg of a login at an identity provider; needs one",
   "GET /api/auth/oidc/login": "redirects to an identity provider; needs one",
@@ -14,12 +22,105 @@
   ]
  },
  "routes": {
+  "DELETE /api/backups/delete/<X>/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "backup_type": [
+     "str"
+    ],
+    "deleted_file": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "DELETE /api/certificates/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "domain": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
   "DELETE /api/dns-providers/accounts/<X>": {
    "200": {
     ".": [
      "dict"
     ],
     "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "DELETE /api/dns/<X>/accounts/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   }
+  },
+  "DELETE /api/inventory/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "fingerprint": [
+     "str"
+    ],
+    "note": [
+     "str"
+    ],
+    "status": [
      "str"
     ]
    },
@@ -86,7 +187,8 @@
      "dict"
     ],
     "entries[].actor": [
-     "dict"
+     "dict",
+     "str"
     ],
     "entries[].actor.kind": [
      "str"
@@ -98,7 +200,7 @@
      "dict"
     ],
     "entries[].error": [
-     "null"
+     "str"
     ],
     "entries[].ip_address": [
      "str"
@@ -150,7 +252,8 @@
      "dict"
     ],
     "entries[].entry.actor": [
-     "dict"
+     "dict",
+     "str"
     ],
     "entries[].entry.actor.kind": [
      "str"
@@ -162,7 +265,7 @@
      "dict"
     ],
     "entries[].entry.error": [
-     "null"
+     "str"
     ],
     "entries[].entry.ip_address": [
      "str"
@@ -406,6 +509,974 @@
     ]
    }
   },
+  "GET /api/backups": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "unified": [
+     "list"
+    ],
+    "unified[]": [
+     "dict"
+    ],
+    "unified[].can_restore": [
+     "bool"
+    ],
+    "unified[].contains_key_material": [
+     "bool"
+    ],
+    "unified[].created": [
+     "null"
+    ],
+    "unified[].filename": [
+     "str"
+    ],
+    "unified[].key_file_count": [
+     "int"
+    ],
+    "unified[].metadata": [
+     "dict"
+    ],
+    "unified[].metadata.backup_id": [
+     "str"
+    ],
+    "unified[].metadata.backup_reason": [
+     "str"
+    ],
+    "unified[].metadata.created": [
+     "str"
+    ],
+    "unified[].metadata.data_files": [
+     "int"
+    ],
+    "unified[].metadata.domains": [
+     "list"
+    ],
+    "unified[].metadata.domains[]": [
+     "str"
+    ],
+    "unified[].metadata.encrypted": [
+     "bool"
+    ],
+    "unified[].metadata.key_files_excluded": [
+     "int"
+    ],
+    "unified[].metadata.key_material_excluded": [
+     "bool"
+    ],
+    "unified[].metadata.secrets_masked": [
+     "bool"
+    ],
+    "unified[].metadata.settings_domains": [
+     "list"
+    ],
+    "unified[].metadata.settings_domains[]": [
+     "str"
+    ],
+    "unified[].metadata.size": [
+     "int"
+    ],
+    "unified[].metadata.timestamp": [
+     "str"
+    ],
+    "unified[].metadata.total_domains": [
+     "int"
+    ],
+    "unified[].metadata.type": [
+     "str"
+    ],
+    "unified[].metadata.version": [
+     "str"
+    ],
+    "unified[].restore_blocked_reason": [
+     "str"
+    ],
+    "unified[].size": [
+     "null"
+    ]
+   }
+  },
+  "GET /api/backups/download/<X>/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/cache/stats": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "current_ttl": [
+     "int"
+    ],
+    "entries": [
+     "list"
+    ],
+    "total_entries": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/certificates": {
+   "200": {
+    ".": [
+     "list"
+    ],
+    "[]": [
+     "dict"
+    ],
+    "[].account_id": [
+     "str"
+    ],
+    "[].alias_dns_provider": [
+     "str"
+    ],
+    "[].auto_renew": [
+     "bool"
+    ],
+    "[].ca_provider": [
+     "str"
+    ],
+    "[].challenge_type": [
+     "str"
+    ],
+    "[].created_at": [
+     "str"
+    ],
+    "[].days_left": [
+     "int"
+    ],
+    "[].days_until_expiry": [
+     "int"
+    ],
+    "[].deployment_host": [
+     "str"
+    ],
+    "[].deployment_port": [
+     "int"
+    ],
+    "[].deployment_protocol": [
+     "str"
+    ],
+    "[].dns_provider": [
+     "str"
+    ],
+    "[].domain": [
+     "str"
+    ],
+    "[].domain_alias": [
+     "str"
+    ],
+    "[].exists": [
+     "bool"
+    ],
+    "[].expired": [
+     "bool"
+    ],
+    "[].expiry_date": [
+     "str"
+    ],
+    "[].latest_issuance": [
+     "null"
+    ],
+    "[].needs_renewal": [
+     "bool"
+    ],
+    "[].notes": [
+     "str"
+    ],
+    "[].oldest_active_issuance": [
+     "null"
+    ],
+    "[].private_key_present": [
+     "bool"
+    ],
+    "[].private_key_state": [
+     "str"
+    ],
+    "[].reissue_required": [
+     "bool"
+    ],
+    "[].renewal_info": [
+     "null"
+    ],
+    "[].renewed_at": [
+     "str"
+    ],
+    "[].san_domains": [
+     "list"
+    ],
+    "[].san_domains[]": [
+     "str"
+    ],
+    "[].seconds_left": [
+     "int"
+    ],
+    "[].storage_warning": [
+     "null"
+    ],
+    "[].tags": [
+     "list"
+    ],
+    "[].tags[]": [
+     "str"
+    ],
+    "[].total_active": [
+     "null"
+    ],
+    "[].total_expired": [
+     "null"
+    ],
+    "[].total_issued": [
+     "null"
+    ],
+    "[].total_revoked": [
+     "null"
+    ],
+    "[].usable": [
+     "bool"
+    ]
+   }
+  },
+  "GET /api/certificates/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "account_id": [
+     "str"
+    ],
+    "alias_dns_provider": [
+     "null"
+    ],
+    "auto_renew": [
+     "bool"
+    ],
+    "ca_provider": [
+     "str"
+    ],
+    "challenge_type": [
+     "str"
+    ],
+    "created_at": [
+     "str"
+    ],
+    "days_left": [
+     "int"
+    ],
+    "days_until_expiry": [
+     "int"
+    ],
+    "deployment_host": [
+     "str"
+    ],
+    "deployment_port": [
+     "int"
+    ],
+    "deployment_protocol": [
+     "str"
+    ],
+    "dns_provider": [
+     "str"
+    ],
+    "domain": [
+     "str"
+    ],
+    "domain_alias": [
+     "null"
+    ],
+    "exists": [
+     "bool"
+    ],
+    "expired": [
+     "bool"
+    ],
+    "expiry_date": [
+     "str"
+    ],
+    "needs_renewal": [
+     "bool"
+    ],
+    "notes": [
+     "str"
+    ],
+    "private_key_present": [
+     "bool"
+    ],
+    "private_key_state": [
+     "str"
+    ],
+    "reissue_required": [
+     "bool"
+    ],
+    "renewal_info": [
+     "null"
+    ],
+    "renewed_at": [
+     "str"
+    ],
+    "san_domains": [
+     "list"
+    ],
+    "san_domains[]": [
+     "str"
+    ],
+    "seconds_left": [
+     "int"
+    ],
+    "storage_warning": [
+     "null"
+    ],
+    "tags": [
+     "list"
+    ],
+    "tags[]": [
+     "str"
+    ],
+    "usable": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/certificates/<X>/deployment-status": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "browser": [
+     "dict"
+    ],
+    "browser.checked_at": [
+     "str"
+    ],
+    "browser.method": [
+     "str"
+    ],
+    "browser.reachable": [
+     "bool"
+    ],
+    "browser.source": [
+     "str"
+    ],
+    "certificate_match": [
+     "bool"
+    ],
+    "code": [
+     "null"
+    ],
+    "deployed": [
+     "bool"
+    ],
+    "domain": [
+     "str"
+    ],
+    "error": [
+     "null"
+    ],
+    "expected_fingerprint": [
+     "str"
+    ],
+    "method": [
+     "str"
+    ],
+    "mismatch_reason": [
+     "str"
+    ],
+    "port": [
+     "int"
+    ],
+    "probe_host": [
+     "str"
+    ],
+    "probe_status": [
+     "str"
+    ],
+    "protocol": [
+     "str"
+    ],
+    "reachable": [
+     "bool"
+    ],
+    "served_fingerprint": [
+     "str"
+    ],
+    "served_subject": [
+     "str"
+    ],
+    "timestamp": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/certificates/<X>/dns-alias-check": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "checks": [
+     "list"
+    ],
+    "checks[]": [
+     "dict"
+    ],
+    "checks[].error": [
+     "str"
+    ],
+    "checks[].expected_target": [
+     "str"
+    ],
+    "checks[].found_targets": [
+     "list"
+    ],
+    "checks[].ok": [
+     "bool"
+    ],
+    "checks[].source": [
+     "str"
+    ],
+    "checks[].status": [
+     "str"
+    ],
+    "domain": [
+     "str"
+    ],
+    "domain_alias": [
+     "str"
+    ],
+    "ok": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/certificates/<X>/download": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/certificates/<X>/download/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "hint": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/certificates/jobs": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "count": [
+     "int"
+    ],
+    "jobs": [
+     "list"
+    ],
+    "jobs[]": [
+     "dict"
+    ],
+    "jobs[].domain": [
+     "str"
+    ],
+    "jobs[].error": [
+     "null"
+    ],
+    "jobs[].error_code": [
+     "null"
+    ],
+    "jobs[].finished_at": [
+     "null"
+    ],
+    "jobs[].job_id": [
+     "str"
+    ],
+    "jobs[].operation": [
+     "str"
+    ],
+    "jobs[].result": [
+     "null"
+    ],
+    "jobs[].started_at": [
+     "str"
+    ],
+    "jobs[].status": [
+     "str"
+    ],
+    "jobs[].submitted_at": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/certificates/jobs/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "domain": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "error_code": [
+     "null"
+    ],
+    "finished_at": [
+     "str"
+    ],
+    "job_id": [
+     "str"
+    ],
+    "operation": [
+     "str"
+    ],
+    "result": [
+     "dict"
+    ],
+    "result.ca_provider": [
+     "str"
+    ],
+    "result.dns_provider": [
+     "str"
+    ],
+    "result.domain": [
+     "str"
+    ],
+    "result.duration": [
+     "number"
+    ],
+    "result.staging": [
+     "bool"
+    ],
+    "result.success": [
+     "bool"
+    ],
+    "started_at": [
+     "str"
+    ],
+    "status": [
+     "str"
+    ],
+    "submitted_at": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/client-certs": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certificates": [
+     "list"
+    ],
+    "certificates[]": [
+     "dict"
+    ],
+    "certificates[].ca_used": [
+     "str"
+    ],
+    "certificates[].cert_usage": [
+     "str"
+    ],
+    "certificates[].common_name": [
+     "str"
+    ],
+    "certificates[].created_at": [
+     "str"
+    ],
+    "certificates[].crl_entry_serial": [
+     "null"
+    ],
+    "certificates[].csr_required": [
+     "bool"
+    ],
+    "certificates[].days_valid": [
+     "int"
+    ],
+    "certificates[].email": [
+     "str"
+    ],
+    "certificates[].expires_at": [
+     "str"
+    ],
+    "certificates[].extended_key_usage": [
+     "list"
+    ],
+    "certificates[].extended_key_usage[]": [
+     "str"
+    ],
+    "certificates[].identifier": [
+     "str"
+    ],
+    "certificates[].key_usage": [
+     "list"
+    ],
+    "certificates[].key_usage[]": [
+     "str"
+    ],
+    "certificates[].notes": [
+     "str"
+    ],
+    "certificates[].organization": [
+     "str"
+    ],
+    "certificates[].organizational_unit": [
+     "str"
+    ],
+    "certificates[].reason_revoked": [
+     "null"
+    ],
+    "certificates[].renewal_enabled": [
+     "bool"
+    ],
+    "certificates[].renewal_threshold_days": [
+     "int"
+    ],
+    "certificates[].revoked": [
+     "bool"
+    ],
+    "certificates[].revoked_at": [
+     "null"
+    ],
+    "certificates[].serial_number": [
+     "str"
+    ],
+    "certificates[].type": [
+     "str"
+    ],
+    "total": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/client-certs/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "ca_used": [
+     "str"
+    ],
+    "cert_usage": [
+     "str"
+    ],
+    "common_name": [
+     "str"
+    ],
+    "created_at": [
+     "str"
+    ],
+    "crl_entry_serial": [
+     "null"
+    ],
+    "csr_required": [
+     "bool"
+    ],
+    "days_valid": [
+     "int"
+    ],
+    "email": [
+     "str"
+    ],
+    "expires_at": [
+     "str"
+    ],
+    "extended_key_usage": [
+     "list"
+    ],
+    "extended_key_usage[]": [
+     "str"
+    ],
+    "identifier": [
+     "str"
+    ],
+    "key_usage": [
+     "list"
+    ],
+    "key_usage[]": [
+     "str"
+    ],
+    "notes": [
+     "str"
+    ],
+    "organization": [
+     "str"
+    ],
+    "organizational_unit": [
+     "str"
+    ],
+    "reason_revoked": [
+     "null"
+    ],
+    "renewal_enabled": [
+     "bool"
+    ],
+    "renewal_threshold_days": [
+     "int"
+    ],
+    "revoked": [
+     "bool"
+    ],
+    "revoked_at": [
+     "null"
+    ],
+    "serial_number": [
+     "str"
+    ],
+    "type": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/client-certs/<X>/download/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/client-certs/ca": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/client-certs/stats": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "active": [
+     "int"
+    ],
+    "by_organization": [
+     "dict"
+    ],
+    "by_organization.CertMate": [
+     "int"
+    ],
+    "by_usage": [
+     "dict"
+    ],
+    "by_usage.api-mtls": [
+     "int"
+    ],
+    "ca_status": [
+     "str"
+    ],
+    "revoked": [
+     "int"
+    ],
+    "total": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/crl/download/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ],
+    "issuer": [
+     "str"
+    ],
+    "last_update": [
+     "str"
+    ],
+    "next_update": [
+     "str"
+    ],
+    "revoked_count": [
+     "int"
+    ],
+    "revoked_serials": [
+     "list"
+    ],
+    "revoked_serials[]": [
+     "int"
+    ],
+    "status": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
   "GET /api/deploy/config": {
    "200": {
     ".": [
@@ -486,6 +1557,54 @@
    "200": {
     ".": [
      "list"
+    ],
+    "[]": [
+     "dict"
+    ],
+    "[].command": [
+     "str"
+    ],
+    "[].domain": [
+     "str"
+    ],
+    "[].dry_run": [
+     "bool"
+    ],
+    "[].duration_ms": [
+     "int"
+    ],
+    "[].error": [
+     "null"
+    ],
+    "[].event": [
+     "str"
+    ],
+    "[].exit_code": [
+     "int"
+    ],
+    "[].hook_id": [
+     "str"
+    ],
+    "[].hook_name": [
+     "str"
+    ],
+    "[].run_id": [
+     "str"
+    ],
+    "[].status": [
+     "str"
+    ],
+    "[].stderr": [
+     "str"
+    ],
+    "[].stdout": [
+     "str"
+    ],
+    "[].success": [
+     "bool"
+    ],
+    "[].timestamp": [
+     "str"
     ]
    }
   },
@@ -496,7 +1615,400 @@
     ]
    }
   },
+  "GET /api/diagnostics/snapshot": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "active_dns_providers": [
+     "dict"
+    ],
+    "active_dns_providers.acme-dns": [
+     "list"
+    ],
+    "active_dns_providers.acme-dns[]": [
+     "dict"
+    ],
+    "active_dns_providers.acme-dns[].description": [
+     "str"
+    ],
+    "active_dns_providers.acme-dns[].id": [
+     "str"
+    ],
+    "active_dns_providers.acme-dns[].name": [
+     "str"
+    ],
+    "active_dns_providers.arvancloud": [
+     "list"
+    ],
+    "active_dns_providers.arvancloud[]": [
+     "dict"
+    ],
+    "active_dns_providers.arvancloud[].description": [
+     "str"
+    ],
+    "active_dns_providers.arvancloud[].id": [
+     "str"
+    ],
+    "active_dns_providers.arvancloud[].name": [
+     "str"
+    ],
+    "active_dns_providers.azure": [
+     "list"
+    ],
+    "active_dns_providers.azure[]": [
+     "dict"
+    ],
+    "active_dns_providers.azure[].description": [
+     "str"
+    ],
+    "active_dns_providers.azure[].id": [
+     "str"
+    ],
+    "active_dns_providers.azure[].name": [
+     "str"
+    ],
+    "active_dns_providers.cloudflare": [
+     "list"
+    ],
+    "active_dns_providers.cloudflare[]": [
+     "dict"
+    ],
+    "active_dns_providers.cloudflare[].description": [
+     "str"
+    ],
+    "active_dns_providers.cloudflare[].id": [
+     "str"
+    ],
+    "active_dns_providers.cloudflare[].name": [
+     "str"
+    ],
+    "active_dns_providers.digitalocean": [
+     "list"
+    ],
+    "active_dns_providers.digitalocean[]": [
+     "dict"
+    ],
+    "active_dns_providers.digitalocean[].description": [
+     "str"
+    ],
+    "active_dns_providers.digitalocean[].id": [
+     "str"
+    ],
+    "active_dns_providers.digitalocean[].name": [
+     "str"
+    ],
+    "active_dns_providers.duckdns": [
+     "list"
+    ],
+    "active_dns_providers.duckdns[]": [
+     "dict"
+    ],
+    "active_dns_providers.duckdns[].description": [
+     "str"
+    ],
+    "active_dns_providers.duckdns[].id": [
+     "str"
+    ],
+    "active_dns_providers.duckdns[].name": [
+     "str"
+    ],
+    "active_dns_providers.edgedns": [
+     "list"
+    ],
+    "active_dns_providers.edgedns[]": [
+     "dict"
+    ],
+    "active_dns_providers.edgedns[].description": [
+     "str"
+    ],
+    "active_dns_providers.edgedns[].id": [
+     "str"
+    ],
+    "active_dns_providers.edgedns[].name": [
+     "str"
+    ],
+    "active_dns_providers.gandi": [
+     "list"
+    ],
+    "active_dns_providers.gandi[]": [
+     "dict"
+    ],
+    "active_dns_providers.gandi[].description": [
+     "str"
+    ],
+    "active_dns_providers.gandi[].id": [
+     "str"
+    ],
+    "active_dns_providers.gandi[].name": [
+     "str"
+    ],
+    "active_dns_providers.google": [
+     "list"
+    ],
+    "active_dns_providers.google[]": [
+     "dict"
+    ],
+    "active_dns_providers.google[].description": [
+     "str"
+    ],
+    "active_dns_providers.google[].id": [
+     "str"
+    ],
+    "active_dns_providers.google[].name": [
+     "str"
+    ],
+    "active_dns_providers.hetzner-cloud": [
+     "list"
+    ],
+    "active_dns_providers.hetzner-cloud[]": [
+     "dict"
+    ],
+    "active_dns_providers.hetzner-cloud[].description": [
+     "str"
+    ],
+    "active_dns_providers.hetzner-cloud[].id": [
+     "str"
+    ],
+    "active_dns_providers.hetzner-cloud[].name": [
+     "str"
+    ],
+    "active_dns_providers.infomaniak": [
+     "list"
+    ],
+    "active_dns_providers.infomaniak[]": [
+     "dict"
+    ],
+    "active_dns_providers.infomaniak[].description": [
+     "str"
+    ],
+    "active_dns_providers.infomaniak[].id": [
+     "str"
+    ],
+    "active_dns_providers.infomaniak[].name": [
+     "str"
+    ],
+    "active_dns_providers.linode": [
+     "list"
+    ],
+    "active_dns_providers.linode[]": [
+     "dict"
+    ],
+    "active_dns_providers.linode[].description": [
+     "str"
+    ],
+    "active_dns_providers.linode[].id": [
+     "str"
+    ],
+    "active_dns_providers.linode[].name": [
+     "str"
+    ],
+    "active_dns_providers.namecheap": [
+     "list"
+    ],
+    "active_dns_providers.namecheap[]": [
+     "dict"
+    ],
+    "active_dns_providers.namecheap[].description": [
+     "str"
+    ],
+    "active_dns_providers.namecheap[].id": [
+     "str"
+    ],
+    "active_dns_providers.namecheap[].name": [
+     "str"
+    ],
+    "active_dns_providers.ovh": [
+     "list"
+    ],
+    "active_dns_providers.ovh[]": [
+     "dict"
+    ],
+    "active_dns_providers.ovh[].description": [
+     "str"
+    ],
+    "active_dns_providers.ovh[].id": [
+     "str"
+    ],
+    "active_dns_providers.ovh[].name": [
+     "str"
+    ],
+    "active_dns_providers.powerdns": [
+     "list"
+    ],
+    "active_dns_providers.powerdns[]": [
+     "dict"
+    ],
+    "active_dns_providers.powerdns[].description": [
+     "str"
+    ],
+    "active_dns_providers.powerdns[].id": [
+     "str"
+    ],
+    "active_dns_providers.powerdns[].name": [
+     "str"
+    ],
+    "active_dns_providers.route53": [
+     "list"
+    ],
+    "active_dns_providers.route53[]": [
+     "dict"
+    ],
+    "active_dns_providers.route53[].description": [
+     "str"
+    ],
+    "active_dns_providers.route53[].id": [
+     "str"
+    ],
+    "active_dns_providers.route53[].name": [
+     "str"
+    ],
+    "backup_count": [
+     "int"
+    ],
+    "backup_total_size": [
+     "int"
+    ],
+    "certbot_version": [
+     "str"
+    ],
+    "certificate_count": [
+     "int"
+    ],
+    "certmate_version": [
+     "str"
+    ],
+    "challenge_type": [
+     "str"
+    ],
+    "configured_domains_count": [
+     "int"
+    ],
+    "container": [
+     "bool"
+    ],
+    "cryptography_version": [
+     "str"
+    ],
+    "default_ca": [
+     "null"
+    ],
+    "disk_free_bytes": [
+     "int"
+    ],
+    "disk_total_bytes": [
+     "int"
+    ],
+    "dns_provider": [
+     "str"
+    ],
+    "openssl_version": [
+     "str"
+    ],
+    "os_platform": [
+     "str"
+    ],
+    "python_version": [
+     "str"
+    ],
+    "recent_audit": [
+     "list"
+    ],
+    "recent_audit[]": [
+     "dict"
+    ],
+    "recent_audit[].operation": [
+     "str"
+    ],
+    "recent_audit[].resource_type": [
+     "str"
+    ],
+    "recent_audit[].status": [
+     "str"
+    ],
+    "recent_audit[].timestamp": [
+     "str"
+    ],
+    "sanitized_logs": [
+     "list"
+    ],
+    "scheduler_running": [
+     "bool"
+    ],
+    "sso_oidc_enabled": [
+     "bool"
+    ],
+    "storage_backend": [
+     "str"
+    ],
+    "storage_permissions": [
+     "dict"
+    ],
+    "storage_permissions.cert_dir_readable": [
+     "bool"
+    ],
+    "storage_permissions.cert_dir_writable": [
+     "bool"
+    ],
+    "storage_permissions.data_dir_readable": [
+     "bool"
+    ],
+    "storage_permissions.data_dir_writable": [
+     "bool"
+    ]
+   }
+  },
   "GET /api/dns-providers/accounts": {
+   "200": {
+    ".": [
+     "list"
+    ],
+    "[]": [
+     "dict"
+    ],
+    "[].account_id": [
+     "str"
+    ],
+    "[].configured": [
+     "bool"
+    ],
+    "[].description": [
+     "str"
+    ],
+    "[].name": [
+     "str"
+    ],
+    "[].provider": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/dns/<X>/accounts": {
+   "200": {
+    ".": [
+     "list"
+    ],
+    "[]": [
+     "dict"
+    ],
+    "[].account_id": [
+     "str"
+    ],
+    "[].configured": [
+     "bool"
+    ],
+    "[].description": [
+     "str"
+    ],
+    "[].name": [
+     "str"
+    ],
+    "[].provider": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/dns/accounts": {
    "200": {
     ".": [
      "list"
@@ -531,6 +2043,545 @@
     ]
    }
   },
+  "GET /api/health": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "checks": [
+     "dict"
+    ],
+    "checks.scheduler": [
+     "str"
+    ],
+    "checks.settings": [
+     "str"
+    ],
+    "checks.storage": [
+     "str"
+    ],
+    "status": [
+     "str"
+    ]
+   },
+   "429": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "retry_after": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/inventory": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certificates": [
+     "list"
+    ],
+    "certificates[]": [
+     "dict"
+    ],
+    "certificates[].days_until_expiry": [
+     "int"
+    ],
+    "certificates[].endpoints": [
+     "list"
+    ],
+    "certificates[].endpoints[]": [
+     "dict"
+    ],
+    "certificates[].endpoints[].first_seen": [
+     "str"
+    ],
+    "certificates[].endpoints[].host": [
+     "str"
+    ],
+    "certificates[].endpoints[].last_seen": [
+     "str"
+    ],
+    "certificates[].endpoints[].port": [
+     "int"
+    ],
+    "certificates[].expiry_status": [
+     "str"
+    ],
+    "certificates[].fingerprint": [
+     "str"
+    ],
+    "certificates[].first_seen": [
+     "str"
+    ],
+    "certificates[].group": [
+     "str"
+    ],
+    "certificates[].issuer": [
+     "str"
+    ],
+    "certificates[].issuer_cn": [
+     "str"
+    ],
+    "certificates[].key": [
+     "dict"
+    ],
+    "certificates[].key.curve": [
+     "str"
+    ],
+    "certificates[].key.size": [
+     "int"
+    ],
+    "certificates[].key.type": [
+     "str"
+    ],
+    "certificates[].last_seen": [
+     "str"
+    ],
+    "certificates[].managed": [
+     "bool"
+    ],
+    "certificates[].managed_domain": [
+     "null"
+    ],
+    "certificates[].not_after": [
+     "str"
+    ],
+    "certificates[].not_before": [
+     "str"
+    ],
+    "certificates[].revocation": [
+     "dict"
+    ],
+    "certificates[].revocation.checked_at": [
+     "str"
+    ],
+    "certificates[].revocation.error": [
+     "str"
+    ],
+    "certificates[].revocation.method": [
+     "null"
+    ],
+    "certificates[].revocation.reason": [
+     "null"
+    ],
+    "certificates[].revocation.revoked_at": [
+     "null"
+    ],
+    "certificates[].revocation.status": [
+     "str"
+    ],
+    "certificates[].san_dns": [
+     "list"
+    ],
+    "certificates[].san_dns[]": [
+     "str"
+    ],
+    "certificates[].serial": [
+     "str"
+    ],
+    "certificates[].signature_algorithm": [
+     "str"
+    ],
+    "certificates[].source": [
+     "str"
+    ],
+    "certificates[].subject": [
+     "str"
+    ],
+    "certificates[].subject_cn": [
+     "str"
+    ],
+    "certificates[].superseded": [
+     "bool"
+    ],
+    "summary": [
+     "dict"
+    ],
+    "summary.by_source": [
+     "dict"
+    ],
+    "summary.by_source.probed": [
+     "int"
+    ],
+    "summary.discovered": [
+     "int"
+    ],
+    "summary.expiry": [
+     "dict"
+    ],
+    "summary.expiry.30": [
+     "int"
+    ],
+    "summary.expiry.7": [
+     "int"
+    ],
+    "summary.expiry.90": [
+     "int"
+    ],
+    "summary.expiry.expired": [
+     "int"
+    ],
+    "summary.expiry.unknown": [
+     "int"
+    ],
+    "summary.issued": [
+     "int"
+    ],
+    "summary.revocation": [
+     "dict"
+    ],
+    "summary.revocation.good": [
+     "int"
+    ],
+    "summary.revocation.not_applicable": [
+     "int"
+    ],
+    "summary.revocation.revoked": [
+     "int"
+    ],
+    "summary.revocation.unavailable": [
+     "int"
+    ],
+    "summary.revocation.unchecked": [
+     "int"
+    ],
+    "summary.revocation.unknown": [
+     "int"
+    ],
+    "summary.superseded": [
+     "int"
+    ],
+    "summary.total": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/inventory/<X>/adopt": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "available": [
+     "bool"
+    ],
+    "dns_provider": [
+     "str"
+    ],
+    "dns_provider_configured": [
+     "bool"
+    ],
+    "domain": [
+     "str"
+    ],
+    "elliptic_curve": [
+     "str"
+    ],
+    "email_configured": [
+     "bool"
+    ],
+    "key_size": [
+     "null"
+    ],
+    "key_type": [
+     "str"
+    ],
+    "reason": [
+     "null"
+    ],
+    "san_domains": [
+     "list"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/inventory/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "ct_monitoring": [
+     "dict"
+    ],
+    "ct_monitoring.domains": [
+     "list"
+    ],
+    "ct_monitoring.domains[]": [
+     "str"
+    ],
+    "ct_monitoring.enabled": [
+     "bool"
+    ],
+    "ct_monitoring.include_managed": [
+     "bool"
+    ],
+    "ct_monitoring.max_new_per_run": [
+     "int"
+    ],
+    "ct_monitoring.min_request_interval": [
+     "number"
+    ],
+    "ct_monitoring.only_valid": [
+     "bool"
+    ],
+    "discovery": [
+     "dict"
+    ],
+    "discovery.allow_private": [
+     "bool"
+    ],
+    "discovery.check_revocation": [
+     "bool"
+    ],
+    "discovery.enabled": [
+     "bool"
+    ],
+    "discovery.endpoints": [
+     "list"
+    ],
+    "discovery.include_managed": [
+     "bool"
+    ],
+    "dns_resolver": [
+     "dict"
+    ],
+    "dns_resolver.nameservers": [
+     "list"
+    ],
+    "dns_resolver.nameservers[]": [
+     "str"
+    ],
+    "domain_health": [
+     "dict"
+    ],
+    "domain_health.check_blocklists": [
+     "bool"
+    ],
+    "domain_health.check_headers": [
+     "bool"
+    ],
+    "domain_health.check_mail": [
+     "bool"
+    ],
+    "domain_health.check_weak_tls": [
+     "bool"
+    ],
+    "domain_health.enabled": [
+     "bool"
+    ],
+    "domain_health.extra_domains": [
+     "list"
+    ],
+    "domain_health.extra_domains[]": [
+     "str"
+    ],
+    "domain_health.include_inventory": [
+     "bool"
+    ],
+    "domain_registration": [
+     "dict"
+    ],
+    "domain_registration.enabled": [
+     "bool"
+    ],
+    "domain_registration.extra_domains": [
+     "list"
+    ],
+    "domain_registration.extra_domains[]": [
+     "str"
+    ],
+    "domain_registration.include_inventory": [
+     "bool"
+    ]
+   }
+  },
+  "GET /api/inventory/crypto-report": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "assets": [
+     "list"
+    ],
+    "assets[]": [
+     "dict"
+    ],
+    "assets[].classification": [
+     "str"
+    ],
+    "assets[].deprecation": [
+     "str"
+    ],
+    "assets[].detail": [
+     "str"
+    ],
+    "assets[].fingerprint": [
+     "str"
+    ],
+    "assets[].key_algorithm": [
+     "str"
+    ],
+    "assets[].key_classification": [
+     "str"
+    ],
+    "assets[].key_curve": [
+     "str"
+    ],
+    "assets[].key_size": [
+     "int"
+    ],
+    "assets[].managed": [
+     "bool"
+    ],
+    "assets[].not_after": [
+     "str"
+    ],
+    "assets[].quantum_vulnerable": [
+     "bool"
+    ],
+    "assets[].signature_algorithm": [
+     "str"
+    ],
+    "assets[].signature_classification": [
+     "str"
+    ],
+    "assets[].source": [
+     "str"
+    ],
+    "assets[].subject_cn": [
+     "str"
+    ],
+    "by_classification": [
+     "dict"
+    ],
+    "by_classification.acceptable": [
+     "int"
+    ],
+    "by_classification.modern": [
+     "int"
+    ],
+    "by_classification.pqc": [
+     "int"
+    ],
+    "by_classification.unknown": [
+     "int"
+    ],
+    "by_classification.weak": [
+     "int"
+    ],
+    "by_key_algorithm": [
+     "dict"
+    ],
+    "by_key_algorithm.ECDSA secp256r1": [
+     "int"
+    ],
+    "by_signature_algorithm": [
+     "dict"
+    ],
+    "by_signature_algorithm.ecdsa-with-SHA256": [
+     "int"
+    ],
+    "generated_at": [
+     "str"
+    ],
+    "quantum_vulnerable": [
+     "int"
+    ],
+    "total": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/inventory/domains": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "domains": [
+     "list"
+    ],
+    "summary": [
+     "dict"
+    ],
+    "summary.by_status": [
+     "dict"
+    ],
+    "summary.by_status.not_published": [
+     "int"
+    ],
+    "summary.by_status.not_registered": [
+     "int"
+    ],
+    "summary.by_status.ok": [
+     "int"
+    ],
+    "summary.by_status.unavailable": [
+     "int"
+    ],
+    "summary.expiry": [
+     "dict"
+    ],
+    "summary.expiry.30": [
+     "int"
+    ],
+    "summary.expiry.60": [
+     "int"
+    ],
+    "summary.expiry.90": [
+     "int"
+    ],
+    "summary.expiry.expired": [
+     "int"
+    ],
+    "summary.total": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/inventory/health": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "names": [
+     "list"
+    ],
+    "summary": [
+     "dict"
+    ],
+    "summary.by_status": [
+     "dict"
+    ],
+    "summary.by_status.failing": [
+     "int"
+    ],
+    "summary.by_status.ok": [
+     "int"
+    ],
+    "summary.by_status.unknown": [
+     "int"
+    ],
+    "summary.by_status.warning": [
+     "int"
+    ],
+    "summary.total": [
+     "int"
+    ]
+   }
+  },
   "GET /api/keys": {
    "200": {
     ".": [
@@ -543,7 +2594,10 @@
      "dict"
     ],
     "keys.*.allowed_domains": [
-     "null"
+     "list"
+    ],
+    "keys.*.allowed_domains[]": [
+     "str"
     ],
     "keys.*.created_at": [
      "str"
@@ -555,7 +2609,7 @@
      "bool"
     ],
     "keys.*.expires_at": [
-     "null"
+     "str"
     ],
     "keys.*.is_agent": [
      "bool"
@@ -589,10 +2643,625 @@
     ]
    }
   },
+  "GET /api/metrics": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "available": [
+     "bool"
+    ],
+    "metrics_endpoint": [
+     "str"
+    ],
+    "summary": [
+     "dict"
+    ],
+    "summary.last_collection": [
+     "int"
+    ],
+    "summary.metrics_endpoint": [
+     "str"
+    ],
+    "summary.prometheus_available": [
+     "bool"
+    ],
+    "summary.uptime_seconds": [
+     "number"
+    ]
+   }
+  },
   "GET /api/notifications/config": {
    "200": {
     ".": [
      "dict"
+    ]
+   }
+  },
+  "GET /api/ocsp/status/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certificate_serial": [
+     "int"
+    ],
+    "certificate_status": [
+     "str"
+    ],
+    "next_update": [
+     "null"
+    ],
+    "responder_name": [
+     "str"
+    ],
+    "response_status": [
+     "str"
+    ],
+    "this_update": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
+  "GET /api/settings": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "api_bearer_token": [
+     "null"
+    ],
+    "auto_renew": [
+     "bool"
+    ],
+    "cloudflare_token": [
+     "str"
+    ],
+    "default_elliptic_curve": [
+     "str"
+    ],
+    "default_key_size": [
+     "int"
+    ],
+    "default_key_type": [
+     "str"
+    ],
+    "dns_propagation_seconds": [
+     "dict"
+    ],
+    "dns_propagation_seconds.acme-dns": [
+     "int"
+    ],
+    "dns_propagation_seconds.arvancloud": [
+     "int"
+    ],
+    "dns_propagation_seconds.azure": [
+     "int"
+    ],
+    "dns_propagation_seconds.cloudflare": [
+     "int"
+    ],
+    "dns_propagation_seconds.custom-script": [
+     "int"
+    ],
+    "dns_propagation_seconds.desec": [
+     "int"
+    ],
+    "dns_propagation_seconds.digitalocean": [
+     "int"
+    ],
+    "dns_propagation_seconds.duckdns": [
+     "int"
+    ],
+    "dns_propagation_seconds.edgedns": [
+     "int"
+    ],
+    "dns_propagation_seconds.gandi": [
+     "int"
+    ],
+    "dns_propagation_seconds.google": [
+     "int"
+    ],
+    "dns_propagation_seconds.hetzner-cloud": [
+     "int"
+    ],
+    "dns_propagation_seconds.infomaniak": [
+     "int"
+    ],
+    "dns_propagation_seconds.linode": [
+     "int"
+    ],
+    "dns_propagation_seconds.namecheap": [
+     "int"
+    ],
+    "dns_propagation_seconds.ovh": [
+     "int"
+    ],
+    "dns_propagation_seconds.powerdns": [
+     "int"
+    ],
+    "dns_propagation_seconds.route53": [
+     "int"
+    ],
+    "dns_propagation_seconds.scaleway": [
+     "int"
+    ],
+    "dns_provider": [
+     "str"
+    ],
+    "dns_providers": [
+     "dict"
+    ],
+    "dns_providers.acme-dns": [
+     "dict"
+    ],
+    "dns_providers.acme-dns.api_url": [
+     "null"
+    ],
+    "dns_providers.acme-dns.password": [
+     "null"
+    ],
+    "dns_providers.acme-dns.subdomain": [
+     "null"
+    ],
+    "dns_providers.acme-dns.username": [
+     "null"
+    ],
+    "dns_providers.arvancloud": [
+     "dict"
+    ],
+    "dns_providers.arvancloud.api_key": [
+     "null"
+    ],
+    "dns_providers.azure": [
+     "dict"
+    ],
+    "dns_providers.azure.client_id": [
+     "null"
+    ],
+    "dns_providers.azure.client_secret": [
+     "null"
+    ],
+    "dns_providers.azure.resource_group": [
+     "null"
+    ],
+    "dns_providers.azure.subscription_id": [
+     "null"
+    ],
+    "dns_providers.azure.tenant_id": [
+     "null"
+    ],
+    "dns_providers.cloudflare": [
+     "dict"
+    ],
+    "dns_providers.cloudflare.api_token": [
+     "null"
+    ],
+    "dns_providers.digitalocean": [
+     "dict"
+    ],
+    "dns_providers.digitalocean.api_token": [
+     "null"
+    ],
+    "dns_providers.dnsmadeeasy": [
+     "dict"
+    ],
+    "dns_providers.dnsmadeeasy.api_token": [
+     "null"
+    ],
+    "dns_providers.duckdns": [
+     "dict"
+    ],
+    "dns_providers.duckdns.api_token": [
+     "null"
+    ],
+    "dns_providers.dynudns": [
+     "dict"
+    ],
+    "dns_providers.dynudns.token": [
+     "null"
+    ],
+    "dns_providers.edgedns": [
+     "dict"
+    ],
+    "dns_providers.edgedns.access_token": [
+     "null"
+    ],
+    "dns_providers.edgedns.client_secret": [
+     "null"
+    ],
+    "dns_providers.edgedns.client_token": [
+     "null"
+    ],
+    "dns_providers.edgedns.host": [
+     "null"
+    ],
+    "dns_providers.gandi": [
+     "dict"
+    ],
+    "dns_providers.gandi.api_token": [
+     "null"
+    ],
+    "dns_providers.godaddy": [
+     "dict"
+    ],
+    "dns_providers.godaddy.api_key": [
+     "null"
+    ],
+    "dns_providers.godaddy.secret": [
+     "null"
+    ],
+    "dns_providers.google": [
+     "dict"
+    ],
+    "dns_providers.google.project_id": [
+     "null"
+    ],
+    "dns_providers.google.service_account_key": [
+     "null"
+    ],
+    "dns_providers.he-ddns": [
+     "dict"
+    ],
+    "dns_providers.he-ddns.password": [
+     "null"
+    ],
+    "dns_providers.he-ddns.username": [
+     "null"
+    ],
+    "dns_providers.hetzner": [
+     "dict"
+    ],
+    "dns_providers.hetzner.api_token": [
+     "null"
+    ],
+    "dns_providers.linode": [
+     "dict"
+    ],
+    "dns_providers.linode.api_key": [
+     "null"
+    ],
+    "dns_providers.multi": [
+     "null"
+    ],
+    "dns_providers.namecheap": [
+     "dict"
+    ],
+    "dns_providers.namecheap.api_key": [
+     "null"
+    ],
+    "dns_providers.namecheap.username": [
+     "null"
+    ],
+    "dns_providers.nsone": [
+     "dict"
+    ],
+    "dns_providers.nsone.api_token": [
+     "null"
+    ],
+    "dns_providers.ovh": [
+     "dict"
+    ],
+    "dns_providers.ovh.application_key": [
+     "null"
+    ],
+    "dns_providers.ovh.application_secret": [
+     "null"
+    ],
+    "dns_providers.ovh.consumer_key": [
+     "null"
+    ],
+    "dns_providers.ovh.endpoint": [
+     "null"
+    ],
+    "dns_providers.porkbun": [
+     "dict"
+    ],
+    "dns_providers.porkbun.api_key": [
+     "null"
+    ],
+    "dns_providers.porkbun.secret_key": [
+     "null"
+    ],
+    "dns_providers.powerdns": [
+     "dict"
+    ],
+    "dns_providers.powerdns.api_key": [
+     "null"
+    ],
+    "dns_providers.powerdns.api_url": [
+     "null"
+    ],
+    "dns_providers.rfc2136": [
+     "dict"
+    ],
+    "dns_providers.rfc2136.api_key": [
+     "null"
+    ],
+    "dns_providers.rfc2136.api_url": [
+     "null"
+    ],
+    "dns_providers.route53": [
+     "dict"
+    ],
+    "dns_providers.route53.access_key_id": [
+     "null"
+    ],
+    "dns_providers.route53.assume_role_arn": [
+     "null"
+    ],
+    "dns_providers.route53.auth_mode": [
+     "null"
+    ],
+    "dns_providers.route53.region": [
+     "str"
+    ],
+    "dns_providers.route53.secret_access_key": [
+     "null"
+    ],
+    "dns_providers.vultr": [
+     "dict"
+    ],
+    "dns_providers.vultr.api_key": [
+     "null"
+    ],
+    "domains": [
+     "list"
+    ],
+    "domains[]": [
+     "dict"
+    ],
+    "domains[].auto_renew": [
+     "bool"
+    ],
+    "domains[].dns_account_id": [
+     "null"
+    ],
+    "domains[].dns_provider": [
+     "str"
+    ],
+    "domains[].domain": [
+     "str"
+    ],
+    "email": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/settings/dns-providers": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "acme-dns": [
+     "dict"
+    ],
+    "acme-dns.api_url": [
+     "null"
+    ],
+    "acme-dns.password": [
+     "null"
+    ],
+    "acme-dns.subdomain": [
+     "null"
+    ],
+    "acme-dns.username": [
+     "null"
+    ],
+    "arvancloud": [
+     "dict"
+    ],
+    "arvancloud.api_key": [
+     "null"
+    ],
+    "azure": [
+     "dict"
+    ],
+    "azure.client_id": [
+     "null"
+    ],
+    "azure.client_secret": [
+     "null"
+    ],
+    "azure.resource_group": [
+     "null"
+    ],
+    "azure.subscription_id": [
+     "null"
+    ],
+    "azure.tenant_id": [
+     "null"
+    ],
+    "cloudflare": [
+     "dict"
+    ],
+    "cloudflare.api_token": [
+     "null"
+    ],
+    "digitalocean": [
+     "dict"
+    ],
+    "digitalocean.api_token": [
+     "null"
+    ],
+    "dnsmadeeasy": [
+     "dict"
+    ],
+    "dnsmadeeasy.api_token": [
+     "null"
+    ],
+    "duckdns": [
+     "dict"
+    ],
+    "duckdns.api_token": [
+     "null"
+    ],
+    "dynudns": [
+     "dict"
+    ],
+    "dynudns.token": [
+     "null"
+    ],
+    "edgedns": [
+     "dict"
+    ],
+    "edgedns.access_token": [
+     "null"
+    ],
+    "edgedns.client_secret": [
+     "null"
+    ],
+    "edgedns.client_token": [
+     "null"
+    ],
+    "edgedns.host": [
+     "null"
+    ],
+    "gandi": [
+     "dict"
+    ],
+    "gandi.api_token": [
+     "null"
+    ],
+    "godaddy": [
+     "dict"
+    ],
+    "godaddy.api_key": [
+     "null"
+    ],
+    "godaddy.secret": [
+     "null"
+    ],
+    "google": [
+     "dict"
+    ],
+    "google.project_id": [
+     "null"
+    ],
+    "google.service_account_key": [
+     "null"
+    ],
+    "he-ddns": [
+     "dict"
+    ],
+    "he-ddns.password": [
+     "null"
+    ],
+    "he-ddns.username": [
+     "null"
+    ],
+    "hetzner": [
+     "dict"
+    ],
+    "hetzner.api_token": [
+     "null"
+    ],
+    "linode": [
+     "dict"
+    ],
+    "linode.api_key": [
+     "null"
+    ],
+    "multi": [
+     "null"
+    ],
+    "namecheap": [
+     "dict"
+    ],
+    "namecheap.api_key": [
+     "null"
+    ],
+    "namecheap.username": [
+     "null"
+    ],
+    "nsone": [
+     "dict"
+    ],
+    "nsone.api_token": [
+     "null"
+    ],
+    "ovh": [
+     "dict"
+    ],
+    "ovh.application_key": [
+     "null"
+    ],
+    "ovh.application_secret": [
+     "null"
+    ],
+    "ovh.consumer_key": [
+     "null"
+    ],
+    "ovh.endpoint": [
+     "null"
+    ],
+    "porkbun": [
+     "dict"
+    ],
+    "porkbun.api_key": [
+     "null"
+    ],
+    "porkbun.secret_key": [
+     "null"
+    ],
+    "powerdns": [
+     "dict"
+    ],
+    "powerdns.api_key": [
+     "null"
+    ],
+    "powerdns.api_url": [
+     "null"
+    ],
+    "rfc2136": [
+     "dict"
+    ],
+    "rfc2136.api_key": [
+     "null"
+    ],
+    "rfc2136.api_url": [
+     "null"
+    ],
+    "route53": [
+     "dict"
+    ],
+    "route53.access_key_id": [
+     "null"
+    ],
+    "route53.assume_role_arn": [
+     "null"
+    ],
+    "route53.auth_mode": [
+     "null"
+    ],
+    "route53.region": [
+     "str"
+    ],
+    "route53.secret_access_key": [
+     "null"
+    ],
+    "vultr": [
+     "dict"
+    ],
+    "vultr.api_key": [
+     "null"
     ]
    }
   },
@@ -672,6 +3341,31 @@
     ]
    }
   },
+  "GET /api/storage/info": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "available_backends": [
+     "list"
+    ],
+    "available_backends[]": [
+     "str"
+    ],
+    "configuration": [
+     "dict"
+    ],
+    "configuration.backend": [
+     "str"
+    ],
+    "configuration.cert_dir": [
+     "str"
+    ],
+    "current_backend": [
+     "str"
+    ]
+   }
+  },
   "GET /api/users": {
    "200": {
     ".": [
@@ -713,7 +3407,77 @@
     ]
    }
   },
+  "PATCH /api/certificates/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "account_id": [
+     "str"
+    ],
+    "alias_dns_provider": [
+     "null"
+    ],
+    "deployment_host": [
+     "str"
+    ],
+    "deployment_port": [
+     "int"
+    ],
+    "deployment_protocol": [
+     "str"
+    ],
+    "dns_provider": [
+     "str"
+    ],
+    "domain": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "notes": [
+     "str"
+    ],
+    "tags": [
+     "list"
+    ],
+    "tags[]": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
   "PATCH /api/keys/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "key_id": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
    "400": {
     ".": [
      "dict"
@@ -810,6 +3574,978 @@
     ],
     "error": [
      "str"
+    ]
+   }
+  },
+  "POST /api/backups/create": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "backups": [
+     "list"
+    ],
+    "backups[]": [
+     "dict"
+    ],
+    "backups[].filename": [
+     "str"
+    ],
+    "backups[].type": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "recommendation": [
+     "null"
+    ],
+    "secrets_masked": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.type": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/backups/restore/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "backup_type": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "reissue_required": [
+     "list"
+    ],
+    "restored_from": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.filename": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/backups/upload": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "filename": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "note": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/cache/clear": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "cleared_entries": [
+     "int"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   }
+  },
+  "POST /api/certificates/<X>/deploy": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ],
+    "failed": [
+     "int"
+    ],
+    "ok": [
+     "bool"
+    ],
+    "results": [
+     "list"
+    ],
+    "results[]": [
+     "dict"
+    ],
+    "results[].command": [
+     "str"
+    ],
+    "results[].domain": [
+     "str"
+    ],
+    "results[].dry_run": [
+     "bool"
+    ],
+    "results[].duration_ms": [
+     "int"
+    ],
+    "results[].error": [
+     "null"
+    ],
+    "results[].event": [
+     "str"
+    ],
+    "results[].exit_code": [
+     "int"
+    ],
+    "results[].hook_id": [
+     "str"
+    ],
+    "results[].hook_name": [
+     "str"
+    ],
+    "results[].run_id": [
+     "str"
+    ],
+    "results[].status": [
+     "str"
+    ],
+    "results[].stderr": [
+     "str"
+    ],
+    "results[].stdout": [
+     "str"
+    ],
+    "results[].success": [
+     "bool"
+    ],
+    "results[].timestamp": [
+     "str"
+    ],
+    "succeeded": [
+     "int"
+    ],
+    "total": [
+     "int"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/certificates/<X>/reissue": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "ca_provider": [
+     "str"
+    ],
+    "dns_provider": [
+     "str"
+    ],
+    "domain": [
+     "str"
+    ],
+    "duration": [
+     "number"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "422": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "hint": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/certificates/<X>/renew": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "dns_provider": [
+     "null"
+    ],
+    "domain": [
+     "str"
+    ],
+    "duration": [
+     "null"
+    ],
+    "message": [
+     "str"
+    ],
+    "renewed": [
+     "bool"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "422": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/certificates/check-caa": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "ca_provider": [
+     "str"
+    ],
+    "domains": [
+     "list"
+    ],
+    "domains[]": [
+     "dict"
+    ],
+    "domains[].domain": [
+     "str"
+    ],
+    "domains[].reason": [
+     "str"
+    ],
+    "domains[].records": [
+     "list"
+    ],
+    "domains[].relevant_name": [
+     "str"
+    ],
+    "domains[].status": [
+     "str"
+    ],
+    "identifiers": [
+     "list"
+    ],
+    "identifiers[]": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "str"
+    ],
+    "suggested_record": [
+     "null"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/certificates/check-dns-alias": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "checks": [
+     "list"
+    ],
+    "checks[]": [
+     "dict"
+    ],
+    "checks[].error": [
+     "str"
+    ],
+    "checks[].expected_target": [
+     "str"
+    ],
+    "checks[].found_targets": [
+     "list"
+    ],
+    "checks[].ok": [
+     "bool"
+    ],
+    "checks[].source": [
+     "str"
+    ],
+    "checks[].status": [
+     "str"
+    ],
+    "domain": [
+     "str"
+    ],
+    "domain_alias": [
+     "str"
+    ],
+    "ok": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/certificates/create": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "ca_provider": [
+     "str"
+    ],
+    "dns_provider": [
+     "str"
+    ],
+    "domain": [
+     "str"
+    ],
+    "duration": [
+     "number"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "202": {
+    ".": [
+     "dict"
+    ],
+    "domain": [
+     "str"
+    ],
+    "job_id": [
+     "str"
+    ],
+    "operation": [
+     "str"
+    ],
+    "status": [
+     "str"
+    ],
+    "status_url": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.dns_provider": [
+     "str"
+    ],
+    "errors.domain": [
+     "str"
+    ],
+    "hint": [
+     "null"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "409": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "hint": [
+     "str"
+    ]
+   },
+   "422": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "hint": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/certificates/deployment-status/browser": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "count": [
+     "int"
+    ],
+    "skipped": [
+     "list"
+    ],
+    "updated": [
+     "list"
+    ],
+    "updated[]": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.reports": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/certificates/reissue-keyless": {
+   "202": {
+    ".": [
+     "dict"
+    ],
+    "queued": [
+     "list"
+    ],
+    "queued[]": [
+     "dict"
+    ],
+    "queued[].domain": [
+     "str"
+    ],
+    "queued[].job_id": [
+     "str"
+    ],
+    "queued[].status_url": [
+     "str"
+    ],
+    "refused": [
+     "list"
+    ],
+    "remaining": [
+     "list"
+    ]
+   }
+  },
+  "POST /api/certificates/zombies/scan": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "results": [
+     "list"
+    ],
+    "results[]": [
+     "dict"
+    ],
+    "results[].domain": [
+     "str"
+    ],
+    "results[].domains": [
+     "dict"
+    ],
+    "results[].domains.alias.example.test": [
+     "str"
+    ],
+    "results[].domains.held.example.test": [
+     "str"
+    ],
+    "results[].domains.keyless.example.test": [
+     "str"
+    ],
+    "results[].domains.new.example.test": [
+     "str"
+    ],
+    "results[].domains.queued.example.test": [
+     "str"
+    ],
+    "results[].domains.shop.example.test": [
+     "str"
+    ],
+    "results[].domains.www.shop.example.test": [
+     "str"
+    ],
+    "results[].status": [
+     "str"
+    ],
+    "summary": [
+     "dict"
+    ],
+    "summary.alive": [
+     "int"
+    ],
+    "summary.suspect": [
+     "int"
+    ],
+    "summary.total": [
+     "int"
+    ],
+    "summary.unverifiable": [
+     "int"
+    ],
+    "summary.zombie": [
+     "int"
+    ]
+   }
+  },
+  "POST /api/client-certs/<X>/renew": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "identifier": [
+     "str"
+    ],
+    "metadata": [
+     "dict"
+    ],
+    "metadata.ca_used": [
+     "str"
+    ],
+    "metadata.cert_usage": [
+     "str"
+    ],
+    "metadata.common_name": [
+     "str"
+    ],
+    "metadata.created_at": [
+     "str"
+    ],
+    "metadata.crl_entry_serial": [
+     "null"
+    ],
+    "metadata.csr_required": [
+     "bool"
+    ],
+    "metadata.days_valid": [
+     "int"
+    ],
+    "metadata.email": [
+     "str"
+    ],
+    "metadata.expires_at": [
+     "str"
+    ],
+    "metadata.extended_key_usage": [
+     "list"
+    ],
+    "metadata.extended_key_usage[]": [
+     "str"
+    ],
+    "metadata.identifier": [
+     "str"
+    ],
+    "metadata.key_usage": [
+     "list"
+    ],
+    "metadata.key_usage[]": [
+     "str"
+    ],
+    "metadata.notes": [
+     "str"
+    ],
+    "metadata.organization": [
+     "str"
+    ],
+    "metadata.organizational_unit": [
+     "str"
+    ],
+    "metadata.reason_revoked": [
+     "null"
+    ],
+    "metadata.renewal_enabled": [
+     "bool"
+    ],
+    "metadata.renewal_threshold_days": [
+     "int"
+    ],
+    "metadata.revoked": [
+     "bool"
+    ],
+    "metadata.revoked_at": [
+     "null"
+    ],
+    "metadata.serial_number": [
+     "str"
+    ],
+    "metadata.type": [
+     "str"
+    ],
+    "paths": [
+     "dict"
+    ],
+    "paths.certificate": [
+     "str"
+    ],
+    "paths.csr": [
+     "str"
+    ],
+    "paths.metadata": [
+     "str"
+    ],
+    "paths.private_key": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
+  "POST /api/client-certs/<X>/revoke": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
+  "POST /api/client-certs/batch": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "certificates": [
+     "list"
+    ],
+    "certificates[]": [
+     "dict"
+    ],
+    "certificates[].common_name": [
+     "str"
+    ],
+    "certificates[].identifier": [
+     "str"
+    ],
+    "errors": [
+     "list"
+    ],
+    "errors[]": [
+     "dict"
+    ],
+    "errors[].error": [
+     "str"
+    ],
+    "errors[].row": [
+     "int"
+    ],
+    "failed": [
+     "int"
+    ],
+    "successful": [
+     "int"
+    ],
+    "total": [
+     "int"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
+  "POST /api/client-certs/ca/reset": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certificates_removed": [
+     "int"
+    ],
+    "message": [
+     "str"
+    ],
+    "warning": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
+    ]
+   }
+  },
+  "POST /api/client-certs/create": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "identifier": [
+     "str"
+    ],
+    "metadata": [
+     "dict"
+    ],
+    "metadata.ca_used": [
+     "str"
+    ],
+    "metadata.cert_usage": [
+     "str"
+    ],
+    "metadata.common_name": [
+     "str"
+    ],
+    "metadata.created_at": [
+     "str"
+    ],
+    "metadata.crl_entry_serial": [
+     "null"
+    ],
+    "metadata.csr_required": [
+     "bool"
+    ],
+    "metadata.days_valid": [
+     "int"
+    ],
+    "metadata.email": [
+     "str"
+    ],
+    "metadata.expires_at": [
+     "str"
+    ],
+    "metadata.extended_key_usage": [
+     "list"
+    ],
+    "metadata.extended_key_usage[]": [
+     "str"
+    ],
+    "metadata.identifier": [
+     "str"
+    ],
+    "metadata.key_usage": [
+     "list"
+    ],
+    "metadata.key_usage[]": [
+     "str"
+    ],
+    "metadata.notes": [
+     "str"
+    ],
+    "metadata.organization": [
+     "str"
+    ],
+    "metadata.organizational_unit": [
+     "str"
+    ],
+    "metadata.reason_revoked": [
+     "null"
+    ],
+    "metadata.renewal_enabled": [
+     "bool"
+    ],
+    "metadata.renewal_threshold_days": [
+     "int"
+    ],
+    "metadata.revoked": [
+     "bool"
+    ],
+    "metadata.revoked_at": [
+     "null"
+    ],
+    "metadata.serial_number": [
+     "str"
+    ],
+    "metadata.type": [
+     "str"
+    ],
+    "paths": [
+     "dict"
+    ],
+    "paths.certificate": [
+     "str"
+    ],
+    "paths.csr": [
+     "str"
+    ],
+    "paths.metadata": [
+     "str"
+    ],
+    "paths.private_key": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "status": [
+     "int"
     ]
    }
   },
@@ -939,19 +4675,290 @@
     ]
    }
   },
+  "POST /api/dns/<X>/accounts": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "id": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/dns/accounts": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "id": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/inventory/<X>/adopt": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "domain": [
+     "str"
+    ],
+    "managed": [
+     "bool"
+    ],
+    "status": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/inventory/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "ct_monitoring": [
+     "dict"
+    ],
+    "ct_monitoring.domains": [
+     "list"
+    ],
+    "ct_monitoring.domains[]": [
+     "str"
+    ],
+    "ct_monitoring.enabled": [
+     "bool"
+    ],
+    "ct_monitoring.include_managed": [
+     "bool"
+    ],
+    "ct_monitoring.max_new_per_run": [
+     "int"
+    ],
+    "ct_monitoring.min_request_interval": [
+     "number"
+    ],
+    "ct_monitoring.only_valid": [
+     "bool"
+    ],
+    "discovery": [
+     "dict"
+    ],
+    "discovery.allow_private": [
+     "bool"
+    ],
+    "discovery.check_revocation": [
+     "bool"
+    ],
+    "discovery.enabled": [
+     "bool"
+    ],
+    "discovery.endpoints": [
+     "list"
+    ],
+    "discovery.endpoints[]": [
+     "str"
+    ],
+    "discovery.include_managed": [
+     "bool"
+    ],
+    "dns_resolver": [
+     "dict"
+    ],
+    "dns_resolver.nameservers": [
+     "list"
+    ],
+    "dns_resolver.nameservers[]": [
+     "str"
+    ],
+    "domain_health": [
+     "dict"
+    ],
+    "domain_health.check_blocklists": [
+     "bool"
+    ],
+    "domain_health.check_headers": [
+     "bool"
+    ],
+    "domain_health.check_mail": [
+     "bool"
+    ],
+    "domain_health.check_weak_tls": [
+     "bool"
+    ],
+    "domain_health.enabled": [
+     "bool"
+    ],
+    "domain_health.extra_domains": [
+     "list"
+    ],
+    "domain_health.extra_domains[]": [
+     "str"
+    ],
+    "domain_health.include_inventory": [
+     "bool"
+    ],
+    "domain_registration": [
+     "dict"
+    ],
+    "domain_registration.enabled": [
+     "bool"
+    ],
+    "domain_registration.extra_domains": [
+     "list"
+    ],
+    "domain_registration.extra_domains[]": [
+     "str"
+    ],
+    "domain_registration.include_inventory": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/inventory/scan": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "ct_monitoring": [
+     "dict"
+    ],
+    "ct_monitoring.reason": [
+     "str"
+    ],
+    "ct_monitoring.skipped": [
+     "bool"
+    ],
+    "discovery": [
+     "dict"
+    ],
+    "discovery.results": [
+     "list"
+    ],
+    "discovery.results[]": [
+     "dict"
+    ],
+    "discovery.results[].endpoint": [
+     "str"
+    ],
+    "discovery.results[].error": [
+     "str"
+    ],
+    "discovery.results[].fingerprint": [
+     "str"
+    ],
+    "discovery.results[].host": [
+     "str"
+    ],
+    "discovery.results[].port": [
+     "int"
+    ],
+    "discovery.results[].revocation": [
+     "str"
+    ],
+    "discovery.results[].status": [
+     "str"
+    ],
+    "discovery.skipped": [
+     "bool"
+    ],
+    "discovery.summary": [
+     "dict"
+    ],
+    "discovery.summary.inventory_count": [
+     "int"
+    ],
+    "discovery.summary.ok": [
+     "int"
+    ],
+    "discovery.summary.total": [
+     "int"
+    ],
+    "domain_health": [
+     "dict"
+    ],
+    "domain_health.reason": [
+     "str"
+    ],
+    "domain_health.results": [
+     "list"
+    ],
+    "domain_health.skipped": [
+     "bool"
+    ],
+    "domain_registration": [
+     "dict"
+    ],
+    "domain_registration.reason": [
+     "str"
+    ],
+    "domain_registration.results": [
+     "list"
+    ],
+    "domain_registration.skipped": [
+     "bool"
+    ]
+   }
+  },
   "POST /api/keys": {
    "201": {
     ".": [
      "dict"
     ],
     "allowed_domains": [
-     "null"
+     "list"
+    ],
+    "allowed_domains[]": [
+     "str"
     ],
     "created_at": [
      "str"
     ],
     "expires_at": [
-     "null"
+     "str"
     ],
     "id": [
      "str"
@@ -1057,6 +5064,344 @@
     ]
    }
   },
+  "POST /api/probe": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certificate": [
+     "dict"
+    ],
+    "certificate.days_until_expiry": [
+     "int"
+    ],
+    "certificate.fingerprint_sha256": [
+     "str"
+    ],
+    "certificate.issuer": [
+     "str"
+    ],
+    "certificate.issuer_cn": [
+     "str"
+    ],
+    "certificate.key": [
+     "dict"
+    ],
+    "certificate.key.curve": [
+     "str"
+    ],
+    "certificate.key.size": [
+     "int"
+    ],
+    "certificate.key.type": [
+     "str"
+    ],
+    "certificate.not_after": [
+     "str"
+    ],
+    "certificate.not_before": [
+     "str"
+    ],
+    "certificate.san_dns": [
+     "list"
+    ],
+    "certificate.san_dns[]": [
+     "str"
+    ],
+    "certificate.san_ip": [
+     "list"
+    ],
+    "certificate.san_ip[]": [
+     "str"
+    ],
+    "certificate.serial_hex": [
+     "str"
+    ],
+    "certificate.serial_number": [
+     "str"
+    ],
+    "certificate.signature_algorithm": [
+     "str"
+    ],
+    "certificate.subject": [
+     "str"
+    ],
+    "certificate.subject_cn": [
+     "str"
+    ],
+    "chain": [
+     "list"
+    ],
+    "chain[]": [
+     "dict"
+    ],
+    "chain[].fingerprint_sha256": [
+     "str"
+    ],
+    "chain[].issuer_cn": [
+     "str"
+    ],
+    "chain[].subject_cn": [
+     "str"
+    ],
+    "chain_available": [
+     "bool"
+    ],
+    "connect_ip": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "error_class": [
+     "str"
+    ],
+    "host": [
+     "str"
+    ],
+    "port": [
+     "int"
+    ],
+    "probed_at": [
+     "str"
+    ],
+    "revocation": [
+     "dict"
+    ],
+    "revocation.attempts": [
+     "list"
+    ],
+    "revocation.checked_at": [
+     "str"
+    ],
+    "revocation.error": [
+     "str"
+    ],
+    "revocation.method": [
+     "null"
+    ],
+    "revocation.reason": [
+     "null"
+    ],
+    "revocation.revoked_at": [
+     "null"
+    ],
+    "revocation.status": [
+     "str"
+    ],
+    "revocation.url": [
+     "null"
+    ],
+    "status": [
+     "str"
+    ],
+    "validation": [
+     "dict"
+    ],
+    "validation.hostname_match": [
+     "bool"
+    ],
+    "validation.is_expired": [
+     "bool"
+    ],
+    "validation.is_self_signed": [
+     "bool"
+    ],
+    "validation.not_yet_valid": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/settings": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/settings/test-ca-provider": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "ca_provider": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.ca_provider": [
+     "str"
+    ],
+    "errors.config": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/storage/azure-keyvault/backfill-certificates": {
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/storage/config": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "backend": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/storage/migrate": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "failed_count": [
+     "int"
+    ],
+    "message": [
+     "str"
+    ],
+    "migrated_count": [
+     "int"
+    ],
+    "migration_results": [
+     "dict"
+    ],
+    "migration_results.alias.example.test": [
+     "bool"
+    ],
+    "migration_results.held.example.test": [
+     "bool"
+    ],
+    "migration_results.keyless.example.test": [
+     "bool"
+    ],
+    "migration_results.legacy.example.test": [
+     "bool"
+    ],
+    "migration_results.queued.example.test": [
+     "bool"
+    ],
+    "migration_results.shop.example.test": [
+     "bool"
+    ],
+    "source_backend": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ],
+    "target_backend": [
+     "str"
+    ],
+    "total": [
+     "int"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.target_config": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/storage/test": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "backend": [
+     "str"
+    ],
+    "certificate_count": [
+     "int"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.backend": [
+     "str"
+    ],
+    "errors.config": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
   "POST /api/users": {
    "201": {
     ".": [
@@ -1079,6 +5424,47 @@
      "dict"
     ],
     "error": [
+     "str"
+    ]
+   }
+  },
+  "PUT /api/certificates/<X>/auto-renew": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "auto_renew": [
+     "bool"
+    ],
+    "domain": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "hint": [
      "str"
     ]
    }
@@ -1115,6 +5501,19 @@
     ],
     "providers[]": [
      "str"
+    ]
+   }
+  },
+  "PUT /api/dns/<X>/accounts/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "message": [
+     "str"
+    ],
+    "success": [
+     "bool"
     ]
    }
   },
@@ -1192,14 +5591,55 @@
   }
  },
  "unseen_items": {
-  "GET /api/deploy/history": [
-   "."
+  "GET /api/cache/stats": [
+   "entries"
+  ],
+  "GET /api/certificates/<X>/dns-alias-check": [
+   "checks[].found_targets"
   ],
   "GET /api/deploy/pending": [
    "."
   ],
+  "GET /api/diagnostics/snapshot": [
+   "sanitized_logs"
+  ],
+  "GET /api/inventory/<X>/adopt": [
+   "san_domains"
+  ],
+  "GET /api/inventory/config": [
+   "discovery.endpoints"
+  ],
+  "GET /api/inventory/domains": [
+   "domains"
+  ],
+  "GET /api/inventory/health": [
+   "names"
+  ],
   "GET /api/webhooks/deliveries": [
    "."
+  ],
+  "POST /api/backups/restore/<X>": [
+   "reissue_required"
+  ],
+  "POST /api/certificates/check-caa": [
+   "domains[].records"
+  ],
+  "POST /api/certificates/check-dns-alias": [
+   "checks[].found_targets"
+  ],
+  "POST /api/certificates/deployment-status/browser": [
+   "skipped"
+  ],
+  "POST /api/certificates/reissue-keyless": [
+   "refused",
+   "remaining"
+  ],
+  "POST /api/inventory/scan": [
+   "domain_health.results",
+   "domain_registration.results"
+  ],
+  "POST /api/probe": [
+   "revocation.attempts"
   ]
  }
 }
