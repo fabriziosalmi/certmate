@@ -15,9 +15,8 @@ call site untouched — a test that still runs and no longer tests anything.
 """
 from ..core.constants import PROBE_PROTOCOLS
 from ..core.cert_probe import (
-    _resolve_and_guard, deployment_target_refusal, proxy_for,
+    _resolve_and_guard, deployment_target_refusal, open_connect_tunnel, proxy_for,
 )
-import http.client
 import logging
 import os
 import socket
@@ -143,10 +142,9 @@ def _open_probe_socket(host, port, timeout):
     proxy = _https_proxy_for(host)
     if proxy:
         proxy_host, proxy_port, proxy_headers = proxy
-        conn = http.client.HTTPConnection(proxy_host, proxy_port, timeout=timeout)
-        conn.set_tunnel(host, port, headers=proxy_headers)
-        conn.connect()
-        return conn.sock, conn.close
+        sock = open_connect_tunnel(proxy_host, proxy_port, proxy_headers,
+                                   host, port, timeout)
+        return sock, sock.close
 
     family, connect_ip, refusal = _resolve_and_guard(host, port, allow_private=True)
     if refusal:

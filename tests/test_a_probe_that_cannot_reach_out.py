@@ -146,10 +146,17 @@ class _ConnectProxy:
     takes), so the OCSP/CRL leg can be driven through the same object.
     """
 
-    def __init__(self, backend_port, require_auth=None, http_body=None):
+    def __init__(self, backend_port, require_auth=None, http_body=None,
+                 coalesce_first_bytes=False):
         self.backend_port = backend_port
         self.require_auth = require_auth
         self.http_body = http_body
+        # A server that speaks first (SMTP) has its banner waiting by the time
+        # the tunnel is up, and a real proxy can hand it over in the same read
+        # as its own answer. Whether it does is a matter of timing, which is
+        # what made this suite fail one run in a few: with this set the banner
+        # ALWAYS travels with the answer, so the case is a test and not a race.
+        self.coalesce_first_bytes = coalesce_first_bytes
         self.connect_targets = []
         self.absolute_requests = []
         self.credentials = []
@@ -215,7 +222,13 @@ class _ConnectProxy:
             client.sendall(b'HTTP/1.1 502 Bad Gateway\r\n\r\n')
             client.close()
             return
-        client.sendall(b'HTTP/1.1 200 Connection established\r\n\r\n')
+        established = b'HTTP/1.1 200 Connection established\r\n\r\n'
+        if self.coalesce_first_bytes:
+            try:
+                established += upstream.recv(4096)
+            except OSError:
+                pass
+        client.sendall(established)
 
         def pump(src, dst):
             try:
@@ -678,7 +691,14 @@ def test_the_deployment_probe_still_tunnels(proxy, backend, monkeypatch):
     assert proxy.connect_targets == [f'{PROBE_HOST}:443']
 
 
-def test_the_smtp_leg_tunnels_too(tmp_path, monkeypatch):
+# Whether the server's banner reaches the client in the same read as the proxy's
+# own answer. Both happen on a real network; the probe has to survive both.
+BANNER_ORDER = pytest.mark.parametrize(
+    'coalesced', [False, True], ids=['banner-after-the-answer', 'banner-with-the-answer'])
+
+
+@BANNER_ORDER
+def test_the_smtp_leg_tunnels_too(tmp_path, monkeypatch, coalesced):
     """The other half. A STARTTLS upgrade over a CONNECT tunnel, end to end:
     the certificate that comes back is the one the SMTP server presented
     after the upgrade, which is the only thing that proves the sequence ran.
@@ -687,7 +707,7 @@ def test_the_smtp_leg_tunnels_too(tmp_path, monkeypatch):
 
     cert, certfile, keyfile = _self_signed('smtp.example.test', tmp_path)
     smtp = _SMTPBackend(certfile, keyfile)
-    relay = _ConnectProxy(smtp.port)
+    relay = _ConnectProxy(smtp.port, coalesce_first_bytes=coalesced)
     try:
         monkeypatch.delenv('no_proxy', raising=False)
         monkeypatch.setenv('https_proxy', relay.url)
@@ -704,23 +724,30 @@ def test_the_smtp_leg_tunnels_too(tmp_path, monkeypatch):
         relay.close()
         smtp.close()
 
-def test_an_smtp_server_that_refuses_starttls_is_not_reachable(tmp_path, monkeypatch):
+@BANNER_ORDER
+def test_an_smtp_server_that_refuses_starttls_is_not_reachable(tmp_path, monkeypatch, coalesced):
     """CONTROL on the leg above: a server that answers the upgrade with a
     refusal must not be reported as having served a certificate.
 
     This used to hand-roll its own listener, with a SINGLE `accept()` in a
     daemon thread whose failures were swallowed, and it failed once in a
     release gate: a 2.5s read timeout — the probe spends half its budget on
-    each read — with nothing to say why. A one-shot accept is consumed by
-    whatever connects first, and a helper that fails in silence turns that
-    into a timeout instead of an explanation. It uses the same backend as the
-    test above now, which serves in a loop and records what each session did.
+    each read — with nothing to say why. That was put down to the one-shot
+    accept, and the fake was fixed (it serves in a loop and records what each
+    session did now). It was not the cause: the test went on failing one run
+    in a few on a slow runner, because the banner a mail server sends the moment
+    it is connected can reach the client in the SAME read as the proxy's own
+    `200`, and the tunnel the probe used (`http.client`'s) kept it in a buffer
+    nobody could reach. The probe had a real defect behind a proxy and the test
+    was telling us. Both orders are run here now, parametrized, so neither is a
+    matter of timing; the cause is
+    `tests/test_the_connect_tunnel_keeps_what_follows_the_answer.py`.
     """
     from modules.api.tls_probe import _probe_tls_certificate
 
     _cert, certfile, keyfile = _self_signed('smtp.example.test', tmp_path)
     smtp = _SMTPBackend(certfile, keyfile, refuse_starttls=True)
-    relay = _ConnectProxy(smtp.port)
+    relay = _ConnectProxy(smtp.port, coalesce_first_bytes=coalesced)
     try:
         monkeypatch.delenv('no_proxy', raising=False)
         monkeypatch.setenv('https_proxy', relay.url)
