@@ -7,7 +7,7 @@
 # explicit, logged override for non-issuance patches only).
 #
 # Usage:
-#   scripts/release.sh prepare X.Y.Z [--skip-real-cert "reason"] [--dry-run]
+#   scripts/release.sh prepare X.Y.Z [--skip-real-cert "reason"] [--allow-stale-base "reason"] [--dry-run]
 #       Validate + run every gate, then (unless --dry-run) branch off main,
 #       bump the version, commit, push and open the release PR.
 #   scripts/release.sh publish X.Y.Z
@@ -98,16 +98,17 @@ version_gt() {  # $1 > $2 ?
 
 # --- prepare ------------------------------------------------------------------
 cmd_prepare() {
-  local version="" skip_reason="" dry=0
+  local version="" skip_reason="" stale_base_reason="" dry=0
   version="${1:-}"; shift || true
   while [ $# -gt 0 ]; do
     case "$1" in
       --skip-real-cert) skip_reason="${2:-}"; shift 2 || die "--skip-real-cert needs a reason";;
+      --allow-stale-base) stale_base_reason="${2:-}"; [ -n "$stale_base_reason" ] || die "--allow-stale-base needs a reason"; shift 2;;
       --dry-run) dry=1; shift;;
       *) die "unknown flag: $1";;
     esac
   done
-  [ -n "$version" ] || die "usage: release.sh prepare X.Y.Z [--skip-real-cert \"reason\"] [--dry-run]"
+  [ -n "$version" ] || die "usage: release.sh prepare X.Y.Z [--skip-real-cert \"reason\"] [--allow-stale-base \"reason\"] [--dry-run]"
   semver_ok "$version" || die "not a semver X.Y.Z: $version"
 
   info "Preconditions"
@@ -200,6 +201,13 @@ $(echo "$changed" | grep -E "$SENSITIVE_RE" | sed 's/^/  /')"
         tests/test_ca_account_email_e2e.py \
         -p no:cacheprovider'
   fi
+  # The Dockerfile pins its base by digest and nothing moves the pin, so the image a release
+  # ships can be a month of Debian fixes behind its own base (#403: 308 findings, 254 on the
+  # current digest). Fails when the pin is behind the tag AND older than two weeks; the fix is
+  # `scripts/check_base_image.py --update`. The override is logged, like --skip-real-cert.
+  local base_args=()
+  [ -z "$stale_base_reason" ] || base_args=(--allow-stale "$stale_base_reason")
+  gate "base image digest (not left behind its tag)" "$PY" scripts/check_base_image.py ${base_args[@]+"${base_args[@]}"}
   gate "Docker build" docker build -t certmate:release-check .
 
   echo; info "ALL GATES PASSED for v$version"

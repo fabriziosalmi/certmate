@@ -175,6 +175,16 @@ the change can be cut. That gate is not skippable for those paths — it exists
 because two DNS providers once shipped in a state where they had never worked in
 any release, and nothing caught it for months.
 
+### The base image
+
+The Dockerfile pins its base by digest, so a rebuild is byte-identical and nothing moves the pin
+by itself. `scripts/release.sh prepare` therefore refuses a release whose pinned digest is behind
+the tag it came from **and** older than two weeks (`scripts/check_base_image.py`; measured
+on 2026-10-02, a 31-day-old pin carried 54 findings the current base does not, #403). The fix is
+one command: `scripts/check_base_image.py --update` writes the digest the tag points at into both
+stages, you read the diff, and the real-certificate gate runs on it like on any other change to
+the image. `--allow-stale-base "reason"` ships the release as it is and logs why.
+
 ### Version strings
 
 Don't add one by hand. Every user-facing copy of the version is bumped by
