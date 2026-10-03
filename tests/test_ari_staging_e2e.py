@@ -8,10 +8,11 @@ through the real certbot, against the real CA.
 
 **The one thing that is not real is that clock**, and only in the ARI client.
 A fresh certificate's window opens weeks from now; waiting for it is not a
-test. The threshold, certbot and the CA all run on the wall clock, which is
-the point: certbot sees a certificate with most of its life left and, asked
-without `--force-renewal`, answers "not yet due". That is the defect this was
-written to catch. The unit tests model certbot's gate; this one runs it.
+test. Since #393 the sweep takes its decision on that clock (the wall clock in
+production); certbot and the CA run on the wall clock, which is the point:
+certbot sees a certificate with most of its life left and, asked without
+`--force-renewal`, answers "not yet due". That is the defect this was written
+to catch. The unit tests model certbot's gate; this one runs it.
 
 **Why in-process rather than against the container** like the other e2e
 files: the container can only be driven over HTTP, and moving the ARI clock
@@ -26,7 +27,7 @@ import os
 import secrets
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from cryptography import x509
@@ -165,7 +166,16 @@ def test_03_the_window_drives_a_real_renewal(instance):
     assert summary['skipped_not_due'] == 0, (
         'certbot answered "not yet due" to a renewal the CA asked for', summary)
     assert summary['renewed'] == 1, summary
-    assert summary['ari_advanced'] == 1, summary
+    # Attributed to the CA only when its instant comes before the threshold's (#393). Since #393
+    # the sweep decides on one clock, this one, and staging's window for a 90-day certificate
+    # sits around 30 days before expiry: the instant it names falls on either side of the
+    # threshold's point (30 days before expiry) about half the time. After it, the threshold
+    # also calls the certificate due at that instant, so the renewal is not one the CA brought
+    # forward. Before #393 the threshold ran on the wall clock and this was always 1. Either
+    # way the renewal is forced and reaches the CA, which is what the assertions around this
+    # one hold.
+    planned = cert_before.not_valid_after_utc.replace(tzinfo=None) - timedelta(days=30)
+    assert summary['ari_advanced'] == (1 if renew_at < planned else 0), (renew_at, planned, summary)
 
     pem_after, cert_after = _leaf(instance)
     assert cert_after.serial_number != cert_before.serial_number
