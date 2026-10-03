@@ -329,6 +329,7 @@ def environment():
 
 ALIAS = 'alias.example.test'
 KEYLESS = 'keyless.example.test'
+KEYLESS_TOO = 'keyless-too.example.test'
 
 
 def _metadata(domain, sans=(), **more):
@@ -338,6 +339,23 @@ def _metadata(domain, sans=(), **more):
                 'ca_provider': 'letsencrypt_staging'}
     metadata.update(more)
     return json.dumps(metadata)
+
+
+def _record_a_renewal_window(directory):
+    """What the nightly sweep keeps after the CA answered with a window (ARI, #962), built by the
+    same functions: without it `renewal_info` is only ever `null` in the walk, and its fields are
+    compared with nothing."""
+    from cryptography import x509
+
+    from modules.core import ari
+    from modules.core.certificates import RENEWAL_INFO_FILE
+
+    cert = x509.load_pem_x509_certificate((directory / 'cert.pem').read_bytes())
+    now = dt.datetime(2026, 9, 27, 2, 0, 4)
+    window = {'suggestedWindow': {'start': '2026-11-02T17:18:36Z', 'end': '2026-11-04T12:29:25Z'},
+              'explanationURL': 'https://letsencrypt.org/docs/'}
+    record = ari.observation(ari.certificate_id(cert), ari.STATUS_WINDOW, window, now)
+    (directory / RENEWAL_INFO_FILE).write_text(json.dumps(record), encoding='utf-8')
 
 
 def seed(container, port):
@@ -354,13 +372,16 @@ def seed(container, port):
     cert_dir = Path(container.cert_dir)
     write_certificate(cert_dir / DOMAIN, DOMAIN, [SAN])
     (cert_dir / DOMAIN / 'metadata.json').write_text(_metadata(DOMAIN, [SAN]), encoding='utf-8')
+    _record_a_renewal_window(cert_dir / DOMAIN)
     # A certificate restored from a share-safe backup: everything but its private key.
-    write_certificate(cert_dir / KEYLESS, KEYLESS)
-    (cert_dir / KEYLESS / 'privkey.pem').unlink()
-    archive = cert_dir / KEYLESS / 'archive' / KEYLESS          # the lineage keeps its certificates, not its keys
-    archive.mkdir(parents=True)
-    (archive / 'cert1.pem').write_bytes((cert_dir / KEYLESS / 'cert.pem').read_bytes())
-    (cert_dir / KEYLESS / 'metadata.json').write_text(_metadata(KEYLESS), encoding='utf-8')
+    # Two of them, so that a reissue limited to one leaves one to do (`remaining`, `next_step`).
+    for name in (KEYLESS, KEYLESS_TOO):
+        write_certificate(cert_dir / name, name)
+        (cert_dir / name / 'privkey.pem').unlink()
+        archive = cert_dir / name / 'archive' / name            # the lineage keeps its certificates, not its keys
+        archive.mkdir(parents=True)
+        (archive / 'cert1.pem').write_bytes((cert_dir / name / 'cert.pem').read_bytes())
+        (cert_dir / name / 'metadata.json').write_text(_metadata(name), encoding='utf-8')
     write_certificate(cert_dir / ALIAS, ALIAS)
     (cert_dir / ALIAS / 'metadata.json').write_text(
         _metadata(ALIAS, domain_alias='alias-zone.example.test', alias_dns_provider='cloudflare'),
@@ -371,7 +392,8 @@ def seed(container, port):
     current['email'] = EMAIL
     current['domains'] = [{'domain': DOMAIN, 'dns_provider': 'cloudflare'},
                           {'domain': ALIAS, 'dns_provider': 'cloudflare'},
-                          {'domain': KEYLESS, 'dns_provider': 'cloudflare'}]
+                          {'domain': KEYLESS, 'dns_provider': 'cloudflare'},
+                          {'domain': KEYLESS_TOO, 'dns_provider': 'cloudflare'}]
     settings.save_settings(current)
 
     # Credentials for the DNS provider the seeded certificates name, so that adopting a

@@ -845,7 +845,18 @@ Neben dem menschenlesbaren Log wird jeder Eintrag an eine manipulationssichere S
 
 <!-- response: GET /api/audit/verify 200 -->
 ```json
-{"ok": true, "count": 128, "first_seq": 0, "last_seq": 127, "head_hash": "5ee1…", "reason": "intact"}
+{
+  "ok": true,
+  "count": 128,
+  "first_seq": 0,
+  "last_seq": 127,
+  "head_hash": "5ee1c0d9a8f46b02e7c3d51f9a20b8e4c6f7d3a1b9e05c28d4f6a7b3e1c9d02f",
+  "error_seq": null,
+  "reason": "intact",
+  "checkpoint_verified": true,
+  "checkpoint_seq": 99,
+  "checkpoint_reason": "consistent with signed checkpoint at seq 99"
+}
 ```
 
 **Offline-Verifikation:** Der eigenständige Verifizierer hängt nur von der Python-Standardbibliothek ab, sodass ein Prüfer ihn ohne Installation oder Vertrauen in CertMate ausführen kann:

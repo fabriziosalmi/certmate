@@ -267,10 +267,13 @@ def seeded():
 
 def test_the_seed_holds_the_certificates_it_says(seeded):
     _, listing, _, _ = seeded
-    assert set(listing) == {world.ALIAS, world.DOMAIN, world.KEYLESS}
+    assert set(listing) == {world.ALIAS, world.DOMAIN, world.KEYLESS, world.KEYLESS_TOO}
     assert listing[world.DOMAIN]['private_key_state'] == 'present'
-    assert listing[world.KEYLESS]['private_key_state'] == 'missing', (
-        'the keyless certificate has a key, so reissue-keyless has nothing to queue')
+    for keyless in (world.KEYLESS, world.KEYLESS_TOO):
+        assert listing[keyless]['private_key_state'] == 'missing', (
+            f'{keyless} has a key, so a reissue limited to one leaves nothing remaining')
+    assert (listing[world.DOMAIN]['renewal_info'] or {}).get('status') == 'window', (
+        'the recorded ARI window is not the one the certificate answers with (its cert_id differs)')
 
 
 def test_the_seed_holds_what_the_inventory_and_the_keys_routes_need(seeded):
