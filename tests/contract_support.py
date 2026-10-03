@@ -80,17 +80,44 @@ def swagger_spec(app_and_token=None):
     return response.get_json()
 
 
+API_REFERENCE = REPO / 'docs' / 'api.md'
+_DOCUMENTED_CALL = re.compile(r'\b(GET|POST|PUT|PATCH|DELETE)\s+(/api/web/[^\s`)<>,]*(?:<[^>]+>[^\s`)<>,]*)*)')
+
+
+def documented_web_routes(text=None):
+    """The dashboard routes (/api/web/) the API reference presents as API, as walk keys.
+
+    /api/web/ is the dashboard's, and most of it is not API. But a route docs/api.md documents
+    is one an integrator calls with a token, and it was outside every gate: its documented
+    answer was compared with nothing (#1105). Read from the document, so documenting a route
+    is what brings it into the surface, and the walk then has to call it or say why not.
+    """
+    if text is None:
+        text = API_REFERENCE.read_text(encoding='utf-8')
+    found = set()
+    for verb, path in _DOCUMENTED_CALL.findall(text):
+        path = re.sub(r'<[^>]+>', '<X>', path.split('?')[0]).rstrip('/')
+        found.add(f'{verb} {path}')
+    return found
+
+
 def route_surface(app):
-    """Every verb+path the app serves under /api/, bar the dashboard's /api/web/."""
+    """Every verb+path the app serves under /api/, bar the dashboard's /api/web/, except the
+    /api/web/ routes the API reference documents (`documented_web_routes`)."""
+    documented = documented_web_routes()
     surface = set()
     for rule in app.url_map.iter_rules():
         path = str(rule)
-        if not path.startswith('/api/') or path.startswith('/api/web/'):
+        if not path.startswith('/api/'):
             continue
-        path = re.sub(r'<[^>]+>', '<X>', path).rstrip('/') or '/'
+        key_path = re.sub(r'<[^>]+>', '<X>', path).rstrip('/') or '/'
         for verb in rule.methods:
-            if verb not in ('HEAD', 'OPTIONS'):
-                surface.add(f'{verb} {path}')
+            if verb in ('HEAD', 'OPTIONS'):
+                continue
+            key = f'{verb} {key_path}'
+            if path.startswith('/api/web/') and key not in documented:
+                continue
+            surface.add(key)
     return surface
 
 

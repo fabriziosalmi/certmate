@@ -209,6 +209,22 @@ def test_every_map_and_catalogue_is_one_the_plan_sees(outcome):
     assert stale == []
 
 
+def test_no_field_is_sent_with_two_types(outcome):
+    """A field that is an object in one answer and a string in another makes every client branch
+    on it. The snapshot recorded `actor` as `dict` or `str` in /api/activity and
+    /api/audit/export, and nothing objected: the client CA reset passed a username where every
+    other record passes `{kind, label}`. `null` is not counted (a field null in one state is
+    the same field), and `int` beside `number` is one kind of value."""
+    mixed = []
+    for route, statuses in outcome[0].items():
+        for status, paths in statuses.items():
+            for path, types in paths.items():
+                kinds = {'number' if t == 'int' else t for t in types}
+                if len(kinds) > 1:
+                    mixed.append(f'{route} [{status}] {path}: {"/".join(types)}')
+    assert mixed == [], 'fields sent with more than one type:\n  ' + '\n  '.join(mixed)
+
+
 def test_every_known_defect_still_shows_the_defect(report, snapshot):
     """The calls that show a wrong answer are made and not recorded. They are checked
     here, so the entry cannot outlive the defect: when the answer changes, the fix has
