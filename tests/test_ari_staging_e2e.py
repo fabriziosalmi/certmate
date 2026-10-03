@@ -168,8 +168,9 @@ def test_03_the_window_drives_a_real_renewal(instance):
     assert summary['renewed'] == 1, summary
     # Attributed to the CA only when its instant comes before the threshold's (#393). Since #393
     # the sweep decides on one clock, this one, and staging's window for a 90-day certificate
-    # sits around 30 days before expiry: the instant it names falls on either side of the
-    # threshold's point (30 days before expiry) about half the time. After it, the threshold
+    # sits around 30 days before expiry, and the instant it names can fall on either side of the
+    # threshold's point (the production window recorded in tests/test_the_ca_says_when_to_renew.py,
+    # 2 to 4 November for a certificate expiring 3 December, contains it). After it, the threshold
     # also calls the certificate due at that instant, so the renewal is not one the CA brought
     # forward. Before #393 the threshold ran on the wall clock and this was always 1. Either
     # way the renewal is forced and reaches the CA, which is what the assertions around this
