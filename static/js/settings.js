@@ -2355,6 +2355,8 @@
             }
             fillCAAccountFields(editingCAProvider, saved);
         }
+        var profileField = document.getElementById('ca-account-acme-profile');
+        if (profileField) profileField.value = (editingCAProvider && currentCAAccountConfig().acme_profile) || '';
         toggleCAProviderConfig();
         document.getElementById('caAccountModal').classList.remove('hidden');
     }
@@ -2376,6 +2378,9 @@
         editingCAProvider = provider;
         var config = collectCAProviderSettings()[provider];
         config.name = name;
+        // The account's default ACME profile (#395); '' clears it.
+        var profileField = document.getElementById('ca-account-acme-profile');
+        if (profileField) config.acme_profile = profileField.value;
         fetch('/api/web/settings/ca-providers/' + encodeURIComponent(provider) +
             '/accounts/' + encodeURIComponent(name) + (editingCAAccount ? '' : '?create=1'), {
             method: 'POST', headers: API_HEADERS, body: JSON.stringify(config)

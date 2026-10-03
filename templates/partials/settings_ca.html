@@ -36,6 +36,14 @@
                                 <label for="ca-account-name" class="block text-xs font-medium text-muted mt-3 mb-1">Account name</label>
                                 <input type="text" id="ca-account-name" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-describedby="ca-account-name-help" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" placeholder="e.g. production or staging">
                                 <p id="ca-account-name-help" class="mt-1 text-xs text-muted">Letters, digits, dots, dashes and underscores.</p>
+                                <label for="ca-account-acme-profile" class="block text-xs font-medium text-muted mt-3 mb-1">Default ACME profile</label>
+                                <select id="ca-account-acme-profile" aria-describedby="ca-account-acme-profile-help" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm">
+                                    <option value="">The CA's default</option>
+                                    <option value="classic">classic: 90 days</option>
+                                    <option value="tlsserver">tlsserver: 45 days, no Common Name</option>
+                                    <option value="shortlived">shortlived: 160 hours</option>
+                                </select>
+                                <p id="ca-account-acme-profile-help" class="mt-1 text-xs text-muted">What a new certificate on this account asks for when its form leaves the profile at Default (Let's Encrypt's profiles).</p>
                             </div>
 
                             <!-- CA Provider Configurations -->
