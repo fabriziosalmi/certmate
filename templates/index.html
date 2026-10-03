@@ -363,6 +363,25 @@
                                     </select>
                                 </div>
                             </div>
+
+                            <!-- ACME profile (#395) -->
+                            <div class="mt-4">
+                                <label for="cert_acme_profile" class="block text-sm font-medium text-label mb-1">
+                                    <i class="fas fa-hourglass-half mr-1 text-purple-500"></i>
+                                    ACME Profile <span class="text-xs font-normal text-muted">(optional)</span>
+                                </label>
+                                <select id="cert_acme_profile"
+                                        class="w-full md:w-1/2 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
+                                    <option value="">Default</option>
+                                    <option value="classic">classic: 90 days</option>
+                                    <option value="tlsserver">tlsserver: 45 days, no Common Name</option>
+                                    <option value="shortlived">shortlived: 160 hours</option>
+                                </select>
+                                <p class="mt-1 text-xs text-muted">
+                                    Let's Encrypt's profiles. Default is the CA account's profile, or the CA's own (on Edit &amp; Reissue, the CA's own).
+                                    A CA that does not offer the profile refuses the request; renewals keep it, and fall back to the CA's default if it is withdrawn.
+                                </p>
+                            </div>
                         </div>
                     </div>
                     

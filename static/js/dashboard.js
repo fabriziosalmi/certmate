@@ -720,6 +720,29 @@
     // the record the renewal sweep keeps (#962) — the dashboard never asks the
     // CA itself. Every state renders as a sentence: "not checked yet" is an
     // answer, and an absent row would read as "nothing to know".
+    // When the sweep renews it (#393): the one instant the server decided, after the threshold,
+    // the lifetime and the CA's window. Shown as it is, never recomputed here.
+    function renewsAtHtml(cert) {
+        if (!cert.renews_at) return '<span class="text-muted">\u2014</span>';
+        var due = cert.needs_renewal && new Date(cert.renews_at) <= new Date();
+        return '<span class="' + (due ? 'text-warning-fg' : '') + '">' +
+            escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
+            (due ? '<div class="text-xs text-warning-fg">Due: the next renewal run renews it</div>' : '');
+    }
+
+    // The ACME profile it was issued with (#395), and the warning a renewal leaves when the CA
+    // no longer offers it and issued its default profile instead.
+    function acmeProfileHtml(cert) {
+        var html = cert.acme_profile
+            ? '<span class="font-mono">' + escapeHtml(cert.acme_profile) + '</span>'
+            : '<span class="text-muted">The CA\'s default</span>';
+        if (cert.acme_profile_withdrawn_at) {
+            html += '<div class="text-xs text-warning-fg">Withdrawn by the CA: renewed with its default on ' +
+                escapeHtml(CertMate.formatDate(cert.acme_profile_withdrawn_at)) + '</div>';
+        }
+        return '<div class="text-right">' + html + '</div>';
+    }
+
     function renewalWindowHtml(info) {
         if (!info) {
             return '<span class="text-muted" title="The renewal sweep has not asked the CA about this certificate yet">Not checked yet</span>';
@@ -1326,7 +1349,9 @@
                 // "not recorded" is an answer; silence would read as "public,
                 // like everything else".
                 detailRow('Issuing CA', caDetailLabel || CA_NOT_RECORDED) +
+                detailRow('Renews', renewsAtHtml(cert)) +
                 detailRow('CA renewal window', renewalWindowHtml(cert.renewal_info)) +
+                detailRow('ACME profile', acmeProfileHtml(cert)) +
                 (sanDomains.length ? detailRow('SANs', '<div class="text-right">' + sanDomainsHtml + '</div>') : '') +
                 (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
                 (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +
@@ -2755,6 +2780,8 @@
         toggleDnsProviderVisibility();
         updateCAProviderInfo();
         if (cert.ca_account_id) document.getElementById('ca_account_id').value = cert.ca_account_id;
+        var profileField = document.getElementById('cert_acme_profile');
+        if (profileField) profileField.value = cert.acme_profile || '';
         updateDnsAliasHelp();
         if (typeof updateAccountSelection === 'function') updateAccountSelection();
         if (cert.account_id) {
@@ -2837,6 +2864,8 @@
         document.getElementById('account_select').value = '';
         document.getElementById('ca_provider_select').value = '';
         document.getElementById('ca_account_id').value = '';
+        var profileReset = document.getElementById('cert_acme_profile');
+        if (profileReset) profileReset.value = '';
         var aliasField = document.getElementById('dns_alias_domain');
         if (aliasField) { aliasField.value = ''; }
         updateDnsAliasHelp();
@@ -3005,6 +3034,14 @@
         } else if (certKeyType === 'ecdsa') {
             requestBody.key_type = 'ecdsa';
             requestBody.elliptic_curve = document.getElementById('cert_elliptic_curve').value;
+        }
+
+        // ACME profile (#395). A create sends it only when one is picked, so the CA account's
+        // default applies otherwise; a reissue always sends it, prefilled with the current
+        // profile, so "Default" there means the CA's own default.
+        var profileSelect = document.getElementById('cert_acme_profile');
+        if (profileSelect && (editingDomain || profileSelect.value)) {
+            requestBody.acme_profile = profileSelect.value;
         }
 
         // Phase 3 opted fresh creates into async issuance so the UI can show an
