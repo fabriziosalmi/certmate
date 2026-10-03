@@ -1,5 +1,5 @@
 {
- "contract_version": "2.39",
+ "contract_version": "2.40",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -365,6 +365,9 @@
     },
     "renewal_info": {},
     "renewed_at": {
+     "type": "string"
+    },
+    "renews_at": {
      "type": "string"
     },
     "san_domains": {

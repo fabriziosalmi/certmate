@@ -36,6 +36,7 @@ from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStr
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS)
 from .inventory_sources import collect_domain_sources
+from . import renewal_policy
 from .domain_entries import entry_auto_renew, entry_domain
 from .structured_logging import LogContext, new_correlation_id
 from .csr_issuance import (
@@ -2252,6 +2253,13 @@ class CertificateManager:
             # a default private CA.
             days_left = remaining.days
             seconds_left = int(remaining.total_seconds())
+            # One rule decides when this renews, and the sweep acts on the same instant
+            # (renewal_policy, #393): the threshold where it is meaningful for this lifetime,
+            # the lifetime rule where it is not, the CA's recorded window within a floor.
+            renewal_info = self._renewal_info_for(domain, cert, settings)
+            renew_instant, _ = renewal_policy.renews_at(
+                cert.not_valid_before_utc.replace(tzinfo=None), expiry_date,
+                renewal_threshold_days, renewal_info)
 
             return {
                 'domain': domain,
@@ -2264,9 +2272,10 @@ class CertificateManager:
                 # the same instant, so they cannot disagree with each other.
                 'seconds_left': seconds_left,
                 'expired': seconds_left <= 0,
-                # Inclusive boundary: a cert with exactly renewal_threshold_days
-                # left must renew. Using `<` skipped the boundary, delaying
-                # renewal by a day; digest.py and metrics.py already use `<=`.
+                # Due from the instant renewal_policy computes (inclusive: at
+                # exactly that instant it renews). digest.py, metrics.py and
+                # expiry_watch.py read `renews_at` rather than redoing the
+                # arithmetic, so none of them can disagree with the sweep.
                 # A certificate with no usable private key cannot serve TLS,
                 # so it needs attention now rather than at its expiry — which
                 # is what let a restored keyless certificate sit untouched
@@ -2275,8 +2284,10 @@ class CertificateManager:
                 # listing path never fetches the key, so only a key we looked
                 # for and did not find (or one that does not match) forces
                 # attention here.
-                'needs_renewal': (days_left <= renewal_threshold_days
+                'needs_renewal': (now_utc >= renew_instant
                                   or key_state in ('missing', 'mismatched')),
+                # The instant the sweep renews it at, so a client is told when, not only whether.
+                'renews_at': renewal_policy.stamp(renew_instant),
                 'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
                 'reissue_required': self._reissue_required(domain, key_state),
@@ -2303,7 +2314,7 @@ class CertificateManager:
                 'renewed_at': metadata.get('renewed_at'),
                 # What the CA's ARI endpoint said at the last sweep (#962),
                 # read from the record the sweep keeps — never fetched here.
-                'renewal_info': self._renewal_info_for(domain, cert, settings),
+                'renewal_info': renewal_info,
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -2342,6 +2353,8 @@ class CertificateManager:
             # A certificate that cannot be parsed cannot be named in ARI, so
             # there is no record that could belong to it.
             'renewal_info': None,
+            # Nor a lifetime to renew within: it is due now (needs_renewal above).
+            'renews_at': None,
         }
 
     def _create_empty_cert_info(self, domain):
@@ -3978,6 +3991,7 @@ class CertificateManager:
                     'skipped_disabled': 0, 'skipped_invalid': 0,
                     'skipped_not_due': 0, 'skipped_busy': 0,
                     'unmanaged': 0, 'reregistered': 0, 'ari_advanced': 0,
+                    'ari_postponed': 0, 'early_forced': 0, 'early_deferred': 0,
                     'reissue_required': 0, 'auto_reissued': 0,
                     'auto_renew_disabled': True}
 
@@ -3992,15 +4006,17 @@ class CertificateManager:
                    'skipped_not_due': 0, 'skipped_busy': 0,
                    'unmanaged': 0, 'reregistered': 0,
                    # Renewals the CA's window brought forward, which the
-                   # configured threshold would not have started tonight.
-                   'ari_advanced': 0,
+                   # configured threshold would not have started tonight; and
+                   # certificates the threshold would have renewed tonight that
+                   # the window postpones (#393).
+                   'ari_advanced': 0, 'ari_postponed': 0,
                    # Certificates with no key anywhere: only a reissue repairs
                    # them, so they are counted apart from failures (#966).
                    'reissue_required': 0,
-                   # Renewals the threshold called due while certbot's own
-                   # 30-day gate would have refused, forced (#966, part 2);
-                   # and those held for the next sweep by the cap or because
-                   # the certificate is less than a week old.
+                   # Renewals the operator's threshold brought ahead of the
+                   # lifetime rule (#966, part 2, #393); and those held for the
+                   # next sweep by the cap or because the certificate is younger
+                   # than a week or a third of its lifetime.
                    'early_forced': 0, 'early_deferred': 0,
                    # Reissued by the sweep itself, opt-in (#966, step 4).
                    'auto_reissued': 0}
@@ -4102,7 +4118,8 @@ class CertificateManager:
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
             "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
             "%d unmanaged, %d re-registered, %d need reissue, "
-            "%d auto-reissued, %d early (forced), %d early deferred",
+            "%d auto-reissued, %d early (forced), %d early deferred, "
+            "%d brought forward by the CA, %d postponed by the CA",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
@@ -4110,33 +4127,55 @@ class CertificateManager:
             summary['unmanaged'], summary['reregistered'],
             summary['reissue_required'], summary['auto_reissued'],
             summary['early_forced'], summary['early_deferred'],
+            summary['ari_advanced'], summary['ari_postponed'],
         )
         return summary
 
-    #: certbot renews unforced only inside this many seconds of expiry
-    #: (`renew_before_expiry`, default "30 days", never set by CertMate).
-    CERTBOT_RENEWAL_WINDOW_SECONDS = 30 * 86400
     #: Default for `early_renewals_per_sweep` (#966, part 2).
     EARLY_RENEWAL_DEFAULT_PER_SWEEP = 10
-    #: A certificate younger than this is never force-renewed (#966, part 2).
-    EARLY_RENEWAL_MIN_AGE_SECONDS = 7 * 86400
 
-    @classmethod
-    def _threshold_outruns_certbot(cls, cert_info, settings):
-        """Did the threshold, and only the threshold, call this due while
-        certbot's own gate would answer "not yet due"? (#966, part 2)
+    def _served_validity(self, domain):
+        """(notBefore, notAfter) of the served certificate as naive UTC, or None."""
+        cert_dir = getattr(self, 'cert_dir', None)
+        if cert_dir is None:
+            return None
+        try:
+            with open(Path(cert_dir) / domain / 'cert.pem', 'rb') as f:
+                cert = x509.load_pem_x509_certificate(f.read())
+        except (OSError, ValueError):
+            return None
+        return (cert.not_valid_before_utc.replace(tzinfo=None),
+                cert.not_valid_after_utc.replace(tzinfo=None))
 
-        Measured in seconds against certbot's window, because days_left rounds
-        down: 30 days and some hours reads 30 and certbot still refuses. A
-        certificate due for another reason (a missing or mismatched served
-        key forces needs_renewal) is not this case: it repairs from the
-        lineage, and forcing would ship a new key for nothing.
+    def _renewal_timing(self, domain, cert_info, settings, now=None):
+        """Why the certificate is or is not due, for the sweep to act on and count (#393).
+
+        The decision itself is `cert_info['needs_renewal']`, computed by renewal_policy in
+        `get_certificate_info`; this says which rule made it, so the sweep can force a renewal
+        that was decided by time, guard one the operator's threshold brought ahead of the
+        lifetime rule (#966), and attribute one the CA's window moved. None when the served
+        certificate cannot be read: nothing is forced then.
         """
-        seconds_left = cert_info.get('seconds_left')
-        if not cert_info.get('needs_renewal') or not isinstance(seconds_left, int):
-            return False
-        threshold = cls._coerce_renewal_threshold_days(settings) * 86400
-        return cls.CERTBOT_RENEWAL_WINDOW_SECONDS <= seconds_left <= threshold
+        validity = self._served_validity(domain)
+        if validity is None:
+            return None
+        not_before, not_after = validity
+        now = now or utc_now()
+        threshold = self._coerce_renewal_threshold_days(settings)
+        instant, reason = renewal_policy.renews_at(
+            not_before, not_after, threshold, cert_info.get('renewal_info'))
+        planned, planned_reason = renewal_policy.renews_at(not_before, not_after, threshold)
+        due = now >= instant
+        advanced = due and reason == renewal_policy.REASON_ARI and now < planned
+        return {
+            'due': due,
+            'advanced': advanced,
+            'postponed': not due and now >= planned,
+            'early': due and not advanced and renewal_policy.is_early(
+                not_before, not_after, threshold, now),
+            'planned_reason': planned_reason,
+            'lifetime': renewal_policy.lifetime_seconds(not_before, not_after),
+        }
 
     @classmethod
     def _early_renewal_cap(cls, settings):
@@ -4148,7 +4187,7 @@ class CertificateManager:
         except (TypeError, ValueError):
             return cls.EARLY_RENEWAL_DEFAULT_PER_SWEEP
 
-    def _may_force_early(self, domain, settings, summary):
+    def _may_force_early(self, domain, settings, summary, lifetime):
         """The two guards on a forced early renewal (#966, part 2).
 
         The cap counts attempts, not successes: it limits orders sent to the
@@ -4156,7 +4195,9 @@ class CertificateManager:
         bounds the damage of a threshold at or above the certificate's
         lifetime, or of a miscomputed expiry: one renewal a week, not one a
         night against Let's Encrypt's five duplicate certificates a week. An
-        unreadable age does not block a renewal that is due.
+        unreadable age does not block a renewal that is due. The age is a week
+        or a third of the lifetime, whichever is less (#393): a fixed week would
+        never let a 160-hour certificate through.
         """
         if summary.get('early_forced', 0) >= self._early_renewal_cap(settings):
             logger.info("%s is due by the threshold, but this sweep already "
@@ -4164,9 +4205,10 @@ class CertificateManager:
                         domain, self._early_renewal_cap(settings))
             return False
         age = self._certificate_age_seconds(domain)
-        if age is not None and age < self.EARLY_RENEWAL_MIN_AGE_SECONDS:
+        min_age = renewal_policy.early_min_age_seconds(lifetime)
+        if age is not None and age < min_age:
             logger.info("%s is due by the threshold but was issued less than "
-                        "7 days ago; not forcing a renewal.", domain)
+                        "%.1f days ago; not forcing a renewal.", domain, min_age / 86400)
             return False
         return True
 
@@ -4272,38 +4314,51 @@ class CertificateManager:
         cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
         if not cert_info:
             return False
-        ari_advanced = False
-        if not cert_info.get('needs_renewal'):
-            # The threshold said no. Ask the CA, which may know something the
-            # threshold cannot: a batch replacement, a compromised
-            # intermediate, a ruling that shortens everything it issued. ARI
-            # can only bring a renewal FORWARD here — see modules/core/ari.py
-            # for why the other direction waits on #395.
-            if not self._ari_says_renew(domain, cert_info, settings):
-                return False
-            ari_advanced = True
-            logger.info("%s is not due by the configured threshold, but its CA "
-                        "says its renewal window has opened; renewing now.",
-                        domain)
+        # Ask the CA first, for every certificate (#393): its window may bring a renewal
+        # forward or postpone it, and the decision below reads the record this writes. A CA
+        # that does not answer leaves no window, and the threshold or lifetime rule decides.
+        self._refresh_renewal_info(domain, cert_info, settings)
+        cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
+        if not cert_info:
+            return False
+        # One clock for the decision: the ARI client's, which is the wall clock in production and
+        # the one place a test can move time (tests/test_ari_staging_e2e.py moves it to the
+        # instant staging's window names, and the renewal that follows is real).
+        now = self._renewal_info_client().now()
+        timing = self._renewal_timing(domain, cert_info, settings, now=now)
+        if timing is None:
+            # The served certificate cannot be read: the answer's own verdict (an unparseable
+            # certificate is due), attempted unforced, as before.
+            due = bool(cert_info.get('needs_renewal'))
+        else:
+            due = timing['due'] or cert_info.get('private_key_state') in ('missing', 'mismatched')
+        if not due:
+            if timing and timing['postponed']:
+                summary['ari_postponed'] += 1
+                logger.info("%s would be due by %s, but its CA's renewal window says later; "
+                            "renewing at %s.", domain, timing['planned_reason'],
+                            cert_info.get('renews_at'))
+            return False
 
-        force = ari_advanced
-        if not ari_advanced and self._threshold_outruns_certbot(cert_info, settings):
-            if not self._may_force_early(domain, settings, summary):
+        # CertMate decided, so certbot is told to renew: its own gate (2/3 of the lifetime in
+        # 5.8, 30 days in 2.10, its own ARI reading) no longer takes part. A certificate due
+        # only for a key problem is not: it repairs from the lineage unforced, and forcing
+        # would ship a new key for nothing.
+        force = bool(timing and timing['due'])
+        ari_advanced = bool(timing and timing['advanced'])
+        if ari_advanced:
+            logger.info("%s is not due by the configured threshold, but its CA "
+                        "says its renewal window has opened; renewing now.", domain)
+        elif timing and timing['early']:
+            if not self._may_force_early(domain, settings, summary, timing['lifetime']):
                 summary['early_deferred'] += 1
                 return False
             summary['early_forced'] += 1
-            force = True
 
         logger.info(f"Renewing certificate for {domain}")
         renew_started = time.time()
         try:
-            # Forced when the CA asked for it (#962), or when the threshold
-            # called it due while certbot would refuse (#966). certbot has its
-            # own gate — without --force-renewal it renews only inside 30 days
-            # of expiry — so both were answered "not yet due": the CA's window
-            # moved to now on a certificate with 60 days left, or a threshold
-            # of 45 that behaved as 30. Inside certbot's window nothing is
-            # forced, and certbot keeps its say.
+            # Forced whenever the decision was about time (#393); see above.
             res = self.renew_certificate(domain, force=force)
             # certbot can still report "not yet due" (renewed=False) on an
             # unforced run: a certificate due for a key problem rather than the
@@ -4425,21 +4480,20 @@ class CertificateManager:
                         "usable ACME directory")
             return None
 
-    def _ari_says_renew(self, domain, cert_info, settings, now=None):
-        """Has the CA's renewal window for this certificate opened? (#393)
+    def _refresh_renewal_info(self, domain, cert_info, settings, now=None):
+        """Ask the CA for this certificate's renewal window and record the answer (#962, #393).
 
-        False for every absence — ARI switched off, no CA manager, a CA that
-        does not publish `renewalInfo`, an unreadable certificate, a request
-        that failed. That asymmetry is the safety property: this can only
-        make a renewal happen sooner than the configured threshold would, so
-        a CA that is down or wrong cannot push a certificate towards expiry.
+        Every absence is recorded as itself — ARI switched off (nothing recorded, and the record
+        is not shown), no identifier, a CA that does not publish `renewalInfo`, a request that
+        failed — and none of them is a window, so the threshold or lifetime rule decides. A CA
+        that is down or wrong cannot push a certificate towards expiry: a window can postpone a
+        renewal only down to the floor in renewal_policy, never past the window's end.
 
-        `ari_enabled: false` in settings.json turns it off. It is on by
-        default because the answer is strictly better than a fixed number
-        and costs one unauthenticated GET per certificate per sweep.
+        `ari_enabled: false` in settings.json turns it off. It is on by default; it costs one
+        unauthenticated GET per certificate per sweep. Returns the status recorded, or None.
         """
-        if not settings.get('ari_enabled', True):
-            return False
+        if not settings.get('ari_enabled', True) or getattr(self, 'cert_dir', None) is None:
+            return None
         from . import ari
 
         client = self._renewal_info_client()
@@ -4453,7 +4507,7 @@ class CertificateManager:
             logger.info("Cannot build an ARI identifier for %s: %s", domain, e)
             self._record_renewal_info(domain, ari.observation(
                 None, ari.STATUS_NO_IDENTIFIER, None, now))
-            return False
+            return ari.STATUS_NO_IDENTIFIER
         directory_url = self._acme_directory_url(cert_info)
         if not directory_url:
             # No usable ACME directory is, from here, a CA that publishes no
@@ -4461,13 +4515,10 @@ class CertificateManager:
             # because no sweep will ever get a different answer.
             self._record_renewal_info(domain, ari.observation(
                 cert_id, ari.STATUS_UNSUPPORTED, None, now))
-            return False
+            return ari.STATUS_UNSUPPORTED
         status, payload = client.lookup(directory_url, cert_id)
-        record = ari.observation(cert_id, status, payload, now)
-        self._record_renewal_info(domain, record)
-        if status != ari.STATUS_WINDOW:
-            return False
-        return ari.is_due(cert_id, payload, now)
+        self._record_renewal_info(domain, ari.observation(cert_id, status, payload, now))
+        return status
 
     def _record_renewal_info(self, domain, record):
         """Keep what the CA said about this certificate, beside it (#962).

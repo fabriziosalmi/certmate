@@ -565,6 +565,26 @@ METADATA_SCHEMA_VERSION = 1
 #                                   repository (dashboard, clients, tests) read
 #                                   it.
 #
+#   When a certificate renews      GET /api/certificates and
+#                                   /api/certificates/<domain> carry `renews_at`,
+#                                   the instant the renewal sweep renews the
+#                                   certificate at (#393), and `needs_renewal` is
+#                                   true from that instant, decided by one rule
+#                                   (modules/core/renewal_policy.py): the
+#                                   threshold where it is at most half the
+#                                   lifetime, the lifetime rule where it is not,
+#                                   the CA's recorded ARI window within a floor.
+#                                   It used to be `days_left <= threshold`, which
+#                                   said "due" up to a night before anything
+#                                   happened for a 90-day certificate and up to
+#                                   two weeks before for a 45-day one, while
+#                                   certbot's own gate decided. 2.40, MINOR: a
+#                                   new field, and `needs_renewal` keeps its
+#                                   documented meaning (whether the certificate
+#                                   needs renewing) and now matches what the
+#                                   sweep does; for a 90-day certificate the
+#                                   renewal happens when it did.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -589,7 +609,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.39'
+API_CONTRACT_VERSION = '2.40'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

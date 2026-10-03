@@ -196,6 +196,8 @@ FLOORS = {
     # 100% when it arrived: 32 statements of pure parsing, plus the decorator,
     # with no I/O. A boolean this refuses is one a caller sent by mistake, so
     # there is no honest reason for a branch of it to go unreached.
+    # 97% measured (#393); the rule every renewal follows, pure, no I/O.
+    'modules/core/renewal_policy.py': 95,
     'modules/core/request_fields.py': 100,
     # Measured at 90.1% when it arrived. What is left is defensive: an AIA
     # payload in PEM or PKCS#7, an Ed25519 responder, a malformed CRL body.

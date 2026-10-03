@@ -43,7 +43,9 @@ def _make_cert_pem(not_after: datetime, with_key: bool = False):
         .issuer_name(name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+        # A 90-day lifetime, Let's Encrypt's: since #393 when a certificate renews depends on
+        # its lifetime, and one issued yesterday would be a short-lived certificate.
+        .not_valid_before(not_after - timedelta(days=90))
         .not_valid_after(not_after)
         .sign(key, hashes.SHA256())
     )
@@ -129,19 +131,27 @@ def test_near_expiry_flags_needs_renewal(cert_manager):
 def test_renewal_boundary_is_inclusive(cert_manager):
     """A cert with exactly renewal_threshold_days left MUST renew.
 
-    Regression for the off-by-one at certificates.py: `days_left <
-    renewal_threshold_days` skipped the boundary, so a cert sitting at
-    exactly 30 days (the default threshold) would not renew until it
-    dropped to 29 — a silent one-day delay. The +12h offset makes the
-    truncating `.days` land on exactly 30 regardless of sub-second skew.
+    The boundary is the instant 30 days before expiry, inclusive (#393). It
+    used to be the whole days left (`days_left <= 30`, after an off-by-one with
+    `<`), so a certificate with 30 days and 12 hours left was called due while
+    certbot's own gate answered "not yet due" until the instant: the API said
+    "due" a night before anything happened. Now 30 days and 12 hours is not due,
+    29 days and 12 hours is, and the instant itself is (`renews_at`).
     """
+    from modules.core import renewal_policy
+
     not_after = datetime.now(timezone.utc) + timedelta(days=30, hours=12)
     _write_cert(cert_manager, "boundary.example.com", *_make_cert_pem(not_after, with_key=True))
-
     info = cert_manager.get_certificate_info("boundary.example.com")
+    assert info["days_left"] == 30
+    assert info["needs_renewal"] is False
+    instant = renewal_policy.parse_instant(info["renews_at"])
+    assert renewal_policy.due(info, now=instant) is True
+    assert renewal_policy.due(info, now=instant - timedelta(seconds=1)) is False
 
-    assert info["days_left"] == 30  # exactly the default threshold
-    assert info["needs_renewal"] is True
+    not_after = datetime.now(timezone.utc) + timedelta(days=29, hours=12)
+    _write_cert(cert_manager, "inside.example.com", *_make_cert_pem(not_after, with_key=True))
+    assert cert_manager.get_certificate_info("inside.example.com")["needs_renewal"] is True
 
 
 def test_just_above_threshold_does_not_renew(cert_manager):

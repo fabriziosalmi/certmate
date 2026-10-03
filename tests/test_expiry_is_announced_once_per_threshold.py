@@ -396,3 +396,20 @@ def test_the_watch_is_wired_and_scheduled(real_app):
     assert container.managers['expiry_watch'] is not None
     job_ids = {job.id for job in container.scheduler.get_jobs()} if container.scheduler else set()
     assert 'expiry_watch' in job_ids
+
+
+@pytest.mark.parametrize('margin_days, expected', [
+    (30, (14, 7, 3, 1, 0)),      # a 90-day certificate: the five marks as always
+    (45, (14, 7, 3, 1, 0)),
+    (15, (7, 3, 1, 0)),          # a 45-day certificate renews with 15 left
+    (160 / 24 / 2, (1, 0)),      # a 160-hour one with 3.3 left: never "expiring" on issue
+])
+def test_with_auto_renew_a_mark_speaks_only_once_half_the_renewal_margin_has_passed(margin_days, expected):
+    """A mark exists to say the renewals have been failing (#393). For a 160-hour certificate
+    the old marks (14, 7) were crossed the moment it was issued."""
+    assert thresholds_for_certificate(True, margin_days) == expected
+
+
+def test_without_auto_renew_every_mark_still_speaks_for_a_short_certificate():
+    marks = thresholds_for_certificate(False, 160 / 24 / 2)
+    assert marks[0] == 14 and set(marks) == {14, 7, 3, 1, 0}

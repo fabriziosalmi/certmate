@@ -1,4 +1,5 @@
-"""A renewal threshold above 30 days renews when it says (#966, part 2).
+"""A renewal threshold above 30 days renews when it says (#966, part 2), under the one rule of
+#393 (modules/core/renewal_policy.py).
 
 `renewal_threshold_days` goes up to 365, but certbot has its own gate: without
 `--force-renewal` it renews only inside 30 days of expiry, and CertMate never
@@ -12,20 +13,29 @@ renewal is forced, as the ARI path already does. Two guards:
 * at most `early_renewals_per_sweep` forced renewals per sweep (default 10,
   clamped 1-50), so raising the threshold on a large estate does not become
   one night of orders against the CA;
-* a certificate issued less than 7 days ago is never forced, so a threshold at
-  or above the certificate's lifetime, or a miscomputed expiry, costs at most
-  one renewal a week instead of one a night.
+* a certificate younger than a week (since #393: or a third of its lifetime,
+  whichever is less) is never renewed early, so a miscomputed expiry costs at
+  most one renewal a week instead of one a night.
 
 A certificate that `needs_renewal` for another reason (a missing or mismatched
 served key) is not forced: those repair themselves from the lineage (measured
 on #966, scenarios A and C), and a forced renewal would ship a new key for
 nothing.
+
+Since #393 CertMate decides and certbot executes: every renewal decided by time is forced, not
+only the early ones, so certbot's own gate takes no part. The guards apply to an EARLY renewal,
+one the operator's threshold brings ahead of the lifetime rule; a threshold above half the
+lifetime does not count at all (the lifetime rule decides), and the minimum age is a week or a
+third of the lifetime, whichever is less.
 """
+import datetime
 from unittest.mock import MagicMock
 
 import pytest
 
+from modules.core import renewal_policy
 from modules.core.certificates import CertificateManager
+from modules.core.utils import utc_now
 
 pytestmark = [pytest.mark.unit]
 
@@ -33,18 +43,30 @@ DAY = 86400
 
 
 def _manager(tmp_path, *, seconds_left, age_days=60, key_state='present',
-             needs_renewal=None, fail=()):
+             needs_renewal=None, fail=(), lifetime_days=90):
     manager = CertificateManager.__new__(CertificateManager)
     manager.cert_dir = tmp_path
     lefts = seconds_left if isinstance(seconds_left, dict) else None
+    now = utc_now()
+
+    def validity(domain):
+        left = lefts[domain] if lefts else seconds_left
+        not_after = now + datetime.timedelta(seconds=left)
+        return not_after - datetime.timedelta(days=lifetime_days), not_after
 
     def info(domain, settings=None, use_cache=True):
+        # What get_certificate_info answers: the decision of renewal_policy, plus a key problem.
         left = lefts[domain] if lefts else seconds_left
         threshold = CertificateManager._coerce_renewal_threshold_days(settings)
-        due = left <= threshold * DAY or key_state != 'present'
+        instant, _ = renewal_policy.renews_at(*validity(domain), threshold)
+        due = utc_now() >= instant or key_state != 'present'
         return {'exists': True, 'seconds_left': left, 'days_left': left // DAY,
-                'private_key_state': key_state,
+                'private_key_state': key_state, 'renews_at': renewal_policy.stamp(instant),
+                'renewal_info': None,
                 'needs_renewal': due if needs_renewal is None else needs_renewal}
+
+    manager._served_validity = MagicMock(side_effect=validity)
+    manager._refresh_renewal_info = MagicMock(return_value=None)
 
     manager.get_certificate_info = MagicMock(side_effect=info)
     calls = []
@@ -61,7 +83,6 @@ def _manager(tmp_path, *, seconds_left, age_days=60, key_state='present',
 
     manager.renew_certificate = MagicMock(side_effect=renew)
     manager._certificate_age_seconds = MagicMock(return_value=age_days * DAY)
-    manager._ari_says_renew = MagicMock(return_value=False)
     manager._audit_scheduled_renew = MagicMock()
     manager._record_renewal_metrics = MagicMock()
     manager._publish_failed_event = MagicMock()
@@ -71,7 +92,7 @@ def _manager(tmp_path, *, seconds_left, age_days=60, key_state='present',
 
 def _summary():
     return {'checked': 0, 'renewed': 0, 'failed': 0, 'skipped_busy': 0,
-            'skipped_not_due': 0, 'ari_advanced': 0, 'reissue_required': 0,
+            'skipped_not_due': 0, 'ari_advanced': 0, 'ari_postponed': 0, 'reissue_required': 0,
             'auto_reissued': 0, 'early_forced': 0, 'early_deferred': 0}
 
 
@@ -99,10 +120,12 @@ def test_the_boundary_is_certbot_s_not_the_rounded_day_count(tmp_path):
     assert summary['renewed'] == 1
 
 
-def test_inside_certbot_s_window_nothing_is_forced(tmp_path):
+def test_a_renewal_decided_by_time_is_forced_even_inside_certbot_s_window(tmp_path):
+    """#393: CertMate decides, so certbot is told to renew. Before, certbot "kept its say" inside
+    its own window, which is how its rule (2/3 of the lifetime in 5.8) came to decide instead."""
     manager, calls = _manager(tmp_path, seconds_left=20 * DAY)
     summary = _sweep(manager, ['a.example.com'], {'renewal_threshold_days': 45})
-    assert calls == [('a.example.com', False)]
+    assert calls == [('a.example.com', True)]
     assert summary['renewed'] == 1 and summary['early_forced'] == 0
 
 
@@ -123,11 +146,23 @@ def test_a_key_problem_is_not_a_reason_to_force(tmp_path, key_state):
     assert summary['early_forced'] == 0 and summary['skipped_not_due'] == 1
 
 
-def test_a_certificate_issued_this_week_is_never_forced(tmp_path):
-    """Guard 2: a threshold at or above the lifetime would otherwise renew a
-    fresh certificate every night."""
+def test_a_threshold_above_half_the_lifetime_does_not_renew_a_fresh_certificate(tmp_path):
+    """A threshold at or above the lifetime used to call a fresh certificate due every night,
+    and only the age guard held it. Since #393 such a threshold means nothing for this
+    certificate and the lifetime rule decides: 85 days left of 90 is not due."""
     manager, calls = _manager(tmp_path, seconds_left=85 * DAY, age_days=5)
     summary = _sweep(manager, ['a.example.com'], {'renewal_threshold_days': 365})
+    assert calls == []
+    assert summary['early_deferred'] == 0 and summary['renewed'] == 0
+
+
+def test_a_certificate_younger_than_the_minimum_age_is_never_forced_early(tmp_path):
+    """Guard 2, which the rule now keeps for inconsistent data only: an early renewal leaves at
+    most half the lifetime, so a consistent certificate is at least that old. The age is read
+    from notBefore apart from the expiry, and a certificate that says it is 5 days old with
+    40 of 90 days left is not one to force."""
+    manager, calls = _manager(tmp_path, seconds_left=40 * DAY, age_days=5)
+    summary = _sweep(manager, ['a.example.com'], {'renewal_threshold_days': 45})
     assert calls == []
     assert summary['early_deferred'] == 1 and summary['renewed'] == 0
 
@@ -154,7 +189,7 @@ def test_a_certificate_inside_certbot_s_window_is_not_held_by_the_cap(tmp_path):
     manager, calls = _manager(tmp_path, seconds_left=lefts)
     summary = _sweep(manager, list(lefts), {'renewal_threshold_days': 45,
                                             'early_renewals_per_sweep': 1})
-    assert ('urgent.example.com', False) in calls
+    assert ('urgent.example.com', True) in calls
     assert summary['early_forced'] == 1 and summary['early_deferred'] == 2
 
 
@@ -198,19 +233,21 @@ def test_the_age_is_read_from_the_certificate(tmp_path):
 
 
 def test_exactly_thirty_days_left_is_forced(tmp_path):
-    """certbot renews only when expiry < now + 30 days, so at exactly 30 days
-    it refuses: the boundary belongs to the forced side."""
+    """At exactly the lifetime rule's 30 days a renewal is due by time and forced, and it is not
+    early: the cap does not hold it."""
     manager, calls = _manager(tmp_path, seconds_left=30 * DAY)
-    _sweep(manager, ['a.example.com'], {'renewal_threshold_days': 45})
+    summary = _sweep(manager, ['a.example.com'], {'renewal_threshold_days': 45})
     assert calls == [('a.example.com', True)]
+    assert summary['early_forced'] == 0
 
 
-def test_the_rule_needs_the_threshold_to_have_called_it_due():
-    """The helper states the rule on its own terms: not due, never forced."""
-    info = {'needs_renewal': False, 'seconds_left': 40 * DAY}
-    assert CertificateManager._threshold_outruns_certbot(
-        info, {'renewal_threshold_days': 45}) is False
-    assert CertificateManager._threshold_outruns_certbot(
-        dict(info, needs_renewal=True), {'renewal_threshold_days': 45}) is True
-    assert CertificateManager._threshold_outruns_certbot(
-        {'needs_renewal': True, 'seconds_left': None}, {'renewal_threshold_days': 45}) is False
+def test_only_a_renewal_the_threshold_brings_ahead_of_the_lifetime_rule_is_early():
+    """The rule the guards apply to, on its own terms (renewal_policy.is_early)."""
+    now = utc_now()
+    not_after = now + datetime.timedelta(days=40)
+    not_before = not_after - datetime.timedelta(days=90)
+    assert renewal_policy.is_early(not_before, not_after, 45, now) is True
+    assert renewal_policy.is_early(not_before, not_after, 30, now) is False       # not due yet
+    later = now + datetime.timedelta(days=15)                                      # 25 days left
+    assert renewal_policy.is_early(not_before, not_after, 45, later) is False     # the lifetime rule
+    assert renewal_policy.is_early(not_before, not_after, 60, now) is False       # over half: ignored
