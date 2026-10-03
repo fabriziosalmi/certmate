@@ -20,7 +20,10 @@ CertMate supports multiple Certificate Authority providers, allowing you to choo
 **Profiles:** `classic` (90 days, the default), `tlsserver` (45 days) and
 `shortlived` (160 hours), on production and staging. A certificate asks for one
 with `acme_profile`, and a CA account can name a default for the certificates
-created on it; see [ACME profiles](api.md#acme-profiles).
+created on it; see [ACME profiles](api.md#acme-profiles). In the dashboard: **ACME
+Profile** in the create form's advanced options (Edit & Reissue opens on the
+certificate's own), and **Default ACME profile** in the CA account form. The
+certificate's panel shows its profile and when it renews.
 
 ### Let's Encrypt (Staging)
 
