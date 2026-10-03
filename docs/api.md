@@ -1336,7 +1336,7 @@ progress, 422 renewal failed (`RENEWAL_FAILED`, or `REISSUE_REQUIRED` when no pr
 
 ### Log stream (admin, debugging)
 
-<!-- illustration: GET /api/web/logs/stream is a dashboard route, outside the route walk -->
+<!-- illustration: the request line; the answer is a server-sent event stream, not JSON -->
 ```
 GET /api/web/logs/stream
 ```
@@ -1709,11 +1709,11 @@ answer gains a `domain_health` summary. What each check means:
 
 #### Is a newer CertMate out
 
-**Endpoint**: `GET /api/web/update-check` — session, viewer
+**Endpoint**: `GET /api/web/update-check` — viewer (API token or dashboard session)
 
-<!-- illustration: GET /api/web/update-check is a dashboard route, outside the route walk -->
+<!-- response: GET /api/web/update-check 200 -->
 ```json
-{ "status": "outdated", "running": "2.34.0", "latest": "v2.35.0" }
+{ "status": "outdated", "running": "2.34.0", "latest": "v2.35.0", "enabled": true }
 ```
 
 **Off by default, and it stays off until an operator turns it on.**

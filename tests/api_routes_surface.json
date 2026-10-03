@@ -61,6 +61,9 @@
   ],
   "GET /api/audit/export": [
    "entries[].entry.details"
+  ],
+  "GET /api/web/audit-logs": [
+   "[].details"
   ]
  },
  "routes": {
@@ -240,8 +243,7 @@
      "dict"
     ],
     "entries[].actor": [
-     "dict",
-     "str"
+     "dict"
     ],
     "entries[].actor.kind": [
      "str"
@@ -305,8 +307,7 @@
      "dict"
     ],
     "entries[].entry.actor": [
-     "dict",
-     "str"
+     "dict"
     ],
     "entries[].entry.actor.kind": [
      "str"
@@ -3321,6 +3322,87 @@
     ],
     "users.*.sso": [
      "bool"
+    ]
+   }
+  },
+  "GET /api/web/audit-logs": {
+   "200": {
+    ".": [
+     "list"
+    ],
+    "[]": [
+     "dict"
+    ],
+    "[].actor": [
+     "dict"
+    ],
+    "[].actor.kind": [
+     "str"
+    ],
+    "[].actor.label": [
+     "str"
+    ],
+    "[].details": [
+     "dict"
+    ],
+    "[].error": [
+     "str"
+    ],
+    "[].ip_address": [
+     "str"
+    ],
+    "[].operation": [
+     "str"
+    ],
+    "[].resource_id": [
+     "str"
+    ],
+    "[].resource_type": [
+     "str"
+    ],
+    "[].status": [
+     "str"
+    ],
+    "[].timestamp": [
+     "str"
+    ],
+    "[].trigger": [
+     "dict"
+    ],
+    "[].trigger.cause": [
+     "str"
+    ],
+    "[].user": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/web/logs/stream": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "<stream>": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/web/update-check": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "enabled": [
+     "bool"
+    ],
+    "latest": [
+     "null"
+    ],
+    "running": [
+     "str"
+    ],
+    "status": [
+     "str"
     ]
    }
   },

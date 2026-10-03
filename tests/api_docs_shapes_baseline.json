@@ -9,6 +9,11 @@
    "names[]"
   ]
  },
+ "docs/api.md GET /api/web/update-check 200": {
+  "unverified": [
+   "latest"
+  ]
+ },
  "docs/api.md POST /api/certificates/check-caa 200": {
   "unverified": [
    "domains[].records[]",
