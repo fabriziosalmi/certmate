@@ -113,6 +113,14 @@ class TestBuildDigest:
         assert len(s['expiring_domains']) == 1
         assert 'expiring.com' in s['expiring_domains'][0]
 
+    def test_expiring_is_the_sweep_s_decision_not_the_threshold_s(self, digest, mock_managers):
+        """A 45-day certificate with 20 days left is inside the 30-day threshold and not due: it
+        renews with 15 left (#393). The digest used to call it expiring from 30 days left."""
+        mock_managers['cert_mgr'].get_certificate_info.side_effect = lambda domain: {
+            'domain': domain, 'exists': True, 'days_left': 20, 'renews_at': '2999-01-01T00:00:00Z'}
+        s = digest.build_digest()['server_certs']
+        assert s['expiring_soon'] == 0 and s['valid'] == 3
+
     def test_client_cert_stats(self, digest):
         data = digest.build_digest()
         c = data['client_certs']
