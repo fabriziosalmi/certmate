@@ -843,3 +843,20 @@ def test_the_ca_is_asked_before_the_decision_is_read(days_left, window):
     manager._renew_if_due('ari.example.test', {}, _summary())
 
     assert order[-2:] == ['ask', 'read'] and order.count('ask') == 1
+
+
+def test_the_sweep_decides_on_the_ari_client_s_clock():
+    """The sweep's one clock is the ARI client's: the wall clock in production, and the one
+    tests/test_ari_staging_e2e.py moves to the instant staging's window names, so that the
+    renewal that follows on Let's Encrypt staging is real. A decision on any other clock would
+    leave that test renewing nothing."""
+    from modules.core.utils import utc_now
+
+    manager = _sweep_manager(days_left=60, window=(10, 11))
+    later = utc_now() + timedelta(days=10, hours=1)
+    manager._ari_client = ari.RenewalInfoClient(get=_transport({}), clock=lambda: later)
+    summary = _summary()
+
+    assert manager._renew_if_due('ari.example.test', {}, summary) is True
+    manager.renew_certificate.assert_called_once_with('ari.example.test', force=True)
+    assert summary['ari_advanced'] == 1

@@ -4321,8 +4321,18 @@ class CertificateManager:
         cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
         if not cert_info:
             return False
-        timing = self._renewal_timing(domain, cert_info, settings)
-        if not cert_info.get('needs_renewal'):
+        # One clock for the decision: the ARI client's, which is the wall clock in production and
+        # the one place a test can move time (tests/test_ari_staging_e2e.py moves it to the
+        # instant staging's window names, and the renewal that follows is real).
+        now = self._renewal_info_client().now()
+        timing = self._renewal_timing(domain, cert_info, settings, now=now)
+        if timing is None:
+            # The served certificate cannot be read: the answer's own verdict (an unparseable
+            # certificate is due), attempted unforced, as before.
+            due = bool(cert_info.get('needs_renewal'))
+        else:
+            due = timing['due'] or cert_info.get('private_key_state') in ('missing', 'mismatched')
+        if not due:
             if timing and timing['postponed']:
                 summary['ari_postponed'] += 1
                 logger.info("%s would be due by %s, but its CA's renewal window says later; "
