@@ -19,6 +19,7 @@ import logging
 import time
 
 from .structured_logging import scrub_log_value
+from . import acme_profiles
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
@@ -46,6 +47,18 @@ MAX_CSR_BYTES = 64 * 1024
 # name, but the implementation now lives once, in the logging module.
 _scrub_log = scrub_log_value
 
+
+
+def _checked_profile(value):
+    """An ACME profile from a request (#395): None when not given (the account's default, or
+    the certificate's own on a reissue), '' when the caller asked for the CA's default, the
+    normalized name otherwise. A malformed one is a ValueError, a 400, before anything runs."""
+    if value is None or value == '':
+        return value
+    ok, profile = acme_profiles.validate_profile(value)
+    if not ok:
+        raise ValueError(profile)
+    return profile
 
 class DomainOutOfScope(PermissionError):
     """Raised when a scoped API key's ``allowed_domains`` does not cover the
@@ -149,7 +162,7 @@ class CertificateService:
                account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
                domain_alias=None, alias_dns_provider=None, key_type=None,
                key_size=None, elliptic_curve=None, user=None, ip_address=None,
-               audit_ctx=None, csr_pem=None):
+               audit_ctx=None, csr_pem=None, acme_profile=None):
         """Validate, scope-check, resolve defaults, issue, and persist a new
         certificate; returns the ``CertificateManager.create_certificate``
         result dict. Raises ``ValueError`` (bad input / missing config),
@@ -173,7 +186,7 @@ class CertificateService:
             alias_dns_provider=alias_dns_provider,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             user=user, ip_address=ip_address, audit_ctx=audit_ctx,
-            csr_pem=csr_pem,
+            csr_pem=csr_pem, acme_profile=acme_profile,
         ))
 
     def prepare_create(self, *, domain, san_domains=None, dns_provider=None,
@@ -181,7 +194,7 @@ class CertificateService:
                         domain_alias=None, alias_dns_provider=None,
                         key_type=None, key_size=None,
                         elliptic_curve=None, user=None, ip_address=None,
-                        audit_ctx=None, csr_pem=None):
+                        audit_ctx=None, csr_pem=None, acme_profile=None):
         """Validate, authorize and resolve a create request WITHOUT side
         effects, returning the resolved kwargs for :meth:`issue_create`. Raises
         ``ValueError`` / :class:`DomainOutOfScope`. Cheap (no certbot, no disk
@@ -264,6 +277,7 @@ class CertificateService:
             ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
             if not ok:
                 raise ValueError(key_err)
+        acme_profile = _checked_profile(acme_profile)
 
         settings = self._settings.load_settings()
         email = settings.get('email')
@@ -297,6 +311,7 @@ class CertificateService:
             'key_type': key_type,
             'key_size': key_size,
             'elliptic_curve': elliptic_curve,
+            'acme_profile': acme_profile,
             'csr_pem': csr_pem,
             # Fallback used only to label the persisted domain entry.
             '_settings_dns_provider': settings.get('dns_provider'),
@@ -341,6 +356,7 @@ class CertificateService:
                 key_size=prepared['key_size'],
                 elliptic_curve=prepared['elliptic_curve'],
                 csr_pem=prepared.get('csr_pem'),
+                acme_profile=prepared.get('acme_profile'),
             )
 
             # Append the new domain under the settings manager's lock so two
@@ -675,7 +691,7 @@ class CertificateService:
                         domain_alias=None, alias_dns_provider=None,
                         key_type=None, key_size=None,
                         elliptic_curve=None, user=None, ip_address=None,
-                        audit_ctx=None, csr_pem=None):
+                        audit_ctx=None, csr_pem=None, acme_profile=None):
         """Validate and resolve an edit-and-reissue request (#267) without
         side effects, returning kwargs for :meth:`issue_reissue`.
 
@@ -774,6 +790,7 @@ class CertificateService:
             ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
             if not ok:
                 raise ValueError(key_err)
+        acme_profile = _checked_profile(acme_profile)
 
         settings = self._settings.load_settings()
         email = settings.get('email')
@@ -809,6 +826,7 @@ class CertificateService:
             'key_type': key_type,
             'key_size': key_size,
             'elliptic_curve': elliptic_curve,
+            'acme_profile': acme_profile,
             'csr_pem': csr_pem,
             '_settings_dns_provider': settings.get('dns_provider'),
             '_audit_ctx': audit_ctx,
@@ -839,6 +857,7 @@ class CertificateService:
                 key_size=prepared['key_size'],
                 elliptic_curve=prepared['elliptic_curve'],
                 csr_pem=prepared.get('csr_pem'),
+                acme_profile=prepared.get('acme_profile'),
                 replace=True,
             )
 

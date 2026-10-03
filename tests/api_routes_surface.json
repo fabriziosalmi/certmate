@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.40",
+ "contract_version": "2.41",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -698,6 +698,12 @@
     "[].account_id": [
      "str"
     ],
+    "[].acme_profile": [
+     "str"
+    ],
+    "[].acme_profile_withdrawn_at": [
+     "str"
+    ],
     "[].alias_dns_provider": [
      "str"
     ],
@@ -836,6 +842,12 @@
     ],
     "account_id": [
      "str"
+    ],
+    "acme_profile": [
+     "str"
+    ],
+    "acme_profile_withdrawn_at": [
+     "null"
     ],
     "alias_dns_provider": [
      "null"

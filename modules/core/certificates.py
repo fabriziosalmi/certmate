@@ -36,7 +36,7 @@ from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStr
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS)
 from .inventory_sources import collect_domain_sources
-from . import renewal_policy
+from . import acme_profiles, renewal_policy
 from .domain_entries import entry_auto_renew, entry_domain
 from .structured_logging import LogContext, new_correlation_id
 from .csr_issuance import (
@@ -134,6 +134,9 @@ _REISSUE_OWNED_METADATA_KEYS = frozenset({
     'domain', 'san_domains', 'dns_provider', 'challenge_type', 'created_at',
     'email', 'staging', 'account_id', 'ca_provider', 'ca_account_id',
     'domain_alias', 'alias_dns_provider', 'storage_warning',
+    # The ACME profile (#395) is the issuance's: a reissue that clears it clears it, and what
+    # the last issuance found about it (withdrawn by the CA) goes with it.
+    'acme_profile', 'acme_profile_withdrawn_at',
 })
 
 # Every key CertMate itself writes into metadata.json. Used as an allowlist
@@ -385,6 +388,7 @@ class _PreparedIssuance:
     key_type: str | None
     key_size: int | None
     elliptic_curve: str | None
+    acme_profile: str | None = None
 
 
 def _private_key_present(key_state):
@@ -2315,6 +2319,10 @@ class CertificateManager:
                 # What the CA's ARI endpoint said at the last sweep (#962),
                 # read from the record the sweep keeps — never fetched here.
                 'renewal_info': renewal_info,
+                # The ACME profile it was issued with (#395), and when a renewal found the
+                # CA no longer offers it (the CA's default was issued instead).
+                'acme_profile': metadata.get('acme_profile'),
+                'acme_profile_withdrawn_at': metadata.get('acme_profile_withdrawn_at'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -2355,6 +2363,8 @@ class CertificateManager:
             'renewal_info': None,
             # Nor a lifetime to renew within: it is due now (needs_renewal above).
             'renews_at': None,
+            'acme_profile': metadata.get('acme_profile'),
+            'acme_profile_withdrawn_at': metadata.get('acme_profile_withdrawn_at'),
         }
 
     def _create_empty_cert_info(self, domain):
@@ -2588,7 +2598,7 @@ class CertificateManager:
                           account_id, staging, ca_provider, ca_account_id,
                           domain_alias, alias_dns_provider, san_domains,
                           challenge_type, key_type, key_size, elliptic_curve,
-                          replace):
+                          replace, acme_profile=None):
         """Validate and resolve everything an issuance needs, before any
         command is built (#666).
 
@@ -2651,7 +2661,7 @@ class CertificateManager:
 
         key_type, key_size, elliptic_curve = self._resolve_key_shape(
             settings, domain, replace, key_type, key_size, elliptic_curve)
-
+        acme_profile = self._resolve_acme_profile(domain, replace, acme_profile, ca_account_config)
 
         return _PreparedIssuance(
             settings=settings.value,
@@ -2669,9 +2679,25 @@ class CertificateManager:
             key_type=key_type,
             key_size=key_size,
             elliptic_curve=elliptic_curve,
+            acme_profile=acme_profile,
         )
 
+    def _resolve_acme_profile(self, domain, replace, requested, ca_account_config):
+        """The ACME profile this issuance asks for, or None for the CA's default (#395).
 
+        Said in the request: that ('' is "the CA's default"). Not said: for a reissue (and a CSR
+        renewal, which is one) the profile the certificate was issued with, so editing a SAN
+        does not quietly change its kind; for a new certificate the CA account's default.
+        """
+        if requested is None:
+            if replace:
+                requested = self._load_metadata(domain).get('acme_profile')
+            else:
+                requested = (ca_account_config or {}).get('acme_profile')
+        ok, profile = acme_profiles.validate_profile(requested)
+        if not ok:
+            raise ValueError(profile)
+        return profile
 
     def _write_dns_credentials(self, strategy, artifacts, dns_provider,
                                dns_config, domain, san_domains):
@@ -2818,6 +2844,7 @@ class CertificateManager:
             domain, email, ca_provider, dns_provider, dns_config,
             ca_account_config or {}, staging, cert_dir, san_domains=san_list,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
+            acme_profile=prepared.acme_profile,
         )
 
         if replace:
@@ -2922,7 +2949,7 @@ class CertificateManager:
             return ''
         return f"\n\n{sentence}" if sentence else ''
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False, acme_profile=None):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -2960,6 +2987,10 @@ class CertificateManager:
                 stays on the appliance that made it. These certificates have no
                 certbot lineage, so ``certbot renew`` will not touch them —
                 renewal re-runs this command with the stored CSR.
+            acme_profile: The ACME profile to ask the CA for (#395), keyword-only.
+                None means "not said": the CA account's default for a new
+                certificate, the recorded profile for a reissue or a CSR
+                renewal. '' means the CA's own default, explicitly.
             renewal: Keyword-only, and passed by one caller:
                 `_renew_from_stored_csr`, which renews a CSR-only certificate
                 by re-running issuance. The certificate is not new, so its
@@ -3020,6 +3051,7 @@ class CertificateManager:
                 san_domains=san_domains, challenge_type=challenge_type,
                 key_type=key_type, key_size=key_size,
                 elliptic_curve=elliptic_curve, replace=replace,
+                acme_profile=acme_profile,
             )
             email = (prepared.ca_account_config or {}).get('email') or email
             ca_provider = prepared.ca_provider
@@ -3040,6 +3072,16 @@ class CertificateManager:
                 account_id=account_id, domain_alias=domain_alias,
                 alias_dns_provider=alias_dns_provider, replace=replace,
             )
+            if renewal and prepared.acme_profile:
+                # A CSR certificate renews by re-running issuance; a renewal asks for its
+                # profile as preferred, like every other renewal (#395).
+                certbot_cmd = ['--preferred-profile' if arg == '--required-profile' else arg
+                               for arg in certbot_cmd]
+                profile_withdrawn = self._profile_still_offered(
+                    domain, prepared.ca_provider, prepared.used_ca_account_id,
+                    prepared.acme_profile) is False
+            else:
+                profile_withdrawn = False
 
             # CSR mode (#599). The command above is reused wholesale — the CA,
             # the EAB credentials, the DNS plugin and its credentials file are
@@ -3183,6 +3225,15 @@ class CertificateManager:
                 'ca_provider': ca_provider,
                 'ca_account_id': used_ca_account_id
             }
+            if prepared.acme_profile:
+                metadata['acme_profile'] = prepared.acme_profile
+                if profile_withdrawn:
+                    metadata['acme_profile_withdrawn_at'] = utc_now_iso()
+                if csr_pem is None:
+                    # Required at issuance, preferred at renewal (#395): a profile the CA
+                    # withdraws must not turn every later renewal into a failure.
+                    acme_profiles.soften_renewal_conf(
+                        cert_output_dir / 'renewal' / f'{domain}.conf')
             if csr_pem is not None:
                 # `key_management` is what stops the health check from reading
                 # the absent key as a lost one (#608 forces needs_renewal on
@@ -3502,6 +3553,19 @@ class CertificateManager:
             ]
             if force:
                 cmd.append('--force-renewal')
+            # The profile the certificate was issued with, asked for as preferred (#395): on
+            # the command line too, so a renewal configuration restored from an older backup,
+            # or written before the profile was softened, still follows the metadata.
+            ok, profile = acme_profiles.validate_profile(metadata.get('acme_profile'))
+            if ok and profile:
+                cmd.extend(['--preferred-profile', profile])
+                acme_profiles.soften_renewal_conf(domain_dir / 'renewal' / f'{domain}.conf')
+                offered = self._profile_still_offered(domain, metadata.get('ca_provider'),
+                                                      metadata.get('ca_account_id'), profile)
+                if offered is False:
+                    metadata['acme_profile_withdrawn_at'] = utc_now_iso()
+                elif offered:
+                    metadata.pop('acme_profile_withdrawn_at', None)
 
             # Build per-request environment with DNS provider credentials
             # (fix #112: env vars like AWS_ACCESS_KEY_ID were missing during
@@ -4479,6 +4543,28 @@ class CertificateManager:
             logger.info("Skipping ARI for this certificate: its CA has no "
                         "usable ACME directory")
             return None
+
+    def _profile_still_offered(self, domain, ca_provider, ca_account_id, profile):
+        """Warn when the CA no longer offers the profile a certificate was issued with (#395).
+
+        The renewal asks for it as preferred, so the CA issues its default instead and the
+        renewal succeeds: the certificate does not expire for want of a profile. That is a
+        different kind of certificate (a 90-day one where a 45-day one was), so it is said here,
+        and the caller records it in the metadata the renewal saves (`acme_profile_withdrawn_at`).
+        Returns True (offered), False (withdrawn: warned), or None when the directory cannot be
+        read, which is not evidence either way.
+        """
+        # Neither raises: _acme_directory_url answers None for a CA it cannot place, and the ARI
+        # client answers None for a directory it could not fetch or parse (cached per CA).
+        url = self._acme_directory_url({'ca_provider': ca_provider, 'account_id': ca_account_id})
+        directory = self._renewal_info_client().directory(url) if url else None
+        offered = acme_profiles.profile_offered(directory, profile)
+        if offered is not False:
+            return offered
+        logger.warning("%s was issued with the ACME profile %r, which its CA no longer offers; "
+                       "the renewal asks for it as preferred and the CA will issue its default "
+                       "profile instead.", domain, profile)
+        return False
 
     def _refresh_renewal_info(self, domain, cert_info, settings, now=None):
         """Ask the CA for this certificate's renewal window and record the answer (#962, #393).

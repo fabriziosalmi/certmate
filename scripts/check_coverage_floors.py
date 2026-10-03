@@ -108,6 +108,8 @@ FLOORS = {
     # tests, so the real numbers are at or above these. Raise them as they
     # climb; never lower one to make a red build pass.
     'modules/core/__init__.py': 95,
+    # 98% measured (#395): pure functions and one file rewrite.
+    'modules/core/acme_profiles.py': 95,
     # 94.2% measured; the module is small, pure apart from one HTTP
     # method, and its transport is injected — so there is no reason
     # for it to fall far.
