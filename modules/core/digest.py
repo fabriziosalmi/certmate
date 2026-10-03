@@ -13,7 +13,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Dict, Any, List
 
-from .constants import DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs
+from . import renewal_policy
+from .constants import iter_cert_domain_dirs
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +53,6 @@ class WeeklyDigest:
         expired = 0
         expiring_domains: List[str] = []
 
-        renewal_threshold = settings.get(
-            'renewal_threshold_days', DEFAULT_RENEWAL_THRESHOLD_DAYS)
-
         for domain in sorted(all_domains):
             info = self.certificate_manager.get_certificate_info(domain)
             if not info or not info.get('exists'):
@@ -65,7 +63,9 @@ class WeeklyDigest:
                 continue
             if days <= 0:
                 expired += 1
-            elif days <= renewal_threshold:
+            # Due by the instant the sweep renews at (renewal_policy, #393), not by a copy of
+            # the threshold arithmetic: for anything but a 90-day certificate the two differ.
+            elif renewal_policy.due(info):
                 expiring_soon += 1
                 expiring_domains.append(f"{domain} ({days}d)")
             else:

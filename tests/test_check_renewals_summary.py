@@ -77,6 +77,10 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         # it happens, so a caller reading the summary does not have to know
         # which path produced the dict.
         'ari_advanced': 0,
+        # And the other direction since #393: certificates the threshold would
+        # have renewed tonight that the CA's window postpones. Zero for the
+        # same reason.
+        'ari_postponed': 0,
         'reissue_required': 0,
         'auto_reissued': 0,
         'early_forced': 0, 'early_deferred': 0,

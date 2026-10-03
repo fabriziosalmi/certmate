@@ -1,6 +1,6 @@
 # CertMate Certificati Client - Guida all'utilizzo
 
-<!-- CERTMATE-TRANSLATED-FROM f31f91fe8af58072 -->
+<!-- CERTMATE-TRANSLATED-FROM f1dfd1dec68254e6 -->
 
 ## Panoramica
 
@@ -381,12 +381,34 @@ Usage Type: mobile-app
 ### Configurazione
 
 - **Orario di verifica**: Ogni giorno alle 3:00
-- **Soglia**: 30 giorni prima della scadenza
+- **Soglia**: 30 giorni prima della scadenza (`renewal_threshold_days`), quando
+  non supera meta della durata del certificato; vedi sotto
 - **Azione**: Rinnovo automatico se abilitato
+
+### Quando si rinnova un certificato
+
+Decide una sola regola, e la risposta del certificato la riporta:
+`needs_renewal` diventa vero a `renews_at`, l'istante in cui la scansione lo
+rinnova (`GET /api/certificates/<domain>`, dal contratto API 2.40). La
+decisione la prende CertMate, che dice a certbot di rinnovare; il cancello di
+certbot non conta piu, quindi un aggiornamento di certbot non puo cambiare
+quando CertMate rinnova.
+
+- **La soglia**, quando non supera meta della durata: 30 giorni di un
+  certificato da 90, come sempre, oppure 45 se imposti 45.
+- **Altrimenti la durata**: un terzo, o la meta per un certificato che vive
+  meno di 10 giorni. 30 giorni non hanno senso per un certificato da 45, che
+  quindi si rinnova quando ne mancano 15; uno da 160 ore quando ne mancano
+  circa 3.
+- **La finestra della CA**, quando ne ha pubblicata una per questo certificato
+  (sotto): prima o dopo la soglia.
+
+Per un certificato da 90 giorni con i 30 predefiniti, i rinnovi avvengono
+quando sono sempre avvenuti.
 
 ### Quando la CA non e d'accordo con la soglia (ARI)
 
-La soglia di 30 giorni e l'opinione di CertMate, ed e la stessa per ogni
+La soglia e l'opinione di CertMate, ed e la stessa per ogni
 certificato e per ogni CA. Dalla [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 una CA puo pubblicare la propria, per singolo certificato: un endpoint
 `renewalInfo` che risponde con una finestra entro cui desidera che quel
@@ -395,26 +417,32 @@ staging. step-ca non ancora (0.30.2, misurato; vedi smallstep/certificates#2162)
 quindi su una step-ca privata decide solo la soglia e il pannello del
 certificato dice che la CA non pubblica una finestra.
 
-La scansione di rinnovo TLS lo chiede. Per ogni certificato che la soglia
-**non** ha gia dichiarato in scadenza, CertMate recupera la finestra della CA
-e rinnova subito se quella finestra lo dice. E cosi che un'istanza viene a
-sapere di una sostituzione in blocco — una emissione errata, un intermedio
-compromesso, una decisione del CA/Browser Forum — giorni prima che arrivi la
-revoca, invece che quando il certificato smette di funzionare.
+La scansione di rinnovo TLS lo chiede, per ogni certificato, e la finestra
+decide in entrambe le direzioni. **Anticipa** un rinnovo: e cosi che
+un'istanza viene a sapere di una sostituzione in blocco — una emissione
+errata, un intermedio compromesso, una decisione del CA/Browser Forum — giorni
+prima che arrivi la revoca, invece che quando il certificato smette di
+funzionare. E **posticipa** un rinnovo che la soglia avrebbe fatto, fino al
+punto della finestra che la CA ha chiesto.
 
-**Puo solo anticipare un rinnovo.** La tua soglia resta la rete di sicurezza:
-una CA spenta, lenta o sbagliata non puo ritardare un rinnovo che sarebbe
-comunque avvenuto. Ogni assenza — una CA che non pubblica `renewalInfo`, un
-endpoint irraggiungibile, una risposta malformata, un certificato autofirmato
-senza Authority Key Identifier con cui nominarlo — ricade sulla soglia.
+**Un rinvio ha un pavimento.** Una finestra non trattiene mai un certificato
+quando resta un sesto della sua durata (15 giorni su 90, 7,5 su 45, circa uno
+su 160 ore), ne oltre la fine della finestra stessa, quindi una CA che sbaglia,
+o una finestra vecchia, non puo spingere un certificato verso la scadenza. Ogni
+assenza — una CA che non pubblica `renewalInfo`, un endpoint irraggiungibile,
+una risposta malformata, un certificato autofirmato senza Authority Key
+Identifier con cui nominarlo — non lascia alcuna finestra, e decide la soglia.
+La finestra resta su disco, quindi un rinvio dura da una scansione alla
+successiva.
 
 Dentro la finestra CertMate sceglie un punto, derivato dall'identificatore del
 certificato stesso, cosi la scelta e la stessa a ogni scansione e due
 certificati non finiscono sullo stesso istante. E esattamente a questo che
 serve la finestra: una CA non vuole che tutti i suoi client rinnovino insieme.
 
-Il riepilogo della scansione li conta come `ari_advanced`, cosi un rinnovo che
-la tua configurazione non spiega resta attribuibile.
+Il riepilogo della scansione li conta come `ari_advanced` e `ari_postponed`,
+cosi un rinnovo che la tua configurazione non spiega, o uno che non fa, resta
+attribuibile.
 
 Il pannello di dettaglio del certificato mostra cosa ha detto la CA
 all'ultima scansione, alla voce **CA renewal window**: la finestra, l'istante
@@ -431,34 +459,26 @@ Imposta `"ari_enabled": false` in `settings.json` per disattivarlo; e attivo
 per impostazione predefinita e costa una GET non autenticata per certificato
 per scansione, piu una per CA all'ora per la directory.
 
-Non ancora fatto, e deliberatamente: permettere ad ARI di **posticipare** un
-rinnovo oltre la tua soglia. E la meta che conta per i certificati di breve
-durata, dove una regola fissa di 30 giorni non ha senso contro un certificato
-da 6 giorni — arrivera con il supporto ai profili che quei certificati
-richiedono.
-
 ### Una soglia oltre i 30 giorni
 
-certbot ha un suo cancello per il rinnovo: se non viene forzato, rinnova solo
-negli ultimi 30 giorni prima della scadenza. Prima della 2.40 CertMate lo
-chiamava senza forzarlo, quindi un `renewal_threshold_days` di 45 si comportava
-come 30, e la scansione contava la differenza come `skipped_not_due` ogni
-notte.
-
-Quando e la soglia, e solo la soglia, a dire che un certificato va rinnovato
-mentre certbot rifiuterebbe, CertMate ora forza il rinnovo, come faceva gia per
-una finestra pubblicata dalla CA. Negli ultimi 30 giorni non cambia niente. Con
-questo arrivano due protezioni:
+Prima della release 2.40.0 CertMate chiedeva a certbot di rinnovare senza
+forzarlo, e il cancello di certbot rinnovava solo negli ultimi 30 giorni prima
+della scadenza, quindi un `renewal_threshold_days` di 45 si comportava come 30.
+La release 2.40.0 ha forzato i rinnovi che una soglia oltre i 30 giorni dava
+da fare, e dal contratto API 2.40 ogni rinnovo deciso da CertMate e forzato:
+una soglia di 45 rinnova un certificato da 90 giorni 45 giorni prima della
+scadenza. Un rinnovo che la soglia anticipa rispetto alla regola della durata
+arriva con due protezioni:
 
 - **Al massimo `early_renewals_per_sweep` per scansione** (predefinito 10, tra
   1 e 50). Alzare la soglia su molti certificati distribuisce i rinnovi
   anticipati su piu notti invece di mandare tutti gli ordini alla CA in una
   sola. Il riepilogo della scansione li conta come `early_forced`, e quelli
   lasciati alla scansione successiva come `early_deferred`.
-- **Un certificato emesso da meno di 7 giorni non viene mai forzato.** Una
-  soglia pari o superiore alla durata del certificato lo darebbe altrimenti
-  sempre da rinnovare. Con questa protezione costa al massimo un rinnovo a
-  settimana, non uno a notte.
+- **Un certificato piu giovane di una settimana, o di un terzo della sua
+  durata, non viene mai rinnovato in anticipo.** Una soglia oltre meta della
+  durata non conta piu (decide la durata), quindi questa protezione e l'ultima
+  difesa contro un certificato le cui date non tornano.
 
 Un certificato che richiede attenzione per un altro motivo, una chiave servita
 che manca o non corrisponde, non viene forzato: viene riparato dalla sua

@@ -140,6 +140,7 @@ rather than written by hand:
   "seconds_left": 6479999,
   "expired": false,
   "needs_renewal": false,
+  "renews_at": "2026-11-03T08:41:10Z",
   "private_key_present": true,
   "private_key_state": "present",
   "reissue_required": false,
@@ -219,6 +220,19 @@ produces certificates with no key, which is the case this exists for.
 
 ##### When will it renew?
 
+`renews_at` is the instant the renewal sweep renews the certificate at, and
+`needs_renewal` is true from that instant on (or now, for a key problem). One
+rule decides, the same the sweep acts on: the threshold
+(`renewal_threshold_days`) when it is at most half the lifetime; otherwise a
+third of the lifetime, or half for a certificate that lives under 10 days; or
+the CA's window below, earlier or later, but never with less than a sixth of
+the lifetime left and never past the window's end. For a 90-day certificate
+with the default 30 days that is 30 days before expiry, as always. `renews_at`
+is UTC with a `Z`, `null` when the certificate could not be parsed. Since API
+contract **2.40**; before it, `needs_renewal` was `days_left <= threshold`, which
+could say "due" a night, or for a 45-day certificate two weeks, before the
+sweep renewed.
+
 `renewal_info` is what the CA said, per certificate, through ACME Renewal
 Information ([RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)) at the
 last renewal sweep. It is read from a record the sweep keeps beside the
@@ -228,16 +242,16 @@ sweep asks about the new certificate.
 
 | `status` | meaning |
 | :--- | :--- |
-| `window` | The CA suggested a window. `renew_at` is the instant inside it at which the sweep renews this certificate, if the configured threshold has not already. |
+| `window` | The CA suggested a window. `renew_at` is the instant inside it at which the sweep renews this certificate, within the floor above; `renews_at` is that instant once the floor is applied. |
 | `unsupported` | The CA publishes no `renewalInfo`. That does not change from one sweep to the next. |
 | `unavailable` | The CA publishes it, and the last sweep got no usable answer. If this lasts, look at the CA. |
 | `no_identifier` | The certificate has no Authority Key Identifier, so ARI cannot name it. Common on hand-made private-CA certificates. |
 | `disabled` | `ari_enabled` is `false` in settings. Nothing is asked. |
 
 The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the
-CA attached to the window, when it gave one; only `https` URLs are kept. The
-window can only bring a renewal forward: the threshold stays the backstop.
-Available since API contract **2.23**.
+CA attached to the window, when it gave one; only `https` URLs are kept. Since
+API contract **2.40** the window postpones a renewal as well as bringing one
+forward, within the floor above. Available since API contract **2.23**.
 
 ##### Deprecated fields
 

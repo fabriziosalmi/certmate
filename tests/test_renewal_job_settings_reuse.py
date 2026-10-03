@@ -86,8 +86,11 @@ def test_check_renewals_reads_settings_once_for_many_domains(tmp_path):
 
     # And the settings dict was actually threaded through every per-domain call,
     # with use_cache=False (the renewal loop visits each domain once, so the
-    # cross-request cert-info cache is pure deepcopy overhead there).
-    assert len(seen_kwargs) == 50
+    # cross-request cert-info cache is pure deepcopy overhead there). Each domain
+    # is read twice: before asking its CA for a renewal window and after, because
+    # the decision reads the window just recorded (#393).
+    assert len(seen_kwargs) == 100
+    assert sorted(kw['domain'] for kw in seen_kwargs) == sorted(domains * 2)
     for kw in seen_kwargs:
         assert kw['settings'] is not None, (
             f"get_certificate_info was called without settings= for "

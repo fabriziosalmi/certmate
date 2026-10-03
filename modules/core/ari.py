@@ -1,10 +1,8 @@
 """ACME Renewal Information (RFC 9773) — asking the CA when to renew.
 
-CertMate decides renewal from one number: `days_left <= renewal_threshold_days`,
-default 30. That number is CertMate's opinion, and it is the same opinion for
-every certificate and every CA. The CA has a better one, and since RFC 9773 it
-publishes it: a `renewalInfo` endpoint that answers, per certificate, a window
-during which it would like that certificate replaced.
+The renewal threshold is CertMate's opinion, the same for every certificate and every CA.
+The CA has a better one, and since RFC 9773 it publishes it: a `renewalInfo` endpoint that
+answers, per certificate, a window during which it would like that certificate replaced.
 
 The window matters most when it moves **earlier**. A CA that has to replace a
 batch of certificates — a mis-issuance, a compromised intermediate, a
@@ -12,16 +10,11 @@ CA/Browser Forum ruling — announces it through ARI, days before the revocation
 lands. An instance that renews on a fixed 30-day rule learns about it when the
 certificate stops working.
 
-**What this module does, and what it deliberately does not.**
-
-ARI here can only bring a renewal *forward*. The operator's threshold remains
-the backstop, so nothing this module does can delay a renewal that would
-otherwise have happened, and a CA that is down, slow, or wrong cannot push a
-certificate towards expiry. Honouring the other direction — letting ARI defer
-past the operator's threshold — is the half that matters for short-lived
-certificates, where a fixed 30-day rule is nonsense against a 6-day
-certificate. That needs the certbot 5.x stack for the profiles that issue
-them (#395, blocked on #103), so it is not guesswork we have to do now.
+**What this module does, and what it does not.** It asks the CA and records the answer beside
+the certificate; it does not decide. The decision is modules/core/renewal_policy.py (#393),
+which honours the window in both directions, earlier or later, with a floor: never with less
+than a sixth of the lifetime left, never past the window's end, so a CA that is wrong cannot
+push a certificate towards expiry. Every absence is recorded as itself and is not a window.
 
 **Why this is native rather than certbot's.** `acme` 3.3.0, the version the
 stack shipped when this was written, had no ARI method at all: `ClientV2`
@@ -32,9 +25,9 @@ said it was a child of #103 was reading the dependency the wrong way round.
 
 Since the certbot 5.8 stack (#103), `acme` has `ClientV2.renewal_time` and
 `certbot renew` consults ARI itself (it records `[acme_renewal_info]` in the
-renewal config). Both exist now and this module still decides when CertMate
-brings a renewal forward; whether the two should stay separate is a question
-about the scheduler, not something the migration changed.
+renewal config). It takes no part in CertMate's decision: the sweep forces the
+renewals it decides (#393), and certbot's postponement does not last (a second
+call inside `ari_retry_after` renews, measured), where this record does.
 """
 
 import base64

@@ -8,12 +8,12 @@ matters most when it moves *earlier* — a batch replacement, a compromised
 intermediate, a ruling — which a fixed 30-day rule finds out about when the
 certificate stops working.
 
-**What is asserted here, and what is deliberately not.** ARI can only bring a
-renewal forward: the configured threshold stays the backstop. So a CA that is
-down, slow, or wrong cannot delay a renewal that would otherwise have
-happened, and there is a control below for exactly that. Letting ARI defer a
-renewal past the threshold is the half that matters for short-lived
-certificates, and it waits on #395.
+**What is asserted here.** Since #393 the CA's window decides in both directions: it brings a
+renewal forward, and it postpones one, through the one rule of modules/core/renewal_policy.py.
+The safety property is the floor: a window can postpone a renewal only until a sixth of the
+lifetime is left, never past the window's end, and every absence (switched off, no identifier,
+a CA without ARI, a CA that did not answer) leaves no window, so the threshold decides. There
+are controls below for each.
 
 **The encoding was verified against the real endpoint**, not against my
 reading of the RFC. `certificate_id` on the certificate `letsencrypt.org`
@@ -40,7 +40,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from modules.core import ari
+from modules.core import ari, renewal_policy
 
 pytestmark = [pytest.mark.unit]
 
@@ -294,7 +294,7 @@ def test_an_answer_that_is_not_an_answer_is_not_a_renewal(status, body):
 # --- what the sweep does with it ------------------------------------------
 
 class _Manager:
-    """The three methods `_ari_says_renew` uses, and nothing else."""
+    """The three methods `_refresh_renewal_info` uses, and nothing else."""
 
     def __init__(self, tmp_path, directory=DIRECTORY):
         from modules.core.certificates import CertificateManager
@@ -333,6 +333,17 @@ def _with_client(manager, get):
     return manager
 
 
+def _decided(manager, domain, settings=None, threshold=30):
+    """Ask the CA as the sweep does, then the decision renewal_policy takes on what was recorded:
+    is the certificate due at NOW?"""
+    manager._refresh_renewal_info(domain, {'ca_provider': 'letsencrypt'}, settings or {}, now=NOW)
+    cert = x509.load_pem_x509_certificate((manager.cert_dir / domain / 'cert.pem').read_bytes())
+    instant, _ = renewal_policy.renews_at(
+        cert.not_valid_before_utc.replace(tzinfo=None), cert.not_valid_after_utc.replace(tzinfo=None),
+        threshold, _record(manager, domain))
+    return NOW >= instant
+
+
 def test_the_sweep_renews_when_the_ca_says_so(swept):
     """THE regression: the threshold has not fired, and the certificate
     renews anyway because its CA asked for it."""
@@ -342,8 +353,7 @@ def test_the_sweep_renews_when_the_ca_says_so(swept):
         f'{ARI_BASE}/{cert_id}': (200, _window(-48, -24)),
     }))
 
-    assert manager._ari_says_renew(domain, {'ca_provider': 'letsencrypt'},
-                                   {}, now=NOW) is True
+    assert _decided(manager, domain) is True
 
 
 def test_the_sweep_waits_when_the_ca_says_wait(swept):
@@ -353,8 +363,7 @@ def test_the_sweep_waits_when_the_ca_says_wait(swept):
         f'{ARI_BASE}/{cert_id}': (200, _window(48, 72)),
     }))
 
-    assert manager._ari_says_renew(domain, {'ca_provider': 'letsencrypt'},
-                                   {}, now=NOW) is False
+    assert _decided(manager, domain) is False
 
 
 def test_a_setting_turns_it_off(swept):
@@ -365,29 +374,30 @@ def test_a_setting_turns_it_off(swept):
                       f'{ARI_BASE}/{cert_id}': (200, _window(-48, -24))})
     _with_client(manager, get)
 
-    assert manager._ari_says_renew(domain, {'ca_provider': 'letsencrypt'},
-                                   {'ari_enabled': False}, now=NOW) is False
+    assert _decided(manager, domain, settings={'ari_enabled': False}) is False
     assert get.calls == []
+    assert _record(manager, domain) is None
 
 
-def test_an_unreadable_certificate_is_not_a_renewal(tmp_path):
-    """Every absence answers False. That asymmetry is the safety property:
-    this can only make a renewal happen SOONER than the threshold would."""
+def test_an_unreadable_certificate_leaves_no_window(tmp_path):
+    """Every absence leaves no window, so the threshold decides: a CA, or a certificate, that
+    cannot be asked cannot move a renewal in either direction."""
     manager = _Manager(tmp_path).real
     _with_client(manager, _transport({DIRECTORY: (200, {'renewalInfo': ARI_BASE})}))
 
-    assert manager._ari_says_renew('not-on-disk.example.test',
-                                   {'ca_provider': 'letsencrypt'},
-                                   {}, now=NOW) is False
+    assert manager._refresh_renewal_info('not-on-disk.example.test',
+                                         {'ca_provider': 'letsencrypt'},
+                                         {}, now=NOW) == ari.STATUS_NO_IDENTIFIER
 
 
-def test_a_ca_with_no_directory_is_not_a_renewal(tmp_path):
-    manager = _Manager(tmp_path, directory=None).real
+def test_a_ca_with_no_directory_leaves_no_window(swept):
+    manager, domain, _cert_id = swept
+    manager.ca_manager._directory = None
     _with_client(manager, _transport({}))
 
-    assert manager._ari_says_renew('anything.example.test',
-                                   {'ca_provider': 'nonsense'},
-                                   {}, now=NOW) is False
+    assert manager._refresh_renewal_info(domain, {'ca_provider': 'nonsense'},
+                                         {}, now=NOW) == ari.STATUS_UNSUPPORTED
+    assert _decided(manager, domain) is False
 
 
 def test_without_a_ca_manager_nothing_is_asked(tmp_path):
@@ -397,26 +407,37 @@ def test_without_a_ca_manager_nothing_is_asked(tmp_path):
     manager.cert_dir = tmp_path
     manager.ca_manager = None
 
-    assert manager._ari_says_renew('x.example.test', {}, {}, now=NOW) is False
+    assert manager._refresh_renewal_info('x.example.test', {}, {}, now=NOW) != ari.STATUS_WINDOW
 
 
-def test_the_threshold_still_decides_on_its_own():
-    """THE control, and the one that matters. ARI is consulted only for a
-    certificate the threshold did NOT already call due, so nothing here can
-    delay a renewal. Read off the call site, because that ordering is the
-    whole safety argument and an edit could reverse it without failing any
-    of the tests above."""
-    import inspect
+def test_a_window_postpones_only_down_to_the_floor():
+    """THE control, now that a window can postpone (#393). The window of a 90-day certificate
+    says renew in 300 days; the threshold would renew it now, 20 days before expiry. It waits,
+    but only until a sixth of the lifetime (15 days) is left, and from there it is due whatever
+    the window says. Before #393 the control was that ARI could not postpone at all."""
+    not_before = NOW - timedelta(days=70)
+    not_after = NOW + timedelta(days=20)
+    far = {'status': 'window', 'renew_at': renewal_policy.stamp(NOW + timedelta(days=300)),
+           'window_end': renewal_policy.stamp(NOW + timedelta(days=301))}
 
-    from modules.core.certificates import CertificateManager
+    instant, reason = renewal_policy.renews_at(not_before, not_after, 30, far)
 
-    source = inspect.getsource(CertificateManager._renew_if_due)
-    guard = source.index("if not cert_info.get('needs_renewal')")
-    ask = source.index('_ari_says_renew')
+    assert reason == renewal_policy.REASON_ARI_FLOOR
+    assert instant == not_after - timedelta(days=15)
+    assert NOW < instant <= NOW + timedelta(days=5)
 
-    assert guard < ask, (
-        'ARI is consulted before the threshold, so it can now delay a '
-        'renewal as well as advance one')
+
+def test_a_window_that_has_ended_is_due():
+    """Never after the window's end: a window that closed without the sweep acting (an instance
+    that was down) does not leave the certificate waiting for the floor."""
+    not_before = NOW - timedelta(days=30)
+    not_after = NOW + timedelta(days=60)
+    ended = {'status': 'window', 'renew_at': renewal_policy.stamp(NOW + timedelta(days=50)),
+             'window_end': renewal_policy.stamp(NOW - timedelta(hours=1))}
+
+    instant, reason = renewal_policy.renews_at(not_before, not_after, 30, ended)
+
+    assert reason == renewal_policy.REASON_ARI_ENDED and instant <= NOW
 
 
 def test_the_sweep_counts_what_the_ca_brought_forward():
@@ -429,7 +450,7 @@ def test_the_sweep_counts_what_the_ca_brought_forward():
 
     source = inspect.getsource(CertificateManager._check_renewals)
 
-    assert "'ari_advanced': 0" in source, (
+    assert "'ari_advanced': 0" in source and "'ari_postponed': 0" in source, (
         'the counter is not in the summary shape, so a caller has to know '
         'which early return produced the dict')
 
@@ -494,7 +515,7 @@ def test_the_sweep_keeps_the_window_it_acted_on(swept):
         f'{ARI_BASE}/{cert_id}': (200, payload),
     }))
 
-    assert manager._ari_says_renew(domain, {}, {}, now=NOW) is False
+    assert manager._refresh_renewal_info(domain, {}, {}, now=NOW) == ari.STATUS_WINDOW
     record = _record(manager, domain)
 
     start, end = ari.parse_window(payload)
@@ -529,7 +550,7 @@ def test_each_kind_of_absence_is_recorded_as_itself(
         answers[f'{ARI_BASE}/{cert_id}'] = ari_answer
     _with_client(manager, _transport(answers))
 
-    assert manager._ari_says_renew(domain, {}, {}, now=NOW) is False
+    assert manager._refresh_renewal_info(domain, {}, {}, now=NOW) == expected
     record = _record(manager, domain)
     assert record['status'] == expected
     assert record['window_start'] is None and record['renew_at'] is None
@@ -543,7 +564,7 @@ def test_a_certificate_that_cannot_be_named_is_recorded(tmp_path):
         cert.public_bytes(serialization.Encoding.PEM))
     manager = _with_client(_Manager(tmp_path).real, _transport({}))
 
-    assert manager._ari_says_renew(domain, {}, {}, now=NOW) is False
+    assert manager._refresh_renewal_info(domain, {}, {}, now=NOW) == ari.STATUS_NO_IDENTIFIER
     assert _record(manager, domain)['status'] == ari.STATUS_NO_IDENTIFIER
 
 
@@ -572,8 +593,9 @@ def test_a_record_that_cannot_be_written_does_not_fail_the_sweep(swept):
 
     manager._atomic_json_write = refuse
 
-    # Still the renewal decision it was before the record existed.
-    assert manager._ari_says_renew(domain, {}, {}, now=NOW) is True
+    # Nothing raised, and with no record there is no window: the threshold decides.
+    assert manager._refresh_renewal_info(domain, {}, {}, now=NOW) == ari.STATUS_WINDOW
+    assert _record(manager, domain) is None
 
 
 # --- and read back, without asking the CA ----------------------------------
@@ -595,7 +617,7 @@ def test_the_response_carries_the_recorded_window(swept):
         DIRECTORY: (200, {'renewalInfo': ARI_BASE}),
         f'{ARI_BASE}/{cert_id}': (200, _window(24, 48)),
     }))
-    manager._ari_says_renew(domain, {}, {}, now=NOW)
+    manager._refresh_renewal_info(domain, {}, {}, now=NOW)
     # Every read below must be served from the record.
     _with_client(manager, _forbidden_transport)
 
@@ -700,38 +722,39 @@ def test_the_instant_shown_is_the_instant_acted_on(cert_id):
     assert start <= shown <= end
 
 
-# --- the renewal the window asked for has to reach the CA (#962) ------------
+# --- what the sweep does with the decision (#962, #393) ----------------------
 
-def _certbot_gate(days_left):
-    """`renew_certificate` as the pinned certbot 2.10.0 behaves.
-
-    Measured by running the real `certbot renew --cert-name` against
-    hand-built lineages (#962): without `--force-renewal` it renews only when
-    fewer than 30 days are left (`RENEWER_DEFAULTS['renew_before_expiry']`)
-    and otherwise answers "not yet due", which `renew_certificate` reports as
-    `renewed: False`. With 29 days left it attempts the renewal; with 31, 45
-    and 60 it does nothing.
-    """
-    from unittest.mock import MagicMock
-
-    def renew(domain, force=False):
-        if not force and days_left >= 30:
-            return {'success': True, 'renewed': False, 'domain': domain}
-        return {'success': True, 'renewed': True, 'domain': domain}
-
-    return MagicMock(side_effect=renew)
-
-
-def _sweep_manager(needs_renewal, ari_says, days_left):
+def _sweep_manager(days_left, window=None, threshold_hint=30):
+    """The sweep around one certificate of 90 days with `days_left` left, a recorded window or
+    none, and certbot replaced by a recorder. get_certificate_info answers what renewal_policy
+    decides, as the real one does."""
     from unittest.mock import MagicMock
 
     from modules.core.certificates import CertificateManager
+    from modules.core.utils import utc_now
+
+    now = utc_now()
+    not_after = now + timedelta(days=days_left)
+    not_before = not_after - timedelta(days=90)
+    record = None
+    if window is not None:
+        start, end = window
+        record = {'status': 'window', 'renew_at': renewal_policy.stamp(now + timedelta(days=start)),
+                  'window_end': renewal_policy.stamp(now + timedelta(days=end))}
+
+    def info(domain, settings=None, use_cache=True):
+        threshold = CertificateManager._coerce_renewal_threshold_days(settings)
+        instant, _ = renewal_policy.renews_at(not_before, not_after, threshold, record)
+        return {'exists': True, 'days_left': days_left, 'renewal_info': record,
+                'renews_at': renewal_policy.stamp(instant),
+                'needs_renewal': utc_now() >= instant}
 
     manager = CertificateManager.__new__(CertificateManager)
-    manager.get_certificate_info = MagicMock(return_value={
-        'exists': True, 'needs_renewal': needs_renewal, 'days_left': days_left})
-    manager._ari_says_renew = MagicMock(return_value=ari_says)
-    manager.renew_certificate = _certbot_gate(days_left)
+    manager.get_certificate_info = MagicMock(side_effect=info)
+    manager._served_validity = MagicMock(return_value=(not_before, not_after))
+    manager._refresh_renewal_info = MagicMock(return_value='window' if window else None)
+    manager.renew_certificate = MagicMock(
+        side_effect=lambda domain, force=False: {'success': True, 'renewed': True, 'domain': domain})
     manager._audit_scheduled_renew = MagicMock()
     manager._record_renewal_metrics = MagicMock()
     manager._publish_failed_event = MagicMock()
@@ -741,30 +764,27 @@ def _sweep_manager(needs_renewal, ari_says, days_left):
 
 def _summary():
     return {'checked': 0, 'renewed': 0, 'failed': 0, 'skipped_busy': 0,
-            'skipped_not_due': 0, 'ari_advanced': 0}
+            'skipped_not_due': 0, 'ari_advanced': 0, 'ari_postponed': 0,
+            'early_forced': 0, 'early_deferred': 0}
 
 
 def test_a_renewal_the_ca_asked_for_actually_happens():
-    """THE regression. A mass revocation moves the window to now on a
-    certificate with 60 days left. The threshold says no, the CA says yes —
-    and certbot, asked without `--force-renewal`, says "not yet due" and
-    renews nothing. That was #926 in the one case it exists for."""
-    manager = _sweep_manager(needs_renewal=False, ari_says=True, days_left=60)
+    """THE regression of #962. A mass revocation moves the window to now on a certificate with
+    60 days left. The threshold says no, the CA says yes, and certbot must be forced, or its
+    own gate answers "not yet due" and renews nothing."""
+    manager = _sweep_manager(days_left=60, window=(-2, -1))
     summary = _summary()
 
     assert manager._renew_if_due('ari.example.test', {}, summary) is True
-    assert summary['renewed'] == 1
-    assert summary['skipped_not_due'] == 0
-    assert summary['ari_advanced'] == 1
-    manager.renew_certificate.assert_called_once_with(
-        'ari.example.test', force=True)
+    assert summary['renewed'] == 1 and summary['ari_advanced'] == 1
+    manager.renew_certificate.assert_called_once_with('ari.example.test', force=True)
 
 
 def test_the_counter_says_what_happened_not_what_was_tried():
     """`ari_advanced` is what makes an early renewal attributable. Counted
     before the attempt, it reported renewals that never happened — and still
     would, for a renewal that fails."""
-    manager = _sweep_manager(needs_renewal=False, ari_says=True, days_left=60)
+    manager = _sweep_manager(days_left=60, window=(-2, -1))
     manager.renew_certificate.side_effect = RuntimeError('certbot exited 1')
     summary = _summary()
 
@@ -773,15 +793,53 @@ def test_the_counter_says_what_happened_not_what_was_tried():
     assert summary['ari_advanced'] == 0
 
 
-def test_the_threshold_path_is_not_forced():
-    """CONTROL. Only the renewal the CA asked for is forced. The threshold
-    path keeps asking certbot, so a threshold above certbot's 30 days behaves
-    exactly as before — that is a separate decision (#962, out of scope)."""
-    manager = _sweep_manager(needs_renewal=True, ari_says=False, days_left=20)
+def test_a_renewal_decided_by_the_threshold_is_forced_too():
+    """#393: CertMate decides and certbot executes, so the threshold path is forced as well.
+    Before, it was left to certbot's own gate, which is how certbot's rule came to decide."""
+    manager = _sweep_manager(days_left=20)
     summary = _summary()
 
     assert manager._renew_if_due('ari.example.test', {}, summary) is True
-    manager.renew_certificate.assert_called_once_with(
-        'ari.example.test', force=False)
-    manager._ari_says_renew.assert_not_called()
+    manager.renew_certificate.assert_called_once_with('ari.example.test', force=True)
+    manager._refresh_renewal_info.assert_called_once()
     assert summary['ari_advanced'] == 0
+
+
+def test_the_ca_postpones_a_renewal_the_threshold_would_have_made():
+    """The other direction (#393). 25 days left of 90 and a threshold of 30: due by the
+    threshold, but the CA's window opens in 5 days, 20 days before expiry, above the floor of
+    15. The sweep waits, and says why."""
+    manager = _sweep_manager(days_left=25, window=(5, 6))
+    summary = _summary()
+
+    assert manager._renew_if_due('ari.example.test', {}, summary) is False
+    manager.renew_certificate.assert_not_called()
+    assert summary['ari_postponed'] == 1
+
+
+def test_the_floor_ends_a_postponement():
+    """14 days left of 90: below the floor of 15, so a window that still says later does not
+    hold the certificate. It renews, forced."""
+    manager = _sweep_manager(days_left=14, window=(30, 31))
+    summary = _summary()
+
+    assert manager._renew_if_due('ari.example.test', {}, summary) is True
+    manager.renew_certificate.assert_called_once_with('ari.example.test', force=True)
+    assert summary['ari_postponed'] == 0
+
+
+@pytest.mark.parametrize('days_left, window', [(25, (5, 6)), (60, None), (20, None)])
+def test_the_ca_is_asked_before_the_decision_is_read(days_left, window):
+    """The decision reads the recorded window, so the sweep asks the CA first, for every
+    certificate, and reads the certificate's answer again after. Asked only for a certificate
+    the threshold had not called due (the order before #393), a postponement would act on last
+    night's window, and the certificate the CA wants renewed now would wait for the threshold."""
+    manager = _sweep_manager(days_left=days_left, window=window)
+    order = []
+    ask, read = manager._refresh_renewal_info.side_effect, manager.get_certificate_info.side_effect
+    manager._refresh_renewal_info.side_effect = lambda *a, **k: order.append('ask') or (ask and ask(*a, **k))
+    manager.get_certificate_info.side_effect = lambda *a, **k: order.append('read') or read(*a, **k)
+
+    manager._renew_if_due('ari.example.test', {}, _summary())
+
+    assert order[-2:] == ['ask', 'read'] and order.count('ask') == 1

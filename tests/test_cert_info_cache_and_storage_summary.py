@@ -28,7 +28,8 @@ def _make_cert_pem(not_after: datetime) -> bytes:
         .issuer_name(name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+        # A 90-day lifetime: since #393 when a certificate renews depends on its lifetime.
+        .not_valid_before(not_after - timedelta(days=90))
         .not_valid_after(not_after)
         .sign(key, hashes.SHA256())
     )
@@ -48,7 +49,7 @@ def cert_manager(tmp_path):
     settings_manager = SettingsManager(file_ops, data_dir / "settings.json")
     storage = MagicMock()
     storage.retrieve_certificate_info.return_value = (
-        {"cert.pem": _make_cert_pem(datetime.now(timezone.utc) + timedelta(days=60))},
+        {"cert.pem": _make_cert_pem(datetime.now(timezone.utc) + timedelta(days=40))},
         {"domain": "example.com", "dns_provider": "azure"},
     )
 
@@ -84,8 +85,10 @@ def test_storage_certificate_info_cache_varies_by_renewal_threshold(cert_manager
     # different renewal thresholds, which produce different cache keys, so
     # both still miss the cache and hit storage. This pins key-variance, not
     # the cache being disabled by passing settings.
+    # 40 days left of 90: not due at 30, due at 45. (A threshold above half the lifetime, such
+    # as 90, no longer counts at all since #393: the lifetime rule decides.)
     low_threshold = {"renewal_threshold_days": 30}
-    high_threshold = {"renewal_threshold_days": 90}
+    high_threshold = {"renewal_threshold_days": 45}
 
     first = cert_manager.get_certificate_info("example.com", settings=low_threshold)
     second = cert_manager.get_certificate_info("example.com", settings=high_threshold)

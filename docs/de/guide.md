@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM f31f91fe8af58072 -->
+<!-- CERTMATE-TRANSLATED-FROM f1dfd1dec68254e6 -->
 
 ## Übersicht
 
@@ -381,92 +381,111 @@ Usage Type: mobile-app
 ### Konfiguration
 
 - **Prüfzeitpunkt**: Täglich um 3:00 Uhr
-- **Schwellenwert**: 30 Tage vor Ablauf
+- **Schwellenwert**: 30 Tage vor Ablauf (`renewal_threshold_days`), sofern das
+  höchstens die halbe Laufzeit des Zertifikats ist; siehe unten
 - **Aktion**: Automatische Erneuerung, sofern aktiviert
+
+### Wann ein Zertifikat erneuert wird
+
+Eine Regel entscheidet, und die Antwort des Zertifikats tragt sie:
+`needs_renewal` wird wahr ab `renews_at`, dem Zeitpunkt, zu dem der Durchlauf es
+erneuert (`GET /api/certificates/<domain>`, seit API-Vertrag 2.40). CertMate
+trifft die Entscheidung und weist certbot an zu erneuern; certbots eigene
+Schranke spielt keine Rolle mehr, ein certbot-Update kann also nicht andern,
+wann CertMate erneuert.
+
+- **Der Schwellenwert**, wenn er hochstens die halbe Laufzeit ist: 30 Tage
+  eines 90-Tage-Zertifikats wie bisher, oder 45, wenn Sie 45 einstellen.
+- **Sonst die Laufzeit**: ein Drittel davon, oder die Halfte fur ein
+  Zertifikat, das unter 10 Tagen lebt. 30 Tage bedeuten nichts fur ein
+  45-Tage-Zertifikat, es wird also mit 15 verbleibenden Tagen erneuert; eines
+  mit 160 Stunden mit etwa 3 verbleibenden Tagen.
+- **Das Fenster der CA**, wenn sie fur dieses Zertifikat eines veroffentlicht
+  hat (unten): fruher oder spater als der Schwellenwert.
+
+Fur ein 90-Tage-Zertifikat mit den voreingestellten 30 Tagen erfolgen die
+Erneuerungen wie immer.
 
 ### Wenn die CA dem Schwellenwert widerspricht (ARI)
 
-Der 30-Tage-Schwellenwert ist CertMates Meinung, und es ist dieselbe Meinung
+Der Schwellenwert ist CertMates Meinung, und es ist dieselbe Meinung
 fur jedes Zertifikat und jede CA. Seit [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 kann eine CA ihre eigene veroffentlichen, pro Zertifikat: ein
 `renewalInfo`-Endpunkt, der ein Zeitfenster nennt, in dem sie dieses
 Zertifikat ersetzt sehen mochte. Let's Encrypt bietet eines, in Produktion und
 im Staging. step-ca noch nicht (0.30.2, gemessen; siehe
-smallstep/certificates#2162), daher entscheidet bei einer privaten step-ca
-allein der Schwellenwert, und das Zertifikatsfenster sagt, dass die CA kein
-Zeitfenster veroffentlicht.
+smallstep/certificates#2162), auf einer privaten step-ca entscheidet also der
+Schwellenwert allein, und das Zertifikatspanel sagt, dass die CA kein Fenster
+veroffentlicht.
 
-Der TLS-Erneuerungsdurchlauf fragt danach. Fur jedes Zertifikat, das der
-Schwellenwert **nicht** bereits als fallig eingestuft hat, holt CertMate das
-Fenster der CA und erneuert sofort, wenn dieses Fenster es sagt. So erfahrt
+Der TLS-Erneuerungsdurchlauf fragt nach, fur jedes Zertifikat, und das Fenster
+entscheidet in beide Richtungen. Es zieht eine Erneuerung **vor**: so erfahrt
 eine Instanz von einem Massenaustausch — einer Fehlausstellung, einem
-kompromittierten Intermediate, einer CA/Browser-Forum-Entscheidung — Tage
-bevor der Widerruf greift, statt erst wenn das Zertifikat nicht mehr
-funktioniert.
+kompromittierten Zwischenzertifikat, einem Beschluss des CA/Browser Forum —
+Tage bevor der Widerruf eintrifft, statt erst, wenn das Zertifikat nicht mehr
+funktioniert. Und es **verschiebt** eine, die der Schwellenwert vorgenommen
+hatte, auf den Punkt im Fenster, den die CA verlangt.
 
-**Es kann eine Erneuerung nur vorziehen.** Ihr Schwellenwert bleibt die
-Ruckfallebene: eine CA, die ausgefallen, langsam oder im Irrtum ist, kann eine
-Erneuerung nicht verzogern, die ohnehin stattgefunden hatte. Jede Leerstelle —
-eine CA ohne `renewalInfo`, ein nicht erreichbarer Endpunkt, eine fehlerhafte
-Antwort, ein selbstsigniertes Zertifikat ohne Authority Key Identifier, uber
-den es benannt werden konnte — fallt auf den Schwellenwert zuruck.
+**Eine Verschiebung hat eine Untergrenze.** Ein Fenster halt ein Zertifikat
+nie mehr zuruck, wenn nur noch ein Sechstel seiner Laufzeit ubrig ist (15 Tage
+von 90, 7,5 von 45, etwa einer von 160 Stunden), und nie uber das Ende des
+Fensters hinaus; eine CA, die sich irrt, oder ein veraltetes Fenster kann ein
+Zertifikat also nicht in den Ablauf treiben. Jedes Fehlen — eine CA ohne
+`renewalInfo`, ein nicht erreichbarer Endpunkt, eine fehlerhafte Antwort, ein
+selbstsigniertes Zertifikat ohne Authority Key Identifier, uber den es benannt
+werden konnte — hinterlasst kein Fenster, und der Schwellenwert entscheidet.
+Das Fenster wird auf der Platte gehalten, eine Verschiebung gilt also von einem
+Durchlauf zum nachsten.
 
-Innerhalb des Fensters wahlt CertMate einen Punkt, abgeleitet aus der Kennung
-des Zertifikats selbst, sodass die Wahl bei jedem Durchlauf dieselbe ist und
-zwei Zertifikate nicht auf demselben Zeitpunkt landen. Genau dafur ist das
-Fenster da: eine CA will nicht, dass alle ihre Clients gleichzeitig erneuern.
+Innerhalb des Fensters wahlt CertMate einen Punkt, abgeleitet vom eigenen
+Bezeichner des Zertifikats, sodass die Wahl bei jedem Durchlauf gleich ist und zwei
+Zertifikate nicht auf denselben Zeitpunkt fallen. Genau dafur ist das Fenster
+da: Eine CA will nicht, dass alle ihre Clients gleichzeitig erneuern.
 
-Die Zusammenfassung des Durchlaufs zahlt diese als `ari_advanced`, damit eine
-Erneuerung, die Ihre Konfiguration nicht erklart, zuordenbar bleibt.
+Die Zusammenfassung des Durchlaufs zahlt diese als `ari_advanced` und
+`ari_postponed`, damit eine Erneuerung, die Ihre Konfiguration nicht erklart,
+oder eine, die sie nicht vornimmt, zuordenbar bleibt.
 
-Das Detailfenster des Zertifikats zeigt unter **CA renewal window**, was die CA
-beim letzten Durchlauf gesagt hat: das Fenster, den Zeitpunkt darin, zu dem
-CertMate erneuert, und den Erklarungslink der CA, wenn sie einen angibt. Gibt
-es kein Fenster, nennt es den Grund: die CA veroffentlicht keines, die CA hat
-bei der letzten Prufung nicht geantwortet, oder das Zertifikat kann in ARI
-nicht benannt werden. Derselbe Eintrag wird von
-`GET /api/certificates/<domain>` als `renewal_info` zuruckgegeben. Er wird aus
-dem gelesen, was der Durchlauf gespeichert hat, daher sendet das Offnen des
-Dashboards nie eine Anfrage an die CA. Direkt nach einer Erneuerung steht dort
-"Not checked yet", bis der nachste Durchlauf nach dem neuen Zertifikat fragt.
+Das Detailpanel des Zertifikats zeigt unter **CA renewal window**, was die CA
+beim letzten Durchlauf gesagt hat: das Fenster, den Zeitpunkt darin, zu dem CertMate
+erneuert, und den Erklarungslink der CA, wenn sie einen angegeben hat. Gibt es
+kein Fenster, sagt es, welches Fehlen vorliegt: Die CA veroffentlicht keines,
+die CA hat bei der letzten Prufung nicht geantwortet, oder das Zertifikat kann
+in ARI nicht benannt werden. Derselbe Datensatz wird als `renewal_info` von
+`GET /api/certificates/<domain>` zuruckgegeben. Er wird aus dem gelesen, was der
+Durchlauf gespeichert hat, das Offnen des Dashboards sendet also nie eine Anfrage an
+die CA. Direkt nach einer Erneuerung steht dort "Not checked yet", bis der
+nachste Durchlauf nach dem neuen Zertifikat fragt.
 
-Setzen Sie `"ari_enabled": false` in `settings.json`, um es abzuschalten; es
-ist standardmassig aktiv und kostet eine unauthentifizierte GET pro Zertifikat
-pro Durchlauf, plus eine pro CA und Stunde fur das Directory.
-
-Noch nicht umgesetzt, und zwar bewusst: ARI eine Erneuerung uber Ihren
-Schwellenwert hinaus **verschieben** zu lassen. Das ist die Halfte, die fur
-kurzlebige Zertifikate zahlt, wo eine feste 30-Tage-Regel gegenuber einem
-6-Tage-Zertifikat sinnlos ist — sie kommt mit der Profilunterstutzung, die
-solche Zertifikate brauchen.
+Setzen Sie `"ari_enabled": false` in `settings.json`, um es abzuschalten; es ist
+standardmassig aktiv und kostet einen nicht authentifizierten GET pro Zertifikat
+und Durchlauf, plus einen pro CA und Stunde fur das Verzeichnis.
 
 ### Ein Schwellenwert ueber 30 Tagen
 
-certbot hat eine eigene Schranke fuer die Erneuerung: ohne Erzwingen erneuert
-es nur innerhalb der letzten 30 Tage vor Ablauf. Vor 2.40 hat CertMate es ohne
-Erzwingen aufgerufen, daher verhielt sich ein `renewal_threshold_days` von 45
-wie 30, und der Durchlauf zaehlte die Luecke jede Nacht als
-`skipped_not_due`.
+Vor Release 2.40.0 rief CertMate certbot ohne Erzwingen auf, und certbots
+eigene Schranke erneuerte nur innerhalb von 30 Tagen vor Ablauf, daher verhielt
+sich ein `renewal_threshold_days` von 45 wie 30. Release 2.40.0 erzwang die
+Erneuerungen, die ein Schwellenwert uber 30 Tagen fallig nannte, und seit
+API-Vertrag 2.40 wird jede Erneuerung erzwungen, die CertMate beschliesst: ein
+Schwellenwert von 45 erneuert ein 90-Tage-Zertifikat 45 Tage vor Ablauf. Eine
+Erneuerung, die der Schwellenwert vor die Laufzeitregel zieht, kommt mit zwei
+Schutzmechanismen:
 
-Wenn der Schwellenwert, und nur der Schwellenwert, ein Zertifikat faellig
-nennt, waehrend certbot ablehnen wuerde, erzwingt CertMate die Erneuerung jetzt,
-wie schon bei einem von der CA veroeffentlichten Fenster. Innerhalb der letzten
-30 Tage aendert sich nichts. Zwei Schutzmechanismen gehoeren dazu:
-
-- **Hoechstens `early_renewals_per_sweep` pro Durchlauf** (Standard 10,
-  zwischen 1 und 50). Wer den Schwellenwert bei vielen Zertifikaten anhebt,
-  verteilt die vorgezogenen Erneuerungen auf mehrere Naechte, statt alle
-  Bestellungen in einer Nacht an die CA zu schicken. Die Zusammenfassung des
-  Durchlaufs zaehlt sie als `early_forced`, die auf den naechsten Durchlauf
-  verschobenen als `early_deferred`.
-- **Ein Zertifikat, das vor weniger als 7 Tagen ausgestellt wurde, wird nie
-  erzwungen.** Ein Schwellenwert in Hoehe der Laufzeit oder darueber wuerde es
-  sonst dauerhaft faellig nennen. Mit diesem Schutz kostet das hoechstens eine
-  Erneuerung pro Woche, nicht eine pro Nacht.
+- **Hochstens `early_renewals_per_sweep` pro Durchlauf** (Standard 10, zwischen 1
+  und 50). Wer den Schwellenwert fur viele Zertifikate anhebt, verteilt die
+  vorgezogenen Erneuerungen so auf mehrere Nachte, statt alle Auftrage in einer
+  an die CA zu schicken. Die Zusammenfassung zahlt sie als `early_forced`, und
+  die fur den nachsten Durchlauf zuruckgestellten als `early_deferred`.
+- **Ein Zertifikat, das junger als eine Woche oder als ein Drittel seiner
+  Laufzeit ist, wird nie vorzeitig erneuert.** Ein Schwellenwert uber der
+  halben Laufzeit zahlt gar nicht mehr (die Laufzeit entscheidet), dieser
+  Schutz ist also die letzte Verteidigung gegen ein Zertifikat, dessen Daten
+  nicht zusammenpassen.
 
 Ein Zertifikat, das aus einem anderen Grund Aufmerksamkeit braucht, ein
-ausgelieferter Schluessel, der fehlt oder nicht passt, wird nicht erzwungen:
-es wird ohne neuen Schluessel aus seiner Lineage repariert.
+ausgelieferter Schlussel, der fehlt oder nicht passt, wird nicht erzwungen: Es
+wird aus seiner Lineage repariert, ohne neuen Schlussel.
 
 ### Automatische Erneuerung aktivieren
 

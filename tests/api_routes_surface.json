@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.39",
+ "contract_version": "2.40",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -791,6 +791,9 @@
     "[].renewed_at": [
      "str"
     ],
+    "[].renews_at": [
+     "str"
+    ],
     "[].san_domains": [
      "list"
     ],
@@ -919,6 +922,9 @@
      "str"
     ],
     "renewed_at": [
+     "str"
+    ],
+    "renews_at": [
      "str"
     ],
     "san_domains": [
