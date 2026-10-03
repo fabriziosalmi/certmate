@@ -75,7 +75,12 @@ def test_a_job_still_running_is_named_on_the_way_out(caplog):
     # over the rendered message: this repository's CodeQL configuration reads
     # `'a.example.com' in text` as an incomplete URL check, and it is right to
     # in general.
-    assert any(record.args and record.args[1] == 'create slow.example.com (running)'
+    # Only this module's records, and only those with the arguments the line has: caplog also
+    # holds whatever another thread logged meanwhile (a scheduler a previous test left running
+    # logs "Running job %s" with one argument), and reading args[1] of that was an IndexError
+    # that failed this test at random in CI.
+    assert any(record.name == LOGGER and len(record.args or ()) > 1
+               and record.args[1] == 'create slow.example.com (running)'
                for record in caplog.records), (
         'the abandoned job was returned but never logged, so nothing survives '
         'the process that says which certificate was not issued')
