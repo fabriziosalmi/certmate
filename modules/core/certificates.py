@@ -38,7 +38,7 @@ from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
 from .inventory_sources import collect_domain_sources
 from . import acme_profiles, renewal_policy
 from .domain_entries import entry_auto_renew, entry_domain
-from .structured_logging import LogContext, new_correlation_id
+from .structured_logging import LogContext, new_correlation_id, scrub_log_value
 from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
     csr_fingerprint, read_csr, to_csr_command,
@@ -4568,9 +4568,11 @@ class CertificateManager:
         offered = acme_profiles.profile_offered(directory, profile)
         if offered is not False:
             return offered
-        logger.warning("%s was issued with the ACME profile %r, which its CA no longer offers; "
+        # Both pass the name check before they get here (no CR/LF); scrubbed anyway, because the
+        # profile arrives from a request and the plain log formatter writes it as it is.
+        logger.warning("%s was issued with the ACME profile %s, which its CA no longer offers; "
                        "the renewal asks for it as preferred and the CA will issue its default "
-                       "profile instead.", domain, profile)
+                       "profile instead.", scrub_log_value(domain), scrub_log_value(profile))
         return False
 
     def _refresh_renewal_info(self, domain, cert_info, settings, now=None):
