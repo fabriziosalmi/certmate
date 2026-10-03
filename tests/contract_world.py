@@ -371,7 +371,9 @@ def seed(container, port):
 
     cert_dir = Path(container.cert_dir)
     write_certificate(cert_dir / DOMAIN, DOMAIN, [SAN])
-    (cert_dir / DOMAIN / 'metadata.json').write_text(_metadata(DOMAIN, [SAN]), encoding='utf-8')
+    # Issued with an ACME profile (#395), as create_certificate records it.
+    (cert_dir / DOMAIN / 'metadata.json').write_text(
+        _metadata(DOMAIN, [SAN], acme_profile='tlsserver'), encoding='utf-8')
     _record_a_renewal_window(cert_dir / DOMAIN)
     # A certificate restored from a share-safe backup: everything but its private key.
     # Two of them, so that a reissue limited to one leaves one to do (`remaining`, `next_step`).
@@ -384,7 +386,9 @@ def seed(container, port):
         (cert_dir / name / 'metadata.json').write_text(_metadata(name), encoding='utf-8')
     write_certificate(cert_dir / ALIAS, ALIAS)
     (cert_dir / ALIAS / 'metadata.json').write_text(
-        _metadata(ALIAS, domain_alias='alias-zone.example.test', alias_dns_provider='cloudflare'),
+        # A profile its CA has since withdrawn: what a renewal records (#395).
+        _metadata(ALIAS, domain_alias='alias-zone.example.test', alias_dns_provider='cloudflare',
+                  acme_profile='shortlived', acme_profile_withdrawn_at='2026-09-30T03:00:04'),
         encoding='utf-8')
 
     settings = container.managers['settings']

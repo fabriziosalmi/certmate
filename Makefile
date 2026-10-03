@@ -40,7 +40,7 @@ FLAKE8_SELECT := E9,F63,F7,F82,F811,F632,E711,E712,E713,E714,F401,F841,E722
 # Real-certificate end-to-end files, the list scripts/release.sh runs.
 E2E_FILES := tests/test_health_ready_e2e.py tests/test_cert_lifecycle.py tests/test_async_issuance_e2e.py \
              tests/test_ari_staging_e2e.py tests/test_renewal_uses_todays_settings_e2e.py \
-             tests/test_ca_account_email_e2e.py
+             tests/test_ca_account_email_e2e.py tests/test_acme_profiles_e2e.py
 
 # Default target
 help:

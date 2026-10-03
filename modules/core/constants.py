@@ -585,6 +585,20 @@ METADATA_SCHEMA_VERSION = 1
 #                                   sweep does; for a 90-day certificate the
 #                                   renewal happens when it did.
 #
+#   ACME profiles                  POST /api/certificates/create and
+#                                   /api/certificates/<domain>/reissue accept
+#                                   `acme_profile` (#395), the profile to ask
+#                                   the CA for ('tlsserver', 'shortlived' on
+#                                   Let's Encrypt), required at issuance and
+#                                   preferred at renewal; the certificate's
+#                                   answer carries `acme_profile` and
+#                                   `acme_profile_withdrawn_at` (a renewal found
+#                                   the CA no longer offers it). A CA account
+#                                   can name a default (`acme_profile`, through
+#                                   the dashboard's account route). 2.41, MINOR:
+#                                   an optional request field and two response
+#                                   fields.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -609,7 +623,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.40'
+API_CONTRACT_VERSION = '2.41'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

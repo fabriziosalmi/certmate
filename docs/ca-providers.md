@@ -17,6 +17,11 @@ CertMate supports multiple Certificate Authority providers, allowing you to choo
 **Configuration:**
 - **Email**: ACME account contact (see [Account email](#account-email))
 
+**Profiles:** `classic` (90 days, the default), `tlsserver` (45 days) and
+`shortlived` (160 hours), on production and staging. A certificate asks for one
+with `acme_profile`, and a CA account can name a default for the certificates
+created on it; see [ACME profiles](api.md#acme-profiles).
+
 ### Let's Encrypt (Staging)
 
 - **Type**: Test certificates from the Let's Encrypt staging environment

@@ -164,7 +164,10 @@ def _provider_of_account(dns_manager, account_id, provider):
 # one is held to a plain charset. IDs that already exist are still accepted
 # for edit and delete, so an account named before this rule is not stranded.
 _CA_ACCOUNT_ID_RE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
-_CA_ACCOUNT_FIELDS = frozenset({'name', 'email', 'acme_url', 'eab_kid', 'eab_hmac', 'ca_cert'})
+# `acme_profile` (#395): the profile a new certificate on this account asks for unless the
+# request names one.
+_CA_ACCOUNT_FIELDS = frozenset({'name', 'email', 'acme_url', 'eab_kid', 'eab_hmac', 'ca_cert',
+                                'acme_profile'})
 
 
 def _ca_accounts_of(settings, provider):
@@ -267,6 +270,15 @@ def _save_ca_account(settings_manager, audit_logger, accounts,
         return jsonify({'error': 'Invalid CA account configuration'}), 400
     submitted = _strip_masked_values(raw)
     config = {**accounts.get(account_id, {}), **submitted}
+    if 'acme_profile' in submitted:
+        from modules.core.acme_profiles import validate_profile
+        ok, profile = validate_profile(submitted['acme_profile'])
+        if not ok:
+            return jsonify({'error': profile}), 400
+        if profile:
+            config['acme_profile'] = profile
+        else:
+            config.pop('acme_profile', None)      # '' clears it: the CA's own default
     if not config.get('email') or not validate_email(config['email'])[0]:
         return jsonify({'error': 'A valid CA account email is required'}), 400
     valid, reason = ca_manager.validate_ca_configuration(provider, config)

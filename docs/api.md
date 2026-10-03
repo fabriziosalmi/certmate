@@ -168,6 +168,8 @@ rather than written by hand:
     "renew_at": "2026-11-03T08:41:10Z",
     "explanation_url": null
   },
+  "acme_profile": null,
+  "acme_profile_withdrawn_at": null,
   "auto_renew": true
 }
 ```
@@ -1267,6 +1269,9 @@ explicitly changed (no key flags are sent and certbot keeps the lineage key).
 - the CA account the certificate was issued under is kept when `ca_provider`
   does not change; before 2.29 a reissue used the CA's default account.
 - `key_type`/`key_size`/`elliptic_curve`: omit to keep the existing key shape
+- `acme_profile`: omit to keep the profile the certificate was issued with, `""`
+  for the CA's default, or a profile name; see [ACME profiles](#acme-profiles).
+  Since API contract **2.41**.
 - `async`: defer issuance to a background job (202 + job id, poll `GET /api/certificates/jobs/<job_id>`)
 
 **Response** (200 OK, or 202 Accepted with `async`): message, domain, dns_provider, ca_provider, duration.
@@ -1280,6 +1285,38 @@ curl -X POST http://localhost:8000/api/certificates/example.com/reissue \
  -H "Content-Type: application/json" \
  -d '{"san_domains": ["www.example.com", "api.example.com"]}'
 ```
+
+#### ACME profiles
+
+A CA can issue more than one kind of certificate, and lists them in its ACME
+directory (`meta.profiles`). Let's Encrypt offers three, in production and on
+staging:
+
+| profile | lifetime | notes |
+| :--- | :--- | :--- |
+| `classic` | 90 days | the default |
+| `tlsserver` | 45 days | no Common Name |
+| `shortlived` | 160 hours | the only one that can name IP addresses (not yet supported by CertMate, [#1130](https://github.com/fabriziosalmi/certmate/issues/1130)) |
+
+`POST /api/certificates/create` and `POST /api/certificates/<domain>/reissue`
+take `acme_profile`. Omitted, a new certificate uses the default its CA account
+names (`acme_profile` on the account), and a reissue keeps the profile the
+certificate was issued with; `""` asks for the CA's own default. A name that is
+not a profile name is a `400` before anything runs.
+
+The profile is **required at issuance**: a CA that does not offer it refuses the
+order, and the certificate is not issued as something else. It is **preferred at
+renewal**: a CA can withdraw a profile (Let's Encrypt retired `tlsclient` in July
+2026), and a renewal that failed on it would leave the certificate to expire. So
+the renewal asks for the profile, and when the CA no longer lists it the CA
+issues its default; the renewal logs a warning and records
+`acme_profile_withdrawn_at` on the certificate, and the next renewal that finds
+the profile offered again clears it.
+
+The certificate's answer carries `acme_profile` and `acme_profile_withdrawn_at`.
+How long before expiry a 45-day or a 160-hour certificate renews is the rule in
+[When will it renew?](#when-will-it-renew): with the default threshold, 15 days
+and about 3 days. Since API contract **2.41**.
 
 #### Renew a certificate
 

@@ -55,9 +55,24 @@ CASES = {
                                   {'api_token': 'do-token'}),
     'domain alias': ({'domain_alias': 'alias.example.net',
                       'alias_dns_provider': 'cloudflare'}, {}, None),
+    # Required at issuance (#395): a CA that does not offer it refuses the order.
+    'acme profile': ({'acme_profile': 'tlsserver'}, {}, None),
 }
 
 EXPECTED = {
+    'acme profile': [
+        'certbot', 'certonly', '--non-interactive', '--agree-tos',
+        '--email', 'a@b.com', '--cert-name', 'example.com', '--server',
+        'https://acme-v02.api.letsencrypt.org/directory', '-d',
+        'example.com', '--key-type', 'ecdsa', '--elliptic-curve',
+        'secp384r1', '--required-profile', 'tlsserver', '--config-dir',
+        '<CERTS>/example.com', '--work-dir',
+        '<CERTS>/example.com/work', '--logs-dir',
+        '<CERTS>/example.com/logs', '--authenticator', 'dns-cloudflare',
+        '--dns-cloudflare-credentials',
+        'letsencrypt/config/cloudflare-<HASH>.ini',
+        '--dns-cloudflare-propagation-seconds', '30',
+    ],
     'baseline dns-01 cloudflare': [
         'certbot', 'certonly', '--non-interactive', '--agree-tos',
         '--email', 'a@b.com', '--cert-name', 'example.com', '--server',
@@ -268,5 +283,6 @@ def test_the_expectations_cover_the_branch_shapes_that_matter():
     for flag in ('--webroot', '--server', '--force-renewal', '--key-type',
                  '--rsa-key-size', '--elliptic-curve', '--manual',
                  '--manual-auth-hook', '--manual-cleanup-hook',
-                 '--authenticator', '--cert-name', '--config-dir'):
+                 '--authenticator', '--cert-name', '--config-dir',
+                 '--required-profile'):
         assert flag in flat, f'no case in the matrix produces {flag}'

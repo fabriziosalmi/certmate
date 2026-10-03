@@ -347,7 +347,8 @@ class CAManager:
                             cert_dir: Path = None, san_domains: list = None,
                             key_type: Optional[str] = None,
                             key_size: Optional[int] = None,
-                            elliptic_curve: Optional[str] = None) -> tuple:
+                            elliptic_curve: Optional[str] = None,
+                            acme_profile: str | None = None) -> tuple:
         """Build certbot command with CA-specific parameters.
 
         Args:
@@ -359,6 +360,11 @@ class CAManager:
                 ``key_type='rsa'`` and ignored otherwise.
             elliptic_curve: ECDSA curve name (secp256r1/secp384r1).
                 Required when ``key_type='ecdsa'`` and ignored otherwise.
+            acme_profile: Optional ACME profile (#395), sent as
+                ``--required-profile``: at issuance the order fails rather than
+                come back as another kind of certificate. The renewal
+                configuration is softened to preferred afterwards
+                (modules/core/acme_profiles.py).
 
         Returns:
             Tuple of (certbot_cmd list, extra_env dict) — extra_env contains
@@ -391,6 +397,9 @@ class CAManager:
             certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
         elif key_type == 'ecdsa' and elliptic_curve:
             certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+
+        if acme_profile:
+            certbot_cmd.extend(['--required-profile', acme_profile])
 
         # Add directory configuration if provided
         if cert_dir:

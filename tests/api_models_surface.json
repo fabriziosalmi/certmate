@@ -1,5 +1,5 @@
 {
- "contract_version": "2.40",
+ "contract_version": "2.41",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -294,6 +294,12 @@
     "account_id": {
      "type": "string"
     },
+    "acme_profile": {
+     "type": "string"
+    },
+    "acme_profile_withdrawn_at": {
+     "type": "string"
+    },
     "alias_dns_provider": {
      "type": "string"
     },
@@ -419,6 +425,9 @@
   "CreateCertificate": {
    "properties": {
     "account_id": {
+     "type": "string"
+    },
+    "acme_profile": {
      "type": "string"
     },
     "alias_dns_provider": {
@@ -842,6 +851,9 @@
   "ReissueCertificate": {
    "properties": {
     "account_id": {
+     "type": "string"
+    },
+    "acme_profile": {
      "type": "string"
     },
     "alias_dns_provider": {

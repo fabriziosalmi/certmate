@@ -221,6 +221,18 @@ def create_api_models(api):
                 'Since API contract 2.40 decided by the same rule the renewal '
                 'sweep acts on.'
             )),
+        'acme_profile': fields.String(
+            description=(
+                "The ACME profile the certificate was issued with (#395): "
+                "'classic', 'tlsserver', 'shortlived' on Let's Encrypt. Null "
+                "for the CA's default. Added in API contract 2.41."
+            )),
+        'acme_profile_withdrawn_at': fields.String(
+            description=(
+                'When a renewal found that the CA no longer offers acme_profile '
+                'and the CA issued its default profile instead, UTC; null '
+                'otherwise. Added in API contract 2.41.'
+            )),
         'renews_at': fields.String(
             description=(
                 'The instant the renewal sweep renews this certificate at, UTC '
@@ -392,6 +404,14 @@ def create_api_models(api):
             description=('DNS provider that hosts the alias zone, when it is '
                          'not the one hosting the primary. Ignored without '
                          'domain_alias.')),
+        'acme_profile': fields.String(
+            description=(
+                "ACME profile to ask the CA for (#395), such as 'tlsserver' "
+                "(45 days) or 'shortlived' (160 hours) on Let's Encrypt. Omit "
+                "to use the CA account's default; pass '' for the CA's own "
+                "default. Required at issuance: a CA that does not offer it "
+                "refuses the order. Since API contract 2.41."
+            )),
         'key_type': fields.String(
             description=(
                 "Optional override of the global default key type. Omit to "
@@ -452,6 +472,10 @@ def create_api_models(api):
                 "current certificate are replaced rather than added to. Same "
                 "field name and same rules as on create."
             )),
+        'acme_profile': fields.String(
+            description=("ACME profile (#395). Omit to keep the certificate's "
+                         "current one; pass '' for the CA's default. Since API "
+                         "contract 2.41.")),
         'key_type': fields.String(
             description='Omit to keep the existing key shape (no key flags are '
                         'sent and certbot preserves the lineage key). Set to '
