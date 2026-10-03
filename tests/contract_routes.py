@@ -87,6 +87,7 @@ CATALOGUES_BY_ROUTE = {
 OPAQUE_BY_ROUTE = {
     'GET /api/audit/export': {'entries[].entry.details'},
     'GET /api/activity': {'entries[].details'},
+    'GET /api/web/audit-logs': {'[].details'},
 }
 
 # Routes deliberately not called, each with the reason. A route outside the OpenAPI
@@ -339,6 +340,11 @@ def _walk(app, token, trace, certbot, container, seeded, report):
          body={'username': 'alice', 'password': password})
     call('get', '/api/auth/me', client=browser, headers=origin)
     call('get', '/api/events/stream', client=browser, headers=origin, stream=True)
+    # The dashboard routes the API reference documents, called the way it says, with the token
+    # (contract_support.documented_web_routes).
+    call('get', '/api/web/update-check')
+    call('get', '/api/web/audit-logs')
+    call('get', '/api/web/logs/stream', stream=True)
     call('post', '/api/auth/logout', client=browser, headers=origin)
     call('post', '/api/auth/config', body={'local_auth_enabled': False})
 

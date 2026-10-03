@@ -132,12 +132,18 @@ class ClientCertificateManager:
         if not self._audit_logger:
             return
         try:
+            # The structured attribution every other record carries ({kind, label}), from the
+            # request this runs in. `actor` here is a username, and passing it as the actor made
+            # this the one audit record whose `actor` was a string (found by the route walk).
+            from .audit_context import audit_context_from_request
+            ctx = audit_context_from_request()
             self._audit_logger.log_operation(
                 operation='ca_reset', resource_type='client_ca',
                 resource_id='client-ca', status='success',
                 error=None,
                 details={'certificates_removed': removed},
-                user=actor, actor=actor,
+                user=actor or ctx.get('user'), ip_address=ctx.get('ip'),
+                actor=ctx.get('actor'), trigger=ctx.get('trigger'),
             )
         except Exception:  # pragma: no cover - defensive
             logger.error(
