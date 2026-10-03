@@ -77,6 +77,18 @@ def _unlock_file(fh) -> None:
         pass
 
 
+
+def _request_attribution():
+    """The actor and trigger of the authenticated identity behind the current request, or None
+    outside a request or without one (a failed login, the scheduler, a CLI). Derived from
+    `request.current_user` only, like audit_context_from_request, so a client header can never
+    set the kind. Does not raise: audit_context_from_request catches what it could."""
+    from flask import has_request_context, request
+    if not has_request_context() or not getattr(request, 'current_user', None):
+        return None
+    from .audit_context import audit_context_from_request
+    return audit_context_from_request()
+
 class AuditLogger:
     """Centralized audit logging for certificate operations."""
 
@@ -575,8 +587,11 @@ class AuditLogger:
                 ``{'kind': 'agent'|'user'|'api_token'|'scheduler'|'system',
                 'id': <api_key_id>, 'label': <username>, 'token_prefix': ...,
                 'agent_session': <client-supplied claim>}``. When omitted, a
-                ``{'kind': 'system', 'label': user}`` actor is synthesised so
-                existing call sites keep working and the field is always present.
+                actor is taken from the request this runs in, when there is one
+                with an authenticated identity (most call sites pass none: 63 did,
+                and every action they recorded read as `system`); otherwise a
+                ``{'kind': 'system', 'label': user}`` actor is synthesised so the
+                field is always present.
             trigger: Structured cause of the action, e.g.
                 ``{'cause': 'manual'|'api'|'agent'|'scheduled_renewal'|'event',
                 'job_id': <scheduler job id>}``. Defaults to ``{'cause': 'event'}``.
@@ -588,6 +603,13 @@ class AuditLogger:
         as an informational claim and never sets ``kind`` on its own.
         """
         try:
+            if actor is None or trigger is None:
+                attributed = _request_attribution()
+                if attributed is not None:
+                    actor = actor or attributed['actor']
+                    trigger = trigger or attributed['trigger']
+                    user = user or attributed.get('user')
+                    ip_address = ip_address or attributed.get('ip')
             audit_entry = {
                 'timestamp': utc_now().isoformat(),
                 'operation': operation,
