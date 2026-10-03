@@ -125,8 +125,8 @@ Crea un nuevo certificado de cliente.
     "extended_key_usage": [
       "clientAuth"
     ],
-    "created_at": "2026-10-03T09:14:02.481217",
-    "expires_at": "2027-10-03T09:14:02.481222",
+    "created_at": "2026-10-03T09:14:02.481217Z",
+    "expires_at": "2027-10-03T09:14:02.481222Z",
     "days_valid": 365,
     "serial_number": "106344602611902843865865504921679461731856720169",
     "renewal_enabled": true,
@@ -189,8 +189,8 @@ Lista todos los certificados de cliente con filtrado opcional.
       "extended_key_usage": [
         "clientAuth"
       ],
-      "created_at": "2027-09-04T02:00:11.904130",
-      "expires_at": "2028-09-03T02:00:11.904134",
+      "created_at": "2027-09-04T02:00:11.904130Z",
+      "expires_at": "2028-09-03T02:00:11.904134Z",
       "days_valid": 365,
       "serial_number": "38880296300846741349714468885652733141547560996",
       "renewal_enabled": true,
@@ -218,8 +218,8 @@ Lista todos los certificados de cliente con filtrado opcional.
       "extended_key_usage": [
         "clientAuth"
       ],
-      "created_at": "2026-10-03T09:14:02.481217",
-      "expires_at": "2027-10-03T09:14:02.481222",
+      "created_at": "2026-10-03T09:14:02.481217Z",
+      "expires_at": "2027-10-03T09:14:02.481222Z",
       "days_valid": 365,
       "serial_number": "106344602611902843865865504921679461731856720169",
       "renewal_enabled": false,
@@ -232,7 +232,7 @@ Lista todos los certificados de cliente con filtrado opcional.
       "crl_entry_serial": null,
       "notes": "Production certificate",
       "superseded_by": "user-example.com-8d41e0b6",
-      "superseded_at": "2027-09-04T02:00:11.912558"
+      "superseded_at": "2027-09-04T02:00:11.912558Z"
     },
     {
       "type": "client",
@@ -249,8 +249,8 @@ Lista todos los certificados de cliente con filtrado opcional.
       "extended_key_usage": [
         "clientAuth"
       ],
-      "created_at": "2026-08-12T15:41:27.118346",
-      "expires_at": "2027-08-12T15:41:27.118350",
+      "created_at": "2026-08-12T15:41:27.118346Z",
+      "expires_at": "2027-08-12T15:41:27.118350Z",
       "days_valid": 365,
       "serial_number": "571206345791062948120556172980012647738192614",
       "renewal_enabled": true,
@@ -258,7 +258,7 @@ Lista todos los certificados de cliente con filtrado opcional.
       "csr_required": false,
       "ca_used": "internal",
       "revoked": true,
-      "revoked_at": "2026-09-30T08:02:51.733905",
+      "revoked_at": "2026-09-30T08:02:51.733905Z",
       "reason_revoked": "key_compromise",
       "crl_entry_serial": null,
       "notes": ""
@@ -313,8 +313,8 @@ Obtiene los metadatos completos de un certificado.
   "extended_key_usage": [
     "clientAuth"
   ],
-  "created_at": "2026-10-03T09:14:02.481217",
-  "expires_at": "2027-10-03T09:14:02.481222",
+  "created_at": "2026-10-03T09:14:02.481217Z",
+  "expires_at": "2027-10-03T09:14:02.481222Z",
   "days_valid": 365,
   "serial_number": "106344602611902843865865504921679461731856720169",
   "renewal_enabled": false,
@@ -327,7 +327,7 @@ Obtiene los metadatos completos de un certificado.
   "crl_entry_serial": null,
   "notes": "Production certificate",
   "superseded_by": "user-example.com-8d41e0b6",
-  "superseded_at": "2027-09-04T02:00:11.912558"
+  "superseded_at": "2027-09-04T02:00:11.912558Z"
 }
 ```
 
@@ -439,8 +439,8 @@ Renueva un certificado (mismo CN, nuevo número de serie).
     "extended_key_usage": [
       "clientAuth"
     ],
-    "created_at": "2027-09-04T02:00:11.904130",
-    "expires_at": "2028-09-03T02:00:11.904134",
+    "created_at": "2027-09-04T02:00:11.904130Z",
+    "expires_at": "2028-09-03T02:00:11.904134Z",
     "days_valid": 365,
     "serial_number": "38880296300846741349714468885652733141547560996",
     "renewal_enabled": true,

@@ -2269,6 +2269,9 @@ class CertificateManager:
                 'domain': domain,
                 'exists': True,
                 'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
+                # The same instant in the form every other date-time has (#1127); expiry_date
+                # keeps its own form for the clients that parse it, deprecated.
+                'expires_at': expiry_date.isoformat(),
                 'days_left': days_left,
                 'days_until_expiry': days_left,
                 # The two questions days_left cannot answer at once: how much
@@ -2332,6 +2335,7 @@ class CertificateManager:
             'domain': domain,
             'exists': True,
             'expiry_date': None,
+            'expires_at': None,
             'days_left': None,
             'days_until_expiry': None,
             # None, not False. This is the branch where the certificate could
@@ -2376,6 +2380,7 @@ class CertificateManager:
             'domain': domain,
             'exists': False,
             'expiry_date': None,
+            'expires_at': None,
             'days_left': None,
             'days_until_expiry': None,
             # Same shape as every other answer, so a client does not have to

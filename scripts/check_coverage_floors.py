@@ -43,6 +43,8 @@ FLOORS = {
     'modules/api/models.py': 100,
     'modules/api/path_validation.py': 80,
     'modules/api/resource_context.py': 100,
+    # 100% measured (#1127); 95 leaves the point of headroom the rule above asks for.
+    'modules/api/timestamps.py': 95,
     'modules/api/resources.py': 100,
     'modules/api/resources_backup.py': 65,
     'modules/api/resources_ca.py': 85,

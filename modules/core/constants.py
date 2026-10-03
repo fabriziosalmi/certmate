@@ -599,6 +599,23 @@ METADATA_SCHEMA_VERSION = 1
 #                                   an optional request field and two response
 #                                   fields.
 #
+#   One form for date-times        Every date-time in an answer is ISO 8601 UTC
+#                                   with a `Z` (#1127): 39 fields had no offset
+#                                   (UTC, written naive so the files on disk keep
+#                                   their form, which a caller read as local
+#                                   time) and 5 had `+00:00`; the answers are
+#                                   rewritten on the way out
+#                                   (modules/api/timestamps.py), the files are
+#                                   not. A certificate's `expires_at` is new;
+#                                   `expiry_date` keeps its own form and is
+#                                   deprecated (#1114). A backup listed without
+#                                   metadata had its `created` in the host's
+#                                   local time; it is UTC. 2.42, MINOR, declared
+#                                   with the maintainer: the instants do not
+#                                   change, only how they are written, and the
+#                                   release notes say so for a client that
+#                                   compares the strings.
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -623,7 +640,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.41'
+API_CONTRACT_VERSION = '2.42'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

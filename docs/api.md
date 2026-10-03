@@ -33,6 +33,21 @@ archive that was requested.
 An absent field still falls back to its documented default; only a value that
 is present and not a boolean is an error.
 
+## Date-times
+
+Every date-time in an answer is ISO 8601 in UTC with a `Z`:
+`2026-10-02T22:26:14.669591Z`, or without the fraction when it has none. Since API
+contract **2.42** ([#1127](https://github.com/fabriziosalmi/certmate/issues/1127)).
+Before it, most had no offset at all (`2026-10-02T22:26:14.669591`, which both
+`datetime.fromisoformat()` and `new Date()` read as local time) and a few had
+`+00:00`, sometimes in the same answer. The instants did not change, only how
+they are written; a client that appended a `Z` itself must stop doing so.
+
+One field keeps its own form: a certificate's `expiry_date`,
+`2026-11-30 09:17:11` (UTC). It is **deprecated**, removed in 3.0
+([#1114](https://github.com/fabriziosalmi/certmate/issues/1114)); `expires_at` is the
+same instant in the form above.
+
 ## Authentication
 
 All API endpoints require Bearer token authentication.
@@ -135,6 +150,7 @@ rather than written by hand:
   "domain": "app.example.com",
   "exists": true,
   "expiry_date": "2026-11-30 09:17:11",
+  "expires_at": "2026-11-30T09:17:11Z",
   "days_left": 74,
   "days_until_expiry": 74,
   "seconds_left": 6479999,
@@ -158,8 +174,8 @@ rather than written by hand:
   "tags": ["production"],
   "deployment_port": null,
   "deployment_protocol": null,
-  "created_at": "2026-09-01T10:14:02.118402",
-  "renewed_at": "2026-09-14T02:31:55.902114",
+  "created_at": "2026-09-01T10:14:02.118402Z",
+  "renewed_at": "2026-09-14T02:31:55.902114Z",
   "renewal_info": {
     "status": "window",
     "checked_at": "2026-09-27T02:00:04Z",
@@ -174,9 +190,8 @@ rather than written by hand:
 }
 ```
 
-`created_at`, `renewed_at` and `expiry_date` are UTC, written without an offset
-([#1127](https://github.com/fabriziosalmi/certmate/issues/1127)). The instants in `renewal_info`
-carry an explicit `Z`, because a browser reads an instant without one as local time.
+Every date-time here is UTC with a `Z` ([Date-times](#date-times)). `expiry_date` keeps
+its own form and is deprecated: `expires_at` is the same instant.
 
 ##### Is it still valid?
 
@@ -594,8 +609,8 @@ Create a new client certificate.
     "extended_key_usage": [
       "clientAuth"
     ],
-    "created_at": "2026-10-03T09:14:02.481217",
-    "expires_at": "2027-10-03T09:14:02.481222",
+    "created_at": "2026-10-03T09:14:02.481217Z",
+    "expires_at": "2027-10-03T09:14:02.481222Z",
     "days_valid": 365,
     "serial_number": "106344602611902843865865504921679461731856720169",
     "renewal_enabled": true,
@@ -614,7 +629,7 @@ Create a new client certificate.
 `metadata` is the certificate's record, the same object `GET /api/client-certs/<identifier>`
 answers with. The `identifier` is the common name made safe for a path, and eight hex
 characters. Its dates (`created_at`, `expires_at`, and later `revoked_at` and
-`superseded_at`) are UTC, written without an offset ([#1127](https://github.com/fabriziosalmi/certmate/issues/1127)).
+`superseded_at`) are UTC with a `Z`, like every date-time ([Date-times](#date-times)).
 
 `paths` is **deprecated**, and **removed by the next major of the API contract (3.0)**
 ([#1114](https://github.com/fabriziosalmi/certmate/issues/1114)). The four entries are where the files
@@ -669,8 +684,8 @@ List all client certificates with optional filtering.
       "extended_key_usage": [
         "clientAuth"
       ],
-      "created_at": "2027-09-04T02:00:11.904130",
-      "expires_at": "2028-09-03T02:00:11.904134",
+      "created_at": "2027-09-04T02:00:11.904130Z",
+      "expires_at": "2028-09-03T02:00:11.904134Z",
       "days_valid": 365,
       "serial_number": "38880296300846741349714468885652733141547560996",
       "renewal_enabled": true,
@@ -698,8 +713,8 @@ List all client certificates with optional filtering.
       "extended_key_usage": [
         "clientAuth"
       ],
-      "created_at": "2026-10-03T09:14:02.481217",
-      "expires_at": "2027-10-03T09:14:02.481222",
+      "created_at": "2026-10-03T09:14:02.481217Z",
+      "expires_at": "2027-10-03T09:14:02.481222Z",
       "days_valid": 365,
       "serial_number": "106344602611902843865865504921679461731856720169",
       "renewal_enabled": false,
@@ -712,7 +727,7 @@ List all client certificates with optional filtering.
       "crl_entry_serial": null,
       "notes": "Production certificate",
       "superseded_by": "user-example.com-8d41e0b6",
-      "superseded_at": "2027-09-04T02:00:11.912558"
+      "superseded_at": "2027-09-04T02:00:11.912558Z"
     },
     {
       "type": "client",
@@ -729,8 +744,8 @@ List all client certificates with optional filtering.
       "extended_key_usage": [
         "clientAuth"
       ],
-      "created_at": "2026-08-12T15:41:27.118346",
-      "expires_at": "2027-08-12T15:41:27.118350",
+      "created_at": "2026-08-12T15:41:27.118346Z",
+      "expires_at": "2027-08-12T15:41:27.118350Z",
       "days_valid": 365,
       "serial_number": "571206345791062948120556172980012647738192614",
       "renewal_enabled": true,
@@ -738,7 +753,7 @@ List all client certificates with optional filtering.
       "csr_required": false,
       "ca_used": "internal",
       "revoked": true,
-      "revoked_at": "2026-09-30T08:02:51.733905",
+      "revoked_at": "2026-09-30T08:02:51.733905Z",
       "reason_revoked": "key_compromise",
       "crl_entry_serial": null,
       "notes": ""
@@ -802,8 +817,8 @@ stop reading it.
   "extended_key_usage": [
     "clientAuth"
   ],
-  "created_at": "2026-10-03T09:14:02.481217",
-  "expires_at": "2027-10-03T09:14:02.481222",
+  "created_at": "2026-10-03T09:14:02.481217Z",
+  "expires_at": "2027-10-03T09:14:02.481222Z",
   "days_valid": 365,
   "serial_number": "106344602611902843865865504921679461731856720169",
   "renewal_enabled": false,
@@ -816,7 +831,7 @@ stop reading it.
   "crl_entry_serial": null,
   "notes": "Production certificate",
   "superseded_by": "user-example.com-8d41e0b6",
-  "superseded_at": "2027-09-04T02:00:11.912558"
+  "superseded_at": "2027-09-04T02:00:11.912558Z"
 }
 ```
 
@@ -936,8 +951,8 @@ certificate that does not exist is a `404` (a `400` before API contract **2.37**
     "extended_key_usage": [
       "clientAuth"
     ],
-    "created_at": "2027-09-04T02:00:11.904130",
-    "expires_at": "2028-09-03T02:00:11.904134",
+    "created_at": "2027-09-04T02:00:11.904130Z",
+    "expires_at": "2028-09-03T02:00:11.904134Z",
     "days_valid": 365,
     "serial_number": "38880296300846741349714468885652733141547560996",
     "renewal_enabled": true,

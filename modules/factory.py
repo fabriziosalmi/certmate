@@ -1604,6 +1604,9 @@ def setup_api_contract_headers(app):
         return response
 
     apply_deprecation_headers(app)
+    # One form for every date-time an answer carries (#1127): modules/api/timestamps.py.
+    from modules.api.timestamps import apply_timestamp_form
+    apply_timestamp_form(app)
 
 
 def setup_correlation_ids(app):
