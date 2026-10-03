@@ -10,7 +10,7 @@ import re
 import json
 import tempfile
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 import logging
 from .domain_entries import iter_domains
@@ -884,7 +884,11 @@ class FileOperations:
                 for backup_file in sorted(unified_backup_dir.glob("backup_*.zip*")):
                     try:
                         stat = backup_file.stat()
-                        metadata = {"size": stat.st_size, "created": datetime.fromtimestamp(stat.st_mtime).isoformat()}
+                        metadata = {"size": stat.st_size,
+                                    # UTC like every other date-time (#1127); fromtimestamp()
+                                    # alone is the local time of the host.
+                                    "created": datetime.fromtimestamp(stat.st_mtime, UTC)
+                                    .replace(tzinfo=None).isoformat()}
 
                         # Try to read unified backup metadata
                         try:

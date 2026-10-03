@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.41",
+ "contract_version": "2.42",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -750,6 +750,9 @@
     "[].expired": [
      "bool"
     ],
+    "[].expires_at": [
+     "str"
+    ],
     "[].expiry_date": [
      "str"
     ],
@@ -894,6 +897,9 @@
     ],
     "expired": [
      "bool"
+    ],
+    "expires_at": [
+     "str"
     ],
     "expiry_date": [
      "str"

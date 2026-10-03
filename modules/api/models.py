@@ -194,7 +194,19 @@ def create_api_models(api):
     certificate_model = api.model('Certificate', {
         'domain': fields.String(required=True, description='Domain name'),
         'exists': fields.Boolean(description='Whether certificate exists'),
-        'expiry_date': fields.String(description='Certificate expiry date'),
+        'expiry_date': fields.String(
+            description=(
+                "Certificate expiry, 'YYYY-MM-DD HH:MM:SS' in UTC. Deprecated "
+                "since API contract 2.42 and removed in 3.0 (#1114): read "
+                "expires_at, the same instant in the form every other date-time "
+                "has."
+            )),
+        'expires_at': fields.String(
+            description=(
+                'Certificate expiry, ISO 8601 UTC with a Z, like every date-time '
+                'the API answers with since contract 2.42. Null when the '
+                'certificate could not be parsed.'
+            )),
         'days_left': fields.Integer(description='Days until expiry'),
         'days_until_expiry': fields.Integer(description='Days until expiry (alias for days_left)'),
         'expired': fields.Boolean(
