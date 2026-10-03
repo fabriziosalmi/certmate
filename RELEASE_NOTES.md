@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.48.0 (when a certificate renews, which kind it is, and one form for every date)
+
+[Read the notes](docs/releases/v2.48.0.md)
+
 ## v2.47.1 (a base image a month newer, and a release that will not ship an old one)
 
 [Read the notes](docs/releases/v2.47.1.md)
