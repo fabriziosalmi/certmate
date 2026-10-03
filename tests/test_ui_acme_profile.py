@@ -11,7 +11,8 @@ import os
 
 import pytest
 
-from tests.conftest import _REQUIRE_BROWSER, BASE_URL as _API_URL, TEST_EMAIL
+from tests.conftest import _REQUIRE_BROWSER, TEST_EMAIL
+from tests.conftest import BASE_URL as _API_URL
 
 if _REQUIRE_BROWSER:
     import importlib.util
@@ -59,10 +60,13 @@ def _dashboard(page, certificates=None):
 
 
 def _posts(page, fragment):
+    """Every POST to `fragment` is answered here and never reaches the shared instance. The
+    trailing `**` matters: the CA account route is called with `?create=1`, and a pattern that
+    stopped at the path let the first version of this file save a real account there."""
     seen = []
     page.on('request', lambda r: seen.append(json.loads(r.post_data or '{}'))
             if r.method == 'POST' and fragment in r.url else None)
-    page.route(f'**{fragment}', lambda route: route.fulfill(
+    page.route(f'**{fragment}**', lambda route: route.fulfill(
         status=200, content_type='application/json',
         body=json.dumps({'success': True, 'domain': 'profile.example.com', 'message': 'ok'})))
     return seen
@@ -128,3 +132,6 @@ def test_a_ca_account_default_reaches_the_server(browser_page):
     browser_page.evaluate("saveCAAccount()")
     browser_page.wait_for_timeout(800)
     assert posts and posts[-1].get('acme_profile') == 'shortlived', posts
+    settings = browser_page.evaluate(
+        "fetch('/api/web/settings').then(r => r.json()).then(s => s.ca_providers || {})")
+    assert 'short' not in json.dumps(settings), 'the account write reached the shared instance'
