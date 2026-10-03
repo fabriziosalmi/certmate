@@ -46,13 +46,19 @@ def mock_managers():
     cert_mgr = MagicMock()
     cert_mgr.cert_dir = Path('/tmp/test_certs_nonexist')
 
+    # The answers get_certificate_info gives: since #393 they carry `renews_at`, the instant the
+    # sweep renews at, and the digest reads "expiring soon" from it rather than from a copy of
+    # the threshold arithmetic. Past for the one inside its renewal window, ahead for the other.
     def get_cert_info(domain):
         if domain == 'example.com':
-            return {'domain': domain, 'exists': True, 'days_left': 60}
+            return {'domain': domain, 'exists': True, 'days_left': 60,
+                    'renews_at': '2999-01-01T00:00:00Z'}
         elif domain == 'expired.com':
-            return {'domain': domain, 'exists': True, 'days_left': -5}
+            return {'domain': domain, 'exists': True, 'days_left': -5,
+                    'renews_at': '2000-01-01T00:00:00Z'}
         elif domain == 'expiring.com':
-            return {'domain': domain, 'exists': True, 'days_left': 10}
+            return {'domain': domain, 'exists': True, 'days_left': 10,
+                    'renews_at': '2000-01-01T00:00:00Z'}
         return None
 
     cert_mgr.get_certificate_info.side_effect = get_cert_info
@@ -106,6 +112,14 @@ class TestBuildDigest:
         assert s['expired'] == 1
         assert len(s['expiring_domains']) == 1
         assert 'expiring.com' in s['expiring_domains'][0]
+
+    def test_expiring_is_the_sweep_s_decision_not_the_threshold_s(self, digest, mock_managers):
+        """A 45-day certificate with 20 days left is inside the 30-day threshold and not due: it
+        renews with 15 left (#393). The digest used to call it expiring from 30 days left."""
+        mock_managers['cert_mgr'].get_certificate_info.side_effect = lambda domain: {
+            'domain': domain, 'exists': True, 'days_left': 20, 'renews_at': '2999-01-01T00:00:00Z'}
+        s = digest.build_digest()['server_certs']
+        assert s['expiring_soon'] == 0 and s['valid'] == 3
 
     def test_client_cert_stats(self, digest):
         data = digest.build_digest()

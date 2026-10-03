@@ -83,8 +83,21 @@ def _context(domains, infos):
     }
 
 
+def _renews_at(days_left):
+    """The `renews_at` get_certificate_info gives a 90-day certificate with the default
+    threshold (#393): 30 days before expiry. Metrics read it rather than redoing the arithmetic."""
+    from datetime import timedelta
+
+    from modules.core import renewal_policy
+    from modules.core.utils import utc_now
+    if days_left is None:          # an unparseable certificate has no instant either
+        return None
+    return renewal_policy.stamp(utc_now() + timedelta(days=days_left - 30))
+
+
 def _info(days_left):
-    return {'exists': True, 'days_left': days_left, 'dns_provider': 'cloudflare'}
+    return {'exists': True, 'days_left': days_left, 'dns_provider': 'cloudflare',
+            'renews_at': _renews_at(days_left)}
 
 
 # --- the version metric ---------------------------------------------------

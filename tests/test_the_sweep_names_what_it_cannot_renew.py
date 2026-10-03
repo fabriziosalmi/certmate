@@ -141,11 +141,15 @@ def instance(tmp_path):
 
 # --- the reported symptom, and that it is not the threshold --------------
 
-def test_a_registered_private_ca_cert_is_picked_up_from_day_zero(instance):
-    """The control that redirects the diagnosis. 31-day lifespan, 30-day
-    threshold: `days_left` is 30 on the day it is issued and `30 <= 30`, so a
-    REGISTERED certificate renews immediately. The reported numbers do not
-    produce the reported symptom."""
+def test_a_registered_private_ca_cert_renews_at_a_third_of_its_life(instance):
+    """The control that redirected the diagnosis, under #393. 31-day lifespan,
+    30-day threshold: before #393 `days_left` was 30 on the day it was issued
+    and `30 <= 30` called a REGISTERED certificate due from day zero (and every
+    night after), so the reported numbers did not produce the reported symptom.
+    A threshold above half the lifetime now means nothing for the certificate,
+    and the lifetime rule renews it with a third of it left, about 10 days."""
+    from modules.core import renewal_policy
+
     instance.put_on_disk('registered.example.com', issued_days_ago=0)
     instance.register({'domain': 'registered.example.com',
                        'dns_provider': 'cloudflare'})
@@ -155,7 +159,8 @@ def test_a_registered_private_ca_cert_is_picked_up_from_day_zero(instance):
         settings=instance.settings_manager.load_settings(), use_cache=False)
 
     assert info['days_left'] == 30
-    assert info['needs_renewal'] is True
+    assert info['needs_renewal'] is False
+    assert abs(renewal_policy.margin_days(info) - 31 / 3) < 0.01
 
 
 def test_an_unregistered_certificate_is_never_checked(instance):

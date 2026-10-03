@@ -174,24 +174,37 @@ def _sample(body, metric, domain):
     return None
 
 
+def _renews_at(days_left):
+    """The `renews_at` get_certificate_info gives a 90-day certificate with the default
+    threshold (#393): 30 days before expiry. Metrics read it rather than redoing the arithmetic."""
+    from datetime import timedelta
+
+    from modules.core import renewal_policy
+    from modules.core.utils import utc_now
+    if days_left is None:          # an unparseable certificate has no instant either
+        return None
+    return renewal_policy.stamp(utc_now() + timedelta(days=days_left - 30))
+
+
 def test_last_renewal_is_the_recorded_event_not_a_guess_from_expiry(tmp_path):
     """'mock data for now' shipped: last_renewal was derived from the expiry
     date and, for a 90-day certificate with a 30-day threshold, pointed into
     the future. It is now the metadata's renewed_at (else created_at)."""
     body = _metrics_body(tmp_path, 'renewed.example.net', {
-        'exists': True, 'days_left': 80, 'dns_provider': 'cloudflare',
+        'exists': True, 'days_left': 80, 'dns_provider': 'cloudflare', 'renews_at': _renews_at(80),
         'created_at': '2026-08-01T08:00:00Z', 'renewed_at': '2026-08-20T03:00:00Z'})
     from datetime import datetime, timezone
     expected = datetime(2026, 8, 20, 3, 0, tzinfo=timezone.utc).timestamp()
     assert _sample(body, 'certmate_certificate_last_renewal_timestamp', 'renewed.example.net') == expected
     import time
     nxt = _sample(body, 'certmate_certificate_next_renewal_timestamp', 'renewed.example.net')
-    assert abs(nxt - (time.time() + 50 * 86400)) < 120   # due when days_left hits 30
+    assert abs(nxt - (time.time() + 50 * 86400)) < 120   # renews_at, 30 days before expiry
 
 
 def test_no_timestamp_known_means_no_sample(tmp_path):
     body = _metrics_body(tmp_path, 'unknown-age.example.net',
-                         {'exists': True, 'days_left': 10, 'dns_provider': 'cloudflare'})
+                         {'exists': True, 'days_left': 10, 'dns_provider': 'cloudflare',
+                          'renews_at': _renews_at(10)})
     assert _sample(body, 'certmate_certificate_last_renewal_timestamp', 'unknown-age.example.net') is None
     import time
     # Inside the renewal window: due now, not in the past.

@@ -105,6 +105,18 @@ def test_the_source_does_not_carry_the_dead_label():
 
 # --- the four assignable statuses partition the certificates -------------
 
+def _renews_at(days_left):
+    """The `renews_at` get_certificate_info gives a 90-day certificate with the default
+    threshold (#393): 30 days before expiry. Metrics read it rather than redoing the arithmetic."""
+    from datetime import timedelta
+
+    from modules.core import renewal_policy
+    from modules.core.utils import utc_now
+    if days_left is None:          # an unparseable certificate has no instant either
+        return None
+    return renewal_policy.stamp(utc_now() + timedelta(days=days_left - 30))
+
+
 @pytest.mark.parametrize('days_left,expected', [
     (60, 'valid'),
     (10, 'expiring_soon'),
@@ -123,7 +135,8 @@ def test_each_certificate_lands_in_exactly_one(tmp_path, days_left, expected):
                      'renewal_threshold_days': 30},
         'cert_dir': tmp_path,
         'get_certificate_info': lambda domain: {
-            'exists': True, 'days_left': days_left, 'dns_provider': 'cf'},
+            'exists': True, 'days_left': days_left, 'dns_provider': 'cf',
+            'renews_at': _renews_at(days_left)},
     })
 
     body = generate_latest().decode('utf-8')

@@ -1,6 +1,6 @@
 # CertMate Certificados de Cliente - Guía de uso
 
-<!-- CERTMATE-TRANSLATED-FROM f31f91fe8af58072 -->
+<!-- CERTMATE-TRANSLATED-FROM f1dfd1dec68254e6 -->
 
 ## Descripción general
 
@@ -381,84 +381,102 @@ Usage Type: mobile-app
 ### Configuración
 
 - **Comprobación**: Diariamente a las 3 AM
-- **Umbral**: 30 días antes de la expiración
+- **Umbral**: 30 días antes de la expiración (`renewal_threshold_days`), cuando
+  no supera la mitad de la vida del certificado; vea abajo
 - **Acción**: Renovación automática si está activada
+
+### Cuando se renueva un certificado
+
+Decide una sola regla, y la respuesta del certificado la lleva:
+`needs_renewal` pasa a verdadero en `renews_at`, el instante en que el barrido
+lo renueva (`GET /api/certificates/<domain>`, desde el contrato de API 2.40).
+CertMate toma la decision y le dice a certbot que renueve; la compuerta propia
+de certbot ya no interviene, asi que una actualizacion de certbot no puede
+cambiar cuando renueva CertMate.
+
+- **El umbral**, cuando no supera la mitad de la vida: 30 dias de un
+  certificado de 90, como siempre, o 45 si fija 45.
+- **Si no, la vida**: un tercio de ella, o la mitad para un certificado que
+  vive menos de 10 dias. 30 dias no significan nada para un certificado de 45,
+  asi que se renueva cuando le quedan 15; uno de 160 horas cuando le quedan
+  unos 3.
+- **La ventana de la CA**, cuando publico una para este certificado (abajo):
+  antes o despues que el umbral.
+
+Para un certificado de 90 dias con los 30 por defecto, las renovaciones ocurren
+cuando siempre ocurrieron.
 
 ### Cuando la CA no coincide con el umbral (ARI)
 
-El umbral de 30 dias es la opinion de CertMate, y es la misma para cada
+El umbral es la opinion de CertMate, y es la misma para cada
 certificado y cada CA. Desde la [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 una CA puede publicar la suya, por certificado: un endpoint `renewalInfo` que
 responde con una ventana durante la cual quiere que ese certificado se
 sustituya. Let's Encrypt ofrece uno, en produccion y en staging. step-ca todavia
 no (0.30.2, medido; vea smallstep/certificates#2162), asi que en una step-ca
-privada decide solo el umbral y el panel del certificado indica que la CA no
-publica una ventana.
+privada decide solo el umbral y el panel del certificado dice que la CA no
+publica ninguna ventana.
 
-El barrido de renovacion TLS lo pregunta. Para cada certificado que el umbral
-**no** ha declarado ya vencido, CertMate obtiene la ventana de la CA y renueva
-de inmediato si esa ventana lo indica. Asi es como una instancia se entera de
-una sustitucion masiva — una emision incorrecta, un intermedio comprometido,
-una resolucion del CA/Browser Forum — dias antes de que llegue la revocacion,
-en lugar de cuando el certificado deja de funcionar.
+El barrido de renovacion TLS pregunta, para cada certificado, y la ventana
+decide en ambas direcciones. **Adelanta** una renovacion: asi se entera una
+instancia de un reemplazo masivo — una emision erronea, un intermedio
+comprometido, una decision del CA/Browser Forum — dias antes de que llegue la
+revocacion, en lugar de cuando el certificado deja de funcionar. Y **pospone**
+una que el umbral habria hecho, hasta el punto de la ventana que pidio la CA.
 
-**Solo puede adelantar una renovacion.** Su umbral sigue siendo la red de
-seguridad: una CA caida, lenta o equivocada no puede retrasar una renovacion
-que habria ocurrido de todos modos. Cada ausencia — una CA que no publica
-`renewalInfo`, un endpoint inalcanzable, una respuesta malformada, un
-certificado autofirmado sin Authority Key Identifier con el que nombrarlo —
-vuelve al umbral.
+**Un aplazamiento tiene un suelo.** Una ventana nunca retiene un certificado
+cuando le queda una sexta parte de su vida (15 dias de 90, 7,5 de 45, alrededor
+de uno de 160 horas), ni mas alla del final de la propia ventana, asi que una
+CA que se equivoca, o una ventana caducada, no puede empujar un certificado
+hacia la expiracion. Cada ausencia — una CA que no publica `renewalInfo`, un
+endpoint inalcanzable, una respuesta mal formada, un certificado autofirmado
+sin Authority Key Identifier con el que nombrarlo — no deja ninguna ventana, y
+decide el umbral. La ventana se guarda en disco, asi que un aplazamiento dura
+de un barrido al siguiente.
 
-Dentro de la ventana CertMate elige un punto, derivado del identificador del
-propio certificado, de modo que la eleccion sea la misma en cada barrido y dos
-certificados no caigan en el mismo instante. Para eso existe la ventana: una
-CA no quiere que todos sus clientes renueven a la vez.
+Dentro de la ventana CertMate elige un punto, derivado del propio
+identificador del certificado, asi que la eleccion es la misma en cada barrido
+y dos certificados no caen en el mismo instante. Para eso existe la ventana:
+una CA no quiere que todos sus clientes renueven a la vez.
 
-El resumen del barrido los cuenta como `ari_advanced`, para que una renovacion
-que su configuracion no explica sea atribuible.
+El resumen del barrido los cuenta como `ari_advanced` y `ari_postponed`, de
+modo que una renovacion que su configuracion no explica, o una que no hace,
+sea atribuible.
 
-El panel de detalle del certificado muestra, bajo **CA renewal window**, lo
-que dijo la CA en el ultimo barrido: la ventana, el instante dentro de ella en
-que CertMate renueva, y el enlace de explicacion de la CA cuando lo da. Si no
-hay ventana, indica que ausencia es: la CA no publica ninguna, la CA no
-respondio en la ultima comprobacion, o el certificado no se puede nombrar en
-ARI. El mismo registro lo devuelve `GET /api/certificates/<domain>` como
-`renewal_info`. Se lee de lo que guardo el barrido, asi que abrir el panel
-nunca envia una peticion a la CA. Justo despues de una renovacion muestra
-"Not checked yet" hasta que el siguiente barrido pregunte por el nuevo
-certificado.
+El panel de detalle del certificado muestra lo que dijo la CA en el ultimo
+barrido, bajo **CA renewal window**: la ventana, el instante dentro de ella en
+que CertMate renueva, y el enlace explicativo de la CA cuando lo dio. Cuando no
+hay ventana dice que ausencia es: la CA no publica ninguna, la CA no respondio
+en la ultima comprobacion, o el certificado no se puede nombrar en ARI. El
+mismo registro se devuelve como `renewal_info` en `GET /api/certificates/<domain>`.
+Se lee de lo que guardo el barrido, asi que abrir el panel nunca envia una
+peticion a la CA. Justo despues de una renovacion dice "Not checked yet" hasta
+que el siguiente barrido pregunte por el nuevo certificado.
 
-Ponga `"ari_enabled": false` en `settings.json` para desactivarlo; esta activo
-por defecto y cuesta una GET no autenticada por certificado y barrido, mas una
-por CA y hora para el directory.
-
-Todavia no hecho, y deliberadamente: dejar que ARI **aplace** una renovacion
-mas alla de su umbral. Esa es la mitad que importa para los certificados de
-corta duracion, donde una regla fija de 30 dias no tiene sentido frente a un
-certificado de 6 dias — llegara con el soporte de perfiles que esos
-certificados necesitan.
+Ponga `"ari_enabled": false` en `settings.json` para desactivarlo; esta activado
+por defecto y cuesta un GET no autenticado por certificado y barrido, mas uno
+por CA y hora para el directorio.
 
 ### Un umbral de mas de 30 dias
 
-certbot tiene su propia barrera de renovacion: si no se le fuerza, solo renueva
-dentro de los ultimos 30 dias antes de la caducidad. Antes de la 2.40 CertMate lo
-llamaba sin forzarlo, asi que un `renewal_threshold_days` de 45 se comportaba
-como 30, y el barrido contaba la diferencia como `skipped_not_due` cada noche.
+Antes de la version 2.40.0 CertMate pedia a certbot renovar sin forzarlo, y la
+compuerta propia de certbot solo renovaba dentro de los 30 dias previos a la
+expiracion, asi que un `renewal_threshold_days` de 45 se comportaba como 30. La
+version 2.40.0 forzo las renovaciones que un umbral de mas de 30 dias daba por
+pendientes, y desde el contrato de API 2.40 se fuerza toda renovacion que
+decide CertMate: un umbral de 45 renueva un certificado de 90 dias 45 dias
+antes de su expiracion. Una renovacion que el umbral adelanta respecto a la
+regla de la vida llega con dos protecciones:
 
-Cuando el umbral, y solo el umbral, declara un certificado pendiente de
-renovar mientras certbot se negaria, CertMate ahora fuerza la renovacion, como
-ya hacia con una ventana publicada por la CA. Dentro de los ultimos 30 dias no
-cambia nada. Vienen con dos protecciones:
-
-- **Como maximo `early_renewals_per_sweep` por barrido** (10 por defecto, entre
+- **Como maximo `early_renewals_per_sweep` por barrido** (por defecto 10, entre
   1 y 50). Subir el umbral en muchos certificados reparte las renovaciones
   anticipadas en varias noches en lugar de enviar todos los pedidos a la CA en
-  una sola. El resumen del barrido las cuenta como `early_forced`, y las que
-  quedan para el barrido siguiente como `early_deferred`.
-- **Un certificado emitido hace menos de 7 dias nunca se fuerza.** Un umbral
-  igual o superior a la vida del certificado lo declararia pendiente para
-  siempre. Con esta proteccion cuesta como mucho una renovacion por semana, no
-  una por noche.
+  una sola. El resumen las cuenta como `early_forced`, y las que quedan para el
+  siguiente barrido como `early_deferred`.
+- **Un certificado mas joven que una semana, o que un tercio de su vida, nunca
+  se renueva por adelantado.** Un umbral por encima de la mitad de la vida ya no
+  cuenta (decide la vida), asi que esta proteccion es la ultima defensa ante un
+  certificado cuyas fechas no cuadran.
 
 Un certificado que necesita atencion por otro motivo, una clave servida que
 falta o no coincide, no se fuerza: se repara desde su linaje sin una clave

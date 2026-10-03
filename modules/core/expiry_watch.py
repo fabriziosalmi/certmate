@@ -48,12 +48,21 @@ CERTIFICATE_THRESHOLDS = (14, 7, 3, 1, 0)
 DOMAIN_THRESHOLDS = (60, 30, 14, 7, 1, 0)
 
 
-def thresholds_for_certificate(auto_renew, renewal_threshold_days=DEFAULT_RENEWAL_THRESHOLD_DAYS):
-    """The days-left marks a certificate is announced at."""
+def thresholds_for_certificate(auto_renew, margin_days=DEFAULT_RENEWAL_THRESHOLD_DAYS):
+    """The days-left marks a certificate is announced at.
+
+    `margin_days` is how many days before expiry this certificate renews (renewal_policy,
+    #393), not the setting: 30 for a 90-day certificate, 15 for a 45-day one, 3.3 for a
+    160-hour one. With auto-renew on, a mark is worth a message only once half of that window
+    has passed with no renewal, so the marks are those at most half the margin: for 90 days the
+    same five as always, for 160 hours the last two, never one the day it is issued. With
+    auto-renew off nobody renews it, so every mark speaks, and the first is the margin itself
+    when that is earlier: where a human has to act.
+    """
+    margin = float(margin_days if margin_days is not None else DEFAULT_RENEWAL_THRESHOLD_DAYS)
     if auto_renew:
-        return CERTIFICATE_THRESHOLDS
-    first = max(int(renewal_threshold_days or DEFAULT_RENEWAL_THRESHOLD_DAYS),
-                CERTIFICATE_THRESHOLDS[0])
+        return tuple(t for t in CERTIFICATE_THRESHOLDS if t <= margin / 2)
+    first = max(int(margin), CERTIFICATE_THRESHOLDS[0])
     return (first,) + CERTIFICATE_THRESHOLDS
 
 
@@ -103,6 +112,7 @@ class ExpiryWatch:
         from .inventory_sources import auto_renew_for, collect_domain_sources
 
         threshold_days = settings.get('renewal_threshold_days', DEFAULT_RENEWAL_THRESHOLD_DAYS)
+        from . import renewal_policy
         announced = []
         for domain in collect_domain_sources(settings, self.certificates.cert_dir):
             info = self.certificates.get_certificate_info(domain, settings=settings)
@@ -110,8 +120,9 @@ class ExpiryWatch:
                 continue
             days_left = info.get('days_left')
             auto_renew = auto_renew_for(settings, domain)
+            margin = renewal_policy.margin_days(info)
             threshold = due_threshold(days_left, thresholds_for_certificate(
-                auto_renew, threshold_days))
+                auto_renew, threshold_days if margin is None else margin))
             if threshold is None:
                 continue
             event = self._announce(KIND_CERTIFICATE, domain, info.get('expiry_date'),

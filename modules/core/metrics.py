@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 import logging
 from .domain_entries import entry_domain
 
-from .constants import DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs
+from . import renewal_policy
+from .constants import iter_cert_domain_dirs
 
 
 def _iso_to_epoch(value):
@@ -29,6 +30,9 @@ def _iso_to_epoch(value):
     return parsed.timestamp()
 
 logger = logging.getLogger(__name__)
+
+# renews_at is naive UTC; its epoch seconds without attaching a timezone to it.
+_EPOCH = datetime(1970, 1, 1)
 
 # Prometheus client library
 try:
@@ -379,10 +383,6 @@ class CertMateMetricsCollector:
             if not all([settings, cert_dir, get_certificate_info]):
                 return
                 
-            # Get configurable renewal threshold (default 30 days for backward compatibility)
-            renewal_threshold_days = settings.get(
-                'renewal_threshold_days', DEFAULT_RENEWAL_THRESHOLD_DAYS)
-                
             domains = settings.get('domains', [])
             total_domains.set(len(domains))
             
@@ -451,7 +451,8 @@ class CertMateMetricsCollector:
                         status = 'missing'
                     elif days_left < 0:
                         status = 'expired'
-                    elif days_left <= renewal_threshold_days:
+                    elif renewal_policy.due(cert_info):
+                        # Due by the instant the sweep renews at (#393).
                         status = 'expiring_soon'
                     else:
                         status = 'valid'
@@ -487,15 +488,22 @@ class CertMateMetricsCollector:
                             certificate_last_renewal.remove(domain, dns_provider)
                         except KeyError:
                             pass
-                    # Next renewal: the scheduler renews once days_left falls
-                    # to the threshold, so this is a real prediction — due
-                    # now when already inside the window.
-                    if days_left is not None:
-                        due_in_days = max(0, days_left - renewal_threshold_days)
+                    # Next renewal: the instant the sweep renews at
+                    # (renewal_policy, #393), which the certificate's answer
+                    # carries; now when it is already due.
+                    renews_at = renewal_policy.parse_instant(cert_info.get('renews_at'))
+                    if renews_at is not None:
                         certificate_next_renewal.labels(
                             domain=domain,
                             dns_provider=dns_provider
-                        ).set(time.time() + due_in_days * 24 * 3600)
+                        ).set(max(time.time(), (renews_at - _EPOCH).total_seconds()))
+                    else:
+                        # No instant (an unparseable certificate): the series goes away rather
+                        # than freezing on the last prediction, as certificate_last_renewal does.
+                        try:
+                            certificate_next_renewal.remove(domain, dns_provider)
+                        except KeyError:
+                            pass
                 else:
                     status_counts['missing'] += 1
             

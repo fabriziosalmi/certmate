@@ -214,7 +214,22 @@ def create_api_models(api):
                 'one that lapsed hours ago. Null when the certificate could '
                 'not be parsed. Added in API contract 2.2.'
             )),
-        'needs_renewal': fields.Boolean(description='Whether certificate needs renewal'),
+        'needs_renewal': fields.Boolean(
+            description=(
+                'Whether the certificate needs renewing: true from renews_at '
+                'on, or now when its private key is missing or does not match. '
+                'Since API contract 2.40 decided by the same rule the renewal '
+                'sweep acts on.'
+            )),
+        'renews_at': fields.String(
+            description=(
+                'The instant the renewal sweep renews this certificate at, UTC '
+                'with a Z: the threshold where it is at most half the lifetime, '
+                'otherwise a third of the lifetime (half under 10 days), or the '
+                "CA's recorded ARI window, never with less than a sixth of the "
+                'lifetime left. Null when the certificate could not be parsed. '
+                'Added in API contract 2.40.'
+            )),
         'usable': fields.Boolean(
             description=(
                 'Whether this certificate can actually serve TLS: it exists AND '
