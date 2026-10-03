@@ -152,5 +152,7 @@ def test_owned_key_set_covers_every_field_the_reissue_writes():
         'created_at', 'email', 'staging', 'account_id', 'ca_provider',
         'ca_account_id', 'domain_alias', 'alias_dns_provider',
         'storage_warning',
+        # The ACME profile and what the last issuance found about it (#395).
+        'acme_profile', 'acme_profile_withdrawn_at',
     }
     assert written_by_reissue == set(_REISSUE_OWNED_METADATA_KEYS)

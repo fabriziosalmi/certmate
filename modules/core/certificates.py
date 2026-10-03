@@ -3553,19 +3553,7 @@ class CertificateManager:
             ]
             if force:
                 cmd.append('--force-renewal')
-            # The profile the certificate was issued with, asked for as preferred (#395): on
-            # the command line too, so a renewal configuration restored from an older backup,
-            # or written before the profile was softened, still follows the metadata.
-            ok, profile = acme_profiles.validate_profile(metadata.get('acme_profile'))
-            if ok and profile:
-                cmd.extend(['--preferred-profile', profile])
-                acme_profiles.soften_renewal_conf(domain_dir / 'renewal' / f'{domain}.conf')
-                offered = self._profile_still_offered(domain, metadata.get('ca_provider'),
-                                                      metadata.get('ca_account_id'), profile)
-                if offered is False:
-                    metadata['acme_profile_withdrawn_at'] = utc_now_iso()
-                elif offered:
-                    metadata.pop('acme_profile_withdrawn_at', None)
+            self._renew_with_profile(domain, domain_dir, metadata, cmd)
 
             # Build per-request environment with DNS provider credentials
             # (fix #112: env vars like AWS_ACCESS_KEY_ID were missing during
@@ -4543,6 +4531,25 @@ class CertificateManager:
             logger.info("Skipping ARI for this certificate: its CA has no "
                         "usable ACME directory")
             return None
+
+    def _renew_with_profile(self, domain, domain_dir, metadata, cmd):
+        """Ask for the profile the certificate was issued with, as preferred (#395).
+
+        On the command line too, so a renewal configuration restored from an older backup, or
+        written before the profile was softened, still follows the metadata. What the CA's
+        directory says about the profile is recorded in `metadata`, which the renewal saves.
+        """
+        ok, profile = acme_profiles.validate_profile(metadata.get('acme_profile'))
+        if not ok or not profile:
+            return
+        cmd.extend(['--preferred-profile', profile])
+        acme_profiles.soften_renewal_conf(domain_dir / 'renewal' / f'{domain}.conf')
+        offered = self._profile_still_offered(domain, metadata.get('ca_provider'),
+                                              metadata.get('ca_account_id'), profile)
+        if offered is False:
+            metadata['acme_profile_withdrawn_at'] = utc_now_iso()
+        elif offered:
+            metadata.pop('acme_profile_withdrawn_at', None)
 
     def _profile_still_offered(self, domain, ca_provider, ca_account_id, profile):
         """Warn when the CA no longer offers the profile a certificate was issued with (#395).
