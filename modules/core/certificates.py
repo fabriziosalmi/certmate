@@ -126,6 +126,16 @@ class ChallengeRecordInUse(DomainOperationInProgress):
                      f"try {domain} again when it finishes",)
 
 
+class CertificateNamesUnknown(Exception):
+    """A certificate exists for *domain* but the names it covers cannot be read:
+    no certificate anywhere it is kept could be parsed, and no record lists them.
+    A scope check that meets this refuses, rather than deciding on the one name
+    it does know."""
+    def __init__(self, domain):
+        self.domain = domain
+        super().__init__(f"The names covered by the certificate for {domain} could not be read")
+
+
 class ReissueRequired(RuntimeError):
     """The certificate has no private key anywhere certbot can reach (#966).
 
@@ -330,6 +340,18 @@ def _resolve_all_domains(domain, san_domains, challenge_type):
             if d.startswith('*.'):
                 raise ValueError("HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.")
     return all_domains
+
+
+def _parse_certificate(content):
+    """An x509 certificate from PEM bytes or text, or None when it is not one."""
+    if not content:
+        return None
+    if isinstance(content, str):
+        content = content.encode()
+    try:
+        return x509.load_pem_x509_certificate(content)
+    except ValueError:
+        return None
 
 
 def _reject_path_escaping_domain(domain):
@@ -1928,46 +1950,51 @@ class CertificateManager:
         Read from both places a name can be recorded, because either can be
         absent: `san_domains` in the metadata (missing for an adopted or
         restored certificate, or one older than the field), and the DNS
-        names of the certificate itself (missing until the first issuance
-        lands). The local copy is the one every operation acts on; the
-        storage backend is asked only when there is no local certificate,
-        which is the one case the backend can be the only record.
+        names of the certificate itself. The certificate is looked for where
+        CertMate serves it, then in certbot's lineage (`live/`, then the
+        newest generation in `archive/`), so a served copy that is missing
+        or torn does not hide the names. The storage backend is asked only
+        when there is no certificate on disk at all, which is the one case
+        the backend can be the only record.
 
-        A domain that cannot name a directory, or files that cannot be read,
-        leave just *domain*, which is what the check asked before this
-        existed, and the operation itself then refuses the same input as it
-        always has.
+        Raises `CertificateNamesUnknown` when a certificate is there but
+        neither a certificate nor a record names what it covers: refusing is
+        the only answer that does not guess. No certificate at all is just
+        *domain*: there is nothing to act on, and the operation itself
+        answers that. A domain that cannot name a directory is just *domain*
+        too, and the operation refuses that input as it always has.
         """
         names = [domain]
         if not isinstance(domain, str) or not domain:
             return names
         try:
             _reject_path_escaping_domain(domain)
-            metadata = self._load_metadata(domain)
-            cert_file = certificate_dir(self.cert_dir, domain) / 'cert.pem'
-            cert_content = cert_file.read_bytes() if cert_file.exists() else None
-        except (ValueError, OSError):
+        except ValueError:
             return names
-        if cert_content is None and self.storage_manager:
+        try:
+            metadata = self._load_metadata(domain)
+        except OSError:
+            metadata = {}  # the certificate may still say; if not, unknown
+        directory = certificate_dir(self.cert_dir, domain)
+        certificate = self._first_readable_certificate(domain, directory)
+        exists = directory.exists()
+        if certificate is None and self.storage_manager:
             # Not caught: a backend that cannot answer leaves the names
             # unknown, and the caller's request fails rather than being
             # checked against fewer names than the certificate has.
             stored = self._storage_retrieve(domain)
             if stored:
                 cert_files, stored_metadata = stored
-                cert_content = (cert_files or {}).get('cert.pem')
+                exists = True
+                certificate = _parse_certificate((cert_files or {}).get('cert.pem'))
                 metadata = metadata or stored_metadata or {}
         recorded = metadata.get('san_domains') if isinstance(metadata, dict) else None
+        if certificate is None and not isinstance(recorded, list) and exists:
+            raise CertificateNamesUnknown(domain)
         if isinstance(recorded, list):
             names.extend(n for n in recorded if isinstance(n, str))
-        if cert_content:
-            if isinstance(cert_content, str):
-                cert_content = cert_content.encode()
-            try:
-                names.extend(csr_domains(x509.load_pem_x509_certificate(cert_content)))
-            except ValueError as e:
-                logger.debug("Could not read the names in the certificate for %s: %s",
-                             scrub_log_value(domain), e)
+        if certificate is not None:
+            names.extend(csr_domains(certificate))
         seen, ordered = set(), []
         for name in names:
             key = name.strip().lower()
@@ -1975,6 +2002,41 @@ class CertificateManager:
                 seen.add(key)
                 ordered.append(name.strip())
         return ordered
+
+    def every_name_matches(self, domain, matches):
+        """True when *matches* accepts every name the certificate covers.
+
+        False when one is refused, and False when the names cannot be read
+        (`CertificateNamesUnknown`): a scope that cannot be confirmed is not
+        granted. The one form every scope check uses, so they cannot differ
+        on that case.
+        """
+        try:
+            names = self.names_covered(domain)
+        except CertificateNamesUnknown:
+            logger.warning("The names of the certificate for %s could not be read; "
+                           "a scoped request for it is refused", scrub_log_value(domain))
+            return False
+        return all(matches(name) for name in names)
+
+    @staticmethod
+    def _first_readable_certificate(domain, directory):
+        """The certificate as served, else certbot's live copy, else its newest
+        archived generation; None when none of them parses."""
+        archive = lineage_archive_dir(directory, domain)
+        generations = sorted(
+            archive.glob('cert*.pem') if archive.is_dir() else [],
+            key=lambda p: int(re.sub(r'\D', '', p.stem) or 0), reverse=True)
+        for candidate in [directory / 'cert.pem',
+                          lineage_live_dir(directory, domain) / 'cert.pem',
+                          *generations]:
+            try:
+                certificate = _parse_certificate(candidate.read_bytes())
+            except OSError:
+                continue
+            if certificate is not None:
+                return certificate
+        return None
 
     def private_key_state(self, domain, cert_content=None, metadata=None):
         """Is there a usable private key beside this certificate? (#608)
