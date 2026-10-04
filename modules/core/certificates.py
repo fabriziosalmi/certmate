@@ -826,9 +826,13 @@ class CertificateManager:
         #
         # `validate_domain_path` rather than the cheaper character check: it
         # resolves the path and confirms it is still under cert_dir, which is
-        # what actually answers the question once symlinks are involved — and
-        # it is the form CodeQL recognises as a sanitizer, so the finding is
-        # closed rather than argued with.
+        # what actually answers the question once symlinks are involved.
+        # This comment used to add that it is "the form CodeQL recognises as a
+        # sanitizer, so the finding is closed". It is not: CodeQL still reports
+        # the path built from `domain_dir` below (alert 1432), because the
+        # containment check tests the resolved path and the function returns
+        # the unresolved one. The guard is real; the alert is a false positive,
+        # and is dismissed as one rather than claimed closed.
         domain_dir, path_error = validate_domain_path(domain, self.cert_dir)
         if path_error:
             raise ValueError(path_error)

@@ -209,6 +209,9 @@ def test_a_wildcard_domain_is_still_allowed(tmp_path):
     'x/y',
     '/absolute',
     '..',
+    # Names the directory itself: cert_dir / '.' / 'metadata.json' is
+    # cert_dir / 'metadata.json'.
+    '.',
 ])
 def test_a_domain_that_could_escape_is_refused_where_the_path_is_built(
         tmp_path, domain):
