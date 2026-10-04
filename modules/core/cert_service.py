@@ -121,8 +121,9 @@ class CertificateService:
         """`_enforce_scope` for the certificate that exists as *domain*.
 
         Renewing or reissuing it acts on every name it covers, so each must be
-        in scope (see `CertificateManager.names_covered`). The refusal names
-        *domain* only; the name outside the scope goes to the server log.
+        in scope (see `CertificateManager.names_covered`). The refusal and the
+        audit entry name *domain* only; the certificate's names are on record
+        for whoever administers it.
         """
         self._enforce_scope(domain, operation, user, ip_address)
         user = user or {}
@@ -130,8 +131,6 @@ class CertificateService:
             return
         for name in self._certs.names_covered(domain):
             if not self._auth.user_can_access_domain(user, name):
-                logger.warning("Scope denial: certificate %s also covers %s",
-                               _scrub_log(domain), _scrub_log(name))
                 self._deny_scope(
                     domain, operation, user, ip_address,
                     reason='certificate covers a name outside scoped key allowed_domains')

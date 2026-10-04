@@ -140,8 +140,9 @@ def check_certificate_scope(ctx: ApiContext, domain, operation):
     creation has always applied to the names it is asked for.
 
     The answer names only *domain*, the name the caller sent: the other
-    names are what the caller is not entitled to, so the one outside the
-    scope is recorded in the server log and not handed back.
+    names are what the caller is not entitled to. The audit entry says a name
+    was outside the scope without naming it; the certificate's names are on
+    record for whoever administers it.
     """
     user = getattr(request, 'current_user', None) or {}
     if not ctx.auth.user_can_access_domain(user, domain):
@@ -151,9 +152,6 @@ def check_certificate_scope(ctx: ApiContext, domain, operation):
         return None
     for name in ctx.certificates.names_covered(domain):
         if not ctx.auth.user_can_access_domain(user, name):
-            logger.warning(
-                "Scope denial: certificate %s also covers %s",
-                scrub_log_value(domain), scrub_log_value(name))
             return _scope_denied(
                 ctx, user, domain, operation,
                 reason='certificate covers a name outside scoped key allowed_domains')
