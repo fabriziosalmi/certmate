@@ -111,7 +111,9 @@ def first_issuance_running(tmp_path, monkeypatch):
     real_run = shell.run
 
     def run(cmd, **kwargs):
-        if 'example.com' in ' '.join(map(str, cmd)) and not entered.is_set():
+        # The first certbot run is the fixture's own issuance: it is started
+        # before anything else, and the test waits for it to get here.
+        if not entered.is_set():
             entered.set()
             release.wait(10)
         return real_run(cmd, **kwargs)
