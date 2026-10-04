@@ -343,7 +343,7 @@ def _edgedns_change(config, validation, action):
     if action == 'create':
         if held(validation):
             return
-        recordset = {'name': name, 'type': 'TXT', 'ttl': 60, 'rdata': rdata + [validation]}
+        recordset = {'name': name, 'type': 'TXT', 'ttl': 60, 'rdata': [*rdata, validation]}
         response = session.put(url, json=recordset) if exists else session.post(url, json=recordset)
     else:
         if not held(validation):
