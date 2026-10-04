@@ -168,16 +168,57 @@ def scrub_log_value(value):
     copy-pasted inline at a dozen call sites — and the one denial path that did
     not receive the copy is exactly the one code scanning flagged.
 
-    Note this is NOT made unnecessary by the JSON formatter. JSON escapes a
-    newline inside a string, so the default configuration is immune; but
-    ``CERTMATE_LOG_JSON=false`` (app.py) selects a plain line formatter where a
-    newline in a username produces a fully attacker-chosen log line, timestamp
-    and level included. The defence has to sit at the call site, not in one of
-    the two formatters.
+    The JSON formatter escapes a newline inside a string, and since
+    ``PlainLineFormatter`` the plain format (``CERTMATE_LOG_JSON=false``)
+    escapes the message's line breaks too, for every call site. This comment
+    used to say the defence "has to sit at the call site, not in one of the two
+    formatters"; the call sites that did not use this were the ones left open.
+    It stays as a second layer, and because code scanning recognises it.
     """
     if value is None:
         return value
     return str(value).replace('\r', '').replace('\n', '')
+
+
+PLAIN_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+PLAIN_DATEFMT = '%Y-%m-%d %H:%M:%S'
+
+
+def _indent(text):
+    return '\n'.join('    ' + line for line in text.replace('\r', '\\r').split('\n'))
+
+
+class PlainLineFormatter(logging.Formatter):
+    """The plain log format, one record per line.
+
+    A line break in a message (a value from a request, the text of an exception
+    that quotes one) used to start a line of its own, which readers of this
+    format take for a new record. So the message's CR and LF are escaped, and
+    the lines a traceback or a stack adds are indented: only a record's own
+    first line starts at the left margin. The JSON format needs neither; it
+    escapes inside the string.
+    """
+
+    def formatMessage(self, record):
+        return super().formatMessage(record).replace('\r', '\\r').replace('\n', '\\n')
+
+    def formatException(self, ei):
+        return _indent(super().formatException(ei))
+
+    def formatStack(self, stack_info):
+        return _indent(super().formatStack(stack_info))
+
+    def format(self, record):
+        # logging.Formatter caches the formatted traceback on the record
+        # (exc_text) and reuses it; a record another handler formatted first
+        # would bring its unindented copy here. Format our own, and leave the
+        # record as it was for the next handler.
+        cached = record.exc_text
+        record.exc_text = None
+        try:
+            return super().format(record)
+        finally:
+            record.exc_text = cached
 
 
 class JSONFormatter(logging.Formatter):
@@ -499,10 +540,7 @@ def configure_structured_logging(
     if json_output:
         formatter = JSONFormatter()
     else:
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+        formatter = PlainLineFormatter(PLAIN_FORMAT, datefmt=PLAIN_DATEFMT)
     
     # Console handler
     console_handler = logging.StreamHandler()

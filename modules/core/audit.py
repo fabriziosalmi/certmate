@@ -12,6 +12,7 @@ from pathlib import Path
 from .utils import utc_now
 from . import audit_chain
 from . import audit_signing
+from .structured_logging import PLAIN_DATEFMT, PLAIN_FORMAT, PlainLineFormatter
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -150,12 +151,11 @@ class AuditLogger:
                 backupCount=backup_count,
                 encoding='utf-8',
             )
+            # The audit message is JSON, which escapes its own line breaks;
+            # the plain formatter is used anyway so this format has one
+            # definition (structured_logging.PlainLineFormatter).
             self.file_handler.setFormatter(
-                logging.Formatter(
-                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S'
-                )
-            )
+                PlainLineFormatter(PLAIN_FORMAT, datefmt=PLAIN_DATEFMT))
         except OSError as e:
             # Previously this raised out of __init__, which the factory calls
             # unguarded — an unwritable logs directory took the whole

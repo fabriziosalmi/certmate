@@ -30,8 +30,15 @@ from modules.web.misc_routes import register_misc_routes
 pytestmark = [pytest.mark.unit]
 
 
-def _build_app(managers: dict) -> Flask:
-    """Mount /health against a stub auth_manager and the given managers dict."""
+OPERATOR = {'username': 'ops', 'role': 'viewer'}
+
+
+def _build_app(managers: dict, identity=None) -> Flask:
+    """Mount /health against a stub auth_manager and the given managers dict.
+
+    `identity` is who the request is from: None is an anonymous caller, the
+    only kind these public routes used to know. The failure's reason is shown
+    to a caller with credentials and withheld from one without."""
     app = Flask(__name__)
     app.config['VERSION'] = 'test'
 
@@ -46,6 +53,7 @@ def _build_app(managers: dict) -> Flask:
     auth_manager.require_session_role = _passthrough
     auth_manager.is_local_auth_enabled.return_value = False
     auth_manager.has_any_users.return_value = False
+    auth_manager.optional_identity.return_value = identity
 
     register_misc_routes(app, managers, require_web_auth=None, auth_manager=auth_manager)
     return app
@@ -61,7 +69,14 @@ def test_health_reports_scheduler_failed_with_error_message():
             'timestamp': '2026-05-16T12:00:00Z',
         },
     }
-    app = _build_app(managers)
+    anonymous = _build_app(managers).test_client().get('/health').get_json()
+    assert anonymous['status'] == 'degraded'
+    assert anonymous['checks']['scheduler'] == 'failed'
+    assert 'sqlite3' not in anonymous['checks']['scheduler_error'], (
+        "an anonymous caller must not see the exception text")
+    assert 'server log' in anonymous['checks']['scheduler_error']
+
+    app = _build_app(managers, identity=OPERATOR)
 
     resp = app.test_client().get('/health')
     assert resp.status_code == 200
@@ -134,7 +149,11 @@ def test_readiness_returns_503_when_scheduler_failed():
             'timestamp': '2026-05-16T12:00:00Z',
         },
     }
-    app = _build_app(managers)
+    anonymous = _build_app(managers).test_client().get('/health/ready')
+    assert anonymous.status_code == 503
+    assert 'sqlite3' not in anonymous.get_json()['scheduler_error']
+
+    app = _build_app(managers, identity=OPERATOR)
     client = app.test_client()
 
     # Liveness unaffected.
