@@ -16,10 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from modules.core.certificates import (CertificateManager, ChallengeRecordInUse,
-                                       DomainOperationInProgress)
-from modules.core.challenge_locks import (ChallengeLocks, ChallengeRecordBusy,
-                                          challenge_record_names)
+from modules.core.certificates import CertificateManager, ChallengeRecordInUse, DomainOperationInProgress
+from modules.core.challenge_locks import ChallengeLocks, ChallengeRecordBusy, challenge_record_names
 from modules.core.shell import MockShellExecutor
 from tests.test_csr_only_issuance import _csr
 
@@ -53,7 +51,7 @@ def test_challenges_that_write_no_dns_record_take_no_lock(challenge_type):
 def test_an_overlapping_set_is_refused_while_the_first_is_held():
     locks = ChallengeLocks()
     with locks.hold(['_acme-challenge.example.com'], timeout=1):
-        with pytest.raises(ChallengeRecordBusy, match='_acme-challenge.example.com'):
+        with pytest.raises(ChallengeRecordBusy, match=r'_acme-challenge\.example\.com'):
             with locks.hold(['_acme-challenge.example.com', '_acme-challenge.www.example.com'],
                             timeout=0.05):
                 pass
