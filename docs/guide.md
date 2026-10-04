@@ -378,7 +378,10 @@ Usage Type: mobile-app
 
 ### Configuration
 
-- **Check Time**: Daily at 3 AM
+- **Check Time**: Daily. Client certificates between 02:00 and 04:00; server
+  certificates, whose rule the rest of this section describes, between 01:00
+  and 03:00 (each sweep is its hour with up to an hour of random offset either
+  way)
 - **Threshold**: 30 days before expiry (`renewal_threshold_days`), where that
   is at most half the certificate's lifetime; see below
 - **Action**: Automatic renewal if enabled

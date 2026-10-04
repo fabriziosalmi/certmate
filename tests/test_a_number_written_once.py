@@ -39,7 +39,10 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 #: counts 8. Both were correct when written, and a gate that made them agree
 #: with today would be falsifying the history it is reading. The first run of
 #: this test flagged both — the rule needed the exclusion, not the notes.
-PROSE = ['README.md'] + [
+#: README.dockerhub.md is the Docker Hub page, a separate file from README.md
+#: although the docstring above calls the README its body: left out of this
+#: list, it went on saying "23 DNS Providers" while the code had 29.
+PROSE = ['README.md', 'README.dockerhub.md'] + [
     str(path.relative_to(REPO)) for path in sorted((REPO / 'docs').rglob('*.md'))
     if 'releases' not in path.parts
 ]
