@@ -183,3 +183,58 @@ def test_a_renewal_is_refused_while_another_certificate_validates_its_record(
             pytest.raises(ChallengeRecordInUse) as refused:
         manager.renew_certificate('*.example.com', force=True)
     assert refused.value.record == '_acme-challenge.example.com'
+
+
+def test_the_api_answers_409_naming_the_record_and_promising_no_retry(tmp_path):
+    """Through the real application: the refusal reaches the caller as the 409
+    every busy certificate gets, names the record, and does not say it will be
+    retried, because for an API request nothing retries it."""
+    import os
+    import secrets
+    import time
+
+    from tests.contract_world import Certbot, certbot_standing_in
+
+    token = secrets.token_urlsafe(32)
+    with pytest.MonkeyPatch.context() as env:
+        for var, sub in (('CERTMATE_CERT_DIR', 'certs'), ('CERTMATE_DATA_DIR', 'data'),
+                         ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
+            (tmp_path / sub).mkdir()
+            env.setenv(var, str(tmp_path / sub))
+        env.setenv('FLASK_ENV', 'testing')
+        env.setenv('TESTING', 'true')
+        env.setenv('API_BEARER_TOKEN', token)
+        os.environ['API_BEARER_TOKEN'] = token
+        from modules.factory import create_app
+        app, container = create_app()
+        settings = container.managers['settings']
+        current = settings.load_settings()
+        current['email'] = 'ops@example.com'
+        settings.save_settings(current)
+        assert container.managers['dns'].add_account('default', 'cloudflare', {'api_token': 'w' * 24})
+        headers = {'Authorization': f'Bearer {token}'}
+        certbot = Certbot()
+        with certbot_standing_in(certbot):
+            gate = certbot.hold_next()
+            first = {}
+            apex = threading.Thread(target=lambda: first.update(response=app.test_client().post(
+                '/api/certificates/create', headers=headers,
+                json={'domain': 'example.com', 'dns_provider': 'cloudflare'})))
+            apex.start()
+            try:
+                deadline = time.monotonic() + 20
+                while not certbot.commands:
+                    assert time.monotonic() < deadline, 'the first issuance never reached certbot'
+                    time.sleep(0.02)
+                refused = app.test_client().post(
+                    '/api/certificates/create', headers=headers,
+                    json={'domain': '*.example.com', 'dns_provider': 'cloudflare'})
+            finally:
+                gate.set()
+                apex.join(30)
+        assert refused.status_code == 409, refused.get_json()
+        body = refused.get_json()
+        assert body['code'] == 'DOMAIN_OPERATION_IN_PROGRESS'
+        assert '_acme-challenge.example.com' in body['error']
+        assert 'retried' not in body['error']
+        assert first['response'].status_code == 201, first['response'].get_json()

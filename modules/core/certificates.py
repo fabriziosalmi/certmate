@@ -120,8 +120,10 @@ class ChallengeRecordInUse(DomainOperationInProgress):
     def __init__(self, domain, record):
         self.record = record
         super().__init__(domain)
+        # No promise of a retry: an API caller gets this as a 409 and nothing
+        # retries for it. The nightly sweep tries again on its own next run.
         self.args = (f"Another certificate is validating at {record}; "
-                     f"{domain} will be retried when it finishes",)
+                     f"try {domain} again when it finishes",)
 
 
 class ReissueRequired(RuntimeError):
