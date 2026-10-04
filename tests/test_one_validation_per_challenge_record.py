@@ -162,3 +162,24 @@ def test_an_unrelated_certificate_still_runs_alongside(first_issuance_running):
         pytest.fail('a certificate with no record in common was refused')
     except Exception:  # noqa: BLE001 - later failures of the stand-in are not the point
         pass
+
+
+def test_a_renewal_is_refused_while_another_certificate_validates_its_record(
+        first_issuance_running, tmp_path):
+    """The renewal path holds the records too. A lineage for *.example.com
+    (cert.pem, metadata, renewal conf) renews while example.com is still in
+    its certbot run: same record, so refused."""
+    import json
+    manager, _ = first_issuance_running
+    wildcard = tmp_path / '*.example.com'
+    (wildcard / 'renewal').mkdir(parents=True)
+    (wildcard / 'cert.pem').write_text('certificate')
+    (wildcard / 'metadata.json').write_text(json.dumps(
+        {'domain': '*.example.com', 'dns_provider': 'cloudflare', 'challenge_type': 'dns-01'}))
+    (wildcard / 'renewal' / '*.example.com.conf').write_text(
+        'version = 5.8.0\n[renewalparams]\nauthenticator = dns-cloudflare\n')
+    with patch.object(CertificateManager, '_renewal_happened', return_value=True), \
+            patch.object(CertificateManager, '_publish_renewed_certificate', return_value=None), \
+            pytest.raises(ChallengeRecordInUse) as refused:
+        manager.renew_certificate('*.example.com', force=True)
+    assert refused.value.record == '_acme-challenge.example.com'
