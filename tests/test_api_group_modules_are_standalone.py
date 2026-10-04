@@ -407,6 +407,51 @@ def test_a_viewer_cannot_download_a_private_key_from_the_bundle_endpoint(
     )
 
 
+@pytest.mark.parametrize('requested', [
+    '../../secret.pem',
+    '../secret.pem',
+    '/etc/passwd',
+    'privkey.pem/../../../secret.pem',
+    'cert.pem\x00.txt',
+    'CERT.PEM',
+    'metadata.json',
+])
+def test_the_file_parameter_is_an_allow_list(api, tmp_path, requested):
+    """`?file=` names a file inside the certificate directory, and the only
+    thing between it and the filesystem is an exact-match allow-list. Nothing
+    drove that list until now (INVALID_FILE had no test)."""
+    from flask import request as flask_request
+    from modules.api.resources_downloads import create_download_resources
+
+    domain = 'example.com'
+    cert_dir = tmp_path / 'certs' / domain
+    cert_dir.mkdir(parents=True)
+    for name in ('cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem'):
+        (cert_dir / name).write_text(f'-----BEGIN {name}-----\n')
+    (cert_dir / 'metadata.json').write_text('{}')
+    (tmp_path / 'secret.pem').write_text('outside the certificate directory\n')
+
+    file_ops = MagicMock()
+    file_ops.cert_dir = tmp_path / 'certs'
+    ctx = _minimal_context(file_ops=file_ops, audit=None, managers={})
+    ctx.auth.user_can_access_domain = lambda user, d: True
+    endpoint = create_download_resources(
+        api, {}, ctx, lambda pem: pem)['DownloadCertificate']
+
+    app = Flask(__name__)
+    with app.test_request_context('/', query_string={'file': requested}):
+        flask_request.current_user = {'username': 'admin', 'role': 'admin'}
+        result = endpoint().get(domain)
+    assert isinstance(result, tuple) and result[1] == 400, result
+    assert result[0]['code'] == 'INVALID_FILE'
+
+    with app.test_request_context('/', query_string={'file': 'cert.pem'}):
+        flask_request.current_user = {'username': 'admin', 'role': 'admin'}
+        allowed = endpoint().get(domain)
+    assert not isinstance(allowed, tuple), (
+        f'CONTROL: cert.pem must be served, got {allowed}')
+
+
 DOWNLOAD_TRAVERSAL = [
     '../secret.pem',
     '../../etc/passwd',

@@ -40,6 +40,10 @@ ENDPOINTS = [
      'CertificateDetail', 'get'),
     ('modules.api.resources_certificates', 'create_certificates_resources',
      'CertificateDetail', 'delete'),
+    # PATCH (tags, notes, probe settings) builds the same directory path and
+    # was the one method of CertificateDetail not driven here (alert 1365).
+    ('modules.api.resources_certificates', 'create_certificates_resources',
+     'CertificateDetail', 'patch'),
     ('modules.api.resources_deployment', 'create_deployment_resources',
      'CertificateDeploymentStatus', 'get'),
     ('modules.api.resources_deployment', 'create_deployment_resources',
