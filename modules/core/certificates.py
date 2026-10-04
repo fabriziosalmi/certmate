@@ -1914,7 +1914,66 @@ class CertificateManager:
         if info is not None:
             return info
         return self._certificate_info_from_disk(domain, settings)
-    
+
+    def names_covered(self, domain):
+        """Every name the certificate stored as *domain* is valid for, *domain* first.
+
+        A certificate is one object however many names it carries: its key
+        serves all of them, so a scope check on a certificate is a check on
+        every one of its names. Creation checks every name it is asked for;
+        this is the same set for a certificate that already exists.
+
+        Read from both places a name can be recorded, because either can be
+        absent: `san_domains` in the metadata (missing for an adopted or
+        restored certificate, or one older than the field), and the DNS
+        names of the certificate itself (missing until the first issuance
+        lands). The local copy is the one every operation acts on; the
+        storage backend is asked only when there is no local certificate,
+        which is the one case the backend can be the only record.
+
+        A domain that cannot name a directory, or files that cannot be read,
+        leave just *domain*, which is what the check asked before this
+        existed, and the operation itself then refuses the same input as it
+        always has.
+        """
+        names = [domain]
+        if not isinstance(domain, str) or not domain:
+            return names
+        try:
+            _reject_path_escaping_domain(domain)
+            metadata = self._load_metadata(domain)
+            cert_file = certificate_dir(self.cert_dir, domain) / 'cert.pem'
+            cert_content = cert_file.read_bytes() if cert_file.exists() else None
+        except (ValueError, OSError):
+            return names
+        if cert_content is None and self.storage_manager:
+            # Not caught: a backend that cannot answer leaves the names
+            # unknown, and the caller's request fails rather than being
+            # checked against fewer names than the certificate has.
+            stored = self._storage_retrieve(domain)
+            if stored:
+                cert_files, stored_metadata = stored
+                cert_content = (cert_files or {}).get('cert.pem')
+                metadata = metadata or stored_metadata or {}
+        recorded = metadata.get('san_domains') if isinstance(metadata, dict) else None
+        if isinstance(recorded, list):
+            names.extend(n for n in recorded if isinstance(n, str))
+        if cert_content:
+            if isinstance(cert_content, str):
+                cert_content = cert_content.encode()
+            try:
+                names.extend(csr_domains(x509.load_pem_x509_certificate(cert_content)))
+            except ValueError as e:
+                logger.debug("Could not read the names in the certificate for %s: %s",
+                             scrub_log_value(domain), e)
+        seen, ordered = set(), []
+        for name in names:
+            key = name.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                ordered.append(name.strip())
+        return ordered
+
     def private_key_state(self, domain, cert_content=None, metadata=None):
         """Is there a usable private key beside this certificate? (#608)
 

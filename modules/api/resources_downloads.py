@@ -26,7 +26,7 @@ from flask_restx import Resource
 
 from ..core.constants import CERTIFICATE_FILES
 from .path_validation import validate_domain_path as _validate_domain_path
-from .resource_context import ApiContext, check_domain_scope, user_has_role
+from .resource_context import ApiContext, check_certificate_scope, user_has_role
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,8 @@ def create_download_resources(api, models, ctx: ApiContext,
     """
     _privkey_to_pkcs1 = privkey_to_pkcs1
 
-    def _check_domain_scope(domain, operation):
-        return check_domain_scope(ctx, domain, operation)
+    def _check_certificate_scope(domain, operation):
+        return check_certificate_scope(ctx, domain, operation)
 
     def _user_has_role(user, min_role):
         return user_has_role(user, min_role)
@@ -82,7 +82,7 @@ def create_download_resources(api, models, ctx: ApiContext,
             contains the private key, so it requires operator role.
             """
             try:
-                scope_err = _check_domain_scope(domain, 'download')
+                scope_err = _check_certificate_scope(domain, 'download')
                 if scope_err:
                     return scope_err
                 cert_dir, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
@@ -348,7 +348,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                 }, 400
 
             try:
-                scope_err = _check_domain_scope(domain, 'download')
+                scope_err = _check_certificate_scope(domain, 'download')
                 if scope_err:
                     return scope_err
                 cert_dir, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)

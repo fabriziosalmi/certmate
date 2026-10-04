@@ -13,7 +13,7 @@ from flask_restx import Resource
 from ..core.audit_context import audit_context_from_request
 from ..core.utils import utc_now_iso
 from .path_validation import validate_domain_path as _validate_domain_path
-from .resource_context import ApiContext, check_domain_scope
+from .resource_context import ApiContext, check_certificate_scope
 from .tls_probe import (
     _certificate_fingerprint, _certificate_subject_summary,
     _probe_tls_certificate,
@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
     """Build the deployment resources against *ctx*."""
 
-    def _check_domain_scope(domain, operation):
-        return check_domain_scope(ctx, domain, operation)
+    def _check_certificate_scope(domain, operation):
+        return check_certificate_scope(ctx, domain, operation)
 
     class CertificateDeploymentStatus(Resource):
         @api.doc(security='Bearer')
@@ -39,7 +39,7 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
             _, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
             if err:
                 return {'error': err}, 400
-            scope_err = _check_domain_scope(domain, 'deployment_status')
+            scope_err = _check_certificate_scope(domain, 'deployment_status')
             if scope_err:
                 return scope_err
 
@@ -224,7 +224,7 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                 if err:
                     skipped.append({'domain': domain, 'error': err})
                     continue
-                scope_err = _check_domain_scope(domain, 'browser_report')
+                scope_err = _check_certificate_scope(domain, 'browser_report')
                 if scope_err:
                     skipped.append({'domain': domain, 'error': 'out of scope'})
                     continue
@@ -261,7 +261,7 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
             with CERTMATE_EVENT=manual; the on_events filter is ignored
             since the user explicitly requested execution.
             """
-            scope_err = _check_domain_scope(domain, 'run_deploy')
+            scope_err = _check_certificate_scope(domain, 'run_deploy')
             if scope_err:
                 return scope_err
             if ctx.deployer is None:
