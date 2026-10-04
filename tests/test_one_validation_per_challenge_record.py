@@ -1,0 +1,165 @@
+"""One DNS-01 validation at a time per challenge record (#1147, item 6).
+
+`example.com` and `*.example.com` are two certificates with two per-domain
+locks, and both answer their DNS-01 challenge at `_acme-challenge.example.com`.
+With CERTMATE_ISSUANCE_WORKERS at its default of 2 they can run at once, and
+certbot-dns-route53 keeps per process the values it added and UPSERTs the
+record set with only those: the second run replaces the first one's value. So
+the certbot run holds a lock per challenge record (modules/core/challenge_locks.py).
+
+The integration tests drive the real CertificateManager.create_certificate,
+with a certbot stand-in that stays "running" until released, so the second
+issuance meets the first one's lock exactly where a real one would.
+"""
+import threading
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from modules.core.certificates import (CertificateManager, ChallengeRecordInUse,
+                                       DomainOperationInProgress)
+from modules.core.challenge_locks import (ChallengeLocks, ChallengeRecordBusy,
+                                          challenge_record_names)
+from modules.core.shell import MockShellExecutor
+from tests.test_csr_only_issuance import _csr
+
+pytestmark = [pytest.mark.unit]
+
+
+# --- which records an issuance writes --------------------------------------
+
+def test_a_wildcard_and_its_apex_write_the_same_record():
+    assert challenge_record_names(['*.example.com']) == ['_acme-challenge.example.com']
+    assert challenge_record_names(['example.com']) == ['_acme-challenge.example.com']
+
+
+def test_every_name_of_a_certificate_counts():
+    assert challenge_record_names(['example.com', 'www.example.com', '*.example.com']) == [
+        '_acme-challenge.example.com', '_acme-challenge.www.example.com']
+
+
+def test_an_alias_answers_every_challenge_at_one_record():
+    assert challenge_record_names(['a.com', 'b.org'], domain_alias='validation.example.net') == [
+        '_acme-challenge.validation.example.net']
+
+
+@pytest.mark.parametrize('challenge_type', ['http-01', 'prevalidated'])
+def test_challenges_that_write_no_dns_record_take_no_lock(challenge_type):
+    assert challenge_record_names(['example.com'], challenge_type=challenge_type) == []
+
+
+# --- the locks ----------------------------------------------------------------
+
+def test_an_overlapping_set_is_refused_while_the_first_is_held():
+    locks = ChallengeLocks()
+    with locks.hold(['_acme-challenge.example.com'], timeout=1):
+        with pytest.raises(ChallengeRecordBusy, match='_acme-challenge.example.com'):
+            with locks.hold(['_acme-challenge.example.com', '_acme-challenge.www.example.com'],
+                            timeout=0.05):
+                pass
+    # Released after the refusal: the second record was not left held.
+    with locks.hold(['_acme-challenge.www.example.com'], timeout=0.05):
+        pass
+
+
+def test_sets_that_do_not_overlap_are_held_at_once():
+    locks = ChallengeLocks()
+    with locks.hold(['_acme-challenge.example.com'], timeout=1):
+        with locks.hold(['_acme-challenge.example.org'], timeout=0.05):
+            pass
+
+
+def test_two_holders_needing_the_same_records_in_opposite_order_do_not_deadlock():
+    locks = ChallengeLocks()
+    names = ['_acme-challenge.a.com', '_acme-challenge.b.com']
+    done = []
+
+    def run(order):
+        for _ in range(200):
+            with locks.hold(order, timeout=5):
+                pass
+        done.append(order)
+
+    threads = [threading.Thread(target=run, args=(names,)),
+               threading.Thread(target=run, args=(list(reversed(names)),))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
+    assert len(done) == 2, 'two holders deadlocked on opposite acquisition orders'
+
+
+# --- through the real create_certificate --------------------------------------
+
+def _manager(tmp_path):
+    settings_mgr = MagicMock()
+    settings_mgr.load_settings.return_value = {
+        'default_ca': 'letsencrypt', 'challenge_type': 'dns-01', 'dns_propagation_seconds': {}}
+    dns_mgr = MagicMock()
+    dns_mgr.get_dns_provider_account_config.return_value = ({'api_token': 'x' * 40}, 'default')
+    shell = MockShellExecutor()
+    manager = CertificateManager(cert_dir=tmp_path, settings_manager=settings_mgr,
+                                 dns_manager=dns_mgr, storage_manager=None, ca_manager=None,
+                                 shell_executor=shell)
+    return manager, shell
+
+
+@pytest.fixture
+def first_issuance_running(tmp_path, monkeypatch):
+    """Start an issuance for example.com whose certbot run does not return
+    until the test says so. Yields (manager, release)."""
+    monkeypatch.setenv('CERTMATE_DOMAIN_LOCK_TIMEOUT', '0.2')
+    manager, shell = _manager(tmp_path)
+    entered, release = threading.Event(), threading.Event()
+    real_run = shell.run
+
+    def run(cmd, **kwargs):
+        if 'example.com' in ' '.join(map(str, cmd)) and not entered.is_set():
+            entered.set()
+            release.wait(10)
+        return real_run(cmd, **kwargs)
+
+    shell.run = run
+    outcome = {}
+
+    def first():
+        try:
+            manager.create_certificate(domain='example.com', email='a@example.com',
+                                       dns_provider='cloudflare',
+                                       csr_pem=_csr('example.com', ('example.com',)))
+        except Exception as exc:  # noqa: BLE001 - the stand-in writes no certificate
+            outcome['error'] = exc
+
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        thread = threading.Thread(target=first)
+        thread.start()
+        assert entered.wait(10), 'the first issuance never reached certbot'
+        try:
+            yield manager, release
+        finally:
+            release.set()
+            thread.join(10)
+
+
+def test_a_wildcard_is_refused_while_its_apex_is_validating(first_issuance_running):
+    manager, _ = first_issuance_running
+    with pytest.raises(ChallengeRecordInUse) as refused:
+        manager.create_certificate(domain='*.example.com', email='a@example.com',
+                                   dns_provider='cloudflare',
+                                   csr_pem=_csr('*.example.com', ('*.example.com',)))
+    assert refused.value.record == '_acme-challenge.example.com'
+    assert isinstance(refused.value, DomainOperationInProgress), (
+        'callers that answer 409 or retry on DomainOperationInProgress must treat this the same')
+
+
+def test_an_unrelated_certificate_still_runs_alongside(first_issuance_running):
+    """CONTROL: the lock is per record, not a global queue."""
+    manager, _ = first_issuance_running
+    try:
+        manager.create_certificate(domain='other.org', email='a@example.com',
+                                   dns_provider='cloudflare',
+                                   csr_pem=_csr('other.org', ('other.org',)))
+    except ChallengeRecordInUse:
+        pytest.fail('a certificate with no record in common was refused')
+    except Exception:  # noqa: BLE001 - later failures of the stand-in are not the point
+        pass
