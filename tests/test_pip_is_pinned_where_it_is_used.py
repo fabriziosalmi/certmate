@@ -15,9 +15,10 @@ floated. Measured inside the published v2.25.4 image:
     which pip         -> /opt/venv/bin/pip
 
 Two builds of the same commit did differ, exactly where the comment said they
-must not. Both stages now take the same `PIP_VERSION`, so a deliberate bump
-moves them together — and this test is what stops them drifting apart, since
-Docker scopes ARG per stage and the value has to be written twice.
+must not. Both stages then took the same `PIP_VERSION`. Since the locks carry
+hashes, the builder installs pip (with setuptools, wheel and packaging) from
+requirements-build.lock with --require-hashes, and the runtime stage still by
+`PIP_VERSION`. Two places for one number, so this holds them together.
 """
 import pathlib
 import re
@@ -51,26 +52,37 @@ def _pip_installs():
     return found
 
 
-def test_the_dockerfile_installs_pip_more_than_once():
-    """Guard the guard: one stage means one of these checks is asleep."""
+def _build_lock_pip():
+    match = re.search(r"^pip==(\S+?)\s*\\?$",
+                      (REPO_ROOT / "requirements-build.lock").read_text(encoding="utf-8"), re.M)
+    return match.group(1) if match else None
+
+
+def test_the_builder_takes_pip_from_its_hashed_lock():
+    """The pip on PATH in the finished image is the builder's (/opt/venv)."""
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    assert "pip install --no-cache-dir --require-hashes -r requirements-build.lock" in text, (
+        "the builder no longer installs its tools from requirements-build.lock with hashes")
+    assert _build_lock_pip(), "requirements-build.lock does not pin pip"
+
+
+def test_the_runtime_stage_installs_pip_and_pins_it():
+    """Guard the guard: no runtime install found means the check below is asleep."""
     installs = _pip_installs()
-    assert len(installs) >= 2, (
-        f"expected pip to be installed in both the builder and the runtime "
-        f"stage, found {len(installs)}: {installs}. If the layout changed, "
-        f"this file needs to change with it rather than pass quietly."
+    assert len(installs) >= 1, (
+        f"expected the runtime stage to install pip, found {installs}. If the "
+        f"layout changed, this file needs to change with it rather than pass quietly."
     )
 
 
-def test_every_stage_declares_the_same_pip_version():
+def test_both_pips_are_the_same_version():
     versions = _pip_version_args()
-    assert len(versions) >= 2, (
-        f"found {len(versions)} `ARG PIP_VERSION=` declarations. Docker scopes "
-        f"ARG per stage, so each stage that installs pip needs its own."
-    )
-    assert len(set(versions)) == 1, (
-        f"the stages pin different pip versions: {versions}. They must move "
-        f"together — a `--build-arg PIP_VERSION=` sets both, and a default "
-        f"that has drifted means the image ships two pips again."
+    assert versions, "no `ARG PIP_VERSION=` left for the runtime stage"
+    assert len(set(versions)) == 1, f"the stages pin different pip versions: {versions}"
+    assert versions[0] == _build_lock_pip(), (
+        f"ARG PIP_VERSION={versions[0]} but requirements-build.lock installs pip "
+        f"{_build_lock_pip()}: the image would ship two pips again. Change "
+        f"requirements-build.txt and regenerate, or move the ARG."
     )
 
 

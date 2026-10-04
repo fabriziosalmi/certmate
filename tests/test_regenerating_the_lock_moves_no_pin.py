@@ -26,15 +26,24 @@ pytestmark.append(pytest.mark.skipif(shutil.which('uv') is None, reason='uv is n
 
 
 def _pins(path):
-    return {m.group(1).lower(): m.group(2) for line in path.read_text().splitlines()
-            for m in [PIN.match(line.strip())] if m}
+    """`name -> version`. The lock is in the hashed form (`name==version \\`
+    followed by `--hash=` lines), so the trailing backslash is dropped first:
+    without that, this read no pin at all, and every comparison below compared
+    two empty dicts and passed."""
+    pins = {m.group(1).lower(): m.group(2) for line in path.read_text().splitlines()
+            for m in [PIN.match(line.strip().rstrip('\\').strip())] if m}
+    assert len(pins) > 50 or path.name == 'requirements-build.lock', (
+        f'read only {len(pins)} pins from {path.name}: the parser no longer matches the file')
+    return pins
 
 
 @pytest.fixture
 def tree(tmp_path):
     """The files the script reads and writes, copied, so the real ones are never touched."""
     for name in ('Dockerfile', 'requirements.txt', 'requirements-minimal.txt',
-                 'requirements.lock', 'requirements-minimal.lock'):
+                 'requirements.lock', 'requirements-minimal.lock',
+                 'requirements.constraints', 'requirements-minimal.constraints',
+                 'requirements-build.txt', 'requirements-build.lock'):
         shutil.copy(REPO / name, tmp_path / name)
     (tmp_path / 'scripts').mkdir()
     for name in ('lockfile.py', 'regenerate_lockfiles.sh'):
@@ -57,6 +66,12 @@ def test_regenerating_an_unchanged_set_moves_no_pin(tree):
     assert 'both architectures resolve identically' in output
     for name, pins in before.items():
         assert _pins(tree / name) == pins, f'{name}: regenerating with nothing to change moved a pin'
+    # The hashes too: a regeneration with nothing to change writes the same
+    # bytes, hashes sorted, so it produces no diff to review.
+    for name in ('requirements.lock', 'requirements-minimal.lock', 'requirements-build.lock',
+                 'requirements.constraints', 'requirements-minimal.constraints'):
+        assert (tree / name).read_text() == (REPO / name).read_text(), (
+            f'{name}: regenerating with nothing to change rewrote the file')
 
 
 def test_a_changed_pin_moves_that_package_and_what_must_follow_it_and_nothing_else(tree):

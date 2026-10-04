@@ -1,0 +1,36 @@
+# GENERATED — do not edit by hand. Regenerate with:
+#
+#     scripts/regenerate_lockfiles.sh
+#
+# The fully resolved install set for requirements-build.txt, resolved by uv for the two
+# published architectures. 3 of these are
+# pinned by requirements-build.txt; the other 1 are transitive and were chosen by
+# the resolver, which is exactly why they are written down here. The image
+# installs them with pip.
+#
+# The two published architectures resolve this set identically, which is what
+# makes one file sufficient. `scripts/regenerate_lockfiles.sh` re-checks that
+# before writing, so the day it stops being true is the day it is noticed.
+#
+# A regeneration starts from the pins already in this file and moves only what
+# the change under review requires: it does not re-resolve the transitive set.
+#
+# Each pin carries the sha256 of every file the index publishes for that
+# version, for both architectures, and the image installs this file with
+# --require-hashes: a file that is not one of these is refused. Anything
+# installed on top of it (extras, test requirements) uses nothing: nothing is installed on top of it, the
+# same pins without hashes. See "Supply-chain posture for Python dependencies"
+# in SECURITY.md.
+
+packaging==26.3 \
+    --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
+    --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+pip==26.1.2 \
+    --hash=sha256:382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab \
+    --hash=sha256:f49cd134c61cf2fd75e0ce2676db03e4054504a5a4986d00f8299ae632dc4605
+setuptools==84.0.0 \
+    --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670 \
+    --hash=sha256:f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73
+wheel==0.48.0 \
+    --hash=sha256:3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab \
+    --hash=sha256:94800765601e9171bf5d58d066e640662842bcedcbab982b2c90787a2c987322
