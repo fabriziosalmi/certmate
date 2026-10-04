@@ -84,15 +84,15 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --require-hashes -r requirements-build.lock
         pip install -r requirements.txt
         pip install -r requirements-test.txt
 
     - name: Lint with flake8
       run: |
-        # Pinned so the build pulls a known version (OpenSSF Scorecard
-        # Pinned-Dependencies flags bare, unversioned pip installs).
-        pip install flake8==7.4.1
+        # From requirements-lint.lock, with hashes: a version pin names the
+        # release, not the file (OpenSSF Scorecard, Pinned-Dependencies).
+        pip install --require-hashes -r requirements-lint.lock
         # stop the build if there are Python syntax errors or undefined names
         # Fails the build. E9/F63/F7/F82 are syntax errors and undefined
         # names; the rest are bug classes that are already clean in this
@@ -510,7 +510,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --require-hashes -r requirements-build.lock
         pip install -r requirements.txt
         pip install -r requirements-test.txt
 
@@ -618,7 +618,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --require-hashes -r requirements-build.lock
         pip install -r requirements.txt
 
     # The wiki has no CI of its own, so it is fetched here. A clone failure
@@ -657,7 +657,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --require-hashes -r requirements-build.lock
         pip install -r requirements.txt
         pip install -r requirements-test.txt
         # hvac lives in the optional Vault set, not the core one. Installed
@@ -798,7 +798,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --require-hashes -r requirements-build.lock
         pip install -r requirements.txt
         pip install -r requirements-test.txt
 

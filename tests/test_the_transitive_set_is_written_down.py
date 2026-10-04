@@ -68,7 +68,12 @@ def test_the_lock_exists(source, lock):
         f'time and the transitive versions are build-day luck')
 
 
-@pytest.mark.parametrize('source,lock', [*PAIRS, ('requirements-build.txt', 'requirements-build.lock')])
+TOOL_PAIRS = [('requirements-build.txt', 'requirements-build.lock'),
+              ('requirements-lint.txt', 'requirements-lint.lock'),
+              ('requirements-galaxy.txt', 'requirements-galaxy.lock')]
+
+
+@pytest.mark.parametrize('source,lock', [*PAIRS, *TOOL_PAIRS])
 def test_every_direct_pin_is_the_one_the_image_installs(source, lock):
     """The guard. A pin bumped without regenerating the lock is a patch that
     merges, goes green, and never ships."""
@@ -88,7 +93,7 @@ def test_the_lock_records_more_than_it_was_given(source, lock):
         f'requirements, so the transitive packages are not in it')
 
 
-@pytest.mark.parametrize('source,lock', [*PAIRS, ('requirements-build.txt', 'requirements-build.lock')])
+@pytest.mark.parametrize('source,lock', [*PAIRS, *TOOL_PAIRS])
 def test_every_line_in_the_lock_is_an_exact_pin_or_its_hash(source, lock):
     """A range or a bare name in a lockfile re-opens exactly the hole the file
     was written to close, for that one package, invisibly. The only other kind
@@ -104,7 +109,8 @@ def test_every_line_in_the_lock_is_an_exact_pin_or_its_hash(source, lock):
     assert not loose, 'not an exact pin: ' + ', '.join(loose)
 
 
-@pytest.mark.parametrize('lock', ['requirements.lock', 'requirements-minimal.lock', 'requirements-build.lock'])
+@pytest.mark.parametrize('lock', ['requirements.lock', 'requirements-minimal.lock', 'requirements-build.lock',
+                                  'requirements-lint.lock', 'requirements-galaxy.lock'])
 def test_every_pin_in_the_lock_is_hashed(lock):
     """The image installs these with --require-hashes, which refuses the whole
     file for one unhashed line. Said here, with the package's name, rather

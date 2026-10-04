@@ -97,7 +97,12 @@ def test_bandit_is_run_as_ci_runs_it_and_at_the_version_ci_pins():
 
 
 def test_flake8_is_pinned_where_the_tests_install_it_to_the_version_ci_pins():
-    ci_pin = re.search(r'pip install flake8==(\S+)', ' '.join(_commands())).group(1)
+    """CI installs flake8 from requirements-lint.lock, with hashes; the pin is
+    in requirements-lint.txt, and requirements-test.txt must carry the same."""
+    assert 'pip install --require-hashes -r requirements-lint.lock' in ' '.join(_commands()), (
+        'the lint job no longer installs flake8 from its hashed lock')
+    lint = (REPO / 'requirements-lint.txt').read_text(encoding='utf-8')
+    ci_pin = re.search(r'^flake8==(\S+)', lint, re.MULTILINE).group(1)
     assert f'flake8=={ci_pin}' in TEST_REQUIREMENTS.split(), 'requirements-test.txt pins another flake8 than CI'
 
 
