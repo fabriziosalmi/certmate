@@ -1598,6 +1598,20 @@ class AuthManager:
             return None, ({'error': 'Authentication failed',
                            'code': 'AUTH_ERROR'}, 401)
 
+    def optional_identity(self):
+        """The caller's identity when the request carries valid credentials,
+        otherwise None. Never refuses: for routes that are public but say
+        more to a caller who has signed in (the health endpoints).
+
+        Setup mode is no identity here. Every request is served as admin
+        then, which identifies nobody, so it must not unlock what an
+        anonymous caller is not shown.
+        """
+        if self.is_setup_mode():
+            return None
+        user, error = self._authenticate_request()
+        return user if error is None else None
+
     def _is_browser_html_request(self):
         """True when the current request looks like a browser asking for HTML.
 

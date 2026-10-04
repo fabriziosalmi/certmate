@@ -3304,7 +3304,8 @@ class CertificateManager:
 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"Certificate creation failed for {domain}: {str(e)} (duration: {duration:.2f}s)")
+            logger.error("Certificate creation failed for %s: %s (duration: %.2fs)",
+                         domain, scrub_log_value(e), duration)
             if not renewal:
                 self._record_creation_metrics(
                     domain, dns_provider, False, duration, error=e)

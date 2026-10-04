@@ -195,7 +195,13 @@ def test_before_the_probe_runs_the_state_is_unknown_and_ready():
 
 # --- the answer has to reach the probes ---------------------------------
 
-def _app(managers):
+OPERATOR = {'username': 'ops', 'role': 'viewer'}
+
+
+def _app(managers, identity=None):
+    """`identity` None is an anonymous caller: the failure's reason (certbot's
+    own output, with install paths) is withheld from it and shown to a caller
+    with credentials."""
     app = Flask(__name__)
     app.config['VERSION'] = 'test'
     auth = MagicMock()
@@ -203,6 +209,7 @@ def _app(managers):
     auth.require_session_role = lambda role: (lambda fn: fn)
     auth.is_local_auth_enabled.return_value = False
     auth.has_any_users.return_value = False
+    auth.optional_identity.return_value = identity
     register_misc_routes(app, managers, require_web_auth=None,
                          auth_manager=auth)
     return app
@@ -216,10 +223,15 @@ def _running_scheduler():
 
 def test_readiness_is_503_when_certbot_cannot_run():
     """The whole point: an orchestrator takes the instance out of rotation."""
-    app = _app({'scheduler': _running_scheduler(),
+    managers = {'scheduler': _running_scheduler(),
                 'scheduler_status': {'state': 'running'},
                 'issuance_status': {'state': 'failed',
-                                    'error': "no attribute 'X509Req'"}})
+                                    'error': "no attribute 'X509Req'"}}
+    anonymous = _app(managers).test_client().get('/health/ready')
+    assert anonymous.status_code == 503, 'the verdict is public; only the reason is not'
+    assert 'X509Req' not in anonymous.get_json()['certbot_error']
+
+    app = _app(managers, identity=OPERATOR)
     response = app.test_client().get('/health/ready')
 
     assert response.status_code == 503
@@ -260,9 +272,15 @@ def test_a_dead_scheduler_still_fails_readiness_on_its_own():
 
 
 def test_health_reports_certbot_and_degrades_on_failure():
-    app = _app({'scheduler': _running_scheduler(),
+    managers = {'scheduler': _running_scheduler(),
                 'scheduler_status': {'state': 'running'},
-                'issuance_status': {'state': 'failed', 'error': 'X509Req'}})
+                'issuance_status': {'state': 'failed', 'error': 'X509Req'}}
+    anonymous = _app(managers).test_client().get('/health').get_json()
+    assert anonymous['checks']['certbot'] == 'failed'
+    assert anonymous['status'] == 'degraded'
+    assert 'X509Req' not in anonymous['checks']['certbot_error']
+
+    app = _app(managers, identity=OPERATOR)
     body = app.test_client().get('/health').get_json()
 
     assert body['checks']['certbot'] == 'failed'

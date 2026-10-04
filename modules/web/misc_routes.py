@@ -6,6 +6,7 @@ from ..core.audit_chain import CheckpointReadError
 from ..core.metrics import generate_metrics_response
 from flask import request, jsonify, Response, stream_with_context
 from modules.core.request_fields import json_booleans
+from modules.core.structured_logging import scrub_log_value
 
 # Log-stream pacing (#418). The poll interval bounds how long a new line
 # waits; the idle ceiling bounds how long an abandoned tab can hold a worker
@@ -559,6 +560,21 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         managers['issuance_status'] = status
         return status
 
+    # What the two public health routes say about a failure. The reason itself
+    # (certbot's last 400 characters of output, the scheduler's exception text)
+    # carries install paths, versions and library names, and these routes
+    # answer anyone who can reach the instance. It stays in the server log,
+    # where issuance_readiness and the factory already write it, and in the
+    # same field for a request that carries credentials.
+    REASON_WITHHELD = ('not shown without credentials: it is in the server log, '
+                       'and in this field when the request is authenticated')
+
+    def _reason_for_caller(reason):
+        if not reason:
+            return reason
+        identity = auth_manager.optional_identity() if auth_manager is not None else None
+        return reason if isinstance(identity, dict) else REASON_WITHHELD
+
     @app.route('/health')
     def health_check():
         """Health check endpoint — intentionally public for load balancers"""
@@ -576,7 +592,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             # diagnose without grepping logs; without this the /health response
             # collapsed to a bare 'not_running' that hid the actual cause.
             checks['scheduler'] = 'failed'
-            checks['scheduler_error'] = scheduler_status.get('error')
+            checks['scheduler_error'] = _reason_for_caller(scheduler_status.get('error'))
             checks['scheduler_failed_at'] = scheduler_status.get('timestamp')
             overall = 'degraded'
         else:
@@ -594,7 +610,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             if issuance.get('version'):
                 checks['certbot_version'] = issuance['version']
             if issuance_state == 'failed':
-                checks['certbot_error'] = issuance.get('error')
+                checks['certbot_error'] = _reason_for_caller(issuance.get('error'))
                 overall = 'degraded'
 
         # Cert directory
@@ -676,9 +692,9 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             'certbot': issuance.get('state') or 'unknown',
         }
         if not scheduler_ok and scheduler_status.get('error'):
-            body['scheduler_error'] = scheduler_status.get('error')
+            body['scheduler_error'] = _reason_for_caller(scheduler_status.get('error'))
         if not issuance_ok and issuance.get('error'):
-            body['certbot_error'] = issuance.get('error')
+            body['certbot_error'] = _reason_for_caller(issuance.get('error'))
         return jsonify(body), (200 if ready else 503)
 
     @app.route('/api/events/stream')
@@ -919,8 +935,11 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             success = 'error' not in result
             return jsonify({'success': success, **result})
         except Exception as e:
-            logger.error(f"Notification test failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+            # A delivery failure comes back in `result` above, on purpose: it
+            # is what the admin is testing. This is something else breaking,
+            # and its text is the server's, not the channel's.
+            logger.error("Notification test failed: %s", scrub_log_value(e))
+            return jsonify({'success': False, 'error': 'Notification test failed'}), 500
 
     @app.route('/api/notifications/webhook/preview', methods=['POST'])
     @auth_manager.require_role('admin')
