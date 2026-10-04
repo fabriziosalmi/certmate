@@ -98,12 +98,14 @@ setup: $(VENV)/bin/activate install-dev
 	@echo "✅ .venv ready. Activate with:"
 	@echo "   source .venv/bin/activate"
 
-# The locked set is what the image and the installer run; the test requirements
-# go on top with the lock as a constraint, so a test dependency cannot move
-# a runtime pin (the same way the Dockerfile layers the extras, #686).
+# The locked set is what the image and the installer run, installed with its
+# hashes; the test requirements go on top constrained by the lock's pins without
+# hashes (requirements.constraints), so a test dependency cannot move a runtime
+# pin, the same way the Dockerfile layers the extras (#686).
 install-dev: $(VENV)/bin/activate
-	$(PIP) install -r requirements.lock
-	$(PIP) install -c requirements.lock -r requirements-test.txt
+	$(PIP) install --require-hashes -r requirements-build.lock
+	$(PIP) install --require-hashes -r requirements.lock
+	$(PIP) install -c requirements.constraints -r requirements-test.txt
 	$(PIP) install bandit==$(BANDIT_VERSION)
 
 # ── Run ────────────────────────────────────────────────────────────────

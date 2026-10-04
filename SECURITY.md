@@ -351,9 +351,10 @@ behind: four advisories, all `cryptography==46.0.7`, all documented above.
 
 ## Supply-chain posture for Python dependencies
 
-This section exists so the absence of hash pinning is a **decision on record**
-rather than an oversight (issue #686). What CertMate does and does not claim
-about the packages in its images:
+This section records what the dependency pinning does and does not guarantee
+(issue #686). It began as the record of why the locks carried no hashes; they
+carry them now, and the reasons that changed are kept below. What CertMate
+does and does not claim about the packages in its images:
 
 **What is guaranteed.** `requirements.lock` and `requirements-minimal.lock`
 hold the **fully resolved** install set for the two main variants — every
@@ -373,39 +374,49 @@ is pinned above the certbot pin, or if any advertised
 `EXTRA_REQUIREMENTS` combination stops resolving. The base image is pinned by
 digest. Published images carry an SPDX SBOM and SLSA provenance, so what
 shipped is auditable after the fact. Extras layers install under
-`-c ${REQUIREMENTS_FILE}`, so an optional backend cannot move a pin the base
-layer holds deliberately.
+`-c requirements.constraints` (the lock's pins), so an optional backend cannot
+move a pin the base layer holds, transitive ones included.
 
-**What is not guaranteed.** The locks carry **no hashes**. Nothing verifies that
-the wheels installed are the wheels that were reviewed. A version pin — even a
-complete, transitive one — does not defend against a **re-published or
-compromised artifact at that same version**. PyPI does not allow re-uploading a
-filename, so this requires a compromise of the index or of the maintainer's
-account — but it is a real class of attack and this project does not currently
-detect it. The optional variants (the DNS and storage sets) have no lock at all
-and still resolve at build time; only the two main variants are locked.
+**Hashes, and where they stop.** `requirements.lock`, `requirements-minimal.lock`
+and `requirements-build.lock` (the builder's own pip, setuptools, wheel and
+packaging) carry the sha256 of every file the index publishes for each pinned
+version, and the image installs them with `--require-hashes`. A file that is
+not one of those is refused and the build stops: a re-published or substituted
+wheel at a pinned version, from a compromised index or maintainer account, does
+not reach the image. That covers every Python package in the published image,
+which is built from `requirements.lock` with no extras: its 126 packages are
+the lock's 123 plus pip, wheel and packaging from the build lock. Before this,
+pip was pinned but setuptools, wheel and packaging were whatever the index
+served on build day.
 
-**Why no hashes, specifically.** `--require-hashes` is all-or-nothing per
-install: every requirement, including every transitive one, must carry a hash or
-pip refuses the file. That collides with how these images are built — 12
-requirements files and a layered `EXTRA_REQUIREMENTS` model whose documented
-combinations multiply rather than compose, so the hashes would be needed per
-variant and per platform, not once.
-Doing it partially is worse than not doing it: a half-hashed set fails installs
-with errors that name the wrong cause, and the reliable response is to route
-around the mechanism with `--no-deps` or a second unhashed install. The project
-would then carry the maintenance cost of lockfiles *and* the false confidence
-of a guard people bypass.
+Where it stops: an image built with `EXTRA_REQUIREMENTS` installs the extras on
+top, constrained by `requirements.constraints` (or
+`requirements-minimal.constraints`): the lock's pins, without the hashes. The
+extras cannot move a pin the lock holds, but the packages they add are pinned
+only as far as their own file pins them and are not hash-verified. The optional
+variants that have no lock (the DNS and storage sets used as
+`REQUIREMENTS_FILE`) still resolve at build time.
 
-One reason previously given here has since been **measured and withdrawn**:
-"two architectures resolving different binary wheels". For `requirements.txt`
-and `requirements-minimal.txt` the resolution is byte-identical on `linux/amd64`
-and `linux/arm64`, which is why one lockfile per variant is enough.
-`scripts/regenerate_lockfiles.sh` resolves both architectures and refuses to
-write if they ever disagree, so this stays a measurement rather than a memory.
-It does not resolve the hash question — a hash is per *wheel*, and identical
-versions can still mean different wheels — but the reason it was leaning on was
-not true.
+**Why the split.** pip's hash checking is all-or-nothing per install, and a
+hash in a constraints file switches it on too. Constraining the extras with the
+hashed lock was measured to fail: `-c requirements.lock -r
+requirements-infisical-storage.txt` ends in "Hashes are required" for the
+package the lock does not have. This section used to give that as the reason to
+have no hashes at all, because the alternatives were a lock per extras
+combination or a half-hashed install whose errors name the wrong cause and get
+routed around. The `.constraints` file avoids both: each pip invocation in the
+build is either fully hashed (the build tools, the lock) or not hashed at all
+(the extras), never mixed. CI installs the test requirements the same way.
+
+**Two reasons once given here, measured and withdrawn.** "Two architectures
+resolving different binary wheels": for `requirements.txt` and
+`requirements-minimal.txt` the resolution is byte-identical on `linux/amd64` and
+`linux/arm64`, which is why one lockfile per variant is enough. "A hash is per
+wheel, so identical versions can still need different hashes": `uv pip compile
+--generate-hashes` lists the hashes of every file of the version, so the hashed
+lock is also identical for both architectures. `scripts/regenerate_lockfiles.sh`
+resolves both and refuses to write if the versions or the hashes ever differ,
+so both stay measurements rather than memories.
 
 **Keeping the locks honest.** Installing from a lock means a bump to
 `requirements.txt` has no effect until the lock is regenerated: a security patch
@@ -439,8 +450,10 @@ but a denylist ships whatever nobody remembered to add to it.
 Dockerfile.
 
 **If you are threat-modelling against this**, the honest summary is:
-auditability, not integrity. The SBOM tells you what you got; it does not prove
-it is what was intended.
+integrity for the Python packages of the published image (each file verified
+against the hash the lock recorded when it was reviewed), auditability for the
+rest. The OS packages and the packages an extras build adds are what the SBOM
+lets you inspect after the fact, not what the build verifies.
 
 ## Coordinated disclosure
 

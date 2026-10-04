@@ -376,8 +376,10 @@ jobs:
           set -- $combo
           base="$1"; shift
           # The same derivation the Dockerfile makes, so a variant that gains
-          # or loses a lock is covered here without editing this list.
-          constraint="${base%.txt}.lock"
+          # or loses a lock is covered here without editing this list. The
+          # .constraints file is the lock's pins without its hashes: the lock
+          # itself would turn hash checking on for the extras and refuse them.
+          constraint="${base%.txt}.constraints"
           [ -f "$constraint" ] || constraint="$base"
           echo "::group::$base (constraint: $constraint) + $*"
           for extra in "$@"; do
@@ -483,10 +485,13 @@ jobs:
         python-version: '3.12'
 
     - name: Install the locked set and the pinned tools
+      # The image's own sequence: the tools and the lock with --require-hashes,
+      # then the test requirements constrained by the lock's pins without
+      # hashes (requirements.constraints), as the Dockerfile layers the extras.
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.lock
-        pip install -c requirements.lock -r requirements-test.txt
+        python -m pip install --require-hashes -r requirements-build.lock
+        pip install --require-hashes -r requirements.lock
+        pip install -c requirements.constraints -r requirements-test.txt
 
     - name: mypy ratchet
       run: python scripts/check_mypy_budget.py

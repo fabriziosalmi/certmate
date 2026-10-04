@@ -114,9 +114,15 @@ package. So a pin changed alone does nothing: after editing it, run
 make lock        # needs uv: pip install uv, or brew install uv
 ```
 
-and commit the locks with it. It starts from the pins already in the locks, so it moves what your
-change needs moved and nothing else; the unit suite (`tests/test_the_transitive_set_is_written_down.py`)
-fails when a pin and its lock disagree. A Dependabot bump to `requirements.txt` needs the same.
+and commit what it writes with it: the locks, now with the sha256 of every file of each pinned
+version (the image installs them with `--require-hashes`), and their `.constraints` files, the same
+pins without hashes, which constrain the extras and the test requirements. It starts from the pins
+already in the locks, so it moves what your change needs moved and nothing else; the unit suite
+(`tests/test_the_transitive_set_is_written_down.py`) fails when a pin and its lock disagree, when a
+pin has no hash, or when a `.constraints` file no longer matches its lock. A Dependabot bump to
+`requirements.txt` needs the same. The builder's own pip, setuptools and wheel are pinned in
+`requirements-build.txt` and locked the same way, and the runtime stage's `ARG PIP_VERSION` must
+equal that pip pin.
 
 ### Editing templates or CSS
 

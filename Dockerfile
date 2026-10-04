@@ -19,9 +19,10 @@ RUN apt-get update && \
 # Copy every requirements*.txt so REQUIREMENTS_FILE and EXTRA_REQUIREMENTS
 # can point at any of the optional sets (storage backends, cloud DNS,
 # extended providers, …) without rebuilding the COPY layer for each one.
-# The .lock files are the fully resolved sets for the two main variants; see
-# the install step below and scripts/regenerate_lockfiles.sh.
-COPY requirements*.txt requirements*.lock ./
+# The .lock files are the fully resolved sets for the two main variants, with
+# hashes; the .constraints files are their pins without hashes, for the extras
+# layer. See the install step below and scripts/regenerate_lockfiles.sh.
+COPY requirements*.txt requirements*.lock requirements*.constraints ./
 
 # Create virtual environment and install dependencies
 RUN python -m venv /opt/venv
@@ -41,69 +42,72 @@ ARG REQUIREMENTS_FILE=requirements.txt
 #
 # Empty by default → no second install, layer cached.
 ARG EXTRA_REQUIREMENTS=
-# The venv's pip, pinned to the same version as the runtime stage's.
+# The venv's tools come from requirements-build.lock: pip, setuptools, wheel and
+# packaging, each with the hashes of its files.
 #
-# This used to be a bare `pip install -U pip`, and the effect was that the pin
-# defended the copy nobody uses. `ENV PATH` puts /opt/venv/bin first, so `pip`
-# in the finished image resolves to THIS one — measured on the published
-# v2.25.4 image:
+# pip here used to be a bare `pip install -U pip`, so the pin defended the copy
+# nobody uses: `ENV PATH` puts /opt/venv/bin first, and on the published v2.25.4
+# image /usr/local/bin/pip was the pinned 26.1.2 while /opt/venv/bin/pip, the one
+# `pip` resolves to, was 26.2.1. Then it became `pip==X -U setuptools wheel`,
+# which pinned pip and left setuptools, wheel and packaging to whatever the
+# index served on build day. A comment here said those "never reach the runtime
+# stage"; they do, because the runtime stage copies /opt/venv, and the published
+# 2.48.1 image carries wheel 0.48.0 and packaging 26.3. They are locked now, at
+# exactly those versions, and the runtime stage's PIP_VERSION must equal the pip
+# pin in requirements-build.txt (a test holds the two together).
 #
-#     /usr/local/bin/pip   26.1.2   pinned, and the comment below explains why
-#     /opt/venv/bin/pip    26.2.1   whatever PyPI served that day
-#     which pip         -> /opt/venv/bin/pip
-#
-# The runtime pin's own comment gives reproducibility as a reason — "two builds
-# of the same commit could differ" — and that was true of the unpinned one, not
-# the pinned one. Same ARG, so a deliberate bump moves both together.
-ARG PIP_VERSION=26.1.2
 # shellcheck disable=SC2086 — intentional word-splitting to iterate the list.
-# No -U: an exact `==` specifier installs that version regardless of what is
-# already there — verified, including downgrading 26.2.1 to 26.1.2 — so the
-# flag only muddies the intent (Copilot, #553). setuptools and wheel keep
-# theirs; they are build-time only and never reach the runtime stage.
-#
-# `-c ${REQUIREMENTS_FILE}` on the extras layer is load-bearing, not tidiness
-# (#686). Each extras install is a separate pip resolution that knows nothing
-# about what the first one pinned, so it is free to move those pins — measured,
-# not theorised: with the base stack installed, `pip install "cryptography<46"`
-# as a second layer silently downgrades 46.0.7 to 45.0.7, below the floor
-# pyopenssl==26.0.0 needs, and the image ships an interpreter where
-# `certbot --version` no longer answers. The extras files reach that same edge
-# by a longer route: they carry unbounded `>=` requirements (azure-identity,
-# boto3, azure-keyvault-*), and a future release of any of them that wants a
-# newer `cryptography` gets it.
-#
-# With the constraint, pip refuses at build time and names the conflict. That
-# is the trade: a variant build that would have shipped a broken stack now
-# fails loudly instead. All documented combinations above resolve under it.
 #
 # The base install reads the LOCKFILE when the chosen variant has one, because
 # `requirements.txt` pins 42 packages and resolves to 118: the other 76 were
 # whatever the index served on build day, and two images built from one commit
 # a month apart were not the same image. `requirements.lock` and
-# `requirements-minimal.lock` record the full resolution, resolved by uv for the two
-# published architectures (scripts/regenerate_lockfiles.sh); pip installs it here.
-# A variant without a lock — the optional-DNS and storage sets — installs from
-# its .txt exactly as before, so nothing here narrows what can be built.
+# `requirements-minimal.lock` record the full resolution, resolved by uv for the
+# two published architectures (scripts/regenerate_lockfiles.sh), with the
+# sha256 of every file the index publishes for each version. pip installs them
+# with --require-hashes: a file that is not one of those is refused, so a
+# re-published or substituted wheel at a pinned version stops the build instead
+# of shipping. A variant without a lock (the optional-DNS and storage sets)
+# installs from its .txt exactly as before, so nothing here narrows what can be
+# built.
 #
-# The lock also becomes the extras constraint when present. It is a superset of
-# the .txt pins, so it constrains the transitive packages too, which is the only
-# way an extras layer cannot move one out from under the locked base. Every
-# documented combination above was measured to resolve under it, and CI checks
-# that on every run rather than trusting this comment.
+# The extras layer is constrained, and that is load-bearing, not tidiness
+# (#686). Each extras install is a separate pip resolution that knows nothing
+# about what the first one pinned, so it is free to move those pins. Measured,
+# not theorised: with the base stack installed, `pip install "cryptography<46"`
+# as a second layer silently downgraded 46.0.7 to 45.0.7, below the floor the
+# pinned pyopenssl needed, and the image shipped an interpreter where
+# `certbot --version` no longer answered. The extras files carry unbounded `>=`
+# requirements (azure-identity, boto3, azure-keyvault-*), so a future release
+# of any of them could reach the same edge. With the constraint pip refuses at
+# build time and names the conflict.
+#
+# The constraint is the .constraints file, not the lock: the same pins, without
+# hashes. pip turns hash checking on for a whole install when any line in it
+# carries a hash, constraints included, so `-c requirements.lock` would refuse
+# every unhashed package an extras file brings. Each pip call below is therefore
+# fully hashed (the tools, the lock) or not hashed at all (the extras), never
+# half (SECURITY.md, "Supply-chain posture"). Every documented combination
+# above resolves under the constraint, and CI checks that on every run.
 #
 # Freezing transitives means a lock can age into a known-vulnerable package. It
 # does not go unnoticed: scripts/check_resolved_advisories.py queries OSV for
 # the set actually installed in the built image, and it is a required check.
-RUN pip install "pip==${PIP_VERSION}" -U setuptools wheel && \
+RUN pip install --no-cache-dir --require-hashes -r requirements-build.lock && \
     LOCKFILE="${REQUIREMENTS_FILE%.txt}.lock"; \
-    if [ ! -f "${LOCKFILE}" ]; then LOCKFILE="${REQUIREMENTS_FILE}"; fi; \
-    echo "==> Installing from ${LOCKFILE}" && \
-    pip install --no-cache-dir -r "${LOCKFILE}" && \
+    CONSTRAINTS="${REQUIREMENTS_FILE%.txt}.constraints"; \
+    if [ -f "${LOCKFILE}" ]; then \
+        echo "==> Installing from ${LOCKFILE}, hashes required" && \
+        pip install --no-cache-dir --require-hashes -r "${LOCKFILE}"; \
+    else \
+        echo "==> ${REQUIREMENTS_FILE} has no lock: installing it unlocked" && \
+        CONSTRAINTS="${REQUIREMENTS_FILE}" && \
+        pip install --no-cache-dir -r "${REQUIREMENTS_FILE}"; \
+    fi && \
     if [ -n "${EXTRA_REQUIREMENTS}" ]; then \
         for req in ${EXTRA_REQUIREMENTS}; do \
             echo "==> Installing extras from ${req}"; \
-            pip install --no-cache-dir -c "${LOCKFILE}" -r "${req}"; \
+            pip install --no-cache-dir -c "${CONSTRAINTS}" -r "${req}"; \
         done; \
     fi
 
@@ -232,7 +236,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # tests/test_image_ships_only_what_it_runs.py checks this against the built
 # image rather than against this comment.
 COPY app.py ./
-COPY requirements*.txt requirements*.lock ./
+COPY requirements*.txt requirements*.lock requirements*.constraints ./
 COPY modules/ ./modules/
 COPY templates/ ./templates/
 COPY static/ ./static/

@@ -55,19 +55,19 @@ echo "python: $PYTHON_VERSION"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-for req in requirements.txt requirements-minimal.txt; do
-    lock="${req%.txt}.lock"
-    echo
-    echo "=== $req -> $lock ==="
-
+# resolve REQ LOCK [EXTRA uv ARGS...]: resolve REQ for both architectures, with
+# the hashes of every file the index publishes for each pinned version, into
+# $WORK/<platform>.txt, and refuse if the two architectures disagree.
+resolve() {
+    req="$1"; lock="$2"; shift 2
     for platform in $PLATFORMS; do
         echo "  resolving for $platform"
         # The current lock is the starting point: its pins are uv's preferences.
-        cp "$lock" "$WORK/$platform.txt"
-        uv pip compile "$req" --python-version "$PYTHON_VERSION" --python-platform "$platform" \
-            --no-header --no-annotate --quiet --output-file "$WORK/$platform.txt"
-        # Only the pins, sorted, for the comparison.
-        sed 's/ *#.*//' "$WORK/$platform.txt" | grep -E '^[A-Za-z0-9._-]+==' | sort > "$WORK/$platform.pins"
+        if [ -f "$lock" ]; then cp "$lock" "$WORK/$platform.txt"; else : > "$WORK/$platform.txt"; fi
+        uv pip compile "$req" "$@" --python-version "$PYTHON_VERSION" --python-platform "$platform" \
+            --generate-hashes --no-header --no-annotate --quiet --output-file "$WORK/$platform.txt"
+        # Only the pins, sorted, for the comparison that names a package.
+        sed 's/ *#.*//; s/ *\\$//' "$WORK/$platform.txt" | grep -E '^[A-Za-z0-9._-]+==' | sort > "$WORK/$platform.pins"
     done
 
     first="$(echo "$PLATFORMS" | cut -d' ' -f1)"
@@ -78,13 +78,37 @@ for req in requirements.txt requirements-minimal.txt; do
             cat "$WORK/skew.diff" >&2
             exit 1
         fi
+        # The hashes too: one lock serves both builds only while the set of
+        # files it lists is the same whichever architecture resolved it. uv
+        # lists every file of the version, so it is; this keeps it a check.
+        if ! diff -q "$WORK/$first.txt" "$WORK/$platform.txt" > /dev/null; then
+            echo "::error::$req resolves to the same versions but different hashes on the two architectures." >&2
+            diff -u "$WORK/$first.txt" "$WORK/$platform.txt" | head -40 >&2
+            exit 1
+        fi
     done
-    echo "  both architectures resolve identically"
+    echo "  both architectures resolve identically, hashes included"
+}
 
-    python3 scripts/lockfile.py write "$req" "$WORK/$first.pins" "$lock"
+for req in requirements.txt requirements-minimal.txt; do
+    lock="${req%.txt}.lock"
+    echo
+    echo "=== $req -> $lock (+ ${lock%.lock}.constraints) ==="
+    resolve "$req" "$lock"
+    python3 scripts/lockfile.py write "$req" "$WORK/$first.txt" "$lock" --constraints
 done
+
+# The builder's own tools: pip, setuptools, wheel and what they need. They used
+# to be installed unpinned (`pip install pip==X -U setuptools wheel`), so they
+# were the one part of the image that was build-day luck. Constrained by the
+# main lock, so a package both need (setuptools) is the same version in both.
+echo
+echo "=== requirements-build.txt -> requirements-build.lock ==="
+resolve requirements-build.txt requirements-build.lock -c requirements.constraints
+python3 scripts/lockfile.py write requirements-build.txt "$WORK/$first.txt" requirements-build.lock
 
 echo
 python3 scripts/lockfile.py check \
     requirements.txt:requirements.lock \
-    requirements-minimal.txt:requirements-minimal.lock
+    requirements-minimal.txt:requirements-minimal.lock \
+    requirements-build.txt:requirements-build.lock
