@@ -18,7 +18,8 @@ from ..core.certificates import CREATION_FAILED, DomainOperationInProgress
 from ..core.utils import classify_renewal_error
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import (
-    ApiContext, check_domain_scope, job_accepted, wants_async,
+    ApiContext, check_certificate_scope, check_domain_scope, job_accepted,
+    wants_async,
 )
 
 logger = logging.getLogger(__name__)
@@ -477,7 +478,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
 
             Body: {"enabled": true|false}
             """
-            scope_err = _check_domain_scope(domain, 'set_auto_renew')
+            scope_err = check_certificate_scope(ctx, domain, 'set_auto_renew')
             if scope_err:
                 return scope_err
             _, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)

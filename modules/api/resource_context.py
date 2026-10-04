@@ -128,6 +128,52 @@ def check_domain_scope(ctx: ApiContext, domain, operation):
     user = getattr(request, 'current_user', None) or {}
     if ctx.auth.user_can_access_domain(user, domain):
         return None
+    return _scope_denied(ctx, user, domain, operation)
+
+
+def check_certificate_scope(ctx: ApiContext, domain, operation):
+    """`check_domain_scope` for an operation on an existing certificate.
+
+    The certificate filed as *domain* may cover other names, and whatever is
+    done to it is done for all of them: its key serves every one. So the
+    caller's scope must cover each name it carries, which is the rule
+    creation has always applied to the names it is asked for.
+
+    The answer names only *domain*, the name the caller sent: the other
+    names are what the caller is not entitled to, so the one outside the
+    scope is recorded in the server log and not handed back.
+    """
+    user = getattr(request, 'current_user', None) or {}
+    if not ctx.auth.user_can_access_domain(user, domain):
+        return _scope_denied(ctx, user, domain, operation)
+    if user.get('allowed_domains') is None:
+        # Unrestricted: no name can fall outside, so nothing is read.
+        return None
+    for name in ctx.certificates.names_covered(domain):
+        if not ctx.auth.user_can_access_domain(user, name):
+            logger.warning(
+                "Scope denial: certificate %s also covers %s",
+                scrub_log_value(domain), scrub_log_value(name))
+            return _scope_denied(
+                ctx, user, domain, operation,
+                reason='certificate covers a name outside scoped key allowed_domains')
+    return None
+
+
+def certificate_in_scope(ctx: ApiContext, domain, scope) -> bool:
+    """Whether *scope* covers every name of the certificate filed as *domain*.
+
+    The question `check_certificate_scope` asks, for a caller that filters
+    rather than refuses (the certificate list). Unrestricted reads nothing.
+    """
+    if scope is None:
+        return True
+    return all(ctx.auth.domain_matches_scope(name, scope)
+               for name in ctx.certificates.names_covered(domain))
+
+
+def _scope_denied(ctx: ApiContext, user, domain, operation,
+                  reason='domain outside scoped key allowed_domains'):
     # Scrubbed exactly as cert_service does for the same denial log: the
     # username can carry a newline (create_user does not constrain it, and the
     # OIDC path takes it from an IdP claim), which under the non-JSON log
@@ -142,7 +188,7 @@ def check_domain_scope(ctx: ApiContext, domain, operation):
             operation=operation,
             resource_type='certificate',
             resource_id=domain,
-            reason='domain outside scoped key allowed_domains',
+            reason=reason,
             user=user.get('username'),
             ip_address=request.remote_addr,
         )

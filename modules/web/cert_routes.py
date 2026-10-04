@@ -135,7 +135,12 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                     cert_dir, error = _sanitize_domain(domain, file_ops.cert_dir)
                     if error:
                         continue
-                    if not auth_manager.domain_matches_scope(cert_dir.name, scope):
+                    # Every name the certificate covers, as for the single
+                    # download: what it holds is valid for all of them.
+                    names = ([cert_dir.name] if scope is None
+                             else certificate_manager.names_covered(cert_dir.name))
+                    if not all(auth_manager.domain_matches_scope(name, scope)
+                               for name in names):
                         if audit_logger:
                             audit_logger.log_authz_denied(
                                 operation='batch_download',

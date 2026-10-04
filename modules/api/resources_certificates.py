@@ -19,7 +19,11 @@ from ..core.inventory_sources import (
     collect_domain_sources,
 )
 from .path_validation import validate_domain_path as _validate_domain_path
-from .resource_context import ApiContext, check_domain_scope
+from .resource_context import (
+    ApiContext,
+    certificate_in_scope,
+    check_certificate_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +143,8 @@ def _audit_labels(ctx, domain, sent, tags_before, metadata):
 def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
     """Build the certificates resources against *ctx*."""
 
-    def _check_domain_scope(domain, operation):
-        return check_domain_scope(ctx, domain, operation)
+    def _check_certificate_scope(domain, operation):
+        return check_certificate_scope(ctx, domain, operation)
 
     class CertificateList(Resource):
         @api.doc(security='Bearer')
@@ -175,6 +179,11 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                 # always True so unrestricted callers see everything.
                 visible = [d for d in all_domains
                            if d and ctx.auth.domain_matches_scope(d, scope)]
+                # The same rule as every operation on one of them: a
+                # certificate is the caller's only when each of its names is,
+                # so the list does not offer what the detail refuses.
+                visible = [d for d in visible
+                           if certificate_in_scope(ctx, d, scope)]
 
                 # Reuse the once-loaded settings dict so each per-domain call
                 # skips its own settings deepcopy — and, with the concurrency
@@ -212,7 +221,7 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             expiry via days_left / needs_renewal. Returns 404 when no
             certificate directory exists for the domain.
             """
-            scope_err = _check_domain_scope(domain, 'get')
+            scope_err = _check_certificate_scope(domain, 'get')
             if scope_err:
                 return scope_err
             cert_dir, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
@@ -258,7 +267,7 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             Body: {"dns_provider": "route53", "deployment_protocol": "smtp-starttls",
                    "deployment_port": 587, "deployment_host": "mail.example.com"}
             """
-            scope_err = _check_domain_scope(domain, 'update_dns_provider')
+            scope_err = _check_certificate_scope(domain, 'update_dns_provider')
             if scope_err:
                 return scope_err
             cert_dir, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
@@ -387,7 +396,7 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             Does NOT revoke the certificate at the CA — call the CA's revoke
             endpoint separately if revocation is required.
             """
-            scope_err = _check_domain_scope(domain, 'delete')
+            scope_err = _check_certificate_scope(domain, 'delete')
             if scope_err:
                 return scope_err
             # Path is only validated for the side-effect of rejecting

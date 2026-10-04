@@ -115,6 +115,29 @@ class CertificateService:
         user = user or {}
         if self._auth.user_can_access_domain(user, domain):
             return
+        self._deny_scope(domain, operation, user, ip_address)
+
+    def _enforce_certificate_scope(self, domain, operation, user, ip_address):
+        """`_enforce_scope` for the certificate that exists as *domain*.
+
+        Renewing or reissuing it acts on every name it covers, so each must be
+        in scope (see `CertificateManager.names_covered`). The refusal names
+        *domain* only; the name outside the scope goes to the server log.
+        """
+        self._enforce_scope(domain, operation, user, ip_address)
+        user = user or {}
+        if user.get('allowed_domains') is None:
+            return
+        for name in self._certs.names_covered(domain):
+            if not self._auth.user_can_access_domain(user, name):
+                logger.warning("Scope denial: certificate %s also covers %s",
+                               _scrub_log(domain), _scrub_log(name))
+                self._deny_scope(
+                    domain, operation, user, ip_address,
+                    reason='certificate covers a name outside scoped key allowed_domains')
+
+    def _deny_scope(self, domain, operation, user, ip_address,
+                    reason='domain outside scoped key allowed_domains'):
         logger.warning(
             "Scope denial: user=%s op=%s domain=%s scope=%s",
             _scrub_log(user.get('username')), operation,
@@ -125,7 +148,7 @@ class CertificateService:
                 operation=operation,
                 resource_type='certificate',
                 resource_id=domain,
-                reason='domain outside scoped key allowed_domains',
+                reason=reason,
                 user=user.get('username'),
                 ip_address=ip_address,
             )
@@ -683,6 +706,10 @@ class CertificateService:
             domain = domain_dir.name
             if not self._auth.domain_matches_scope(domain, scope):
                 continue
+            if scope is not None and not all(
+                    self._auth.domain_matches_scope(name, scope)
+                    for name in self._certs.names_covered(domain)):
+                continue
             if CertificateManager._lineage_lost_its_key(domain_dir, domain):
                 found.append(domain)
         return sorted(found)
@@ -768,8 +795,10 @@ class CertificateService:
 
         # Scope covers the primary and the FINAL SAN set (kept + added):
         # a scoped key must not be able to keep another tenant's SAN alive
-        # through inheritance any more than it could add it explicitly.
-        self._enforce_scope(domain, 'reissue', user, ip_address)
+        # through inheritance any more than it could add it explicitly. And
+        # every name the certificate covers today: a reissue replaces it for
+        # all of them, so naming a smaller set must not drop another tenant's.
+        self._enforce_certificate_scope(domain, 'reissue', user, ip_address)
         for san in san_domains:
             san_clean = san.strip() if isinstance(san, str) else ''
             if san_clean:
@@ -912,7 +941,7 @@ class CertificateService:
         Raises :class:`DomainOutOfScope`. Returns the resolved kwargs for
         :meth:`issue_renew`.
         """
-        self._enforce_scope(domain, 'renew', user, ip_address)
+        self._enforce_certificate_scope(domain, 'renew', user, ip_address)
         return {'domain': domain, '_audit_ctx': audit_ctx}
 
     def issue_renew(self, prepared, *, force=False):
