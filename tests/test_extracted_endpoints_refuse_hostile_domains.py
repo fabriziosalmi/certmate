@@ -40,6 +40,10 @@ ENDPOINTS = [
      'CertificateDetail', 'get'),
     ('modules.api.resources_certificates', 'create_certificates_resources',
      'CertificateDetail', 'delete'),
+    # PATCH (tags, notes, probe settings) builds the same directory path and
+    # was the one method of CertificateDetail not driven here (alert 1365).
+    ('modules.api.resources_certificates', 'create_certificates_resources',
+     'CertificateDetail', 'patch'),
     ('modules.api.resources_deployment', 'create_deployment_resources',
      'CertificateDeploymentStatus', 'get'),
     ('modules.api.resources_deployment', 'create_deployment_resources',
@@ -47,11 +51,6 @@ ENDPOINTS = [
     ('modules.api.resources_lifecycle', 'create_lifecycle_resources',
      'CertificateAutoRenew', 'put'),
 ]
-
-MODELS = {k: MagicMock() for k in (
-    'certificate_model', 'create_cert_model', 'reissue_cert_model',
-    'deployment_status_model', 'browser_deployment_reports_model')}
-
 
 def _build(module_name, factory_name, capture):
     import importlib
@@ -79,7 +78,11 @@ def _build(module_name, factory_name, capture):
 
     app = Flask(__name__)
     api = Api(app, prefix='/api')
-    return app, getattr(module, factory_name)(api, MODELS, ctx)
+    # The real models, not mocks: a marshalled route answers with the fields
+    # its model declares, and marshalling against a MagicMock answered every
+    # refusal with an empty body, so the refusal could not be told apart.
+    from modules.api.models import create_api_models
+    return app, getattr(module, factory_name)(api, create_api_models(api), ctx)
 
 
 @pytest.mark.parametrize('hostile', HOSTILE)
@@ -99,8 +102,15 @@ def test_a_hostile_domain_is_refused_without_being_logged(
 
     status = result[1] if isinstance(result, tuple) and len(result) >= 2 \
         else 200
-    assert status in (400, 403, 404), (
-        f'{resource}.{method} answered {status} for {hostile!r}'
+    body = result[0] if isinstance(result, tuple) else result
+    # 400 from the validator, not "anything that is not a success". This
+    # accepted 404 too, and a 404 is what an endpoint with no validator at all
+    # answers here, because the escaped path does not exist: removing
+    # validate_domain_path from CertificateDetail.patch left all 42 cases
+    # green. The refusal has to be the validator's.
+    assert status == 400 and 'invalid domain' in str(body).lower(), (
+        f'{resource}.{method} answered {status} {body!r} for {hostile!r}, '
+        f'not the validator\'s refusal'
     )
 
     emitted = [line for line in capture.getvalue().split('\n') if line.strip()]

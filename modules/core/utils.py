@@ -232,7 +232,14 @@ def validate_domain(domain: str) -> Tuple[bool, str]:
             return False, f"Domain label '{label}' is too long (maximum 63 characters)."
         
         is_last_label = (i == len(labels) - 1)
-        if is_last_label and (not label.isalpha() or len(label) < 2):
+        # isascii() as well as isalpha(): isalpha() is true for any Unicode
+        # letter, so 'example.c\u03bfm' (a Greek omicron) and 'example.\u00e7om'
+        # passed here while DOMAIN_RE, which every other route uses, refuses
+        # them. Create then made the directory, certbot refused the name, and
+        # the directory stayed: absent from the list and refused by DELETE,
+        # since the route that deletes it validates with DOMAIN_RE. An
+        # internationalised name is written in Punycode, which is ASCII.
+        if is_last_label and (not (label.isascii() and label.isalpha()) or len(label) < 2):
             return False, f"Invalid Top-Level Domain (TLD): '{label}'."
         if not is_last_label and not label_pattern.fullmatch(label):
              return False, f"Invalid format for domain label: '{label}'."

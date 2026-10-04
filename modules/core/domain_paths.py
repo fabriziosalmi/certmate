@@ -75,7 +75,11 @@ def is_path_safe_segment(value):
     identifiers go through it too: same rule, same consequence, different kind
     of name.
     """
-    if not value:
+    # '.' is a segment that names its parent: `cert_dir / '.' / 'metadata.json'`
+    # is `cert_dir / 'metadata.json'`. No caller can deliver it today (the
+    # domain validators refuse it first), but this is the rule the metadata
+    # write relies on, so it says so itself.
+    if not value or value == '.':
         return False
     return not any(bad in value for bad in _PATH_UNSAFE)
 
