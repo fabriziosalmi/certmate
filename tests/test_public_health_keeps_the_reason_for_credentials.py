@@ -99,6 +99,8 @@ def test_anything_that_is_not_a_user_record_is_no_identity(tmp_path):
     An auth manager that answers with something truthy that is not one (a
     stub, a future refactor returning a flag) gets the anonymous answer."""
     am = MagicMock()
+    am.require_role = lambda role: (lambda fn: fn)
+    am.require_session_role = lambda role: (lambda fn: fn)
     am.optional_identity.return_value = True
     body = _app(am).test_client().get('/health').get_json()
     assert '/opt/venv' not in body['checks']['certbot_error']
