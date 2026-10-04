@@ -349,6 +349,27 @@ def _activity_page(audit_logger, limit, query, scope=None, matches=None):
         'complete': found['complete'],
     }
 
+# What the two public health routes say about a failure. The reason itself
+# (certbot's last 400 characters of output, the scheduler's exception text)
+# carries install paths, versions and library names, and these routes answer
+# anyone who can reach the instance. It stays in the server log, where
+# issuance_readiness and the factory already write it, and in the same field
+# for a request that carries credentials.
+REASON_WITHHELD = ('not shown without credentials: it is in the server log, '
+                   'and in this field when the request is authenticated')
+
+
+def _reason_for_caller(auth_manager, reason):
+    """The reason for a caller with credentials, a fixed pointer otherwise.
+
+    Fail closed: anything but a user record from optional_identity() counts
+    as anonymous."""
+    if not reason:
+        return reason
+    identity = auth_manager.optional_identity() if auth_manager is not None else None
+    return reason if isinstance(identity, dict) else REASON_WITHHELD
+
+
 def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
     _register_update_check(app, managers, auth_manager)
@@ -560,21 +581,6 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         managers['issuance_status'] = status
         return status
 
-    # What the two public health routes say about a failure. The reason itself
-    # (certbot's last 400 characters of output, the scheduler's exception text)
-    # carries install paths, versions and library names, and these routes
-    # answer anyone who can reach the instance. It stays in the server log,
-    # where issuance_readiness and the factory already write it, and in the
-    # same field for a request that carries credentials.
-    REASON_WITHHELD = ('not shown without credentials: it is in the server log, '
-                       'and in this field when the request is authenticated')
-
-    def _reason_for_caller(reason):
-        if not reason:
-            return reason
-        identity = auth_manager.optional_identity() if auth_manager is not None else None
-        return reason if isinstance(identity, dict) else REASON_WITHHELD
-
     @app.route('/health')
     def health_check():
         """Health check endpoint — intentionally public for load balancers"""
@@ -592,7 +598,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             # diagnose without grepping logs; without this the /health response
             # collapsed to a bare 'not_running' that hid the actual cause.
             checks['scheduler'] = 'failed'
-            checks['scheduler_error'] = _reason_for_caller(scheduler_status.get('error'))
+            checks['scheduler_error'] = _reason_for_caller(auth_manager, scheduler_status.get('error'))
             checks['scheduler_failed_at'] = scheduler_status.get('timestamp')
             overall = 'degraded'
         else:
@@ -610,7 +616,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             if issuance.get('version'):
                 checks['certbot_version'] = issuance['version']
             if issuance_state == 'failed':
-                checks['certbot_error'] = _reason_for_caller(issuance.get('error'))
+                checks['certbot_error'] = _reason_for_caller(auth_manager, issuance.get('error'))
                 overall = 'degraded'
 
         # Cert directory
@@ -692,9 +698,9 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             'certbot': issuance.get('state') or 'unknown',
         }
         if not scheduler_ok and scheduler_status.get('error'):
-            body['scheduler_error'] = _reason_for_caller(scheduler_status.get('error'))
+            body['scheduler_error'] = _reason_for_caller(auth_manager, scheduler_status.get('error'))
         if not issuance_ok and issuance.get('error'):
-            body['certbot_error'] = _reason_for_caller(issuance.get('error'))
+            body['certbot_error'] = _reason_for_caller(auth_manager, issuance.get('error'))
         return jsonify(body), (200 if ready else 503)
 
     @app.route('/api/events/stream')
