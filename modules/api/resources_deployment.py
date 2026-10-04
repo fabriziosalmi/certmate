@@ -7,8 +7,6 @@ therefore testable — without constructing the whole manager graph.
 """
 import logging
 
-from pathlib import Path
-
 from flask import current_app, request
 from flask_restx import Resource
 
@@ -20,6 +18,7 @@ from .tls_probe import (
     _certificate_fingerprint, _certificate_subject_summary,
     _probe_tls_certificate,
 )
+from modules.core.domain_paths import certificate_dir
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                     logger.warning(f"Could not read stored certificate for {domain}: {e}")
 
             if expected_bytes is None:
-                cert_path = Path(ctx.file_ops.cert_dir) / domain / 'cert.pem'
+                cert_path = certificate_dir(ctx.file_ops.cert_dir, domain) / 'cert.pem'
                 if cert_path.exists():
                     expected_bytes = cert_path.read_bytes()
 

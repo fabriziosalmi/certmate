@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from urllib.parse import urlparse
 
 from .constants import CERTIFICATE_FILES
-from .domain_paths import STORAGE_DOMAIN_RE, reject_unsafe_domain
+from .domain_paths import STORAGE_DOMAIN_RE, certificate_dir, reject_unsafe_domain
 from .redirect_guard import GuardedSession
 
 logger = logging.getLogger(__name__)
@@ -419,7 +419,7 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to local filesystem"""
         try:
-            domain_dir = self.cert_dir / domain
+            domain_dir = certificate_dir(self.cert_dir, domain)
             domain_dir.mkdir(parents=True, exist_ok=True)
 
             # Store certificate files atomically. Private keys are 0600 from
@@ -446,7 +446,7 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata from local filesystem"""
         try:
-            domain_dir = self.cert_dir / domain
+            domain_dir = certificate_dir(self.cert_dir, domain)
             if not domain_dir.exists():
                 return None
             
@@ -488,7 +488,7 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     def delete_certificate(self, domain: str) -> bool:
         """Delete certificate from local filesystem"""
         try:
-            domain_dir = self.cert_dir / domain
+            domain_dir = certificate_dir(self.cert_dir, domain)
             if domain_dir.exists():
                 shutil.rmtree(domain_dir)
                 logger.info(f"Certificate deleted for {domain}")
@@ -500,7 +500,7 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     
     def certificate_exists(self, domain: str) -> bool:
         """Check if certificate exists in local filesystem"""
-        domain_dir = self.cert_dir / domain
+        domain_dir = certificate_dir(self.cert_dir, domain)
         return domain_dir.exists() and (domain_dir / 'cert.pem').exists()
     
     def get_backend_name(self) -> str:

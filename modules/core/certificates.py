@@ -43,7 +43,14 @@ from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
     csr_fingerprint, read_csr, to_csr_command,
 )
-from .domain_paths import reject_unsafe_domain, validate_domain_path
+from .domain_paths import (
+    certificate_dir,
+    lineage_archive_dir,
+    lineage_live_dir,
+    reject_unsafe_domain,
+    renewal_conf,
+    validate_domain_path,
+)
 from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,
@@ -697,7 +704,7 @@ class CertificateManager:
         # called from (#672).
         _reject_path_escaping_domain(domain)
         try:
-            target = Path(cert_dir) / domain / 'accounts'
+            target = certificate_dir(cert_dir, domain) / 'accounts'
             if target.exists() and any(target.rglob('*.json')):
                 return None                      # already has an account
             for candidate in sorted(Path(cert_dir).iterdir()):
@@ -969,7 +976,7 @@ class CertificateManager:
             if not domain_dir.is_dir():
                 continue
             domain = domain_dir.name
-            live_dir = domain_dir / 'live' / domain
+            live_dir = lineage_live_dir(domain_dir, domain)
             if not live_dir.is_dir():
                 # Imported or externally managed: nothing to reconcile against.
                 continue
@@ -1102,7 +1109,7 @@ class CertificateManager:
         where the path is built makes the property local and keeps it that way.
         """
         _reject_path_escaping_domain(domain)
-        return self.cert_dir / domain / 'metadata.json'
+        return certificate_dir(self.cert_dir, domain) / 'metadata.json'
 
     def _store_in_backend(self, domain, cert_files, metadata):
         """Push the bundle to the configured storage backend.
@@ -1420,7 +1427,7 @@ class CertificateManager:
         a fresh cert (issue #230). Best-effort: it never fails the surrounding
         certificate operation.
         """
-        domain_dir = self.cert_dir / domain
+        domain_dir = certificate_dir(self.cert_dir, domain)
         pfx_path = domain_dir / 'cert.pfx'
         try:
             settings = self.settings_manager.load_settings()
@@ -1924,7 +1931,7 @@ class CertificateManager:
         The warning below therefore fires once per distinct file pair rather
         than once per read, which is the same information at 1/N the volume.
         """
-        key_file = self.cert_dir / domain / 'privkey.pem'
+        key_file = certificate_dir(self.cert_dir, domain) / 'privkey.pem'
         if not key_file.exists():
             return self.key_state_for_bytes(domain, None, cert_content, metadata)
 
@@ -2151,7 +2158,7 @@ class CertificateManager:
         """
         # Fall back to local filesystem for backward compatibility
         cert_dir = self.cert_dir
-        cert_path = cert_dir / domain
+        cert_path = certificate_dir(cert_dir, domain)
         if not cert_path.exists():
             logger.info(f"Certificate directory does not exist for domain: {domain}")
             return self._create_empty_cert_info(domain)
@@ -2201,7 +2208,7 @@ class CertificateManager:
         """
         if key_state != 'missing':
             return False
-        return self._lineage_lost_its_key(Path(self.cert_dir) / domain, domain)
+        return self._lineage_lost_its_key(certificate_dir(self.cert_dir, domain), domain)
 
     def _parse_certificate_info(self, domain, cert_content, metadata=None,
                                 settings=None, key_state='present'):
@@ -2410,15 +2417,15 @@ class CertificateManager:
         ``.broken-lineage-*`` dir so it stays recoverable; the flat
         ``<domain>/*.pem`` we serve from is untouched.
         """
-        conf = cert_output_dir / 'renewal' / f'{domain}.conf'
+        conf = renewal_conf(cert_output_dir, domain)
         if not conf.exists():
             return
-        live_cert = cert_output_dir / 'live' / domain / 'cert.pem'
+        live_cert = lineage_live_dir(cert_output_dir, domain) / 'cert.pem'
         broken = (not live_cert.exists()) or (not live_cert.is_symlink())
         if not broken:
             return
         quarantine = Path(tempfile.mkdtemp(prefix='.broken-lineage-', dir=str(cert_output_dir)))
-        for rel in (Path('renewal') / f'{domain}.conf', Path('live') / domain, Path('archive') / domain):
+        for rel in (renewal_conf(Path(), domain), lineage_live_dir(Path(), domain), lineage_archive_dir(Path(), domain)):
             src = cert_output_dir / rel
             if src.exists() or src.is_symlink():
                 dst = quarantine / rel
@@ -2641,7 +2648,7 @@ class CertificateManager:
         # This existence check runs *under* the per-domain lock acquired
         # above so two concurrent creates for the same domain can't both
         # pass the check and race to issue duplicate certificates.
-        existing_cert = self.cert_dir / domain / 'cert.pem'
+        existing_cert = certificate_dir(self.cert_dir, domain) / 'cert.pem'
         if existing_cert.exists() and not replace:
             raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
 
@@ -2665,7 +2672,7 @@ class CertificateManager:
 
         # Create output directory
         cert_dir = self.cert_dir
-        cert_output_dir = cert_dir / domain
+        cert_output_dir = certificate_dir(cert_dir, domain)
         cert_output_dir.mkdir(parents=True, exist_ok=True)
 
         key_type, key_size, elliptic_curve = self._resolve_key_shape(
@@ -3187,7 +3194,7 @@ class CertificateManager:
             # promote is the same one either way, and it skips files that do
             # not exist, which is what leaves privkey.pem alone.
             live_dir = (csr_output_dir if csr_output_dir is not None
-                        else cert_output_dir / 'live' / domain)
+                        else lineage_live_dir(cert_output_dir, domain))
             cert_files = {}
 
             if live_dir.exists():
@@ -3242,7 +3249,7 @@ class CertificateManager:
                     # Required at issuance, preferred at renewal (#395): a profile the CA
                     # withdraws must not turn every later renewal into a failure.
                     acme_profiles.soften_renewal_conf(
-                        cert_output_dir / 'renewal' / f'{domain}.conf')
+                        renewal_conf(cert_output_dir, domain))
             if csr_pem is not None:
                 # `key_management` is what stops the health check from reading
                 # the absent key as a lost one (#608 forces needs_renewal on
@@ -3372,7 +3379,7 @@ class CertificateManager:
         metadata = self._load_metadata(domain) or {}
         if metadata.get('key_management') != 'external':
             return None
-        csr_path = self.cert_dir / domain / 'csr.pem'
+        csr_path = certificate_dir(self.cert_dir, domain) / 'csr.pem'
         if not csr_path.exists():
             raise RuntimeError(
                 f"Cannot renew {domain}: it was issued from a CSR this "
@@ -3396,7 +3403,7 @@ class CertificateManager:
         buy is the reissue metadata semantics, which are the right ones here.
         """
         metadata = request['metadata']
-        before = self._cert_fingerprint(self.cert_dir / domain / 'cert.pem')
+        before = self._cert_fingerprint(certificate_dir(self.cert_dir, domain) / 'cert.pem')
 
         result = self.create_certificate(
             domain=domain,
@@ -3424,7 +3431,7 @@ class CertificateManager:
         # for an unchanged CSR — which is exactly what a repeat request inside
         # the CA's own reuse window produces — must not be reported as a
         # renewal, or `renewed_at` would advance while the expiry did not.
-        after = self._cert_fingerprint(self.cert_dir / domain / 'cert.pem')
+        after = self._cert_fingerprint(certificate_dir(self.cert_dir, domain) / 'cert.pem')
         renewed = after is None or after != before
         return {
             'success': True,
@@ -3452,9 +3459,9 @@ class CertificateManager:
         """
         if (domain_dir / 'privkey.pem').exists():
             return False
-        if (domain_dir / 'live' / domain / 'privkey.pem').exists():
+        if (lineage_live_dir(domain_dir, domain) / 'privkey.pem').exists():
             return False
-        archive = domain_dir / 'archive' / domain
+        archive = lineage_archive_dir(domain_dir, domain)
         if not archive.is_dir():
             return False
         has_certs = any(archive.glob('cert*.pem'))
@@ -3489,7 +3496,7 @@ class CertificateManager:
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
-            domain_dir = cert_dir / domain
+            domain_dir = certificate_dir(cert_dir, domain)
             if not domain_dir.exists() or not (domain_dir / 'cert.pem').exists():
                 raise FileNotFoundError(f"No certificate found for domain: {domain}")
 
@@ -3591,7 +3598,7 @@ class CertificateManager:
             # cert before the run and compare after. Skipped for
             # non-artifact-producing doubles (MockShellExecutor), which stage
             # no real files — those fall back to the output sentinel below.
-            live_cert_file = domain_dir / 'live' / domain / 'cert.pem'
+            live_cert_file = lineage_live_dir(domain_dir, domain) / 'cert.pem'
             fingerprint_check = getattr(self.shell_executor, 'produces_artifacts', True)
             pre_renew_fingerprint = None
             if fingerprint_check:
@@ -3799,7 +3806,7 @@ class CertificateManager:
         # the domain as skipped_not_due. Reconciling here is what
         # heals an instance that is already in that state; the
         # staged publish above is what stops it happening again.
-        stale = self._stale_flat_files(domain_dir / 'live' / domain, domain_dir)
+        stale = self._stale_flat_files(lineage_live_dir(domain_dir, domain), domain_dir)
         if stale:
             logger.warning(
                 "Certificate for %s did not need renewing, but its "
@@ -3808,7 +3815,7 @@ class CertificateManager:
                 "certificate can sit beside the previous private "
                 "key.", domain, ", ".join(stale))
             try:
-                self._publish_flat_files(domain_dir / 'live' / domain, domain_dir)
+                self._publish_flat_files(lineage_live_dir(domain_dir, domain), domain_dir)
             except Exception as republish_error:
                 logger.error(
                     "Could not republish the served copy for %s: %s",
@@ -3871,7 +3878,7 @@ class CertificateManager:
         Returns the result dict `renew_certificate` returns unchanged.
         """
         # Copy renewed certificates from the correct live directory
-        src_dir = domain_dir / 'live' / domain
+        src_dir = lineage_live_dir(domain_dir, domain)
         dest_dir = domain_dir
 
         cert_files = self._publish_flat_files(src_dir, dest_dir)
@@ -4202,7 +4209,7 @@ class CertificateManager:
         if cert_dir is None:
             return None
         try:
-            with open(Path(cert_dir) / domain / 'cert.pem', 'rb') as f:
+            with open(certificate_dir(cert_dir, domain) / 'cert.pem', 'rb') as f:
                 cert = x509.load_pem_x509_certificate(f.read())
         except (OSError, ValueError):
             return None
@@ -4277,7 +4284,7 @@ class CertificateManager:
     def _certificate_age_seconds(self, domain):
         """Seconds since the served certificate's notBefore, or None."""
         try:
-            with open(Path(self.cert_dir) / domain / 'cert.pem', 'rb') as f:
+            with open(certificate_dir(self.cert_dir, domain) / 'cert.pem', 'rb') as f:
                 cert = x509.load_pem_x509_certificate(f.read())
         except (OSError, ValueError):
             return None
@@ -4553,7 +4560,7 @@ class CertificateManager:
         if not ok or not profile:
             return
         cmd.extend(['--preferred-profile', profile])
-        acme_profiles.soften_renewal_conf(domain_dir / 'renewal' / f'{domain}.conf')
+        acme_profiles.soften_renewal_conf(renewal_conf(domain_dir, domain))
         offered = self._profile_still_offered(domain, metadata.get('ca_provider'),
                                               metadata.get('ca_account_id'), profile)
         if offered is False:
@@ -4604,7 +4611,7 @@ class CertificateManager:
         client = self._renewal_info_client()
         now = now or client.now()
         try:
-            raw = (self.cert_dir / domain / 'cert.pem').read_bytes()
+            raw = (certificate_dir(self.cert_dir, domain) / 'cert.pem').read_bytes()
             cert_id = ari.certificate_id(x509.load_pem_x509_certificate(raw))
         except (OSError, ValueError) as e:
             # A self-signed certificate with no Authority Key Identifier
@@ -4639,7 +4646,7 @@ class CertificateManager:
         """
         try:
             self._atomic_json_write(
-                self.cert_dir / domain / RENEWAL_INFO_FILE, record)
+                certificate_dir(self.cert_dir, domain) / RENEWAL_INFO_FILE, record)
         except OSError as e:
             # The class name only: an OSError's text repeats the path, and
             # nothing here is worth a traceback in a nightly log.
@@ -4681,7 +4688,7 @@ class CertificateManager:
         if cert_dir is None:
             return None
         try:
-            with open(cert_dir / domain / RENEWAL_INFO_FILE,
+            with open(certificate_dir(cert_dir, domain) / RENEWAL_INFO_FILE,
                       encoding='utf-8') as handle:
                 record = json.load(handle)
         except (OSError, ValueError):
@@ -5059,7 +5066,7 @@ class CertificateManager:
             raise RuntimeError(f"Cannot delete certificate for {domain}: an operation is currently in progress")
         try:
             import shutil
-            domain_dir = self.cert_dir / domain
+            domain_dir = certificate_dir(self.cert_dir, domain)
             local_deleted = False
             if domain_dir.exists():
                 shutil.rmtree(domain_dir)

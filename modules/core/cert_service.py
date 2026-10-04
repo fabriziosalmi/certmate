@@ -24,6 +24,7 @@ from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
 from .utils import validate_domain, validate_key_options
+from .domain_paths import certificate_dir
 
 logger = logging.getLogger(__name__)
 
@@ -718,7 +719,7 @@ class CertificateService:
             raise ValueError(f'Invalid domain: {normalized}')
         domain = normalized
 
-        cert_file = self._certs.cert_dir / domain / 'cert.pem'
+        cert_file = certificate_dir(self._certs.cert_dir, domain) / 'cert.pem'
         if not cert_file.exists():
             raise FileNotFoundError(
                 f'No certificate found for {domain}. Use create instead.'

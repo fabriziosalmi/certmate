@@ -23,6 +23,7 @@ from .deploy_window import (
     STALE_AFTER_DAYS, WindowError, describe as describe_window, is_open,
     next_open, normalize_window,
 )
+from .domain_paths import certificate_dir
 
 logger = logging.getLogger(__name__)
 
@@ -655,7 +656,7 @@ class DeployManager:
         if not any(target_applies(t, domain, event_type) for t in targets):
             return []
 
-        domain_dir = self.cert_dir / domain
+        domain_dir = certificate_dir(self.cert_dir, domain)
         cert_path = domain_dir / 'fullchain.pem'
         key_path = domain_dir / 'privkey.pem'
         applicable = [t for t in targets if target_applies(t, domain, event_type)]
@@ -811,7 +812,7 @@ class DeployManager:
         is unreadable. A missing or malformed file means no tags, not no hook.
         """
         try:
-            with open(self.cert_dir / domain / 'metadata.json', encoding='utf-8') as f:
+            with open(certificate_dir(self.cert_dir, domain) / 'metadata.json', encoding='utf-8') as f:
                 return tags_from_metadata(json.load(f))
         except (OSError, ValueError):
             return []
@@ -834,7 +835,7 @@ class DeployManager:
 
         deploy_env = os.environ.copy()
         deploy_env['CERTMATE_DOMAIN'] = domain
-        deploy_env['CERTMATE_CERT_PATH'] = str(self.cert_dir / domain / 'cert.pem')
+        deploy_env['CERTMATE_CERT_PATH'] = str(certificate_dir(self.cert_dir, domain) / 'cert.pem')
         # A CSR-only certificate has no private key here — the device that
         # generated it kept it (#599). The variable is left UNSET rather than
         # pointed at a file that does not exist, because the path would be a
@@ -843,16 +844,16 @@ class DeployManager:
         # failure; it is so a hook can ask `[ -n "$CERTMATE_KEY_PATH" ]` and
         # get a truthful answer. Nothing changes for a key-managed
         # certificate, which is every existing one.
-        key_path = self.cert_dir / domain / 'privkey.pem'
+        key_path = certificate_dir(self.cert_dir, domain) / 'privkey.pem'
         if key_path.exists():
             deploy_env['CERTMATE_KEY_PATH'] = str(key_path)
         else:
             deploy_env.pop('CERTMATE_KEY_PATH', None)
-        deploy_env['CERTMATE_FULLCHAIN_PATH'] = str(self.cert_dir / domain / 'fullchain.pem')
+        deploy_env['CERTMATE_FULLCHAIN_PATH'] = str(certificate_dir(self.cert_dir, domain) / 'fullchain.pem')
         # Intermediate chain on its own — some targets reject a chained cert
         # (fullchain) and want the leaf and intermediates as separate files
         # (issue #232).
-        deploy_env['CERTMATE_CHAIN_PATH'] = str(self.cert_dir / domain / 'chain.pem')
+        deploy_env['CERTMATE_CHAIN_PATH'] = str(certificate_dir(self.cert_dir, domain) / 'chain.pem')
         deploy_env['CERTMATE_EVENT'] = event_type
         # The tags an operator put on the certificate (#1043), comma-separated,
         # so one hook can decide per certificate whether to act: `case

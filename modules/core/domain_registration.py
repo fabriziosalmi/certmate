@@ -47,6 +47,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+from .domain_paths import certificate_dir
 from .request_fields import json_list
 from .utils import exclusive_run, utc_now_iso
 
@@ -607,7 +608,7 @@ class DomainRegistrationManager:
         return sorted({r for r in (registrable_domain(n) for n in names) if r})
 
     def _metadata_sans(self, domain):
-        path = self.cert_dir / domain / 'metadata.json'
+        path = certificate_dir(self.cert_dir, domain) / 'metadata.json'
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, ValueError):

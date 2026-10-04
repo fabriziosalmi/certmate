@@ -1128,13 +1128,17 @@ def repair_certbot_renewal_paths(domain_dir: Union[str, Path], domain: str) -> b
     precautions as :func:`repair_certbot_lineage_symlinks`, which runs next to
     it on both the restore path and the renewal path.
     """
+    # Imported here, not at the top: this module has no intra-package imports
+    # at module level (see the note under its imports), and domain_paths is
+    # the one home of the certificate layout (#1146).
+    from .domain_paths import renewal_conf
     shape_ok, _ = validate_domain(domain)
     if not shape_ok:
         return False
     domain_dir = Path(domain_dir)
     try:
         base = domain_dir.resolve()
-        conf = (base / 'renewal' / f'{domain}.conf').resolve()
+        conf = renewal_conf(base, domain).resolve()
         conf.relative_to(base)
     except (OSError, ValueError):
         return False
@@ -1184,6 +1188,10 @@ def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -
     Only the *newest* archive generation is linked, which is what certbot's
     own ``live`` symlinks mean.
     """
+    # Imported here, not at the top: this module has no intra-package imports
+    # at module level (see the note under its imports), and domain_paths is
+    # the one home of the certificate layout (#1146).
+    from .domain_paths import lineage_archive_dir, lineage_live_dir, renewal_conf
     # `domain` reaches the restore caller from ZIP entry names, so treat it as
     # untrusted here rather than relying on the caller: validate its shape,
     # then confirm every path we touch resolves inside domain_dir. The
@@ -1212,9 +1220,9 @@ def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -
             return None
         return base / path
 
-    live_dir = _inside(Path('live') / domain)
-    archive_dir = _inside(Path('archive') / domain)
-    conf = _inside(Path('renewal') / f'{domain}.conf')
+    live_dir = _inside(lineage_live_dir(Path(), domain))
+    archive_dir = _inside(lineage_archive_dir(Path(), domain))
+    conf = _inside(renewal_conf(Path(), domain))
     if live_dir is None or archive_dir is None or conf is None:
         return False
 

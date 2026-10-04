@@ -51,6 +51,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .domain_paths import certificate_dir
 from .request_fields import json_list
 from .utils import exclusive_run
 
@@ -899,7 +900,7 @@ class DomainHealthManager:
         return dict(sorted(tracked.items()))
 
     def _metadata_sans(self, domain):
-        path = self.cert_dir / domain / 'metadata.json'
+        path = certificate_dir(self.cert_dir, domain) / 'metadata.json'
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, ValueError):
