@@ -189,8 +189,10 @@ def test_load_settings_logs_warning_when_domains_missing_but_certs_exist(
     with caplog.at_level("WARNING"):
         settings_manager.load_settings()
 
-    assert "settings.json has no domains but certificates exist on disk" in caplog.text
-    assert "example.com" in caplog.text
+    warnings = [r for r in caplog.records
+                if r.getMessage().startswith("settings.json has no domains but certificates exist on disk")]
+    assert len(warnings) == 1
+    assert warnings[0].args == (["example.com"],)
 
 
 def _no_users_records(caplog):

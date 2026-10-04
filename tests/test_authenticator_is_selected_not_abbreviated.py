@@ -61,8 +61,9 @@ class TestBaseStrategyAvoidsAmbiguousFlag:
         strategy = CloudflareStrategy()
         creds = strategy.create_config_file({'api_token': 'tok'})
 
+        alias = 'delegated.example.com'
         cmd = []
         with caplog.at_level('INFO'):
-            strategy.configure_certbot_arguments(cmd, creds, domain_alias='delegated.example.com')
+            strategy.configure_certbot_arguments(cmd, creds, domain_alias=alias)
 
-        assert any('delegated.example.com' in record.message for record in caplog.records)
+        assert any(f"DNS alias '{alias}' requested" in record.message for record in caplog.records)
