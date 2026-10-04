@@ -303,36 +303,61 @@ def _edgedns_zone(alias_domain, session, base_url):
     raise DNSAliasError(f"Unable to determine EdgeDNS zone for alias '{alias_domain}' using zone names: {guesses}")
 
 
+def _edgedns_fail(response):
+    body = (response.text or '')[:_EDGEDNS_ERROR_SNIPPET]
+    raise DNSAliasError(f'EdgeDNS API request failed: {response.status_code} {body}')
+
+
 def _edgedns_change(config, validation, action):
+    """Add or remove one validation value in the alias's TXT record set.
+
+    One record set per name and type, at /zones/{zone}/names/{name}/types/TXT:
+    the only path the Edge DNS API has for a single record set, and the one
+    certbot-plugin-edgedns uses. This hook used to POST a bare record set to
+    /zones/{zone}/recordsets (which takes {"recordsets": [...]}) and send PUT
+    and DELETE to /zones/{zone}/recordsets/{name}/TXT, which does not exist.
+
+    It adds and removes its own value rather than writing the set: a wildcard
+    with its apex puts two values under one name, and certbot runs the auth
+    hook for both before validating either. Writing the set kept only the
+    second value, and cleanup deleted the other order's value with its own.
+    """
     alias_domain = config['domain_alias']
     session, base_url = _edgegrid_auth(config)
     zone = _edgedns_zone(alias_domain, session, base_url)
     name = _record_name(alias_domain)
-    recordsets_url = f'{base_url}/config-dns/v2/zones/{zone}/recordsets'
+    url = f'{base_url}/config-dns/v2/zones/{zone}/names/{name}/types/TXT'
+
+    current = session.get(url)
+    if current.status_code == 404:
+        exists, rdata = False, []
+    elif current.status_code == 200:
+        exists, rdata = True, list((current.json() or {}).get('rdata') or [])
+    else:
+        _edgedns_fail(current)
+
+    # Edge DNS returns TXT data quoted ('"value"'); compare without the quotes.
+    def held(value):
+        return any(item.strip('"') == value for item in rdata)
 
     if action == 'create':
-        response = session.post(recordsets_url, json={
-            'name': name,
-            'type': 'TXT',
-            'ttl': 60,
-            'rdata': [validation],
-        })
-        if response.status_code == 409:
-            response = session.put(f'{recordsets_url}/{name}/TXT', json={
-                'name': name,
-                'type': 'TXT',
-                'ttl': 60,
-                'rdata': [validation],
-            })
-    else:
-        response = session.delete(f'{recordsets_url}/{name}/TXT')
-        if response.status_code == 404:
+        if held(validation):
             return
+        recordset = {'name': name, 'type': 'TXT', 'ttl': 60, 'rdata': rdata + [validation]}
+        response = session.put(url, json=recordset) if exists else session.post(url, json=recordset)
+    else:
+        if not held(validation):
+            return
+        remaining = [item for item in rdata if item.strip('"') != validation]
+        if remaining:
+            response = session.put(url, json={'name': name, 'type': 'TXT', 'ttl': 60, 'rdata': remaining})
+        else:
+            response = session.delete(url)
+            if response.status_code == 404:
+                return
 
     if response.status_code >= 400:
-        body = (response.text or '')[:_EDGEDNS_ERROR_SNIPPET]
-        raise DNSAliasError(
-            f'EdgeDNS API request failed: {response.status_code} {body}')
+        _edgedns_fail(response)
 
 
 def _acme_dns_change(config, validation, action):
