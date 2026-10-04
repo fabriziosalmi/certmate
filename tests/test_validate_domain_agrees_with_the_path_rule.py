@@ -4,7 +4,7 @@
 that later reads, patches, deploys or deletes the certificate screens it with
 `DOMAIN_RE` through `validate_domain_path`. The two disagreed on one point: the
 TLD was checked with `isalpha()`, which is true for any Unicode letter, so
-`example.cοm` (a Greek omicron) passed create and was refused everywhere
+`example.c\u03bfm` (a Greek omicron) passed create and was refused everywhere
 else. Run against the published 2.48.0 image, create made the directory,
 certbot refused the name ("Non-ASCII domain names not supported"), and the
 directory stayed: not in `GET /api/certificates`, and `DELETE` answered 400.
@@ -18,11 +18,11 @@ pytestmark = [pytest.mark.unit]
 
 
 @pytest.mark.parametrize('domain', [
-    'example.cοm',      # Greek omicron in the TLD
-    'example.çom',      # c-cedilla
-    'example.сom',      # Cyrillic es
-    'a.cöm',            # o-umlaut
-    'example.ｃom',      # fullwidth c
+    'example.c\u03bfm',      # Greek omicron in the TLD
+    'example.\u00e7om',      # c-cedilla
+    'example.\u0441om',      # Cyrillic es
+    'a.c\u00f6m',            # o-umlaut
+    'example.\uff43om',      # fullwidth c
 ])
 def test_a_tld_with_a_non_ascii_letter_is_refused(domain):
     ok, message = validate_domain(domain)
@@ -38,9 +38,9 @@ def test_a_tld_with_a_non_ascii_letter_is_refused(domain):
     'xn--exmple-cua.com',
     'https://example.org/path',
     'example.com.',
-    'example.cοm',
-    'exämple.com',
-    'example.çom',
+    'example.c\u03bfm',
+    'ex\u00e4mple.com',
+    'example.\u00e7om',
     'example.c0m',
     'example.c',
 ])

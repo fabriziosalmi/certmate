@@ -421,6 +421,7 @@ def test_the_file_parameter_is_an_allow_list(api, tmp_path, requested):
     thing between it and the filesystem is an exact-match allow-list. Nothing
     drove that list until now (INVALID_FILE had no test)."""
     from flask import request as flask_request
+
     from modules.api.resources_downloads import create_download_resources
 
     domain = 'example.com'
