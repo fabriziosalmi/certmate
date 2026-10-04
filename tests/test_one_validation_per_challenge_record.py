@@ -69,24 +69,23 @@ def test_sets_that_do_not_overlap_are_held_at_once():
             pass
 
 
-def test_two_holders_needing_the_same_records_in_opposite_order_do_not_deadlock():
-    locks = ChallengeLocks()
-    names = ['_acme-challenge.a.com', '_acme-challenge.b.com']
-    done = []
+def test_the_locks_are_taken_in_one_order_whatever_order_they_are_asked_in():
+    """Two runs needing {a, b} and {b, a} must take them in the same order, or
+    each can hold one and wait for the other. Checked on the order itself: a
+    two-thread race finds the interleaving only by luck (200 rounds of it
+    passed with the ordering removed)."""
+    asked = []
 
-    def run(order):
-        for _ in range(200):
-            with locks.hold(order, timeout=5):
-                pass
-        done.append(order)
+    class Recording(ChallengeLocks):
+        def _lock(self, name):
+            asked.append(name)
+            return super()._lock(name)
 
-    threads = [threading.Thread(target=run, args=(names,)),
-               threading.Thread(target=run, args=(list(reversed(names)),))]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=20)
-    assert len(done) == 2, 'two holders deadlocked on opposite acquisition orders'
+    locks = Recording()
+    with locks.hold(['_acme-challenge.z.com', '_acme-challenge.a.com', '_acme-challenge.m.com'],
+                    timeout=1):
+        pass
+    assert asked == sorted(asked)
 
 
 # --- through the real create_certificate --------------------------------------
