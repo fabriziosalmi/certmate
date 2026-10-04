@@ -68,7 +68,7 @@ def test_the_lock_exists(source, lock):
         f'time and the transitive versions are build-day luck')
 
 
-@pytest.mark.parametrize('source,lock', PAIRS)
+@pytest.mark.parametrize('source,lock', [*PAIRS, ('requirements-build.txt', 'requirements-build.lock')])
 def test_every_direct_pin_is_the_one_the_image_installs(source, lock):
     """The guard. A pin bumped without regenerating the lock is a patch that
     merges, goes green, and never ships."""
