@@ -92,3 +92,13 @@ def test_setup_mode_identifies_nobody(tmp_path):
     assert am.is_setup_mode() is True
     body = _app(am).test_client().get('/health').get_json()
     assert '/opt/venv' not in body['checks']['certbot_error']
+
+
+def test_anything_that_is_not_a_user_record_is_no_identity(tmp_path):
+    """Fail closed: the reason is shown for a user record and nothing else.
+    An auth manager that answers with something truthy that is not one (a
+    stub, a future refactor returning a flag) gets the anonymous answer."""
+    am = MagicMock()
+    am.optional_identity.return_value = True
+    body = _app(am).test_client().get('/health').get_json()
+    assert '/opt/venv' not in body['checks']['certbot_error']
