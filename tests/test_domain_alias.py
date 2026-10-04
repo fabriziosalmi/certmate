@@ -641,7 +641,9 @@ class TestEdgeDNSEgressTimeout:
 
         class _FakeSession:
             def get(self, url, **kwargs):
-                return _Response(200)          # first zone guess wins
+                # The zone exists (first guess wins); the record set does not
+                # yet, so the hook goes on to create it.
+                return _Response(404 if '/names/' in url else 200)
 
             def post(self, url, **kwargs):
                 return _Response(500, "A" * 100_000)
