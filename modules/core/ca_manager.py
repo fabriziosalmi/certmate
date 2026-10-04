@@ -7,6 +7,7 @@ import logging
 import tempfile
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
+from .domain_paths import certificate_dir
 
 logger = logging.getLogger(__name__)
 
@@ -403,7 +404,7 @@ class CAManager:
 
         # Add directory configuration if provided
         if cert_dir:
-            cert_output_dir = cert_dir / domain
+            cert_output_dir = certificate_dir(cert_dir, domain)
             cert_output_dir.mkdir(parents=True, exist_ok=True)
 
             certbot_cmd.extend([
