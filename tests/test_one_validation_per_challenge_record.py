@@ -126,7 +126,7 @@ def first_issuance_running(tmp_path, monkeypatch):
             manager.create_certificate(domain='example.com', email='a@example.com',
                                        dns_provider='cloudflare',
                                        csr_pem=_csr('example.com', ('example.com',)))
-        except Exception as exc:  # noqa: BLE001 - the stand-in writes no certificate
+        except Exception as exc:  # the stand-in writes no certificate
             outcome['error'] = exc
 
     with patch.object(CertificateManager, '_write_pfx', return_value=None):
@@ -160,7 +160,7 @@ def test_an_unrelated_certificate_still_runs_alongside(first_issuance_running):
                                    csr_pem=_csr('other.org', ('other.org',)))
     except ChallengeRecordInUse:
         pytest.fail('a certificate with no record in common was refused')
-    except Exception:  # noqa: BLE001 - later failures of the stand-in are not the point
+    except Exception:  # later failures of the stand-in are not the point
         pass
 
 
