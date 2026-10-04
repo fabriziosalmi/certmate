@@ -114,7 +114,7 @@ Full tool reference, attribution model and safety notes: **[docs/mcp.md](docs/mc
 
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
 
-- **Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry, with deploy hooks to reload services
+- **Zero-Downtime Automation** - Certificates renew automatically (30 days before expiry by default; earlier in the life of a certificate that lives under 60 days — see [when a certificate renews](docs/guide.md#when-a-certificate-renews)), with deploy hooks to reload services
 - **Multi-Cloud Support** - Cloudflare, AWS, Azure, GCP, Akamai Edge DNS, Hetzner, Porkbun, GoDaddy and the rest — [docs/dns-providers.md](docs/dns-providers.md) has the full list
 - **Enterprise-Ready** - RBAC, scoped API keys, Docker, Kubernetes, REST API, and monitoring built-in
 - **Simple Integration** - One-URL certificate downloads for easy automation
@@ -146,7 +146,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Wildcard Support** - Single certificate for `*.example.com` and `example.com`
 - **Multi-Domain Certificates** - SAN certificates for multiple domains
 - **DNS Alias via CNAME Delegation** - Delegate ACME DNS validation to an alternative domain using standard CNAME records
-- **Automatic Renewal** - Smart renewal 30 days before expiry
+- **Automatic Renewal** - One rule for every lifetime, and the CA's renewal window (ARI) can move it; each certificate says when it renews (`renews_at`)
 - **Certificate Validation** - Real-time SSL certificate status checking
 - **Per-Certificate CA Selection** - Choose different CAs for different certificates
 - **Zombie Certificate Scanner** - multi-threaded probe that asks whether the names in your managed certificates still resolve and answer, so a domain you have let go is visible before its renewals start failing

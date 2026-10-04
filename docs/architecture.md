@@ -829,8 +829,8 @@ Each certificate has a `metadata.json` file containing:
 
 ### Auto-Renewal
 
-- **Scheduled**: Daily at 3 AM (configurable)
-- **Threshold**: 30 days before expiry (configurable)
+- **Scheduled**: Daily, server certificates between 01:00 and 03:00 (02:00 with an hour of random offset either way), client certificates between 02:00 and 04:00
+- **When**: 30 days before expiry by default (`renewal_threshold_days`), a third of the lifetime for a certificate that lives under 60 days (half under 10 days), or where the CA's renewal window (ARI) puts it; see [the guide](./guide.md#when-a-certificate-renews)
 - **Graceful**: Continues on errors, logs for review
 
 ---
@@ -872,8 +872,10 @@ What availability looks like instead — **active/standby**:
    Secrets Manager, Vault, Infisical, S3-compatible) so certificate material also lives
    somewhere independent of the node.
 3. Run **one** instance. On failure, start a replacement against the same data
-   and point the ingress at it. A missed renewal window is not urgent — renewal
-   begins 30 days before expiry, so a failover has weeks of slack.
+   and point the ingress at it. A missed renewal window is not urgent for a
+   90-day certificate — renewal begins 30 days before expiry, so a failover has
+   weeks of slack. It is for short-lived ones: a 160-hour certificate renews
+   with about 80 hours left, so a failover has days, not weeks.
 4. Keep [disaster-recovery backups](./guide.md) with
    `CERTMATE_BACKUP_PASSPHRASE` set, so a rebuild from scratch is possible when
    the volume itself is lost.
