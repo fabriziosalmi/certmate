@@ -110,8 +110,7 @@ class TestBuildDigest:
         assert s['valid'] == 1
         assert s['expiring_soon'] == 1
         assert s['expired'] == 1
-        assert len(s['expiring_domains']) == 1
-        assert 'expiring.com' in s['expiring_domains'][0]
+        assert s['expiring_domains'] == ['expiring.com (10d)']
 
     def test_expiring_is_the_sweep_s_decision_not_the_threshold_s(self, digest, mock_managers):
         """A 45-day certificate with 20 days left is inside the 30-day threshold and not due: it
