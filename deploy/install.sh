@@ -24,6 +24,12 @@ PREFIX="/opt/certmate"
 ENV_FILE="/etc/certmate/certmate.env"
 UNIT="/etc/systemd/system/certmate.service"
 UV_VERSION="0.12.21"
+# sha256 of https://astral.sh/uv/$UV_VERSION/install.sh, which is the release's
+# uv-installer.sh (same bytes). That script carries the sha256 of each
+# platform's uv archive and checks it, so pinning the script pins the binary.
+# Change it with UV_VERSION: tests/test_the_bare_metal_installer.py checks the
+# pair against the published file.
+UV_INSTALLER_SHA256="0722d6c438395e39e1c27a86a79054d3b2820dd9399c7f8b0f6f84cd27ce36c3"
 PYTHON_VERSION="3.12"
 # Everything under PREFIX that belongs to the installation rather than to a
 # release. An upgrade deletes the rest and unpacks the new release in its place.
@@ -148,7 +154,11 @@ export UV_NO_MODIFY_PATH=1
 export UV_CACHE_DIR="$work/uv-cache"
 if [ "$("$UV_INSTALL_DIR/uv" --version 2>/dev/null | awk '{print $2}')" != "$UV_VERSION" ]; then
   say "Installing uv $UV_VERSION"
-  curl -fsSL "https://astral.sh/uv/$UV_VERSION/install.sh" | sh >/dev/null
+  # Downloaded, checked, then run: never piped into sh unchecked.
+  curl -fsSL "https://astral.sh/uv/$UV_VERSION/install.sh" -o "$work/uv-install.sh"
+  echo "$UV_INSTALLER_SHA256  $work/uv-install.sh" | sha256sum -c - >/dev/null 2>&1 \
+    || die "the uv $UV_VERSION installer does not match its pinned sha256; refusing to run it"
+  sh "$work/uv-install.sh" >/dev/null
 fi
 uv="$UV_INSTALL_DIR/uv"
 

@@ -1,0 +1,36 @@
+# GENERATED — do not edit by hand. Regenerate with:
+#
+#     scripts/regenerate_lockfiles.sh
+#
+# The fully resolved install set for requirements-lint.txt, resolved by uv for the two
+# published architectures. 1 of these are
+# pinned by requirements-lint.txt; the other 3 are transitive and were chosen by
+# the resolver, which is exactly why they are written down here. The image
+# installs them with pip.
+#
+# The two published architectures resolve this set identically, which is what
+# makes one file sufficient. `scripts/regenerate_lockfiles.sh` re-checks that
+# before writing, so the day it stops being true is the day it is noticed.
+#
+# A regeneration starts from the pins already in this file and moves only what
+# the change under review requires: it does not re-resolve the transitive set.
+#
+# Each pin carries the sha256 of every file the index publishes for that
+# version, for both architectures, and the image installs this file with
+# --require-hashes: a file that is not one of these is refused. Anything
+# installed on top of it (extras, test requirements) uses nothing: nothing is installed on top of it, the
+# same pins without hashes. See "Supply-chain posture for Python dependencies"
+# in SECURITY.md.
+
+flake8==7.4.1 \
+    --hash=sha256:78480274a6d7289d9cb8eafeda241fac57d4ea687d26e32dfdca37b72cdeddad \
+    --hash=sha256:84ea5afcaf344487b0ea5baaebb8100f4cfaebc01f755998f75876664029f587
+mccabe==0.7.0 \
+    --hash=sha256:348e0240c33b60bbdf4e523192ef919f28cb2c3d7d5c7794f74009290f236325 \
+    --hash=sha256:6c2d30ab6be0e4a46919781807b4f0d834ebdd6c6e3dca0bda5a15f863427b6e
+pycodestyle==2.15.0 \
+    --hash=sha256:12fd2f73c7b8ee8845a0431111df8faf4c1a07d6e64e2ee7f0c74014dab14181 \
+    --hash=sha256:318f5db083869b4c4dad922d0b11124fb27ab181b6730b93371da671e31bd50e
+pyflakes==4.0.2 \
+    --hash=sha256:01faee1160feadfd9d58c9631a895126ba2032c2e8748e32a96ab51cbd084c6d \
+    --hash=sha256:dcf9cfcece3d9dacc66b7dd2fa217c1a1b79e3075bf488909c15e0857203fd24

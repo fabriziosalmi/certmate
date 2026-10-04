@@ -43,7 +43,9 @@ def tree(tmp_path):
     for name in ('Dockerfile', 'requirements.txt', 'requirements-minimal.txt',
                  'requirements.lock', 'requirements-minimal.lock',
                  'requirements.constraints', 'requirements-minimal.constraints',
-                 'requirements-build.txt', 'requirements-build.lock'):
+                 'requirements-build.txt', 'requirements-build.lock',
+                 'requirements-lint.txt', 'requirements-lint.lock',
+                 'requirements-galaxy.txt', 'requirements-galaxy.lock'):
         shutil.copy(REPO / name, tmp_path / name)
     (tmp_path / 'scripts').mkdir()
     for name in ('lockfile.py', 'regenerate_lockfiles.sh'):
@@ -69,6 +71,7 @@ def test_regenerating_an_unchanged_set_moves_no_pin(tree):
     # The hashes too: a regeneration with nothing to change writes the same
     # bytes, hashes sorted, so it produces no diff to review.
     for name in ('requirements.lock', 'requirements-minimal.lock', 'requirements-build.lock',
+                 'requirements-lint.lock', 'requirements-galaxy.lock',
                  'requirements.constraints', 'requirements-minimal.constraints'):
         assert (tree / name).read_text() == (REPO / name).read_text(), (
             f'{name}: regenerating with nothing to change rewrote the file')

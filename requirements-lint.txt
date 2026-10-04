@@ -1,0 +1,3 @@
+# flake8 for the CI lint job, locked with hashes in requirements-lint.lock by
+# scripts/regenerate_lockfiles.sh. The same pin as requirements-test.txt.
+flake8==7.4.1

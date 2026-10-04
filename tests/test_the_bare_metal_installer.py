@@ -87,3 +87,38 @@ def test_shellcheck_is_clean():
     result = subprocess.run(['shellcheck', '-s', 'sh', str(REPO / 'deploy' / 'install.sh')],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stdout
+
+
+# --- the uv installer is checked before it runs ---------------------------
+
+def _pinned(name):
+    match = re.search(rf'^{name}="([^"]+)"$', INSTALL, re.MULTILINE)
+    assert match, f'install.sh no longer sets {name}'
+    return match.group(1)
+
+
+def test_the_uv_installer_is_not_piped_into_a_shell():
+    """`curl ... | sh` runs whatever the server sends. The installer is
+    downloaded to a file, its sha256 checked, and only then run."""
+    assert not re.search(r'curl[^\n|]*\|\s*sh\b', INSTALL), 'install.sh pipes a download into sh'
+    assert re.fullmatch(r'[0-9a-f]{64}', _pinned('UV_INSTALLER_SHA256'))
+    check = INSTALL.index('sha256sum -c')
+    run = INSTALL.index('sh "$work/uv-install.sh"')
+    assert check < run, 'the installer runs before its sha256 is checked'
+
+
+@pytest.mark.network
+def test_the_pinned_sha256_is_the_published_installer_for_that_version():
+    """The pair moves together: a UV_VERSION bump without the new sha256 would
+    refuse every install, and this says so before a release does."""
+    import hashlib
+    import urllib.request
+    version = _pinned('UV_VERSION')
+    # astral.sh answers 403 to urllib's default User-Agent; curl, which the
+    # installer uses, is served.
+    request = urllib.request.Request(f'https://astral.sh/uv/{version}/install.sh',
+                                     headers={'User-Agent': 'curl/8.7.1'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        published = hashlib.sha256(response.read()).hexdigest()
+    assert published == _pinned('UV_INSTALLER_SHA256'), (
+        f'uv {version}: the published installer is {published}; update UV_INSTALLER_SHA256')

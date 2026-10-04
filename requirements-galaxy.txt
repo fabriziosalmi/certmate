@@ -1,0 +1,5 @@
+# ansible-core for publishing the Ansible collection to Galaxy
+# (.github/workflows/publish-galaxy.yml), locked with hashes in
+# requirements-galaxy.lock. The job holds the Galaxy API key, so what it
+# installs is verified. 2.20.9 is what the previous range (>=2.17,<2.21) installed.
+ansible-core==2.20.9

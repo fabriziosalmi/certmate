@@ -107,8 +107,21 @@ echo "=== requirements-build.txt -> requirements-build.lock ==="
 resolve requirements-build.txt requirements-build.lock -c requirements.constraints
 python3 scripts/lockfile.py write requirements-build.txt "$WORK/$first.txt" requirements-build.lock
 
+# Tools CI runs outside the image: flake8 for the lint job, and ansible-core in
+# the job that publishes to Galaxy with the Galaxy API key. Locked with hashes
+# for the same reason as the image: the version alone does not say which file.
+for req in requirements-lint.txt requirements-galaxy.txt; do
+    lock="${req%.txt}.lock"
+    echo
+    echo "=== $req -> $lock ==="
+    resolve "$req" "$lock"
+    python3 scripts/lockfile.py write "$req" "$WORK/$first.txt" "$lock"
+done
+
 echo
 python3 scripts/lockfile.py check \
     requirements.txt:requirements.lock \
     requirements-minimal.txt:requirements-minimal.lock \
-    requirements-build.txt:requirements-build.lock
+    requirements-build.txt:requirements-build.lock \
+    requirements-lint.txt:requirements-lint.lock \
+    requirements-galaxy.txt:requirements-galaxy.lock
