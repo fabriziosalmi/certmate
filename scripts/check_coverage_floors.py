@@ -135,6 +135,7 @@ FLOORS = {
     'modules/core/cert_probe.py': 80,
     'modules/core/cert_service.py': 90,
     'modules/core/certificates.py': 85,
+    'modules/core/challenge_locks.py': 95,
     'modules/core/client_certificates.py': 75,
     'modules/core/constants.py': 80,
     'modules/core/crypto_report.py': 95,

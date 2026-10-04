@@ -43,6 +43,7 @@ from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
     csr_fingerprint, read_csr, to_csr_command,
 )
+from .challenge_locks import ChallengeLocks, ChallengeRecordBusy, challenge_record_names
 from .domain_paths import (
     certificate_dir,
     lineage_archive_dir,
@@ -110,6 +111,17 @@ class DomainOperationInProgress(RuntimeError):
     def __init__(self, domain):
         self.domain = domain
         super().__init__(f"A certificate operation for {domain} is already in progress")
+
+
+class ChallengeRecordInUse(DomainOperationInProgress):
+    """Another certificate's certbot run is validating at the same DNS record
+    (modules/core/challenge_locks.py). A DomainOperationInProgress, so every
+    caller that turns that into a 409 or a retry does the same here."""
+    def __init__(self, domain, record):
+        self.record = record
+        super().__init__(domain)
+        self.args = (f"Another certificate is validating at {record}; "
+                     f"{domain} will be retried when it finishes",)
 
 
 class ReissueRequired(RuntimeError):
@@ -451,6 +463,8 @@ class CertificateManager:
         # Per-domain locks to prevent concurrent create/renew on the same domain
         self._domain_locks: dict[str, threading.Lock] = {}
         self._domain_locks_mutex = threading.Lock()
+        # Per DNS challenge record, across certificates (challenge_locks.py).
+        self._challenge_locks = ChallengeLocks()
         # domain -> (key digest, cert digest, answer) for private_key_state.
         # One entry per domain, like _domain_locks above and bounded the same
         # way: by how many certificates this instance manages. See
@@ -1069,6 +1083,21 @@ class CertificateManager:
             if domain not in self._domain_locks:
                 self._domain_locks[domain] = threading.Lock()
             return self._domain_locks[domain]
+
+    @contextmanager
+    def _challenge_records_held(self, domain, domains, domain_alias, challenge_type):
+        """Hold the challenge records this certbot run will write.
+
+        Around the certbot run only: that is where the records are published
+        and cleaned up, and two certificates whose records do not overlap keep
+        running in parallel. A record another run holds is refused with
+        ChallengeRecordInUse, a DomainOperationInProgress."""
+        names = challenge_record_names(domains, domain_alias, challenge_type)
+        try:
+            with self._challenge_locks.hold(names, self._domain_lock_timeout()):
+                yield
+        except ChallengeRecordBusy as busy:
+            raise ChallengeRecordInUse(domain, str(busy)) from None
 
     @contextmanager
     def domain_lock(self, domain: str):
@@ -3153,14 +3182,16 @@ class CertificateManager:
             # (Copilot, #604).
             self._seed_acme_account(domain, cert_dir, ca_provider, used_ca_account_id)
 
-            # Run certbot with isolated environment
-            result = self.shell_executor.run(
-                certbot_cmd,
-                capture_output=True,
-                text=True,
-                timeout=1800,  # 30 minute timeout
-                env=process_env
-            )
+            # Run certbot with isolated environment, holding the challenge
+            # records it will write (another certificate may share them).
+            with self._challenge_records_held(domain, all_domains, domain_alias, challenge_type):
+                result = self.shell_executor.run(
+                    certbot_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,  # 30 minute timeout
+                    env=process_env
+                )
 
             if result.returncode != 0:
                 # One builder for create and renew (#666 S6): what is logged
@@ -3612,8 +3643,11 @@ class CertificateManager:
             # would silently stop EVERY future automatic renewal until the
             # process is restarted; a synchronous API/web renew would also pin
             # its gunicorn worker. Fail fast instead.
-            result = self.shell_executor.run(cmd, capture_output=True, text=True,
-                                             timeout=1800, env=process_env)
+            renewal_domains = [domain, *(metadata.get('san_domains') or [])]
+            with self._challenge_records_held(domain, renewal_domains,
+                                              metadata.get('domain_alias'), challenge_type):
+                result = self.shell_executor.run(cmd, capture_output=True, text=True,
+                                                 timeout=1800, env=process_env)
 
             if result.returncode == 0:
                 # If CertMate's renewal_threshold_days is wider than certbot's
