@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.48.1 (DNS aliases on Akamai Edge DNS, one log record per line, and health checks that keep their reasons)
+
+[Read the notes](docs/releases/v2.48.1.md)
+
 ## v2.48.0 (when a certificate renews, which kind it is, and one form for every date)
 
 [Read the notes](docs/releases/v2.48.0.md)
