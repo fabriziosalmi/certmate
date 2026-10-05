@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.48.3 (what a key restricted to domains can reach, and pip 26.2.1)
+
+[Read the notes](docs/releases/v2.48.3.md)
+
 ## v2.48.2 (scoped keys and every name of a certificate, one DNS-01 validation per record, and hashed dependencies)
 
 [Read the notes](docs/releases/v2.48.2.md)
