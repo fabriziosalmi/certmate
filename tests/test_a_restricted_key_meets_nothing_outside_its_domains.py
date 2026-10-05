@@ -46,10 +46,10 @@ NOT_THEIRS = ['*.nothing.example']
 SOMEONE_ELSES = re.compile(r'[a-z0-9-]+\.example\.test|(?:alice|bob)@example\.test', re.I)
 MATERIAL = re.compile(r'BEGIN (?:[A-Z ]+ )?PRIVATE KEY|BEGIN CERTIFICATE')
 
-# A restricted key reads names here today. Each entry is an open item with its
-# decision, and the test fails when it stops being true, so it gets removed.
+# Routes whose view for a restricted key is a change of its own. The test fails
+# when an entry is no longer needed, so it gets removed.
 KNOWN_EXPOSED = {
-    'GET /metrics': 'per-domain series are to be filtered by scope (decided 2026-10-05, own change)',
+    'GET /metrics': 'a per-scope view of the series is its own change',
 }
 
 # Routes that answer a restricted key something other than a refusal when it
