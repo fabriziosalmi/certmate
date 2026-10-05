@@ -174,6 +174,38 @@ class BearerTokenFileUnreadable(Exception):
         super().__init__(f"{path}: {cause}")
 
 
+def domain_restricted_refusal(audit_logger, resource_type, what):
+    """Why the current request is refused on a route that is not about a domain, or None.
+
+    `allowed_domains` restricts an API key to domains. Some things belong to
+    the instance and are filed under no domain: client certificates, backups.
+    Nothing in them can be matched against that restriction, so a restricted
+    key has no claim on them and is refused, rather than treated as
+    unrestricted. Sessions and keys without `allowed_domains` get None.
+
+    One home for the rule, its log line and its audit entry; each API group
+    answers in its own envelope with the sentence returned. Reads
+    `request.current_user`, so it runs after the role check that sets it.
+    """
+    user = getattr(request, 'current_user', None)
+    if not isinstance(user, dict) or user.get('allowed_domains') is None:
+        return None
+    # The route is in the audit entry below; the log line carries the caller.
+    logger.warning(
+        "Scope denial: user=%s is restricted to domains; %s refused",
+        scrub_log_value(user.get('username')), scrub_log_value(what))
+    if audit_logger:
+        audit_logger.log_authz_denied(
+            operation=request.method.lower(),
+            resource_type=resource_type,
+            resource_id=request.path,
+            reason=f'key restricted to domains has no access to {what}',
+            user=user.get('username'),
+            ip_address=request.remote_addr,
+        )
+    return f'This API key is restricted to domains and cannot be used for {what}'
+
+
 class AuthManager:
     """Class to handle authentication and authorization"""
     

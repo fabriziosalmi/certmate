@@ -74,10 +74,8 @@ def _instance_wide(audit_logger=None):
     """A decorator that refuses an API key restricted with `allowed_domains`.
 
     A client certificate belongs to the instance, not to a domain: there is
-    nothing in it for `allowed_domains` to be matched against. So a key that
-    is restricted to domains has no claim on any of them, and is refused here
-    rather than treated as unrestricted. Sessions and keys without
-    `allowed_domains` are unaffected.
+    nothing in it for `allowed_domains` to be matched against. The rule is
+    `domain_restricted_refusal`; this answers it in this group's envelope.
 
     Listed first in `method_decorators`, so that `require_role` (listed after
     it, and therefore outermost) has authenticated the caller and set
@@ -85,29 +83,15 @@ def _instance_wide(audit_logger=None):
     """
     from functools import wraps
 
-    from ..core.structured_logging import scrub_log_value
+    from ..core.auth import domain_restricted_refusal
 
     def decorator(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
-            user = getattr(request, 'current_user', None)
-            if isinstance(user, dict) and user.get('allowed_domains') is not None:
-                # The route is in the audit entry below; the log line carries
-                # only the caller.
-                logger.warning(
-                    "Scope denial: user=%s is restricted to domains; client certificates refused",
-                    scrub_log_value(user.get('username')))
-                if audit_logger:
-                    audit_logger.log_authz_denied(
-                        operation=request.method.lower(),
-                        resource_type='client_certificate',
-                        resource_id=request.path,
-                        reason='key restricted to domains has no access to client certificates',
-                        user=user.get('username'),
-                        ip_address=request.remote_addr,
-                    )
-                abort(403, 'This API key is restricted to domains and cannot be used '
-                           'for client certificates', code='DOMAIN_OUT_OF_SCOPE')
+            refusal = domain_restricted_refusal(
+                audit_logger, 'client_certificate', 'client certificates')
+            if refusal:
+                abort(403, refusal, code='DOMAIN_OUT_OF_SCOPE')
             return fn(*args, **kwargs)
         return wrapped
     return decorator

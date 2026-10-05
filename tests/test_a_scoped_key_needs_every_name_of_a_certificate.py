@@ -267,3 +267,18 @@ def test_a_backend_that_cannot_answer_refuses_rather_than_narrows(tmp_path):
 @pytest.mark.parametrize('domain', [None, '', '../escape', 'a/b'])
 def test_a_name_that_is_not_a_directory_is_just_itself(tmp_path, domain):
     assert _manager(tmp_path).names_covered(domain) == [domain]
+
+
+def test_a_reissue_answers_the_same_whether_or_not_the_certificate_exists(instance):
+    """Scope is checked before the certificate is looked for, so the refusal
+    does not say which names outside the scope have a certificate."""
+    client, tenant, admin, _certbot, _certs, _legacy = instance
+    absent = client.post('/api/certificates/absent.other.example/reissue', headers=tenant, json={})
+    assert absent.status_code == 403, absent.get_json()
+    assert absent.get_json()['code'] == 'DOMAIN_OUT_OF_SCOPE'
+    # CONTROL: an unrestricted caller is told there is nothing to reissue.
+    assert client.post('/api/certificates/absent.other.example/reissue',
+                       headers=admin, json={}).status_code == 404
+    # CONTROL: inside its scope the key is told the same.
+    assert client.post('/api/certificates/absent.team.example/reissue',
+                       headers=tenant, json={}).status_code == 404

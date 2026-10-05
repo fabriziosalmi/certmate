@@ -24,6 +24,7 @@ from ..core.utils import ALREADY_RUNNING, utc_now_iso
 from .resource_context import (
     ApiContext,
     check_domain_scope,
+    instance_wide,
     is_record_in_scope,
     scope_filter_records,
 )
@@ -242,6 +243,10 @@ def _inventory_domains_resource(api, ctx):
 def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
     """Build the inventory resources against *ctx*."""
 
+    # What the instance is set to watch (endpoints, CT-log domains, extra
+    # names) is its own configuration, not a record about one domain.
+    not_for_restricted_keys = instance_wide(ctx, 'inventory_config', 'the inventory configuration')
+
     def _check_domain_scope(domain, operation):
         return check_domain_scope(ctx, domain, operation)
 
@@ -327,6 +332,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
     class InventoryConfig(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('viewer')
+        @not_for_restricted_keys
         def get(self):
             """Return discovery + CT-log monitoring configuration."""
             discovery = ctx.managers.get('cert_discovery')
@@ -340,6 +346,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
+        @not_for_restricted_keys
         def post(self):
             """Update the discovery configuration.
 
