@@ -1811,54 +1811,9 @@ class AuthManager:
         def decorator(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
-                user, err = self._authenticate_request()
-                if err is not None:
-                    # When a browser hits an HTML page route without a
-                    # session, return a 302 to /login?next=<path> instead
-                    # of the API-style 401 JSON. Without this the user
-                    # sees a bare {"code":"AUTH_HEADER_MISSING",…} body
-                    # in the browser tab — disorienting because the
-                    # adjacent dashboard route (`/`) already redirects
-                    # cleanly via its hand-rolled flow. /api/ paths and
-                    # non-HTML clients keep getting the JSON response.
-                    if self._is_browser_html_request():
-                        from flask import redirect, url_for
-                        return redirect(url_for('login_page', next=request.path))
-                    return err
-
-                # current_user is set here only after auth is known to
-                # have succeeded; downstream code that reads it can trust
-                # the value is fresh from this request, not a leftover.
-                request.current_user = user
-
-                user_level = ROLE_HIERARCHY.get(user.get('role'), -1)
-                required_level = ROLE_HIERARCHY.get(min_role, 999)
-                if user_level < required_level:
-                    # Audit + log every role denial so privilege-enumeration
-                    # attempts surface in the audit trail instead of vanishing
-                    # behind a silent 403 (2026-05-12 API auth audit, F-2).
-                    self._log_rbac_denial(
-                        user=user,
-                        required_role=min_role,
-                        endpoint=request.path,
-                    )
-                    # A browser navigating to a role-gated HTML page (e.g. an
-                    # operator opening /settings) should land on a styled page
-                    # inside the app chrome — with the nav still present so they
-                    # can move to a tab they can use — instead of a bare JSON
-                    # body they can only escape with the back button (#256).
-                    # /api/ paths and non-HTML clients keep the machine-readable
-                    # 403 so programmatic callers are unaffected.
-                    if self._is_browser_html_request():
-                        from flask import render_template
-                        return render_template(
-                            '403.html',
-                            required_role=min_role,
-                            current_role=user.get('role'),
-                        ), 403
-                    return {'error': f'{min_role} privileges required',
-                            'code': 'INSUFFICIENT_ROLE'}, 403
-
+                denial = self.authorize(min_role)
+                if denial is not None:
+                    return denial
                 return f(*args, **kwargs)
             decorated_function._certmate_protection = f'require_role:{min_role}'
             return decorated_function
@@ -1869,6 +1824,64 @@ class AuthManager:
         # Resource class without instantiating or calling anything.
         decorator._certmate_protection = f'require_role:{min_role}'
         return decorator
+
+    def authorize(self, min_role):
+        """Authenticate the request and check it has *min_role*.
+
+        Returns None when it does, having set `request.current_user`, or the
+        response that refuses it. What `require_role` does, as a call: the
+        decorator uses it, and so does the check that runs before a request's
+        body is validated (`authorize_before_validation` in the factory), so
+        the two cannot answer differently.
+        """
+        user, err = self._authenticate_request()
+        if err is not None:
+            # When a browser hits an HTML page route without a
+            # session, return a 302 to /login?next=<path> instead
+            # of the API-style 401 JSON. Without this the user
+            # sees a bare {"code":"AUTH_HEADER_MISSING",…} body
+            # in the browser tab — disorienting because the
+            # adjacent dashboard route (`/`) already redirects
+            # cleanly via its hand-rolled flow. /api/ paths and
+            # non-HTML clients keep getting the JSON response.
+            if self._is_browser_html_request():
+                from flask import redirect, url_for
+                return redirect(url_for('login_page', next=request.path))
+            return err
+
+        # current_user is set here only after auth is known to
+        # have succeeded; downstream code that reads it can trust
+        # the value is fresh from this request, not a leftover.
+        request.current_user = user
+
+        user_level = ROLE_HIERARCHY.get(user.get('role'), -1)
+        required_level = ROLE_HIERARCHY.get(min_role, 999)
+        if user_level < required_level:
+            # Audit + log every role denial so privilege-enumeration
+            # attempts surface in the audit trail instead of vanishing
+            # behind a silent 403 (2026-05-12 API auth audit, F-2).
+            self._log_rbac_denial(
+                user=user,
+                required_role=min_role,
+                endpoint=request.path,
+            )
+            # A browser navigating to a role-gated HTML page (e.g. an
+            # operator opening /settings) should land on a styled page
+            # inside the app chrome — with the nav still present so they
+            # can move to a tab they can use — instead of a bare JSON
+            # body they can only escape with the back button (#256).
+            # /api/ paths and non-HTML clients keep the machine-readable
+            # 403 so programmatic callers are unaffected.
+            if self._is_browser_html_request():
+                from flask import render_template
+                return render_template(
+                    '403.html',
+                    required_role=min_role,
+                    current_role=user.get('role'),
+                ), 403
+            return {'error': f'{min_role} privileges required',
+                    'code': 'INSUFFICIENT_ROLE'}, 403
+        return None
 
     def _log_rbac_denial(self, user, required_role, endpoint):
         """Record an RBAC role-level denial.
