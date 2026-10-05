@@ -43,7 +43,12 @@
             #createCertFormContainer { transition: none; }
         }
         </style>
-        <div id="createCertFormContainer" role="dialog" aria-modal="true" aria-label="New certificate"
+        <!-- `inert` while closed. Closing moves the panel out of sight, it does
+             not take it out of the page: without this, Tab still stops on
+             every control in it and a screen reader is offered a dialog that
+             is not open. openCertDrawer / closeCertDrawer keep the attribute
+             in step with the state class. -->
+        <div id="createCertFormContainer" role="dialog" aria-modal="true" aria-label="New certificate" inert
              class="fixed top-0 right-0 z-50 h-full w-full max-w-[480px] bg-surface shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out motion-reduce:transition-none">
         <div class="bg-surface flex flex-col h-full overflow-hidden">
             <div class="px-6 py-5 border-b border-border bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
@@ -466,6 +471,7 @@
             drawerLastFocused = document.activeElement;
             setDrawerType(type === 'client' ? 'client' : 'server');
             d.classList.remove('translate-x-full');
+            d.removeAttribute('inert');
             if (s) { s.classList.remove('opacity-0', 'pointer-events-none'); s.classList.add('opacity-100'); }
             try { CertMate.lockScroll(); } catch (e) {}
             document.addEventListener('keydown', drawerTrapTab);
@@ -484,7 +490,10 @@
             }
             var d = document.getElementById('createCertFormContainer');
             var s = document.getElementById('certDrawerScrim');
-            if (d) d.classList.add('translate-x-full');
+            // Inert again from the moment it closes, so nothing puts focus in
+            // it afterwards: not Tab, and not the delayed focus of the first
+            // field when the panel is closed before that fires.
+            if (d) { d.classList.add('translate-x-full'); d.setAttribute('inert', ''); }
             if (s) { s.classList.add('opacity-0', 'pointer-events-none'); s.classList.remove('opacity-100'); }
             try { CertMate.unlockScroll(); } catch (e) {}
             document.removeEventListener('keydown', drawerTrapTab);
