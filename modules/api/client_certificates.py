@@ -92,10 +92,11 @@ def _instance_wide(audit_logger=None):
         def wrapped(*args, **kwargs):
             user = getattr(request, 'current_user', None)
             if isinstance(user, dict) and user.get('allowed_domains') is not None:
+                # The route is in the audit entry below; the log line carries
+                # only the caller.
                 logger.warning(
-                    "Scope denial: user=%s is restricted to domains; client certificates refused (%s %s)",
-                    scrub_log_value(user.get('username')), request.method,
-                    scrub_log_value(request.path))
+                    "Scope denial: user=%s is restricted to domains; client certificates refused",
+                    scrub_log_value(user.get('username')))
                 if audit_logger:
                     audit_logger.log_authz_denied(
                         operation=request.method.lower(),
