@@ -67,6 +67,34 @@ curl -X GET http://localhost:8000/api/client-certs \
  -H "Content-Type: application/json"
 ```
 
+### The role is checked before the body
+
+A request with no credentials is answered `401`, and one below the route's role
+`403 INSUFFICIENT_ROLE`, before its body is validated. Since API contract
+**2.43**; before it, seven routes that validate their body answered such a
+request `400` about the body.
+
+### Keys restricted to domains
+
+An API key can carry `allowed_domains`, a list of exact names and
+`*.example.com` patterns. What such a key is answered, since API contract
+**2.43**:
+
+- **A certificate** is the key's when its scope covers every name the
+  certificate covers: its own, the `san_domains` recorded with it, and the DNS
+  names in the certificate. Otherwise every certificate route answers
+  `403 DOMAIN_OUT_OF_SCOPE` and the list leaves it out. The same when the names
+  cannot be read. Reissue answers `403` for a name outside the scope whether or
+  not a certificate exists for it.
+- **What belongs to the instance** is refused with the same `403`: the
+  client-certificate routes (the CA certificate, the CRL and OCSP stay public),
+  the backup routes, the inventory configuration.
+- **`/metrics`** answers with the series about the key's own domains and none of
+  the instance's totals.
+- **An admin key cannot be restricted.** Creating one is refused. One stored by
+  an earlier release acts as an operator within its domains, and
+  `GET /api/keys` reports that role.
+
 ---
 
 ## Rate Limiting
