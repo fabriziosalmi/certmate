@@ -193,7 +193,7 @@ def test_the_api_answers_409_naming_the_record_and_promising_no_retry(tmp_path):
     import secrets
     import time
 
-    from tests.contract_world import Certbot, certbot_standing_in
+    from tests.contract_world import Certbot, certbot_standing_in, sealed, warm_up
 
     token = secrets.token_urlsafe(32)
     with pytest.MonkeyPatch.context() as env:
@@ -214,7 +214,10 @@ def test_the_api_answers_409_naming_the_record_and_promising_no_retry(tmp_path):
         assert container.managers['dns'].add_account('default', 'cloudflare', {'api_token': 'w' * 24})
         headers = {'Authorization': f'Bearer {token}'}
         certbot = Certbot()
-        with certbot_standing_in(certbot):
+        # Sealed: after the issuance the application asks the CA for a renewal
+        # window, and this test is not about a CA answering.
+        warm_up()
+        with certbot_standing_in(certbot), sealed():
             gate = certbot.hold_next()
             first = {}
             apex = threading.Thread(target=lambda: first.update(response=app.test_client().post(

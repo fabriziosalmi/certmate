@@ -139,7 +139,7 @@ def test_the_key_that_is_creating_a_certificate_can_follow_it(tmp_path):
     import threading
     import time
 
-    from tests.contract_world import Certbot, certbot_standing_in
+    from tests.contract_world import Certbot, certbot_standing_in, sealed, warm_up
 
     token = secrets.token_urlsafe(32)
     with pytest.MonkeyPatch.context() as patch:
@@ -164,7 +164,10 @@ def test_the_key_that_is_creating_a_certificate_can_follow_it(tmp_path):
         headers = {'Authorization': f"Bearer {key['token']}"}
         name = 'new.team.example'
         certbot = Certbot()
-        with certbot_standing_in(certbot):
+        # Sealed: after the issuance the application asks the CA for a renewal
+        # window, and this test is not about a CA answering.
+        warm_up()
+        with certbot_standing_in(certbot), sealed():
             gate = certbot.hold_next()
             created = {}
             issuing = threading.Thread(target=lambda: created.update(response=app.test_client().post(
