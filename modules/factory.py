@@ -1724,6 +1724,50 @@ def setup_security_headers(app):
         return response
 
 
+def _role_required_before_validation(view_class, verb):
+    """The role a flask-restx method asks for, if its body is validated.
+
+    None when the method declares no request model (nothing is validated, so
+    nothing runs ahead of its own role check) or no `require_role`.
+    """
+    method = getattr(view_class, verb.lower(), None)
+    if method is None or not getattr(method, '__apidoc__', {}).get('expect'):
+        return None
+    markers = [getattr(method, '_certmate_protection', None)]
+    markers += [getattr(decorator, '_certmate_protection', None)
+                for decorator in getattr(view_class, 'method_decorators', None) or []]
+    for marker in markers:
+        if marker and marker.startswith('require_role:'):
+            return marker.split(':', 1)[1]
+    return None
+
+
+def setup_authorization_before_validation(app, container: AppContainer):
+    """Who is asking is settled before what they sent is read.
+
+    flask-restx validates a request's body against the route's model before it
+    calls the method, and the role check is a decorator on the method. So a
+    request with no credentials was answered about its body ("'domain' is a
+    required property") by a route that would have refused it either way. Here
+    the same check the decorator makes (`AuthManager.authorize`) runs first,
+    for the methods that have both a model and a role. The decorator still
+    runs afterwards; this only moves the refusal ahead of the validation.
+    """
+    from flask import request as flask_request
+    auth = container.managers.get('auth')
+    if auth is None:
+        return
+
+    @app.before_request
+    def authorize_before_validation():
+        view = app.view_functions.get(flask_request.endpoint)
+        view_class = getattr(view, 'view_class', None)
+        if view_class is None:
+            return None
+        role = _role_required_before_validation(view_class, flask_request.method)
+        return auth.authorize(role) if role else None
+
+
 def setup_rate_limiting(app, container: AppContainer):
     from flask import request as flask_request, jsonify as flask_jsonify
     rate_limiter = container.managers.get('rate_limiter')
@@ -1910,6 +1954,8 @@ def create_app(test_config=None):
     setup_correlation_ids(app)
     setup_api_contract_headers(app)
     setup_rate_limiting(app, container)
+    # After the rate limit, so a flood of unauthenticated requests is still counted.
+    setup_authorization_before_validation(app, container)
     setup_slow_request_logging(app, container)
 
     # Make the app instance available to background APScheduler jobs before

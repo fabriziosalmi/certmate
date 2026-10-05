@@ -16,7 +16,15 @@ for CertMate's Prometheus endpoint (`GET /metrics`).
 `/metrics` requires the **viewer** role — it is a read-only scrape target, so
 a scraper does not need an admin credential. Create a dedicated viewer-scoped
 API token (Settings > API Keys) and present it as a Bearer credential — see
-`prometheus-scrape.example.yml`. Then load the alert rules:
+`prometheus-scrape.example.yml`.
+
+Leave `allowed_domains` empty on that key for the dashboard and the alert rules
+shipped here: they read the instance's totals. A key restricted with
+`allowed_domains` gets the series about its own domains only (the ones with a
+`domain` label its scope covers) and none of the totals, which is the view for
+a team that monitors its own certificates.
+
+Then load the alert rules:
 
 ```yaml
 # prometheus.yml
