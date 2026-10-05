@@ -11,6 +11,7 @@ import secrets
 import pytest
 
 from tests.contract_world import write_certificate
+from tests.restricted_keys import stored_as_admin_with_domains, the_downgrade_lifted
 
 pytestmark = [pytest.mark.unit]
 
@@ -41,20 +42,23 @@ def instance(tmp_path_factory):
         auth = container.managers['auth']
         headers = {'instance': {'Authorization': f'Bearer {token}'}}
         for name, role, scope in (('restricted-viewer', 'viewer', SCOPE),
-                                  # Minted the way keys were before `POST /api/keys`
-                                  # stopped creating them, and still honoured.
-                                  ('restricted-admin', 'admin', SCOPE),
                                   ('viewer', 'viewer', None)):
             ok, key = auth.create_api_key(name, role=role, allowed_domains=scope)
             assert ok, key
             headers[name] = {'Authorization': f"Bearer {key['token']}"}
+        # Stored as admin with `allowed_domains`, and honoured as admin for this
+        # module (see `the_downgrade_lifted`): it passes every role check, so
+        # what refuses it is the rule under test.
+        stored = stored_as_admin_with_domains(container, 'restricted-admin', SCOPE)
+        headers['restricted-admin'] = {'Authorization': f"Bearer {stored['token']}"}
         client = app.test_client()
         made = client.post('/api/backups/create', headers=headers['instance'],
                            json={'type': 'unified'})
         assert made.status_code in (200, 201), made.get_json()
         listed = client.get('/api/backups', headers=headers['instance']).get_json()
         filename = listed['unified'][0]['filename']
-        yield client, headers, filename, tmp
+        with the_downgrade_lifted():
+            yield client, headers, filename, tmp
 
 
 def test_the_list_names_every_domain_which_is_the_premise(instance):
