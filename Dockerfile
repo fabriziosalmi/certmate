@@ -174,21 +174,30 @@ WORKDIR /app
 # CVE-2026-3219 against pip 25.0.1); the app itself runs from /opt/venv and
 # never uses it. See issue #403.
 #
-# NOT bumped past 26.1.2 on purpose. 26.2.1 fixes CVE-2026-13346 in pip
-# itself, but vendors msgpack 1.1.2 and setuptools 70.3.0, which a scan then
-# reports as three findings of its own. Measured on this image, same scanner,
-# same day: base-image bump alone 216 -> 150 with nothing new; base bump plus
-# pip 26.2.1 -> 151, the difference being those three vendored packages.
-# All four live in pip, which this image never uses at runtime — the app runs
-# from /opt/venv and installs nothing. Trading one unreachable finding for
-# three is chasing the number rather than the risk (#403). Revisit when pip's
-# vendor tree catches up.
+# 26.2.1 fixes CVE-2026-13346 in pip itself. It was held at 26.1.2 for a
+# while, on the measurement that a scan of the image found more with 26.2.1
+# than without, the extra findings being in msgpack 1.1.2 and setuptools
+# 70.3.0, "which 26.2.1 vendors". The count was right and the reason was not.
+# 26.1.2 vendors the same msgpack 1.1.2 and setuptools 70.3.0
+# (pip/_vendor/vendor.txt lists both, and msgpack/fallback.py and
+# pkg_resources/__init__.py are byte-identical in the two wheels). What 26.2.1
+# adds is pip/_vendor/bom.cdx.json, a CycloneDX list of what it vendors, and
+# the scanner reads that. The hold did not avoid those findings: it kept them
+# unreported, and kept the CVE.
+#
+# Measured on 2026-10-05, Trivy 0.70.0 on the image and OSV on each vendored
+# version. Known vulnerabilities in pip and what it vendors: 11 in 26.1.2 (its
+# own, 5 in urllib3 2.6.3, 1 in idna 3.11, 1 in pygments 2.19.2, 1 in msgpack,
+# 2 in setuptools), of which the scan saw one; 6 in 26.2.1 (3 in urllib3
+# 2.7.0, msgpack, setuptools), all of which it sees. So the image's count goes
+# from 254 to 258 while what is actually there goes down (#403). pip is not
+# used at runtime; it runs when the image is built.
 #
 # Pinned, for the same reason the base image is pinned by digest a few lines
 # up: an unpinned `--upgrade pip` would make the runtime stage's contents
 # depend on whatever PyPI happens to serve at build time, so two builds of the
 # same commit could differ. Bump this deliberately when a pip CVE lands.
-ARG PIP_VERSION=26.1.2
+ARG PIP_VERSION=26.2.1
 RUN apt-get update && \
     apt-get install -y -o Acquire::Retries=3 bash curl tini && \
     apt-get install -y -o Acquire::Retries=3 --only-upgrade perl-base && \
