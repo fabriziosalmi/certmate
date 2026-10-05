@@ -1,12 +1,10 @@
 import logging
 import re
 import time
-from functools import wraps
 
 from ..core.audit_chain import CheckpointReadError
 from ..core.metrics import generate_metrics_response
 from flask import request, jsonify, Response, stream_with_context
-from modules.core.auth import domain_restricted_refusal
 from modules.core.request_fields import json_booleans
 from modules.core.structured_logging import scrub_log_value
 
@@ -372,19 +370,31 @@ def _reason_for_caller(auth_manager, reason):
     return reason if isinstance(identity, dict) else REASON_WITHHELD
 
 
-def _not_for_restricted_keys(managers, resource_type, what):
-    """A decorator for a route about the whole instance: a key restricted with
-    `allowed_domains` is refused (`domain_restricted_refusal` is the rule).
-    Outside `register_misc_routes`, whose complexity is budgeted."""
-    def decorator(fn):
-        @wraps(fn)
-        def wrapped(*args, **kwargs):
-            refusal = domain_restricted_refusal(managers.get('audit'), resource_type, what)
-            if refusal:
-                return jsonify({'error': refusal, 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
-            return fn(*args, **kwargs)
-        return wrapped
-    return decorator
+def _metrics_scope(managers, auth_manager):
+    """What of `/metrics` the caller may see: None for everything, or a
+    predicate on a domain for a key restricted with `allowed_domains`.
+
+    The predicate is the rule every certificate route applies: the key's scope
+    has to cover every name the certificate filed under that domain covers
+    (`CertificateManager.every_name_matches`), so a certificate the key cannot
+    read is not described to it here either. Asked once per domain per scrape.
+    Outside `register_misc_routes`, whose complexity is budgeted.
+    """
+    user = getattr(request, 'current_user', None)
+    scope = user.get('allowed_domains') if isinstance(user, dict) else None
+    if scope is None:
+        return None
+    certificates = managers.get('certificates')
+    answers = {}
+
+    def in_scope(domain):
+        if domain not in answers:
+            def matches(name):
+                return auth_manager.domain_matches_scope(name, scope)
+            answers[domain] = (certificates.every_name_matches(domain, matches)
+                               if certificates is not None else matches(domain))
+        return answers[domain]
+    return in_scope
 
 
 def register_misc_routes(app, managers, require_web_auth, auth_manager):
@@ -538,7 +548,6 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     # managed domain, which is infrastructure disclosure.
     @app.route('/metrics')
     @auth_manager.require_role('viewer')
-    @_not_for_restricted_keys(managers, 'metrics', 'the metrics')
     def metrics():
         """Prometheus metrics endpoint.
 
@@ -548,10 +557,8 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         every labelled inventory metric stays empty ('No data' at scrape).
 
         The series are about the whole instance: every managed domain is a
-        label. A key restricted to domains is refused, as on the other routes
-        about what the instance owns. A view of the series limited to the
-        key's domains would replace this refusal, and is a change of its own
-        (`_not_for_restricted_keys`).
+        label, and the rest are its totals. A key restricted to domains gets
+        the series about its own domains and nothing else (`_metrics_scope`).
         """
         try:
             app_context = None
@@ -575,7 +582,8 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                     logger.warning(
                         "Metrics context unavailable, emitting base metrics "
                         f"only: {ctx_err}")
-            return generate_metrics_response(app_context)
+            return generate_metrics_response(
+                app_context, domain_in_scope=_metrics_scope(managers, auth_manager))
         except Exception as e:
             logger.error(f"Metrics error: {e}")
             return jsonify({'error': 'Internal Server Error'}), 500
