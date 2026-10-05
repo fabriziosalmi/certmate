@@ -33,6 +33,7 @@ import secrets
 
 import pytest
 
+from modules.core import metrics
 from tests import contract_routes, contract_support
 from tests import contract_world as world
 from tests.restricted_keys import stored_as_admin_with_domains
@@ -182,7 +183,12 @@ def shadow(tmp_path_factory):
         patch.setattr(contract_routes, 'Plan', Recording)
         contract_routes.run(app, token)
     plan = built['plan']
-    _sweep(plan, tmp_path_factory.mktemp('restricted-sweep'))
+    try:
+        _sweep(plan, tmp_path_factory.mktemp('restricted-sweep'))
+    finally:
+        # The sweep scrapes /metrics, and the collector gathers at most once per
+        # interval for the whole process: left fresh for whichever test scrapes next.
+        metrics.metrics_collector.last_collection = 0
     return plan
 
 
