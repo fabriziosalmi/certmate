@@ -1727,7 +1727,7 @@ certmate/
 #### Authentication & Authorization
 - **Role-Based Access Control**: Assign viewer, operator, or admin roles to each user
 - **Scoped API Keys**: Create API keys with specific role permissions and optional expiration
-- **Per-Domain Scoping (`allowed_domains`)**: Restrict a scoped API key to a list of domain patterns. Supports exact (`example.com`) and wildcard (`*.example.com`) forms; the wildcard matches subdomains only, not the apex. An operation on an existing certificate needs every name the certificate covers to be in scope, as creating it does. Out-of-scope requests return `403 DOMAIN_OUT_OF_SCOPE` and are recorded in the audit log. Leave the field empty for unrestricted access (legacy behavior).
+- **Per-Domain Scoping (`allowed_domains`)**: Restrict a scoped API key to a list of domain patterns. Supports exact (`example.com`) and wildcard (`*.example.com`) forms; the wildcard matches subdomains only, not the apex. An operation on an existing certificate needs every name the certificate covers to be in scope, as creating it does. Client certificates are not filed under a domain, so a key restricted this way cannot use the client-certificate routes. Out-of-scope requests return `403 DOMAIN_OUT_OF_SCOPE` and are recorded in the audit log. Leave the field empty for unrestricted access (legacy behavior).
 - **HMAC-SHA256 Token Hashing**: API tokens are hashed with a server-side HMAC secret, preventing offline brute-force even if the settings file is leaked (backward compatible with pre-2.2.6 SHA-256 hashes)
 - **Strong Bearer Tokens**: Use cryptographically secure tokens (32+ characters)
 - **Token Rotation**: Regularly rotate API tokens and revoke unused keys

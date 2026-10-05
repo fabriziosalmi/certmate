@@ -70,6 +70,49 @@ def _validate_identifier(identifier):
             and bool(IDENTIFIER_RE.match(identifier)))
 
 
+def _instance_wide(audit_logger=None):
+    """A decorator that refuses an API key restricted with `allowed_domains`.
+
+    A client certificate belongs to the instance, not to a domain: there is
+    nothing in it for `allowed_domains` to be matched against. So a key that
+    is restricted to domains has no claim on any of them, and is refused here
+    rather than treated as unrestricted. Sessions and keys without
+    `allowed_domains` are unaffected.
+
+    Listed first in `method_decorators`, so that `require_role` (listed after
+    it, and therefore outermost) has authenticated the caller and set
+    `request.current_user` by the time this reads it.
+    """
+    from functools import wraps
+
+    from ..core.structured_logging import scrub_log_value
+
+    def decorator(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            user = getattr(request, 'current_user', None)
+            if isinstance(user, dict) and user.get('allowed_domains') is not None:
+                # The route is in the audit entry below; the log line carries
+                # only the caller.
+                logger.warning(
+                    "Scope denial: user=%s is restricted to domains; client certificates refused",
+                    scrub_log_value(user.get('username')))
+                if audit_logger:
+                    audit_logger.log_authz_denied(
+                        operation=request.method.lower(),
+                        resource_type='client_certificate',
+                        resource_id=request.path,
+                        reason='key restricted to domains has no access to client certificates',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
+                abort(403, 'This API key is restricted to domains and cannot be used '
+                           'for client certificates', code='DOMAIN_OUT_OF_SCOPE')
+            return fn(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
 def create_client_certificate_models(api):
     """Create Flask-RESTX models for client certificates."""
 
@@ -242,7 +285,8 @@ def _require_certificate(client_cert_manager, identifier):
         abort(404, f"Certificate not found: {identifier}")
 
 
-def _build_ca_reset_resource(auth_manager, client_cert_manager, crl_manager):
+def _build_ca_reset_resource(auth_manager, client_cert_manager, crl_manager,
+                             instance_wide=lambda fn: fn):
     """The CA reset resource, built outside create_client_certificate_resources.
 
     That function is a 3k-line closure registering every client-certificate
@@ -255,7 +299,7 @@ def _build_ca_reset_resource(auth_manager, client_cert_manager, crl_manager):
             # The most destructive action in this namespace: it discards every
             # client identity this instance has ever signed. Admin, and it takes
             # more than a POST to trigger.
-            method_decorators = [auth_manager.require_role('admin')]
+            method_decorators = [instance_wide, auth_manager.require_role('admin')]
 
             def post(self):
                 """Rebuild the client CA and remove the certificates it signed."""
@@ -323,13 +367,15 @@ def create_client_certificate_resources(api, managers):
         logger.error("ClientCertificateManager not available")
         return {}
 
+    instance_wide = _instance_wide(managers.get('audit'))
+
     # Client Certificate List Resource
     class ClientCertificateList(Resource):
         # Internal security audit (May 2026) — H1: `require_auth` only
         # checks identity, not role. Aligning every client-cert Resource
         # with the same role stratification the TLS cert path already
         # uses: viewer reads, operator mints/renews, admin revokes.
-        method_decorators = [auth_manager.require_role('viewer')]
+        method_decorators = [instance_wide, auth_manager.require_role('viewer')]
 
         def get(self):
             """Get list of client certificates with optional filtering."""
@@ -365,7 +411,7 @@ def create_client_certificate_resources(api, managers):
     class ClientCertificateCreate(Resource):
         # Mint a CA-signed identity — operator+ (parity with TLS cert
         # CreateCertificate which is `require_role('operator')`).
-        method_decorators = [auth_manager.require_role('operator')]
+        method_decorators = [instance_wide, auth_manager.require_role('operator')]
 
         def post(self):
             """Create a new client certificate."""
@@ -395,7 +441,7 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Detail Resource
     class ClientCertificateDetail(Resource):
-        method_decorators = [auth_manager.require_role('viewer')]
+        method_decorators = [instance_wide, auth_manager.require_role('viewer')]
 
         def get(self, identifier):
             """Get certificate metadata."""
@@ -426,7 +472,7 @@ def create_client_certificate_resources(api, managers):
         # mirroring DownloadCertificate/DownloadCertificateFile on the TLS
         # path. Viewer is the floor — anything that mints or modifies
         # state lives on other Resources.
-        method_decorators = [auth_manager.require_role('viewer')]
+        method_decorators = [instance_wide, auth_manager.require_role('viewer')]
 
         # File types whose download exposes the private key. Caller must
         # hold operator+ regardless of which Resource entry point they
@@ -503,7 +549,7 @@ def create_client_certificate_resources(api, managers):
         # Revoking a CA-signed identity is destructive and analogous
         # to deleting a TLS cert (admin). Aligns with the TLS-side
         # `CertificateDelete` admin gating.
-        method_decorators = [auth_manager.require_role('admin')]
+        method_decorators = [instance_wide, auth_manager.require_role('admin')]
 
         def post(self, identifier):
             """Revoke a client certificate."""
@@ -549,7 +595,7 @@ def create_client_certificate_resources(api, managers):
     class ClientCertificateRenew(Resource):
         # Renew re-mints a CA-signed identity — operator+ (parity with
         # TLS-side `RenewCertificate`).
-        method_decorators = [auth_manager.require_role('operator')]
+        method_decorators = [instance_wide, auth_manager.require_role('operator')]
 
         def post(self, identifier):
             """Renew a client certificate."""
@@ -578,7 +624,7 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Statistics Resource
     class ClientCertificateStatistics(Resource):
-        method_decorators = [auth_manager.require_role('viewer')]
+        method_decorators = [instance_wide, auth_manager.require_role('viewer')]
 
         def get(self):
             """Get certificate statistics."""
@@ -599,7 +645,7 @@ def create_client_certificate_resources(api, managers):
     class ClientCertificateBatch(Resource):
         # Batch mint up to 100 identities — operator+ (same role as
         # single-cert ClientCertificateCreate).
-        method_decorators = [auth_manager.require_role('operator')]
+        method_decorators = [instance_wide, auth_manager.require_role('operator')]
 
         def post(self):
             """Create multiple certificates from CSV data."""
@@ -782,7 +828,7 @@ def create_client_certificate_resources(api, managers):
 
     ClientCertificateAuthorityCert = _build_ca_cert_resource(client_cert_manager)
     ClientCertificateAuthorityReset = _build_ca_reset_resource(
-        auth_manager, client_cert_manager, crl_manager)
+        auth_manager, client_cert_manager, crl_manager, instance_wide)
 
     # Return dictionary of resource classes
     return {
