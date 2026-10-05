@@ -218,3 +218,18 @@ def test_without_a_backend_an_empty_directory_is_still_just_the_name(tmp_path):
     (tmp_path / BLANK).mkdir()
     (tmp_path / BLANK / 'live').mkdir()
     assert _bare_manager(tmp_path).names_covered(BLANK) == [BLANK]
+
+
+def test_a_torn_certificate_only_the_backend_holds_is_unknown_too(tmp_path):
+    from unittest import mock
+
+    from modules.core.certificates import CertificateManager, CertificateNamesUnknown
+
+    class Backend:
+        def retrieve_certificate(self, domain):
+            return {'cert.pem': b'-----BEGIN CERTIFICATE-----\ntorn'}, {}
+
+    manager = CertificateManager(tmp_path, mock.MagicMock(), mock.MagicMock(),
+                                 storage_manager=Backend())
+    with pytest.raises(CertificateNamesUnknown):
+        manager.names_covered(BLANK)
