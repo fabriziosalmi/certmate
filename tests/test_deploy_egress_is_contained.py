@@ -314,13 +314,20 @@ def test_sanitize_text_redacts_an_encoded_certificate_too():
 
 
 def test_the_encoded_pem_scan_cannot_be_made_to_stall():
-    """sanitize_text sees unbounded hook output on a worker thread; it must stay linear."""
+    """sanitize_text sees unbounded hook output on a worker thread; it must stay linear.
+
+    Counted in the CPU time of this thread, not on the clock. What has to stay
+    bounded is the work, and on a machine busy with something else the clock
+    counts the something else: the same scan measured 1.5 s of CPU and between
+    2.7 and 4.7 s on the clock on a machine running six times what it has cores
+    for, and failed a release gate with nothing wrong in it.
+    """
     hostile = ['A' * 3_000_000, ('AAAA ' * 400_000), ('QUJD' * 50_000 + '!') * 20,
                'A' * 119 + ' ' + 'A' * 119]
-    start = time.perf_counter()
+    start = time.thread_time()
     for text in hostile:
         sanitize_text(text)
-    assert time.perf_counter() - start < 3.0
+    assert time.thread_time() - start < 3.0
 
 
 # --------------------------------------------------------------------------
