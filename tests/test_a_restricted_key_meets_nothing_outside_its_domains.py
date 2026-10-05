@@ -65,6 +65,30 @@ MAY_ANSWER = {
     'POST /api/certificates/reissue-keyless': 'acts only on certificates in the key\'s scope: here, none',
 }
 
+# Routes that answer a restricted key and where the walk cannot tell whether
+# they should: the owner's own answer names nothing here, so there is nothing
+# a restricted key's answer could be caught repeating. Each says why that is
+# no gap, or which test fills the instance and looks. A route that joins them
+# fails `test_the_walk_knows_where_it_cannot_see` until someone has decided.
+SEEN_ELSEWHERE = 'holds no name in the walk\'s instance; `filled`, below, fills it and compares with the owner'
+NAMES_NOTHING = {
+    'GET /api/cache/stats': SEEN_ELSEWHERE,
+    'GET /api/inventory/domains': SEEN_ELSEWHERE,
+    'GET /api/inventory/health': SEEN_ELSEWHERE,
+    'GET /api/activity': 'the walk\'s audit names no domain when this is read; '
+                         'tests/test_what_a_scoped_key_may_read_in_the_activity.py writes entries for two tenants and looks',
+    'GET /api/auth/config': 'whether sign-in is on: what the login page reads, with no credentials',
+    'GET /api/auth/oidc/config': 'the SSO button\'s label and address: what the login page reads, with no credentials',
+    'GET /api/health': 'the instance\'s health, public by design',
+    'GET /api/metrics': 'where the metrics are and whether the collector is up; the series are at /metrics, which is scoped',
+    'GET /api/web/update-check': 'the version running and the latest published',
+    'GET /api/client-certs/ca': 'public material, see PUBLIC_MATERIAL',
+    'GET /api/crl/download/<X>': 'public material, see PUBLIC_MATERIAL',
+    'GET /api/ocsp/status/<X>': 'public material, see PUBLIC_MATERIAL',
+    'GET /api/settings/dns-providers': 'the instance\'s provider accounts, secrets masked; names no domain',
+    'GET /api/storage/info': 'which storage backend the instance uses; names no domain',
+}
+
 # Answered to anyone, with no credentials, by design: what a relying party needs.
 PUBLIC_MATERIAL = {
     'GET /api/client-certs/ca', 'GET /api/crl/download/<X>', 'GET /api/ocsp/status/<X>',
@@ -87,6 +111,8 @@ class Shadow(contract_routes.Plan):
         self.exposed = set()
         self.answered = set()
         self.owner_saw_names = 0
+        self.owner_named = set()
+        self.restricted_answered = set()
         self.swept = 0
         self.trace = [] if self.trace is None else self.trace
 
@@ -128,6 +154,9 @@ class Shadow(contract_routes.Plan):
             stream=stream, query=query, data=data, keep=keep, limited=limited, defect=defect)
         if attempts and SOMEONE_ELSES.search(json.dumps(payload, default=str)):
             self.owner_saw_names += 1
+            self.owner_named.add(key)
+        if any(status < 300 for _who, status, _text, _sent in attempts):
+            self.restricted_answered.add(key)
         for who, status, text, sent in attempts:
             self._judge(key, path or template, verb.upper(), stream, who, status, text,
                         response.status_code, sent=sent, about_a_domain='<domain>' in template)
@@ -271,6 +300,17 @@ def test_the_walk_was_tried_and_the_instance_did_hold_those_names(shadow):
     assert shadow.swept > 100, shadow.swept
 
 
+def test_the_walk_knows_where_it_cannot_see(shadow):
+    """Where a restricted key is answered and the owner's answer named nothing,
+    a clean result says nothing about the route: there was no name to be caught
+    repeating. Those routes are listed, each with why or with the test that
+    looks at it on an instance that holds names."""
+    blind = shadow.restricted_answered - shadow.owner_named - set(MAY_ANSWER)
+    assert blind == set(NAMES_NOTHING), (
+        f'answered to a restricted key with nothing to compare, and not listed: {sorted(blind - set(NAMES_NOTHING))}; '
+        f'listed and no longer so: {sorted(set(NAMES_NOTHING) - blind)}')
+
+
 def test_every_exception_is_still_one(shadow):
     assert shadow.exposed == set(KNOWN_EXPOSED), (
         'no longer exposed, remove from KNOWN_EXPOSED: '
@@ -356,3 +396,65 @@ def test_the_dashboard_does_create_for_the_owner(dashboard):
                            dashboard['owner'])
     assert status == 200, (status, payload[:200])
     assert len(certbot.commands) > before
+
+
+
+# What the walk's instance does not hold: deployment checks in the cache, and
+# what the inventory knows about names (their registration, their health). One
+# name of each is the restricted keys' own, so a route that answered nothing at
+# all would not pass for one that filters.
+OWN, THEIRS = 'own.nothing.example', 'theirs.example.test'
+
+
+@pytest.fixture(scope='module')
+def filled(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp('restricted-filled')
+    try:
+        with _ordinary_application(tmp) as (sweep, _app, _certbot):
+            managers = sweep.container.managers
+            for name in (OWN, THEIRS, sweep.world.domain):
+                managers['cache'].deployment_cache.set(name, {'deployed': True})
+            for name in (OWN, THEIRS):
+                managers['cert_inventory'].record_registration(
+                    {'domain': name, 'status': 'ok', 'expires_at': '2027-01-01T00:00:00Z'})
+                managers['cert_inventory'].record_domain_health(
+                    name, 'warning', {'spf': {'status': 'warning', 'detail': 'none'}})
+            owner = {'Authorization': f'Bearer {sweep.token}'}
+
+            def get(path, credentials):
+                sweep.forget_the_rate()
+                response = sweep.admin.get(path, headers=credentials)
+                text = response.get_data(as_text=True)
+                response.close()
+                return response.status_code, text
+
+            yield {'get': get, 'owner': owner, 'keys': sweep._keys(), 'theirs': (THEIRS, sweep.world.domain)}
+    finally:
+        metrics.metrics_collector.last_collection = 0
+
+
+@pytest.mark.parametrize('path', [
+    '/api/cache/stats', '/api/web/cache/stats', '/api/inventory/domains', '/api/inventory/health'])
+def test_a_filled_instance_names_only_the_keys_own(filled, path):
+    get = filled['get']
+
+    # CONTROL: the names are there, and the owner is given them.
+    status, text = get(path, filled['owner'])
+    assert status == 200 and OWN in text and THEIRS in text, (status, text[:300])
+
+    for who, credentials in filled['keys'].items():
+        status, text = get(path, credentials)
+        assert status == 200 and OWN in text, f'{who}: its own name is missing ({status})'
+        named = [name for name in filled['theirs'] if name in text]
+        assert named == [], f'{who} is named {named}'
+
+
+@pytest.mark.parametrize('path', ['/api/cache/stats', '/api/web/cache/stats'])
+def test_the_count_is_of_what_the_key_is_given(filled, path):
+    get = filled['get']
+    _status, text = get(path, filled['owner'])
+    assert json.loads(text)['total_entries'] == 3
+    for who, credentials in filled['keys'].items():
+        _status, text = get(path, credentials)
+        answer = json.loads(text)
+        assert answer['total_entries'] == len(answer['entries']) == 1, (who, answer)

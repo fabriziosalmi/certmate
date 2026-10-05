@@ -2035,6 +2035,11 @@ certificate endpoints or use a webhook.
 
 **Endpoint**: `GET /api/cache/stats` — viewer
 
+The deployment checks the instance has cached, one entry per domain. A key
+restricted with `allowed_domains` gets the entries for certificates its scope
+covers, under the rule of the certificate list, and `total_entries` counts
+those.
+
 #### Clear the deployment cache
 
 **Endpoint**: `POST /api/cache/clear` — admin
