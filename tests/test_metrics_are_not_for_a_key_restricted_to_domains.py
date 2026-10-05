@@ -17,9 +17,13 @@ from tests.contract_world import write_certificate
 
 pytestmark = [pytest.mark.unit]
 
-MINE = 'app.team.example'
-THEIRS = 'shop.other.example'
-MIXED = 'api.team.example'          # filed in scope, and covers a name outside it
+# Names no other test uses. The registry is one per process, so in the full
+# suite it also holds the counters other tests left for their own domains, and
+# a scope shared with them would let those through here.
+SCOPE = ['*.metrics-team.example']
+MINE = 'app.metrics-team.example'
+THEIRS = 'shop.metrics-other.example'
+MIXED = 'api.metrics-team.example'  # filed in scope, and covers a name outside it
 INSTANCE_WIDE = ('certmate_certificates_total', 'certmate_domains_total',
                  'certmate_certificates_by_provider', 'certmate_certificates_by_status',
                  'certmate_dns_provider_accounts', 'certmate_application_uptime_seconds',
@@ -43,7 +47,7 @@ def instance(tmp_path_factory):
         os.environ['API_BEARER_TOKEN'] = token
         from modules.factory import create_app
         app, container = create_app()
-        sans = {MINE: ['www.team.example'], THEIRS: [], MIXED: ['api.other.example']}
+        sans = {MINE: ['www.metrics-team.example'], THEIRS: [], MIXED: ['api.metrics-other.example']}
         for name, extra in sans.items():
             write_certificate(tmp / 'certs' / name, name, extra)
             (tmp / 'certs' / name / 'metadata.json').write_text(json.dumps(
@@ -56,7 +60,7 @@ def instance(tmp_path_factory):
         for name in sans:
             metrics.certificate_requests_total.labels(domain=name, dns_provider='cloudflare', status='success').inc()
         headers = {}
-        for name, scope in (('restricted', ['*.team.example']), ('viewer', None)):
+        for name, scope in (('restricted', SCOPE), ('viewer', None)):
             ok, key = container.managers['auth'].create_api_key(name, role='viewer', allowed_domains=scope)
             assert ok, key
             headers[name] = {'Authorization': f"Bearer {key['token']}"}
@@ -87,7 +91,7 @@ def test_a_restricted_key_gets_its_own_domains_series(instance):
 def test_it_gets_no_series_about_another_domain(instance):
     text = _scrape(instance, 'restricted')
     assert THEIRS not in text
-    assert 'other.example' not in text
+    assert 'metrics-other.example' not in text
 
 
 def test_a_certificate_that_also_covers_another_name_is_not_described_to_it(instance):
