@@ -46,11 +46,10 @@ NOT_THEIRS = ['*.nothing.example']
 SOMEONE_ELSES = re.compile(r'[a-z0-9-]+\.example\.test|(?:alice|bob)@example\.test', re.I)
 MATERIAL = re.compile(r'BEGIN (?:[A-Z ]+ )?PRIVATE KEY|BEGIN CERTIFICATE')
 
-# Routes whose view for a restricted key is a change of its own. The test fails
-# when an entry is no longer needed, so it gets removed.
-KNOWN_EXPOSED = {
-    'GET /metrics': 'a per-scope view of the series is its own change',
-}
+# Routes that are known to name the instance's data to a restricted key, each
+# with the decision taken about it. Empty, and meant to stay so: the test fails
+# on an entry that is no longer needed, so one cannot be left behind.
+KNOWN_EXPOSED = {}
 
 # Routes that answer a restricted key something other than a refusal when it
 # sends a request the instance would act on for its owner. Each with why that

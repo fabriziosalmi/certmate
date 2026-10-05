@@ -1,10 +1,12 @@
 import logging
 import re
 import time
+from functools import wraps
 
 from ..core.audit_chain import CheckpointReadError
 from ..core.metrics import generate_metrics_response
 from flask import request, jsonify, Response, stream_with_context
+from modules.core.auth import domain_restricted_refusal
 from modules.core.request_fields import json_booleans
 from modules.core.structured_logging import scrub_log_value
 
@@ -370,6 +372,21 @@ def _reason_for_caller(auth_manager, reason):
     return reason if isinstance(identity, dict) else REASON_WITHHELD
 
 
+def _not_for_restricted_keys(managers, resource_type, what):
+    """A decorator for a route about the whole instance: a key restricted with
+    `allowed_domains` is refused (`domain_restricted_refusal` is the rule).
+    Outside `register_misc_routes`, whose complexity is budgeted."""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            refusal = domain_restricted_refusal(managers.get('audit'), resource_type, what)
+            if refusal:
+                return jsonify({'error': refusal, 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+            return fn(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
 def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
     _register_update_check(app, managers, auth_manager)
@@ -521,6 +538,7 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     # managed domain, which is infrastructure disclosure.
     @app.route('/metrics')
     @auth_manager.require_role('viewer')
+    @_not_for_restricted_keys(managers, 'metrics', 'the metrics')
     def metrics():
         """Prometheus metrics endpoint.
 
@@ -528,6 +546,12 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         DNS-provider and cache gauges are actually populated. Without a
         context, generate_metrics_response only emits application_uptime and
         every labelled inventory metric stays empty ('No data' at scrape).
+
+        The series are about the whole instance: every managed domain is a
+        label. A key restricted to domains is refused, as on the other routes
+        about what the instance owns. A view of the series limited to the
+        key's domains would replace this refusal, and is a change of its own
+        (`_not_for_restricted_keys`).
         """
         try:
             app_context = None
