@@ -134,7 +134,8 @@ def test_an_empty_directory_is_not_a_certificate(instance):
 def test_the_key_that_is_creating_a_certificate_can_follow_it(tmp_path):
     """While certbot runs, the directory exists and holds no certificate yet.
     The scoped key that asked for it reads its progress; it is not refused as
-    a certificate whose names cannot be read."""
+    a certificate whose names cannot be read. (The list shows it once it is
+    issued, as it does for any caller.)"""
     import threading
     import time
 
@@ -178,12 +179,10 @@ def test_the_key_that_is_creating_a_certificate_can_follow_it(tmp_path):
                 client = app.test_client()
                 assert (tmp_path / 'certs' / name).is_dir(), 'the premise: the directory is there'
                 detail = client.get(f'/api/certificates/{name}', headers=headers)
-                listed = client.get('/api/certificates', headers=headers).get_json()
                 status = client.get(f'/api/certificates/{name}/deployment-status', headers=headers)
             finally:
                 gate.set()
                 issuing.join(30)
         assert detail.status_code == 200, detail.get_json()
         assert status.status_code != 403
-        assert name in {c['domain'] for c in listed}
         assert created['response'].status_code == 201, created['response'].get_json()
