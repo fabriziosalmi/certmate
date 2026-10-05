@@ -14,7 +14,7 @@ import threading
 import uuid
 import time
 from functools import wraps
-from flask import request
+from flask import jsonify, request
 from datetime import datetime, timezone
 from .structured_logging import scrub_log_value
 from .utils import utc_now
@@ -204,6 +204,23 @@ def domain_restricted_refusal(audit_logger, resource_type, what):
             ip_address=request.remote_addr,
         )
     return f'This API key is restricted to domains and cannot be used for {what}'
+
+
+def not_for_domain_restricted_keys(audit_logger, resource_type, what):
+    """A decorator for a dashboard route about something the instance owns.
+
+    `domain_restricted_refusal` in the dashboard's envelope. Placed under
+    `require_role`, which sets the caller.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            refusal = domain_restricted_refusal(audit_logger, resource_type, what)
+            if refusal:
+                return jsonify({'error': refusal, 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+            return fn(*args, **kwargs)
+        return wrapped
+    return decorator
 
 
 class AuthManager:

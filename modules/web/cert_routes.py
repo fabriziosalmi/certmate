@@ -7,6 +7,7 @@ from flask import request, jsonify, send_file, after_this_request
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
+from modules.core.auth import not_for_domain_restricted_keys
 from modules.core.request_fields import json_booleans
 from modules.core.structured_logging import scrub_log_value
 
@@ -175,8 +176,10 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/web/certificates/dns-providers', methods=['GET'])
     @auth_manager.require_role('viewer')
+    @not_for_domain_restricted_keys(audit_logger, 'dns_providers', 'the DNS provider accounts')
     def list_dns_providers_web():
-        """List available DNS providers"""
+        """List available DNS providers. Refused to a key restricted to
+        domains, as the API's twin is: the accounts are the instance's."""
         try:
             providers = dns_manager.get_available_providers()
             return jsonify(providers)

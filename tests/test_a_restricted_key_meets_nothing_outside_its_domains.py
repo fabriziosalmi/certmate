@@ -38,6 +38,7 @@ import zipfile
 import pytest
 
 from modules.core import metrics
+from modules.core.cert_probe import parse_certificate
 from tests import contract_routes, contract_support
 from tests import contract_world as world
 from tests.restricted_keys import stored_as_admin_with_domains
@@ -85,8 +86,6 @@ NAMES_NOTHING = {
     'GET /api/client-certs/ca': 'public material, see PUBLIC_MATERIAL',
     'GET /api/crl/download/<X>': 'public material, see PUBLIC_MATERIAL',
     'GET /api/ocsp/status/<X>': 'public material, see PUBLIC_MATERIAL',
-    'GET /api/settings/dns-providers': 'the instance\'s provider accounts, secrets masked; names no domain',
-    'GET /api/storage/info': 'which storage backend the instance uses; names no domain',
 }
 
 # Answered to anyone, with no credentials, by design: what a relying party needs.
@@ -399,11 +398,13 @@ def test_the_dashboard_does_create_for_the_owner(dashboard):
 
 
 
-# What the walk's instance does not hold: deployment checks in the cache, and
-# what the inventory knows about names (their registration, their health). One
-# name of each is the restricted keys' own, so a route that answered nothing at
-# all would not pass for one that filters.
+# What the walk's instance does not hold: deployment checks in the cache, what
+# the inventory knows about names (their registration, their health), and three
+# certificates in the inventory. One of each is the restricted keys' own, so a
+# route that answered nothing at all would not pass for one that filters. The
+# third certificate covers a name of theirs and a name that is not.
 OWN, THEIRS = 'own.nothing.example', 'theirs.example.test'
+SHARED = ('shared.nothing.example', 'partner.example.test')
 
 
 @pytest.fixture(scope='module')
@@ -419,6 +420,10 @@ def filled(tmp_path_factory):
                     {'domain': name, 'status': 'ok', 'expires_at': '2027-01-01T00:00:00Z'})
                 managers['cert_inventory'].record_domain_health(
                     name, 'warning', {'spf': {'status': 'warning', 'detail': 'none'}})
+            for names in ((OWN,), (THEIRS,), SHARED):
+                leaf, _key = world.make_cert(names[0], san_dns=list(names))
+                managers['cert_inventory'].record_certificate(
+                    parse_certificate(world.pem(leaf))['certificate'], source='probed', host=names[0], port=443)
             owner = {'Authorization': f'Bearer {sweep.token}'}
 
             def get(path, credentials):
@@ -428,13 +433,14 @@ def filled(tmp_path_factory):
                 response.close()
                 return response.status_code, text
 
-            yield {'get': get, 'owner': owner, 'keys': sweep._keys(), 'theirs': (THEIRS, sweep.world.domain)}
+            yield {'get': get, 'owner': owner, 'keys': sweep._keys()}
     finally:
         metrics.metrics_collector.last_collection = 0
 
 
 @pytest.mark.parametrize('path', [
-    '/api/cache/stats', '/api/web/cache/stats', '/api/inventory/domains', '/api/inventory/health'])
+    '/api/cache/stats', '/api/web/cache/stats', '/api/inventory/domains', '/api/inventory/health',
+    '/api/inventory'])
 def test_a_filled_instance_names_only_the_keys_own(filled, path):
     get = filled['get']
 
@@ -445,7 +451,7 @@ def test_a_filled_instance_names_only_the_keys_own(filled, path):
     for who, credentials in filled['keys'].items():
         status, text = get(path, credentials)
         assert status == 200 and OWN in text, f'{who}: its own name is missing ({status})'
-        named = [name for name in filled['theirs'] if name in text]
+        named = sorted(set(SOMEONE_ELSES.findall(text)))
         assert named == [], f'{who} is named {named}'
 
 
@@ -458,3 +464,28 @@ def test_the_count_is_of_what_the_key_is_given(filled, path):
         _status, text = get(path, credentials)
         answer = json.loads(text)
         assert answer['total_entries'] == len(answer['entries']) == 1, (who, answer)
+
+
+def test_a_certificate_that_covers_another_name_is_not_in_the_keys_inventory(filled):
+    """The rule of the certificate routes, in the inventory: every name."""
+    get = filled['get']
+    _status, text = get('/api/inventory', filled['owner'])
+    assert all(name in text for name in SHARED)          # CONTROL: it is there
+    for who, credentials in filled['keys'].items():
+        _status, text = get('/api/inventory', credentials)
+        assert OWN in text, who                            # CONTROL: the key's own is given
+        assert not any(name in text for name in SHARED), f'{who} is given {SHARED}'
+
+
+# What is the instance's and filed under no domain: a restricted key is
+# refused, by the API's routes and by the dashboard's twins of them.
+@pytest.mark.parametrize('path', [
+    '/api/settings', '/api/web/settings', '/api/settings/dns-providers',
+    '/api/web/certificates/dns-providers', '/api/storage/info'])
+def test_the_instances_configuration_is_refused(filled, path):
+    get = filled['get']
+    status, _text = get(path, filled['owner'])
+    assert status == 200, status                            # CONTROL: the route answers
+    for who, credentials in filled['keys'].items():
+        status, text = get(path, credentials)
+        assert status == 403 and json.loads(text)['code'] == 'DOMAIN_OUT_OF_SCOPE', (who, status, text[:200])

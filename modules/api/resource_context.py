@@ -219,8 +219,8 @@ def _scope_denied(ctx: ApiContext, user, domain, operation,
 
 
 def is_record_in_scope(ctx: ApiContext, record) -> bool:
-    """True if the caller's scope covers any domain the inventory *record*
-    names (subject CN or a SAN).
+    """True if the caller's scope covers every domain the inventory *record*
+    names (subject CN and SANs).
 
     Matches CertificateList exactly: scope comes from allowed_domains and is
     fed to domain_matches_scope, so an unrestricted caller (scope None,

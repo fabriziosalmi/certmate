@@ -12,6 +12,10 @@ regardless of scope. Other endpoints already filtered correctly
 (``CertificateList.get`` does this via the same
 ``domain_matches_scope`` check) — settings was the outlier.
 
+The filter was the fix then. Since API contract 2.44 the settings are refused
+to such a key altogether: they are the instance's, and only `domains` had
+ever been narrowed.
+
 ### M5 — `POST /api/certificates/check-dns-alias` had no scope check
 
 The body-style variant accepted ``domain`` + ``san_domains`` straight
@@ -120,15 +124,21 @@ def _as_user(app, role, allowed_domains):
         }
 
 
-class TestSettingsGetFiltersDomainsByScope:
+class TestSettingsAreNotForAKeyRestrictedToDomains:
+    """The settings named every domain to a restricted key; then `domains` was
+    filtered for it and the rest of the settings still answered. They are the
+    instance's (its contact address, its provider accounts, its storage and
+    sign-in configuration), so such a key is now refused, as it is for backups.
+    What it may know about its own domains it reads from the certificate routes."""
 
     def test_unrestricted_caller_sees_all_domains(self, settings_get_app):
+        """CONTROL: the route does answer, in both shapes an entry can have."""
         app, _ = settings_get_app
         _as_user(app, 'viewer', None)  # no scope
         r = app.test_client().get('/api/settings')
         assert r.status_code == 200, r.data
         body = r.get_json()
-        # All four domains visible.
+        # All four domains visible, the bare-string one among them.
         names = []
         for entry in body.get('domains', []):
             names.append(entry if isinstance(entry, str) else entry.get('domain'))
@@ -137,42 +147,15 @@ class TestSettingsGetFiltersDomainsByScope:
             'app.tenant-b.example', 'legacy-string-form.tenant-c.example',
         }
 
-    def test_scoped_caller_sees_only_in_scope_domains(self, settings_get_app):
+    @pytest.mark.parametrize('scope', [['*.tenant-a.example'], ['*.tenant-c.example'], []])
+    def test_a_restricted_caller_is_refused(self, settings_get_app, scope):
         app, _ = settings_get_app
-        _as_user(app, 'viewer', ['*.tenant-a.example'])
+        _as_user(app, 'viewer', scope)
         r = app.test_client().get('/api/settings')
-        assert r.status_code == 200, r.data
-        body = r.get_json()
-        names = [
-            entry if isinstance(entry, str) else entry.get('domain')
-            for entry in body.get('domains', [])
-        ]
-        assert set(names) == {'app.tenant-a.example', 'api.tenant-a.example'}
-
-    def test_scoped_caller_does_not_see_other_tenant_domains(self, settings_get_app):
-        """The headline of the audit finding: a scoped key must NOT
-        enumerate other tenants' domains via the settings response."""
-        app, _ = settings_get_app
-        _as_user(app, 'viewer', ['*.tenant-a.example'])
-        r = app.test_client().get('/api/settings')
-        r.get_json()
-        # Defensive: no part of the response carries tenant-b or
-        # tenant-c domain names.
-        assert b'tenant-b' not in r.data
-        assert b'tenant-c' not in r.data
-
-    def test_scope_filter_handles_legacy_string_entries(self, settings_get_app):
-        """The `domains` list can contain either dicts or bare strings
-        (legacy shape). The filter must handle both."""
-        app, _ = settings_get_app
-        _as_user(app, 'viewer', ['*.tenant-c.example'])
-        r = app.test_client().get('/api/settings')
-        body = r.get_json()
-        names = [
-            entry if isinstance(entry, str) else entry.get('domain')
-            for entry in body.get('domains', [])
-        ]
-        assert names == ['legacy-string-form.tenant-c.example']
+        assert r.status_code == 403, r.data
+        assert r.get_json()['code'] == 'DOMAIN_OUT_OF_SCOPE'
+        # The refusal names no domain, its own included.
+        assert b'tenant' not in r.data
 
 
 # =============================================
