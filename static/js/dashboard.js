@@ -2230,7 +2230,7 @@
         var ca = document.getElementById('ca_provider_select');
         var prevalidated = select && select.querySelector('option[value="prevalidated"]');
         if (prevalidated) {
-            var allowed = ca && ca.value === 'sectigo';
+            var allowed = ca && (ca.value || defaultCAProvider) === 'sectigo';
             prevalidated.hidden = !allowed;
             prevalidated.disabled = !allowed;
             if (!allowed && select.value === 'prevalidated') select.value = '';

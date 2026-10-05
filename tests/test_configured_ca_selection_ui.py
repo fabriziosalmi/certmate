@@ -20,12 +20,13 @@ const select = () => ({value: '', options: [], replaceChildren() { this.options 
     add(option) { this.options.push(option); }, querySelector() { return null; }});
 global.Option = function(label, value) { this.textContent = label; this.value = value; };
 const hidden = { add() {}, remove() {}, toggle() {} };
+const prevalidated = {hidden: true, disabled: true};
 const elements = {
     ca_provider_select: select(), ca_account_id: select(),
     createCertForm: {addEventListener() {}},
     'ca-account-container': {classList: hidden},
     'ca-provider-info': {classList: hidden},
-    challenge_type_select: {value: '', querySelector() { return null; }},
+    challenge_type_select: {value: '', querySelector() { return prevalidated; }},
     'dns-provider-container': {style: {display: ''}}
 };
 const settings = {
@@ -45,6 +46,7 @@ window.loadCAProviders().then(() => {
     if (ca.options.map(o => o.value).join(',') !== ',letsencrypt,sectigo') throw Error('Unconfigured CA offered');
     if (ca.options[0].textContent !== "Global default: Let's Encrypt — le@example.com")
         throw Error('Global default CA account not identified');
+    if (!prevalidated.hidden || !prevalidated.disabled) throw Error('Default LE offers Sectigo challenge');
     ca.value = 'sectigo'; window.updateCAProviderInfo();
     if (elements.ca_account_id.options.map(o => o.value).join(',') !== ',scm,bertrand' ||
         elements.ca_account_id.options[0].textContent !== 'Default for Sectigo: Bertrand')
@@ -60,6 +62,14 @@ window.loadCAProviders().then(() => {
         elements.ca_account_id.options.map(o => o.value).join(',') !== ',scm,bertrand' ||
         elements.ca_provider_select.options[0].textContent !== 'Global default: Sectigo — Bertrand')
         throw Error('Default CA account not offered');
+    if (prevalidated.hidden || prevalidated.disabled) throw Error('Default Sectigo challenge unavailable');
+    elements.challenge_type_select.value = 'prevalidated';
+    window.toggleDnsProviderVisibility();
+    if (elements['dns-provider-container'].style.display !== 'none') throw Error('Prevalidated shows DNS fields');
+    elements.ca_provider_select.value = 'letsencrypt';
+    window.updateCAProviderInfo();
+    if (!prevalidated.hidden || !prevalidated.disabled || elements.challenge_type_select.value !== '')
+        throw Error('Explicit LE keeps Sectigo challenge with default Sectigo');
 }).catch(error => { console.error(error); process.exitCode = 1; });
 """
     result = subprocess.run([node, '-e', script, str(root / 'certmate.js'),
