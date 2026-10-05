@@ -2268,7 +2268,7 @@ and may be reworded.
 | `AUTH_HEADER_MISSING` / `INVALID_AUTH_FORMAT` / `INVALID_AUTH_SCHEME` / `INVALID_TOKEN` / `AUTH_ERROR` | 401 | Authentication failed, and which part |
 | `SESSION_REQUIRED` | 401 | The endpoint needs a browser session, not a bearer token |
 | `INSUFFICIENT_ROLE` | 403 | Authenticated, but the role is too low |
-| `DOMAIN_OUT_OF_SCOPE` | 403 | The API key is scoped to other domains, or the certificate also covers a name outside the key's scope |
+| `DOMAIN_OUT_OF_SCOPE` | 403 | The API key is scoped to other domains, or the certificate also covers a name outside the key's scope, or the route is for client certificates, which a key restricted to domains cannot use |
 | `PRIVKEY_REQUIRES_OPERATOR` | 403 | Private-key download needs operator or above |
 | `CERTIFICATE_ALREADY_EXISTS` | 409 | A certificate for that domain is already managed |
 | `DOMAIN_OPERATION_IN_PROGRESS` | 409 | Another create/renew holds this domain's lock |
