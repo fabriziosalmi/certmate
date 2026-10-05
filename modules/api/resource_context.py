@@ -117,6 +117,10 @@ def job_accepted(job_id, operation, domain, status_url) -> dict:
     }
 
 
+_COVERS_ANOTHER_NAME = (
+    'certificate covers a name outside scoped key allowed_domains, or its names could not be read')
+
+
 def check_domain_scope(ctx: ApiContext, domain, operation):
     """Reject the request if the caller's API-key allowed_domains does not
     cover *domain*. Returns (body, status) on denial, or None when permitted.
@@ -150,11 +154,9 @@ def check_certificate_scope(ctx: ApiContext, domain, operation):
     if user.get('allowed_domains') is None:
         # Unrestricted: no name can fall outside, so nothing is read.
         return None
-    for name in ctx.certificates.names_covered(domain):
-        if not ctx.auth.user_can_access_domain(user, name):
-            return _scope_denied(
-                ctx, user, domain, operation,
-                reason='certificate covers a name outside scoped key allowed_domains')
+    if not ctx.certificates.every_name_matches(
+            domain, lambda name: ctx.auth.user_can_access_domain(user, name)):
+        return _scope_denied(ctx, user, domain, operation, reason=_COVERS_ANOTHER_NAME)
     return None
 
 
@@ -166,8 +168,8 @@ def certificate_in_scope(ctx: ApiContext, domain, scope) -> bool:
     """
     if scope is None:
         return True
-    return all(ctx.auth.domain_matches_scope(name, scope)
-               for name in ctx.certificates.names_covered(domain))
+    return ctx.certificates.every_name_matches(
+        domain, lambda name: ctx.auth.domain_matches_scope(name, scope))
 
 
 def _scope_denied(ctx: ApiContext, user, domain, operation,
