@@ -129,11 +129,11 @@ class CertificateService:
         user = user or {}
         if user.get('allowed_domains') is None:
             return
-        for name in self._certs.names_covered(domain):
-            if not self._auth.user_can_access_domain(user, name):
-                self._deny_scope(
-                    domain, operation, user, ip_address,
-                    reason='certificate covers a name outside scoped key allowed_domains')
+        if not self._certs.every_name_matches(
+                domain, lambda name: self._auth.user_can_access_domain(user, name)):
+            self._deny_scope(
+                domain, operation, user, ip_address,
+                reason='certificate covers a name outside scoped key allowed_domains, or its names could not be read')
 
     def _deny_scope(self, domain, operation, user, ip_address,
                     reason='domain outside scoped key allowed_domains'):
@@ -705,9 +705,8 @@ class CertificateService:
             domain = domain_dir.name
             if not self._auth.domain_matches_scope(domain, scope):
                 continue
-            if scope is not None and not all(
-                    self._auth.domain_matches_scope(name, scope)
-                    for name in self._certs.names_covered(domain)):
+            if scope is not None and not self._certs.every_name_matches(
+                    domain, lambda name: self._auth.domain_matches_scope(name, scope)):
                 continue
             if CertificateManager._lineage_lost_its_key(domain_dir, domain):
                 found.append(domain)
