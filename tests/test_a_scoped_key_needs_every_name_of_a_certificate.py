@@ -101,6 +101,7 @@ def instance(tmp_path_factory):
         # that lifted, the scope check those two routes have is what answers.
         legacy = stored_as_admin_with_domains(container, 'tenant-admin', SCOPE)
         _LIMITER.append(container.managers.get('rate_limiter'))
+        _CACHE.append(container.managers['cache'])
         # Sealed from the network: after an issuance the application asks the CA
         # for its renewal window, and a test about scope should not wait on, or
         # depend on, a CA answering.
@@ -112,6 +113,7 @@ def instance(tmp_path_factory):
 
 
 _LIMITER = []
+_CACHE = []
 
 
 @pytest.fixture(autouse=True)
@@ -173,6 +175,17 @@ def test_it_is_not_listed(instance):
     assert not listed & set(REFUSED)
     everything = {c['domain'] for c in client.get('/api/certificates', headers=admin).get_json()}
     assert set(REFUSED) <= everything
+
+
+@pytest.mark.parametrize('path', ['/api/cache/stats', '/api/web/cache/stats'])
+def test_its_deployment_check_is_not_in_the_cache_statistics(instance, path):
+    client, tenant, admin, _certbot, _certs, _legacy = instance
+    for domain in (CLEAN, MIXED):
+        _CACHE[0].deployment_cache.set(domain, {'deployed': True})
+    everything = {entry['domain'] for entry in client.get(path, headers=admin).get_json()['entries']}
+    assert {CLEAN, MIXED} <= everything
+    seen = {entry['domain'] for entry in client.get(path, headers=tenant).get_json()['entries']}
+    assert seen == {CLEAN}
 
 
 def test_it_is_left_out_of_a_batch_download(instance):

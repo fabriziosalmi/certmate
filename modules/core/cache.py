@@ -28,10 +28,19 @@ class CacheManager:
         except Exception as e:
             logger.error(f"Error updating cache settings: {e}")
 
-    def get_cache_stats(self):
-        """Get cache statistics"""
+    def get_cache_stats(self, visible=None):
+        """Get cache statistics.
+
+        The cache is keyed by domain, so its statistics are a list of domains.
+        *visible* is ``callable(domain) -> bool`` for a caller who may see only
+        some of them; the count is then of the entries that caller is given.
+        """
         try:
-            return self.deployment_cache.get_stats()
+            stats = self.deployment_cache.get_stats()
+            if visible is not None:
+                entries = [entry for entry in stats.get('entries', []) if visible(entry.get('domain'))]
+                stats = {**stats, 'entries': entries, 'total_entries': len(entries)}
+            return stats
         except Exception as e:
             logger.error(f"Error getting cache stats: {e}")
             return {
