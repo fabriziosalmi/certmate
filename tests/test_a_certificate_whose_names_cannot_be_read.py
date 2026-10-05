@@ -119,3 +119,71 @@ def test_the_names_come_from_where_they_survive(instance):
     assert certificates.names_covered('absent.team.example') == ['absent.team.example']
     with pytest.raises(CertificateNamesUnknown):
         certificates.names_covered(BLANK)
+
+
+def test_an_empty_directory_is_not_a_certificate(instance):
+    """What a first issuance has before certbot answers, and what a failed
+    create can leave: nothing to protect, so just the name."""
+    container = instance[3]
+    certificates = container.managers['certificates']
+    (certificates.cert_dir / 'empty.team.example').mkdir()
+    assert certificates.names_covered('empty.team.example') == ['empty.team.example']
+    assert _status(instance, 'empty.team.example') != 403
+
+
+def test_the_key_that_is_creating_a_certificate_can_follow_it(tmp_path):
+    """While certbot runs, the directory exists and holds no certificate yet.
+    The scoped key that asked for it reads its progress; it is not refused as
+    a certificate whose names cannot be read."""
+    import threading
+    import time
+
+    from tests.contract_world import Certbot, certbot_standing_in
+
+    token = secrets.token_urlsafe(32)
+    with pytest.MonkeyPatch.context() as patch:
+        for var, sub in (('CERTMATE_CERT_DIR', 'certs'), ('CERTMATE_DATA_DIR', 'data'),
+                         ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
+            (tmp_path / sub).mkdir()
+            patch.setenv(var, str(tmp_path / sub))
+        patch.setenv('FLASK_ENV', 'testing')
+        patch.setenv('TESTING', 'true')
+        patch.setenv('API_BEARER_TOKEN', token)
+        os.environ['API_BEARER_TOKEN'] = token
+        from modules.factory import create_app
+        app, container = create_app()
+        settings = container.managers['settings']
+        current = settings.load_settings()
+        current['email'] = 'ops@team.example'
+        settings.save_settings(current)
+        assert container.managers['dns'].add_account('default', 'cloudflare', {'api_token': 'w' * 24})
+        ok, key = container.managers['auth'].create_api_key(
+            'tenant', role='operator', allowed_domains=SCOPE)
+        assert ok, key
+        headers = {'Authorization': f"Bearer {key['token']}"}
+        name = 'new.team.example'
+        certbot = Certbot()
+        with certbot_standing_in(certbot):
+            gate = certbot.hold_next()
+            created = {}
+            issuing = threading.Thread(target=lambda: created.update(response=app.test_client().post(
+                '/api/certificates/create', headers=headers,
+                json={'domain': name, 'dns_provider': 'cloudflare'})))
+            issuing.start()
+            try:
+                deadline = time.monotonic() + 20
+                while not certbot.commands:
+                    assert time.monotonic() < deadline, 'the issuance never reached certbot'
+                    time.sleep(0.02)
+                client = app.test_client()
+                assert (tmp_path / 'certs' / name).is_dir(), 'the premise: the directory is there'
+                detail = client.get(f'/api/certificates/{name}', headers=headers)
+                listed = client.get('/api/certificates', headers=headers).get_json()
+                status = client.get(f'/api/certificates/{name}/deployment-status', headers=headers)
+            finally:
+                gate.set()
+                issuing.join(30)
+        assert detail.status_code == 200, detail.get_json()
+        assert status.status_code != 403
+        assert name in {c['domain'] for c in listed}
+        assert created['response'].status_code == 201, created['response'].get_json()

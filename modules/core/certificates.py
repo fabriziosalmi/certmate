@@ -1957,11 +1957,12 @@ class CertificateManager:
         when there is no certificate on disk at all, which is the one case
         the backend can be the only record.
 
-        Raises `CertificateNamesUnknown` when a certificate is there but
-        neither a certificate nor a record names what it covers: refusing is
-        the only answer that does not guess. No certificate at all is just
-        *domain*: there is nothing to act on, and the operation itself
-        answers that. A domain that cannot name a directory is just *domain*
+        Raises `CertificateNamesUnknown` when certificate material is there
+        (a served PEM, or a lineage) but neither a certificate nor a record
+        names what it covers: refusing is the only answer that does not
+        guess. No material at all is just *domain*, which includes the empty
+        directory of an issuance in flight: there is nothing to act on, and
+        the operation itself answers that. A domain that cannot name a directory is just *domain*
         too, and the operation refuses that input as it always has.
         """
         names = [domain]
@@ -1977,7 +1978,7 @@ class CertificateManager:
             metadata = {}  # the certificate may still say; if not, unknown
         directory = certificate_dir(self.cert_dir, domain)
         certificate = self._first_readable_certificate(domain, directory)
-        exists = directory.exists()
+        exists = self._holds_certificate_material(domain, directory)
         if certificate is None and self.storage_manager:
             # Not caught: a backend that cannot answer leaves the names
             # unknown, and the caller's request fails rather than being
@@ -2018,6 +2019,21 @@ class CertificateManager:
                            "a scoped request for it is refused", scrub_log_value(domain))
             return False
         return all(matches(name) for name in names)
+
+    @staticmethod
+    def _holds_certificate_material(domain, directory):
+        """Is there anything of a certificate here: a served PEM, or a lineage?
+
+        The directory alone is not that. It exists from the first moment of a
+        first issuance, empty, and the caller creating that certificate reads
+        its progress; and a directory left behind by a failed create holds
+        nothing to protect.
+        """
+        if any((directory / name).exists() for name in CERTIFICATE_FILES):
+            return True
+        live = lineage_live_dir(directory, domain)
+        archive = lineage_archive_dir(directory, domain)
+        return any(d.is_dir() and any(d.iterdir()) for d in (live, archive))
 
     @staticmethod
     def _first_readable_certificate(domain, directory):
