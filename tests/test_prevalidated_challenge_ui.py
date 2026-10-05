@@ -1,4 +1,4 @@
-"""The prevalidated challenge appears only with an explicit Sectigo CA choice."""
+"""The prevalidated challenge is available when the effective CA is Sectigo."""
 
 import subprocess
 from pathlib import Path
