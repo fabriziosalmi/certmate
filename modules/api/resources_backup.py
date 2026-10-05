@@ -20,7 +20,7 @@ import logging
 from ..core.request_fields import json_booleans
 from ..core.domain_paths import is_path_safe_segment
 from ..core.file_operations import RestoreIncompleteError
-from .resource_context import ApiContext
+from .resource_context import ApiContext, instance_wide
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +69,15 @@ def _keyless_restore_fields(file_ops):
 def create_backup_resources(api, models, ctx: ApiContext) -> dict:
     """Build the backup resources against *ctx*."""
 
+    # A backup is the whole instance. A key restricted to domains has no claim
+    # on any part of one: not the list, which names every domain, and not the
+    # archive (see `instance_wide`).
+    not_for_restricted_keys = instance_wide(ctx, 'backup', 'backups')
+
     class BackupList(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('viewer')
+        @not_for_restricted_keys
         @api.marshal_with(models['backup_list_model'])
         def get(self):
             """List all available backups"""
@@ -101,6 +107,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
             ),
         }))
         @ctx.auth.require_role('admin')
+        @not_for_restricted_keys
         @json_booleans(include_secrets=False)
         def post(self):
             """Create a new backup (unified format recommended)"""
@@ -171,6 +178,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
     class BackupDownload(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
+        @not_for_restricted_keys
         def get(self, backup_type, filename):
             """Download a backup file"""
             try:
@@ -240,6 +248,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
             'create_backup_before_restore': fields.Boolean(description='Create backup before restore', default=True)
         }))
         @ctx.auth.require_role('admin')
+        @not_for_restricted_keys
         def post(self, backup_type):
             """Restore from a unified backup file (only unified backups supported)"""
             try:
@@ -363,6 +372,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
     class BackupDelete(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
+        @not_for_restricted_keys
         def delete(self, backup_type, filename):
             """Delete a unified backup file"""
             try:
@@ -415,6 +425,7 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
     class BackupUpload(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
+        @not_for_restricted_keys
         def post(self):
             """Upload a backup archive taken off this node.
 

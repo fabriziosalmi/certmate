@@ -16,11 +16,12 @@ and fallbacks the closure performed, including the `CertificateService`
 fallback that lets tests pass a minimal manager dict.
 """
 from dataclasses import dataclass
+from functools import wraps
 from typing import Any, Optional
 
 from flask import request
 
-from modules.core.auth import ROLE_HIERARCHY
+from modules.core.auth import ROLE_HIERARCHY, domain_restricted_refusal
 from modules.core.cert_service import CertificateService
 from modules.core.inventory_view import record_in_scope
 from modules.core.structured_logging import scrub_log_value
@@ -170,6 +171,25 @@ def certificate_in_scope(ctx: ApiContext, domain, scope) -> bool:
         return True
     return ctx.certificates.every_name_matches(
         domain, lambda name: ctx.auth.domain_matches_scope(name, scope))
+
+
+def instance_wide(ctx: ApiContext, resource_type, what):
+    """A decorator for a route about something the instance owns, not a domain.
+
+    Refuses a key restricted with `allowed_domains` (`domain_restricted_refusal`
+    is the rule). Placed under `require_role`, which sets the caller, and above
+    `marshal_with`, which would otherwise reshape the refusal into the route's
+    success model.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            refusal = domain_restricted_refusal(ctx.audit, resource_type, what)
+            if refusal:
+                return {'error': refusal, 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+            return fn(*args, **kwargs)
+        return wrapped
+    return decorator
 
 
 def _scope_denied(ctx: ApiContext, user, domain, operation,

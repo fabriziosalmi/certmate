@@ -744,6 +744,11 @@ class CertificateService:
             raise ValueError(f'Invalid domain: {normalized}')
         domain = normalized
 
+        # Before looking for the certificate: a caller whose scope does not
+        # cover the name is told that, whether or not a certificate exists
+        # for it.
+        self._enforce_scope(domain, 'reissue', user, ip_address)
+
         cert_file = certificate_dir(self._certs.cert_dir, domain) / 'cert.pem'
         if not cert_file.exists():
             raise FileNotFoundError(
