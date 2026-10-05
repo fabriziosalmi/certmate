@@ -143,6 +143,68 @@ def _caa_never_asks_real_dns():
         yield
 
 
+# certbot invocations that only read the local installation.
+_CERTBOT_LOCAL_ONLY = {'--version', '--help', '-h', 'plugins'}
+_REAL_CERTBOT = {'allowed': False, 'refused': []}
+
+
+class _NoRealCertbot:
+    """`subprocess` as `modules/core/shell.py` sees it, minus the real certbot.
+
+    Every test that issues or renews replaces `ShellExecutor.run` with a
+    stand-in, so a certbot that reaches this point is one that escaped its
+    stand-in. That happened: a reissue queued by a test ran on a worker thread
+    after the test's fixture had closed the stand-in, and the real certbot
+    registered an account with Let's Encrypt staging. Nothing failed, and the
+    log line was the only trace. Here it is refused, and recorded so the run
+    fails even when the call happened on a thread no test was waiting for.
+
+    It sits below the stand-ins (which replace `ShellExecutor.run` whole and
+    never reach `subprocess`), so it cannot get in their way, and for the whole
+    session, because a thread can outlive the test that started it. Tests
+    marked `e2e` are the ones meant to reach a CA, and the guard stands aside
+    for them.
+    """
+
+    def __init__(self, real):
+        self._real = real
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def run(self, cmd, *args, **kwargs):
+        program = os.path.basename(str(cmd[0])) if cmd else ''
+        if (program == 'certbot' and not _REAL_CERTBOT['allowed']
+                and not set(map(str, cmd[1:])) <= _CERTBOT_LOCAL_ONLY):
+            _REAL_CERTBOT['refused'].append(' '.join(map(str, cmd[:2])))
+            raise RuntimeError(
+                'the test suite refused to run the real certbot '
+                f'({" ".join(map(str, cmd[:2]))}): use a stand-in, or mark the test e2e')
+        return self._real.run(cmd, *args, **kwargs)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _no_real_certbot():
+    import modules.core.shell as shell
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(shell, 'subprocess', _NoRealCertbot(shell.subprocess))
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _real_certbot_for_e2e(request):
+    _REAL_CERTBOT['allowed'] = request.node.get_closest_marker('e2e') is not None
+    yield
+    _REAL_CERTBOT['allowed'] = False
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if _REAL_CERTBOT['refused']:
+        print('\nThe real certbot was refused outside an e2e test '
+              f'{len(_REAL_CERTBOT["refused"])} time(s): {_REAL_CERTBOT["refused"][:5]}')
+        session.exitstatus = 1
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
