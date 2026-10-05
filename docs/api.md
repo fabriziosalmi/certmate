@@ -67,6 +67,34 @@ curl -X GET http://localhost:8000/api/client-certs \
  -H "Content-Type: application/json"
 ```
 
+### The role is checked before the body
+
+A request with no credentials is answered `401`, and one below the route's role
+`403 INSUFFICIENT_ROLE`, before its body is validated. Since API contract
+**2.43**; before it, seven routes that validate their body answered such a
+request `400` about the body.
+
+### Keys restricted to domains
+
+An API key can carry `allowed_domains`, a list of exact names and
+`*.example.com` patterns. What such a key is answered, since API contract
+**2.43**:
+
+- **A certificate** is the key's when its scope covers every name the
+  certificate covers: its own, the `san_domains` recorded with it, and the DNS
+  names in the certificate. Otherwise every certificate route answers
+  `403 DOMAIN_OUT_OF_SCOPE` and the list leaves it out. The same when the names
+  cannot be read. Reissue answers `403` for a name outside the scope whether or
+  not a certificate exists for it.
+- **What belongs to the instance** is refused with the same `403`: the
+  client-certificate routes (the CA certificate, the CRL and OCSP stay public),
+  the backup routes, the inventory configuration.
+- **`/metrics`** answers with the series about the key's own domains and none of
+  the instance's totals.
+- **An admin key cannot be restricted.** Creating one is refused. One stored by
+  an earlier release acts as an operator within its domains, and
+  `GET /api/keys` reports that role.
+
 ---
 
 ## Rate Limiting
@@ -1864,6 +1892,13 @@ it here. This exists because the server and the browser can see different
 things: a certificate that is fine from inside the network and unreachable
 from outside it is a deployment problem the server alone cannot detect.
 
+A report is kept with the certificate and shown to every user, and the
+read-only role can send one, so its fields are kept only in the form the
+dashboard sends them: `method` and `source` a lower-case label of at most 32
+characters (letters, digits, hyphens), `checked_at` an ISO 8601 date-time.
+A value in another form is replaced by the default (`browser-fallback`,
+`browser`, the server's own time); one that is not text is a `400`.
+
 ### DNS provider accounts
 
 #### List and add accounts
@@ -2181,7 +2216,10 @@ the Prometheus client library is not installed.
 
 The scrape target itself is the separate `/metrics` route, and it is **not**
 public: it carries the same viewer requirement, because its series enumerate
-every managed domain.
+every managed domain. A key restricted with `allowed_domains` gets the series
+about its own domains only: those with a `domain` label its scope covers
+(every name of the certificate, as on the certificate routes), and none of the
+instance's totals.
 
 #### Scan for zombie domains
 
@@ -2268,7 +2306,7 @@ and may be reworded.
 | `AUTH_HEADER_MISSING` / `INVALID_AUTH_FORMAT` / `INVALID_AUTH_SCHEME` / `INVALID_TOKEN` / `AUTH_ERROR` | 401 | Authentication failed, and which part |
 | `SESSION_REQUIRED` | 401 | The endpoint needs a browser session, not a bearer token |
 | `INSUFFICIENT_ROLE` | 403 | Authenticated, but the role is too low |
-| `DOMAIN_OUT_OF_SCOPE` | 403 | The API key is scoped to other domains, or the certificate also covers a name outside the key's scope, or the route is for client certificates, backups, the inventory configuration or `/metrics`, which a key restricted to domains cannot use |
+| `DOMAIN_OUT_OF_SCOPE` | 403 | The API key is scoped to other domains, or the certificate also covers a name outside the key's scope, or the route is for client certificates, backups or the inventory configuration, which a key restricted to domains cannot use |
 | `PRIVKEY_REQUIRES_OPERATOR` | 403 | Private-key download needs operator or above |
 | `CERTIFICATE_ALREADY_EXISTS` | 409 | A certificate for that domain is already managed |
 | `DOMAIN_OPERATION_IN_PROGRESS` | 409 | Another create/renew holds this domain's lock |

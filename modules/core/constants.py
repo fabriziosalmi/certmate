@@ -616,6 +616,35 @@ METADATA_SCHEMA_VERSION = 1
 #                                   release notes say so for a client that
 #                                   compares the strings.
 #
+#   A key restricted with `allowed_domains`, and a request without the role
+#                                   A key that carries `allowed_domains` is
+#                                   answered 403 DOMAIN_OUT_OF_SCOPE on a
+#                                   certificate that covers a name outside its
+#                                   scope, or whose names cannot be read, and
+#                                   the list leaves that certificate out
+#                                   (#1158, shipped in v2.48.2 with this number
+#                                   unmoved; #1163). The client-certificate
+#                                   routes, the backup routes and the inventory
+#                                   configuration answer it 403 (#1166, #1167).
+#                                   POST /api/certificates/<domain>/reissue
+#                                   answers it 403, not 404, for a name outside
+#                                   its scope that has no certificate (#1167).
+#                                   /metrics answers it with the series about
+#                                   its own domains (#1171). A key stored with
+#                                   the admin role and `allowed_domains` acts
+#                                   as operator, and GET /api/keys reports that
+#                                   role (#1168). A request with no credentials
+#                                   or below the role is answered 401 or 403
+#                                   before its body is validated, where seven
+#                                   routes answered 400 about the body (#1172).
+#                                   POST /api/certificates/deployment-status/
+#                                   browser keeps `method`, `source` and
+#                                   `checked_at` only in the form the dashboard
+#                                   sends them (#1173). 2.43. New answers to
+#                                   existing requests, which the rule below
+#                                   calls MAJOR; counted as the security fixes
+#                                   they are (2.7, 2.31, 2.32).
+#
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
 # MAJOR when something a caller may depend on goes away or changes meaning: an
@@ -640,7 +669,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.42'
+API_CONTRACT_VERSION = '2.43'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
