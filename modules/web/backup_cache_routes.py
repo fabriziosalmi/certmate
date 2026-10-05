@@ -92,10 +92,14 @@ def register_backup_cache_routes(app, managers, require_web_auth,
     @app.route('/api/web/cache/stats', methods=['GET'])
     @auth_manager.require_role('viewer')
     def cache_stats_web():
-        """Get cache statistics"""
+        """Get cache statistics, held to the rule of the API's twin: a key
+        restricted to domains gets the entries for certificates its scope covers."""
         try:
-            stats = cache_manager.get_cache_stats()
-            return jsonify(stats)
+            scope = (getattr(request, 'current_user', None) or {}).get('allowed_domains')
+            visible = None if scope is None else (
+                lambda domain: managers['certificates'].every_name_matches(
+                    domain, lambda name: auth_manager.domain_matches_scope(name, scope)))
+            return jsonify(cache_manager.get_cache_stats(visible))
         except Exception as e:
             logger.error("Failed to get cache stats: %s", e)
             return jsonify({'error': 'Failed to get cache stats'}), 500

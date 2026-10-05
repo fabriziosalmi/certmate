@@ -10,7 +10,7 @@ from flask_restx import Resource
 
 import logging
 
-from .resource_context import ApiContext
+from .resource_context import ApiContext, certificate_in_scope
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +23,12 @@ def create_cache_resources(api, models, ctx: ApiContext) -> dict:
         @ctx.auth.require_role('viewer')
         @api.marshal_with(models['cache_stats_model'])
         def get(self):
-            """Get cache statistics"""
+            """Get cache statistics. A key restricted to domains gets the entries
+            for certificates its scope covers, under the rule of the certificate list."""
             try:
-                stats = ctx.cache.get_cache_stats()
-                return stats
+                scope = (getattr(request, 'current_user', None) or {}).get('allowed_domains')
+                visible = None if scope is None else (lambda domain: certificate_in_scope(ctx, domain, scope))
+                return ctx.cache.get_cache_stats(visible)
             except Exception as e:
                 logger.error(f"Error getting cache stats: {e}")
                 return {'error': 'Failed to get cache statistics'}, 500
