@@ -24,12 +24,16 @@ What this does not try, and what does:
 * a key whose scope covers some of a certificate's names and not others. These
   keys own nothing here, so the first name already refuses them.
   tests/test_a_scoped_key_needs_every_name_of_a_certificate.py tries that.
-* a valid request on the routes the walk does not have (the pages and the
-  dashboard's /api/web/ routes): `_sweep` sends them an empty one.
+* a valid request on the pages: `_sweep` sends every route the walk does not
+  have an empty one. The dashboard's /api/web/ routes that take a body and are
+  open to these roles get a valid one from `dashboard`, at the end.
 """
+import contextlib
+import io
 import json
 import re
 import secrets
+import zipfile
 
 import pytest
 
@@ -192,17 +196,10 @@ def shadow(tmp_path_factory):
     return plan
 
 
-def _sweep(plan, tmp):
-    """The routes the walk does not call: everything outside /api/ (the pages,
-    /metrics, /health) and the dashboard's own /api/web/ routes.
-
-    On an application built the ordinary way, because the walk's is built
-    without its templates and answers every page with a 500, and seeded the
-    same way. GET with nothing, and every other verb with an empty body: enough
-    to see a route that answers a restricted key, and not enough to prove one
-    refuses a valid request. The walk is what proves that, for the routes it
-    has.
-    """
+@contextlib.contextmanager
+def _ordinary_application(tmp):
+    """The application built the ordinary way (the walk's is built without its
+    templates and answers every page with a 500), seeded the way the walk's is."""
     token = secrets.token_urlsafe(32)
     with pytest.MonkeyPatch.context() as patch:
         for var, sub in (('CERTMATE_CERT_DIR', 'certs'), ('CERTMATE_DATA_DIR', 'data'),
@@ -214,34 +211,49 @@ def _sweep(plan, tmp):
         patch.setenv('API_BEARER_TOKEN', token)
         from modules.factory import create_app
         app, container = create_app()
-        with world.certbot_standing_in(world.Certbot()):
+        certbot = world.Certbot()
+        with world.certbot_standing_in(certbot):
             seeded = world.seed(container, 0)
             sweep = Shadow(app, token, container=container)
             sweep.world = seeded
-            walked = set(plan.seen)
-            for rule in app.url_map.iter_rules():
-                template = str(rule)
-                if template.startswith('/static'):
+            yield sweep, app, certbot
+
+
+def _sweep(plan, tmp):
+    """The routes the walk does not call: everything outside /api/ (the pages,
+    /metrics, /health) and the dashboard's own /api/web/ routes.
+
+    GET with nothing, and every other verb with an empty body: enough to see a
+    route that answers a restricted key, and not enough to prove one refuses a
+    valid request. The walk proves that for the routes it has, and
+    `dashboard` below for the dashboard's routes that take a body.
+    """
+    with _ordinary_application(tmp) as (sweep, app, _certbot):
+        seeded = sweep.world
+        walked = set(plan.seen)
+        for rule in app.url_map.iter_rules():
+            template = str(rule)
+            if template.startswith('/static'):
+                continue
+            for verb in sorted(rule.methods - {'HEAD', 'OPTIONS'}):
+                key = f'{verb} {re.sub(r"<[^>]+>", "<X>", template)}'
+                if key in walked:
                     continue
-                for verb in sorted(rule.methods - {'HEAD', 'OPTIONS'}):
-                    key = f'{verb} {re.sub(r"<[^>]+>", "<X>", template)}'
-                    if key in walked:
-                        continue
-                    path = re.sub(r'<[^>]+>', seeded.domain, template)
-                    for who, credentials in sweep._keys().items():
-                        sweep.forget_the_rate()
-                        kwargs = {'headers': credentials}
-                        if verb != 'GET':
-                            kwargs['json'] = {}
-                        response = sweep.admin.open(path, method=verb, **kwargs)
-                        # Everything is read but an event stream, which has no end.
-                        endless = response.mimetype == 'text/event-stream'
-                        text = '' if endless else response.get_data().decode('utf-8', 'replace')
-                        status = response.status_code
-                        response.close()
-                        plan.swept += 1
-                        plan._judge(key, path, verb, False, who, status, text, owner_status=599,
-                                    sent=path, about_a_domain='domain>' in template)
+                path = re.sub(r'<[^>]+>', seeded.domain, template)
+                for who, credentials in sweep._keys().items():
+                    sweep.forget_the_rate()
+                    kwargs = {'headers': credentials}
+                    if verb != 'GET':
+                        kwargs['json'] = {}
+                    response = sweep.admin.open(path, method=verb, **kwargs)
+                    # Everything is read but an event stream, which has no end.
+                    endless = response.mimetype == 'text/event-stream'
+                    text = '' if endless else response.get_data().decode('utf-8', 'replace')
+                    status = response.status_code
+                    response.close()
+                    plan.swept += 1
+                    plan._judge(key, path, verb, False, who, status, text, owner_status=599,
+                                sent=path, about_a_domain='domain>' in template)
 
 
 def test_no_call_of_the_walk_gives_a_restricted_key_what_is_not_its_own(shadow):
@@ -266,3 +278,81 @@ def test_every_exception_is_still_one(shadow):
     assert shadow.answered == set(MAY_ANSWER), (
         'no longer answered, remove from MAY_ANSWER: '
         f'{sorted(set(MAY_ANSWER) - shadow.answered)}')
+
+
+# The dashboard's own routes are outside the walk, and an empty body is answered
+# about the body before anything is said about the caller's domains. These are
+# the ones that take a body and are open to a viewer or an operator.
+@pytest.fixture(scope='module')
+def dashboard(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp('restricted-dashboard')
+    try:
+        with _ordinary_application(tmp) as (sweep, _app, certbot):
+            held = sorted(path.name for path in (tmp / 'certs').iterdir())
+            owner = {'Authorization': f'Bearer {sweep.token}'}
+
+            def post(path, body, credentials):
+                sweep.forget_the_rate()
+                response = sweep.admin.post(path, json=body, headers=credentials)
+                payload = response.get_data()
+                response.close()
+                return response.status_code, payload
+
+            yield {'post': post, 'keys': sweep._keys(), 'owner': owner, 'held': held,
+                   'certbot': certbot, 'certs': tmp / 'certs', 'theirs': sweep.world.domain}
+    finally:
+        metrics.metrics_collector.last_collection = 0
+
+
+def _bundled(payload):
+    return zipfile.ZipFile(io.BytesIO(payload)).namelist()
+
+
+def test_the_dashboard_bundle_holds_nothing_for_a_restricted_key(dashboard):
+    post, held = dashboard['post'], dashboard['held']
+
+    # CONTROL: the owner gets every certificate it asks for.
+    status, payload = post('/api/web/certificates/download/batch', {'domains': held}, dashboard['owner'])
+    assert status == 200 and len(_bundled(payload)) == len(held) > 0, (status, held)
+
+    for who, credentials in dashboard['keys'].items():
+        status, payload = post('/api/web/certificates/download/batch', {'domains': held}, credentials)
+        assert status == 200 and _bundled(payload) == [], (who, status, _bundled(payload))
+
+
+@pytest.mark.parametrize('body', [
+    {'domain': 'outside-a.example.test'},
+    {'domain': 'in.nothing.example', 'san_domains': ['outside-b.example.test']},
+], ids=['a name outside the scope', 'a name inside it with one outside'])
+def test_the_dashboard_creates_nothing_for_a_restricted_key(dashboard, body):
+    post, certbot = dashboard['post'], dashboard['certbot']
+    for who, credentials in dashboard['keys'].items():
+        before = len(certbot.commands)
+        status, _payload = post('/api/web/certificates/create', body, credentials)
+        assert status == 403, (who, status)
+        assert len(certbot.commands) == before, f'{who}: certbot was run'
+    assert not (dashboard['certs'] / body['domain']).exists()
+
+
+def test_the_dashboard_batch_creates_nothing_for_a_restricted_key(dashboard):
+    post, certbot = dashboard['post'], dashboard['certbot']
+    wanted = ['outside-c.example.test', dashboard['theirs']]
+    for who, credentials in dashboard['keys'].items():
+        before = len(certbot.commands)
+        status, payload = post('/api/web/certificates/batch', {'domains': wanted}, credentials)
+        if status == 403:
+            continue  # the viewer: below the route's role
+        results = json.loads(payload)
+        assert status == 200 and [entry['success'] for entry in results] == [False, False], (who, results)
+        assert len(certbot.commands) == before, f'{who}: certbot was run'
+    assert not (dashboard['certs'] / 'outside-c.example.test').exists()
+
+
+def test_the_dashboard_does_create_for_the_owner(dashboard):
+    """CONTROL: the same request the restricted keys were refused."""
+    post, certbot = dashboard['post'], dashboard['certbot']
+    before = len(certbot.commands)
+    status, payload = post('/api/web/certificates/create', {'domain': 'outside-a.example.test'},
+                           dashboard['owner'])
+    assert status == 200, (status, payload[:200])
+    assert len(certbot.commands) > before
