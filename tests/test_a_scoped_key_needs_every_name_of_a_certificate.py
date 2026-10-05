@@ -30,7 +30,7 @@ import time
 
 import pytest
 
-from tests.contract_world import Certbot, certbot_standing_in, write_certificate
+from tests.contract_world import Certbot, certbot_standing_in, sealed, warm_up, write_certificate
 from tests.restricted_keys import stored_as_admin_with_domains, the_downgrade_lifted
 
 pytestmark = [pytest.mark.unit]
@@ -100,10 +100,29 @@ def instance(tmp_path_factory):
         # `allowed_domains` acts as an operator and never reaches them; with
         # that lifted, the scope check those two routes have is what answers.
         legacy = stored_as_admin_with_domains(container, 'tenant-admin', SCOPE)
-        with certbot_standing_in(Certbot()) as certbot, the_downgrade_lifted():
+        _LIMITER.append(container.managers.get('rate_limiter'))
+        # Sealed from the network: after an issuance the application asks the CA
+        # for its renewal window, and a test about scope should not wait on, or
+        # depend on, a CA answering.
+        warm_up()
+        with certbot_standing_in(Certbot()) as certbot, the_downgrade_lifted(), sealed():
             yield app.test_client(), {'Authorization': f"Bearer {key['token']}"}, \
                 {'Authorization': f'Bearer {token}'}, certbot, certs, \
                 {'Authorization': f"Bearer {legacy['token']}"}
+
+
+_LIMITER = []
+
+
+@pytest.fixture(autouse=True)
+def _a_minute_of_its_own(instance):
+    """The API answers 429 after 100 requests a minute from one address, and this
+    module makes more than that. A test that met the limit would report a 429
+    where it expects a 403, which says nothing about scope. Each test starts
+    with the count at zero; the limit itself has tests of its own."""
+    for limiter in _LIMITER:
+        if limiter is not None:
+            limiter.requests.clear()
 
 
 def _refused(response, domain):
@@ -193,7 +212,8 @@ def test_the_keyless_sweep_does_not_see_it(instance):
         while client.get(job['status_url'], headers=tenant).get_json()['status'] not in (
                 'succeeded', 'failed'):
             assert time.monotonic() < deadline, f"job {job['job_id']} never finished"
-            time.sleep(0.05)
+            # Not faster: each poll is a request, and they count (see above).
+            time.sleep(0.25)
     assert len(certbot.commands) > before, 'the queued reissue never reached the stand-in'
 
 
