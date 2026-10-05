@@ -1864,6 +1864,13 @@ it here. This exists because the server and the browser can see different
 things: a certificate that is fine from inside the network and unreachable
 from outside it is a deployment problem the server alone cannot detect.
 
+A report is kept with the certificate and shown to every user, and the
+read-only role can send one, so its fields are kept only in the form the
+dashboard sends them: `method` and `source` a lower-case label of at most 32
+characters (letters, digits, hyphens), `checked_at` an ISO 8601 date-time.
+A value in another form is replaced by the default (`browser-fallback`,
+`browser`, the server's own time); one that is not text is a `400`.
+
 ### DNS provider accounts
 
 #### List and add accounts

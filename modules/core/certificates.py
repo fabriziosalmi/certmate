@@ -15,6 +15,7 @@ import logging
 import signal
 import shutil
 from contextlib import contextmanager
+from datetime import datetime
 from dataclasses import dataclass, field
 
 try:  # POSIX only; the lock degrades to a no-op without it
@@ -340,6 +341,29 @@ def _resolve_all_domains(domain, san_domains, challenge_type):
             if d.startswith('*.'):
                 raise ValueError("HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.")
     return all_domains
+
+
+# What the dashboard sends for a browser report's `method` and `source`:
+# `browser-fallback`, `unavailable`, `browser`.
+_REPORT_LABEL = re.compile(r'[a-z0-9][a-z0-9-]{0,31}\Z')
+
+
+def _recognised_label(value, default):
+    """*value* when it is a short lower-case label, *default* otherwise."""
+    if isinstance(value, str) and _REPORT_LABEL.match(value):
+        return value
+    return default
+
+
+def _recognised_instant(value):
+    """*value* when it is an ISO 8601 date-time, None otherwise."""
+    if not isinstance(value, str):
+        return None
+    try:
+        datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    return value
 
 
 def _parse_certificate(content):
@@ -1561,11 +1585,16 @@ class CertificateManager:
             if not isinstance(deployment_status, dict):
                 deployment_status = {}
 
+            # A report comes from the dashboard of whoever is signed in, the
+            # read-only role included, and is kept in the certificate's
+            # metadata and shown to everyone else. So what is kept is what is
+            # recognised: a short label, an instant. Anything else is replaced
+            # by the value the dashboard itself would have sent.
             deployment_status['browser'] = {
                 'reachable': bool(browser_status.get('reachable', False)),
-                'checked_at': browser_status.get('checked_at') or utc_now_iso(),
-                'method': browser_status.get('method') or 'browser-fallback',
-                'source': browser_status.get('source') or 'browser',
+                'checked_at': _recognised_instant(browser_status.get('checked_at')) or utc_now_iso(),
+                'method': _recognised_label(browser_status.get('method'), 'browser-fallback'),
+                'source': _recognised_label(browser_status.get('source'), 'browser'),
             }
 
             metadata['deployment_status'] = deployment_status
