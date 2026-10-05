@@ -13,6 +13,8 @@ import secrets
 
 import pytest
 
+from tests.restricted_keys import stored_as_admin_with_domains, the_downgrade_lifted
+
 pytestmark = [pytest.mark.unit]
 
 SCOPE = ['*.team.example']
@@ -37,18 +39,21 @@ def instance(tmp_path_factory):
         headers = {'instance': {'Authorization': f'Bearer {token}'}}
         for name, role, scope in (('restricted-viewer', 'viewer', SCOPE),
                                   ('restricted-operator', 'operator', SCOPE),
-                                  # `POST /api/keys` no longer mints one; a key from
-                                  # before that rule is still honoured with its scope.
-                                  ('restricted-admin', 'admin', SCOPE),
                                   ('operator', 'operator', None)):
             ok, key = auth.create_api_key(name, role=role, allowed_domains=scope)
             assert ok, key
             headers[name] = {'Authorization': f"Bearer {key['token']}"}
+        # Stored as admin with `allowed_domains`, and honoured as admin for this
+        # module, so it passes every role check and what refuses it is the rule
+        # under test (see `the_downgrade_lifted`).
+        stored = stored_as_admin_with_domains(container, 'restricted-admin', SCOPE)
+        headers['restricted-admin'] = {'Authorization': f"Bearer {stored['token']}"}
         client = app.test_client()
         made = client.post('/api/client-certs/create', headers=headers['instance'],
                            json={'common_name': 'payments-service', 'cert_usage': 'api-mtls'})
         assert made.status_code == 201, made.get_json()
-        yield client, headers, made.get_json()['identifier'], container
+        with the_downgrade_lifted():
+            yield client, headers, made.get_json()['identifier'], container
 
 
 def _routes(identifier):
@@ -69,7 +74,7 @@ def _routes(identifier):
 def test_every_route_that_takes_credentials_refuses_a_restricted_key(instance):
     client, headers, identifier, _container = instance
     for method, path, body in _routes(identifier):
-        # The admin key reaches every route past its role check, so the refusal
+        # Honoured as admin here, it passes every role check, so the refusal
         # seen is the restriction's and not the role's.
         response = client.open(path, method=method, headers=headers['restricted-admin'], json=body)
         assert response.status_code == 403, (method, path, response.status_code, response.get_json())

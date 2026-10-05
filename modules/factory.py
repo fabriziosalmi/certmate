@@ -1866,6 +1866,17 @@ def create_app(test_config=None):
                     "them, and they are still valid. Review them in Settings -> API "
                     "Keys: confirm the ones you made, revoke the rest.",
                     unreviewed_setup_keys=len(unreviewed))
+            restricted_admins = _auth.restricted_admin_keys()
+            if restricted_admins:
+                # Named by their key name, never by token. Not on /health: this
+                # is for whoever reads the instance's own log.
+                logger.warning(
+                    f"{len(restricted_admins)} API key(s) are stored with the admin "
+                    "role and allowed_domains. An admin key cannot be restricted to "
+                    "domains, so each acts as an operator within its domains. Replace "
+                    "them with an operator key (restricted) or an admin key "
+                    "(unrestricted): " + ", ".join(restricted_admins),
+                    restricted_admin_keys=len(restricted_admins))
     except Exception as e:
         logger.debug(f"Setup-mode startup check failed: {e}")
 

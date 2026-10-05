@@ -31,6 +31,7 @@ import time
 import pytest
 
 from tests.contract_world import Certbot, certbot_standing_in, write_certificate
+from tests.restricted_keys import stored_as_admin_with_domains, the_downgrade_lifted
 
 pytestmark = [pytest.mark.unit]
 
@@ -95,13 +96,11 @@ def instance(tmp_path_factory):
         auth = container.managers['auth']
         ok, key = auth.create_api_key('tenant', role='operator', allowed_domains=SCOPE)
         assert ok, key
-        # Deleting and deploying take the admin role, and `POST /api/keys` no
-        # longer mints a scoped admin key. One minted before that rule is still
-        # honoured with its scope, so it is the only scoped caller those two
-        # routes can meet, and it is made here the way it was made then.
-        ok, legacy = auth.create_api_key('tenant-admin', role='admin', allowed_domains=SCOPE)
-        assert ok, legacy
-        with certbot_standing_in(Certbot()) as certbot:
+        # Deleting and deploying take the admin role. A key stored as admin with
+        # `allowed_domains` acts as an operator and never reaches them; with
+        # that lifted, the scope check those two routes have is what answers.
+        legacy = stored_as_admin_with_domains(container, 'tenant-admin', SCOPE)
+        with certbot_standing_in(Certbot()) as certbot, the_downgrade_lifted():
             yield app.test_client(), {'Authorization': f"Bearer {key['token']}"}, \
                 {'Authorization': f'Bearer {token}'}, certbot, certs, \
                 {'Authorization': f"Bearer {legacy['token']}"}

@@ -449,6 +449,38 @@ class AuthManager:
                     return True
         return False
 
+    @classmethod
+    def effective_key_role(cls, role, allowed_domains):
+        """The role an API key acts with, given what is stored for it.
+
+        An admin key restricted to domains is a contradiction: admin reaches
+        what belongs to the instance (settings, users, keys, storage, backups),
+        and none of that can be matched against a domain. Such a key can no
+        longer be created, but one created before that rule is still on disk.
+        It acts as an operator, with its `allowed_domains`: the restriction its
+        owner asked for is the part that is kept, and it holds everywhere,
+        including on routes written after this.
+
+        Decided here, where the caller's identity is built, so that no route
+        has to remember it.
+        """
+        role = cls._normalize_role(role)
+        if role == 'admin' and allowed_domains is not None:
+            return 'operator'
+        return role
+
+    def restricted_admin_keys(self):
+        """Names of live keys stored as admin with `allowed_domains`, which
+        therefore act as operator (`effective_key_role`). For the startup log."""
+        now = utc_now()
+        return sorted(
+            str(data.get('name') or key_id)
+            for key_id, data in self._get_api_keys().items()
+            if not data.get('revoked')
+            and not self._api_key_expired(data, now, key_id=key_id)
+            and self._normalize_role(data.get('role', 'viewer')) == 'admin'
+            and data.get('allowed_domains') is not None)
+
     def user_can_access_domain(self, user, domain):
         """Return True if the request's current_user is allowed to operate on
         *domain* according to its scoped key's allowed_domains.
@@ -598,6 +630,12 @@ class AuthManager:
             scoped_domains, scope_err = self._normalize_allowed_domains(allowed_domains)
             if scope_err:
                 return False, scope_err
+            if normalized_role == 'admin' and scoped_domains is not None:
+                # Refused where the key is written, not only by the route that
+                # asks for it: see `effective_key_role` for why the two cannot
+                # go together.
+                return False, ('Admin keys cannot be domain-scoped; use the '
+                               'operator role for scoped access')
 
             normalized_expiry, expiry_err = self._normalize_expires_at(expires_at)
             if expiry_err:
@@ -660,7 +698,10 @@ class AuthManager:
             is_expired = self._api_key_expired(data, now, key_id=key_id)
             result[key_id] = {
                 'name': data.get('name'),
-                'role': data.get('role'),
+                # The role it acts with, which is what a reader of this list
+                # needs: an admin key restricted to domains acts as operator.
+                'role': self.effective_key_role(
+                    data.get('role', 'viewer'), data.get('allowed_domains')),
                 'token_prefix': data.get('token_prefix'),
                 'created_at': data.get('created_at'),
                 'created_by': data.get('created_by'),
@@ -842,7 +883,8 @@ class AuthManager:
                             _warn_once_about_last_used(e)
                     return {
                         'username': 'api_key:' + key_data.get('name', key_id),
-                        'role': self._normalize_role(key_data.get('role', 'viewer')),
+                        'role': self.effective_key_role(
+                            key_data.get('role', 'viewer'), key_data.get('allowed_domains')),
                         'allowed_domains': key_data.get('allowed_domains'),
                         'api_key_id': key_id,
                         # Stable, non-secret identifiers for audit attribution.
