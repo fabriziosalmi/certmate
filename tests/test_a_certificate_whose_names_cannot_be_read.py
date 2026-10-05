@@ -186,3 +186,35 @@ def test_the_key_that_is_creating_a_certificate_can_follow_it(tmp_path):
         assert detail.status_code == 200, detail.get_json()
         assert status.status_code != 403
         assert created['response'].status_code == 201, created['response'].get_json()
+
+
+def _bare_manager(tmp_path):
+    """A manager with no storage backend, so only the directory can answer."""
+    from unittest import mock
+
+    from modules.core.certificates import CertificateManager
+    return CertificateManager(tmp_path, mock.MagicMock(), mock.MagicMock())
+
+
+def test_a_torn_served_copy_alone_is_material_with_unknown_names(tmp_path):
+    from modules.core.certificates import CertificateNamesUnknown
+    (tmp_path / BLANK).mkdir()
+    _torn(tmp_path / BLANK)
+    with pytest.raises(CertificateNamesUnknown):
+        _bare_manager(tmp_path).names_covered(BLANK)
+
+
+@pytest.mark.parametrize('part', ['live', 'archive'])
+def test_a_lineage_with_no_readable_certificate_is_material_too(tmp_path, part):
+    from modules.core.certificates import CertificateNamesUnknown
+    lineage = tmp_path / BLANK / part / BLANK
+    lineage.mkdir(parents=True)
+    (lineage / 'privkey1.pem').write_bytes(b'not a certificate')
+    with pytest.raises(CertificateNamesUnknown):
+        _bare_manager(tmp_path).names_covered(BLANK)
+
+
+def test_without_a_backend_an_empty_directory_is_still_just_the_name(tmp_path):
+    (tmp_path / BLANK).mkdir()
+    (tmp_path / BLANK / 'live').mkdir()
+    assert _bare_manager(tmp_path).names_covered(BLANK) == [BLANK]
