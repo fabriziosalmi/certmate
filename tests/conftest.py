@@ -14,6 +14,7 @@ Environment variables:
 """
 
 import os
+import sys
 import secrets
 import time
 import subprocess
@@ -145,7 +146,7 @@ def _caa_never_asks_real_dns():
 
 # certbot invocations that only read the local installation.
 _CERTBOT_LOCAL_ONLY = {'--version', '--help', '-h', 'plugins'}
-_REAL_CERTBOT = {'allowed': False, 'refused': []}
+_REAL_CERTBOT = {'allowed': False, 'refused': [], 'session_over': False}
 
 
 class _NoRealCertbot:
@@ -161,7 +162,8 @@ class _NoRealCertbot:
 
     It sits below the stand-ins (which replace `ShellExecutor.run` whole and
     never reach `subprocess`), so it cannot get in their way, and for the whole
-    session, because a thread can outlive the test that started it. Tests
+    process, because a thread can outlive the test that started it and the
+    session too. Tests
     marked `e2e` are the ones meant to reach a CA, and the guard stands aside
     for them.
     """
@@ -177,18 +179,27 @@ class _NoRealCertbot:
         if (program == 'certbot' and not _REAL_CERTBOT['allowed']
                 and not set(map(str, cmd[1:])) <= _CERTBOT_LOCAL_ONLY):
             _REAL_CERTBOT['refused'].append(' '.join(map(str, cmd[:2])))
+            if _REAL_CERTBOT['session_over']:
+                # Too late to fail the run: say it where a person reading the log will see it.
+                print(f'\nThe real certbot was refused after the last test ({" ".join(map(str, cmd[:2]))}): '
+                      'a test left a job running.', file=sys.__stderr__, flush=True)
             raise RuntimeError(
                 'the test suite refused to run the real certbot '
                 f'({" ".join(map(str, cmd[:2]))}): use a stand-in, or mark the test e2e')
         return self._real.run(cmd, *args, **kwargs)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _no_real_certbot():
+def pytest_sessionstart(session):
+    """Put the guard in for the life of the process, not of the session.
+
+    It was a session fixture, and a session fixture is taken out when the last
+    test ends. A job a test has queued can still be on a worker thread then,
+    while the interpreter closes: it found the real `subprocess` back in place
+    and ran the real certbot, with nothing left to refuse it or to report it.
+    """
     import modules.core.shell as shell
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(shell, 'subprocess', _NoRealCertbot(shell.subprocess))
-        yield
+    if not isinstance(shell.subprocess, _NoRealCertbot):
+        shell.subprocess = _NoRealCertbot(shell.subprocess)
 
 
 @pytest.fixture(autouse=True)
@@ -199,6 +210,7 @@ def _real_certbot_for_e2e(request):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    _REAL_CERTBOT['session_over'] = True
     if _REAL_CERTBOT['refused']:
         print('\nThe real certbot was refused outside an e2e test '
               f'{len(_REAL_CERTBOT["refused"])} time(s): {_REAL_CERTBOT["refused"][:5]}')
