@@ -648,12 +648,12 @@ METADATA_SCHEMA_VERSION = 1
 #                                   answered 403 DOMAIN_OUT_OF_SCOPE by GET
 #                                   /api/settings, GET /api/settings/
 #                                   dns-providers and GET /api/storage/info,
-#                                   which are the instance's; the inventory
+#                                   which are the instance's, and the inventory
 #                                   gives it a certificate only when its scope
 #                                   covers every name of it, where one name was
-#                                   enough; and the cache statistics give it
-#                                   the entries its scope covers (#1181). 2.44.
-#                                   Counted as 2.43 was.
+#                                   enough (#1184). The cache statistics give
+#                                   it the entries its scope covers (#1181).
+#                                   2.44. Counted as 2.43 was.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
