@@ -83,6 +83,8 @@ def test_a_certificate_without_a_probe_host_says_null_not_nothing(tmp_path, monk
 _EDIT_SCRIPT = r"""
 const fs = require('fs');
 global.window = global;
+// The file registers its component when Alpine starts; nothing starts it here.
+global.document = {addEventListener() {}};
 global.CertMate = {toast() {}, confirm() { return Promise.resolve(true); }};
 let sent = null;
 global.fetch = (url, opts) => {
