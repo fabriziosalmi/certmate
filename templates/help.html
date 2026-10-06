@@ -300,7 +300,7 @@ curl -H "Authorization: Bearer $TOKEN" \
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // In-page help search. Filters [data-help-section] blocks by plain
     // substring match on textContent. The section-nav strip stays
     // visible during search — it's how the user reorients when the

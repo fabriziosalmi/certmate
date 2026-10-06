@@ -1,9 +1,9 @@
 """No markup carries script: a control names what it does, and the name is registered.
 
-An `onclick="..."` is inline script. A Content-Security-Policy that lets the
-page's own run lets an injected one run too, which is why `script-src` still
-carries 'unsafe-inline' (#314). The controls no longer need it: each says what
-it does with a name,
+An `onclick="..."` is inline script, and the Content-Security-Policy refuses
+it: `script-src` carries no 'unsafe-inline' (#314), because a policy that
+lets the page's own handler run lets an injected one run too. So a control
+says what it does with a name,
 
     <button data-click="ccSortCertificates" data-args='["status"]'>
 

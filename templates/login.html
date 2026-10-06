@@ -11,7 +11,7 @@
     <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Apply dark mode before paint to prevent flash. Mirrors the snippet in
     // base.html so login.html honours the same `localStorage.theme` value
     // (set by the theme toggle inside the app) and the same OS-preference
@@ -122,7 +122,7 @@
         </div>
     </main>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         // This page stands alone, without the shared script and its actions.
         document.getElementById('passwordToggleBtn').addEventListener('click', togglePassword);
 
