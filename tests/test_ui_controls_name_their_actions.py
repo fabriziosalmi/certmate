@@ -97,9 +97,15 @@ def page(browser_page):
 
     def heard(message):
         # What a script said. A request that failed is not that: the two
-        # certificates of this module exist nowhere, and the page asks about them.
-        if message.type == 'error' and 'Failed to load resource' not in message.text:
-            page.said.append(message.text)
+        # certificates of this module exist nowhere, and the page asks about
+        # them. Nor is a request the browser dropped because the test left the
+        # page while it was out: the settings page asks for its backups three
+        # seconds after it loads, which is when the walk below moves on.
+        if message.type != 'error' or 'Failed to load resource' in message.text:
+            return
+        if 'TypeError: Failed to fetch' in message.text:
+            return
+        page.said.append(message.text)
 
     page.on('console', heard)
     page.on('pageerror', lambda error: page.said.append(f'uncaught: {error}'))
