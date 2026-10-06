@@ -21,10 +21,21 @@ import sys
 
 # A change to any of these can change what the UI suite sees. A trailing `/*`
 # means "this directory and everything under it".
+#
+# `modules/web/*` is the dashboard's own server side: its pages and the
+# `/api/web/` routes only the dashboard calls. `tests/test_ui*.py` is the suite
+# itself. This list named `tests/test_ui.py` alone when the suite was one file;
+# it grew to thirteen, and a pull request that added or changed any of the
+# other twelve was merged without the suite having run.
+#
+# The rest of `modules/` is not here, although the pages call the API too: the
+# suite runs on the one self-hosted host, behind every other test job. The
+# nightly run is what looks at those changes.
 PATTERNS = [
     'templates/*',
     'static/*',
-    'tests/test_ui.py',
+    'modules/web/*',
+    'tests/test_ui*.py',
     'tests/conftest.py',
     'Dockerfile',
     '.github/workflows/ui-tests.yml',

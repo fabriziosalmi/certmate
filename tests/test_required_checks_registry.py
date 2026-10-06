@@ -266,13 +266,28 @@ def test_the_ui_path_list_still_names_real_paths():
     loudly (the workflow stopped running and someone noticed). Here it fails
     open — the suite is skipped and the gate reports a pass — so the list has
     to be checked against the tree."""
-    assert {'templates/*', 'static/*', 'tests/test_ui.py'} <= set(uifilter.PATTERNS)
+    assert {'templates/*', 'static/*', 'modules/web/*', 'tests/test_ui*.py'} <= set(uifilter.PATTERNS)
     for pattern in uifilter.PATTERNS:
-        target = REPO / pattern.rstrip('/*')
-        assert target.exists(), (
+        if pattern.endswith('/*'):
+            found = (REPO / pattern[:-2]).is_dir()
+        else:
+            found = any(REPO.glob(pattern))
+        assert found, (
             '%r no longer exists, so changes to it would skip the UI suite'
             % pattern
         )
+
+
+def test_every_file_of_the_ui_suite_is_watched():
+    """The suite is the files marked `ui`. One that the filter does not watch
+    can be added or changed by a pull request that never runs it."""
+    marker = 'pytest.mark.' + 'ui'      # in two parts, or this file would be one of them
+    suite = sorted(
+        str(path.relative_to(REPO)) for path in (REPO / 'tests').glob('*.py')
+        if marker in path.read_text())
+    assert len(suite) >= 13, suite                      # CONTROL: the marker is still how they are found
+    unwatched = [path for path in suite if not uifilter.matches(path)]
+    assert unwatched == [], f'changed without the UI suite running: {unwatched}'
 
 
 @pytest.mark.parametrize('path, watched', [
@@ -284,13 +299,20 @@ def test_the_ui_path_list_still_names_real_paths():
     ('tests/conftest.py', True),
     ('.github/workflows/ui-tests.yml', True),
     ('scripts/ui_paths_changed.py', True),
+    ('tests/test_ui.py', True),
+    ('tests/test_ui_san_editor.py', True),
+    ('modules/web/settings_routes.py', True),
+    ('modules/web/misc_routes.py', True),
     ('modules/core/auth.py', False),
-    ('tests/test_ui_helpers.py', False),
+    ('modules/api/resources_settings.py', False),
+    ('modules/webhooks.py', False),
+    ('tests/test_user_roles.py', False),
+    ('tests/ui/notes.md', False),
     ('README.md', False),
     ('Dockerfile.dev', False),
     ('staticfiles/app.js', False),
 ])
-def test_the_matcher_agrees_with_what_the_trigger_used_to_do(path, watched):
+def test_the_matcher_watches_what_the_suite_is_made_of(path, watched):
     assert uifilter.matches(path) is watched
 
 
