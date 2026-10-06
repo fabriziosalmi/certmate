@@ -71,9 +71,6 @@ def two_certificates(docker_container, ui_session_cookie, tmp_path_factory):
 
 
 def _open_dashboard(page):
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
-        " catch (e) {}")
     page.goto(BASE_URL, wait_until='networkidle')
     page.wait_for_selector(f'tr[data-row-domain="{TAGGED}"]', timeout=15000)
 

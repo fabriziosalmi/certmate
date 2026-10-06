@@ -64,8 +64,6 @@ _INJECT = """() => {
 @pytest.mark.parametrize('path', ['/help', '/settings', '/'])
 def test_what_is_not_the_pages_does_not_run_and_what_is_does(browser_page, path):
     page = browser_page
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); } catch (e) {}")
     page.goto(f'{BASE_URL}{path}', wait_until="networkidle")
     page.evaluate(_REFUSED)
 

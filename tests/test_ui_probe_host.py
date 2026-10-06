@@ -55,9 +55,6 @@ def _open_probe_tab(page, certificates):
             status=200, content_type='application/json',
             body=json.dumps(certificates)),
     )
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
-        " catch (e) {}")
     page.goto(f'{BASE_URL}/settings')
     page.click('#settings-tab-probe')
     page.wait_for_selector('#settings-panel-probe', state='visible')

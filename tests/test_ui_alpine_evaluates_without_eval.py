@@ -100,8 +100,6 @@ def page(browser_page):
     """One page for the module, with the server's answers fixed for the GETs the
     Settings components make, and everything the browser complains of kept."""
     page = browser_page
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); } catch (e) {}")
     page.add_init_script(f'({_WATCH})()')
     page.emulate_media(reduced_motion='reduce')
     page.heard = Heard(page)
