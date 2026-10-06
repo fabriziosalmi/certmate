@@ -44,10 +44,17 @@
             .catch(function () { /* keep last-known role */ });
     }
 
+    // hideLoadingModal() completes the bar and hides the indicator half a
+    // second later. This is that pending hide, so that work started in the
+    // meantime can call it off: a renewal that fails at once leaves the focus
+    // on its button, and Enter starts another while the bar is still filling.
+    var _loadingHideTimer = null;
+
     // Show enhanced loading modal with progress
     function showLoadingModal(title, message) {
         title = title || 'Processing Certificate...';
         message = message || 'This may take a few minutes';
+        clearTimeout(_loadingHideTimer);
         var modal = document.getElementById('loadingModal');
         document.getElementById('loadingTitle').textContent = title;
         document.getElementById('loadingMessage').textContent = message;
@@ -71,7 +78,8 @@
     // Hide loading modal and complete progress
     function hideLoadingModal(progressInterval) {
         document.getElementById('progressBar').style.width = '100%';
-        setTimeout(function () {
+        clearTimeout(_loadingHideTimer);
+        _loadingHideTimer = setTimeout(function () {
             var modal = document.getElementById('loadingModal');
             modal.classList.add('hidden');
             modal.classList.remove('flex', 'items-center', 'justify-center');
