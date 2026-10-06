@@ -88,7 +88,17 @@ An API key can carry `allowed_domains`, a list of exact names and
   not a certificate exists for it.
 - **What belongs to the instance** is refused with the same `403`: the
   client-certificate routes (the CA certificate, the CRL and OCSP stay public),
-  the backup routes, the inventory configuration.
+  the backup routes, the inventory configuration. Since **2.44** also the
+  settings (`GET /api/settings`), the DNS provider accounts
+  (`GET /api/settings/dns-providers`) and the storage configuration
+  (`GET /api/storage/info`). What the key may know about its own domains it
+  reads from the certificate routes.
+- **The inventory** gives the key a certificate when its scope covers every
+  name of it, the rule of the certificate routes, since **2.44**; before, one
+  name in scope was enough. Registrations and name health are given for the
+  names the scope covers.
+- **The cache statistics** list the entries for certificates the scope covers,
+  and `total_entries` counts those, since **2.44**.
 - **`/metrics`** answers with the series about the key's own domains and none of
   the instance's totals.
 - **An admin key cannot be restricted.** Creating one is refused. One stored by

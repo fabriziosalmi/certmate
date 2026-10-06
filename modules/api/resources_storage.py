@@ -12,7 +12,7 @@ from flask_restx import Resource
 
 import logging
 
-from .resource_context import ApiContext
+from .resource_context import ApiContext, instance_wide
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,9 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
     class StorageBackendInfo(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('viewer')
+        @instance_wide(ctx, 'storage', 'the storage configuration')
         def get(self):
-            """Get current storage backend information"""
+            """Get current storage backend information. A key restricted with `allowed_domains` is refused."""
             try:
                 storage_manager = ctx.managers.get('storage')
                 if not storage_manager:

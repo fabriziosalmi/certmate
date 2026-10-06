@@ -644,6 +644,16 @@ METADATA_SCHEMA_VERSION = 1
 #                                   existing requests, which the rule below
 #                                   calls MAJOR; counted as the security fixes
 #                                   they are (2.7, 2.31, 2.32).
+#                                   A key that carries `allowed_domains` is
+#                                   answered 403 DOMAIN_OUT_OF_SCOPE by GET
+#                                   /api/settings, GET /api/settings/
+#                                   dns-providers and GET /api/storage/info,
+#                                   which are the instance's, and the inventory
+#                                   gives it a certificate only when its scope
+#                                   covers every name of it, where one name was
+#                                   enough (#1184). The cache statistics give
+#                                   it the entries its scope covers (#1181).
+#                                   2.44. Counted as 2.43 was.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -669,7 +679,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.43'
+API_CONTRACT_VERSION = '2.44'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

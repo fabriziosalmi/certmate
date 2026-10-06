@@ -145,10 +145,13 @@ def test_scope_matches_on_subject_cn():
     assert record_in_scope(rec, _only('b.example.com')) is False
 
 
-def test_scope_matches_on_any_san():
+def test_scope_needs_every_name():
+    """The rule of the certificate routes: a certificate that also covers a
+    name outside the scope is not that key's to read."""
     rec = _rec(subject_cn='a.example.com', san_dns=['a.example.com', 'b.example.com'])
-    # Scoped to b only: still visible because a SAN matches.
-    assert record_in_scope(rec, _only('b.example.com')) is True
+    assert record_in_scope(rec, _only('b.example.com')) is False
+    assert record_in_scope(rec, _only('a.example.com')) is False
+    assert record_in_scope(rec, _only('a.example.com', 'b.example.com')) is True
 
 
 def test_scope_out_of_scope_record_hidden():
