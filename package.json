@@ -10,5 +10,8 @@
   "devDependencies": {
     "@alpinejs/csp": "3.15.12",
     "tailwindcss": "^3.4.17"
+  },
+  "overrides": {
+    "postcss-selector-parser": "^7.1.6"
   }
 }
