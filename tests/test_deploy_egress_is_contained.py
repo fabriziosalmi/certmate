@@ -313,21 +313,50 @@ def test_sanitize_text_redacts_an_encoded_certificate_too():
     assert '[PEM REDACTED]' in sanitize_text(base64.b64encode(cert_pem * 3).decode())
 
 
-def test_the_encoded_pem_scan_cannot_be_made_to_stall():
+# Text made to cost the scan as much as it can, at any size: one run of
+# base64 characters, runs too short to be looked at, runs that decode, and
+# runs just over the length at which a run is looked at.
+HOSTILE = {
+    'one long run': lambda size: 'A' * size,
+    'runs too short to look at': lambda size: 'AAAA ' * (size // 5),
+    'twenty runs that decode': lambda size: ('QUJD' * (size // 80) + '!') * 20,
+    'runs just long enough to look at': lambda size: ('A' * 119 + ' ') * (size // 120),
+}
+
+
+def _cpu_seconds(text):
+    """The least CPU time of this thread that sanitising `text` took, of five tries.
+
+    CPU time and not the clock: on a machine busy with something else the
+    clock counts the something else. The least of several, because what makes
+    one try slower than another is never the scan. And no more tries once one
+    has taken half a second: a scan gone wrong is then already plain, and five
+    of them would be minutes.
+    """
+    least = float('inf')
+    for _ in range(5):
+        start = time.thread_time()
+        sanitize_text(text)
+        least = min(least, time.thread_time() - start)
+        if least > 0.5:
+            break
+    return least
+
+
+@pytest.mark.parametrize('shape', sorted(HOSTILE))
+def test_the_encoded_pem_scan_cannot_be_made_to_stall(shape):
     """sanitize_text sees unbounded hook output on a worker thread; it must stay linear.
 
-    Counted in the CPU time of this thread, not on the clock. What has to stay
-    bounded is the work, and on a machine busy with something else the clock
-    counts the something else: the same scan measured 1.5 s of CPU and between
-    2.7 and 4.7 s on the clock on a machine running six times what it has cores
-    for, and failed a release gate with nothing wrong in it.
+    Linear is a statement about growth, so growth is what is measured: four
+    times the text may cost four times the work, and not sixteen. A number of
+    seconds says how fast the machine is instead. This test had one (3.0 s of
+    CPU for all the shapes together, 1.5 s where it was written) and a hosted
+    runner took 3.14 s with nothing wrong in the scan.
     """
-    hostile = ['A' * 3_000_000, ('AAAA ' * 400_000), ('QUJD' * 50_000 + '!') * 20,
-               'A' * 119 + ' ' + 'A' * 119]
-    start = time.thread_time()
-    for text in hostile:
-        sanitize_text(text)
-    assert time.thread_time() - start < 3.0
+    small, large = _cpu_seconds(HOSTILE[shape](50_000)), _cpu_seconds(HOSTILE[shape](200_000))
+    assert large < 8 * small, (
+        f'{shape}: 4 times the text took {large / small:.1f} times the CPU '
+        f'({small * 1000:.1f} ms, then {large * 1000:.1f} ms)')
 
 
 # --------------------------------------------------------------------------
