@@ -46,9 +46,6 @@ def _no_usable_ca(docker_container, ui_session_cookie):
 
 def test_without_a_usable_ca_the_form_says_so_and_sends_nothing(browser_page):
     page = browser_page
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
-        " catch (e) {}")
     page.goto(BASE_URL, wait_until="networkidle")
     page.click('button[title="New certificate"]')
     page.wait_for_selector('#createCertFormContainer', state='visible')

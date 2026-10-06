@@ -90,8 +90,6 @@ PLAYGROUND = """() => {
 @pytest.fixture(scope="module")
 def page(browser_page):
     page = browser_page
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); } catch (e) {}")
     page.emulate_media(reduced_motion='reduce')
     page.said = []
 

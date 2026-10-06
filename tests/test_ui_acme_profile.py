@@ -51,7 +51,6 @@ def _a_usable_ca(docker_container, ui_session_cookie):
 
 
 def _dashboard(page, certificates=None):
-    page.add_init_script("try { window.localStorage.setItem('certmate_wizard_skipped', '1'); } catch (e) {}")
     if certificates is not None:
         page.route('**/api/certificates', lambda route: route.fulfill(
             status=200, content_type='application/json', body=json.dumps(certificates))

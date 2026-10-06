@@ -60,9 +60,6 @@ def _open_deploy_tab(page, config=None):
                           body=json.dumps({'success': True}))
 
     page.route('**/api/deploy/config', _handle)
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
-        " catch (e) {}")
     page.goto(f'{BASE_URL}/settings')
     page.click('#settings-tab-deploy')
     page.wait_for_selector('#settings-panel-deploy', state='visible')

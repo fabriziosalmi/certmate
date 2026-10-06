@@ -66,9 +66,6 @@ def _open_create_drawer(page):
     closed drawer still accepts `fill()` — the element is in the DOM — and the
     test would then assert against a form the operator never sees.
     """
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
-        " catch (e) {}")
     page.goto(BASE_URL, wait_until="networkidle")
     page.click('button[title="New certificate"]')
     page.wait_for_selector('#createCertFormContainer', state='visible')

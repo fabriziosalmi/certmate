@@ -40,17 +40,14 @@ BASE_URL = f"http://localhost:{os.environ.get('CERTMATE_TEST_PORT', '18888')}"
 
 def _open_form(page):
     # The first-run wizard is a fixed overlay (#setupWizard, z-[110]) that
-    # swallows pointer events on a fresh instance. Deleting the node is not
-    # enough — setup-wizard.js renders it from an async /api/web/settings
-    # response, so it comes back after the delete. Set the skip flag the
-    # wizard's own "Skip" button sets, before any script runs.
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
-        " catch (e) {}")
-    page.goto(BASE_URL)
+    # swallows pointer events on a fresh instance. The suite's instance has
+    # dismissed it once, for every browser (`ui_session_cookie`). It is drawn
+    # from the answer to /api/web/settings, so the look comes after the page
+    # has gone quiet: this is where a suite that lost the dismissal says so.
+    page.goto(BASE_URL, wait_until="networkidle")
     page.wait_for_selector('#createCertFormContainer')
     assert page.locator('#setupWizard').count() == 0, (
-        'the setup wizard is still on the page and will swallow clicks'
+        'the setup wizard is on the page and will swallow clicks'
     )
 
     # The create form lives in a slide-over drawer behind the "+ New" button.
