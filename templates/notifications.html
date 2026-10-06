@@ -22,7 +22,7 @@
                             <input type="checkbox" id="showSnoozed" class="rounded border-border text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
                             Show snoozed
                         </label>
-                        <button type="button" onclick="loadNotifications()" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh notifications">
+                        <button type="button" data-click="loadNotifications" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh notifications">
                             <i class="fas fa-sync"></i>
                         </button>
                     </div>
@@ -234,6 +234,8 @@
         });
         document.getElementById('showSnoozed').addEventListener('change', render);
 
+        // What the page's controls ask for by name: see CertMate.actions.
+        CertMate.globalActions(['loadNotifications']);
         loadNotifications();
     })();
     </script>

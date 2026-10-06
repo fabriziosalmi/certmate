@@ -15,7 +15,7 @@
                                 </label>
                                 <select id="storage-backend" name="storage_backend" 
                                         class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm"
-                                        onchange="toggleStorageBackendConfig()">
+                                        data-change="toggleStorageBackendConfig">
                                     <option value="local_filesystem">Local Filesystem (Default)</option>
                                     <option value="azure_keyvault">Azure Key Vault</option>
                                     <option value="aws_secrets_manager">AWS Secrets Manager</option>
@@ -86,7 +86,7 @@
                                             <label for="azure-storage-mode" class="block text-xs text-info-strong mb-1">Storage mode</label>
                                             <select id="azure-storage-mode"
                                                     class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
-                                                    onchange="toggleAzureBackfillRow()">
+                                                    data-change="toggleAzureBackfillRow">
                                                 <option value="secrets">Secrets only (default)</option>
                                                 <option value="certificate">Certificate object only</option>
                                                 <option value="both">Both (Secrets + Certificate object)</option>
@@ -99,7 +99,7 @@
                                         <div id="azure-backfill-row" class="md:col-span-2" style="display: none;">
                                             <button type="button"
                                                     id="azure-backfill-btn"
-                                                    onclick="backfillAzureCertificateObjects()"
+                                                    data-click="backfillAzureCertificateObjects"
                                                     class="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
                                                 <i class="fas fa-cloud-upload-alt mr-1"></i> Backfill Certificate objects
                                             </button>
@@ -124,7 +124,7 @@
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <div class="md:col-span-3">
                                             <label for="aws-auth-mode" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Authentication</label>
-                                            <select id="aws-auth-mode" onchange="toggleAWSAuthMode()" class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground">
+                                            <select id="aws-auth-mode" data-change="toggleAWSAuthMode" class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground">
                                                 <option value="access_keys">Access keys</option>
                                                 <option value="iam_role">AWS credentials / IAM role (no keys)</option>
                                             </select>
@@ -261,7 +261,7 @@
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div class="md:col-span-2">
                                             <label for="s3-auth-mode" class="block text-xs text-success-strong mb-1">Authentication</label>
-                                            <select id="s3-auth-mode" onchange="toggleS3AuthMode()" class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground">
+                                            <select id="s3-auth-mode" data-change="toggleS3AuthMode" class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground">
                                                 <option value="access_keys">Access keys (S3-compatible)</option>
                                                 <option value="iam_role">AWS credentials / IAM role (no keys)</option>
                                             </select>
@@ -320,11 +320,11 @@
 
                             <!-- Storage Backend Actions -->
                             <div class="flex flex-wrap gap-3 pt-2 border-t border-border">
-                                <button type="button" onclick="testStorageBackend()" 
+                                <button type="button" data-click="testStorageBackend" 
                                         class="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
                                     <i class="fas fa-plug mr-1"></i> Test Connection
                                 </button>
-                                <button type="button" onclick="showStorageMigrationModal()" 
+                                <button type="button" data-click="showStorageMigrationModal" 
                                         class="bg-yellow-600 text-white px-3 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors text-sm">
                                     <i class="fas fa-exchange-alt mr-1"></i> Migrate Certificates
                                 </button>

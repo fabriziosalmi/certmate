@@ -809,6 +809,137 @@
                                    hour12: CLOCK.hour12 });
     };
 
+    // ── Actions ──────────────────────────────────────────────────
+    // What a control does is named in the markup and looked up here, so that
+    // no markup carries script (an `onclick` attribute is inline script, and a
+    // Content-Security-Policy that allows it allows an injected one too):
+    //
+    //   <button data-click="closeCertDrawer">
+    //   <button data-click="ccSortCertificates" data-args='["status"]'>
+    //   <select data-change="applyPrivateCaPreset">
+    //   <button data-click="uploadBackup" data-pass="el">
+    //
+    // `data-args` is a JSON array, the arguments as data and never as code.
+    // `data-pass` names what the page adds after them, in order: `el` (the
+    // control), `event`, `value`, `checked`.
+    //
+    // Only a name registered with CertMate.actions() is ever called. A name
+    // that is not there is reported and nothing runs.
+    //
+    // One listener on the document serves every control, including markup a
+    // script builds later. Two things an inline handler did by itself are
+    // rules here:
+    //   - the innermost control wins. A click on a button, link or field
+    //     inside a `data-click` row is the button's, not the row's, which is
+    //     what `event.stopPropagation()` on each inner button was for;
+    //   - `data-self` limits a control to events on itself and not on what it
+    //     contains: the backdrop of a dialog.
+    // And one it did not: a `data-click` element that is not a button or a
+    // link (a table row with `role="button"`) answers Enter and Space.
+    var ACTIONS = Object.create(null);
+
+    // For markup a script builds: the attributes that name an action, with
+    // its arguments encoded as data.
+    //   '<button type="button"' + CertMate.does('click', 'deleteCertificate', [cert.domain]) + '>'
+    CM.does = function (type, name, args, pass) {
+        var out = ' data-' + type + '="' + CM.escapeHtml(name) + '"';
+        if (args && args.length) out += ' data-args="' + CM.escapeHtml(JSON.stringify(args)) + '"';
+        if (pass) out += ' data-pass="' + CM.escapeHtml(pass) + '"';
+        return out + ' ';
+    };
+    var CONTROLS = 'a[href], button, input, select, textarea, label, summary';
+
+    CM.actions = function (named) {
+        Object.keys(named).forEach(function (name) {
+            if (typeof named[name] !== 'function') {
+                throw new Error('CertMate.actions: ' + name + ' is not a function');
+            }
+            ACTIONS[name] = named[name];
+        });
+    };
+    CM.hasAction = function (name) { return name in ACTIONS; };
+
+    // The same, for functions a page already has under a name: the ones its
+    // markup used to call from a handler attribute. A dotted name is a method, and is
+    // called on its object. A name that is not there fails here, when the page
+    // loads, and not at the click.
+    CM.globalActions = function (names) {
+        var named = {};
+        names.forEach(function (name) {
+            var path = name.split('.');
+            var owner = path.slice(0, -1).reduce(function (o, key) { return o == null ? o : o[key]; }, window);
+            var fn = owner == null ? undefined : owner[path[path.length - 1]];
+            if (typeof fn !== 'function') {
+                throw new Error('CertMate.globalActions: ' + name + ' is not a function of this page');
+            }
+            named[name] = path.length > 1 ? function () { return fn.apply(owner, arguments); } : fn;
+        });
+        CM.actions(named);
+    };
+
+    function actionOf(event, type) {
+        if (!event.target || typeof event.target.closest !== 'function') return null;
+        var el = event.target.closest('[data-' + type + ']');
+        if (!el) return null;
+        if (el.hasAttribute('data-self') && event.target !== el) return null;
+        if (type === 'click' && event.target !== el) {
+            var inner = event.target.closest(CONTROLS + ', [data-click]');
+            if (inner && inner !== el && el.contains(inner)) return null;
+        }
+        return el;
+    }
+
+    function runAction(el, type, event) {
+        var name = el.getAttribute('data-' + type);
+        if (!(name in ACTIONS)) {
+            console.error('CertMate: no action is registered as "' + name + '"');
+            return;
+        }
+        var args = [];
+        var given = el.getAttribute('data-args');
+        if (given) {
+            args = JSON.parse(given);
+            if (!Array.isArray(args)) throw new Error('data-args is not a JSON array: ' + given);
+        }
+        (el.getAttribute('data-pass') || '').split(',').forEach(function (what) {
+            what = what.trim();
+            if (what === 'el') args.push(el);
+            else if (what === 'event') args.push(event);
+            else if (what === 'value') args.push(el.value);
+            else if (what === 'checked') args.push(el.checked);
+            else if (what) throw new Error('data-pass: "' + what + '" is not el, event, value or checked');
+        });
+        return ACTIONS[name].apply(el, args);
+    }
+
+    ['click', 'change', 'input'].forEach(function (type) {
+        document.addEventListener(type, function (event) {
+            var el = actionOf(event, type);
+            if (el) runAction(el, type, event);
+        });
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+        var el = event.target;
+        if (!el || !el.hasAttribute || !el.hasAttribute('data-click') || el.matches(CONTROLS)) return;
+        event.preventDefault();          // Space would scroll the page
+        runAction(el, 'click', event);
+    });
+
+    // The actions every page has. The two buttons in the top bar open what a
+    // key opens, by sending the key: the palette and the shortcuts list each
+    // listen for theirs and know nothing of the buttons.
+    CM.actions({
+        print: function () { window.print(); },
+        openCommandPalette: function () {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+        },
+        openShortcutsHelp: function () {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: '?' }));
+        },
+        'CertMate.copyDiagnosticsSnapshot': function (el) { return CM.copyDiagnosticsSnapshot(el); }
+    });
+
     // ── Expose globally ──────────────────────────────────────────
     window.CertMate = CM;
 

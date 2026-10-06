@@ -292,6 +292,8 @@ const payloads = JSON.parse(process.env.PAYLOADS);
 const urls = [];
 const context = {
   window: {}, console, Promise,
+  // The page registers the actions its controls name when it loads.
+  CertMate: {globalActions() {}, actions() {}},
   document: { getElementById: el, addEventListener() {}, querySelectorAll() { return []; } },
   fetch(url) {
     urls.push(url);
@@ -363,4 +365,4 @@ def test_an_inventory_that_is_entirely_superseded_says_so(node):
 
 def test_the_toggle_is_in_the_template():
     template = (REPO / 'templates' / 'inventory.html').read_text(encoding='utf-8')
-    assert 'id="invSuperseded"' in template and 'onchange="InventoryPage.toggleSuperseded()"' in template
+    assert 'id="invSuperseded"' in template and 'data-change="InventoryPage.toggleSuperseded"' in template
