@@ -325,20 +325,21 @@ HOSTILE = {
 
 
 def _cpu_seconds(text):
-    """The least CPU time of this thread that sanitising `text` took, of five tries.
+    """The least CPU time of this thread that sanitising `text` took, of up to five tries.
 
     CPU time and not the clock: on a machine busy with something else the
     clock counts the something else. The least of several, because what makes
-    one try slower than another is never the scan. And no more tries once one
-    has taken half a second: a scan gone wrong is then already plain, and five
-    of them would be minutes.
+    one try slower than another is never the scan. And no more tries once
+    they have taken half a second together: nothing is learnt from repeating
+    a measurement that long, and a scan gone wrong would repeat for minutes.
     """
-    least = float('inf')
+    least, spent = float('inf'), 0.0
     for _ in range(5):
         start = time.thread_time()
         sanitize_text(text)
-        least = min(least, time.thread_time() - start)
-        if least > 0.5:
+        took = time.thread_time() - start
+        least, spent = min(least, took), spent + took
+        if spent > 0.5:
             break
     return least
 
@@ -347,16 +348,22 @@ def _cpu_seconds(text):
 def test_the_encoded_pem_scan_cannot_be_made_to_stall(shape):
     """sanitize_text sees unbounded hook output on a worker thread; it must stay linear.
 
-    Linear is a statement about growth, so growth is what is measured: four
-    times the text may cost four times the work, and not sixteen. A number of
-    seconds says how fast the machine is instead. This test had one (3.0 s of
-    CPU for all the shapes together, 1.5 s where it was written) and a hosted
-    runner took 3.14 s with nothing wrong in the scan.
+    Linear is a statement about growth, so growth is what is measured: sixteen
+    times the text may cost sixteen times the work, and a scan that has gone
+    quadratic costs 256 times. The line is drawn at 64, four times away from
+    both. A number of seconds says how fast the machine is instead: this test
+    had one (3.0 s of CPU for all the shapes together, 1.5 s where it was
+    written) and a hosted runner took 3.14 s with nothing wrong in the scan.
+
+    Twice, at a few kilobytes and at a few megabytes. The small sizes come
+    first because a quadratic scan shows there in seconds, and at the sizes
+    hook output can really have it would take hours to say so.
     """
-    small, large = _cpu_seconds(HOSTILE[shape](50_000)), _cpu_seconds(HOSTILE[shape](200_000))
-    assert large < 8 * small, (
-        f'{shape}: 4 times the text took {large / small:.1f} times the CPU '
-        f'({small * 1000:.1f} ms, then {large * 1000:.1f} ms)')
+    for size in (5_000, 200_000):
+        small, large = _cpu_seconds(HOSTILE[shape](size)), _cpu_seconds(HOSTILE[shape](16 * size))
+        assert large < 64 * small, (
+            f'{shape}: 16 times the text ({size} characters, then {16 * size}) took '
+            f'{large / small:.0f} times the CPU ({small * 1000:.2f} ms, then {large * 1000:.1f} ms)')
 
 
 # --------------------------------------------------------------------------
