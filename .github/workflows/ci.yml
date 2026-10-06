@@ -938,6 +938,15 @@ jobs:
           exit 1
         fi
 
+    # The page runs the build of Alpine that evaluates expressions without
+    # `eval`, which is what lets the Content-Security-Policy go without
+    # 'unsafe-eval'. An expression it cannot evaluate fails in the browser,
+    # and only when someone's data reaches it. This checks every one of them
+    # against the package's own parser, and that the vendored file is the
+    # package's.
+    - name: Alpine expressions are evaluable without eval
+      run: node scripts/check_alpine_expressions.mjs
+
     # Theme-token regression gate: the migration (docs/THEME_MIGRATION.md)
     # collapsed every light + dark: color pair onto semantic tokens. This fails
     # the build if a new raw pair (e.g. bg-white dark:bg-gray-800) is

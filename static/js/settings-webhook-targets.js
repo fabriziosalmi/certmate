@@ -541,6 +541,13 @@
     }
 
     window.webhookTargets = webhookTargets;
+
+    // Registered by name as well: the build of Alpine in use evaluates an
+    // expression without `eval` and reaches nothing outside the component,
+    // so `x-data="webhookTargets()"` finds it here and not on `window`.
+    document.addEventListener('alpine:init', function () {
+        Alpine.data('webhookTargets', webhookTargets);
+    });
     // The pure parts, reachable from a browser test without driving the form.
     window.CertMateWebhookTargets = {
         hostOf: hostOf, sendsKey: sendsKey, parseDomains: parseDomains,

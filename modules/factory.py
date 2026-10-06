@@ -1680,10 +1680,12 @@ def setup_security_headers(app):
         if 'Content-Security-Policy' not in response.headers:
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
-                # Alpine.js v3 requires 'unsafe-eval' (uses new Function() for expression
-                # evaluation). Removing it breaks the UI. The risk is mitigated by
-                # 'unsafe-inline' already being required for inline <script> blocks.
-                # To eliminate unsafe-eval, migrate to the @alpinejs/csp build.
+                # No 'unsafe-eval'. Alpine is the `@alpinejs/csp` build, which
+                # parses an expression itself where the standard build compiles
+                # it with `new Function()`, and reaches nothing outside the
+                # component it is evaluated in. 'unsafe-inline' is still here
+                # for the inline <script> blocks and the inline event handlers
+                # (#314).
                 #
                 # ReDoc and its Montserrat/Roboto fonts used to require a CDN
                 # script-src/style-src/font-src whitelist. v2.4.15 self-hosts the
@@ -1700,7 +1702,7 @@ def setup_security_headers(app):
                 # and makes no third-party request. Worth knowing that the
                 # air-gap property there rests on the CSP, not on the bundle
                 # being clean: loosening img-src would reintroduce the egress.
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "script-src 'self' 'unsafe-inline'; "
                 "style-src 'self' 'unsafe-inline'; "
                 "font-src 'self'; "
                 "img-src 'self' data:; "

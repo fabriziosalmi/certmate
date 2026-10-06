@@ -13,7 +13,8 @@ dns:
 deviations: []                  # MUSTs are NEVER waivable (AG-GOV-01)
 
 # OPEN MUST — tracked as remediation, NOT a waiver (AG-GOV-01 forbids waiving a MUST):
-#   AG-CSP-02 (HIGH) — script-src carries 'unsafe-eval' + 'unsafe-inline' (Alpine.js v3).
+#   AG-CSP-02 (HIGH) — script-src carries 'unsafe-inline' (inline <script> blocks and
+#   inline event handlers). 'unsafe-eval' is gone: Alpine is the @alpinejs/csp build.
 #   Surface is non-conformant at Bronze until fixed.
-#   fix:    @alpinejs/csp build + nonce inline scripts -> drop both tokens
-#   issue:  #314   owner: fabrizio   target: 2026-09-30   evidence: modules/factory.py:1696
+#   fix:    nonce the inline scripts, move the inline handlers to listeners -> drop the token
+#   issue:  #314   owner: fabrizio   target: 2026-10-30   evidence: modules/factory.py:1705

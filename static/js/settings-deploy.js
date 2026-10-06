@@ -21,6 +21,14 @@
             showDomain: false,
             showHistory: false,
             history: [],
+
+            // What the template needs and an expression may not reach or say:
+            // there is no `Object` inside one, and it is one statement.
+            get domainNames() { return Object.keys(this.config.domain_hooks).sort(); },
+            toggleHistory: function () {
+                this.showHistory = !this.showHistory;
+                if (this.showHistory) this.loadHistory();
+            },
             newDomain: '',
             // Drives the execution-detail modal in settings_deploy.html.
             // null = nothing selected; the modal is gated on this via x-if so
@@ -285,4 +293,11 @@
     }
 
     window.deployManager = deployManager;
+
+    // Registered by name as well: the build of Alpine in use evaluates an
+    // expression without `eval` and reaches nothing outside the component,
+    // so `x-data="deployManager()"` finds it here and not on `window`.
+    document.addEventListener('alpine:init', function () {
+        Alpine.data('deployManager', deployManager);
+    });
 })();

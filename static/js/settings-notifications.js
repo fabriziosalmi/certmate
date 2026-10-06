@@ -242,6 +242,22 @@
                 if (idx === -1) wh.events.push(evt);
                 else wh.events.splice(idx, 1);
             },
+            // What the template needs and an expression may not reach or say:
+            // no arrow function, no `delete`, no `Object` or `CertMate`, and
+            // one statement.
+            get activeWebhooks() {
+                return this.config.channels.webhooks.filter(function (w) { return w.enabled; }).length;
+            },
+            removeHeader: function (wh, key) {
+                delete wh.headers[key];
+                wh.headers = Object.assign({}, wh.headers);
+            },
+            toggleDeliveries: function () {
+                this.showDeliveries = !this.showDeliveries;
+                if (this.showDeliveries) this.loadDeliveries();
+            },
+            formatDateTime: function (value) { return CertMate.formatDateTime(value); },
+
             loadDeliveries: function () {
                 var self = this;
                 fetch('/api/webhooks/deliveries?limit=50', { credentials: 'same-origin' })
@@ -256,5 +272,33 @@
         };
     }
 
+
+    // The two fields beside a webhook's headers, and the button that adds
+    // what they hold to it.
+    function webhookHeaderDraft() {
+        return {
+            hk: '',
+            hv: '',
+            add: function (wh) {
+                var name = this.hk.trim();
+                if (!name) return;
+                if (!wh.headers) wh.headers = {};
+                wh.headers[name] = this.hv;
+                wh.headers = Object.assign({}, wh.headers);
+                this.hk = '';
+                this.hv = '';
+            }
+        };
+    }
+
     window.notificationSettings = notificationSettings;
+    window.webhookHeaderDraft = webhookHeaderDraft;
+
+    // Registered by name as well: the build of Alpine in use evaluates an
+    // expression without `eval` and reaches nothing outside the component,
+    // so `x-data="notificationSettings()"` finds it here and not on `window`.
+    document.addEventListener('alpine:init', function () {
+        Alpine.data('notificationSettings', notificationSettings);
+        Alpine.data('webhookHeaderDraft', webhookHeaderDraft);
+    });
 })();

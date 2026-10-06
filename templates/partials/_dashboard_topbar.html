@@ -48,6 +48,14 @@ document.addEventListener('alpine:init', function () {
         // Every change goes through here: the URL keeps the view, so a reload
         // or a shared link lands on the same one, and the client list loads
         // the first time it is asked for.
+        // The two things the markup asked for by calling a function of the
+        // page: an expression reaches the store and nothing on `window`.
+        openDrawer: function () {
+            if (typeof openCertDrawer === 'function') { openCertDrawer(this.view); }
+        },
+        loadClientCerts: function () {
+            if (this.view === 'client' && typeof initClientCerts === 'function') { initClientCerts(); }
+        },
         select: function (view) {
             this.view = view;
             history.replaceState(null, '', view === 'client' ? '#client' : '#');
@@ -89,7 +97,7 @@ document.addEventListener('alpine:init', function () {
             <i class="fas fa-id-card" aria-hidden="true"></i>Client
         </button>
         <span class="mx-1 h-6 w-px bg-border" aria-hidden="true"></span>
-        <button type="button" @click="openCertDrawer($store.certs.view)"
+        <button type="button" @click="$store.certs.openDrawer()"
                 class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
                 title="New certificate">
             <i class="fas fa-plus" aria-hidden="true"></i>New

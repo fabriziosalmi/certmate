@@ -28,6 +28,12 @@
             createdToken: '',
             newKey: { name: '', role: 'viewer', expires_at: '', allowed_domains: '', is_agent: false },
 
+            // What the template needs and an expression may not reach: there
+            // is no `Object`, `Array` or `CertMate` inside one.
+            get keyIds() { return Object.keys(this.keys); },
+            hasDomainList: function (keyId) { return Array.isArray(this.keys[keyId].allowed_domains); },
+            formatDate: function (value) { return CertMate.formatDate(value); },
+
             loadKeys: function () {
                 var self = this;
                 self.loading = true;
@@ -283,4 +289,12 @@
     }
 
     window.rateLimitManager = rateLimitManager;
+
+    // Registered by name as well: the build of Alpine in use evaluates an
+    // expression without `eval` and reaches nothing outside the component,
+    // so `x-data="apiKeyManager()"` finds it here and not on `window`.
+    document.addEventListener('alpine:init', function () {
+        Alpine.data('apiKeyManager', apiKeyManager);
+        Alpine.data('rateLimitManager', rateLimitManager);
+    });
 })();
