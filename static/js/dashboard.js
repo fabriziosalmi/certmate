@@ -537,7 +537,7 @@
         // screen readers announce "Enable auto-renew foo.example.com"
         // instead of just "Enable auto-renew" repeated per row (B1 fix).
         return '<button type="button" data-action="toggle-auto-renew" data-domain="' + safeDomain +
-            '" data-auto-renew="' + (autoRenewEnabled ? 'true' : 'false') + '" onclick="event.stopPropagation()" ' +
+            '" data-auto-renew="' + (autoRenewEnabled ? 'true' : 'false') + '" ' +
             'class="p-1.5 ' + color + ' rounded hover:bg-hover" ' +
             'title="' + title + '" aria-label="' + title + ' ' + safeDomain + '">' +
             '<i class="fas ' + icon + '" aria-hidden="true"></i></button>';
@@ -797,7 +797,7 @@
                     '</div>' +
                     '<h3 class="text-lg font-medium text-foreground mb-2">No matching certificates</h3>' +
                     '<p class="text-muted mb-6">Try adjusting your search criteria or filters.</p>' +
-                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600">' +
+                    '<button data-click="clearFilters" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600">' +
                     '<i class="fas fa-times mr-2"></i>Clear Filters</button>' +
                     '</div>' +
                     '</div>' +
@@ -821,7 +821,7 @@
                     '<div class="bg-warning-surface border border-warning-line rounded-lg p-3 mb-6">' +
                     '<p class="text-xs text-warning-strong"><i class="fas fa-shield-alt mr-1"></i><strong>Security:</strong> Authentication is disabled by default. Enable it before exposing CertMate to the internet.</p>' +
                     '</div>' +
-                    '<div class="text-center"><button type="button" onclick="openCreateCertForm()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
+                    '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
             }
@@ -844,7 +844,7 @@
         // API, Auto-renew, Delete" with no domain context, repeated for
         // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert, i) {
@@ -858,7 +858,7 @@
             var domainAlias = cert.domain_alias || '';
 
             if (!cert.exists) {
-                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
+                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" data-click="openCertRow" data-pass="el">
                     <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
@@ -956,7 +956,7 @@
             // A certificate with no key gets a key glyph, not a padlock: it
             // secures nothing until it is reissued.
             var lockIcon = keylessRow ? 'fa-key' : isExpired ? 'fa-lock-open' : 'fa-lock';
-            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
+            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" data-click="openCertRow" data-pass="el">
                 <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
@@ -977,7 +977,7 @@
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
-                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
+                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
                     </div>
                 </td>
             </tr>`;
@@ -1108,19 +1108,6 @@
         '</div>';
     }
 
-    // Keyboard activation for the clickable certificate rows: Enter or Space
-    // opens the detail panel, matching the row's onclick. Space is prevented
-    // from scrolling the page.
-    function certRowKey(event, domain) {
-        // Only the row itself: a keypress that bubbles up from a control inside it
-        // (a tag chip, an action button) belongs to that control.
-        if (event.target !== event.currentTarget) return;
-        if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
-            event.preventDefault();
-            openCertDetail(domain);
-        }
-    }
-
     // Element focused before the detail modal opened, so focus can be
     // restored to the triggering row when it closes.
     var _lastDetailFocus = null;
@@ -1131,7 +1118,7 @@
     function autoRenewSwitchHtml(domain, on) {
         return '<button type="button" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" ' +
             'aria-label="Auto-renew" title="' + (on ? 'Auto-renew on — click to disable' : 'Auto-renew off — click to enable') + '" ' +
-            'onclick="toggleAutoRenew(\'' + domain + '\', ' + (on ? 'true' : 'false') + ')" ' +
+            CertMate.does('click', 'toggleAutoRenew', [domain, !!on]) +
             'class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ' + (on ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600') + '">' +
             '<span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ' + (on ? 'translate-x-5' : 'translate-x-1') + '"></span>' +
             '</button>';
@@ -1271,7 +1258,7 @@
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
                 '<p class="text-muted mb-6">Certificate not found on disk.</p>' +
                 (roleAtLeast('admin')
-                    ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="inline-flex items-center px-4 py-2 border border-danger-line shadow-sm text-sm font-medium rounded-md text-danger-fg bg-danger-surface hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>'
+                    ? '<button type="button"' + CertMate.does('click', 'deleteCertificate', [cert.domain]) + 'class="inline-flex items-center px-4 py-2 border border-danger-line shadow-sm text-sm font-medium rounded-md text-danger-fg bg-danger-surface hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>'
                     : '<p class="text-xs text-gray-400">Ask an admin to remove this entry.</p>') +
                 '</div>';
         } else {
@@ -1299,8 +1286,9 @@
             // Quick-action icon button — same glyphs as the dashboard table row
             // actions so the action vocabulary reads identically everywhere; the
             // label lives in the tooltip + aria-label.
-            function actIcon(onclick, icon, hover, title) {
-                return '<button type="button" onclick="' + onclick + '" title="' + title + '" aria-label="' + title + '" ' +
+            // `action` and `args` name what the button does (see CertMate.actions).
+            function actIcon(action, args, icon, hover, title, pass) {
+                return '<button type="button"' + CertMate.does('click', action, args, pass) + 'title="' + title + '" aria-label="' + title + '" ' +
                     'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
                     '<i class="fas ' + icon + '"></i></button>';
             }
@@ -1312,8 +1300,8 @@
             }
             // Danger variant — red at rest, same chrome as the topbar Logout, for
             // the destructive delete. (deleteCertificate still confirms first.)
-            function actIconDanger(onclick, icon, title) {
-                return '<button type="button" onclick="' + onclick + '" title="' + title + '" aria-label="' + title + '" ' +
+            function actIconDanger(action, args, icon, title) {
+                return '<button type="button"' + CertMate.does('click', action, args) + 'title="' + title + '" aria-label="' + title + '" ' +
                     'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-danger-line text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 transition">' +
                     '<i class="fas ' + icon + '"></i></button>';
             }
@@ -1337,7 +1325,7 @@
                 '<div class="flex-shrink-0 flex items-center gap-2">' +
                 '<span class="text-[11px] font-semibold uppercase tracking-wide ' + statusClass + ' opacity-80">Auto-renew</span>' +
                 (roleAtLeast('operator')
-                    ? autoRenewSwitchHtml(safeDomain, autoOn)
+                    ? autoRenewSwitchHtml(cert.domain, autoOn)
                     : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>') +
                 '</div>' +
                 '</div>' +
@@ -1365,25 +1353,25 @@
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Deployment</h4>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 deploymentBadgesHtml(cert, true) +
-                actIcon("checkDeploymentStatus('" + safeDomain + "', this, true)", 'fa-arrows-rotate', 'indigo', 'Check deployment now') +
+                actIcon('checkDeploymentStatusNow', [cert.domain], 'fa-arrows-rotate', 'indigo', 'Check deployment now', 'el') +
                 actLink('/settings#deploy', 'fa-pen-to-square', 'blue', 'View / edit deploy hooks') +
-                (roleAtLeast('admin') ? actIcon("runDeployHooks('" + safeDomain + "')", 'fa-play', 'green', 'Run deploy hooks now') : '') +
+                (roleAtLeast('admin') ? actIcon('runDeployHooks', [cert.domain], 'fa-play', 'green', 'Run deploy hooks now') : '') +
                 '</div>' +
-                (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
+                (safeDomainAlias ? '<button type="button"' + CertMate.does('click', 'checkDnsAliasForCertificate', [cert.domain]) + 'class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden mt-2"></div>' +
                 '</div>' +
                 '<div>' +
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 (roleAtLeast('operator')
-                    ? actIcon("renewCertificate('" + safeDomain + "')", 'fa-sync-alt', 'green', 'Renew certificate') +
-                      actIcon("renewCertificate('" + safeDomain + "', true)", 'fa-bolt', 'amber', 'Force renew') +
-                      actIcon("startEditReissue('" + safeDomain + "')", 'fa-pen', 'blue', 'Edit & reissue')
+                    ? actIcon('renewCertificate', [cert.domain], 'fa-sync-alt', 'green', 'Renew certificate') +
+                      actIcon('renewCertificate', [cert.domain, true], 'fa-bolt', 'amber', 'Force renew') +
+                      actIcon('startEditReissue', [cert.domain], 'fa-pen', 'blue', 'Edit & reissue')
                     : '') +
-                actIcon("downloadCertificate('" + safeDomain + "')", 'fa-download', 'blue', 'Download certificate') +
-                actIcon("copyCurlCommand('" + safeDomain + "')", 'fa-code', 'indigo', 'Show API command') +
+                actIcon('downloadCertificate', [cert.domain], 'fa-download', 'blue', 'Download certificate') +
+                actIcon('copyCurlCommand', [cert.domain], 'fa-code', 'indigo', 'Show API command') +
                 (roleAtLeast('admin')
-                    ? actIconDanger("deleteCertificate('" + safeDomain + "')", 'fa-trash-alt', 'Delete certificate')
+                    ? actIconDanger('deleteCertificate', [cert.domain], 'fa-trash-alt', 'Delete certificate')
                     : '') +
                 '</div>' +
                 '</div>' +
@@ -1882,7 +1870,7 @@
         var names = keyless.slice(0, 5).map(function (cert) { return escapeHtml(cert.domain); }).join(', ') +
             (keyless.length > 5 ? ' and ' + (keyless.length - 5) + ' more' : '');
         var action = roleAtLeast('operator')
-            ? '<button type="button" id="reissueKeylessBtn" onclick="reissueKeyless()" class="shrink-0 px-3 py-1 border border-warning-line rounded-md text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50">Reissue all</button>'
+            ? '<button type="button" id="reissueKeylessBtn" data-click="reissueKeyless" class="shrink-0 px-3 py-1 border border-warning-line rounded-md text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50">Reissue all</button>'
             : '<span class="shrink-0 text-xs">An operator can reissue them.</span>';
         banner.innerHTML =
             '<div class="flex items-center justify-between gap-4 p-3 rounded-md bg-warning-surface border border-warning-line text-sm text-warning-fg">' +
@@ -2833,7 +2821,7 @@
                 form.insertBefore(banner, form.firstChild);
             }
             banner.innerHTML = '<span><i class="fas fa-pen mr-2"></i>Editing <strong>' + escapeHtml(domain) + '</strong>: submitting reissues the certificate in place. The current certificate keeps serving until the reissue succeeds; the key shape is preserved unless explicitly changed.</span>' +
-                '<button type="button" onclick="cancelEditReissue()" class="shrink-0 px-3 py-1 border border-warning-line rounded-md text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40">Cancel edit</button>';
+                '<button type="button" data-click="cancelEditReissue" class="shrink-0 px-3 py-1 border border-warning-line rounded-md text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40">Cancel edit</button>';
             if (submitBtn) {
                 if (!submitBtn.dataset.createHtml) {
                     submitBtn.dataset.createHtml = submitBtn.innerHTML;
@@ -3197,7 +3185,7 @@
         // never saw the form — so offering Retry there would POST an empty
         // create. Dismiss is always available.
         var retryButton = job.payload
-            ? '<button type="button" onclick="retryCreateJob(\'' + jobId + '\')" class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-border text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600" title="Retry issuance for ' + domain + '" aria-label="Retry issuance for ' + domain + '"><i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Retry</button>'
+            ? '<button type="button"' + CertMate.does('click', 'retryCreateJob', [jobId]) + 'class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-border text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600" title="Retry issuance for ' + domain + '" aria-label="Retry issuance for ' + domain + '"><i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Retry</button>'
             : '';
         return '<tr data-pending-job="' + jobId + '" class="bg-red-50/40 dark:bg-red-900/10">' +
             '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
@@ -3210,7 +3198,7 @@
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap text-right"><div class="flex items-center justify-end gap-1">' +
             retryButton +
-            '<button type="button" onclick="dismissPendingJob(\'' + jobId + '\')" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="Dismiss" aria-label="Dismiss failed issuance for ' + domain + '"><i class="fas fa-times" aria-hidden="true"></i></button>' +
+            '<button type="button"' + CertMate.does('click', 'dismissPendingJob', [jobId]) + 'class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="Dismiss" aria-label="Dismiss failed issuance for ' + domain + '"><i class="fas fa-times" aria-hidden="true"></i></button>' +
             '</div></td></tr>';
     }
 
@@ -3699,7 +3687,7 @@
         if (!value) return '';
         return ' <button type="button" class="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors align-middle"' +
             ' data-copy="' + escapeHtml(value) + '"' +
-            ' onclick="copyAliasValueToClipboard(this)"' +
+            ' data-click="copyAliasValueToClipboard" data-pass="el"' +
             ' title="Copy to clipboard" aria-label="Copy to clipboard">' +
             '<i class="fas fa-clipboard text-xs"></i></button>';
     }
@@ -3911,7 +3899,6 @@
     window.reissueKeyless = reissueKeyless;
     window.exportAllCertificates = exportAllCertificates;
     window.openCertDetail = openCertDetail;
-    window.certRowKey = certRowKey;
     window.startEditReissue = startEditReissue;
     window.cancelEditReissue = cancelEditReissue;
     window.closeCertDetail = closeCertDetail;
@@ -3946,4 +3933,23 @@
     window.retryCreateJob = retryCreateJob;
     window.dismissPendingJob = dismissPendingJob;
     window.flashCertRow = flashCertRow;
+    // What the page's controls may ask for by name (`data-click`, `data-change`,
+    // `data-input`): see CertMate.actions in certmate.js.
+    CertMate.globalActions([
+        'cancelEditReissue', 'checkAllDeploymentStatuses', 'checkDnsAliasForCertificate',
+        'clearDebugConsole', 'clearFilters', 'closeCertDetail', 'copyAliasValueToClipboard',
+        'copyCurlCommand', 'copyDetailDomain', 'copyFromModal', 'deleteCertificate',
+        'dismissPendingJob', 'downloadCertificate', 'exportAllCertificates',
+        'invalidateAllCache', 'loadCertificates', 'reissueKeyless', 'renewCertificate',
+        'retryCreateJob', 'runDeployHooks', 'setStatusFilter', 'showCacheStats',
+        'sortCertificates', 'startEditReissue', 'toggleAdvancedOptions', 'toggleAutoRenew',
+        'toggleCertKeyOptions', 'toggleDebugConsole', 'toggleDnsProviderVisibility',
+        'updateAccountSelection', 'updateCAProviderInfo'
+    ]);
+    CertMate.actions({
+        // A row of the list opens its certificate; the name is on the row.
+        openCertRow: function (row) { openCertDetail(row.getAttribute('data-row-domain')); },
+        // "Check now" in the detail panel: past the cache, with the button to spin.
+        checkDeploymentStatusNow: function (domain, button) { return checkDeploymentStatus(domain, button, true); }
+    });
 })();

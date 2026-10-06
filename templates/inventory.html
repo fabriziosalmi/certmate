@@ -16,12 +16,12 @@
                      to say so here: the button finishes either way, and an
                      unexplained no-op reads as a broken button. -->
                 <span id="scanMsg" class="text-xs text-muted" role="status"></span>
-                <button type="button" id="scanNowBtn" onclick="InventoryPage.runScan()"
+                <button type="button" id="scanNowBtn" data-click="InventoryPage.runScan"
                         class="hidden px-2.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"
                         title="Run a discovery sweep and CT-log poll now">
                     <i class="fas fa-magnifying-glass mr-1"></i>Scan now
                 </button>
-                <button type="button" onclick="InventoryPage.load()" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh inventory">
+                <button type="button" data-click="InventoryPage.load" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh inventory">
                     <i class="fas fa-sync"></i>
                 </button>
             </div>
@@ -201,7 +201,7 @@
             </div>
             <div class="px-6 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">
                 <span id="cfgMsg" class="text-xs text-muted mr-auto"></span>
-                <button type="button" onclick="InventoryPage.saveConfig()" class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition">Save configuration</button>
+                <button type="button" data-click="InventoryPage.saveConfig" class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition">Save configuration</button>
             </div>
         </details>
     </div>
@@ -209,22 +209,22 @@
     <!-- Filters -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden">
         <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center gap-2 flex-wrap">
-            <input type="search" id="invSearch" oninput="InventoryPage.render()" aria-label="Search inventory"
+            <input type="search" id="invSearch" data-input="InventoryPage.render" aria-label="Search inventory"
                    placeholder="Search subject, SAN, issuer…"
                    class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-64">
-            <select id="invGroup" onchange="InventoryPage.render()" aria-label="Filter by group" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
+            <select id="invGroup" data-change="InventoryPage.render" aria-label="Filter by group" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                 <option value="">All certificates</option>
                 <option value="issued">Issued by CertMate</option>
                 <option value="discovered">Discovered / unmanaged</option>
             </select>
-            <select id="invSource" onchange="InventoryPage.render()" aria-label="Filter by source" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
+            <select id="invSource" data-change="InventoryPage.render" aria-label="Filter by source" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                 <option value="">All sources</option>
                 <option value="issued">issued</option>
                 <option value="probed">probed</option>
                 <option value="ct-log">ct-log</option>
                 <option value="imported">imported</option>
             </select>
-            <select id="invExpiry" onchange="InventoryPage.render()" aria-label="Filter by expiry" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
+            <select id="invExpiry" data-change="InventoryPage.render" aria-label="Filter by expiry" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                 <option value="">Any expiry</option>
                 <option value="expired">Expired</option>
                 <option value="critical">≤ 7 days</option>
@@ -234,7 +234,7 @@
             </select>
             <label class="inline-flex items-center gap-2 text-xs text-muted cursor-pointer"
                    title="A certificate is superseded when every endpoint it was seen on has since been seen serving a different one. Nothing is deleted; they are hidden until you ask.">
-                <input type="checkbox" id="invSuperseded" onchange="InventoryPage.toggleSuperseded()" aria-label="Show superseded certificates">
+                <input type="checkbox" id="invSuperseded" data-change="InventoryPage.toggleSuperseded" aria-label="Show superseded certificates">
                 Show superseded
             </label>
             <span class="text-xs text-muted ml-auto" id="invCount"></span>

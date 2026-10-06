@@ -168,30 +168,35 @@ def test_delete_route_is_registered_with_the_delete_verb(app_container):
     assert 'DELETE' in rules['/api/inventory/<string:fingerprint>']
 
 
-def test_every_inline_handler_the_table_emits_is_actually_exported():
+def test_every_action_the_table_names_is_exported_and_registered():
     """The Forget button reaches the DOM as
-    `onclick="InventoryPage.forgetFromEl(this)"`. If the function is not on the
-    exported object the button is inert and clicking it raises in the console —
-    a failure no server-side test can see, and the reason the reported bug
-    would look unfixed.
+    `data-click="InventoryPage.forgetFromEl"`. If the function is not on the
+    exported object, or is not among the actions the page registers, the button
+    is inert: a failure no server-side test can see, and the reason the
+    reported bug would look unfixed.
     """
     import re
 
     js = Path('static/js/inventory.js').read_text()
 
-    called = set(re.findall(r'InventoryPage\.([A-Za-z_]\w*)\s*\(', js))
-    assert 'forgetFromEl' in called, (
-        'the Forget button is not wired to a handler at all'
+    named = set(re.findall(r'data-click="InventoryPage\.([A-Za-z_]\w*)"', js))
+    assert 'forgetFromEl' in named and 'adoptFromEl' in named, (
+        f'the buttons of a row are not wired to an action at all: {sorted(named)}'
     )
 
     exported_block = js[js.index('window.InventoryPage'):]
     exported_block = exported_block[:exported_block.index('};')]
     exported = set(re.findall(r'(\w+)\s*:', exported_block))
+    registered = set(re.findall(
+        r"'InventoryPage\.(\w+)'", js[js.index('CertMate.globalActions(['):]))
 
-    missing = called - exported
-    assert not missing, (
-        f'inventory.js calls InventoryPage.{sorted(missing)} from generated '
-        f'markup but does not export it — those buttons do nothing'
+    assert not named - exported, (
+        f'inventory.js names InventoryPage.{sorted(named - exported)} in generated '
+        f'markup but does not export it: those buttons do nothing'
+    )
+    assert not named - registered, (
+        f'InventoryPage.{sorted(named - registered)} is named in generated markup '
+        f'and is not registered as an action: those buttons do nothing'
     )
 
 

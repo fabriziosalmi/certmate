@@ -19,7 +19,7 @@
              was relocated out of the inline layout to kill the layout-jump;
              all field IDs are unchanged, so the submit handler in dashboard.js
              keeps working untouched. -->
-        <div id="certDrawerScrim" onclick="closeCertDrawer()" aria-hidden="true"
+        <div id="certDrawerScrim" data-click="closeCertDrawer" aria-hidden="true"
              class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 motion-reduce:transition-none"></div>
         <!-- Creating a certificate is the primary action, so on >=md it presents
              as a CENTERED MODAL (fade + scale); on mobile it stays a side/full
@@ -64,7 +64,7 @@
                         <p id="drawerSubtitle" class="text-sm text-muted mt-1">Generate SSL certificates with multiple CA providers and advanced DNS challenge support</p>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button type="button" onclick="closeCertDrawer()" class="ml-3 inline-flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded hover:bg-hover" title="Close form" aria-label="Close create certificate form">
+                        <button type="button" data-click="closeCertDrawer" class="ml-3 inline-flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded hover:bg-hover" title="Close form" aria-label="Close create certificate form">
                             <i class="fas fa-times text-lg"></i>
                         </button>
                     </div>
@@ -74,11 +74,11 @@
                 <!-- Type segmented: the decision, in the head. Preset from the
                      active view; locally overridable for this one creation. -->
                 <div class="grid grid-cols-2 gap-1.5 rounded-xl border border-border bg-surface-2 p-1.5 mb-5" role="group" aria-label="Certificate type">
-                    <button type="button" id="drawerTypeServer" aria-pressed="true" onclick="setDrawerType('server')"
+                    <button type="button" id="drawerTypeServer" aria-pressed="true" data-click="setDrawerType" data-args='["server"]'
                             class="inline-flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-muted hover:text-foreground transition-all aria-pressed:bg-surface aria-pressed:text-primary aria-pressed:shadow-sm">
                         <i class="fas fa-globe" aria-hidden="true"></i>Server
                     </button>
-                    <button type="button" id="drawerTypeClient" aria-pressed="false" onclick="setDrawerType('client')"
+                    <button type="button" id="drawerTypeClient" aria-pressed="false" data-click="setDrawerType" data-args='["client"]'
                             class="inline-flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-muted hover:text-foreground transition-all aria-pressed:bg-surface aria-pressed:text-primary aria-pressed:shadow-sm">
                         <i class="fas fa-id-card" aria-hidden="true"></i>Client
                     </button>
@@ -175,7 +175,7 @@
                                 </label>
                                 <select id="ca_provider_select" name="ca_provider" 
                                         class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
-                                        onchange="updateCAProviderInfo()">
+                                        data-change="updateCAProviderInfo">
                                     <option value="">Loading configured CAs...</option>
                                 </select>
                                 <div id="ca-provider-info" class="mt-2 text-xs text-muted hidden">
@@ -201,7 +201,7 @@
                                 </label>
                                 <select id="challenge_type_select" name="challenge_type"
                                         class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
-                                        onchange="toggleDnsProviderVisibility()">
+                                        data-change="toggleDnsProviderVisibility">
                                     <option value="">Use default from settings</option>
                                     <option value="dns-01">DNS-01 (DNS provider credentials)</option>
                                     <option value="http-01">HTTP-01 (domain points to this server)</option>
@@ -221,7 +221,7 @@
                                 </label>
                                 <select id="dns_provider_select" name="dns_provider"
                                         class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
-                                        onchange="updateAccountSelection()">
+                                        data-change="updateAccountSelection">
                                     <option value="">Use default from settings</option>
                                     <option value="cloudflare">Cloudflare</option>
                                     <option value="route53">AWS Route53</option>
@@ -279,7 +279,7 @@
                     
                     <!-- Advanced Options (Collapsible) -->
                     <div class="border-t border-border pt-6">
-                        <button type="button" onclick="toggleAdvancedOptions()" id="advancedOptionsToggle"
+                        <button type="button" data-click="toggleAdvancedOptions" id="advancedOptionsToggle"
                                 aria-expanded="false" aria-controls="advanced-options"
                                 class="flex items-center text-sm font-medium text-label hover:text-primary transition-colors duration-200">
                             <i class="fas fa-cog mr-2"></i>
@@ -337,7 +337,7 @@
                                     </label>
                                     <select id="cert_key_type"
                                             class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm"
-                                            onchange="toggleCertKeyOptions()">
+                                            data-change="toggleCertKeyOptions">
                                         <option value="">Use global default</option>
                                         <option value="rsa">RSA</option>
                                         <option value="ecdsa">ECDSA</option>
@@ -526,6 +526,8 @@
                 }
             } catch (e) { /* storage unavailable */ }
         });
+        // What the panel's controls ask for by name: see CertMate.actions.
+        CertMate.globalActions(['closeCertDrawer', 'openCertDrawer', 'openCreateCertForm', 'setDrawerType']);
         </script>
 
         <!-- SERVER CERTIFICATES (stats + table). The creation drawer sits
@@ -550,19 +552,19 @@
                              surface. Status filtering is a row of chips (phase 5)
                              driving setStatusFilter(); counts come from updateStats. -->
                         <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter certificates by status">
-                            <button type="button" data-status-chip="all" aria-pressed="true" onclick="setStatusFilter('all')"
+                            <button type="button" data-status-chip="all" aria-pressed="true" data-click="setStatusFilter" data-args='["all"]'
                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">
                                 All <span class="text-[10px] tabular-nums opacity-70" data-status-count="all"></span>
                             </button>
-                            <button type="button" data-status-chip="valid" aria-pressed="false" onclick="setStatusFilter('valid')"
+                            <button type="button" data-status-chip="valid" aria-pressed="false" data-click="setStatusFilter" data-args='["valid"]'
                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-green-500/15 aria-pressed:text-success-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">
                                 Valid <span class="text-[10px] tabular-nums opacity-70" data-status-count="valid"></span>
                             </button>
-                            <button type="button" data-status-chip="expiring" aria-pressed="false" onclick="setStatusFilter('expiring')"
+                            <button type="button" data-status-chip="expiring" aria-pressed="false" data-click="setStatusFilter" data-args='["expiring"]'
                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-yellow-500/15 aria-pressed:text-warning-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-yellow-500/30">
                                 Expiring <span class="text-[10px] tabular-nums opacity-70" data-status-count="expiring"></span>
                             </button>
-                            <button type="button" data-status-chip="expired" aria-pressed="false" onclick="setStatusFilter('expired')"
+                            <button type="button" data-status-chip="expired" aria-pressed="false" data-click="setStatusFilter" data-args='["expired"]'
                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">
                                 Expired <span class="text-[10px] tabular-nums opacity-70" data-status-count="expired"></span>
                             </button>
@@ -570,20 +572,20 @@
                         <!-- List actions — quick-action icon group (replaces the
                              labelled "Check All"). -->
                         <div class="inline-flex items-center gap-1.5" role="group" aria-label="Certificate list actions">
-                            <button type="button" onclick="checkAllDeploymentStatuses(event)" class="cm-icon-btn"
+                            <button type="button" data-click="checkAllDeploymentStatuses" data-pass="event" class="cm-icon-btn"
                                     title="Re-check deployment status for every certificate (server + browser probe)."
                                     aria-label="Check all deployments">
                                 <i class="fas fa-tower-broadcast" aria-hidden="true"></i>
                             </button>
-                            <button type="button" onclick="exportAllCertificates()" class="cm-icon-btn"
+                            <button type="button" data-click="exportAllCertificates" class="cm-icon-btn"
                                     title="Export all certificates as a ZIP" aria-label="Export all certificates as ZIP">
                                 <i class="fas fa-file-zipper" aria-hidden="true"></i>
                             </button>
-                            <button type="button" onclick="loadCertificates()" class="cm-icon-btn"
+                            <button type="button" data-click="loadCertificates" class="cm-icon-btn"
                                     title="Refresh the certificate list" aria-label="Refresh certificate list">
                                 <i class="fas fa-arrows-rotate" aria-hidden="true"></i>
                             </button>
-                            <button type="button" data-debug-control onclick="toggleDebugConsole()" class="cm-icon-btn hidden"
+                            <button type="button" data-debug-control data-click="toggleDebugConsole" class="cm-icon-btn hidden"
                                     title="Open the deployment-check debug console" aria-label="Open deployment-check debug console">
                                 <i class="fas fa-terminal" aria-hidden="true"></i>
                             </button>
@@ -609,35 +611,35 @@
                                  See issue #170. -->
                             <th id="sort-th-domain" scope="col" aria-sort="none"
                                 class="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider w-1/2">
-                                <button type="button" onclick="sortCertificates('domain')"
+                                <button type="button" data-click="sortCertificates" data-args='["domain"]'
                                         class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
                                     Domain <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-domain" aria-hidden="true"></i>
                                 </button>
                             </th>
                             <th id="sort-th-status" scope="col" aria-sort="none"
                                 class="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                                <button type="button" onclick="sortCertificates('status')"
+                                <button type="button" data-click="sortCertificates" data-args='["status"]'
                                         class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
                                     Status <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-status" aria-hidden="true"></i>
                                 </button>
                             </th>
                             <th id="sort-th-expiry" scope="col" aria-sort="none"
                                 class="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden md:table-cell">
-                                <button type="button" onclick="sortCertificates('expiry')"
+                                <button type="button" data-click="sortCertificates" data-args='["expiry"]'
                                         class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
                                     Expires <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-expiry" aria-hidden="true"></i>
                                 </button>
                             </th>
                             <th id="sort-th-provider" scope="col" aria-sort="none"
                                 class="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
-                                <button type="button" onclick="sortCertificates('provider')"
+                                <button type="button" data-click="sortCertificates" data-args='["provider"]'
                                         class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
                                     Provider <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-provider" aria-hidden="true"></i>
                                 </button>
                             </th>
                             <th id="sort-th-ca" scope="col" aria-sort="none"
                                 class="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
-                                <button type="button" onclick="sortCertificates('ca')"
+                                <button type="button" data-click="sortCertificates" data-args='["ca"]'
                                         class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
                                     CA <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-ca" aria-hidden="true"></i>
                                 </button>
@@ -671,19 +673,19 @@
     <!-- Certificate Detail Modal — centered on every viewport; the body
          scrolls within max-h-[90vh] so the card stays fully visible on mobile
          and portrait orientations. -->
-    <div id="certDetailOverlay" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-40 hidden" onclick="closeCertDetail()"></div>
-    <div id="certDetailPanel" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="detailDomain" onclick="if (event.target === this) closeCertDetail()">
+    <div id="certDetailOverlay" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-40 hidden" data-click="closeCertDetail"></div>
+    <div id="certDetailPanel" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="detailDomain" data-click="closeCertDetail" data-self>
         <div id="certDetailCard" class="bg-surface rounded-2xl shadow-elevated w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden transform transition-all duration-200 opacity-0 scale-95">
             <div class="flex-shrink-0 bg-surface border-b border-gray-100 dark:border-white/5 px-6 py-4 flex items-center justify-between gap-2">
                 <div class="flex items-center gap-2 min-w-0 flex-1">
                     <!-- Domain shown in full on one line (mono, horizontally
                          scrollable for very long names) and copyable. -->
                     <h3 class="text-base font-semibold font-mono text-foreground whitespace-nowrap overflow-x-auto min-w-0" id="detailDomain">Certificate Details</h3>
-                    <button type="button" onclick="copyDetailDomain()" class="flex-shrink-0 text-gray-400 hover:text-foreground p-1.5 rounded-lg hover:bg-hover transition-colors" title="Copy domain" aria-label="Copy domain">
+                    <button type="button" data-click="copyDetailDomain" class="flex-shrink-0 text-gray-400 hover:text-foreground p-1.5 rounded-lg hover:bg-hover transition-colors" title="Copy domain" aria-label="Copy domain">
                         <i class="fas fa-copy text-sm"></i>
                     </button>
                 </div>
-                <button type="button" data-detail-close onclick="closeCertDetail()" class="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Close" aria-label="Close certificate details">
+                <button type="button" data-detail-close data-click="closeCertDetail" class="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Close" aria-label="Close certificate details">
                     <i class="fas fa-times text-lg"></i>
                 </button>
             </div>
@@ -721,7 +723,7 @@
                 <div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded-md font-mono text-sm">
                     <code id="curlCommandText"></code>
                 </div>
-                <button type="button" onclick="copyFromModal()" class="mt-2 inline-flex items-center px-3 py-1 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-input hover:bg-gray-50 dark:hover:bg-gray-600">
+                <button type="button" data-click="copyFromModal" class="mt-2 inline-flex items-center px-3 py-1 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-input hover:bg-gray-50 dark:hover:bg-gray-600">
                     <i class="fas fa-copy mr-1"></i>
                     Copy Command
                 </button>
@@ -750,16 +752,16 @@
                 <span class="text-gray-400 text-xs">| Cache: <span id="debug-cache-info">Loading...</span></span>
             </div>
             <div class="flex items-center space-x-2">
-                <button onclick="showCacheStats()" class="text-blue-400 hover:text-blue-300" title="Show cache stats" aria-label="Show cache stats">
+                <button data-click="showCacheStats" class="text-blue-400 hover:text-blue-300" title="Show cache stats" aria-label="Show cache stats">
                     <i class="fas fa-database"></i>
                 </button>
-                <button onclick="invalidateAllCache()" class="text-orange-400 hover:text-orange-300" title="Clear cache" aria-label="Clear cache">
+                <button data-click="invalidateAllCache" class="text-orange-400 hover:text-orange-300" title="Clear cache" aria-label="Clear cache">
                     <i class="fas fa-trash"></i>
                 </button>
-                <button onclick="clearDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
+                <button data-click="clearDebugConsole" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
                     <i class="fas fa-eraser"></i>
                 </button>
-                <button onclick="toggleDebugConsole()" class="text-gray-400 hover:text-white" title="Close console" aria-label="Close debug console">
+                <button data-click="toggleDebugConsole" class="text-gray-400 hover:text-white" title="Close console" aria-label="Close debug console">
                     <i class="fas fa-times"></i>
                 </button>
             </div>

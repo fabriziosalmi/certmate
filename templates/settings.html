@@ -98,11 +98,11 @@
                     Atomic backup of both settings and certificates, captured together so they can never drift out of sync.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <button type="button" onclick="createBackup('unified', this)" class="btn-cta w-full sm:w-auto">
+                    <button type="button" data-click="createBackup" data-args='["unified"]' data-pass="el" class="btn-cta w-full sm:w-auto">
                         <i class="fas fa-archive mr-2"></i>
                         Create Unified Backup
                     </button>
-                    <button type="button" onclick="CertMate.copyDiagnosticsSnapshot(this)" class="btn btn-secondary w-full sm:w-auto">
+                    <button type="button" data-click="CertMate.copyDiagnosticsSnapshot" data-pass="el" class="btn btn-secondary w-full sm:w-auto">
                         <i class="fas fa-clipboard mr-2"></i>
                         Copy Diagnostic Snapshot
                     </button>
@@ -130,7 +130,7 @@
                     <input type="file" id="backup-upload-input" accept=".zip,.enc"
                            aria-label="Backup archive to upload"
                            class="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-surface-2 file:text-foreground hover:file:bg-hover">
-                    <button type="button" onclick="uploadBackup(this)" class="btn btn-secondary w-full sm:w-auto">
+                    <button type="button" data-click="uploadBackup" data-pass="el" class="btn btn-secondary w-full sm:w-auto">
                         <i class="fas fa-upload mr-2"></i>
                         Upload Backup
                     </button>
@@ -144,7 +144,7 @@
                         <i class="fas fa-history mr-2 text-orange-500"></i>
                         Existing Backups
                     </h4>
-                    <button type="button" onclick="refreshBackupList()" 
+                    <button type="button" data-click="refreshBackupList" 
                             class="text-sm text-info-fg hover:text-blue-800 dark:hover:text-blue-300">
                         <i class="fas fa-sync-alt mr-1"></i>
                         Refresh
@@ -212,7 +212,7 @@
                         class="px-4 py-2 border border-border rounded-md text-label hover:bg-gray-50 dark:hover:bg-gray-700">
                     Cancel
                 </button>
-                <button type="button" onclick="saveAccount()"
+                <button type="button" data-click="saveAccount"
                         class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                     Add Account
                 </button>
@@ -257,7 +257,7 @@
                         class="px-4 py-2 border border-border rounded-md text-label hover:bg-gray-50 dark:hover:bg-gray-700">
                     Cancel
                 </button>
-                <button type="button" onclick="saveEditAccount()"
+                <button type="button" data-click="saveEditAccount"
                         class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                     Update Account
                 </button>
@@ -269,10 +269,10 @@
     <div id="settingsDebugConsole" class="fixed bottom-4 left-4 right-4 bg-black text-green-400 font-mono text-xs rounded-lg shadow-lg border border-gray-600 hidden z-40">
         <div class="flex justify-between items-center px-3 py-2 border-b border-gray-700">
             <span class="text-white font-semibold">Settings Debug Console</span>
-            <button type="button" onclick="clearSettingsDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
+            <button type="button" data-click="clearSettingsDebugConsole" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
                 <i class="fas fa-eraser"></i>
             </button>
-            <button type="button" onclick="toggleSettingsDebugConsole()" class="text-gray-400 hover:text-white ml-2" title="Close console" aria-label="Close debug console">
+            <button type="button" data-click="toggleSettingsDebugConsole" class="text-gray-400 hover:text-white ml-2" title="Close console" aria-label="Close debug console">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -280,7 +280,7 @@
             <div class="text-gray-500">Debug console ready. All settings actions will be logged here...</div>
         </div>
     </div>
-    <button type="button" data-debug-control onclick="toggleSettingsDebugConsole()"
+    <button type="button" data-debug-control data-click="toggleSettingsDebugConsole"
             class="hidden fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary"
             aria-label="Open settings debug console">
         <i class="fas fa-bug"></i> Debug

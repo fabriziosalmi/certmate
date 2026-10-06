@@ -68,7 +68,7 @@
     </div>
     <div class="flex items-center space-x-2">
         <input type="checkbox" id="generateKey" name="generateKey" checked
-               onchange="document.getElementById('csrBlock').classList.toggle('hidden', this.checked)"
+               data-change="ccToggleCsrBlock" data-pass="checked"
                class="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-2 focus:ring-primary">
         <label for="generateKey" class="text-sm text-label">
             <i class="fas fa-lock mr-1"></i>Generate private key (recommended)
