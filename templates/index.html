@@ -662,7 +662,7 @@
     </div><!-- /x-show server -->
 
     <!-- CLIENT CERTIFICATES -->
-    <div x-show="$store.certs.view === 'client'" x-cloak x-init="if ($store.certs.view === 'client') initClientCerts()">
+    <div x-show="$store.certs.view === 'client'" x-cloak x-init="$store.certs.loadClientCerts()">
         {% include 'partials/_client_certs.html' %}
     </div>
 

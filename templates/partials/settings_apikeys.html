@@ -95,10 +95,10 @@
                     <template x-if="loading">
                         <div class="text-center py-4 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading keys...</div>
                     </template>
-                    <template x-if="!loading && Object.keys(keys).length === 0">
+                    <template x-if="!loading && keyIds.length === 0">
                         <div class="text-center py-4 text-muted text-sm"><i class="fas fa-key mr-2"></i> No API keys created yet.</div>
                     </template>
-                    <template x-for="keyId in Object.keys(keys)" :key="keyId">
+                    <template x-for="keyId in keyIds" :key="keyId">
                         <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
                              :class="keys[keyId].revoked ? 'opacity-50' : ''">
                             <div class="flex items-center space-x-3">
@@ -123,14 +123,14 @@
                                         </template>
                                         <template x-if="keys[keyId].created_during_setup && keys[keyId].setup_origin_confirmed_at">
                                             <span class="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted"
-                                                  :title="'Created during setup; confirmed by ' + (keys[keyId].setup_origin_confirmed_by || '?') + ' on ' + CertMate.formatDate(keys[keyId].setup_origin_confirmed_at)">
+                                                  :title="'Created during setup; confirmed by ' + (keys[keyId].setup_origin_confirmed_by || '?') + ' on ' + formatDate(keys[keyId].setup_origin_confirmed_at)">
                                                 created during setup: confirmed
                                             </span>
                                         </template>
                                         <template x-if="keys[keyId].is_expired && !keys[keyId].revoked">
                                             <span class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">expired</span>
                                         </template>
-                                        <template x-if="Array.isArray(keys[keyId].allowed_domains)">
+                                        <template x-if="hasDomainList(keyId)">
                                             <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
                                                   :title="keys[keyId].allowed_domains.length === 0 ? 'No domains in scope (locked)' : 'Scoped to: ' + keys[keyId].allowed_domains.join(', ')">
                                                 <i class="fas fa-shield-alt mr-1"></i>
@@ -141,14 +141,14 @@
                                     <div class="text-xs text-muted">
                                         <span class="font-mono" x-text="keys[keyId].token_prefix + '...'"></span>
                                         <span class="mx-1">&middot;</span>
-                                        <span x-text="'Created ' + CertMate.formatDate(keys[keyId].created_at)"></span>
+                                        <span x-text="'Created ' + formatDate(keys[keyId].created_at)"></span>
                                         <template x-if="keys[keyId].last_used_at">
-                                            <span><span class="mx-1">&middot;</span><span x-text="'Last used ' + CertMate.formatDate(keys[keyId].last_used_at)"></span></span>
+                                            <span><span class="mx-1">&middot;</span><span x-text="'Last used ' + formatDate(keys[keyId].last_used_at)"></span></span>
                                         </template>
                                         <template x-if="keys[keyId].expires_at">
-                                            <span><span class="mx-1">&middot;</span><span x-text="'Expires ' + CertMate.formatDate(keys[keyId].expires_at)"></span></span>
+                                            <span><span class="mx-1">&middot;</span><span x-text="'Expires ' + formatDate(keys[keyId].expires_at)"></span></span>
                                         </template>
-                                        <template x-if="Array.isArray(keys[keyId].allowed_domains) && keys[keyId].allowed_domains.length > 0">
+                                        <template x-if="hasDomainList(keyId) && keys[keyId].allowed_domains.length > 0">
                                             <span><span class="mx-1">&middot;</span><span class="font-mono" x-text="keys[keyId].allowed_domains.join(', ')"></span></span>
                                         </template>
                                     </div>

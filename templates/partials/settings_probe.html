@@ -64,7 +64,7 @@
                                             <div x-show="editProtoOpen" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
                                                  class="absolute z-50 mt-1 w-full border border-border rounded-lg bg-input shadow-lg overflow-hidden">
                                                 <template x-for="opt in ['https-tls', 'tls', 'smtp-starttls']" :key="opt">
-                                                    <button type="button" @click="editProtocol = opt; editProtoOpen = false"
+                                                    <button type="button" @click="chooseEditProtocol(opt)"
                                                             class="w-full text-left px-3 py-2 text-sm transition-colors duration-100"
                                                             :class="editProtocol === opt ? 'bg-hover text-foreground font-medium' : 'text-muted hover:bg-hover hover:text-foreground'">
                                                         <span x-text="protocolLabel(opt)"></span>
@@ -166,7 +166,7 @@
                                 <div x-show="addProtoOpen" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
                                      class="absolute z-50 mt-1 w-full border border-border rounded-lg bg-input shadow-lg overflow-hidden">
                                     <template x-for="opt in ['https-tls', 'tls', 'smtp-starttls']" :key="opt">
-                                        <button type="button" @click="addProtocol = opt; addProtoOpen = false"
+                                        <button type="button" @click="chooseAddProtocol(opt)"
                                                 class="w-full text-left px-3 py-2 text-sm transition-colors duration-100"
                                                 :class="addProtocol === opt ? 'bg-hover text-foreground font-medium' : 'text-muted hover:bg-hover hover:text-foreground'">
                                             <span x-text="protocolLabel(opt)"></span>

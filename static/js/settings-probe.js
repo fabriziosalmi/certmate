@@ -23,6 +23,10 @@
             addPort: '',
             addProtocol: 'https-tls',
             addProtoOpen: false,
+            // Choosing a protocol sets it and closes its list: two statements,
+            // and an expression is one.
+            chooseAddProtocol: function (protocol) { this.addProtocol = protocol; this.addProtoOpen = false; },
+            chooseEditProtocol: function (protocol) { this.editProtocol = protocol; this.editProtoOpen = false; },
             // "Edit" state
             editingDomain: null,
             editHost: '',
@@ -234,4 +238,11 @@
     }
 
     window.probeManager = probeManager;
+
+    // Registered by name as well: the build of Alpine in use evaluates an
+    // expression without `eval` and reaches nothing outside the component,
+    // so `x-data="probeManager()"` finds it here and not on `window`.
+    document.addEventListener('alpine:init', function () {
+        Alpine.data('probeManager', probeManager);
+    });
 })();

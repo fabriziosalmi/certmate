@@ -156,4 +156,11 @@
     }
 
     window.oidcSettings = oidcSettings;
+
+    // Registered by name as well: the build of Alpine in use evaluates an
+    // expression without `eval` and reaches nothing outside the component,
+    // so `x-data="oidcSettings()"` finds it here and not on `window`.
+    document.addEventListener('alpine:init', function () {
+        Alpine.data('oidcSettings', oidcSettings);
+    });
 })();

@@ -183,13 +183,13 @@
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
                             <i class="fas fa-sitemap mr-2 text-purple-500"></i>Domain-Specific Hooks
-                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + Object.keys(config.domain_hooks).length + ' domains)'"></span>
+                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + domainNames.length + ' domains)'"></span>
                         </span>
                         <i class="fas text-gray-400" :class="showDomain ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
                     <div x-show="showDomain" x-cloak class="p-4 space-y-3">
                         <p class="text-xs text-muted mb-2">These hooks only run for the specified domain.</p>
-                        <template x-for="domain in Object.keys(config.domain_hooks).sort()" :key="domain">
+                        <template x-for="domain in domainNames" :key="domain">
                             <div class="border border-border rounded-lg p-3 mb-2">
                                 <div class="flex items-center justify-between mb-3">
                                     <h4 class="font-medium text-sm text-foreground">
@@ -620,7 +620,7 @@
 
                 <!-- Execution History -->
                 <div class="border border-border rounded-lg overflow-hidden">
-                    <button type="button" @click="showHistory = !showHistory; if(showHistory) loadHistory()"
+                    <button type="button" @click="toggleHistory()"
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
                             <i class="fas fa-history mr-2 text-gray-500"></i>Recent Executions

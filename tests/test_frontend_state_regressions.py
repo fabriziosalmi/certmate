@@ -75,7 +75,11 @@ def test_the_sso_loader_records_the_failure_instead_of_falling_back_to_defaults(
 # --- #425 ------------------------------------------------------------------
 
 @pytest.mark.parametrize("template,state", [
-    ("templates/settings.html", "tab"),
+    # The Settings tab was `x-data` written out in settings.html, with the
+    # listener in its `x-init`. The build of Alpine in use evaluates no arrow
+    # function and reaches no `window`, so the component is registered from a
+    # file of its own, and the listener is beside the state there.
+    ("static/js/settings-tabs.js", "tab: fromHash()"),
     # #359 moved the dashboard's view toggle into the global topbar, so the
     # view itself moved out of index.html's `x-data` and into an Alpine store
     # that ships with the toggle. The listener that keeps it following the
