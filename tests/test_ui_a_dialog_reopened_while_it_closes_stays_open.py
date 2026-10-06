@@ -54,8 +54,6 @@ OPEN = "() => !document.getElementById('certDetailPanel').classList.contains('hi
 @pytest.fixture
 def dashboard(browser_page):
     page = browser_page
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); } catch (e) {}")
     page.route('**/api/certificates', lambda route: (
         route.fulfill(status=200, content_type='application/json', body=json.dumps(CERTIFICATES))
         if route.request.method == 'GET' else route.continue_()))

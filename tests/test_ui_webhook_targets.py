@@ -121,8 +121,6 @@ def page(browser_page):
     endpoint and reloads the component.
     """
     fresh = browser_page.context.new_page()
-    fresh.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); } catch (e) {}")
     delay = os.environ.get('CERTMATE_UI_SLOW_RESPONSES')
     if delay:
         # Answers that arrive late, as they do on a busy CI runner: how a test that

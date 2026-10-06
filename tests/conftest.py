@@ -661,13 +661,27 @@ def ui_session_cookie(docker_container):
             f"/login and the tests would silently exercise the login screen."
         )
 
+    # The first-run wizard covers the page and takes every click. It is
+    # dismissed here once, the way its own Skip button does it for every
+    # browser, and the instance stays what it is: one whose setup is not
+    # finished.
+    #
+    # This used to post the whole settings back with `setup_completed` set, and
+    # the answer was never read. It was a 403 (a session request with no Origin
+    # is refused), and with an Origin it would have been a 400 (the settings it
+    # had just read carry `users` and `oidc`, which this route does not take).
+    # So the wizard was on every page, and fourteen modules each hid it for
+    # themselves; the one that did not raced it.
     s = requests.Session()
     s.cookies.set("certmate_session", session_cookie)
-    r = s.get(f"{BASE_URL}/api/web/settings")
-    if r.status_code == 200:
-        data = r.json()
-        data["setup_completed"] = True
-        s.post(f"{BASE_URL}/api/web/settings", json=data)
+    dismissed = s.post(f"{BASE_URL}/api/web/settings", json={"wizard_dismissed": True},
+                       headers={"Origin": BASE_URL})
+    seen = s.get(f"{BASE_URL}/api/web/settings")
+    if dismissed.status_code != 200 or seen.json().get("wizard_dismissed") is not True:
+        pytest.fail(
+            f"UI suite could not dismiss the first-run wizard (HTTP {dismissed.status_code}: "
+            f"{dismissed.text[:200]}). It covers every page and takes the clicks."
+        )
     return session_cookie
 
 

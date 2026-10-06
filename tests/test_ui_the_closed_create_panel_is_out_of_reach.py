@@ -72,9 +72,6 @@ def _loaded(browser_page):
     itself right, and a test of "as loaded" would be reading that instead.
     """
     page = browser_page
-    page.add_init_script(
-        "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
-        " catch (e) {}")
     page.goto(BASE_URL, wait_until="networkidle")
     page.wait_for_selector(OPENER, state='visible')
     assert not _is_open(page)

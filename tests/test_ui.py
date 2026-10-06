@@ -296,16 +296,6 @@ class TestCertCreationFlow:
         browser_page.goto(BASE_URL)
         browser_page.wait_for_load_state("networkidle")
 
-        # The first-run setup wizard is rendered as a fixed-position overlay
-        # (#setupWizard, z-[110]) by static/js/setup-wizard.js when
-        # setup_completed is False — which is the case in a freshly-started
-        # test container. The overlay intercepts every pointer event, so any
-        # subsequent click against the dashboard times out. Remove the
-        # overlay DOM node so the test interacts with the live dashboard.
-        browser_page.evaluate(
-            "() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }"
-        )
-
         # v2.19.4 replaced the #toggleCreateForm button with a drawer opened
         # from the toolbar. This test kept clicking the old id and had been
         # failing ever since — invisibly, because it takes `cloudflare_token`
@@ -412,14 +402,6 @@ class TestClientCertListKeepsItsFilter:
     it across page loads, and the details panel offers the .pfx bundle the
     API has served since v2.24.0 but the UI never exposed."""
 
-    @staticmethod
-    def _drop_wizard(page):
-        # The first-run wizard is a fixed overlay (#setupWizard, z-[110]) that
-        # intercepts every click on a fresh container; other tests remove it
-        # the same way.
-        page.evaluate(
-            "() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }")
-
     def _open_client_tab(self, page):
         page.goto(BASE_URL)
         page.wait_for_load_state("domcontentloaded")
@@ -428,7 +410,6 @@ class TestClientCertListKeepsItsFilter:
         client_btn = page.locator("#certViewClientBtn")
         expect(client_btn).to_be_visible(timeout=10000)
         page.wait_for_timeout(1000)
-        self._drop_wizard(page)
         client_btn.click()
         expect(client_btn).to_have_attribute("aria-pressed", "true", timeout=10000)
         page.wait_for_timeout(800)
@@ -483,7 +464,6 @@ class TestClientCertListKeepsItsFilter:
         expect(active_chip).to_have_attribute("aria-pressed", "true")
 
         # Remembered across a page load.
-        self._drop_wizard(browser_page)
         browser_page.locator('[data-cc-status-chip="revoked"]').click()
         expect(row(ids[0])).to_be_visible(timeout=10000)
         expect(row(ids[1])).to_have_count(0)
@@ -493,7 +473,6 @@ class TestClientCertListKeepsItsFilter:
         expect(row(ids[1])).to_have_count(0)
 
         # The details panel has the PKCS#12 button next to crt/key/csr.
-        self._drop_wizard(browser_page)
         row(ids[0]).click()
         pfx = browser_page.locator('button[data-click="downloadCertFile"][data-args*="pfx"]')
         expect(pfx).to_be_visible(timeout=5000)
@@ -537,7 +516,6 @@ class TestDeliberateNoAuthToggle:
     def _open_users_tab(self, page):
         page.goto(f"{BASE_URL}/settings")
         page.wait_for_load_state("networkidle")
-        page.evaluate("() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }")
         page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
         page.wait_for_timeout(400)
 
