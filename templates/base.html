@@ -22,7 +22,7 @@
         html { scrollbar-gutter: stable; overflow-y: scroll; }
     </style>
     {% block head %}{% endblock %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Apply dark mode before paint to prevent flash
     (function() {
         var theme = localStorage.getItem('theme');
@@ -159,7 +159,7 @@
             </a>
         </div>
     </nav>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Logout visibility is now gated server-side via the `current_user`
     // Jinja context var, so the deferred /api/auth/me probe is no longer
     // needed — the button either renders or it doesn't, no layout shift.
@@ -378,7 +378,7 @@
     })();
     </script>
     <script defer src="/static/js/alpine.min.js"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Alpine load-failure fallback. `defer`-loaded scripts run before
     // DOMContentLoaded; if `window.Alpine` still isn't defined by then,
     // the bundle failed (network, parse error on an ancient browser,
@@ -431,7 +431,7 @@
             by <a href="https://github.com/fabriziosalmi/certmate" target="_blank" rel="noopener noreferrer" class="hover:text-foreground transition">Fabrizio Salmi and contributors</a>
         </div>
     </footer>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // What the top bar's controls ask for by name: see CertMate.actions.
     CertMate.globalActions(['doLogout', 'setTheme']);
 

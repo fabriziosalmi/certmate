@@ -27,7 +27,7 @@
    the 1136px at 1200. The 1100px this was first written against is not enough
    — the cluster lands in the bar and then wraps inside itself, leaving a
    108px-tall navigation, which is worse than giving it a row. #}
-<script>
+<script nonce="{{ csp_nonce }}">
 // The dashboard's Server/Client view, as a global Alpine store.
 //
 // It was `x-data` on the page's content wrapper, which worked while the toggle
@@ -37,7 +37,7 @@
 //
 // Not deferred, so it registers the listener before the deferred Alpine bundle
 // dispatches `alpine:init` — which is true wherever in the document this
-// partial is included. A <script> is display:none, so it is not a flex item of
+// partial is included. A <script nonce="{{ csp_nonce }}"> is display:none, so it is not a flex item of
 // the row around it.
 document.addEventListener('alpine:init', function () {
     function fromHash() {

@@ -12,9 +12,7 @@ dns:
   zone: certmate.org            # checked for CAA / DNSSEC / dangling CNAME
 deviations: []                  # MUSTs are NEVER waivable (AG-GOV-01)
 
-# OPEN MUST — tracked as remediation, NOT a waiver (AG-GOV-01 forbids waiving a MUST):
-#   AG-CSP-02 (HIGH) — script-src carries 'unsafe-inline' (inline <script> blocks and
-#   inline event handlers). 'unsafe-eval' is gone: Alpine is the @alpinejs/csp build.
-#   Surface is non-conformant at Bronze until fixed.
-#   fix:    nonce the inline scripts, move the inline handlers to listeners -> drop the token
-#   issue:  #314   owner: fabrizio   target: 2026-10-30   evidence: modules/factory.py:1705
+# AG-CSP-02 (HIGH) — closed by #314. script-src is 'self' and a per-response nonce: no 'unsafe-eval'
+#   (Alpine is the @alpinejs/csp build), no 'unsafe-inline' (no markup carries an event handler, and
+#   the inline <script> blocks carry the nonce).
+#   held by: tests/test_the_policy_allows_no_eval_and_no_inline_script.py   evidence: modules/factory.py:1726
