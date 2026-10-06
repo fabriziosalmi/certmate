@@ -144,6 +144,60 @@ def _caa_never_asks_real_dns():
         yield
 
 
+# The applications built in this process and not yet stopped.
+_APPLICATIONS = []
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _applications_are_remembered(_isolate_runtime_dirs):
+    """Every `create_app()` in the suite is written down, so it can be stopped.
+
+    `create_app()` starts a scheduler, an issuance pool, four event threads and
+    a watchdog, and leaves stopping them to `atexit`: right for a server, which
+    has one application and exits when it is done. A test process builds some
+    ninety, and nothing stopped any of them before the last test. Their
+    schedulers went on running: each fires `deploy_window_drain` at every
+    minute, and the daily sweeps at 02:00 to 07:00, in the middle of whatever
+    test is running by then.
+    """
+    import modules.factory as factory
+    register_at_exit = factory._stop_background_work_at_exit
+
+    def remember(container):
+        _APPLICATIONS.append(container)
+        register_at_exit(container)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(factory, '_stop_background_work_at_exit', remember)
+        yield
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _an_application_stops_with_its_module(_applications_are_remembered):
+    """An application lives no longer than the module that built it.
+
+    Whatever fixture built it, of whatever scope: by the time the next module
+    runs, its scheduler, its pool and its threads are stopped, the way the
+    application stops itself (`stop_background_work`). A module that needs an
+    application gets one from its own fixture, as all of them do.
+
+    Measured before this: 22 schedulers running after the first 76 modules.
+    Idle they allocate nothing, and at the minute they allocated 666 KB between
+    them, which a test that measures the memory of something else (the audit
+    chain's verifier, 25 KB on its own) read as its own and failed on.
+    """
+    yield
+    from modules.factory import stop_background_work
+    failed = []
+    while _APPLICATIONS:
+        container = _APPLICATIONS.pop()
+        try:
+            stop_background_work(container)
+        except Exception as error:                      # every one is tried, then all are reported
+            failed.append(repr(error))
+    assert failed == [], f'an application built in this module did not stop: {failed}'
+
+
 # certbot invocations that only read the local installation.
 _CERTBOT_LOCAL_ONLY = {'--version', '--help', '-h', 'plugins'}
 _REAL_CERTBOT = {'allowed': False, 'refused': [], 'session_over': False}
