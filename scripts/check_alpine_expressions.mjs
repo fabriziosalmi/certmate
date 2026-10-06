@@ -104,7 +104,8 @@ for (const file of fs.readdirSync(SCRIPTS).sort()) {
 
 // The templates: which includes which, and what each declares.
 const ATTRIBUTE = /(?<![\w-])(x-data|x-show|x-if|x-for|x-model(?:\.[\w.]+)?|x-text|x-html|x-init|x-effect|x-bind:[\w.-]+|x-on:[\w.:-]+|:[a-zA-Z][\w.-]*|@[a-z][\w.:-]*)\s*=\s*"([^"]*)"/gs;
-const decode = (s) => s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'");
+// `&amp;` last: decoded first, `&amp;lt;` would come out as `<` and not as the `&lt;` it stands for.
+const decode = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 function* templates(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
