@@ -1111,6 +1111,11 @@
     // Element focused before the detail modal opened, so focus can be
     // restored to the triggering row when it closes.
     var _lastDetailFocus = null;
+    // The close fades for 200 ms before it hides the dialog. This is that
+    // pending hide, so that opening the dialog again in the meantime can call
+    // it off: Escape gives the focus back to the row, and Enter is then enough
+    // to reopen while the fade is still running.
+    var _detailHideTimer = null;
 
     // Inline auto-renew toggle for the detail modal (replaces the old text row +
     // separate "Disable Auto-Renew" button). role="switch" for a11y; the click
@@ -1385,6 +1390,7 @@
         // fade) on the next frame so the transition actually plays. Focus moves
         // to the close button and is restored to the triggering row on close.
         _lastDetailFocus = document.activeElement;
+        clearTimeout(_detailHideTimer);
         overlay.classList.remove('hidden');
         panel.classList.remove('hidden');
         panel.classList.add('flex');
@@ -1405,7 +1411,10 @@
         var content = document.getElementById('certDetailContent');
         var card = document.getElementById('certDetailCard');
         if (card) card.classList.add('opacity-0', 'scale-95');
-        setTimeout(function () {
+        // One pending hide at a time: a second close inside the fade (Escape,
+        // then the backdrop) would otherwise leave a timer nobody remembers.
+        clearTimeout(_detailHideTimer);
+        _detailHideTimer = setTimeout(function () {
             overlay.classList.add('hidden');
             panel.classList.add('hidden');
             panel.classList.remove('flex');
