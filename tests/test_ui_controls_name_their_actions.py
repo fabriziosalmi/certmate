@@ -274,10 +274,11 @@ def test_the_dashboard_a_row_its_dialog_and_the_buttons_a_script_built(page):
     page.wait_for_function("() => !document.getElementById('certDetailPanel').classList.contains('hidden')")
     page.mouse.click(6, 6)                        # a corner: the backdrop, not the card
     page.wait_for_function("() => document.getElementById('certDetailPanel').classList.contains('hidden')")
-    # The list redraws itself when it reloads, and a row that is replaced
-    # takes the focus with it: wait for the page to be quiet, then focus and
-    # press in one step.
-    page.wait_for_load_state('networkidle')
+    # Three closes come before this key (the edit button, Escape, the
+    # backdrop). Each used to leave its own 200 ms timer, and one of them hid
+    # the dialog this key opens when the steps above came close enough
+    # together. tests/test_ui_a_dialog_reopened_while_it_closes_stays_open.py
+    # is where that is held; here the key only has to do what a click does.
     row.press('Enter')
     try:
         page.wait_for_function(
