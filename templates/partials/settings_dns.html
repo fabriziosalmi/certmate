@@ -413,7 +413,7 @@
                                     <i class="fab fa-cloudflare mr-2 text-orange-500"></i>
                                     Cloudflare Configuration
                                 </h4>
-                                <button type="button" id="cloudflare-add-account" onclick="showAddAccountModal('cloudflare')" 
+                                <button type="button" id="cloudflare-add-account" data-click="showAddAccountModal" data-args='["cloudflare"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -453,7 +453,7 @@
                                     <i class="fab fa-aws mr-2 text-orange-400"></i>
                                     AWS Route53 Configuration
                                 </h4>
-                                <button type="button" id="route53-add-account" onclick="showAddAccountModal('route53')" 
+                                <button type="button" id="route53-add-account" data-click="showAddAccountModal" data-args='["route53"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -468,7 +468,7 @@
                             <!-- Legacy single account fields (hidden when multi-account mode is active) -->
                             <div id="route53-legacy-config">
                                 <label for="route53_auth_mode" class="block text-sm font-medium text-label">Authentication</label>
-                                <select id="route53_auth_mode" name="route53_auth_mode" onchange="toggleRoute53LegacyAuthMode()" class="mt-1 mb-4 block w-full border border-border rounded-md py-2 px-3 bg-input text-foreground">
+                                <select id="route53_auth_mode" name="route53_auth_mode" data-change="toggleRoute53LegacyAuthMode" class="mt-1 mb-4 block w-full border border-border rounded-md py-2 px-3 bg-input text-foreground">
                                     <option value="access_keys">Access keys</option>
                                     <option value="iam_role">AWS credentials / IAM role (no keys)</option>
                                 </select>
@@ -525,7 +525,7 @@
                                     <i class="fab fa-microsoft mr-2 text-blue-600"></i>
                                     Azure DNS Configuration
                                 </h4>
-                                <button type="button" id="azure-add-account" onclick="showAddAccountModal('azure')" 
+                                <button type="button" id="azure-add-account" data-click="showAddAccountModal" data-args='["azure"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -599,7 +599,7 @@
                                     <i class="fab fa-google mr-2 text-blue-500"></i>
                                     Google Cloud DNS Configuration
                                 </h4>
-                                <button type="button" id="google-add-account" onclick="showAddAccountModal('google')" 
+                                <button type="button" id="google-add-account" data-click="showAddAccountModal" data-args='["google"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -646,7 +646,7 @@
                                     <i class="fas fa-server mr-2 text-gray-600"></i>
                                     PowerDNS Configuration
                                 </h4>
-                                <button type="button" id="powerdns-add-account" onclick="showAddAccountModal('powerdns')" 
+                                <button type="button" id="powerdns-add-account" data-click="showAddAccountModal" data-args='["powerdns"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -696,7 +696,7 @@
                                     <i class="fab fa-digital-ocean mr-2 text-blue-600"></i>
                                     DigitalOcean DNS Configuration
                                 </h4>
-                                <button type="button" id="digitalocean-add-account" onclick="showAddAccountModal('digitalocean')" 
+                                <button type="button" id="digitalocean-add-account" data-click="showAddAccountModal" data-args='["digitalocean"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -738,7 +738,7 @@
                                     <i class="fas fa-cloud mr-2 text-blue-600"></i>
                                     Vultr DNS Configuration
                                 </h4>
-                                <button type="button" id="vultr-add-account" onclick="showAddAccountModal('vultr')" 
+                                <button type="button" id="vultr-add-account" data-click="showAddAccountModal" data-args='["vultr"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -775,7 +775,7 @@
                                     <i class="fas fa-server mr-2 text-blue-600"></i>
                                     EfficientIP SOLIDserver DNS Configuration
                                 </h4>
-                                <button type="button" id="solidserver-add-account" onclick="showAddAccountModal('solidserver')" 
+                                <button type="button" id="solidserver-add-account" data-click="showAddAccountModal" data-args='["solidserver"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -1198,7 +1198,7 @@
                                     <i class="fas fa-exchange-alt mr-2 text-gray-600"></i>
                                     RFC2136 DNS Configuration
                                 </h4>
-                                <button type="button" id="rfc2136-add-account" onclick="showAddAccountModal('rfc2136')" 
+                                <button type="button" id="rfc2136-add-account" data-click="showAddAccountModal" data-args='["rfc2136"]' 
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Server
@@ -1405,7 +1405,7 @@
                                     <i class="fas fa-feather mr-2 text-yellow-500"></i>
                                     DuckDNS Configuration
                                 </h4>
-                                <button type="button" id="duckdns-add-account" onclick="showAddAccountModal('duckdns')"
+                                <button type="button" id="duckdns-add-account" data-click="showAddAccountModal" data-args='["duckdns"]'
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -1443,7 +1443,7 @@
                                     <i class="fas fa-terminal mr-2 text-gray-600"></i>
                                     Custom Script Configuration
                                 </h4>
-                                <button type="button" id="custom-script-add-account" onclick="showAddAccountModal('custom-script')"
+                                <button type="button" id="custom-script-add-account" data-click="showAddAccountModal" data-args='["custom-script"]'
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -1489,7 +1489,7 @@
                                     <i class="fas fa-network-wired mr-2 text-indigo-600"></i>
                                     NS1 Configuration
                                 </h4>
-                                <button type="button" id="nsone-add-account" onclick="showAddAccountModal('nsone')"
+                                <button type="button" id="nsone-add-account" data-click="showAddAccountModal" data-args='["nsone"]'
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account
@@ -1526,7 +1526,7 @@
                                     <i class="fas fa-cogs mr-2 text-green-600"></i>
                                     DNS Made Easy Configuration
                                 </h4>
-                                <button type="button" id="dnsmadeeasy-add-account" onclick="showAddAccountModal('dnsmadeeasy')"
+                                <button type="button" id="dnsmadeeasy-add-account" data-click="showAddAccountModal" data-args='["dnsmadeeasy"]'
                                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                     <i class="fas fa-plus mr-1"></i>
                                     Add Account

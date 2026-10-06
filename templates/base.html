@@ -83,7 +83,7 @@
                          old Certificates link was: the logo links home and the
                          Server/Client toggle handles cert navigation now. Visible at
                          all widths so mobile keeps search access. -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="inline-flex items-center px-2 py-2 rounded-md border-b-2 border-transparent hover:bg-hover text-muted hover:text-foreground" title="Search (Cmd+K)" aria-label="Open search">
+                    <button type="button" data-click="openCommandPalette" class="inline-flex items-center px-2 py-2 rounded-md border-b-2 border-transparent hover:bg-hover text-muted hover:text-foreground" title="Search (Cmd+K)" aria-label="Open search">
                         <i class="fas fa-search"></i>
                     </button>
                     <!-- Primary operations — icon-only on desktop (label via tooltip +
@@ -108,7 +108,7 @@
                         <i class="fas fa-question-circle"></i>
                     </a>
                     <!-- Keyboard shortcuts hint -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-hover rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
+                    <button type="button" data-click="openShortcutsHelp" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-hover rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
                         <i class="fas fa-keyboard text-sm"></i>
                     </button>
                     <!-- Notification bell — links to the full /notifications
@@ -125,7 +125,7 @@
                          the button no longer flashes in then out as the
                          old JS auth-check completed 500 ms after paint). -->
                     {% if current_user %}
-                    <button type="button" id="logoutBtn" onclick="doLogout()" class="inline-flex items-center px-2.5 py-2 rounded-md text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 border border-danger-line" title="Logout" aria-label="Log out">
+                    <button type="button" id="logoutBtn" data-click="doLogout" class="inline-flex items-center px-2.5 py-2 rounded-md text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 border border-danger-line" title="Logout" aria-label="Log out">
                         <i class="fas fa-sign-out-alt"></i>
                     </button>
                     {% endif %}
@@ -432,6 +432,9 @@
         </div>
     </footer>
     <script>
+    // What the top bar's controls ask for by name: see CertMate.actions.
+    CertMate.globalActions(['doLogout', 'setTheme']);
+
     // Opt-in: the endpoint answers `disabled` unless an operator turned the
     // check on, and this adds nothing to the page in that case. It never
     // blocks rendering — the footer is already correct without it.

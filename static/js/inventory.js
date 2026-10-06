@@ -158,7 +158,7 @@
         // Only unmanaged (discovered) certificates can be adopted.
         if (!r.managed) {
             html += '<button type="button" data-fp="' + fp + '" '
-                + 'onclick="InventoryPage.adoptFromEl(this)" '
+                + 'data-click="InventoryPage.adoptFromEl" data-pass="el" '
                 + 'class="px-2 py-1 text-xs bg-surface-2 text-primary rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
                 + 'title="Take over issuance/renewal of this certificate">'
                 + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
@@ -167,7 +167,7 @@
         // too: the certificate itself is untouched, so the only consequence is
         // that CertMate stops listing this observation.
         html += '<button type="button" data-fp="' + fp + '" '
-            + 'onclick="InventoryPage.forgetFromEl(this)" '
+            + 'data-click="InventoryPage.forgetFromEl" data-pass="el" '
             + 'class="ml-1 px-2 py-1 text-xs bg-surface-2 text-muted rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
             + 'title="Remove this certificate from the inventory">'
             + '<i class="fas fa-eraser mr-1"></i>Forget</button>';
@@ -597,4 +597,11 @@
         loadDomainHealth();
         gateAdminControls();
     });
+    // What the page's controls may ask for by name (`data-click`, `data-change`,
+    // `data-input`): see CertMate.actions in certmate.js.
+    CertMate.globalActions([
+        'InventoryPage.adoptFromEl', 'InventoryPage.forgetFromEl', 'InventoryPage.load',
+        'InventoryPage.render', 'InventoryPage.runScan', 'InventoryPage.saveConfig',
+        'InventoryPage.toggleSuperseded'
+    ]);
 }());

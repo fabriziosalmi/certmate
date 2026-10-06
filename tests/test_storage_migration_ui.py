@@ -31,6 +31,7 @@ const requests = [], messages = [];
 global.Option = function(text, value) { this.text = text; this.value = value; };
 global.window = {};
 global.CertMate = {
+  globalActions() {}, actions() {},
   escapeHtml: s => s, formatTime: () => '',
   toast: (message, type) => messages.push({message, type}),
 };

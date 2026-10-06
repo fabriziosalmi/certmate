@@ -200,7 +200,7 @@ class TestCAAndChallengeToggles:
 
         # CAs are configured per account: the panel lives in the account
         # modal, reached from "Add account" (#1045).
-        browser_page.locator('button[onclick="openCAAccountModal()"]').click(timeout=10000)
+        browser_page.locator('button[data-click="openCAAccountModal"]').click(timeout=10000)
         browser_page.select_option('#add-ca-type', 'google')
         browser_page.wait_for_timeout(300)
 
@@ -259,7 +259,8 @@ class TestSettingsCloudflareFlow:
         browser_page.click('label:has(input[name="dns_provider"][value="cloudflare"])')
 
         # Open add account modal for Cloudflare specifically
-        add_btn = browser_page.locator('#cloudflare-add-account, button[onclick*="showAddAccountModal(\'cloudflare\'"]')
+        add_btn = browser_page.locator(
+            '#cloudflare-add-account, button[data-click="showAddAccountModal"][data-args*="cloudflare"]')
         if add_btn.first.is_visible():
             add_btn.first.click()
             # Wait for the modal to actually appear
@@ -494,7 +495,7 @@ class TestClientCertListKeepsItsFilter:
         # The details panel has the PKCS#12 button next to crt/key/csr.
         self._drop_wizard(browser_page)
         row(ids[0]).click()
-        pfx = browser_page.locator('button[onclick="downloadCertFile(\'pfx\')"]')
+        pfx = browser_page.locator('button[data-click="downloadCertFile"][data-args*="pfx"]')
         expect(pfx).to_be_visible(timeout=5000)
 
 

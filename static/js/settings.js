@@ -2538,7 +2538,7 @@
         }
 
         // Show loading state
-        var testButton = document.querySelector('button[onclick="testCAProvider()"]');
+        var testButton = document.querySelector('button[data-click="testCAProvider"]');
         if (!testButton) return;
         var originalText = testButton.innerHTML;
         testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
@@ -3743,5 +3743,19 @@
         tabs[next].click();
     }
     window.onSettingsTabKeydown = onSettingsTabKeydown;
+
+    // What the page's controls may ask for by name (`data-click`, `data-change`,
+    // `data-input`): see CertMate.actions in certmate.js.
+    CertMate.globalActions([
+        'applyPrivateCaPreset', 'backfillAzureCertificateObjects', 'clearSettingsDebugConsole',
+        'createBackup', 'createUser', 'generateToken', 'openCAAccountModal',
+        'refreshBackupList', 'refreshUserList', 'saveAccount', 'saveCAAccount',
+        'saveEditAccount', 'selectCAAccountType', 'showAddAccountModal',
+        'showStorageMigrationModal', 'testCAProvider', 'testStorageBackend',
+        'toggleAWSAuthMode', 'toggleAzureBackfillRow', 'toggleDefaultKeyOptions',
+        'toggleLocalAuth', 'toggleRoute53LegacyAuthMode', 'toggleS3AuthMode',
+        'toggleSettingsDebugConsole', 'toggleStorageBackendConfig', 'toggleTokenVisibility',
+        'uploadBackup'
+    ]);
 
 })();

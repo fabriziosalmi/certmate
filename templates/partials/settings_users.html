@@ -35,7 +35,7 @@
                         <p class="text-xs text-muted mt-1">Require username/password login for web access</p>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="localAuthToggle" class="sr-only peer" onchange="toggleLocalAuth()">
+                        <input type="checkbox" id="localAuthToggle" class="sr-only peer" data-change="toggleLocalAuth">
                         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
                     </label>
                 </div>
@@ -73,7 +73,7 @@
                                 <option value="operator" selected>Operator</option>
                                 <option value="admin">Admin</option>
                             </select>
-                            <button type="button" onclick="createUser()"
+                            <button type="button" data-click="createUser"
                                     class="btn btn-primary">
                                 <i class="fas fa-plus mr-1"></i> Add
                             </button>
@@ -88,7 +88,7 @@
                     <h4 class="text-sm font-semibold text-label">
                         <i class="fas fa-list mr-1"></i> Existing Users
                     </h4>
-                    <button type="button" onclick="refreshUserList()" 
+                    <button type="button" data-click="refreshUserList" 
                             class="text-sm text-info-fg hover:underline">
                         <i class="fas fa-sync-alt mr-1"></i> Refresh
                     </button>
