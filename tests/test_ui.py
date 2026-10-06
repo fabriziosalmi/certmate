@@ -79,12 +79,16 @@ class TestNavigation:
 class TestDashboardUI:
     """Dashboard page UI elements."""
 
-    def test_welcome_banner_visible(self, browser_page):
+    def test_welcome_banner_visible(self, browser_page, ui_session_cookie):
         import requests as _req
-        try:
-            certs = _req.get(f"{BASE_URL}/api/certificates", timeout=5).json()
-        except Exception:
-            certs = []
+        # Asked as the signed-in user. It used to be asked with no credentials:
+        # the answer was a 401 with an error in it, which is not an empty list,
+        # so this test took it for "certificates present" and skipped, in every
+        # run since the instance has required a login.
+        answer = _req.get(f"{BASE_URL}/api/certificates", timeout=5,
+                          cookies={"certmate_session": ui_session_cookie})
+        certs = answer.json()
+        assert answer.status_code == 200 and isinstance(certs, list), (answer.status_code, certs)
         if certs:
             # Lifecycle tests already created a certificate — the welcome banner
             # is intentionally hidden when certificates exist.
@@ -92,7 +96,8 @@ class TestDashboardUI:
             _pytest.skip("Certificates present in container — welcome banner not shown")
         browser_page.goto(BASE_URL)
         browser_page.wait_for_load_state("networkidle")
-        expect(browser_page.locator("text=Welcome to CertMate").first).to_be_visible()
+        # In the list's own place: the first-run wizard has the same words in its title.
+        expect(browser_page.locator("#certificatesList >> text=Welcome to CertMate")).to_be_visible()
 
     # The xfail is gone. It said "Pre-existing: fixture auth + Alpine.js
     # x-show timing" and was non-strict, so its result was ignored either way
