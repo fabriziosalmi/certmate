@@ -160,9 +160,14 @@ def _applications_are_remembered(_isolate_runtime_dirs):
     minute, and the daily sweeps at 02:00 to 07:00, in the middle of whatever
     test is running by then.
     """
+    import functools
+
     import modules.factory as factory
     register_at_exit = factory._stop_background_work_at_exit
 
+    # `wraps`, so that a test which reads the source of the hook reads the
+    # application's and not this.
+    @functools.wraps(register_at_exit)
     def remember(container):
         _APPLICATIONS.append(container)
         register_at_exit(container)
