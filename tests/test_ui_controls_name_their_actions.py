@@ -268,7 +268,22 @@ def test_the_dashboard_a_row_its_dialog_and_the_buttons_a_script_built(page):
     page.wait_for_function("() => !document.getElementById('certDetailPanel').classList.contains('hidden')")
     page.mouse.click(6, 6)                        # a corner: the backdrop, not the card
     page.wait_for_function("() => document.getElementById('certDetailPanel').classList.contains('hidden')")
-    row.focus()
-    page.keyboard.press('Enter')
-    page.wait_for_function("() => !document.getElementById('certDetailPanel').classList.contains('hidden')")
+    # The list redraws itself when it reloads, and a row that is replaced
+    # takes the focus with it: wait for the page to be quiet, then focus and
+    # press in one step.
+    page.wait_for_load_state('networkidle')
+    row.press('Enter')
+    try:
+        page.wait_for_function(
+            "() => !document.getElementById('certDetailPanel').classList.contains('hidden')", timeout=10000)
+    except Exception:
+        # What the page was like when the key did nothing, for whoever reads the failure.
+        raise AssertionError('Enter on the row did not open its certificate: ' + json.dumps(page.evaluate("""() => ({
+            focus: document.activeElement.tagName + '#' + document.activeElement.id + ' ' +
+                (document.activeElement.getAttribute('data-row-domain') || ''),
+            rows: Array.from(document.querySelectorAll('tr[data-row-domain]')).map(r => r.getAttribute('data-row-domain')),
+            panel: document.getElementById('certDetailPanel').className.slice(-40),
+            dialogs: Array.from(document.querySelectorAll('[role=dialog], [role=alertdialog]'))
+                .filter(e => e.offsetParent !== null).map(e => e.id || e.getAttribute('aria-label')),
+        })"""))) from None
     assert page.said == [], page.said

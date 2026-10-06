@@ -39,7 +39,7 @@ SCRIPTS = sorted(p for p in (REPO / 'static' / 'js').glob('*.js')
                  if not p.name.endswith('.min.js') and 'redoc' not in p.name)
 
 # An attribute whose name starts with `on`, in a tag: `<a onclick=`, ` onchange='`.
-HANDLER = re.compile(r"""<[a-zA-Z][^<>]*?\s(on[a-z]+)\s*=\s*["']""")
+HANDLER = re.compile(r"""<[a-zA-Z][^<>]*?\s(on[a-z]+)\s*=\s*["']""", re.I)
 # The same inside a string a script concatenates into markup.
 HANDLER_IN_A_STRING = re.compile(
     r"""[\s'"`](on(?:click|dblclick|change|input|submit|key\w+|mouse\w+|focus|blur|load|error))\s*=\s*\\?["']""")
@@ -86,7 +86,7 @@ def test_no_template_has_an_event_handler_attribute():
     found = []
     for path in TEMPLATES:
         # Markup only: what is between <script> tags is script, checked below.
-        markup = re.sub(r'<script\b.*?</script>', '', _read(path), flags=re.S)
+        markup = re.sub(r'<script\b.*?</script\s*>', '', _read(path), flags=re.S | re.I)
         found += [f'{path.name}: {attribute}' for attribute in HANDLER.findall(markup)]
     assert found == [], found
 
@@ -96,7 +96,7 @@ def test_no_script_builds_markup_with_an_event_handler():
     for path in SCRIPTS:
         found += [f'{path.name}: {attribute}' for attribute in HANDLER_IN_A_STRING.findall(_read(path))]
     for path in TEMPLATES:
-        for script in re.findall(r'<script\b[^>]*>(.*?)</script>', _read(path), flags=re.S):
+        for script in re.findall(r'<script\b[^>]*>(.*?)</script\s*>', _read(path), flags=re.S | re.I):
             found += [f'{path.name}: {attribute}' for attribute in HANDLER_IN_A_STRING.findall(script)]
     assert found == [], found
 
@@ -106,6 +106,7 @@ def test_the_patterns_above_do_find_a_handler():
     assert HANDLER.findall('<button type="button" onclick="closeCertDrawer()" class="x">') == ['onclick']
     assert HANDLER.findall("<select id='a' onchange='render()'>") == ['onchange']
     assert HANDLER.findall('<div x-on:click="open = true" data-on="1">') == []
+    assert HANDLER.findall('<BUTTON ONCLICK="x()">') == ['ONCLICK']
     assert HANDLER_IN_A_STRING.findall("""'<button type="button" onclick="retry(\\'' + id + '\\')" class=""") == ['onclick']
     assert HANDLER_IN_A_STRING.findall("""+ 'onclick="InventoryPage.adoptFromEl(this)" '""") == ['onclick']
     assert HANDLER_IN_A_STRING.findall("sse.onerror = function() {") == []
@@ -171,7 +172,7 @@ def test_a_control_with_arguments_or_something_passed_names_an_action():
     half converted."""
     orphans = []
     for path in TEMPLATES:
-        markup = re.sub(r'<script\b.*?</script>', '', _read(path), flags=re.S)
+        markup = re.sub(r'<script\b.*?</script\s*>', '', _read(path), flags=re.S | re.I)
         for tag in re.findall(r'<[a-zA-Z][^<>]*\sdata-(?:args|pass|self)\b[^<>]*>', markup):
             if not re.search(r'\sdata-(?:click|change|input)=', tag):
                 orphans.append(f'{path.name}: {tag[:90]}')
