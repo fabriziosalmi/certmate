@@ -313,21 +313,57 @@ def test_sanitize_text_redacts_an_encoded_certificate_too():
     assert '[PEM REDACTED]' in sanitize_text(base64.b64encode(cert_pem * 3).decode())
 
 
-def test_the_encoded_pem_scan_cannot_be_made_to_stall():
+# Text made to cost the scan as much as it can, at any size: one run of
+# base64 characters, runs too short to be looked at, runs that decode, and
+# runs just over the length at which a run is looked at.
+HOSTILE = {
+    'one long run': lambda size: 'A' * size,
+    'runs too short to look at': lambda size: 'AAAA ' * (size // 5),
+    'twenty runs that decode': lambda size: ('QUJD' * (size // 80) + '!') * 20,
+    'runs just long enough to look at': lambda size: ('A' * 119 + ' ') * (size // 120),
+}
+
+
+def _cpu_seconds(text):
+    """The least CPU time of this thread that sanitising `text` took, of up to five tries.
+
+    CPU time and not the clock: on a machine busy with something else the
+    clock counts the something else. The least of several, because what makes
+    one try slower than another is never the scan. And no more tries once
+    they have taken half a second together: nothing is learnt from repeating
+    a measurement that long, and a scan gone wrong would repeat for minutes.
+    """
+    least, spent = float('inf'), 0.0
+    for _ in range(5):
+        start = time.thread_time()
+        sanitize_text(text)
+        took = time.thread_time() - start
+        least, spent = min(least, took), spent + took
+        if spent > 0.5:
+            break
+    return least
+
+
+@pytest.mark.parametrize('shape', sorted(HOSTILE))
+def test_the_encoded_pem_scan_cannot_be_made_to_stall(shape):
     """sanitize_text sees unbounded hook output on a worker thread; it must stay linear.
 
-    Counted in the CPU time of this thread, not on the clock. What has to stay
-    bounded is the work, and on a machine busy with something else the clock
-    counts the something else: the same scan measured 1.5 s of CPU and between
-    2.7 and 4.7 s on the clock on a machine running six times what it has cores
-    for, and failed a release gate with nothing wrong in it.
+    Linear is a statement about growth, so growth is what is measured: sixteen
+    times the text may cost sixteen times the work, and a scan that has gone
+    quadratic costs 256 times. The line is drawn at 64, four times away from
+    both. A number of seconds says how fast the machine is instead: this test
+    had one (3.0 s of CPU for all the shapes together, 1.5 s where it was
+    written) and a hosted runner took 3.14 s with nothing wrong in the scan.
+
+    Twice, at a few kilobytes and at a few megabytes. The small sizes come
+    first because a quadratic scan shows there in seconds, and at the sizes
+    hook output can really have it would take hours to say so.
     """
-    hostile = ['A' * 3_000_000, ('AAAA ' * 400_000), ('QUJD' * 50_000 + '!') * 20,
-               'A' * 119 + ' ' + 'A' * 119]
-    start = time.thread_time()
-    for text in hostile:
-        sanitize_text(text)
-    assert time.thread_time() - start < 3.0
+    for size in (5_000, 200_000):
+        small, large = _cpu_seconds(HOSTILE[shape](size)), _cpu_seconds(HOSTILE[shape](16 * size))
+        assert large < 64 * small, (
+            f'{shape}: 16 times the text ({size} characters, then {16 * size}) took '
+            f'{large / small:.0f} times the CPU ({small * 1000:.2f} ms, then {large * 1000:.1f} ms)')
 
 
 # --------------------------------------------------------------------------

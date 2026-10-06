@@ -274,7 +274,7 @@ curl -H "Authorization: Bearer $TOKEN" \
                             Open an issue on GitHub
                             <i class="fas fa-external-link-alt ml-2 text-xs" aria-hidden="true"></i>
                         </a>
-                        <button type="button" onclick="CertMate.copyDiagnosticsSnapshot(this)"
+                        <button type="button" data-click="CertMate.copyDiagnosticsSnapshot" data-pass="el"
                                 class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
                             <i class="fas fa-clipboard mr-2" aria-hidden="true"></i>
                             Copy Diagnostic Snapshot
@@ -300,7 +300,7 @@ curl -H "Authorization: Bearer $TOKEN" \
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // In-page help search. Filters [data-help-section] blocks by plain
     // substring match on textContent. The section-nav strip stays
     // visible during search — it's how the user reorients when the

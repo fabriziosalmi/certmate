@@ -59,7 +59,7 @@ def test_index_quick_add_select_covers_all_providers():
     """templates/index.html — the quick-add domain DNS provider <select>
     must offer exactly the canonical provider set."""
     html = _read('templates/index.html')
-    m = re.search(r'updateAccountSelection\(\).*?</select>', html, re.S)
+    m = re.search(r'data-change="updateAccountSelection".*?</select>', html, re.S)
     assert m, "could not locate the quick-add DNS provider <select> in index.html"
     options = set(re.findall(r'<option value="([a-z0-9-]+)"', m.group(0)))
     missing = _SUPPORTED - options
@@ -72,11 +72,15 @@ def test_index_quick_add_select_covers_all_providers():
 
 
 def test_add_account_buttons_have_modal_field_schema():
-    """Every Add-Account button (showAddAccountModal('<provider>')) must have a
-    credential schema in settings.js getProviderFields, or its modal renders
-    no fields (the vultr bug)."""
+    """Every Add-Account button (`data-click="showAddAccountModal"` with the
+    provider as its argument) must have a credential schema in settings.js
+    getProviderFields, or its modal renders no fields (the vultr bug)."""
     html = _read('templates/partials/settings_dns.html')
-    button_providers = set(re.findall(r"showAddAccountModal\('([a-z0-9-]+)'\)", html))
+    button_providers = set(re.findall(
+        r"""data-click="showAddAccountModal" data-args='\["([a-z0-9-]+)"\]'""", html))
+    # The buttons are found by how they are written: a rewrite of the markup
+    # that this pattern no longer matches must not pass for "no buttons".
+    assert len(button_providers) >= 8, button_providers
 
     js = _read('static/js/settings.js')
     start = js.index('function getProviderFields')

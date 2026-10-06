@@ -11,7 +11,7 @@
                         <div class="border border-border rounded-lg overflow-hidden">
                             <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30">
                                 <span class="font-medium text-foreground text-sm"><i class="fas fa-check-circle mr-2 text-green-500"></i>Configured CA accounts</span>
-                                <button type="button" onclick="openCAAccountModal()" class="text-xs px-3 py-1.5 bg-primary text-white rounded hover:bg-secondary transition"><i class="fas fa-plus mr-1"></i>Add CA Account</button>
+                                <button type="button" data-click="openCAAccountModal" class="text-xs px-3 py-1.5 bg-primary text-white rounded hover:bg-secondary transition"><i class="fas fa-plus mr-1"></i>Add CA Account</button>
                             </div>
                             <div id="configured-ca-list" class="space-y-2 p-4" aria-label="Configured CA accounts"></div>
                         </div>
@@ -21,7 +21,7 @@
                         <div class="space-y-4">
                             <div>
                                 <label for="add-ca-type" class="block text-xs font-medium text-muted mb-1">Certificate Authority</label>
-                                <select id="add-ca-type" onchange="selectCAAccountType()" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm">
+                                <select id="add-ca-type" data-change="selectCAAccountType" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm">
                                     <option value="">Choose a type</option>
                                     <option value="letsencrypt">Let's Encrypt</option>
                                     <option value="letsencrypt_staging">Let's Encrypt (Staging)</option>
@@ -312,7 +312,7 @@
                                             Known ACME CA (preset) - Optional
                                             <i class="fas fa-info-circle ml-1 cursor-help" title="Pre-fills the directory URL for public ACME CAs that work through the Private CA entry"></i>
                                         </label>
-                                        <select id="private-ca-preset" onchange="applyPrivateCaPreset()"
+                                        <select id="private-ca-preset" data-change="applyPrivateCaPreset"
                                                 class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground">
                                             <option value="">Custom / self-hosted (default)</option>
                                             <option value="actalis">Actalis (EU public CA, EAB required)</option>
@@ -384,7 +384,7 @@
 
                             <!-- CA Provider Actions -->
                             <div class="flex flex-wrap gap-3 pt-2 border-t border-border">
-                                <button type="button" onclick="testCAProvider()" 
+                                <button type="button" data-click="testCAProvider" 
                                         class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm font-medium">
                                     <i class="fas fa-plug mr-1"></i> Check configuration
                                 </button>
@@ -395,7 +395,7 @@
                             </div>
                             <div class="flex justify-end gap-2 pt-2">
                                 <button type="button" data-modal-close class="px-3 py-2 border border-border rounded">Cancel</button>
-                                <button type="button" onclick="saveCAAccount()" class="px-3 py-2 bg-primary text-white rounded">Save Account</button>
+                                <button type="button" data-click="saveCAAccount" class="px-3 py-2 bg-primary text-white rounded">Save Account</button>
                             </div>
                         </div>
                     {% endcall %}

@@ -14,7 +14,7 @@ def test_route53_account_modal_switches_authentication_fields(node):
     script = r"""
 const fs = require('fs');
 global.window = global;
-global.CertMate = {escapeHtml: s => String(s), formatTime: () => '12:00'};
+global.CertMate = {globalActions() {}, actions() {}, escapeHtml: s => String(s), formatTime: () => '12:00'};
 global.setTimeout = () => 0;
 const mode = {value: 'access_keys', addEventListener(event, callback) { this.onchange = callback; }};
 const field = () => ({required: true, parentElement: {classList: {
@@ -50,7 +50,7 @@ def test_clearing_role_arn_is_sent_to_the_account_api(node):
     script = r"""
 const fs = require('fs');
 global.window = global;
-global.CertMate = {escapeHtml: s => String(s), formatTime: () => '12:00'};
+global.CertMate = {globalActions() {}, actions() {}, escapeHtml: s => String(s), formatTime: () => '12:00'};
 global.FormData = class {get(key) { return {
     'edit-provider-name': 'route53', 'edit-account-id': 'prod',
     name: 'prod', description: '', set_as_default: ''}[key]; }};
@@ -79,7 +79,7 @@ def test_legacy_route53_form_updates_the_default_account_not_provider_root(node)
     script = r"""
 const fs = require('fs');
 global.window = global;
-global.CertMate = {escapeHtml: s => String(s), formatTime: () => '12:00'};
+global.CertMate = {globalActions() {}, actions() {}, escapeHtml: s => String(s), formatTime: () => '12:00'};
 const values = {default_ca: 'letsencrypt', dns_provider: 'route53',
     challenge_type: 'dns-01', route53_auth_mode: 'iam_role',
     route53_region: 'eu-west-3', route53_assume_role_arn: ''};

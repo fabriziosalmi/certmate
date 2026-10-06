@@ -22,7 +22,7 @@
         <div class="flex items-center gap-2 no-print">
             <a href="/api/inventory/crypto-report?format=csv" class="px-3 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"><i class="fas fa-file-csv mr-1"></i>CSV</a>
             <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="px-3 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"><i class="fas fa-file-code mr-1"></i>JSON</a>
-            <button type="button" onclick="window.print()" class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"><i class="fas fa-print mr-1"></i>Print / Save as PDF</button>
+            <button type="button" data-click="print" class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"><i class="fas fa-print mr-1"></i>Print / Save as PDF</button>
         </div>
     </div>
 
@@ -66,7 +66,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     'use strict';
     var esc = (window.CertMate && CertMate.escapeHtml) || function (s) {
