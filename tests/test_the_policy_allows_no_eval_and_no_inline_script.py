@@ -70,13 +70,29 @@ def pages(tmp_path, monkeypatch):
     return application.test_client()
 
 
+SCRIPT_TAG = re.compile(r'<script\b([^>]*)>', re.I)
+LOADS_A_FILE = re.compile(r'(?:^|\s)src\s*=', re.I)
+
+
+def _inline_scripts(markup):
+    """The attributes of every <script> that carries its code, however the tag is written."""
+    return [attributes for attributes in SCRIPT_TAG.findall(markup) if not LOADS_A_FILE.search(attributes)]
+
+
+def test_an_inline_script_is_found_however_it_is_written():
+    """CONTROL for the two tests below: what they would not see, they would pass."""
+    assert _inline_scripts('<script>a()</script>') == ['']
+    assert _inline_scripts('<SCRIPT type="module">a()</SCRIPT>') == [' type="module"']
+    assert _inline_scripts('<script data-src="/static/js/a.js">a()</script>') == [' data-src="/static/js/a.js"']
+    assert _inline_scripts('<script src="/static/js/a.js"></script><script\n  SRC = "/b.js"></script>') == []
+
+
 @pytest.mark.parametrize('path', ['/login', '/redoc', '/docs/'])
 def test_a_page_carries_the_nonce_its_header_names(pages, path):
     response = pages.get(path, follow_redirects=True)
     assert response.status_code == 200
     header = re.search(r"'nonce-([^']+)'", response.headers['Content-Security-Policy']).group(1)
-    scripts = re.findall(r'<script\b([^>]*)>', response.get_data(as_text=True))
-    written = [attributes for attributes in scripts if 'src=' not in attributes]
+    written = _inline_scripts(response.get_data(as_text=True))
     assert written, f'{path} has no inline script: this test has lost its subject'
     assert all(f'nonce="{header}"' in attributes for attributes in written), written
 
@@ -87,8 +103,8 @@ def test_every_script_a_template_writes_carries_the_nonce():
     nothing and need none."""
     bare, counted = [], 0
     for template in sorted((REPO / 'templates').rglob('*.html')):
-        for attributes in re.findall(r'<script\b([^>]*)>', template.read_text()):
-            if 'src=' in attributes or 'application/json' in attributes or 'application/ld+json' in attributes:
+        for attributes in _inline_scripts(template.read_text()):
+            if 'application/json' in attributes or 'application/ld+json' in attributes:
                 continue
             counted += 1
             if 'nonce="{{ csp_nonce }}"' not in attributes:
