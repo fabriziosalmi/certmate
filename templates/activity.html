@@ -30,7 +30,7 @@
                             <option value="download">Downloaded</option>
                             <option value="api_request">API requests only</option>
                         </select>
-                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
+                        <button type="button" data-click="loadActivity" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
                             <i class="fas fa-sync"></i>
                         </button>
                     </div>
@@ -46,8 +46,8 @@
     <!-- Activity entry detail modal — opened by clicking any row. Populated by
          openDetail() with the full audit entry (metadata, error, command
          output for deploy hooks, raw details JSON) plus contextual actions. -->
-    <div id="activityDetailModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4" onclick="if (event.target===this) closeDetail()" role="dialog" aria-modal="true" aria-labelledby="activityDetailTitle">
-        <div class="bg-surface text-foreground border border-border rounded-xl shadow-2xl w-full max-w-2xl" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;" onclick="event.stopPropagation()">
+    <div id="activityDetailModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4" data-click="closeDetail" data-self role="dialog" aria-modal="true" aria-labelledby="activityDetailTitle">
+        <div class="bg-surface text-foreground border border-border rounded-xl shadow-2xl w-full max-w-2xl" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;">
             <div class="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div class="flex items-center gap-3 min-w-0">
                     <div id="activityDetailIcon" class="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center flex-shrink-0"><i class="fas fa-circle text-muted text-sm"></i></div>
@@ -56,14 +56,14 @@
                         <p id="activityDetailSub" class="text-xs text-muted truncate"></p>
                     </div>
                 </div>
-                <button type="button" onclick="closeDetail()" aria-label="Close" class="text-muted hover:text-foreground transition text-xl leading-none flex-shrink-0">&times;</button>
+                <button type="button" data-click="closeDetail" aria-label="Close" class="text-muted hover:text-foreground transition text-xl leading-none flex-shrink-0">&times;</button>
             </div>
             <div id="activityDetailBody" class="px-5 py-4 space-y-4 overflow-y-auto" style="min-height:0;"></div>
             <div id="activityDetailActions" class="flex items-center justify-end gap-2 px-5 py-3 border-t border-border flex-wrap"></div>
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function() {
         var escapeHtml = CertMate.escapeHtml;
         // Entries currently rendered (post-filter); the detail modal reads
@@ -387,7 +387,7 @@
                 list.innerHTML = '<li role="presentation" class="px-6 py-12 flex flex-col items-center gap-3 text-muted">' +
                     '<i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i>' +
                     '<p>' + emptyMsg + '</p>' +
-                    (anyFilter ? '<button type="button" onclick="clearActivityFilters()" class="text-xs text-primary hover:underline">Clear filters</button>' : '') +
+                    (anyFilter ? '<button type="button" data-click="clearActivityFilters" class="text-xs text-primary hover:underline">Clear filters</button>' : '') +
                 '</li>';
                 return;
             }
@@ -627,6 +627,8 @@
             clearTimeout(searchDebounce);
             searchDebounce = setTimeout(reloadFromFilters, 250);
         });
+        // What the page's controls ask for by name: see CertMate.actions.
+        CertMate.globalActions(['clearActivityFilters', 'closeDetail', 'loadActivity']);
         loadActivity();
     })();
     </script>

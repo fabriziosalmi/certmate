@@ -82,7 +82,7 @@ def test_add_opens_ca_account_modal_without_changing_default(node):
     script = r"""
 const fs = require('fs');
 global.window = global;
-global.CertMate = {escapeHtml: String};
+global.CertMate = {globalActions() {}, actions() {}, escapeHtml: String};
 const type = {value: '', options: [{value: '', textContent: 'Choose a type'},
     {value: 'sectigo', textContent: 'Sectigo'}]};
 const panels = {};

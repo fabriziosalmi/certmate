@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from flask_restx import Api, Namespace
 
@@ -1670,7 +1670,24 @@ def setup_correlation_ids(app):
                 logger.debug("Could not release the request log context")
 
 
+def _script_nonce():
+    """The value this response's inline scripts carry, made the first time it is asked for.
+
+    One per request and never reused: a script is the page's own when it
+    carries it, and an injected one cannot know it. Made on demand so that a
+    response that renders no template (the API, a file) and an error raised
+    before any hook ran are served the same way.
+    """
+    if 'csp_nonce' not in g:
+        g.csp_nonce = secrets.token_urlsafe(18)
+    return g.csp_nonce
+
+
 def setup_security_headers(app):
+    @app.context_processor
+    def nonce_for_templates():
+        return {'csp_nonce': _script_nonce()}
+
     @app.after_request
     def add_security_headers(response):
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
@@ -1680,12 +1697,16 @@ def setup_security_headers(app):
         if 'Content-Security-Policy' not in response.headers:
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
-                # No 'unsafe-eval'. Alpine is the `@alpinejs/csp` build, which
-                # parses an expression itself where the standard build compiles
-                # it with `new Function()`, and reaches nothing outside the
-                # component it is evaluated in. 'unsafe-inline' is still here
-                # for the inline <script> blocks and the inline event handlers
-                # (#314).
+                # No 'unsafe-eval' and no 'unsafe-inline' for scripts (#314).
+                #
+                # Alpine is the `@alpinejs/csp` build, which parses an
+                # expression itself where the standard build compiles it with
+                # `new Function()`, and reaches nothing outside the component it
+                # is evaluated in. No markup carries an event handler: a control
+                # names an action (static/js/certmate.js). And the <script>
+                # blocks written into the templates carry this response's
+                # nonce, which is how the browser tells them from one that was
+                # injected.
                 #
                 # ReDoc and its Montserrat/Roboto fonts used to require a CDN
                 # script-src/style-src/font-src whitelist. v2.4.15 self-hosts the
@@ -1702,7 +1723,7 @@ def setup_security_headers(app):
                 # and makes no third-party request. Worth knowing that the
                 # air-gap property there rests on the CSP, not on the bundle
                 # being clean: loosening img-src would reintroduce the egress.
-                "script-src 'self' 'unsafe-inline'; "
+                f"script-src 'self' 'nonce-{_script_nonce()}'; "
                 "style-src 'self' 'unsafe-inline'; "
                 "font-src 'self'; "
                 "img-src 'self' data:; "

@@ -146,10 +146,18 @@ def _row_templates():
     return rows
 
 
+def _sortable_fields(thead):
+    """The fields the headers sort by, as the markup names them. Never empty:
+    the two tests that loop over them would pass on nothing."""
+    fields = re.findall(r"""data-click="sortCertificates" data-args='\["(\w+)"\]'""", thead)
+    assert len(fields) >= 5, f'the sortable headers were not found in the markup: {fields}'
+    return fields
+
+
 def test_the_table_has_a_ca_column():
     thead = _certificates_thead()
     assert 'id="sort-th-ca"' in thead
-    assert "sortCertificates('ca')" in thead
+    assert 'ca' in _sortable_fields(thead)
 
 
 def test_every_sortable_header_has_the_ids_the_sort_code_looks_up():
@@ -158,7 +166,7 @@ def test_every_sortable_header_has_the_ids_the_sort_code_looks_up():
     match its ids sorts correctly and silently stops announcing itself —
     working code, broken for anyone using a screen reader."""
     thead = _certificates_thead()
-    for field in re.findall(r"sortCertificates\('(\w+)'\)", thead):
+    for field in _sortable_fields(thead):
         assert f'id="sort-th-{field}"' in thead, field
         assert f'id="sort-icon-{field}"' in thead, field
 
@@ -168,7 +176,7 @@ def test_the_sort_comparator_knows_the_field_the_header_sends():
     every pair: the click lands, the arrow moves, nothing reorders."""
     comparator = DASHBOARD_JS[DASHBOARD_JS.index('function applySorting'):]
     comparator = comparator[:comparator.index('\n    }')]
-    for field in re.findall(r"sortCertificates\('(\w+)'\)", _certificates_thead()):
+    for field in _sortable_fields(_certificates_thead()):
         assert f"field === '{field}'" in comparator, (
             f"the {field} header sorts by nothing: applySorting has no branch for it"
         )

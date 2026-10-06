@@ -28,7 +28,7 @@
   <body>
     <div id="redoc-container"></div>
     <script src="/static/js/redoc.standalone.js"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Pin ReDoc's typography to the system-font stack so the
       // bundle doesn't try to fetch Montserrat/Roboto from Google.
       // Spec is served by Flask-RESTx at /api/swagger.json; there is

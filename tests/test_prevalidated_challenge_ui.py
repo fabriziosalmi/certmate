@@ -19,7 +19,7 @@ const challenge = {
 const ca = {value: 'sectigo'};
 const dns = {style: {display: ''}};
 const form = {addEventListener() {}};
-global.CertMate = {escapeHtml: s => s};
+global.CertMate = {globalActions() {}, actions() {}, escapeHtml: s => s};
 global.window = {};
 global.setInterval = () => 0;
 global.document = {
