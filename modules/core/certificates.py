@@ -5262,6 +5262,7 @@ class CertificateManager:
         An explicit user-initiated deletion must destroy the key material
         everywhere CertMate put it.
         """
+        _reject_path_escaping_domain(domain)
         domain_lock = self._get_domain_lock(domain)
         # Acquire lock to ensure no create/renew is in progress (non-blocking)
         if not domain_lock.acquire(blocking=False):
