@@ -1,7 +1,7 @@
 # Google Cloud DNS specific requirements
 # Install this in addition to requirements-minimal.txt for Google Cloud support
 
-google-cloud-dns==0.37.1
+google-cloud-dns==0.37.2
 certbot-dns-google==5.8.0
 
 # The window the ACME stack works in: certbot and acme 5.8.0 require
