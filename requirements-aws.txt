@@ -1,7 +1,7 @@
 # AWS/Route53 specific requirements
 # Install this in addition to requirements-minimal.txt for AWS support
 
-boto3==1.43.103
+boto3==1.43.108
 certbot-dns-route53==5.8.0
 
 # The window the ACME stack works in: certbot and acme 5.8.0 require
