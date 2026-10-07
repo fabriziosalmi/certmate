@@ -751,7 +751,3 @@ def get_metrics_summary():
 def is_prometheus_available() -> bool:
     """Check if Prometheus client is available."""
     return PROMETHEUS_AVAILABLE
-
-def get_metrics_collector():
-    """Get the global metrics collector instance."""
-    return metrics_collector

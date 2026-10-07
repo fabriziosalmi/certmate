@@ -763,26 +763,6 @@ class AuditLogger:
             ip_address=ip_address
         )
 
-    def log_error(
-        self,
-        operation: str,
-        resource_type: str,
-        resource_id: str,
-        error_message: str,
-        user: Optional[str] = None,
-        ip_address: Optional[str] = None
-    ) -> None:
-        """Log operation error."""
-        self.log_operation(
-            operation=operation,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            status='failure',
-            user=user,
-            ip_address=ip_address,
-            error=error_message
-        )
-
     # ---- Configuration & access-control mutations ----
     # These methods cover the audit gap identified in Sprint 1: any operation
     # that mutates settings, auth config, API keys, users, deploy hooks, or
@@ -972,24 +952,6 @@ class AuditLogger:
             resource_id=f"{scope}:{hook_id}",
             status='success',
             details={'scope': scope},
-            user=user,
-            ip_address=ip_address,
-        )
-
-    def log_ca_provider_changed(
-        self,
-        old: Optional[str],
-        new: Optional[str],
-        user: Optional[str] = None,
-        ip_address: Optional[str] = None,
-    ) -> None:
-        """Log a change to the active CA provider."""
-        self.log_operation(
-            operation='update',
-            resource_type='ca_provider',
-            resource_id='active',
-            status='success',
-            details={'before': old, 'after': new},
             user=user,
             ip_address=ip_address,
         )

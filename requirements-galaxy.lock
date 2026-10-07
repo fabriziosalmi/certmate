@@ -22,9 +22,9 @@
 # same pins without hashes. See "Supply-chain posture for Python dependencies"
 # in SECURITY.md.
 
-ansible-core==2.20.9 \
-    --hash=sha256:1ab5e75c4bb214a37e75f40f02dc545cdbbe2a322ef367cbb4451234c3cbe765 \
-    --hash=sha256:73bcd4c3dd51b597202f8cf5a72b8e145342c7885ad21114e5979bdf629b3366
+ansible-core==2.21.4 \
+    --hash=sha256:81a9329f4f12cfa5008dcab5d1bf23ae69b7effc08c0f00048ab2461147ae95a \
+    --hash=sha256:ebe74d9c8fadcb41ad2151e031bf1e785e3098aaa015019b4e19a0a96f0dcc4f
 cffi==2.1.1 \
     --hash=sha256:046bfc24911b37851ee1b51aab8bffe713d89c68c6a057b09484ce9fd5f69b4e \
     --hash=sha256:06c72bb76605a4b0cd0aad6930b69d4baf7dd5d806cfc409b824191099700e66 \
