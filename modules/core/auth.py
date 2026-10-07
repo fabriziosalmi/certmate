@@ -1920,9 +1920,13 @@ class AuthManager:
             # everything else it knows.
             ip = None
 
+        # The endpoint is the request's own path and the user's name and role come
+        # from a record an administrator can edit: every value is scrubbed, as
+        # in the scope denial above, so none of them can end the line.
         logger.warning(
             "RBAC denial: user=%s role=%s required=%s endpoint=%s ip=%s",
-            username, actual_role, required_role, endpoint, ip,
+            scrub_log_value(username), scrub_log_value(actual_role), scrub_log_value(required_role),
+            scrub_log_value(endpoint), scrub_log_value(ip),
         )
 
         if self._audit_logger is not None:

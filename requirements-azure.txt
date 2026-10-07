@@ -6,5 +6,5 @@
 # certbot-dns-azure is no longer used: it has no release for certbot 4 or
 # later (#103).
 
-azure-identity==1.25.3
+azure-identity==1.26.0
 azure-mgmt-dns==9.0.0
