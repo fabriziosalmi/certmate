@@ -123,11 +123,17 @@ def test_secrets_are_redacted_before_send():
 
 
 def test_send_is_failure_isolated():
+    reached = []
+
     def boom(payload, config):
+        reached.append(payload)
         raise ConnectionError('collector down')
     # Must not raise.
     _sink({'audit_sink': {'enabled': True, 'format': FORMAT_SYSLOG, 'host': 'h'}},
           syslog_send=boom).send(_entry())
+    # And the transport that fails was the one asked: without this the test passes
+    # for a send() that never sends.
+    assert len(reached) == 1
 
 
 def test_settings_read_failure_isolated():
@@ -135,6 +141,8 @@ def test_settings_read_failure_isolated():
     sm.load_settings.side_effect = RuntimeError('settings unavailable')
     # No enabled config -> disabled; must not raise.
     AuditSink(sm, syslog_send=_Capture()).send(_entry())
+    # The settings were read, and it was the read that failed.
+    assert sm.load_settings.called
 
 
 # --------------------------------------------------------------------------- #
@@ -176,3 +184,6 @@ def test_audit_logger_survives_sink_error(tmp_path):
     # Must not raise despite the sink blowing up.
     logger.log_operation(operation='create', resource_type='certificate',
                          resource_id='ex.com', status='success')
+    # The sink was handed the entry: without this the test passes for a logger
+    # that never calls it.
+    assert sink.send.call_count == 1

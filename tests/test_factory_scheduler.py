@@ -36,8 +36,12 @@ def test_run_manager_job_handles_missing_manager_without_crash(monkeypatch, tmp_
 
 def test_run_manager_job_swallows_manager_exception_without_crash(monkeypatch, tmp_path):
     """Branch with manager method raising must log, not propagate."""
+    ran = []
+
     class Boom:
-        def check_renewals(self): raise RuntimeError('simulated')
+        def check_renewals(self):
+            ran.append(True)
+            raise RuntimeError('simulated')
 
     monkeypatch.setenv('DATA_DIR', str(tmp_path))
     factory._flask_app = None
@@ -45,3 +49,5 @@ def test_run_manager_job_swallows_manager_exception_without_crash(monkeypatch, t
     app.config['MANAGERS'] = {'certificates': Boom()}
     # Should not raise
     factory._run_manager_job('certificates', 'check_renewals')
+    # And the manager was asked: the other two tests here are about a job that is skipped.
+    assert ran == [True]
