@@ -22,7 +22,7 @@ dns-lexicon==3.25.1
 urllib3!=2.2.0,>=2.8.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
 dnspython==2.8.0                   # Used directly: CAA lookups (modules/core/caa.py) and the DNS-alias hook. It used to arrive only through the DNS plugins, so a plugin dropping it would have taken our own code with it.
 requests==2.34.2
-tldextract==5.3.2                  # Used directly: the registrable domain for registration expiry (modules/core/domain_registration.py), from its bundled Public Suffix List, offline. Previously only transitive, through dns-lexicon.
+tldextract==5.4.0                  # Used directly: the registrable domain for registration expiry (modules/core/domain_registration.py), from its bundled Public Suffix List, offline. Previously only transitive, through dns-lexicon.
 python-dotenv==1.2.4
 APScheduler==3.11.3
 cryptography==50.0.2               # certbot/acme 5.8.0 need >=47 and pyopenssl 26.4.0 needs >=49,<51. See requirements.txt.
