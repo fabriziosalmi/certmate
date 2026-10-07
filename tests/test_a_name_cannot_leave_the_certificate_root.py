@@ -73,7 +73,7 @@ def test_the_local_backend_refuses_a_name_that_leaves_its_root(sandbox, bad):
     before = _snapshot(tmp)
 
     assert backend.store_certificate(name, {'cert.pem': b'REPLACED'}, {'replaced': True}) is False
-    assert backend.retrieve_certificate(name) is None, 'a private key was handed back from outside the root'
+    assert backend.retrieve_certificate(name) is None, 'files came back from outside the certificate root'
     assert backend.certificate_exists(name) is False
     assert backend.delete_certificate(name) is False
 
