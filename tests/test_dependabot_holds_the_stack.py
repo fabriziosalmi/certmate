@@ -56,23 +56,13 @@ HELD = {
     # never "is every deliberately held-back pin actually held". A reason
     # written down and not enforced is a reason that gets overwritten.
     "infisical-python": "the last release with complete",
-    # Promoted from DEFENSIVE (#657). It used to arrive only as certbot's own
+    # Pinned directly since #657. It used to arrive only as certbot's own
     # dependency, and certbot bounds it not at all — so the version was
     # whatever PyPI served, while the pyopenssl and cryptography reasons above
     # are stated in terms of a specific acme version. The two most carefully
     # reasoned pins in the tree rested on a number nothing enforced.
     "acme": "ACME protocol client",
 }
-
-# Ignored defensively rather than held: entries for packages that carry no
-# direct pin of their own. An entry costs nothing and stops a future direct pin
-# from being bumped past the stack the moment it is added. Kept separate from
-# HELD so the "still pinned" check does not fail on them.
-#
-# Empty since acme was promoted to HELD (#657): it acquired a direct pin, which
-# is exactly the transition test_a_defensive_entry_really_is_unpinned exists to
-# force rather than let happen silently.
-DEFENSIVE: set = set()
 
 # Wildcards cover a family; each needs at least one pinned member to be real.
 HELD_FAMILIES = {
@@ -206,23 +196,9 @@ def test_every_held_family_has_at_least_one_member(pattern, prefix):
     )
 
 
-@pytest.mark.parametrize("package", sorted(DEFENSIVE))
-def test_a_defensive_entry_really_is_unpinned(package):
-    """If it acquires a direct pin, it stops being defensive and becomes held.
-
-    Which means it needs a documented reason like everything else in HELD —
-    this check is what forces that move rather than letting the entry quietly
-    change meaning.
-    """
-    assert not re.search(rf"^{re.escape(package)}==", _requirements_text(), re.M | re.I), (
-        f"{package} is now pinned directly. Move it from DEFENSIVE to HELD "
-        f"with the reason written next to the pin."
-    )
-
-
 def test_no_ignore_entry_is_unexplained():
     """The other direction: everything ignored must be something we hold."""
-    known = set(HELD) | set(HELD_FAMILIES) | DEFENSIVE
+    known = set(HELD) | set(HELD_FAMILIES)
     seen = set()
     for config in _pip_configs():
         seen |= set(_pip_ignore(config))

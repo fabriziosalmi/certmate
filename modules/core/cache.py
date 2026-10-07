@@ -106,7 +106,3 @@ class CacheManager:
         if not domain:
             return
         self.remove_from_cache(domain)
-
-    def get_cache_instance(self):
-        """Get the deployment cache instance for direct access"""
-        return self.deployment_cache
