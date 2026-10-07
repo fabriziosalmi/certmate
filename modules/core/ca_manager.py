@@ -461,28 +461,3 @@ class CAManager:
 
         return True, "Configuration is valid"
     
-    def get_ca_account_display_info(self, ca_provider: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Get display-friendly information about CA account"""
-        display_info = {
-            'provider_name': self.ca_providers.get(ca_provider, {}).get('name', ca_provider),
-            'account_name': config.get('name', 'Default Account'),
-            'description': config.get('description', ''),
-            'certificate_types': self.ca_providers.get(ca_provider, {}).get('certificate_types', []),
-            'supports_wildcard': self.ca_providers.get(ca_provider, {}).get('supports_wildcard', False)
-        }
-        
-        # Add provider-specific display info
-        if self.requires_eab(ca_provider):
-            display_info['eab_configured'] = bool(
-                config.get('eab_key_id') or config.get('eab_kid')
-            )
-            if self.ca_providers[ca_provider].get('requires_acme_url'):
-                display_info['acme_url'] = config.get('acme_url', '')
-        elif ca_provider == 'private_ca':
-            display_info['acme_url'] = config.get('acme_url', '')
-            display_info['ca_cert_configured'] = bool(config.get('ca_cert'))
-            display_info['eab_configured'] = bool(
-                config.get('eab_key_id') or config.get('eab_kid')
-            )
-        
-        return display_info

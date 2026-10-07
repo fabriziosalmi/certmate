@@ -5143,12 +5143,6 @@ class CertificateManager:
         except Exception:  # pragma: no cover - defensive
             logger.debug("Could not record a renewal sweep metric")
 
-    def create_certificate_legacy(self, domain, email, cloudflare_token):
-        """Legacy function for backward compatibility"""
-        dns_config = {'api_token': cloudflare_token}
-        # Fallback to direct method call
-        return self.create_certificate(domain, email, 'cloudflare', dns_config)
-    
 
 
     def _get_dns_config(self, dns_provider, account_id):
