@@ -257,7 +257,7 @@ def test_the_structural_check_does_see_a_method_that_does_not_ask():
 # --- the validator every route asks first -------------------------------------------------------------
 
 @pytest.mark.parametrize('name', ['example.com\n', 'example.com\r\nERROR forged', 'example.com\r', '\nexample.com',
-                                  'example.com\x1b[31m', 'example.com x', 'exa\tmple.com'])
+                                  'example.com\x1b[31m', 'example.com' + chr(0x2028) + 'x', 'exa\tmple.com'])
 def test_the_route_validator_refuses_a_name_with_a_line_break_or_a_control_character(tmp_path, name):
     """A route logs the domain it was given after this has accepted it. Code scanning cannot see
     that, and asks whether the value can end a log line. It cannot: the pattern is anchored with
