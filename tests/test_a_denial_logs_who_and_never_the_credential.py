@@ -17,7 +17,7 @@ import logging
 from unittest.mock import MagicMock
 
 import pytest
-from flask import Flask, request
+from flask import Flask
 
 from modules.core import auth as auth_module
 from modules.core.auth import AuthManager, domain_restricted_refusal
@@ -91,8 +91,8 @@ def test_a_refused_session_is_named_and_its_password_is_nowhere(world, captured)
 
 
 def test_a_refused_restricted_key_is_named_and_its_token_is_nowhere(world, captured):
-    auth, settings, app = world
-    ok, created = auth.create_api_key('tenant', role='operator', allowed_domains=['*.team.example'])
+    auth, _, app = world
+    _, created = auth.create_api_key('tenant', role='operator', allowed_domains=['*.team.example'])
     token = created['token']
 
     @auth.require_role('viewer')

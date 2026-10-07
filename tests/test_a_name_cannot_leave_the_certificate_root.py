@@ -252,3 +252,27 @@ def test_the_structural_check_does_see_a_method_that_does_not_ask():
 
     assert _asks(asking, '_acceptable_storage_name') and not _asks(silent, '_acceptable_storage_name')
     assert hasattr(storage_backends, '_acceptable_storage_name')
+
+
+# --- the validator every route asks first -------------------------------------------------------------
+
+@pytest.mark.parametrize('name', ['example.com\n', 'example.com\r\nERROR forged', 'example.com\r', '\nexample.com',
+                                  'example.com\x1b[31m', 'example.com x', 'exa\tmple.com'])
+def test_the_route_validator_refuses_a_name_with_a_line_break_or_a_control_character(tmp_path, name):
+    """A route logs the domain it was given after this has accepted it. Code scanning cannot see
+    that, and asks whether the value can end a log line. It cannot: the pattern is anchored with
+    `\\Z`, where `$` would let a trailing newline through (it did once)."""
+    from modules.api.path_validation import validate_domain_path
+
+    path, error = validate_domain_path(name, tmp_path)
+
+    assert path is None and error
+
+
+def test_the_route_validator_accepts_a_plain_name(tmp_path):
+    """CONTROL."""
+    from modules.api.path_validation import validate_domain_path
+
+    path, error = validate_domain_path('example.com', tmp_path)
+
+    assert path is not None and not error
