@@ -110,12 +110,17 @@ def test_an_unknown_provider_is_labelled_rather_than_dropped(manager):
 def test_recording_never_raises(manager):
     """CONTROL. Telemetry must not be the reason an issuance that already
     obtained a certificate is reported as failed."""
+    touched = []
+
     class Hostile:
         def __str__(self):
+            touched.append(True)
             raise RuntimeError('even the error is broken')
 
     manager._record_creation_metrics('m4.example.com', 'cloudflare', False,
                                      1.0, error=Hostile())
+    # The error was looked at: otherwise there was nothing here to survive.
+    assert touched
 
 
 # --- the rate limit, which is not just another ACME error ----------------

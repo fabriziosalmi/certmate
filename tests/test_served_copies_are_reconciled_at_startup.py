@@ -227,14 +227,18 @@ def test_the_startup_wrapper_never_raises(monkeypatch):
     repairs — the instance would not come back at all."""
     from modules import factory
 
+    asked = []
+
     class Boom:
         def reconcile_served_copies(self):
+            asked.append(True)
             raise RuntimeError('disk gone')
 
     class Container:
         managers = {'certificates': Boom()}
 
     factory.reconcile_served_copies(Container())
+    assert asked == [True], 'the repair that fails was never asked for'
 
 
 def test_the_startup_wrapper_tolerates_a_missing_manager():
