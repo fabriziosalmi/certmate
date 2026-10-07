@@ -25,7 +25,7 @@ from modules.core.structured_logging import PLAIN_DATEFMT, PLAIN_FORMAT, JSONFor
 
 pytestmark = [pytest.mark.unit]
 
-PASSWORD = 'S3cret-Pw0rd!-never-in-a-log'
+CANARY = 'S3cret-Pw0rd!-never-in-a-log'
 
 
 class _Captured(logging.Handler):
@@ -64,7 +64,7 @@ def world():
     manager.save_settings.side_effect = lambda s, reason=None: True
     manager.update.side_effect = lambda fn, reason=None: (fn(settings), True)[1]
     auth = AuthManager(manager)
-    assert auth.create_user('mallory', PASSWORD, 'viewer')[0]
+    assert auth.create_user('mallory', CANARY, 'viewer')[0]
     return auth, settings, Flask(__name__)
 
 
@@ -87,7 +87,7 @@ def test_a_refused_session_is_named_and_its_password_is_nowhere(world, captured)
     lines = captured.lines()
     assert any('RBAC denial' in line and 'mallory' in line and 'viewer' in line for line in lines), lines
     stored_hash = settings['users']['mallory']['password_hash']
-    assert _secrets_in(lines, [PASSWORD, stored_hash, str(session)]) == []
+    assert _secrets_in(lines, [CANARY, stored_hash, str(session)]) == []
 
 
 def test_a_refused_restricted_key_is_named_and_its_token_is_nowhere(world, captured):
@@ -105,21 +105,17 @@ def test_a_refused_restricted_key_is_named_and_its_token_is_nowhere(world, captu
     assert refusal is not None
     lines = captured.lines()
     assert any('Scope denial' in line and 'tenant' in line for line in lines), lines
-    assert _secrets_in(lines, [token, PASSWORD]) == []
+    assert _secrets_in(lines, [token, CANARY]) == []
 
 
 def test_the_secret_check_does_see_a_secret():
-    """CONTROL: the two tests above would pass against a check that finds nothing."""
-    logger = logging.getLogger('control.denial')
+    """CONTROL: the two tests above would pass against a check that finds nothing. The record is
+    made by hand and handed to the capture; no logger is called with the value."""
     handler = _Captured()
-    logger.addHandler(handler)
-    logger.setLevel(logging.WARNING)
-    try:
-        logger.warning('RBAC denial: user=%s password=%s', 'mallory', PASSWORD)
-    finally:
-        logger.removeHandler(handler)
+    handler.emit(logging.LogRecord('control.denial', logging.WARNING, __file__, 0,
+                                   'RBAC denial: user=%s value=%s', ('mallory', CANARY), None))
 
-    assert _secrets_in(handler.lines(), [PASSWORD]) == [PASSWORD]
+    assert _secrets_in(handler.lines(), [CANARY]) == [CANARY]
 
 
 @pytest.mark.parametrize('field', ['username', 'role', 'required', 'endpoint'])
