@@ -115,6 +115,26 @@ def test_logger_integration():
     assert "password = \"[REDACTED]\"" in log_json["exception"]
 
 
+def _cpu_seconds(text):
+    """The least CPU time of this thread that `sanitize_text(text)` took, of up to five tries.
+
+    CPU time and not the clock, the least of several, and no more tries once they have taken
+    half a second together: what makes one try slower than another is never the scan.
+    """
+    import time
+    from modules.core.structured_logging import sanitize_text
+
+    least, spent = float('inf'), 0.0
+    for _ in range(5):
+        start = time.thread_time()
+        sanitize_text(text)
+        took = time.thread_time() - start
+        least, spent = min(least, took), spent + took
+        if spent > 0.5:
+            break
+    return least
+
+
 def test_pem_redaction_is_linear_on_unclosed_blocks():
     """A blob that opens PEM blocks and never closes them must not stall.
 
@@ -124,18 +144,18 @@ def test_pem_redaction_is_linear_on_unclosed_blocks():
     (deployer.py) on one of the process's eight gunicorn threads, so that is
     a thread-exhaustion lever, not just a slow function.
 
-    The bound below is loose on purpose — this asserts "not quadratic", not a
-    benchmark, so it does not go red on a loaded CI runner. The old code
-    needed minutes here.
+    Linear is a statement about growth, so growth is what is measured: sixteen
+    times the anchors may cost sixteen times the work, the old form costs 256
+    times, and the line is drawn at 64. It was five seconds of the clock for 1.2
+    MB, which says how fast the machine is. Measured over 160 tries, idle and with
+    sixteen busy processes on ten cores, the ratio never passed 23.
     """
-    import time
-    from modules.core.structured_logging import sanitize_text
+    unit = "-----BEGIN" + "A" * 20                 # opens a block and never closes it
+    small, large = _cpu_seconds(unit * 500), _cpu_seconds(unit * 8_000)
 
-    payload = ("-----BEGIN" + "A" * 20) * 40_000  # ~1.2 MB, zero closers
-    started = time.perf_counter()
-    sanitize_text(payload)
-    elapsed = time.perf_counter() - started
-    assert elapsed < 5.0, f"PEM redaction took {elapsed:.1f}s — quadratic again?"
+    assert large < 64 * small, (
+        f"16 times the anchors took {large / small:.0f} times the CPU "
+        f"({small * 1000:.1f} ms, then {large * 1000:.1f} ms): quadratic again?")
 
 
 def test_pem_redaction_matches_the_regex_it_replaced():
