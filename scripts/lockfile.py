@@ -21,14 +21,17 @@ Modes, all pure functions over text so they are testable without pip:
 
     write   turn what `uv pip compile --generate-hashes` resolved into a lock
             (and, with --constraints, its constraints file)
-    check   every direct pin present in the lock at the same version; every
-            pin in the lock hashed; the constraints file equal to the lock
+    check   every direct requirement satisfied by the version the lock
+            installs (an exact pin by the same version, a range by a version
+            inside it); every pin in the lock hashed; the constraints file
+            equal to the lock
 
 `check` is the one that matters day to day. Installing from a lock means a
 Dependabot bump to `requirements.txt` has **no effect** until the lock is
 regenerated — the build would keep installing the old version and the merged
 security patch would silently not ship. That failure is invisible, so it is
-made loud: `check` runs in the unit suite and in the image build.
+made loud: `check` runs in the unit suite, and at the end of the regeneration.
+The image build does not run it.
 
 Regenerating (the command is repeated in each lockfile header, where the person
 who needs it is looking):
@@ -43,8 +46,9 @@ import re
 import sys
 
 # A pinned line in a requirements file: `name==version`, before any comment.
-# Deliberately narrower than PEP 508 — anything with a marker, an extra or a
-# range is not a plain pin and is reported rather than silently skipped.
+# Deliberately narrower than PEP 508: anything with a marker, an extra or a
+# range is not a plain pin. `read_entries` does not return it, and `check`
+# compares it with the lock by its own rule (`_check_requirement`).
 PIN = re.compile(r'^([A-Za-z0-9._-]+)==([^\s;#]+)\s*$')
 HASH = re.compile(r'^--hash=(sha256:[0-9a-f]{64})$')
 
@@ -158,13 +162,65 @@ def render_constraints(resolved: dict[str, str], lock: str) -> str:
     return CONSTRAINTS_HEADER.format(lock=lock) + '\n' + body
 
 
-def check(requirements: pathlib.Path, lock: pathlib.Path) -> list[str]:
-    """Every direct pin present in the lock at the same version.
+def requirement_lines(text: str) -> list[tuple[int, str]]:
+    """The requirements of a file that are not exact pins: `(line, text)`.
 
-    Returns the problems, so the caller decides how loudly to fail. An empty
-    list means the lock still speaks for that requirements file.
+    Blank lines, comments and options (`-r`, `-c`, `--hash`) are not
+    requirements. What is left and does not match `PIN` is a range, a bare
+    name, an extra, a marker or a URL, and each of those makes a claim about
+    the install that the lock has to be able to satisfy.
     """
-    direct = read_pins(requirements.read_text(encoding='utf-8'))
+    found = []
+    for number, raw in enumerate(text.splitlines(), 1):
+        line = raw.split('#')[0].strip()
+        if line.endswith('\\'):
+            line = line[:-1].strip()
+        if not line or line.startswith('-') or PIN.match(line):
+            continue
+        found.append((number, line))
+    return found
+
+
+def _check_requirement(number: int, line: str, source: str, lock: str,
+                       locked: dict[str, str]) -> str | None:
+    """The problem with one non-pin requirement, or None when the lock meets it.
+
+    Fails closed: a line this function cannot compare is reported as one,
+    never skipped. A skipped line is a claim about the install that nothing
+    checks, and the lock can drift away from it without a test going red.
+    """
+    try:
+        from packaging.requirements import InvalidRequirement, Requirement
+    except ImportError:
+        raise SystemExit('scripts/lockfile.py needs the `packaging` module to compare a range '
+                         'with the lock: pip install packaging') from None
+    where = f'{source}:{number}'
+    try:
+        requirement = Requirement(line)
+    except InvalidRequirement:
+        return f'{where}: `{line}` is not a requirement this check can read, so the lock is not compared with it'
+    if requirement.marker is not None or requirement.url is not None:
+        return (f'{where}: `{line}` has a marker or a URL, which this check cannot compare with '
+                f'{lock}; write it as a plain pin or a plain range')
+    version = locked.get(normalize(requirement.name))
+    if version is None:
+        return f'{where}: `{line}` is required and absent from {lock}, so the image would not install it'
+    if not requirement.specifier.contains(version, prereleases=True):
+        return (f'{where}: `{line}` is required, but the image installs {requirement.name}=={version} '
+                f'from {lock}: regenerate the lock, or the requirement is not met')
+    return None
+
+
+def check(requirements: pathlib.Path, lock: pathlib.Path) -> list[str]:
+    """Every direct requirement met by the version the lock installs.
+
+    An exact pin must be in the lock at the same version. Any other
+    requirement (a range, a floor, an exclusion) must be met by the locked
+    version. Returns the problems, so the caller decides how loudly to fail.
+    An empty list means the lock still speaks for that requirements file.
+    """
+    text = requirements.read_text(encoding='utf-8')
+    direct = read_pins(text)
     locked = read_pins(lock.read_text(encoding='utf-8'))
 
     problems = []
@@ -178,6 +234,10 @@ def check(requirements: pathlib.Path, lock: pathlib.Path) -> list[str]:
                 f'{name} is pinned to {version} in {requirements.name} but '
                 f'the image installs {locked[name]} from {lock.name} — '
                 f'regenerate the lock, or the bump does not ship')
+    for number, line in requirement_lines(text):
+        problem = _check_requirement(number, line, requirements.name, lock.name, locked)
+        if problem:
+            problems.append(problem)
     return problems
 
 

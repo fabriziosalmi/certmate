@@ -220,6 +220,88 @@ def test_a_pin_missing_from_the_lock_is_caught(tmp_path):
     assert 'certbot' in problems[0]
 
 
+def _pair(tmp_path, requirements, lock):
+    source = tmp_path / 'requirements.txt'
+    pinned = tmp_path / 'requirements.lock'
+    source.write_text(requirements)
+    pinned.write_text(lock)
+    return source, pinned
+
+
+def test_a_floor_the_lock_does_not_reach_is_caught(tmp_path):
+    """A floor raised above the locked version is a requirement the image
+    does not meet, and a merge of it goes green. This is the shape of a
+    Dependabot bump of `SQLAlchemy>=2.1.1` to `>=2.1.3` while the lock pins
+    2.1.1: the manifest says one thing and the image installs another."""
+    problems = check(*_pair(tmp_path, 'SQLAlchemy>=2.1.3,<3.0.0\n', 'sqlalchemy==2.1.1\n'))
+
+    assert len(problems) == 1
+    assert 'SQLAlchemy' in problems[0] and '2.1.1' in problems[0] and '2.1.3' in problems[0], (
+        'the message names neither the version installed nor the one required')
+    assert 'requirements.txt:1' in problems[0], 'the message does not say where the requirement is'
+
+
+def test_a_ceiling_the_lock_has_passed_is_caught(tmp_path):
+    assert len(check(*_pair(tmp_path, 'authlib>=1.8,<2.0\n', 'authlib==2.0.1\n'))) == 1
+
+
+def test_an_exclusion_the_lock_installs_is_caught(tmp_path):
+    """`urllib3!=2.2.0,>=2.8.0,<3` is how a CVE is written down. A lock that
+    installs the excluded version is the failure it exists to prevent."""
+    requirements = 'urllib3!=2.8.1,>=2.8.0,<3\n'
+    assert len(check(*_pair(tmp_path, requirements, 'urllib3==2.8.1\n'))) == 1
+    assert check(*_pair(tmp_path, requirements, 'urllib3==2.8.2\n')) == []
+
+
+def test_a_range_the_lock_meets_reports_nothing(tmp_path):
+    """CONTROL: the check is not simply refusing every range."""
+    assert check(*_pair(tmp_path, 'SQLAlchemy>=2.1.1,<3.0.0  # a comment\nflask==3.1.2\n',
+                        'sqlalchemy==2.1.3\nflask==3.1.2\n')) == []
+
+
+def test_a_range_missing_from_the_lock_is_caught(tmp_path):
+    problems = check(*_pair(tmp_path, 'SQLAlchemy>=2.1.1\n', 'flask==3.1.2\n'))
+
+    assert len(problems) == 1 and 'SQLAlchemy' in problems[0] and 'absent' in problems[0]
+
+
+@pytest.mark.parametrize('line', [
+    'flask>=3.1 ; python_version < "3.13"',      # a marker: whether it applies is not decided here
+    'flask @ https://example.test/flask.whl',    # a URL
+    'flask >>> 3',                               # not a requirement at all
+], ids=['marker', 'url', 'garbage'])
+def test_a_requirement_that_cannot_be_compared_is_reported_not_skipped(tmp_path, line):
+    """The first version of this check skipped what it could not read, which
+    is the thing it replaced. A line with a claim in it that nothing compares
+    is a line the lock can drift away from unseen."""
+    problems = check(*_pair(tmp_path, line + '\n', 'flask==3.1.2\n'))
+
+    assert len(problems) == 1 and 'requirements.txt:1' in problems[0]
+
+
+def test_a_bare_name_present_in_the_lock_is_fine_and_absent_is_not(tmp_path):
+    assert check(*_pair(tmp_path, 'flask\n', 'flask==3.1.2\n')) == []
+    assert len(check(*_pair(tmp_path, 'flask\n', 'werkzeug==3.1.3\n'))) == 1
+
+
+def test_options_and_comments_are_not_requirements(tmp_path):
+    assert check(*_pair(tmp_path, '-r other.txt\n--hash=sha256:' + '0' * 64 + '\n# a note\n\n',
+                        'flask==3.1.2\n')) == []
+
+
+def test_the_real_requirements_have_ranges_for_the_check_to_compare():
+    """CONTROL for the tests above and for the guard on the real files: a
+    check that is looking at no ranges passes however wrong the lock is. The
+    count is a floor, not a pin: the day the last range goes, this says so."""
+    ranges = {}
+    for source, _lock in [*PAIRS, *TOOL_PAIRS]:
+        found = _lockfile.requirement_lines((REPO / source).read_text(encoding='utf-8'))
+        if found:
+            ranges[source] = [line for _, line in found]
+    assert len(ranges.get('requirements.txt', [])) >= 3, ranges
+    assert any(line.lower().startswith('sqlalchemy') for line in ranges['requirements.txt']), ranges
+
+
 def test_a_lock_that_agrees_reports_nothing(tmp_path):
     source = tmp_path / 'requirements.txt'
     lock = tmp_path / 'requirements.lock'
@@ -254,9 +336,9 @@ def test_a_normalised_name_still_matches_across_the_two_files(tmp_path):
     'flask[async]==3.1.2',        # an extra
 ])
 def test_read_pins_ignores_what_is_not_a_plain_pin(line):
-    """These are read as *absent* rather than as a pin, so a requirements file
-    that grows one is reported by the guard instead of being silently skipped
-    with the wrong version assumed."""
+    """These are read as *absent* rather than as a pin, so they are not taken
+    for one with the wrong version assumed. `check` compares them with the
+    lock by their own rule (`requirement_lines`), tested below."""
     assert read_pins(line) == {}
 
 
