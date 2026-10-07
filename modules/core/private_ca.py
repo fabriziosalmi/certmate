@@ -303,8 +303,8 @@ class PrivateCAGenerator:
         if country and (len(country) != 2 or not country.isalpha()):
             # cryptography refuses this at signing time with a message about
             # attribute lengths, which is not something an operator can act
-            # on. Refuse here, before anything is written, and say what to
-            # type: X.509 `C` is an ISO 3166-1 alpha-2 code.
+            # on. Refuse here, before anything is written, and say what the
+            # value has to be: X.509 `C` is an ISO 3166-1 alpha-2 code.
             raise ValueError(
                 f"CA subject country must be a two-letter ISO country code "
                 f"(for example 'IT', 'CH', 'US'), got {country!r}"

@@ -697,18 +697,3 @@ DEFAULT_CACHE_TTL = 300
 # could only misdescribe them. They stay next to the algorithm that reads
 # them.
 
-
-def get_domain_name(domain_config):
-    """Extract domain name from either string or dict format.
-    
-    Args:
-        domain_config: Either a string domain name or a dict with 'domain' key
-        
-    Returns:
-        str or None: The domain name, or None if not found
-    """
-    if isinstance(domain_config, str):
-        return domain_config
-    elif isinstance(domain_config, dict):
-        return domain_config.get('domain')
-    return None

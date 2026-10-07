@@ -1942,19 +1942,6 @@ class AuthManager:
             except Exception as e:
                 logger.debug(f"Failed to write RBAC denial audit entry: {e}")
 
-    def require_admin(self, f):
-        """Decorator to require admin role (backward compat wrapper)."""
-        return self.require_role('admin')(f)
-
     def validate_api_token(self, token):
         """Validate API token against legacy token and scoped keys."""
         return self.authenticate_api_token(token) is not None
-
-    def get_current_token(self):
-        """Get the current API bearer token from settings"""
-        try:
-            settings = self.settings_manager.load_settings()
-            return settings.get('api_bearer_token')
-        except Exception as e:
-            logger.error(f"Error getting current token: {e}")
-            return None
