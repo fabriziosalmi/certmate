@@ -183,7 +183,7 @@ ci: lint typecheck security test-ci
 
 # ── Dependencies ───────────────────────────────────────────────────────
 # Needs uv. Starts from the pins already in the locks, so it moves what a changed pin needs and
-# nothing else; scripts/lockfile.py check (in the unit suite and the image build) fails if you forget.
+# nothing else; scripts/lockfile.py check (in the unit suite) fails if you forget.
 
 lock:
 	scripts/regenerate_lockfiles.sh
