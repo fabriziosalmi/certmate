@@ -1920,9 +1920,13 @@ class AuthManager:
             # everything else it knows.
             ip = None
 
+        # The endpoint is the request's own path and the user's name and role come
+        # from a record an administrator can edit: every value is scrubbed, as
+        # in the scope denial above, so none of them can end the line.
         logger.warning(
             "RBAC denial: user=%s role=%s required=%s endpoint=%s ip=%s",
-            username, actual_role, required_role, endpoint, ip,
+            scrub_log_value(username), scrub_log_value(actual_role), scrub_log_value(required_role),
+            scrub_log_value(endpoint), scrub_log_value(ip),
         )
 
         if self._audit_logger is not None:
@@ -1938,19 +1942,6 @@ class AuthManager:
             except Exception as e:
                 logger.debug(f"Failed to write RBAC denial audit entry: {e}")
 
-    def require_admin(self, f):
-        """Decorator to require admin role (backward compat wrapper)."""
-        return self.require_role('admin')(f)
-
     def validate_api_token(self, token):
         """Validate API token against legacy token and scoped keys."""
         return self.authenticate_api_token(token) is not None
-
-    def get_current_token(self):
-        """Get the current API bearer token from settings"""
-        try:
-            settings = self.settings_manager.load_settings()
-            return settings.get('api_bearer_token')
-        except Exception as e:
-            logger.error(f"Error getting current token: {e}")
-            return None

@@ -121,6 +121,8 @@ def test_delete_tolerates_nxrrset(captured_update):
     captured_update['rcode'] = dns.rcode.NXRRSET
     # already-gone on cleanup must not raise
     _rfc2136_change(_CFG, 'validation-token-123', 'delete')
+    # And the update was sent, and was the one answered NXRRSET.
+    assert 'message' in captured_update
 
 
 def test_nonzero_rcode_on_create_raises(captured_update):

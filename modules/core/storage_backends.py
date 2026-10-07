@@ -261,6 +261,24 @@ def _validate_storage_domain(domain: str) -> str:
     return domain
 
 
+def _acceptable_storage_name(domain, action):
+    """Whether `domain` may be used as a certificate's name by a storage method.
+
+    The methods of a backend that take a name are the last place it can be
+    refused: the name is a directory under the certificate root on the local
+    filesystem, and a key or a path in every other store. Each such method asks
+    this first, and answers its own failure (`False`, `None`) when the name is
+    refused, so a caller that already validated sees no difference. The log line
+    carries the action and not the name.
+    """
+    try:
+        _validate_storage_domain(domain)
+    except ValueError as error:
+        logger.error("Refused to %s a certificate: %s", action, error)
+        return False
+    return True
+
+
 # Azure Key Vault storage modes. Default 'secrets' preserves the legacy
 # behaviour. 'certificate' uses the native Certificate object (consumable
 # directly by App Service / App Gateway / Front Door / API Management /
@@ -418,6 +436,8 @@ class LocalFileSystemBackend(CertificateStorageBackend):
 
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to local filesystem"""
+        if not _acceptable_storage_name(domain, 'store'):
+            return False
         try:
             domain_dir = certificate_dir(self.cert_dir, domain)
             domain_dir.mkdir(parents=True, exist_ok=True)
@@ -445,6 +465,8 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata from local filesystem"""
+        if not _acceptable_storage_name(domain, 'retrieve'):
+            return None
         try:
             domain_dir = certificate_dir(self.cert_dir, domain)
             if not domain_dir.exists():
@@ -487,6 +509,8 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     
     def delete_certificate(self, domain: str) -> bool:
         """Delete certificate from local filesystem"""
+        if not _acceptable_storage_name(domain, 'delete'):
+            return False
         try:
             domain_dir = certificate_dir(self.cert_dir, domain)
             if domain_dir.exists():
@@ -500,6 +524,8 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     
     def certificate_exists(self, domain: str) -> bool:
         """Check if certificate exists in local filesystem"""
+        if not _acceptable_storage_name(domain, 'look for'):
+            return False
         domain_dir = certificate_dir(self.cert_dir, domain)
         return domain_dir.exists() and (domain_dir / 'cert.pem').exists()
     
@@ -2348,16 +2374,22 @@ class StorageManager:
     
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate using the configured backend"""
+        if not _acceptable_storage_name(domain, 'store'):
+            return False
         backend = self.get_backend()
         return backend.store_certificate(domain, cert_files, metadata)
     
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate using the configured backend"""
+        if not _acceptable_storage_name(domain, 'retrieve'):
+            return None
         backend = self.get_backend()
         return backend.retrieve_certificate(domain)
 
     def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve lightweight certificate info using the configured backend."""
+        if not _acceptable_storage_name(domain, 'retrieve'):
+            return None
         backend = self.get_backend()
         return backend.retrieve_certificate_info(domain)
 
@@ -2380,6 +2412,8 @@ class StorageManager:
     
     def delete_certificate(self, domain: str) -> bool:
         """Delete certificate using the configured backend"""
+        if not _acceptable_storage_name(domain, 'delete'):
+            return False
         backend = self.get_backend()
         return backend.delete_certificate(domain)
     
@@ -2391,7 +2425,11 @@ class StorageManager:
         certificate the store may already hold; it should say so where it
         makes that choice, rather than inheriting it from a swallowed
         exception.
+
+        A name that cannot be a certificate's is not held by any backend.
         """
+        if not _acceptable_storage_name(domain, 'look for'):
+            return False
         backend = self.get_backend()
         return backend.certificate_exists(domain)
     

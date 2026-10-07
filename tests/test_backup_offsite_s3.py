@@ -78,3 +78,5 @@ def test_upload_failure_is_best_effort(tmp_path):
     fake.put_object.side_effect = RuntimeError('s3 unreachable')
     with patch('boto3.client', return_value=fake):
         fo._upload_backup_offsite(path, path.name, _S3_CFG, encrypted=True)  # no exception
+    # The upload was attempted and was the call that failed.
+    assert fake.put_object.called
