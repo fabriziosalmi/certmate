@@ -40,6 +40,18 @@ def _requirements_files():
     return sorted(ROOT.glob('requirements*.txt'))
 
 
+# Files with no constraint of their own for `cryptography`. Each is either installed on top
+# of requirements.txt under the constraints file that pins it, or is a tool set with a lock
+# of its own (build, lint, galaxy, test). They are listed, and not skipped, so a file that
+# starts or stops constraining it is a decision someone makes here, with the three checks
+# below starting or stopping to cover it, and not a test that quietly stops running.
+WITHOUT_A_CONSTRAINT = [
+    'requirements-aws-storage.txt', 'requirements-azure.txt', 'requirements-build.txt',
+    'requirements-extended.txt', 'requirements-galaxy.txt', 'requirements-infisical-storage.txt',
+    'requirements-lint.txt', 'requirements-test.txt', 'requirements-vault-storage.txt',
+]
+
+
 def _constraint(path):
     """The cryptography specifier declared in *path*, or None."""
     for line in path.read_text(encoding='utf-8').splitlines():
@@ -50,6 +62,10 @@ def _constraint(path):
     return None
 
 
+def _constraining_files():
+    return [path for path in _requirements_files() if _constraint(path) is not None]
+
+
 def _held_version():
     spec = _constraint(ROOT / 'requirements.txt')
     assert spec is not None, "requirements.txt no longer constrains cryptography"
@@ -58,13 +74,11 @@ def _held_version():
     return pinned[0]
 
 
-@pytest.mark.parametrize('path', _requirements_files(), ids=lambda p: p.name)
+@pytest.mark.parametrize('path', _constraining_files(), ids=lambda p: p.name)
 def test_every_file_accepts_the_held_version(path):
     """A file that rejects the pinned version cannot be installed alongside the
     others, whatever the order."""
     spec = _constraint(path)
-    if spec is None:
-        pytest.skip(f'{path.name} does not constrain {PACKAGE}')
     held = _held_version()
     assert spec.contains(Version(held)), (
         f"{path.name} declares {PACKAGE}{spec}, which excludes the held "
@@ -72,7 +86,7 @@ def test_every_file_accepts_the_held_version(path):
     )
 
 
-@pytest.mark.parametrize('path', _requirements_files(), ids=lambda p: p.name)
+@pytest.mark.parametrize('path', _constraining_files(), ids=lambda p: p.name)
 def test_every_constraint_is_bounded_above(path):
     """The defect class, independent of which versions exist today.
 
@@ -82,8 +96,6 @@ def test_every_constraint_is_bounded_above(path):
     particular, it was `>=41` with nothing on the right-hand side.
     """
     spec = _constraint(path)
-    if spec is None:
-        pytest.skip(f'{path.name} does not constrain {PACKAGE}')
     bounded = any(s.operator in ('==', '<', '<=', '~=') for s in spec)
     assert bounded, (
         f"{path.name} declares {PACKAGE}{spec} with no upper bound, so it "
@@ -92,7 +104,7 @@ def test_every_constraint_is_bounded_above(path):
     )
 
 
-@pytest.mark.parametrize('path', _requirements_files(), ids=lambda p: p.name)
+@pytest.mark.parametrize('path', _constraining_files(), ids=lambda p: p.name)
 def test_no_file_admits_a_version_that_breaks_issuance(path):
     """The real defect: a floor with no ceiling.
 
@@ -100,11 +112,25 @@ def test_no_file_admits_a_version_that_breaks_issuance(path):
     file resolves to the newest release and `certbot --version` dies.
     """
     spec = _constraint(path)
-    if spec is None:
-        pytest.skip(f'{path.name} does not constrain {PACKAGE}')
     admitted = [v for v in BREAKS_THE_STACK if spec.contains(Version(v))]
     assert not admitted, (
         f"{path.name} declares {PACKAGE}{spec}, which would resolve to "
         f"{admitted} when this file is installed on its own — versions that "
         f"install cleanly and then kill `certbot --version`"
     )
+
+
+def test_the_files_without_a_constraint_are_the_ones_listed():
+    """What the three checks above do not look at, written down. A file that gains a constraint
+    is covered from then on; a file that loses one stops being, and this says so."""
+    without = [path.name for path in _requirements_files() if _constraint(path) is None]
+
+    assert without == WITHOUT_A_CONSTRAINT, (
+        f'the files without a `{PACKAGE}` constraint changed: now {without}. Add the file to '
+        f'WITHOUT_A_CONSTRAINT with the reason it needs none, or give it a constraint the '
+        f'checks above will cover')
+
+
+def test_the_checks_have_files_to_look_at():
+    """CONTROL: a parametrization over an empty list is skipped, not failed."""
+    assert len(_constraining_files()) >= 5, [path.name for path in _constraining_files()]

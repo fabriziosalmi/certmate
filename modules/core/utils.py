@@ -652,11 +652,6 @@ def create_cloudflare_config(token: str) -> Path:
     """Create Cloudflare credentials file."""
     return _create_config_file("cloudflare", f"dns_cloudflare_api_token = {token}\n")
 
-def create_route53_config(access_key_id: str, secret_access_key: str) -> Path:
-    """Create AWS Route53 credentials file."""
-    content = f"dns_route53_access_key_id = {access_key_id}\ndns_route53_secret_access_key = {secret_access_key}\n"
-    return _create_config_file("route53", content)
-
 def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str, zone_domain: Union[str, List[str]]) -> Path:
     """Write the config ``azure_dns_hook`` reads, and return its path.
 
