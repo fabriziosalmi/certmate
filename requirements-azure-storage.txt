@@ -1,6 +1,6 @@
 # Optional dependencies for Azure Key Vault storage backend
 azure-keyvault-secrets>=4.11.2
-azure-keyvault-certificates>=4.11.2
+azure-keyvault-certificates>=4.11.3
 azure-identity>=1.26.0
 
 # The window the ACME stack works in: certbot and acme 5.8.0 require
