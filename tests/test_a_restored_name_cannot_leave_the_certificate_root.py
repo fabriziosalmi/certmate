@@ -17,6 +17,7 @@ import secrets
 import sys
 import urllib.parse
 import zipfile
+from unittest import mock
 
 import pytest
 
@@ -135,7 +136,7 @@ def test_the_restore_leaves_the_names_in_the_settings_which_is_the_premise(resto
 
 
 def test_no_reader_of_the_restored_names_touches_what_is_outside_the_root(restored):
-    client, headers, container, tmp, outside, before, _answer = restored
+    client, headers, container, _tmp, outside, before, _answer = restored
     key = (outside / 'privkey.pem').read_text()
     marker = key.splitlines()[1][:40]
     WATCH['root'], WATCH['seen'] = os.path.realpath(outside), []
@@ -151,3 +152,25 @@ def test_no_reader_of_the_restored_names_touches_what_is_outside_the_root(restor
         text = response.get_data(as_text=True)
         assert marker not in text, path
         assert 'outside.example.test' not in text, path
+
+
+def test_the_renewal_sweep_asks_about_a_name_even_when_the_settings_let_it_through(restored):
+    """The settings are validated when they are saved, and that is one layer. The sweep builds
+    paths from the names it reads, so it must not depend on that layer alone.
+
+    The settings manager is made to hand over the hostile names as they are in the archive, the
+    way it would if its own check were not there, and the sweep is run on them.
+    """
+    _client, _headers, container, _tmp, outside, before, _answer = restored
+    settings = container.managers['settings']
+    handed_over = dict(settings.load_settings())
+    handed_over['domains'] = ([{'domain': name, 'dns_provider': 'cloudflare', 'auto_renew': True} for name in HOSTILE]
+                              + [{'domain': 'outside.example.test', 'dns_provider': 'cloudflare'}])
+    WATCH['root'], WATCH['seen'] = os.path.realpath(outside), []
+    try:
+        with sealed(), mock.patch.object(settings, 'load_settings', return_value=handed_over):
+            container.managers['certificates'].check_renewals()
+    finally:
+        WATCH['root'] = None
+    assert WATCH['seen'] == [], WATCH['seen'][:5]
+    assert _tree(outside) == before
