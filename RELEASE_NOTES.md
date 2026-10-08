@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.48.5 (a second SMTP recipient can be typed, and the places that take a name ask about it)
+
+[Read the notes](docs/releases/v2.48.5.md)
+
 ## v2.48.4 (scripts run only with the page's nonce, and three more places a key restricted to domains is held to them)
 
 [Read the notes](docs/releases/v2.48.4.md)
