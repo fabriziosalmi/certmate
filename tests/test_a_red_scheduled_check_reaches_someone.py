@@ -19,7 +19,8 @@ pytestmark = [pytest.mark.unit]
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location('report_scheduled_result', ROOT / 'scripts' / 'report_scheduled_result.py')
+    path = ROOT / 'scripts' / 'report_scheduled_result.py'
+    spec = importlib.util.spec_from_file_location('report_scheduled_result', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -33,8 +34,13 @@ def _jobs():
 
 
 def _scheduled_only(jobs):
-    return {name for name, job in jobs.items() if 'schedule' in str(job.get('if', '')) and "!= 'schedule'" not in str(job.get('if', ''))
-            and name != 'report-scheduled'}
+    """Jobs that run on the schedule and not on pull requests: their `if` names `schedule` without excluding it."""
+    found = set()
+    for name, job in jobs.items():
+        condition = str(job.get('if', ''))
+        if 'schedule' in condition and "!= 'schedule'" not in condition and name != 'report-scheduled':
+            found.add(name)
+    return found
 
 
 class FakeGh:
@@ -42,7 +48,7 @@ class FakeGh:
 
     def __init__(self, open_titles=()):
         self.calls = []
-        self.open = {number: title for number, title in enumerate(open_titles, start=100)}
+        self.open = dict(enumerate(open_titles, start=100))
 
     def __call__(self, *arguments):
         self.calls.append(arguments)
@@ -92,7 +98,8 @@ def test_the_job_reports_every_reported_job_with_its_own_result():
 def test_a_failure_opens_one_issue_naming_the_job_and_the_run():
     gh = FakeGh()
     assert reporter.report('wiki', 'failure', 'https://example/run/1', run=gh) == 'opened'
-    (verb, *rest), = [c for c in gh.calls if c[:2] == ('issue', 'create')]
+    (created,) = [c for c in gh.calls if c[:2] == ('issue', 'create')]
+    rest = created[2:]
     assert reporter.title_for('wiki') in rest
     assert 'https://example/run/1' in rest[rest.index('--body') + 1]
 
