@@ -251,6 +251,9 @@ def test_cleanup_of_a_record_that_vanishes_before_the_delete_is_not_an_error():
         http.get(RECORD, status_code=200, json=_recordset('token-1'))
         http.delete(RECORD, **_not_found())
         hook.run(_config(), 'cleanup', _challenge())
+        # The delete was sent and was the one answered 404: without this the test
+        # passes for a cleanup that never deletes.
+        assert [r.method for r in http.request_history].count('DELETE') == 1
 
 
 def test_cleanup_that_cannot_delete_the_record_says_so_instead_of_pretending():
