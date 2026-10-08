@@ -10,8 +10,8 @@ type: application
 # in the application's repository and only ever ships that application, so it
 # tracks it: one number, bumped by scripts/release.sh, pinned by
 # tests/test_helm_chart.py. A chart-only fix rides the next release.
-version: 2.48.4
-appVersion: "2.48.4"
+version: 2.48.5
+appVersion: "2.48.5"
 home: https://www.certmate.org
 icon: https://raw.githubusercontent.com/fabriziosalmi/certmate/main/static/img/certmate_logo_256.png
 sources:
@@ -42,7 +42,7 @@ annotations:
       url: https://github.com/fabriziosalmi/certmate/issues
   artifacthub.io/images: |
     - name: certmate
-      image: docker.io/fabriziosalmi/certmate:2.48.4
+      image: docker.io/fabriziosalmi/certmate:2.48.5
       platforms:
         - linux/amd64
         - linux/arm64
