@@ -4311,6 +4311,14 @@ class CertificateManager:
                     logger.warning(f"Skipping domain entry that names no domain: {domain_entry!r}")
                     summary['skipped_invalid'] += 1
                     continue
+                try:
+                    _reject_path_escaping_domain(domain)
+                except ValueError:
+                    # The settings are validated when they are saved, but the sweep reads
+                    # them and builds paths from the names, so it asks for itself.
+                    logger.warning("Skipping a domain entry whose name is not a usable certificate name")
+                    summary['skipped_invalid'] += 1
+                    continue
                 per_cert_auto_renew = entry_auto_renew(domain_entry)
 
                 considered.add(domain)
