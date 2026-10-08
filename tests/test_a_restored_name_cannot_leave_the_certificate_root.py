@@ -90,8 +90,11 @@ def restored(tmp_path_factory):
                 members[info.filename] = z.read(info.filename)
         print('MEMBERS', [m for m in members if 'settings' in m or 'metadata' in m])
         hostile = json.loads(members['settings.json'])
-        hostile['settings']['domains'] = [{'domain': name, 'dns_provider': 'cloudflare'} for name in HOSTILE] \
-            + [name for name in HOSTILE] + [{'domain': 'extra.example.test', 'dns_provider': 'cloudflare'}, {'domain': 'mine.example.test', 'dns_provider': 'cloudflare'}]
+        # Each hostile name twice: as an entry of the current shape and as a bare string, the old one.
+        as_entries = [{'domain': name, 'dns_provider': 'cloudflare'} for name in HOSTILE]
+        kept = [{'domain': 'extra.example.test', 'dns_provider': 'cloudflare'},
+                {'domain': 'mine.example.test', 'dns_provider': 'cloudflare'}]
+        hostile['settings']['domains'] = as_entries + list(HOSTILE) + kept
         members['settings.json'] = json.dumps(hostile).encode()
         with zipfile.ZipFile(archive, 'w') as z:
             for name, content in members.items():
@@ -99,8 +102,6 @@ def restored(tmp_path_factory):
         before = _tree(outside)
         answer = client.post('/api/backups/restore/unified', headers=headers, json={'filename': filename})
         yield client, headers, container, tmp, outside, before, answer
-
-
 
 
 def _everything_that_reads_the_settings(client, headers, container):
@@ -117,8 +118,8 @@ def _everything_that_reads_the_settings(client, headers, container):
         answers.append((f'DELETE /api/certificates/{quoted}', client.delete(f'/api/certificates/{quoted}', headers=headers)))
     certificates = container.managers['certificates']
     certificates.check_renewals()
-    container.managers['file_ops'].create_unified_backup(container.managers['settings'].load_settings(),
-                                                          'manual', include_secrets=True)
+    current = container.managers['settings'].load_settings()
+    container.managers['file_ops'].create_unified_backup(current, 'manual', include_secrets=True)
     return answers
 
 
