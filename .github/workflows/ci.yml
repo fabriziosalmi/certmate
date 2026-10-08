@@ -630,6 +630,37 @@ jobs:
     - name: Every endpoint the wiki states is one the application serves
       run: python scripts/check_wiki_endpoints.py /tmp/wiki
 
+  # A red scheduled run is read by nobody: it notifies whoever last edited the
+  # cron line, and the weekly run went red on four of its last six runs without
+  # anyone being told. This turns the result of each scheduled check into an
+  # issue (opened on failure, commented while it stays red, closed when green).
+  #
+  # Only the checks whose failure may be said in public are listed. `advisories`
+  # is left out on purpose: a failure there means a dependency advisory is open
+  # and not yet written down, and an issue would announce it before it is fixed.
+  # tests/test_a_red_scheduled_check_reaches_someone.py keeps this list and the
+  # script's in step, and fails when a scheduled-only job is in neither.
+  report-scheduled:
+    if: always() && github.event_name == 'schedule'
+    needs: [ca-endpoints, wiki, wiki-endpoints]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Report each check
+      run: |
+        python3 scripts/report_scheduled_result.py ca-endpoints "${{ needs.ca-endpoints.result }}" --run-url "$RUN_URL"
+        python3 scripts/report_scheduled_result.py wiki "${{ needs.wiki.result }}" --run-url "$RUN_URL"
+        python3 scripts/report_scheduled_result.py wiki-endpoints "${{ needs.wiki-endpoints.result }}" --run-url "$RUN_URL"
+
   # Storage backends against real servers rather than a faithful fake.
   #
   # The in-memory S3 fake is a good test and cannot disagree with me: it
