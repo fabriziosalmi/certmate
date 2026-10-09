@@ -96,6 +96,11 @@
 
     // Clear filters function
     function clearFilters() {
+        currentTagFilter = '';
+        certificateSearch = '';
+        var search = document.getElementById('certificateSearch');
+        if (search) search.value = '';
+        renderTagFilterBar();
         setStatusFilter('all');
     }
 
@@ -103,6 +108,7 @@
     // The clicked chip becomes aria-pressed; the rest reset.
     function setStatusFilter(value) {
         currentStatusFilter = value;
+        certificatePage = 1;
         document.querySelectorAll('[data-status-chip]').forEach(function (chip) {
             chip.setAttribute('aria-pressed', chip.getAttribute('data-status-chip') === value ? 'true' : 'false');
         });
@@ -372,6 +378,65 @@
     // Active tag filter (#1043): one tag, or '' for none. Combined with the status
     // chips, so "expiring" + "loadbalancer" is a question the page can answer.
     var currentTagFilter = '';
+    var certificateSearch = '';
+    var certificatePage = 1;
+    var certificatePageSize = 25;
+    var filteredCertificates = [];
+    var visibleCertificates = [];
+    var deploymentPageTimer = null;
+    var deploymentPageVersion = 0;
+    try {
+        var savedPageSize = Number(localStorage.getItem('certificate-page-size'));
+        if ([25, 50, 100].indexOf(savedPageSize) !== -1) certificatePageSize = savedPageSize;
+    } catch (e) { /* browser storage unavailable */ }
+
+    function searchCertificates(input) {
+        certificateSearch = input.value.trim().toLowerCase();
+        certificatePage = 1;
+        filterCertificates();
+    }
+
+    function changeCertificatePageSize(select) {
+        var size = Number(select.value);
+        if ([25, 50, 100].indexOf(size) === -1) return;
+        certificatePageSize = size;
+        certificatePage = 1;
+        try { localStorage.setItem('certificate-page-size', String(size)); } catch (e) {}
+        filterCertificates();
+    }
+
+    function changeCertificatePage(delta) {
+        certificatePage += delta;
+        filterCertificates();
+    }
+
+    function certificatePageRows(certificates) {
+        filteredCertificates = applySorting(certificates);
+        var pages = Math.max(1, Math.ceil(filteredCertificates.length / certificatePageSize));
+        certificatePage = Math.max(1, Math.min(certificatePage, pages));
+        var start = (certificatePage - 1) * certificatePageSize;
+        var rows = filteredCertificates.slice(start, start + certificatePageSize);
+        var summary = document.getElementById('certificatePageSummary');
+        if (summary) summary.textContent = filteredCertificates.length
+            ? (start + 1) + '–' + (start + rows.length) + ' of ' + filteredCertificates.length
+            : '0 certificates';
+        var previous = document.getElementById('certificatePreviousPage');
+        var next = document.getElementById('certificateNextPage');
+        if (previous) previous.disabled = certificatePage <= 1;
+        if (next) next.disabled = certificatePage >= pages;
+        return rows;
+    }
+
+    function checkVisibleDeployments() {
+        clearTimeout(deploymentPageTimer);
+        var version = ++deploymentPageVersion;
+        var certs = visibleCertificates.filter(function (cert) { return cert.exists; });
+        deploymentPageTimer = setTimeout(function () {
+            runDeploymentChecks(certs, {shouldContinue: function () {
+                return version === deploymentPageVersion;
+            }});
+        }, 300);
+    }
 
     // Filter and search certificates
     function filterCertificates() {
@@ -383,7 +448,7 @@
         }
 
         var filteredCerts = allCertificates.filter(function (cert) {
-            // Status filter (free-text search now lives in the ⌘K palette)
+            // Search and filters apply across the whole list, before pagination.
             var matchesStatus = true;
             if (statusFilter !== 'all') {
                 var isExpired = cert.exists && hasExpired(cert);
@@ -406,7 +471,9 @@
             var matchesTag = !currentTagFilter ||
                 (Array.isArray(cert.tags) && cert.tags.indexOf(currentTagFilter) !== -1);
 
-            return matchesStatus && matchesTag;
+            var searchable = [cert.domain, cert.dns_provider, cert.ca_provider, cert.notes]
+                .concat(cert.san_domains || [], cert.tags || []).join(' ').toLowerCase();
+            return matchesStatus && matchesTag && (!certificateSearch || searchable.indexOf(certificateSearch) !== -1);
         });
 
         displayCertificates(filteredCerts);
@@ -458,6 +525,7 @@
     // Choosing the tag already chosen clears it, like pressing a pressed chip.
     function setTagFilter(tag) {
         currentTagFilter = (currentTagFilter === tag) ? '' : (tag || '');
+        certificatePage = 1;
         renderTagFilterBar();
         filterCertificates();
     }
@@ -466,6 +534,7 @@
     var currentSort = { field: 'domain', dir: 'asc' };
 
     function sortCertificates(field) {
+        certificatePage = 1;
         if (currentSort.field === field) {
             currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
         } else {
@@ -791,9 +860,11 @@
         if (!Array.isArray(certificates)) {
             certificates = [];
         }
+        visibleCertificates = certificatePageRows(certificates);
+        checkVisibleDeployments();
 
         if (certificates.length === 0) {
-            var isFiltered = currentStatusFilter !== 'all';
+            var isFiltered = currentStatusFilter !== 'all' || currentTagFilter || certificateSearch;
             thead.style.display = 'none';
 
             if (isFiltered) {
@@ -838,7 +909,6 @@
         }
 
         thead.style.display = '';
-        var sorted = applySorting(certificates);
 
         var rowHtml = CertMate.html;
         var rowRaw = CertMate.raw;
@@ -855,7 +925,7 @@
             return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
-        container.innerHTML = sorted.map(function (cert, i) {
+        container.innerHTML = visibleCertificates.map(function (cert, i) {
             // providerDisplayName(...) already calls escapeHtml internally —
             // when interpolating into the rowHtml template we wrap it with
             // rowRaw() to opt out of re-escaping. cert.domain and
@@ -964,7 +1034,7 @@
             // A certificate with no key gets a key glyph, not a padlock: it
             // secures nothing until it is reissued.
             var lockIcon = keylessRow ? 'fa-key' : isExpired ? 'fa-lock-open' : 'fa-lock';
-            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" data-click="openCertRow" data-pass="el">
+            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(Math.min(i, 10) * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" data-click="openCertRow" data-pass="el">
                 <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
@@ -1020,10 +1090,6 @@
         container.querySelectorAll('button[data-more-domain]').forEach(function (btn) {
             btn.addEventListener('click', function (e) { e.stopPropagation(); openRowMenu(btn); });
         });
-
-        // Automatic deployment checks are triggered once, from loadCertificates(),
-        // via runDeploymentChecks() — batched and deduped. We intentionally do NOT
-        // fire a second (unbatched) pass here.
 
         // Re-attach any optimistic Issuing/Failed rows on top: a full rebuild
         // here (loadCertificates or a filter pass) would otherwise drop them.
@@ -1608,6 +1674,10 @@
         var batchIndex = 0;
         return new Promise(function (resolve) {
             function processBatch() {
+                if (options.shouldContinue && !options.shouldContinue()) {
+                    resolve();
+                    return;
+                }
                 if (batchIndex >= batches.length) {
                     updateDeploymentStats();
                     resolve();
@@ -1960,23 +2030,6 @@
             filterCertificates();
             renderKeylessBanner(certificates);
 
-            // Check deployment status for all certificates after a short delay.
-            // Single source of automatic checks — batched/deduped via
-            // runDeploymentChecks() (no progress callback here).
-            addDebugLog('Scheduling automatic deployment status checks...', 'info');
-
-            setTimeout(function () {
-                var existingCerts = certificates.filter(function (cert) { return cert.exists; });
-                if (existingCerts.length > 0) {
-                    addDebugLog('Starting automatic deployment status checks for all certificates', 'info');
-                    runDeploymentChecks(existingCerts).then(function () {
-                        addDebugLog('Automatic deployment check completed for ' + existingCerts.length + ' certificates', 'success');
-                    });
-                } else {
-                    addDebugLog('No certificates with valid status found to check', 'warn');
-                }
-            }, 1500);
-
         }).catch(function (error) {
             addDebugLog('Failed to load certificates: ' + error.message, 'error');
 
@@ -2017,16 +2070,7 @@
             if (value && value !== lastClearSignal) {
                 deploymentCache.clear();
                 addDebugLog('Deployment cache cleared by admin request', 'warn');
-                // Re-check all certificates (batched via runDeploymentChecks).
-                setTimeout(function () {
-                    if (Array.isArray(allCertificates) && allCertificates.length > 0) {
-                        var existingCerts = allCertificates.filter(function (cert) { return cert.exists; });
-                        if (existingCerts.length > 0) {
-                            addDebugLog('Re-checking all certificates after cache clear...', 'info');
-                            runDeploymentChecks(existingCerts);
-                        }
-                    }
-                }, 1000);
+                checkVisibleDeployments();
                 lastClearSignal = value;
             }
         }
@@ -3773,6 +3817,11 @@
     // (e.g. the client view is active), so the caller can fall back to a reload.
     function flashCertRow(domain) {
         if (!domain) return false;
+        var index = filteredCertificates.findIndex(function (cert) { return cert.domain === domain; });
+        if (index !== -1 && Math.floor(index / certificatePageSize) + 1 !== certificatePage) {
+            certificatePage = Math.floor(index / certificatePageSize) + 1;
+            filterCertificates();
+        }
         // Match by reading data-row-domain directly instead of interpolating the
         // (user-derived) domain into a CSS selector — no escaping subtleties, no
         // injection surface.
@@ -3806,6 +3855,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        var pageSize = document.getElementById('certificatePageSize');
+        if (pageSize) pageSize.value = String(certificatePageSize);
         // Paint the stats-card skeleton placeholders before the cert
         // fetch returns, so the surface is never an empty grid — count
         // is driven by STAT_METRICS_COUNT to stay in sync with the
@@ -3964,6 +4015,9 @@
         'updateAccountSelection', 'updateCAProviderInfo'
     ]);
     CertMate.actions({
+        searchCertificates: searchCertificates,
+        changeCertificatePageSize: changeCertificatePageSize,
+        changeCertificatePage: changeCertificatePage,
         // A row of the list opens its certificate; the name is on the row.
         openCertRow: function (row) { openCertDetail(row.getAttribute('data-row-domain')); },
         // "Check now" in the detail panel: past the cache, with the button to spin.

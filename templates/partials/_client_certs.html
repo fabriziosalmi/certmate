@@ -9,11 +9,13 @@
 <div class="bg-surface shadow-card rounded-xl overflow-hidden">
     <div class="px-6 py-4 border-b border-gray-100 dark:border-white/5">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <h3 class="text-lg font-semibold text-foreground">Client Certificates</h3>
+            <div class="flex flex-wrap items-center gap-3">
+                <h3 class="text-lg font-semibold text-foreground">Client Certificates</h3>
+                <input type="search" aria-label="Search client certificates" placeholder="Search client certificates…"
+                       data-input="ccSearchCertificates" data-pass="el"
+                       class="w-full sm:w-64 text-sm border border-border rounded-lg bg-input text-foreground px-3 py-2 focus:ring-2 focus:ring-primary">
+            </div>
             <div class="flex flex-wrap items-center gap-2">
-                <!-- Status + usage as chips (CN/email search lives in the ⌘K
-                     palette) and an actions icon group — same vocabulary as the
-                     server list header. Counts/filtering are driven by client-certs.js. -->
                 <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter by status">
                     <button type="button" data-cc-status-chip="" aria-pressed="true" data-click="ccSetStatusFilter" data-args='[""]' class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">All <span class="text-[10px] tabular-nums opacity-70" data-cc-status-count="all"></span></button>
                     <button type="button" data-cc-status-chip="active" aria-pressed="false" data-click="ccSetStatusFilter" data-args='["active"]' class="cm-chip aria-pressed:bg-green-500/15 aria-pressed:text-success-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">Active <span class="text-[10px] tabular-nums opacity-70" data-cc-status-count="active"></span></button>
@@ -62,6 +64,21 @@
             </tbody>
         </table>
     </div>
+    <nav class="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-border text-sm" aria-label="Client certificate pages">
+        <div class="flex items-center gap-2">
+            <label for="clientCertificatePageSize" class="text-muted">Per page</label>
+            <select id="clientCertificatePageSize" data-change="ccChangePageSize" data-pass="el" class="border border-border rounded bg-input text-foreground px-2 py-1">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+            <span id="clientCertificatePageSummary" class="text-muted" role="status" aria-live="polite"></span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="clientCertificatePreviousPage" type="button" data-click="ccChangePage" data-args='[-1]' disabled class="border border-border rounded px-3 py-1 text-label disabled:opacity-50">Previous</button>
+            <button id="clientCertificateNextPage" type="button" data-click="ccChangePage" data-args='[1]' disabled class="border border-border rounded px-3 py-1 text-label disabled:opacity-50">Next</button>
+        </div>
+    </nav>
 </div>
 
 <!-- Modal for certificate details -->

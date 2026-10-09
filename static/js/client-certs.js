@@ -8,6 +8,13 @@
     var escapeHtml = CertMate.escapeHtml;
     var currentCertId = null;
     var certificatesData = [];
+    var ccSearch = '';
+    var ccPage = 1;
+    var ccPageSize = 25;
+    try {
+        var savedSize = Number(localStorage.getItem('client-certificate-page-size'));
+        if ([25, 50, 100].indexOf(savedSize) !== -1) ccPageSize = savedSize;
+    } catch (e) { /* storage unavailable */ }
     var ccCurrentUsage = '';   // '' = all — driven by the usage filter chips
     var ccCurrentStatus = '';  // '' = all — driven by the status filter chips
     var _initialized = false;
@@ -53,6 +60,7 @@
         if (_initialized) return;
         _initialized = true;
         ccRestoreFilters();
+        document.getElementById('clientCertificatePageSize').value = String(ccPageSize);
         ccLoadStatistics();
         ccLoadCertificates();
         ccSetupEventListeners();
@@ -122,17 +130,10 @@
     // Every (re)load applies the current chips, so a revoke or renew that
     // refreshes the list lands back in the same view (#562).
     function ccLoadCertificates() {
-        var usage = ccCurrentUsage;
-        var status = ccCurrentStatus;
-        fetch('/api/client-certs')
+        return fetch('/api/client-certs')
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                var all = data.certificates || [];
-                certificatesData = all.filter(function(cert) {
-                    var matchUsage = !usage || cert.cert_usage === usage;
-                    var matchStatus = !status || (status === 'active' && !cert.revoked) || (status === 'revoked' && cert.revoked);
-                    return matchUsage && matchStatus;
-                });
+                certificatesData = data.certificates || [];
                 ccRenderCertificates();
             })
             .catch(function(e) { console.error('Error loading client certificates:', e); });
@@ -141,12 +142,29 @@
     function ccRenderCertificates() {
         var tbody = document.getElementById('certTableBody');
         if (!tbody) return;
-        if (certificatesData.length === 0) {
+        var filtered = ccApplySort(certificatesData.filter(function (cert) {
+            var usage = !ccCurrentUsage || cert.cert_usage === ccCurrentUsage;
+            var status = !ccCurrentStatus || (ccCurrentStatus === 'active' && !cert.revoked) ||
+                (ccCurrentStatus === 'revoked' && cert.revoked);
+            var text = [cert.common_name, cert.email, cert.identifier, cert.cert_usage,
+                cert.organization].join(' ').toLowerCase();
+            return usage && status && (!ccSearch || text.indexOf(ccSearch) !== -1);
+        }));
+        var pages = Math.max(1, Math.ceil(filtered.length / ccPageSize));
+        ccPage = Math.max(1, Math.min(ccPage, pages));
+        var start = (ccPage - 1) * ccPageSize;
+        var visible = filtered.slice(start, start + ccPageSize);
+        var summary = document.getElementById('clientCertificatePageSummary');
+        if (summary) summary.textContent = filtered.length
+            ? (start + 1) + '–' + (start + visible.length) + ' of ' + filtered.length : '0 certificates';
+        var previous = document.getElementById('clientCertificatePreviousPage');
+        var next = document.getElementById('clientCertificateNextPage');
+        if (previous) previous.disabled = ccPage <= 1;
+        if (next) next.disabled = ccPage >= pages;
+        if (filtered.length === 0) {
             // Distinguish "none exist yet" (offer a CTA) from "none match the
             // active usage/status filter" (offer a reorientation hint).
-            var usageSel = document.getElementById('filterUsage');
-            var statusSel = document.getElementById('filterStatus');
-            var isFiltered = (usageSel && usageSel.value) || (statusSel && statusSel.value);
+            var isFiltered = ccCurrentUsage || ccCurrentStatus || ccSearch;
             if (isFiltered) {
                 tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
                     '<div class="mx-auto max-w-sm text-center">' +
@@ -166,7 +184,7 @@
             return;
         }
 
-        tbody.innerHTML = ccApplySort(certificatesData).map(function(cert) {
+        tbody.innerHTML = visible.map(function(cert) {
             var expiresDate = new Date(cert.expires_at);
             var createdDate = new Date(cert.created_at);
             var isExpiringSoon = expiresDate - new Date() < 30 * 24 * 60 * 60 * 1000;
@@ -242,6 +260,7 @@
     }
 
     window.ccSortCertificates = function(field) {
+        ccPage = 1;
         if (ccSort.field === field) {
             ccSort.dir = ccSort.dir === 'asc' ? 'desc' : 'asc';
         } else {
@@ -404,16 +423,18 @@
     // Status/usage filter chips — the clicked chip becomes aria-pressed; the
     // rest reset. ccCurrent{Status,Usage} are the source of truth read below.
     function ccSetStatusFilter(value) {
+        ccPage = 1;
         ccCurrentStatus = value;
         ccPressChips();
         ccRememberFilters();
-        ccFilterCertificates();
+        ccRenderCertificates();
     }
     function ccSetUsageFilter(value) {
+        ccPage = 1;
         ccCurrentUsage = value;
         ccPressChips();
         ccRememberFilters();
-        ccFilterCertificates();
+        ccRenderCertificates();
     }
     function ccRefresh() {
         ccLoadStatistics();
@@ -422,12 +443,6 @@
     window.ccSetStatusFilter = ccSetStatusFilter;
     window.ccSetUsageFilter = ccSetUsageFilter;
     window.ccRefresh = ccRefresh;
-
-    // Free-text CN/email search lives in the global ⌘K palette; the chips are
-    // applied by the loader itself.
-    function ccFilterCertificates() {
-        ccLoadCertificates();
-    }
 
     function ccShowCertDetails(id) {
         var cert = certificatesData.find(function(c) { return c.identifier === id; });
@@ -566,4 +581,23 @@
         'ccRefresh', 'ccSetStatusFilter', 'ccSetUsageFilter', 'ccSortCertificates',
         'ccToggleCsrBlock', 'closeCertModal', 'downloadCertFile'
     ]);
+    CertMate.actions({
+        ccSearchCertificates: function (input) {
+            ccSearch = input.value.trim().toLowerCase();
+            ccPage = 1;
+            ccRenderCertificates();
+        },
+        ccChangePageSize: function (select) {
+            var size = Number(select.value);
+            if ([25, 50, 100].indexOf(size) === -1) return;
+            ccPageSize = size;
+            ccPage = 1;
+            try { localStorage.setItem('client-certificate-page-size', String(size)); } catch (e) {}
+            ccRenderCertificates();
+        },
+        ccChangePage: function (delta) {
+            ccPage += delta;
+            ccRenderCertificates();
+        }
+    });
 })();
