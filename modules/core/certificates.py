@@ -1303,7 +1303,7 @@ class CertificateManager:
             raise FileExistsError(f'Certificate for {domain} already exists in storage')
         # Stage outside inventory: readers must never see a cert without its key/config.
         with tempfile.TemporaryDirectory(prefix='.import-', dir=self.cert_dir) as temp:
-            staging = Path(temp) / domain
+            staging = certificate_dir(temp, domain)
             staging.mkdir(mode=0o700)
             for name in CERTIFICATE_FILES:
                 path = staging / name

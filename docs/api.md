@@ -204,6 +204,8 @@ rather than written by hand:
   "alias_dns_provider": null,
   "san_domains": ["www.example.com"],
   "ca_provider": "letsencrypt",
+  "ca_account_id": "default",
+  "imported_at": null,
   "challenge_type": "dns-01",
   "account_id": "default",
   "storage_warning": null,
