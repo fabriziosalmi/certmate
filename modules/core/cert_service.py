@@ -23,8 +23,10 @@ from . import acme_profiles
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
-from .utils import validate_domain, validate_key_options
+from .cert_import import validate_import_bundle
+from .utils import utc_now_iso, validate_domain, validate_key_options
 from .domain_paths import certificate_dir
+from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS
 
 logger = logging.getLogger(__name__)
 
@@ -303,11 +305,9 @@ class CertificateService:
         acme_profile = _checked_profile(acme_profile)
 
         settings = self._settings.load_settings()
-        email = settings.get('email')
-        if not email:
-            raise ValueError('Email not configured')
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
+        email = self._ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
         if challenge_type == 'prevalidated':
@@ -404,6 +404,102 @@ class CertificateService:
             'ca_provider': result.get('ca_provider'),
         })
         return result
+
+    def import_certificate(self, *, certificate, chain, private_key, domain=None,
+                           dns_provider=None, account_id=None, ca_provider=None,
+                           ca_account_id=None, challenge_type=None, domain_alias=None,
+                           alias_dns_provider=None, acme_profile=None,
+                           user=None, ip_address=None, audit_ctx=None):
+        """Check, store and register an existing certificate, never issue one."""
+        bundle = validate_import_bundle(certificate, chain, private_key)
+        if domain is None or domain == '':
+            domain = bundle['names'][0]
+        if not isinstance(domain, str):
+            raise ValueError('Domain is required')
+        ok, normalized = validate_domain(domain.strip())
+        if not ok or normalized not in bundle['names']:
+            raise ValueError('Primary domain must be one of the certificate DNS names')
+        prepared = self.prepare_create(
+            domain=normalized, san_domains=[n for n in bundle['names'] if n != normalized],
+            dns_provider=dns_provider, account_id=account_id, ca_provider=ca_provider,
+            ca_account_id=ca_account_id, challenge_type=challenge_type,
+            domain_alias=domain_alias, alias_dns_provider=alias_dns_provider,
+            acme_profile=acme_profile, user=user, ip_address=ip_address)
+        if prepared['challenge_type'] not in ('dns-01', 'http-01', 'prevalidated'):
+            raise ValueError('Unsupported challenge type')
+        if prepared['challenge_type'] == 'http-01' and any(n.startswith('*.') for n in bundle['names']):
+            raise ValueError('HTTP-01 cannot renew wildcard certificates')
+        if prepared['challenge_type'] != 'dns-01' and prepared['domain_alias']:
+            raise ValueError('DNS aliases require DNS-01')
+        ca = self._certs.ca_manager
+        if ca is None:
+            raise ValueError('CA manager is unavailable')
+        settings = self._settings.load_settings()
+        try:
+            ca_config, used_ca_account = ca.get_ca_config(prepared['ca_provider'], ca_account_id)
+        except ValueError:
+            # A global email is sufficient for Let's Encrypt, as in ordinary issuance.
+            configured = settings.get('ca_providers', {}).get(prepared['ca_provider'])
+            if prepared['ca_provider'] == 'letsencrypt_staging':
+                configured = configured or settings.get('ca_providers', {}).get('letsencrypt')
+            if (prepared['ca_provider'] not in ('letsencrypt', 'letsencrypt_staging')
+                    or ca_account_id not in (None, '', 'default') or configured):
+                raise
+            ca_config, used_ca_account = {'email': prepared['email']}, 'default'
+        ca.get_acme_server_url(prepared['ca_provider'], account_config=ca_config)
+        ca.get_eab_credentials(prepared['ca_provider'], ca_config)
+        if any(n.startswith('*.') for n in bundle['names']) and not ca.ca_providers[prepared['ca_provider']]['supports_wildcard']:
+            raise ValueError('Selected CA does not support wildcard certificates')
+        if ca_account_id and used_ca_account != ca_account_id:
+            raise ValueError('Selected CA account is not configured')
+        prepared['ca_account_id'] = used_ca_account
+        prepared['acme_profile'] = self._certs._resolve_acme_profile(
+            normalized, False, prepared['acme_profile'], ca_config)
+        if prepared['challenge_type'] == 'dns-01':
+            dns_config, used_account = self._certs.dns_manager.get_dns_provider_account_config(
+                prepared['dns_provider'], account_id, settings)
+            if (not dns_config or (account_id and used_account != account_id)
+                    or not self._certs.dns_manager._account_has_credentials(prepared['dns_provider'], dns_config)):
+                raise ValueError('Selected DNS provider account is not configured')
+            prepared['account_id'] = used_account
+            if prepared['domain_alias']:
+                alias_provider = prepared['alias_dns_provider'] or prepared['dns_provider']
+                if alias_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
+                    raise ValueError('DNS alias mode does not support this DNS provider yet')
+                alias_config, _ = self._certs.dns_manager.get_dns_provider_account_config(
+                    alias_provider, account_id, settings)
+                if (not alias_config or
+                        not self._certs.dns_manager._account_has_credentials(alias_provider, alias_config)):
+                    raise ValueError('Alias DNS provider account is not configured')
+                if alias_provider != prepared['dns_provider']:
+                    # An omitted account means each provider uses its own default.
+                    prepared['account_id'] = account_id
+        metadata = {k: prepared[k] for k in (
+            'domain', 'email', 'san_domains', 'ca_provider', 'ca_account_id',
+            'challenge_type', 'dns_provider', 'account_id', 'domain_alias',
+            'alias_dns_provider', 'acme_profile')}
+        metadata.update(bundle['key_options'], created_at=bundle['created_at'], imported_at=utc_now_iso())
+        with self._certs.domain_lock(normalized):
+            warning = self._certs.store_imported_certificate(normalized, bundle['files'], metadata)
+            try:
+                if not self._settings.update(_add_domain_entry(prepared), 'certificate_imported'):
+                    raise RuntimeError('Renewal registration was not saved')
+            except Exception:
+                # Keep the valid bundle: a settings failure must not destroy the upload.
+                self._audit_emit(audit_ctx, 'import', normalized, 'failure',
+                                 error='Certificate stored but renewal registration failed')
+                raise RuntimeError('Certificate imported, but registering it in settings failed. '
+                                    'The certificate files are preserved; restore settings persistence '
+                                    'so the renewal sweep can recover registration.') from None
+        self._audit_emit(audit_ctx, 'import', normalized, 'success', details={
+            'ca_provider': metadata['ca_provider'], 'challenge_type': metadata['challenge_type'],
+            'san_count': len(metadata['san_domains'])})
+        self._publish('certificate_created', {
+            'domain': normalized, 'san_domains': metadata['san_domains'],
+            'dns_provider': metadata['dns_provider'], 'ca_provider': metadata['ca_provider'],
+            'imported': True})
+        return {'success': True, 'domain': normalized, 'san_domains': metadata['san_domains'],
+                'storage_warning': warning}
 
     def create_batch(self, *, domains, dns_provider=None, account_id=None,
                      ca_provider=None, ca_account_id=None, challenge_type=None,
@@ -826,11 +922,10 @@ class CertificateService:
         acme_profile = _checked_profile(acme_profile)
 
         settings = self._settings.load_settings()
-        email = settings.get('email')
-        if not email:
-            raise ValueError('Email not configured')
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
+        ca_account_id = metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None
+        email = self._ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
         if challenge_type == 'prevalidated':
@@ -851,7 +946,7 @@ class CertificateService:
             'dns_provider': dns_provider,
             'account_id': account_id,
             'ca_provider': ca_provider,
-            'ca_account_id': metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None,
+            'ca_account_id': ca_account_id,
             'domain_alias': domain_alias,
             'alias_dns_provider': alias_dns_provider,
             'san_domains': san_domains,
@@ -864,6 +959,18 @@ class CertificateService:
             '_settings_dns_provider': settings.get('dns_provider'),
             '_audit_ctx': audit_ctx,
         }
+
+    def _ca_email(self, settings, ca_provider, ca_account_id):
+        email = settings.get('email')
+        configured_cas = settings.get('ca_providers', {})
+        if ((ca_provider in configured_cas or
+             (ca_provider == 'letsencrypt_staging' and 'letsencrypt' in configured_cas))
+                and self._certs.ca_manager):
+            ca_config, _ = self._certs.ca_manager.get_ca_config(ca_provider, ca_account_id)
+            email = ca_config.get('email') or email
+        if not email:
+            raise ValueError('Email not configured')
+        return email
 
     def issue_reissue(self, prepared):
         """Blocking half of edit-and-reissue: certbot re-runs over the

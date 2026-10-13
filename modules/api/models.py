@@ -298,8 +298,10 @@ def create_api_models(api):
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
         'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
-        'ca_provider': fields.String(description='CA provider the certificate was issued with (from metadata; null for older certificates)'),
-        'challenge_type': fields.String(description='Challenge type used at issuance (from metadata)'),
+        'ca_provider': fields.String(description='CA used at issuance, or selected for the next renewal of an imported certificate (from metadata)'),
+        'ca_account_id': fields.String(description='CA account used at issuance, or selected for renewal of an imported certificate'),
+        'imported_at': fields.String(description='When the currently served certificate was imported, ISO 8601; null after it is replaced by issuance'),
+        'challenge_type': fields.String(description='Challenge used at issuance, or selected for renewal of an imported certificate (from metadata)'),
         'account_id': fields.String(description='DNS provider account used at issuance (from metadata)'),
         'storage_warning': fields.String(
             description=(
@@ -392,6 +394,21 @@ def create_api_models(api):
                          'fails although the record appears shortly after. POST it '
                          'whole: providers left out return to their defaults. '
                          'Returned since API contract 2.30.')),
+    })
+
+    import_cert_model = api.model('ImportCertificate', {
+        'domain': fields.String(description='Optional primary identity; defaults to the first DNS name in the certificate'),
+        'certificate': fields.String(required=True, description='One leaf certificate in PEM format (max 64 KiB)'),
+        'chain': fields.String(required=True, description='PEM issuers in order, intermediate first (max 64 KiB; root optional)'),
+        'private_key': fields.String(required=True, description='Matching unencrypted PEM private key (max 64 KiB)'),
+        'ca_provider': fields.String(description='CA to use for the next renewal'),
+        'ca_account_id': fields.String(description='CA account for the next renewal'),
+        'challenge_type': fields.String(enum=['dns-01', 'http-01', 'prevalidated']),
+        'dns_provider': fields.String(description='DNS provider for renewal'),
+        'account_id': fields.String(description='DNS account for renewal'),
+        'domain_alias': fields.String(description='Optional DNS-01 alias domain'),
+        'alias_dns_provider': fields.String(description='Optional provider hosting the alias zone'),
+        'acme_profile': fields.String(description='Optional ACME profile for renewal'),
     })
 
     create_cert_model = api.model('CreateCertificate', {
@@ -737,6 +754,7 @@ def create_api_models(api):
         'deployment_status_model': deployment_status_model,
         'certificate_model': certificate_model,
         'create_cert_model': create_cert_model,
+        'import_cert_model': import_cert_model,
         'reissue_cert_model': reissue_cert_model,
         'cache_entry_model': cache_entry_model,
         'backup_metadata_model': backup_metadata_model,

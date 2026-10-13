@@ -181,9 +181,12 @@ def test_a_malformed_account_default_is_refused_at_issuance(tmp_path):
 
 def test_a_csr_renewal_asks_for_its_profile_as_preferred(tmp_path):
     """A CSR certificate renews by re-running issuance (replace + renewal)."""
+    from tests.test_csr_only_issuance import _csr
+
     manager, shell = _manager(tmp_path, {'domain': DOMAIN, 'dns_provider': 'cloudflare',
                                          'acme_profile': 'tlsserver'})
-    manager.create_certificate(DOMAIN, 'a@b.com', 'cloudflare', replace=True, renewal=True)
+    manager.create_certificate(DOMAIN, 'a@b.com', 'cloudflare', replace=True, renewal=True,
+                               csr_pem=_csr(DOMAIN, (DOMAIN,)))
     assert _the_profile_flag(_argv(shell)) == ('--preferred-profile', 'tlsserver')
 
 

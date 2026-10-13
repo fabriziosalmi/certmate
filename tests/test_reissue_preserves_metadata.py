@@ -152,6 +152,8 @@ def test_owned_key_set_covers_every_field_the_reissue_writes():
         'created_at', 'email', 'staging', 'account_id', 'ca_provider',
         'ca_account_id', 'domain_alias', 'alias_dns_provider',
         'storage_warning',
+        # Reissuance replaces the uploaded certificate and clears its import marker.
+        'imported_at',
         # The ACME profile and what the last issuance found about it (#395).
         'acme_profile', 'acme_profile_withdrawn_at',
     }
