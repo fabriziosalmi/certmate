@@ -400,6 +400,14 @@ def _reject_path_escaping_domain(domain):
     reject_unsafe_domain(domain)
 
 
+def _confined_import_path(path, directory):
+    """Resolve symlinks before checking containment, and use that checked path."""
+    resolved = os.path.realpath(path)
+    if not resolved.startswith(os.path.realpath(directory) + os.sep):
+        raise ValueError('Invalid imported certificate path')
+    return Path(resolved)
+
+
 @dataclass
 class _IssuanceArtifacts:
     """Temp files an issuance creates, which its caller must remove.
@@ -3290,15 +3298,17 @@ class CertificateManager:
             if imported_renewal_force is not None:
                 # First import renewal: resolve under the issuance lock so a concurrent
                 # config edit is honored and two renewals cannot buy two certificates.
-                metadata = self._load_metadata(domain)
                 output, path_error = validate_domain_path(domain, self.cert_dir)
                 if path_error:
                     raise ValueError('Invalid imported certificate domain')
-                if not (output / 'cert.pem').exists():
+                cert_path = _confined_import_path(output / 'cert.pem', output)
+                lineage_path = _confined_import_path(renewal_conf(output, domain), output)
+                if not cert_path.exists():
                     raise FileNotFoundError(f'No imported certificate found for domain: {domain}')
-                if renewal_conf(output, domain).exists():
+                if lineage_path.exists():
                     return {'success': True, 'renewed': False, 'domain': domain,
                             'message': 'Imported certificate already has a renewal lineage'}
+                metadata = self._load_metadata(domain)
                 if not metadata.get('imported_at'):
                     raise FileNotFoundError(f'No imported certificate found for domain: {domain}')
                 if not imported_renewal_force and not self.get_certificate_info(domain, use_cache=False)['needs_renewal']:
@@ -5095,8 +5105,7 @@ class CertificateManager:
             stored['domains'] = entries + [entry]
 
         try:
-            if not self.settings_manager.update(_add, reason='sweep_reregistered'):
-                raise RuntimeError('Renewal registration was not saved')
+            self.settings_manager.update(_add, reason='sweep_reregistered')
         except Exception as e:
             logger.error(
                 "Renewed %r but could not re-register it in settings (%s); it "

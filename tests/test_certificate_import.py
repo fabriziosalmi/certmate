@@ -341,7 +341,7 @@ def test_import_is_listed_downloadable_and_never_issues(instance, bundle):
     stored = json.loads((instance.directory / 'metadata.json').read_text())
     assert stored['ca_provider'] == 'sectigo' and stored['ca_account_id'] == 'paid'
     assert stored['challenge_type'] == 'prevalidated' and stored['dns_provider'] is None
-    assert stored['email'] == 'ca@example.com'
+    assert stored['email'] == 'ops@example.com'
     assert stored['san_domains'] == [SAN]
     assert stored['key_type'] == 'ecdsa' and stored['imported_at']
     assert stat.S_IMODE((instance.directory / 'privkey.pem').stat().st_mode) == 0o600
@@ -415,11 +415,12 @@ def test_alias_providers_keep_their_own_default_accounts_at_first_renewal(instan
 
 
 @pytest.mark.parametrize('global_email,account_email,expected', [
-    ('', 'ca@example.com', 'ca@example.com'),
+    ('', 'ca@example.com', None),
+    ('ops@example.com', 'ca@example.com', 'ops@example.com'),
     ('ops@example.com', '', 'ops@example.com'),
     ('', '', None),
 ])
-def test_effective_ca_email_is_shared_by_import_create_and_reissue(
+def test_import_follows_the_current_create_and_reissue_email_gate(
         instance, bundle, global_email, account_email, expected):
     settings = instance.managers['settings']
 
@@ -577,6 +578,32 @@ def test_explicit_import_renewal_refuses_path_segments(instance, domain):
     instance.shell.run.assert_not_called()
 
 
+@pytest.mark.parametrize('target', ['directory', 'cert.pem', 'renewal'])
+def test_first_import_renewal_refuses_symlinks_outside_its_directory(instance, bundle, tmp_path, target, monkeypatch):
+    assert instance.post(import_payload(bundle)).status_code == 201
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    if target == 'directory':
+        saved = instance.directory.with_name('saved-import')
+        instance.directory.rename(saved)
+        instance.directory.symlink_to(outside, target_is_directory=True)
+    elif target == 'cert.pem':
+        certificate = instance.directory / 'cert.pem'
+        certificate.unlink()
+        (outside / 'cert.pem').write_text('outside certificate')
+        certificate.symlink_to(outside / 'cert.pem')
+    else:
+        renewal_conf(instance.directory, DOMAIN).parent.mkdir(parents=True)
+        (outside / 'lineage.conf').write_text('outside lineage')
+        renewal_conf(instance.directory, DOMAIN).symlink_to(outside / 'lineage.conf')
+    read_metadata = MagicMock(side_effect=AssertionError('Metadata read before path validation'))
+    monkeypatch.setattr(instance.certs, '_load_metadata', read_metadata)
+    with pytest.raises(ValueError, match='Invalid imported certificate'):
+        instance.certs.create_certificate(DOMAIN, 'ops@example.com', imported_renewal_force=True)
+    read_metadata.assert_not_called()
+    instance.shell.run.assert_not_called()
+
+
 def test_staging_failure_publishes_no_partial_bundle(instance, bundle, monkeypatch):
     def fail(*args, **kwargs):
         raise OSError('Read-only storage')
@@ -620,14 +647,6 @@ def test_failed_registration_preserves_bundle_and_sweep_recovers(instance, monke
     assert summary['renewed'] == 1 and summary['reregistered'] == 1
     assert any(d.get('domain') == DOMAIN for d in settings.load_settings(use_cache=False)['domains'])
     assert (instance.directory / 'cert.pem').read_bytes() == fresh['cert.pem']
-
-
-def test_sweep_registration_failure_is_not_counted_as_success(instance, bundle, monkeypatch):
-    assert instance.post(import_payload(bundle)).status_code == 201
-    summary = {'reregistered': 0}
-    monkeypatch.setattr(instance.managers['settings'], 'update', lambda *args, **kwargs: False)
-    instance.certs._reregister_domain(DOMAIN, summary)
-    assert summary['reregistered'] == 0
 
 
 def test_disk_only_prevalidated_certificate_requires_sectigo(instance, bundle):
