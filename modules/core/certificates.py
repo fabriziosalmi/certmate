@@ -28,7 +28,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from cryptography import x509
-from .ca_manager import CAManager
+from .ca_manager import CAManager, resolve_ca_account
 from .cert_labels import tags_from_metadata
 from .shell import ShellExecutor
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
@@ -2762,42 +2762,9 @@ class CertificateManager:
         logger.info(f"Using CA provider: {ca_provider}")
 
         # Get CA account configuration if CA manager is available
-        ca_account_config = None
-        used_ca_account_id = None
-        if self.ca_manager:
-            try:
-                ca_account_config, used_ca_account_id = self.ca_manager.get_ca_config(ca_provider, ca_account_id)
-                logger.info(f"Using CA account: {used_ca_account_id}")
-            except Exception as e:
-                if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
-                    # The one CA that needs no saved configuration: certbot's
-                    # defaults are the configuration. With none on disk the
-                    # plain-certbot branch below handles it (staging via
-                    # --staging). Do NOT reset the provider here — that would
-                    # silently flip a staging request to production issuance.
-                    logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
-                else:
-                    # Everything else fails closed. This used to fall back to
-                    # Let's Encrypt and answer 201, so a request for DigiCert,
-                    # ZeroSSL, Google, SSL.com, Actalis or a PRIVATE CA came
-                    # back as a certificate from a different authority, with a
-                    # log warning as the only signal. Measured, six providers
-                    # did it; only Sectigo refused, because it was added after
-                    # the fallback and carved itself out (#884).
-                    #
-                    # The private-CA case is the one that settles it. An
-                    # operator asking their internal CA for an internal name
-                    # and receiving a publicly-trusted certificate has had
-                    # that name published, and no log line undoes it.
-                    #
-                    # There is no safe substitute for the CA that was asked
-                    # for, so there is nothing to substitute.
-                    raise ValueError(
-                        f"CA provider '{ca_provider}' is not configured on this "
-                        f"instance, and issuing from a different CA is not a "
-                        f"substitute for the one you asked for. Configure it in "
-                        f"Settings, or request a CA that is configured. ({e})"
-                    ) from e
+        ca_account_config, used_ca_account_id = resolve_ca_account(self.ca_manager, ca_provider, ca_account_id)
+        if used_ca_account_id is not None:
+            logger.info(f"Using CA account: {used_ca_account_id}")
         return ca_provider, staging, ca_account_config, used_ca_account_id
 
     def _resolve_challenge_and_dns(self, settings, domain, challenge_type,

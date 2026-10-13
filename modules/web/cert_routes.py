@@ -51,6 +51,15 @@ def _refusal(error):
     return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
 
 
+def _batch_email_configured(cert_service, settings, data):
+    try:
+        cert_service._ca_email(settings, data.get('ca_provider') or settings.get('default_ca', 'letsencrypt'),
+                               data.get('ca_account_id'))
+        return True
+    except ValueError:
+        return False
+
+
 def register_cert_routes(app, managers, require_web_auth, auth_manager,
                          certificate_manager, _sanitize_domain, file_ops,
                          settings_manager, dns_manager, CERTIFICATE_FILES):
@@ -131,7 +140,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Batch size limit exceeded: maximum 50 domains per request'}), 400
 
             settings = settings_manager.load_settings()
-            if not settings.get('email'):
+            if not _batch_email_configured(cert_service, settings, data):
                 return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
 
             # Each domain through the service's own create steps (account,

@@ -23,6 +23,7 @@ from cryptography.exceptions import UnsupportedAlgorithm
 
 from .structured_logging import scrub_log_value
 from . import acme_profiles
+from .ca_manager import resolve_ca_account
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
@@ -1138,12 +1139,8 @@ class CertificateService:
 
     def _ca_email(self, settings, ca_provider, ca_account_id):
         email = settings.get('email')
-        configured_cas = settings.get('ca_providers', {})
-        if ((ca_provider in configured_cas or
-             (ca_provider == 'letsencrypt_staging' and 'letsencrypt' in configured_cas))
-                and self._certs.ca_manager):
-            ca_config, _ = self._certs.ca_manager.get_ca_config(ca_provider, ca_account_id)
-            email = ca_config.get('email') or email
+        ca_config, _ = resolve_ca_account(self._certs.ca_manager, ca_provider, ca_account_id, settings=settings)
+        email = (ca_config or {}).get('email') or email
         if not email:
             raise ValueError('Email not configured')
         return email

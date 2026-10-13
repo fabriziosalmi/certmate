@@ -14,6 +14,8 @@ Pure and side-effect-free: it reads config through the DNS manager but issues
 nothing, so it is safe to call for a live "can I adopt this?" affordance.
 """
 
+from .ca_manager import CAManager, resolve_ca_account
+
 # Key sizes / curves the create flow accepts. Anything else on the observed
 # cert falls back to the configured defaults rather than being forced through.
 _RSA_SIZES = {2048, 3072, 4096}
@@ -96,7 +98,13 @@ def build_adoption_plan(record, dns_manager, settings=None):
     if settings is None:
         settings = dns_manager.settings_manager.load_settings()
 
-    plan['email_configured'] = bool(settings.get('email'))
+    try:
+        ca_config, _ = resolve_ca_account(CAManager(dns_manager.settings_manager),
+                                         settings.get('default_ca', 'letsencrypt'), settings=settings)
+    except ValueError:
+        plan['reason'] = 'Configure the selected CA in Settings before adopting.'
+        return plan
+    plan['email_configured'] = bool((ca_config or {}).get('email') or settings.get('email'))
 
     provider, _confidence = dns_manager.suggest_dns_provider_for_domain(domain, settings=settings)
     plan['dns_provider'] = provider

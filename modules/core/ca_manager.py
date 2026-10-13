@@ -12,6 +12,29 @@ from .domain_paths import certificate_dir
 logger = logging.getLogger(__name__)
 
 
+def resolve_ca_account(ca_manager, ca_provider, ca_account_id=None, *, settings=None):
+    """Resolve issuance's account, preserving Let's Encrypt's certbot-default fallback."""
+    if ca_manager is None:
+        return None, None
+    try:
+        if settings is None:
+            config, used_account = ca_manager.get_ca_config(ca_provider, ca_account_id)
+        else:
+            config, used_account = ca_manager.get_ca_config(ca_provider, ca_account_id, settings=settings)
+        return config, used_account
+    except Exception as e:
+        if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
+            logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
+            return None, None
+        # Never substitute a public CA for the requested CA: it could publish internal names.
+        raise ValueError(
+            f"CA provider '{ca_provider}' is not configured on this "
+            f"instance, and issuing from a different CA is not a "
+            f"substitute for the one you asked for. Configure it in "
+            f"Settings, or request a CA that is configured. ({e})"
+        ) from e
+
+
 def acme_directory_refusal(url, what='ACME Directory URL'):
     """Why *url* is not usable as an ACME directory, or None if it is.
 
@@ -175,9 +198,10 @@ class CAManager:
         """Get list of supported Certificate Authorities"""
         return self.ca_providers
     
-    def get_ca_config(self, ca_provider: str, account_id: str = None) -> Tuple[Dict[str, Any], str]:
+    def get_ca_config(self, ca_provider: str, account_id: str = None, *, settings=None) -> Tuple[Dict[str, Any], str]:
         """Get CA configuration for the specified provider and account"""
-        settings = self.settings_manager.load_settings()
+        if settings is None:
+            settings = self.settings_manager.load_settings()
         
         # Get CA provider configuration
         ca_providers = settings.get('ca_providers', {})
