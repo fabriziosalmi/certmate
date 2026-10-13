@@ -4965,6 +4965,10 @@ class CertificateManager:
             return False, 'it has no readable metadata.json'
 
         challenge_type = metadata.get('challenge_type', 'dns-01')
+        if challenge_type == 'prevalidated':
+            if metadata.get('ca_provider') != 'sectigo':
+                return False, 'prevalidated ACME renewal is available only for Sectigo'
+            return True, None
         if challenge_type == 'http-01':
             # No per-domain credential to check: the webroot is instance-level
             # and the renewal needs nothing this instance does not already have.
