@@ -38,10 +38,12 @@ def test_create_and_reissue_resolve_ca_contact_email(tmp_path, global_email, acc
             (directory / 'cert.pem').write_bytes(b'old certificate')
             manager._save_metadata('example.com', {'ca_provider': 'sectigo', 'ca_account_id': 'paid',
                                                    'challenge_type': 'prevalidated'})
-            prepare = lambda: service.prepare_reissue(domain='example.com', user={})
+            def prepare():
+                return service.prepare_reissue(domain='example.com', user={})
         else:
-            prepare = lambda: service.prepare_create(domain='example.com', ca_account_id=account_id,
-                                                      challenge_type='prevalidated', user={})
+            def prepare():
+                return service.prepare_create(domain='example.com', ca_account_id=account_id,
+                                              challenge_type='prevalidated', user={})
         if expected is None:
             with pytest.raises(ValueError, match='Email not configured'):
                 prepare()
