@@ -7,7 +7,7 @@ from flask import request
 from flask_restx import Resource
 
 from ..core.audit_context import audit_context_from_request
-from ..core.cert_import import MAX_IMPORT_PEM_BYTES
+from ..core.cert_import import INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import DomainOperationInProgress
 from ..core.request_fields import json_bool
@@ -59,8 +59,12 @@ def create_import_resources(api, models, ctx):
             except DomainOperationInProgress:
                 return {'error': 'An operation is already in progress for this domain',
                         'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
-            except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm) as e:
+            except CertificateImportError as e:
                 return {'error': str(e), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
+            except ValueError as e:
+                return {'error': str(e), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
+            except (x509.DuplicateExtension, UnsupportedAlgorithm):
+                return {'error': INVALID_IMPORT_BUNDLE, 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
             except (OSError, RuntimeError):
                 # Never log the request or parser exceptions: the upload contains a private key.
                 logger.error('Certificate import failed')

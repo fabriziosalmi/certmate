@@ -303,6 +303,7 @@ sweep asks about the new certificate.
 | `unsupported` | The CA publishes no `renewalInfo`. That does not change from one sweep to the next. |
 | `unavailable` | The CA publishes it, and the last sweep got no usable answer. If this lasts, look at the CA. |
 | `no_identifier` | The certificate has no Authority Key Identifier, so ARI cannot name it. Common on hand-made private-CA certificates. |
+| `imported` | No CA was contacted: the configured CA is for future renewal, not the imported certificate's issuer. |
 | `disabled` | `ari_enabled` is `false` in settings. Nothing is asked. |
 
 The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the

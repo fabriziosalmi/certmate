@@ -494,6 +494,37 @@ def test_import_opt_out_survives_registration_failure(instance, monkeypatch):
     instance.shell.run.assert_not_called()
 
 
+def test_import_opt_out_can_be_enabled_then_recovered_after_settings_loss(instance):
+    assert instance.post(import_payload(make_bundle(start=-60, end=1), auto_renew=False)).status_code == 201
+    response = instance.client.put(f'/api/certificates/{DOMAIN}/auto-renew',
+                                   json={'enabled': True}, headers=instance.headers)
+    assert response.status_code == 200
+    assert instance.certs._load_metadata(DOMAIN)['auto_renew'] is True
+    assert instance.managers['settings'].update(lambda settings: settings.update(domains=[]))
+    instance.certs.renew_certificate = MagicMock(return_value={'success': True, 'renewed': True})
+    summary = instance.certs.check_renewals()
+    instance.certs.renew_certificate.assert_called_once()
+    assert summary['renewed'] == 1
+    assert summary['skipped_disabled'] == 0
+
+
+@pytest.mark.parametrize('with_identifier', [False, True])
+def test_import_does_not_ask_future_ca_for_renewal_window(instance, with_identifier):
+    extensions = [x509.AuthorityKeyIdentifier(b'issuer-key-id', None, None)] if with_identifier else []
+    data = make_bundle(start=-1, end=120, leaf_extensions=extensions)
+    response = instance.post(import_payload(data, ca_provider='letsencrypt', ca_account_id='default',
+                                            challenge_type='http-01'))
+    assert response.status_code == 201, response.get_json()
+    client = instance.certs._renewal_info_client()
+    client.lookup = MagicMock(side_effect=AssertionError('Imported identifier sent to future CA'))
+    instance.certs.check_renewals()
+    client.lookup.assert_not_called()
+    info = instance.certs.get_certificate_info(DOMAIN, use_cache=False)
+    assert info['renewal_info']['status'] == 'imported'
+    assert info['renewal_info']['window_start'] is None
+    instance.shell.run.assert_not_called()
+
+
 @pytest.mark.parametrize('provider', ['letsencrypt', 'letsencrypt_staging'])
 @pytest.mark.parametrize('account', [None, 'default'])
 def test_letsencrypt_import_accepts_the_existing_global_email_default(instance, bundle, provider, account):
@@ -914,6 +945,37 @@ def test_preview_validates_complete_bundle_without_saving_or_issuing(instance, b
     assert response.status_code == 200, response.get_json()
     assert response.get_json() == {'common_names': [DOMAIN], 'sans': [DOMAIN, SAN], 'validated': True}
     assert not instance.directory.exists()
+    instance.shell.run.assert_not_called()
+
+
+@pytest.mark.parametrize('failure,message', [
+    ('key', 'Private key does not match the certificate'),
+    ('root', 'Certificate or chain is expired or not yet valid'),
+])
+def test_preview_and_import_explain_the_same_validation_refusal(instance, failure, message):
+    data = make_bundle(root_end=-1) if failure == 'root' else make_bundle()
+    if failure == 'key':
+        data['private_key'] = make_bundle()['private_key']
+    preview = instance.client.post('/api/web/certificates/import/preview', json=data, headers=instance.headers)
+    imported = instance.post(import_payload(data))
+    assert preview.status_code == imported.status_code == 400
+    assert preview.get_json()['error'] == imported.get_json()['error'] == message
+    instance.shell.run.assert_not_called()
+    assert not instance.directory.exists()
+
+
+def test_raw_parser_errors_are_not_exposed_by_preview_or_import(instance, bundle, monkeypatch):
+    from modules.core.cert_import import INVALID_IMPORT_BUNDLE
+
+    def fail(*args, **kwargs):
+        raise ValueError('parser internals and secret material')
+
+    monkeypatch.setattr('modules.web.cert_routes.validate_import_bundle', fail)
+    monkeypatch.setattr('modules.core.cert_service.validate_import_bundle', fail)
+    preview = instance.client.post('/api/web/certificates/import/preview', json=bundle, headers=instance.headers)
+    imported = instance.post(import_payload(bundle))
+    assert preview.status_code == imported.status_code == 400
+    assert preview.get_json()['error'] == imported.get_json()['error'] == INVALID_IMPORT_BUNDLE
     instance.shell.run.assert_not_called()
 
 

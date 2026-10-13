@@ -4914,9 +4914,12 @@ class CertificateManager:
             # A self-signed certificate with no Authority Key Identifier
             # cannot be named in ARI at all; so can an unreadable file.
             logger.info("Cannot build an ARI identifier for %s: %s", domain, e)
-            self._record_renewal_info(domain, ari.observation(
-                None, ari.STATUS_NO_IDENTIFIER, None, now))
-            return ari.STATUS_NO_IDENTIFIER
+            status = ari.STATUS_IMPORTED if cert_info.get('imported_at') else ari.STATUS_NO_IDENTIFIER
+            self._record_renewal_info(domain, ari.observation(None, status, None, now))
+            return status
+        if cert_info.get('imported_at'):
+            self._record_renewal_info(domain, ari.observation(cert_id, ari.STATUS_IMPORTED, None, now))
+            return ari.STATUS_IMPORTED
         directory_url = self._acme_directory_url(cert_info)
         if not directory_url:
             # No usable ACME directory is, from here, a CA that publishes no
@@ -5343,7 +5346,13 @@ class CertificateManager:
             s['domains'] = new_domains
 
         try:
-            self.settings_manager.update(_flip, reason='set_auto_renew')
+            with self.domain_lock(domain):
+                if not self.settings_manager.update(_flip, reason='set_auto_renew'):
+                    return False
+                metadata = self._load_metadata(domain)
+                if metadata.get('imported_at') and 'auto_renew' in metadata:
+                    metadata['auto_renew'] = bool(enabled)
+                    self.write_metadata(domain, metadata)
         except _DomainNotInSettings:
             return False
         logger.info(f"auto_renew set to {bool(enabled)} for {domain}")

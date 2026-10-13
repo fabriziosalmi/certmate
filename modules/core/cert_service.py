@@ -17,13 +17,16 @@ adapters map to HTTP 403.
 """
 import logging
 import time
+from cryptography import x509
+from cryptography.exceptions import UnsupportedAlgorithm
 
 from .structured_logging import scrub_log_value
 from . import acme_profiles
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
-from .cert_import import validate_import_bundle, validate_import_renewability
+from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError,
+                          validate_import_bundle, validate_import_renewability)
 from .utils import utc_now_iso, validate_domain, validate_key_options
 from .domain_paths import certificate_dir
 from .domain_entries import entry_domain, normalize_entry
@@ -414,8 +417,13 @@ class CertificateService:
                            alias_dns_provider=None, acme_profile=None, auto_renew=True,
                            user=None, ip_address=None, audit_ctx=None):
         """Check, store and register an existing certificate, never issue one."""
-        bundle = validate_import_bundle(certificate, chain, private_key)
-        bundle.update(validate_import_renewability(bundle))
+        try:
+            bundle = validate_import_bundle(certificate, chain, private_key)
+            bundle.update(validate_import_renewability(bundle))
+        except CertificateImportError:
+            raise
+        except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
+            raise CertificateImportError(INVALID_IMPORT_BUNDLE) from None
         if not isinstance(auto_renew, bool):
             raise ValueError('auto_renew must be a boolean')
         if domain is None or domain == '':

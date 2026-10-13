@@ -984,6 +984,7 @@
     "status": {
      "enum": [
       "disabled",
+      "imported",
       "no_identifier",
       "unavailable",
       "unsupported",

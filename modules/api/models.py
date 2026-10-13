@@ -167,14 +167,15 @@ def create_api_models(api):
     renewal_info_model = api.model('RenewalInfo', {
         'status': fields.String(
             enum=['window', 'unsupported', 'unavailable', 'no_identifier',
-                  'disabled'],
+                  'disabled', 'imported'],
             description=(
                 "'window': the CA answered with a renewal window. "
                 "'unsupported': it publishes no renewalInfo, which will not "
                 "change. 'unavailable': it does, and the last sweep got no "
                 "usable answer. 'no_identifier': the certificate has no "
                 "Authority Key Identifier to name it by. 'disabled': "
-                "ari_enabled is false, so nothing is asked.")),
+                "ari_enabled is false, so nothing is asked. 'imported': the configured "
+                "CA is for future renewal, not the current issuer, so nothing is asked.")),
         'checked_at': fields.String(
             description='When the sweep asked, RFC 3339 UTC with Z.'),
         'window_start': fields.String(

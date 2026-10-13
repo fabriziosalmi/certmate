@@ -778,6 +778,8 @@
                 return '<span class="text-warning-fg"' + checked + '>The CA did not answer at the last check</span>';
             case 'no_identifier':
                 return '<span class="text-muted"' + checked + '>Cannot be asked: no Authority Key Identifier</span>';
+            case 'imported':
+                return '<span class="text-muted"' + checked + '>Not asked: imported certificate; renewal CA is not its issuer</span>';
             case 'disabled':
                 return '<span class="text-muted">Off (ari_enabled is false)</span>';
         }

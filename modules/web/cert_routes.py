@@ -10,7 +10,8 @@ from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import (
-    MAX_IMPORT_PEM_BYTES, preview_import_certificate, validate_import_bundle, validate_import_renewability,
+    INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError, preview_import_certificate,
+    validate_import_bundle, validate_import_renewability,
 )
 from modules.core.auth import not_for_domain_restricted_keys
 from modules.core.request_fields import json_booleans
@@ -34,9 +35,10 @@ def preview_certificate_import_web():
             validate_import_renewability(bundle)
             result['validated'] = True
         return jsonify(result)
+    except CertificateImportError as error:
+        return jsonify({'error': str(error)}), 400
     except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
-        return jsonify({'error': 'Invalid certificate bundle. Check PEM format, validity dates, '
-                                 'chain signatures and private key match (max 64 KiB per file).'}), 400
+        return jsonify({'error': INVALID_IMPORT_BUNDLE}), 400
 
 
 def register_cert_routes(app, managers, require_web_auth, auth_manager,
