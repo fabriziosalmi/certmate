@@ -348,6 +348,7 @@ Send a JSON object with:
 | Field | Purpose |
 | --- | --- |
 | `domain` | Optional primary identity, one of the certificate's DNS names. Defaults to its first DNS name. |
+| `auto_renew` | Optional JSON boolean, default `true`. Saved with the domain registration. `false` prevents automatic renewal from the first sweep. |
 | `certificate` | Exactly one leaf certificate, in PEM format. |
 | `chain` | PEM CA certificates in issuer order (intermediate first). The root is optional. |
 | `private_key` | Matching, unencrypted RSA or ECDSA private key in PEM format. |
@@ -372,8 +373,7 @@ checked; private CAs and chains without a root are allowed. Configure providers
 before importing; checking configuration does not test live CA authorization or
 DNS credentials.
 
-The selected CA account's email takes precedence over the global email. For an
-alias hosted by a different DNS provider, omitting `account_id` lets each provider
+For an alias hosted by a different DNS provider, omitting `account_id` lets each provider
 use its own default account; the alias provider must support CertMate's DNS hook.
 
 Returns **201** with `domain`, `san_domains`, and an optional `storage_warning`.
@@ -393,7 +393,9 @@ a certificate through the selected CA/challenge and creates a normal lineage;
 the imported certificate keeps serving if issuance fails. Later renewals use
 that lineage normally. Automatic renewal follows the usual renewal policy, so
 a certificate already inside its renewal window may renew at the next sweep;
-disable automatic renewal if that is not wanted. A non-forced manual renewal
+set `auto_renew: false` at import (or disable the dashboard switch) if that is not wanted.
+An opted-out import remains opted out even if settings registration fails.
+A non-forced manual renewal
 outside the window does not issue a replacement.
 
 Use HTTPS for imports: the upload contains the private key. It is stored with

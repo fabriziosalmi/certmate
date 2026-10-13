@@ -9,10 +9,11 @@ from unittest.mock import MagicMock
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID, ObjectIdentifier
 
-from modules.core.cert_import import MAX_IMPORT_PEM_BYTES, validate_import_bundle
+from modules.core.cert_import import MAX_IMPORT_PEM_BYTES, validate_import_renewability
+from modules.core.cert_import import validate_import_bundle as validate_integrity
 from modules.core.domain_paths import lineage_live_dir, renewal_conf
 
 pytestmark = pytest.mark.unit
@@ -21,19 +22,25 @@ SAN = 'other.example.com'
 PEM = serialization.Encoding.PEM
 
 
+def validate_import_bundle(**data):
+    bundle = validate_integrity(**data)
+    return {**bundle, **validate_import_renewability(bundle)}
+
+
 def make_bundle(*, names=(DOMAIN, SAN), start=-1, end=120, rsa_key=False, ca=False,
                 root_ca=True, root_end=365, intermediate=False, key_usage=None,
                 root_extensions=(), intermediate_extensions=(), leaf_extensions=(),
-                root_path_length=1, self_issued_intermediate=False):
-    now = datetime.datetime.now(datetime.timezone.utc)
+                root_path_length=1, self_issued_intermediate=False, key=None, san_names=None):
+    now = datetime.datetime.now(datetime.UTC)
     root_key = ec.generate_private_key(ec.SECP256R1())
-    key = rsa.generate_private_key(65537, 2048) if rsa_key else ec.generate_private_key(ec.SECP256R1())
+    key = key or (rsa.generate_private_key(65537, 2048) if rsa_key else ec.generate_private_key(ec.SECP256R1()))
     root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Import test root')])
     root = (x509.CertificateBuilder().subject_name(root_name).issuer_name(root_name)
             .public_key(root_key.public_key()).serial_number(x509.random_serial_number())
             .not_valid_before(now - datetime.timedelta(days=2))
             .not_valid_after(now + datetime.timedelta(days=root_end))
-            .add_extension(x509.BasicConstraints(ca=root_ca, path_length=root_path_length if root_ca else None), critical=True))
+            .add_extension(x509.BasicConstraints(ca=root_ca,
+                                                path_length=root_path_length if root_ca else None), critical=True))
     for extension in root_extensions:
         root = root.add_extension(extension, critical=True)
     root = root.sign(root_key, hashes.SHA256())
@@ -58,7 +65,8 @@ def make_bundle(*, names=(DOMAIN, SAN), start=-1, end=120, rsa_key=False, ca=Fal
             .serial_number(x509.random_serial_number())
             .not_valid_before(now + datetime.timedelta(days=start))
             .not_valid_after(now + datetime.timedelta(days=end))
-            .add_extension(x509.SubjectAlternativeName([x509.DNSName(n) for n in names]), critical=False)
+            .add_extension(x509.SubjectAlternativeName(
+                san_names if san_names is not None else [x509.DNSName(n) for n in names]), critical=False)
             .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
     if key_usage is not None:
         cert = cert.add_extension(key_usage, critical=True)
@@ -96,6 +104,32 @@ def test_refuses_missing_malformed_or_oversized_inputs(bundle, field, bad):
 def test_refuses_expired_or_future_certificates(start, end):
     with pytest.raises(ValueError, match='expired or not yet valid'):
         validate_import_bundle(**make_bundle(start=start, end=end))
+
+
+@pytest.mark.parametrize('case', ['ip-san', 'many-names', 'invalid-dns', 'ed25519', 'small-rsa', 'large-curve'])
+def test_integrity_is_independent_of_renewability(case):
+    import ipaddress
+    options = {
+        'ip-san': {'san_names': [x509.IPAddress(ipaddress.ip_address('192.0.2.1'))]},
+        'many-names': {'names': tuple(f'host{i}.example.com' for i in range(101))},
+        'invalid-dns': {'names': ('not_a_domain.example.com',)},
+        'ed25519': {'key': ed25519.Ed25519PrivateKey.generate()},
+        'small-rsa': {'key': rsa.generate_private_key(65537, 1024)},
+        'large-curve': {'key': ec.generate_private_key(ec.SECP521R1())},
+    }
+    data = make_bundle(**options[case])
+    bundle = validate_integrity(**data)
+    assert bundle['files']['privkey.pem']
+    with pytest.raises(ValueError):
+        validate_import_renewability(bundle)
+
+
+@pytest.mark.parametrize('value', [b'-----BEGIN CERTIFICATE-----' * 2000,
+                                 b'-----END CERTIFICATE-----' * 2000,
+                                 b'garbage-----BEGIN CERTIFICATE-----bad-----END CERTIFICATE-----'])
+def test_malformed_repeated_pem_markers_are_rejected(bundle, value):
+    with pytest.raises(ValueError):
+        validate_integrity(**{**bundle, 'chain': value})
 
 
 def test_refuses_mismatched_key_and_unrelated_chain(bundle):
@@ -419,6 +453,46 @@ def test_import_only_needs_the_three_pems_and_renewal_source(instance, bundle):
     assert response.get_json()['san_domains'] == [SAN]
 
 
+@pytest.mark.parametrize('auto_renew', [None, True, False])
+def test_import_registers_auto_renew_atomically_and_sweep_honors_it(instance, auto_renew):
+    payload = import_payload(make_bundle(start=-60, end=1))
+    if auto_renew is not None:
+        payload['auto_renew'] = auto_renew
+    assert instance.post(payload).status_code == 201
+    entry = next(d for d in instance.managers['settings'].load_settings()['domains'] if d['domain'] == DOMAIN)
+    enabled = auto_renew is not False
+    assert entry['auto_renew'] is enabled
+    instance.certs.renew_certificate = MagicMock(return_value={'success': True, 'renewed': True})
+    summary = instance.certs.check_renewals()
+    assert instance.certs.renew_certificate.called is enabled
+    assert summary['skipped_disabled'] == int(not enabled)
+
+
+@pytest.mark.parametrize('value', ['false', None, 0, 1, []])
+def test_import_refuses_non_boolean_auto_renew(instance, bundle, value):
+    assert instance.post(import_payload(bundle, auto_renew=value)).status_code == 400
+    assert not instance.directory.exists()
+
+
+def test_import_updates_auto_renew_for_an_already_registered_domain(instance, bundle):
+    assert instance.managers['settings'].update(
+        lambda settings: settings.update(domains=[{'domain': DOMAIN, 'auto_renew': True}]))
+    assert instance.post(import_payload(bundle, auto_renew=False)).status_code == 201
+    assert instance.managers['settings'].load_settings()['domains'][0]['auto_renew'] is False
+
+
+def test_import_opt_out_survives_registration_failure(instance, monkeypatch):
+    settings = instance.managers['settings']
+    save = settings.save_settings
+    monkeypatch.setattr(settings, 'save_settings', lambda *args, **kwargs: False)
+    assert instance.post(import_payload(make_bundle(start=-60, end=1), auto_renew=False)).status_code == 500
+    monkeypatch.setattr(settings, 'save_settings', save)
+    summary = instance.certs.check_renewals()
+    assert summary['skipped_disabled'] == 1
+    assert summary['renewed'] == 0
+    instance.shell.run.assert_not_called()
+
+
 @pytest.mark.parametrize('provider', ['letsencrypt', 'letsencrypt_staging'])
 @pytest.mark.parametrize('account', [None, 'default'])
 def test_letsencrypt_import_accepts_the_existing_global_email_default(instance, bundle, provider, account):
@@ -454,6 +528,53 @@ def test_import_while_domain_busy_returns_conflict(instance, bundle, monkeypatch
     with instance.certs.domain_lock(DOMAIN):
         assert instance.post(import_payload(bundle)).status_code == 409
     assert not instance.directory.exists()
+
+
+def test_concurrent_first_renewals_issue_only_once(instance, bundle, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, current_thread
+
+    assert instance.post(import_payload(bundle)).status_code == 201
+    fresh = validate_import_bundle(**make_bundle(end=180))['files']
+    issuing, second_attempt = Event(), Event()
+    get_lock = instance.certs._get_domain_lock
+    issuer_thread = []
+
+    def lock(domain):
+        if issuer_thread and current_thread().ident != issuer_thread[0]:
+            second_attempt.set()
+        return get_lock(domain)
+
+    def issue(command, **kwargs):
+        issuer_thread.append(current_thread().ident)
+        issuing.set()
+        assert second_attempt.wait(5)
+        live = lineage_live_dir(instance.directory, DOMAIN)
+        live.mkdir(parents=True)
+        for name, data in fresh.items():
+            (live / name).write_bytes(data)
+        conf = renewal_conf(instance.directory, DOMAIN)
+        conf.parent.mkdir()
+        conf.write_text('[renewalparams]\nauthenticator = manual\n')
+        return SimpleNamespace(returncode=0, stdout='renewed', stderr='')
+
+    monkeypatch.setattr(instance.certs, '_get_domain_lock', lock)
+    instance.shell.run.side_effect = issue
+    instance.shell.produces_artifacts = True
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(instance.certs.renew_certificate, DOMAIN, force=True)
+        assert issuing.wait(5)
+        second = pool.submit(instance.certs.renew_certificate, DOMAIN, force=True)
+        assert first.result(timeout=10)['renewed'] is True
+        assert second.result(timeout=10)['renewed'] is False
+    instance.shell.run.assert_called_once()
+
+
+@pytest.mark.parametrize('domain', ['../escape', '/outside', 'example.com/../../outside', 'example.com\\outside'])
+def test_explicit_import_renewal_refuses_path_segments(instance, domain):
+    with pytest.raises(ValueError):
+        instance.certs.create_certificate(domain, 'ops@example.com', imported_renewal_force=True)
+    instance.shell.run.assert_not_called()
 
 
 def test_staging_failure_publishes_no_partial_bundle(instance, bundle, monkeypatch):

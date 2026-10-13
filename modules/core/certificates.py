@@ -3191,7 +3191,7 @@ class CertificateManager:
             return ''
         return f"\n\n{sentence}" if sentence else ''
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False, acme_profile=None, force=False):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False, acme_profile=None, imported_renewal_force=None):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -3238,7 +3238,10 @@ class CertificateManager:
                 `created_at` is kept, `renewed_at` is stamped, and the run is
                 not counted as a creation; the caller counts the renewal
                 (#666, D4).
-            force: Bypass the due-date gate for a first-import renewal only.
+            imported_renewal_force: Explicit first-import renewal entry point.
+                None keeps ordinary issuance behavior, including renewal=True.
+                False resolves import metadata under the lock and checks the due date;
+                True does the same but bypasses the due-date gate.
             replace: Reissue over the existing certbot lineage (#267). The
                 same ``--cert-name`` with a different ``-d`` set makes
                 certbot replace the lineage's domain set (expand AND
@@ -3284,11 +3287,13 @@ class CertificateManager:
         artifacts = _IssuanceArtifacts()
 
         try:
-            if renewal and csr_pem is None:
+            if imported_renewal_force is not None:
                 # First import renewal: resolve under the issuance lock so a concurrent
                 # config edit is honored and two renewals cannot buy two certificates.
                 metadata = self._load_metadata(domain)
-                output = certificate_dir(self.cert_dir, domain)
+                output, path_error = validate_domain_path(domain, self.cert_dir)
+                if path_error:
+                    raise ValueError('Invalid imported certificate domain')
                 if not (output / 'cert.pem').exists():
                     raise FileNotFoundError(f'No imported certificate found for domain: {domain}')
                 if renewal_conf(output, domain).exists():
@@ -3296,7 +3301,7 @@ class CertificateManager:
                             'message': 'Imported certificate already has a renewal lineage'}
                 if not metadata.get('imported_at'):
                     raise FileNotFoundError(f'No imported certificate found for domain: {domain}')
-                if not force and not self.get_certificate_info(domain, use_cache=False)['needs_renewal']:
+                if not imported_renewal_force and not self.get_certificate_info(domain, use_cache=False)['needs_renewal']:
                     return {'success': True, 'renewed': False, 'domain': domain,
                             'message': 'Imported certificate is not yet due for renewal'}
                 (email, dns_provider, account_id, ca_provider, ca_account_id,
@@ -3739,7 +3744,7 @@ class CertificateManager:
         if metadata.get('imported_at') and not renewal_conf(certificate_dir(self.cert_dir, domain), domain).exists():
             result = self.create_certificate(
                 domain=domain, email=metadata.get('email'),
-                replace=True, renewal=True, force=force)
+                replace=True, renewal=True, imported_renewal_force=force)
             result.setdefault('renewed', True)
             result.setdefault('message', 'Imported certificate renewed successfully')
             return result
@@ -5008,6 +5013,10 @@ class CertificateManager:
         as something else. After this, the warning only ever names
         certificates the sweep genuinely could not take on.
         """
+        metadata = self._load_metadata(domain)
+        if metadata.get('imported_at') and metadata.get('auto_renew') is False:
+            summary['skipped_disabled'] += 1
+            return
         renewable, reason = self._unregistered_is_renewable(domain, settings)
         if not renewable:
             summary['unmanaged'] += 1

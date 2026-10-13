@@ -790,6 +790,9 @@
     "alias_dns_provider": {
      "type": "string"
     },
+    "auto_renew": {
+     "type": "boolean"
+    },
     "ca_account_id": {
      "type": "string"
     },

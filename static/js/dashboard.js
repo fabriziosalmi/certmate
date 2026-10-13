@@ -2990,6 +2990,7 @@
 
     function toggleCertificateImport() {
         var importing = document.getElementById('importExistingCertificate').checked;
+        if (!importing) document.getElementById('importAutoRenew').checked = true;
         var form = document.getElementById('createCertForm');
         document.getElementById('certificateImportFiles').classList.toggle('hidden', !importing);
         document.getElementById('drawerSubtitle').classList.toggle('hidden', importing);
@@ -3034,7 +3035,7 @@
     }
 
     async function importCertificate(form) {
-        var payload = {};
+        var payload = {auto_renew: document.getElementById('importAutoRenew').checked};
         var fields = importFileFields;
         var inputs = form.querySelectorAll('input, select, textarea, button');
         var disabled = Array.from(inputs, function (input) { return input.disabled; });

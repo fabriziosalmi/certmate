@@ -299,9 +299,12 @@ def create_api_models(api):
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
         'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
         'ca_provider': fields.String(description='CA used at issuance, or selected for the next renewal of an imported certificate (from metadata)'),
-        'ca_account_id': fields.String(description='CA account used at issuance, or selected for renewal of an imported certificate'),
-        'imported_at': fields.String(description='When the currently served certificate was imported, ISO 8601; null after it is replaced by issuance'),
-        'challenge_type': fields.String(description='Challenge used at issuance, or selected for renewal of an imported certificate (from metadata)'),
+        'ca_account_id': fields.String(description=(
+            'CA account used at issuance, or selected for renewal of an imported certificate')),
+        'imported_at': fields.String(description=(
+            'When the currently served certificate was imported, ISO 8601; null after it is replaced by issuance')),
+        'challenge_type': fields.String(description=(
+            'Challenge used at issuance, or selected for renewal of an imported certificate (from metadata)')),
         'account_id': fields.String(description='DNS provider account used at issuance (from metadata)'),
         'storage_warning': fields.String(
             description=(
@@ -397,9 +400,12 @@ def create_api_models(api):
     })
 
     import_cert_model = api.model('ImportCertificate', {
+        'auto_renew': fields.Boolean(default=True, description=(
+            'Enable automatic renewal; false keeps the imported certificate until manual action')),
         'domain': fields.String(description='Optional primary identity; defaults to the first DNS name in the certificate'),
         'certificate': fields.String(required=True, description='One leaf certificate in PEM format (max 64 KiB)'),
-        'chain': fields.String(required=True, description='PEM issuers in order, intermediate first (max 64 KiB; root optional)'),
+        'chain': fields.String(required=True, description=(
+            'PEM issuers in order, intermediate first (max 64 KiB; root optional)')),
         'private_key': fields.String(required=True, description='Matching unencrypted PEM private key (max 64 KiB)'),
         'ca_provider': fields.String(description='CA to use for the next renewal'),
         'ca_account_id': fields.String(description='CA account for the next renewal'),

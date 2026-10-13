@@ -23,9 +23,10 @@ from . import acme_profiles
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
-from .cert_import import validate_import_bundle
+from .cert_import import validate_import_bundle, validate_import_renewability
 from .utils import utc_now_iso, validate_domain, validate_key_options
 from .domain_paths import certificate_dir
+from .domain_entries import entry_domain, normalize_entry
 from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS
 
 logger = logging.getLogger(__name__)
@@ -408,10 +409,13 @@ class CertificateService:
     def import_certificate(self, *, certificate, chain, private_key, domain=None,
                            dns_provider=None, account_id=None, ca_provider=None,
                            ca_account_id=None, challenge_type=None, domain_alias=None,
-                           alias_dns_provider=None, acme_profile=None,
+                           alias_dns_provider=None, acme_profile=None, auto_renew=True,
                            user=None, ip_address=None, audit_ctx=None):
         """Check, store and register an existing certificate, never issue one."""
         bundle = validate_import_bundle(certificate, chain, private_key)
+        bundle.update(validate_import_renewability(bundle))
+        if not isinstance(auto_renew, bool):
+            raise ValueError('auto_renew must be a boolean')
         if domain is None or domain == '':
             domain = bundle['names'][0]
         if not isinstance(domain, str):
@@ -448,7 +452,8 @@ class CertificateService:
             ca_config, used_ca_account = {'email': prepared['email']}, 'default'
         ca.get_acme_server_url(prepared['ca_provider'], account_config=ca_config)
         ca.get_eab_credentials(prepared['ca_provider'], ca_config)
-        if any(n.startswith('*.') for n in bundle['names']) and not ca.ca_providers[prepared['ca_provider']]['supports_wildcard']:
+        if (any(n.startswith('*.') for n in bundle['names'])
+                and not ca.ca_providers[prepared['ca_provider']]['supports_wildcard']):
             raise ValueError('Selected CA does not support wildcard certificates')
         if ca_account_id and used_ca_account != ca_account_id:
             raise ValueError('Selected CA account is not configured')
@@ -479,12 +484,13 @@ class CertificateService:
             'challenge_type', 'dns_provider', 'account_id', 'domain_alias',
             'alias_dns_provider', 'acme_profile')}
         metadata.update(bundle['key_options'], created_at=bundle['created_at'], imported_at=utc_now_iso())
+        metadata['auto_renew'] = prepared['auto_renew'] = auto_renew
         with self._certs.domain_lock(normalized):
             warning = self._certs.store_imported_certificate(normalized, bundle['files'], metadata)
             try:
                 if not self._settings.update(_add_domain_entry(prepared), 'certificate_imported'):
                     raise RuntimeError('Renewal registration was not saved')
-            except Exception:
+            except (OSError, RuntimeError):
                 # Keep the valid bundle: a settings failure must not destroy the upload.
                 self._audit_emit(audit_ctx, 'import', normalized, 'failure',
                                  error='Certificate stored but renewal registration failed')
@@ -1118,26 +1124,27 @@ def _add_domain_entry(prepared):
         prepared['domain'],
         (None if prepared['challenge_type'] == 'prevalidated' else
          prepared['dns_provider'] or prepared['_settings_dns_provider']),
-        prepared['account_id'])
+        prepared['account_id'], auto_renew=prepared.get('auto_renew'))
 
 
-def _make_add_domain(domain, dns_provider, account_id):
+def _make_add_domain(domain, dns_provider, account_id, *, auto_renew=None):
     """Build the idempotent ``settings_manager.update`` mutator that appends
     *domain* to the tracked domains list unless it is already present."""
 
     def _add_domain(s):
         domains_list = s.get('domains', []) or []
-        already_present = any(
-            (d == domain if isinstance(d, str) else d.get('domain') == domain)
-            for d in domains_list
-        )
-        if already_present:
-            return
+        for index, entry in enumerate(domains_list):
+            if entry_domain(entry) == domain:
+                if auto_renew is not None:
+                    domains_list[index] = {**normalize_entry(entry), 'auto_renew': auto_renew}
+                return
         domains_list.append({
             'domain': domain,
             'dns_provider': dns_provider,
             'dns_account_id': account_id,
         })
+        if auto_renew is not None:
+            domains_list[-1]['auto_renew'] = auto_renew
         s['domains'] = domains_list
 
     return _add_domain

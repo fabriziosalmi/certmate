@@ -92,6 +92,11 @@
                         </label>
                         <div id="certificateImportFiles" class="hidden space-y-3">
                             <p class="text-sm text-muted">No certificate will be issued now. Names and key type are read from the certificate. Select the CA, account and challenge below for its next renewal, under the normal renewal policy.</p>
+                            <label class="flex items-center gap-2 text-sm font-semibold text-label">
+                                <input id="importAutoRenew" type="checkbox" checked class="rounded border-border text-primary focus:ring-primary">
+                                Automatically renew this certificate
+                            </label>
+                            <p class="text-xs text-muted">Enabled: a certificate already due may renew at the next sweep, with the CA's normal fees. Disable to keep it until a manual renewal.</p>
                             <div class="grid grid-cols-3 gap-2 sm:gap-3">
                                 {% for id, label, icon, accept, description in [
                                     ('importCertificateFile', 'Certificate', 'fa-certificate', '.pem,.crt,.cer', 'Certificate (PEM, leaf only)'),

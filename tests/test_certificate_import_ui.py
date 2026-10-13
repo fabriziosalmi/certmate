@@ -25,7 +25,7 @@ const classes = () => {
 const make = () => ({value: '', disabled: false, checked: false, dataset: {},
   classList: classes(), innerHTML: 'Create', setAttribute() {}, addEventListener() {}});
 const elements = {};
-['createCertForm', 'importExistingCertificate', 'certificateImportFiles', 'drawerTitle', 'drawerSubtitle',
+ ['createCertForm', 'importExistingCertificate', 'importAutoRenew', 'certificateImportFiles', 'drawerTitle', 'drawerSubtitle',
  'createCertFormContainer', 'importCertificateFile', 'importChainFile', 'importPrivateKeyFile',
  'domain', 'ca_provider_select', 'ca_account_id', 'challenge_type_select', 'dns_provider_select',
  'account_select', 'dns_alias_domain', 'cert_acme_profile', 'cert_csr', 'san_entry',
@@ -34,7 +34,8 @@ const elements = {};
  'importCertificatePreview', 'importCertificatePreviewStatus', 'importCertificatePreviewNames',
  'importCertificatePreviewCN', 'importCertificatePreviewSAN'].forEach(id => {
    elements[id] = make(); elements[id].id = id;
- });
+  });
+elements.importAutoRenew.checked = true;
 const dropZones = ['importCertificateFile', 'importChainFile', 'importPrivateKeyFile'].map(id => {
   const input = elements[id];
   const handlers = {};
@@ -82,7 +83,8 @@ global.fetch = (url, options) => {
       sans: ['import.example.com', 'other.example.com'], validated: !!(body.chain && body.private_key)})});
   }
   calls.push({url, payload: JSON.parse(options.body)});
-  return Promise.resolve({ok: !fail, json: () => Promise.resolve(fail ? {error: 'Bad chain'} : {domain: 'import.example.com'})});
+    return Promise.resolve({ok: !fail,
+      json: () => Promise.resolve(fail ? {error: 'Bad chain'} : {domain: 'import.example.com'})});
 };
 function selectFiles(size = 50) {
   ['importCertificateFile', 'importChainFile', 'importPrivateKeyFile'].forEach((id, i) => {
@@ -173,6 +175,7 @@ async function run() {
   check(calls.length === 1 && calls[0].url === '/api/certificates/import', 'Import issued or double-submitted');
   const body = calls[0].payload;
   check(body.certificate === 'CERT PEM' && body.chain === 'CHAIN PEM' && body.private_key === 'PRIVATE PEM', 'Missing bundle');
+  check(body.auto_renew === true, 'Default import did not enable auto-renew');
   check(!body.domain && body.ca_account_id === 'paid', 'Names should be derived; source missing');
   check(!body.dns_provider && !body.account_id && !body.csr && !body.async, 'Import contains issuance-only fields');
   check(!elements.importExistingCertificate.checked && sourceOnly.every(el => !el.disabled), 'Issuance controls not restored');
@@ -181,7 +184,9 @@ async function run() {
     check(elements[id + 'Name'].textContent === 'Drop or click', 'Filename not reset');
   });
   selectFiles(); fail = true;
+  elements.importAutoRenew.checked = false;
   await submit(event);
+  check(calls[calls.length - 1].payload.auto_renew === false, 'Import did not send auto-renew opt-out');
   check(elements.importExistingCertificate.checked && !elements.importPrivateKeyFile.disabled, 'Error prevents retry');
   check(messages.includes('Bad chain'), 'Validation error not shown');
   selectFiles(65537);

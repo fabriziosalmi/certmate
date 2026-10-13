@@ -15,7 +15,8 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from .utils import validate_domain, validate_key_options
 
 MAX_IMPORT_PEM_BYTES = 64 * 1024
-_CERT_BLOCK = re.compile(br'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', re.S)
+_CERT_BEGIN = b'-----BEGIN CERTIFICATE-----'
+_CERT_END = b'-----END CERTIFICATE-----'
 
 
 def _pem(value, label):
@@ -31,9 +32,15 @@ def _pem(value, label):
 
 
 def _certificates(data, label):
-    blocks = _CERT_BLOCK.findall(data)
-    if not blocks or _CERT_BLOCK.sub(b'', data).strip():
+    parts = data.split(_CERT_END)
+    if len(parts) < 2 or parts[-1].strip():
         raise ValueError(f'{label} must contain only PEM certificates')
+    blocks = []
+    for part in parts[:-1]:
+        part = part.strip()
+        if not part.startswith(_CERT_BEGIN) or part.count(_CERT_BEGIN) != 1:
+            raise ValueError(f'{label} must contain only PEM certificates')
+        blocks.append(part + _CERT_END)
     try:
         return [x509.load_pem_x509_certificate(block) for block in blocks]
     except ValueError:
@@ -96,7 +103,7 @@ def _check_name_constraints(issuer, subordinates):
 
 
 def validate_import_bundle(certificate, chain, private_key):
-    """Return normalized files, DNS names and the key shape for renewal."""
+    """Validate bundle integrity and return parsed objects and normalized files."""
     leaves = _certificates(_pem(certificate, 'Certificate'), 'Certificate')
     if len(leaves) != 1:
         raise ValueError('Certificate must contain exactly one leaf certificate; put issuers in Chain')
@@ -110,17 +117,7 @@ def validate_import_bundle(certificate, chain, private_key):
     public_format = (serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
     if key.public_key().public_bytes(*public_format) != cert.public_key().public_bytes(*public_format):
         raise ValueError('Private key does not match the certificate')
-    if isinstance(key, rsa.RSAPrivateKey):
-        shape = {'key_type': 'rsa', 'key_size': key.key_size}
-    elif isinstance(key, ec.EllipticCurvePrivateKey):
-        shape = {'key_type': 'ecdsa', 'elliptic_curve': key.curve.name}
-    else:
-        raise ValueError('Only RSA and ECDSA keys can be renewed by CertMate')
-    ok, error = validate_key_options(shape['key_type'], shape.get('key_size'), shape.get('elliptic_curve'))
-    if not ok:
-        raise ValueError(error)
-
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     bundle = [cert, *issuers]
     if len({c.public_bytes(serialization.Encoding.DER) for c in bundle}) != len(bundle):
         raise ValueError('Chain contains duplicate certificates or the leaf certificate')
@@ -150,8 +147,8 @@ def validate_import_bundle(certificate, chain, private_key):
     try:
         usage = cert.extensions.get_extension_for_class(x509.KeyUsage).value
         if not (usage.digital_signature or
-                (shape['key_type'] == 'rsa' and usage.key_encipherment) or
-                (shape['key_type'] == 'ecdsa' and usage.key_agreement)):
+                (isinstance(key, rsa.RSAPrivateKey) and usage.key_encipherment) or
+                (isinstance(key, ec.EllipticCurvePrivateKey) and usage.key_agreement)):
             raise ValueError('Certificate key usage does not permit TLS server authentication')
     except x509.ExtensionNotFound:
         pass
@@ -177,6 +174,31 @@ def validate_import_bundle(certificate, chain, private_key):
         except (InvalidSignature, UnsupportedAlgorithm, TypeError, ValueError):
             raise ValueError('Chain root signature is invalid') from None
 
+    cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+    chain_pem = b''.join(c.public_bytes(serialization.Encoding.PEM) for c in issuers)
+    return {
+        'certificate': cert, 'private_key': key,
+        'files': {'cert.pem': cert_pem, 'chain.pem': chain_pem,
+                  'fullchain.pem': cert_pem + chain_pem,
+                  'privkey.pem': key.private_bytes(serialization.Encoding.PEM,
+                                                 serialization.PrivateFormat.PKCS8,
+                                                 serialization.NoEncryption())},
+        'created_at': cert.not_valid_before_utc.isoformat(),
+    }
+
+
+def validate_import_renewability(bundle):
+    """Check that CertMate can issue the bundle's names and key shape later."""
+    cert, key = bundle['certificate'], bundle['private_key']
+    if isinstance(key, rsa.RSAPrivateKey):
+        shape = {'key_type': 'rsa', 'key_size': key.key_size}
+    elif isinstance(key, ec.EllipticCurvePrivateKey):
+        shape = {'key_type': 'ecdsa', 'elliptic_curve': key.curve.name}
+    else:
+        raise ValueError('Only RSA and ECDSA keys can be renewed by CertMate')
+    ok, error = validate_key_options(shape['key_type'], shape.get('key_size'), shape.get('elliptic_curve'))
+    if not ok:
+        raise ValueError(error)
     try:
         san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
         if any(not isinstance(name, x509.DNSName) for name in san):
@@ -193,15 +215,4 @@ def validate_import_bundle(certificate, chain, private_key):
             raise ValueError('Certificate contains a DNS name CertMate cannot renew')
         if domain not in normalized:
             normalized.append(domain)
-    cert_pem = cert.public_bytes(serialization.Encoding.PEM)
-    chain_pem = b''.join(c.public_bytes(serialization.Encoding.PEM) for c in issuers)
-    return {
-        'files': {'cert.pem': cert_pem, 'chain.pem': chain_pem,
-                  'fullchain.pem': cert_pem + chain_pem,
-                  'privkey.pem': key.private_bytes(serialization.Encoding.PEM,
-                                                 serialization.PrivateFormat.PKCS8,
-                                                 serialization.NoEncryption())},
-        'names': normalized,
-        'key_options': shape,
-        'created_at': cert.not_valid_before_utc.isoformat(),
-    }
+    return {'names': normalized, 'key_options': shape}

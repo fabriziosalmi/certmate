@@ -10,6 +10,7 @@ from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import MAX_IMPORT_PEM_BYTES
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import DomainOperationInProgress
+from ..core.request_fields import json_bool
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ def create_import_resources(api, models, ctx):
             data = api.payload
             if not isinstance(data, dict):
                 return {'error': 'A JSON object is required'}, 400
+            auto_renew, error = json_bool(data, 'auto_renew', default=True)
+            if error:
+                return {'error': error}, 400
             config_keys = ('domain', 'dns_provider', 'account_id', 'ca_provider',
                            'ca_account_id', 'challenge_type', 'domain_alias',
                            'alias_dns_provider', 'acme_profile')
@@ -43,6 +47,7 @@ def create_import_resources(api, models, ctx):
                 result = ctx.cert_service.import_certificate(
                     certificate=data.get('certificate'), chain=data.get('chain'),
                     private_key=data.get('private_key'),
+                    auto_renew=auto_renew,
                     **{k: data.get(k) for k in config_keys},
                     user=getattr(request, 'current_user', None) or {},
                     ip_address=request.remote_addr, audit_ctx=audit_context_from_request())
@@ -55,7 +60,7 @@ def create_import_resources(api, models, ctx):
                 return {'error': 'An operation is already in progress for this domain'}, 409
             except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm) as e:
                 return {'error': str(e), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
-            except Exception:
+            except (OSError, RuntimeError):
                 # Never log the request or parser exceptions: the upload contains a private key.
                 logger.error('Certificate import failed')
                 return {'error': 'Could not complete certificate import. Check storage and settings; '
