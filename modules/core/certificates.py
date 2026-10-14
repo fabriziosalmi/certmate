@@ -2764,7 +2764,7 @@ class CertificateManager:
         # Get CA account configuration if CA manager is available
         ca_account_config, used_ca_account_id = resolve_ca_account(self.ca_manager, ca_provider, ca_account_id)
         if used_ca_account_id is not None:
-            logger.info(f"Using CA account: {used_ca_account_id}")
+            logger.info("Using CA account: %s", scrub_log_value(used_ca_account_id))
         return ca_provider, staging, ca_account_config, used_ca_account_id
 
     def _resolve_challenge_and_dns(self, settings, domain, challenge_type,

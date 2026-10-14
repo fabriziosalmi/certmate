@@ -364,7 +364,7 @@ class CertificateService:
         settings = self._settings.load_settings()
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
-        email = self._ca_email(settings, ca_provider, ca_account_id)
+        email = self.resolve_ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
         if challenge_type == 'prevalidated':
@@ -1102,7 +1102,7 @@ class CertificateService:
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
         ca_account_id = metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None
-        email = self._ca_email(settings, ca_provider, ca_account_id)
+        email = self.resolve_ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
         if challenge_type == 'prevalidated':
@@ -1137,7 +1137,8 @@ class CertificateService:
             '_audit_ctx': audit_ctx,
         }
 
-    def _ca_email(self, settings, ca_provider, ca_account_id):
+    def resolve_ca_email(self, settings, ca_provider, ca_account_id):
+        """Return the issuance email, or refuse the missing CA/email before work starts."""
         email = settings.get('email')
         ca_config, _ = resolve_ca_account(self._certs.ca_manager, ca_provider, ca_account_id, settings=settings)
         email = (ca_config or {}).get('email') or email

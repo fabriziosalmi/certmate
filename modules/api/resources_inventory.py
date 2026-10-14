@@ -463,7 +463,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             record = inventory.get(fingerprint)
             if record is None or not _record_in_scope(record):
                 return {'error': 'Certificate not found in inventory'}, 404
-            return build_adoption_plan(record, dns_mgr)
+            return build_adoption_plan(record, dns_mgr, ctx.managers.get('ca'))
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('operator')
@@ -482,7 +482,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             if record is None or not _record_in_scope(record):
                 return {'error': 'Certificate not found in inventory'}, 404
 
-            plan = build_adoption_plan(record, dns_mgr)
+            plan = build_adoption_plan(record, dns_mgr, ctx.managers.get('ca'))
             if not plan['available']:
                 return {'error': plan['reason'], 'code': 'ADOPTION_UNAVAILABLE'}, 400
 

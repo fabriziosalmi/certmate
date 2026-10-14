@@ -142,6 +142,83 @@ def test_batch_and_adoption_follow_the_single_create_email_rule(tmp_path, global
             assert command[command.index('--email') + 1] == expected
     else:
         assert not shell.commands_executed
-    plan = build_adoption_plan(_rec(), _FakeDNS(), settings=settings.load_settings.return_value)
+    plan = build_adoption_plan(_rec(), _FakeDNS(), manager.ca_manager, settings=settings.load_settings.return_value)
     assert plan['email_configured'] is bool(expected)
     assert plan['available'] is bool(expected)
+
+
+@pytest.fixture
+def missing_ca(tmp_path):
+    settings = MagicMock()
+    settings.load_settings.return_value = {'email': 'global@example.com', 'default_ca': 'digicert'}
+    shell = MockShellExecutor()
+    manager = CertificateManager(cert_dir=tmp_path, settings_manager=settings,
+                                 dns_manager=MagicMock(), ca_manager=CAManager(settings), shell_executor=shell)
+    auth = MagicMock()
+    auth.require_role.side_effect = lambda role: lambda function: function
+    return settings, manager, auth, shell
+
+
+@pytest.mark.parametrize('async_', [False, True])
+@pytest.mark.parametrize('reissue', [False, True])
+def test_unconfigured_ca_is_refused_before_sync_or_async_issuance(missing_ca, tmp_path, async_, reissue):
+    from flask_restx import Api
+
+    from modules.api.models import create_api_models
+    from modules.api.resources import create_api_resources
+
+    settings, manager, auth, shell = missing_ca
+    executor = MagicMock()
+    app = Flask(__name__)
+    api = Api(app)
+    managers = {'auth': auth, 'settings': settings, 'certificates': manager,
+                'file_ops': MagicMock(cert_dir=tmp_path), 'cache': MagicMock(),
+                'dns': manager.dns_manager, 'ca': manager.ca_manager, 'cert_executor': executor}
+    resources = create_api_resources(api, create_api_models(api), managers)
+    api.add_resource(resources['CreateCertificate'], '/create')
+    api.add_resource(resources['CertificateReissue'], '/<string:domain>/reissue')
+    if reissue:
+        directory = tmp_path / 'example.com'
+        directory.mkdir()
+        (directory / 'cert.pem').write_bytes(b'old certificate')
+        manager._save_metadata('example.com', {'ca_provider': 'digicert', 'challenge_type': 'http-01'})
+    response = app.test_client().post('/example.com/reissue' if reissue else '/create', json={
+        'domain': 'example.com', 'ca_provider': 'digicert', 'challenge_type': 'http-01', 'async': async_})
+    assert response.status_code == 400, response.get_json()
+    assert "CA provider 'digicert' is not configured" in response.get_json()['error']
+    executor.submit.assert_not_called()
+    assert shell.commands_executed == []
+
+
+def test_batch_reports_unconfigured_ca_not_missing_email(missing_ca):
+    settings, manager, auth, shell = missing_ca
+    app = Flask(__name__)
+    register_cert_routes(app, {}, lambda function: function, auth, manager,
+                         lambda domain: domain, MagicMock(), settings, MagicMock(), CERTIFICATE_FILES)
+    response = app.test_client().post('/api/web/certificates/batch', json={
+        'domains': ['example.com'], 'ca_provider': 'digicert'})
+    assert response.status_code == 400
+    assert "CA provider 'digicert' is not configured" in response.get_json()['error']
+    assert shell.commands_executed == []
+
+
+def test_adoption_reports_email_and_dns_even_when_ca_is_not_configured(missing_ca):
+    settings, manager, _, _ = missing_ca
+    plan = build_adoption_plan(_rec(), _FakeDNS(settings=settings.load_settings.return_value), manager.ca_manager)
+    assert plan['available'] is False
+    assert "CA provider 'digicert' is not configured" in plan['reason']
+    assert plan['email_configured'] is True
+    assert plan['dns_provider'] == 'cloudflare'
+    assert plan['dns_provider_configured'] is True
+
+
+def test_resolved_ca_account_cannot_inject_a_log_line(missing_ca, caplog):
+    settings, manager, _, _ = missing_ca
+    account_id = 'work\nforged log line'
+    settings.load_settings.return_value['ca_providers'] = {
+        'digicert': {'accounts': {account_id: {'email': 'ca@example.com'}}}}
+    with caplog.at_level('INFO', logger='modules.core.certificates'):
+        manager._resolve_ca(settings, 'digicert', account_id, False)
+    message = next(record.getMessage() for record in caplog.records if 'Using CA account:' in record.getMessage())
+    assert '\n' not in message
+    assert 'work' in message
