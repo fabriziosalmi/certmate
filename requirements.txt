@@ -104,7 +104,7 @@ certbot-dns-desec==1.3.2
 #   pip install certbot-dns-scaleway==0.0.7
 
 # Cloud SDK dependencies
-boto3==1.43.108                    # AWS support
+boto3==1.43.111                    # AWS support
 azure-identity==1.26.0             # Azure support
 azure-mgmt-dns==9.0.0              # Azure DNS support (CertMate's own hook; tests/test_azure_dns_hook.py runs it on this pin)
 google-cloud-dns==0.37.2           # Google Cloud support
@@ -113,7 +113,7 @@ dns-lexicon==3.25.1                # Provider-neutral DNS API support for alias 
 
 # Core application dependencies
 urllib3!=2.2.0,>=2.8.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
-dnspython==2.8.0                   # Used directly: CAA lookups (modules/core/caa.py) and the DNS-alias hook. It used to arrive only through the DNS plugins, so a plugin dropping it would have taken our own code with it.
+dnspython==2.9.0                   # Used directly: CAA lookups (modules/core/caa.py) and the DNS-alias hook. It used to arrive only through the DNS plugins, so a plugin dropping it would have taken our own code with it.
 requests==2.34.2
 tldextract==5.4.0                  # Used directly: the registrable domain for registration expiry (modules/core/domain_registration.py), from its bundled Public Suffix List, offline. Previously only transitive, through dns-lexicon.
 python-dotenv==1.2.4
