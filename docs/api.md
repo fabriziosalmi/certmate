@@ -204,6 +204,8 @@ rather than written by hand:
   "alias_dns_provider": null,
   "san_domains": ["www.example.com"],
   "ca_provider": "letsencrypt",
+  "ca_account_id": "default",
+  "imported_at": null,
   "challenge_type": "dns-01",
   "account_id": "default",
   "storage_warning": null,
@@ -301,6 +303,7 @@ sweep asks about the new certificate.
 | `unsupported` | The CA publishes no `renewalInfo`. That does not change from one sweep to the next. |
 | `unavailable` | The CA publishes it, and the last sweep got no usable answer. If this lasts, look at the CA. |
 | `no_identifier` | The certificate has no Authority Key Identifier, so ARI cannot name it. Common on hand-made private-CA certificates. |
+| `imported` | No CA was contacted: the configured CA is for future renewal, not the imported certificate's issuer. |
 | `disabled` | `ari_enabled` is `false` in settings. Nothing is asked. |
 
 The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the
@@ -322,6 +325,85 @@ They are **deprecated**, and **removed by the next major of the API contract (3.
 which is tracked in [#1114](https://github.com/fabriziosalmi/certmate/issues/1114). Until then they are
 still sent, as `null`, so nothing that reads them breaks; stop reading them. Deprecating
 does not move the contract version; the removal does.
+
+#### Import an existing server certificate
+
+`POST /api/certificates/import` — requires **operator**. Stores a valid certificate
+without contacting the CA or issuing a replacement. This is useful when issuance
+is paid, for example with Sectigo. The dashboard offers **Import an existing
+certificate** in the Server certificate creation form.
+
+Selecting or dropping the leaf certificate shows a CN/SAN identity preview before
+import, sending only that public certificate while the selection is incomplete.
+Selected files are yellow. Once all three files are selected, the dashboard sends
+the certificate, chain and private key to check their signatures, dates and key
+match without saving or issuing anything. A valid bundle turns all three tiles
+green; replacing a file clears that verdict and checks again. Import still repeats
+validation and checks the renewal configuration before saving.
+
+Available since API contract **2.45**. Certificate reads also expose
+`ca_account_id` and `imported_at`; the latter is null once the imported certificate
+is replaced by issuance. Until then, the dashboard labels the configured CA as
+**Renewal**, rather than claiming it issued the uploaded certificate.
+
+Send a JSON object with:
+
+| Field | Purpose |
+| --- | --- |
+| `domain` | Optional primary identity, one of the certificate's DNS names. Defaults to its first DNS name. |
+| `auto_renew` | Optional JSON boolean, default `true`. Saved with the domain registration. `false` prevents automatic renewal from the first sweep. |
+| `certificate` | Exactly one leaf certificate, in PEM format. |
+| `chain` | PEM CA certificates in issuer order (intermediate first). The root is optional. |
+| `private_key` | Matching, unencrypted RSA or ECDSA private key in PEM format. |
+| `ca_provider`, `ca_account_id` | Configured CA and account for the **next renewal**, not necessarily the current issuer. |
+| `challenge_type` | `dns-01`, `http-01`, or Sectigo `prevalidated`. Defaults to settings. |
+| `dns_provider`, `account_id` | Configured DNS provider/account for DNS-01 renewal. |
+| `domain_alias`, `alias_dns_provider` | Optional DNS-01 alias configuration. |
+| `acme_profile` | Optional ACME profile for renewal. Omitted: inherit the selected CA account's default at import. Empty string: use the CA's own default. |
+
+Each PEM is limited to **64 KiB**. CertMate checks validity dates of the leaf and
+supplied chain, key correspondence, TLS server key usage, chain signatures and
+CA constraints. SANs and key shape are derived from the certificate; every DNS name must be in the
+caller's scope. Supported keys are RSA 2048/3072/4096 and ECDSA P-256/P-384.
+Issuer authentication purposes and DNS name constraints are enforced throughout
+the supplied chain. Non-DNS name constraints and wildcard certificates with name
+constraints are explicitly rejected because those combinations are not supported.
+Unsupported critical extensions are also rejected, including certificate-policy
+constraints. An explicit extended key usage must include TLS server authentication,
+including on CA certificates; `anyExtendedKeyUsage` alone is not sufficient.
+HTTP-01 cannot renew a wildcard. Public trust and OCSP/CRL revocation are **not**
+checked; private CAs and chains without a root are allowed. Configure providers
+before importing; checking configuration does not test live CA authorization or
+DNS credentials.
+
+For an alias hosted by a different DNS provider, omitting `account_id` lets each provider
+use its own default account; the alias provider must support CertMate's DNS hook.
+
+Returns **201** with `domain`, `san_domains`, and an optional `storage_warning`.
+Malformed/invalid bundles or renewal configuration return **400**. An existing
+local certificate directory or certificate in the configured backend returns
+**409**: imports never overwrite it. Unauthenticated/insufficiently privileged
+callers receive **401/403**.
+
+If renewal registration cannot be saved, the response is **500**, not **201**,
+and any published certificate files are preserved. Restore settings persistence;
+the automatic renewal sweep can renew and re-register the disk-only certificate
+when due. Re-importing it returns **409** and never overwrites it.
+
+The imported bundle is available for downloads and uses the configured storage
+backend. No Certbot lineage is fabricated on import. The first renewal obtains
+a certificate through the selected CA/challenge and creates a normal lineage;
+the imported certificate keeps serving if issuance fails. Later renewals use
+that lineage normally. Automatic renewal follows the usual renewal policy, so
+a certificate already inside its renewal window may renew at the next sweep;
+set `auto_renew: false` at import (or disable the dashboard switch) if that is not wanted.
+An opted-out import remains opted out even if settings registration fails.
+A non-forced manual renewal
+outside the window does not issue a replacement.
+
+Use HTTPS for imports: the upload contains the private key. It is stored with
+restricted filesystem permissions, never returned by the import response or
+written to the import audit record.
 
 #### Reissue every certificate that lost its key
 
@@ -373,6 +455,11 @@ A missing `enabled` is `400 AUTO_RENEW_FLAG_REQUIRED`; a domain that is not
 tracked in settings is `404 DOMAIN_NOT_IN_SETTINGS`, because only those have a
 renewal flag to toggle. The change is audited and published on the event
 stream as `certificate_auto_renew_changed`.
+An imported certificate whose domain is busy answers `409 DOMAIN_OPERATION_IN_PROGRESS`;
+ordinary certificates can still be toggled during issuance. A failed settings save
+answers `500 AUTO_RENEW_UPDATE_FAILED`. If settings were saved but the import's
+recovery metadata could not be updated, the same code explicitly reports that partial
+success; retry the toggle to synchronize the recovery copy.
 
 #### Change a certificate's probe, notes or tags
 

@@ -64,6 +64,7 @@ STATUS_WINDOW = 'window'            # the CA answered with a usable window
 STATUS_UNSUPPORTED = 'unsupported'  # the CA publishes no renewalInfo at all
 STATUS_UNAVAILABLE = 'unavailable'  # it does; this sweep got no usable answer
 STATUS_NO_IDENTIFIER = 'no_identifier'  # the certificate cannot be named
+STATUS_IMPORTED = 'imported'  # the configured renewal CA is not the certificate's issuer
 
 # RFC 9773 §4.2 lets the CA attach a page explaining the window — the one
 # place a mass revocation says *why*. It is rendered as a link, so only https

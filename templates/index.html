@@ -85,10 +85,47 @@
                 </div>
                 <div id="form-server">
                 <form id="createCertForm" class="space-y-6">
+                    <div id="certificateImportMode" class="space-y-3">
+                        <label class="flex items-center gap-2 text-sm font-semibold text-label">
+                            <input id="importExistingCertificate" type="checkbox" data-change="toggleCertificateImport" class="rounded border-border text-primary focus:ring-primary">
+                            Import an existing certificate
+                        </label>
+                        <div id="certificateImportFiles" class="hidden space-y-3">
+                            <p class="text-sm text-muted">No certificate will be issued now. Names and key type are read from the certificate. Select the CA, account and challenge below for its next renewal, under the normal renewal policy.</p>
+                            <label class="flex items-center gap-2 text-sm font-semibold text-label">
+                                <input id="importAutoRenew" type="checkbox" checked class="rounded border-border text-primary focus:ring-primary">
+                                Automatically renew this certificate
+                            </label>
+                            <p class="text-xs text-muted">Enabled: a certificate already due may renew at the next sweep, with the CA's normal fees. Disable to keep it until a manual renewal.</p>
+                            <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                                {% for id, label, icon, accept, description in [
+                                    ('importCertificateFile', 'Certificate', 'fa-certificate', '.pem,.crt,.cer', 'Certificate (PEM, leaf only)'),
+                                    ('importChainFile', 'Chain', 'fa-layer-group', '.pem,.crt,.cer', 'Chain (PEM, intermediate first; root optional)'),
+                                    ('importPrivateKeyFile', 'Private key', 'fa-key', '.pem,.key', 'Private key (unencrypted PEM)')
+                                ] %}
+                                <label for="{{ id }}" data-import-dropzone title="{{ description }}"
+                                       class="relative h-24 min-w-0 flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-surface-2 p-2 text-center cursor-pointer hover:border-primary focus-within:ring-2 focus-within:ring-primary transition-colors">
+                                    <input id="{{ id }}" type="file" accept="{{ accept }}" aria-label="{{ description }}" aria-describedby="{{ id }}Name" disabled class="sr-only">
+                                    <i class="fas {{ icon }} text-xl text-primary" aria-hidden="true"></i>
+                                    <span class="text-sm font-semibold text-label">{{ label }}</span>
+                                    <span id="{{ id }}Name" class="block w-full truncate text-xs text-muted" aria-live="polite">Drop or click</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div id="importCertificatePreview" class="hidden rounded-lg border border-border bg-surface-2 p-3 text-sm" aria-live="polite">
+                                <p id="importCertificatePreviewStatus" class="text-xs text-muted"></p>
+                                <dl id="importCertificatePreviewNames" class="hidden mt-2 space-y-2">
+                                    <div><dt class="font-semibold text-label">Common Name (CN)</dt><dd id="importCertificatePreviewCN" class="break-all text-foreground"></dd></div>
+                                    <div><dt class="font-semibold text-label">Subject Alternative Names (SAN)</dt><dd id="importCertificatePreviewSAN" class="break-all whitespace-pre-line text-foreground"></dd></div>
+                                </dl>
+                            </div>
+                            <p class="text-xs text-muted">Each file is limited to 64 KiB. Validity dates, key match and chain signatures are checked; public trust and revocation are not checked. Existing certificates cannot be overwritten.</p>
+                        </div>
+                    </div>
                     <!-- Main Certificate Configuration -->
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                        <div class="space-y-4">
-                            <div>
+                        <div class="flex flex-col gap-4">
+                            <div data-issuance-only>
                                 <label for="domain" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-globe mr-2 text-blue-500"></i>
                                     Primary Domain Name
@@ -104,7 +141,7 @@
                             </div>
                             
                             <!-- SAN Domains (optional) -->
-                            <div>
+                            <div data-issuance-only>
                                 <label for="san_entry" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-plus-circle mr-2 text-indigo-500"></i>
                                     Additional Domains (SAN)
@@ -138,7 +175,7 @@
                                  shape — rather than letting the request be
                                  refused by the server for asking two things at
                                  once. -->
-                            <div class="border border-border rounded-lg overflow-hidden">
+                            <div data-issuance-only class="border border-border rounded-lg overflow-hidden">
                                 <button type="button" id="csr_toggle"
                                         aria-expanded="false" aria-controls="csr_panel"
                                         class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
@@ -289,7 +326,7 @@
                         
                         <div id="advanced-options" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
+                                <div data-issuance-only>
                                     <label class="flex items-center text-sm text-label">
                                         <input type="checkbox" id="wildcard-cert" class="rounded border-border text-primary focus:ring-primary dark:bg-gray-700">
                                         <span class="ml-2">
@@ -329,7 +366,7 @@
                             </div>
 
                             <!-- Certificate key shape -->
-                            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div data-issuance-only class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="cert_key_type" class="block text-sm font-medium text-label mb-1">
                                         <i class="fas fa-key mr-1 text-purple-500"></i>
@@ -392,12 +429,12 @@
                     
                     <!-- Action Button -->
                     <div class="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
-                        <div class="text-sm text-muted">
+                        <div data-issuance-only class="text-sm text-muted">
                             <i class="fas fa-shield-alt mr-1 text-green-500"></i>
-                            Free SSL certificates with automatic renewal
+                            SSL certificates with automatic renewal
                         </div>
                         <button type="submit"
-                                class="btn-cta w-full sm:w-auto px-8 py-3 text-base shadow-lg hover:scale-105">
+                                class="btn-cta w-full sm:w-auto sm:ml-auto px-8 py-3 text-base shadow-lg hover:scale-105">
                             <i class="fas fa-magic mr-2"></i>
                             Create Certificate
                         </button>
@@ -430,6 +467,7 @@
         // handler in dashboard.js keeps working untouched.
         function setDrawerType(type) {
             var isServer = type !== 'client';
+            if (!isServer && typeof window.resetCertificateImport === 'function') window.resetCertificateImport();
             var fs = document.getElementById('form-server');
             var fc = document.getElementById('form-client');
             if (fs) fs.classList.toggle('hidden', !isServer);
@@ -488,6 +526,7 @@
             if (typeof window.cancelEditReissue === 'function') {
                 window.cancelEditReissue();
             }
+            if (typeof window.resetCertificateImport === 'function') window.resetCertificateImport();
             var d = document.getElementById('createCertFormContainer');
             var s = document.getElementById('certDrawerScrim');
             // Inert again from the moment it closes, so nothing puts focus in

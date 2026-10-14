@@ -1,5 +1,5 @@
 {
- "contract_version": "2.44",
+ "contract_version": "2.45",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -306,6 +306,9 @@
     "auto_renew": {
      "type": "boolean"
     },
+    "ca_account_id": {
+     "type": "string"
+    },
     "ca_provider": {
      "type": "string"
     },
@@ -349,6 +352,9 @@
      "type": "string"
     },
     "expiry_date": {
+     "type": "string"
+    },
+    "imported_at": {
      "type": "string"
     },
     "latest_issuance": {
@@ -773,6 +779,59 @@
    },
    "required": []
   },
+  "ImportCertificate": {
+   "properties": {
+    "account_id": {
+     "type": "string"
+    },
+    "acme_profile": {
+     "type": "string"
+    },
+    "alias_dns_provider": {
+     "type": "string"
+    },
+    "auto_renew": {
+     "type": "boolean"
+    },
+    "ca_account_id": {
+     "type": "string"
+    },
+    "ca_provider": {
+     "type": "string"
+    },
+    "certificate": {
+     "type": "string"
+    },
+    "chain": {
+     "type": "string"
+    },
+    "challenge_type": {
+     "enum": [
+      "dns-01",
+      "http-01",
+      "prevalidated"
+     ],
+     "type": "string"
+    },
+    "dns_provider": {
+     "type": "string"
+    },
+    "domain": {
+     "type": "string"
+    },
+    "domain_alias": {
+     "type": "string"
+    },
+    "private_key": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "certificate",
+    "chain",
+    "private_key"
+   ]
+  },
   "InfisicalStorage": {
    "properties": {
     "client_id": {
@@ -925,6 +984,7 @@
     "status": {
      "enum": [
       "disabled",
+      "imported",
       "no_identifier",
       "unavailable",
       "unsupported",
@@ -1680,6 +1740,21 @@
    },
    "responses": {
     "200": null
+   }
+  },
+  "POST /certificates/import": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/ImportCertificate"
+     }
+    }
+   },
+   "responses": {
+    "201": null,
+    "400": null,
+    "409": null
    }
   },
   "POST /certificates/reissue-keyless": {

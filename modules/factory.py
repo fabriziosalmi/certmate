@@ -1336,6 +1336,7 @@ def setup_api(container: AppContainer, app):
     ns_cache.add_resource(api_resources['CacheClear'], '/clear')
     ns_certificates.add_resource(api_resources['CertificateList'], '')
     ns_certificates.add_resource(api_resources['CreateCertificate'], '/create')
+    ns_certificates.add_resource(api_resources['ImportCertificate'], '/import')
     ns_certificates.add_resource(api_resources['ZombieScan'], '/zombies/scan')
     ns_certificates.add_resource(api_resources['CheckDNSAlias'], '/check-dns-alias')
     ns_certificates.add_resource(api_resources['CheckCAA'], '/check-caa')

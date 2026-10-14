@@ -17,14 +17,20 @@ adapters map to HTTP 403.
 """
 import logging
 import time
+from cryptography import x509
+from cryptography.exceptions import UnsupportedAlgorithm
 
 from .structured_logging import scrub_log_value
 from . import acme_profiles
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
-from .utils import validate_domain, validate_key_options
+from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError,
+                          validate_import_bundle, validate_import_renewability)
+from .utils import utc_now_iso, validate_domain, validate_key_options
 from .domain_paths import certificate_dir
+from .domain_entries import entry_domain, normalize_entry
+from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS
 
 logger = logging.getLogger(__name__)
 
@@ -404,6 +410,112 @@ class CertificateService:
             'ca_provider': result.get('ca_provider'),
         })
         return result
+
+    def import_certificate(self, *, certificate, chain, private_key, domain=None,
+                           dns_provider=None, account_id=None, ca_provider=None,
+                           ca_account_id=None, challenge_type=None, domain_alias=None,
+                           alias_dns_provider=None, acme_profile=None, auto_renew=True,
+                           user=None, ip_address=None, audit_ctx=None):
+        """Check, store and register an existing certificate, never issue one."""
+        try:
+            bundle = validate_import_bundle(certificate, chain, private_key)
+            bundle.update(validate_import_renewability(bundle))
+        except CertificateImportError:
+            raise
+        except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
+            raise CertificateImportError(INVALID_IMPORT_BUNDLE) from None
+        if not isinstance(auto_renew, bool):
+            raise ValueError('auto_renew must be a boolean')
+        if domain is None or domain == '':
+            domain = bundle['names'][0]
+        if not isinstance(domain, str):
+            raise ValueError('Domain is required')
+        ok, normalized = validate_domain(domain.strip())
+        if not ok or normalized not in bundle['names']:
+            raise ValueError('Primary domain must be one of the certificate DNS names')
+        prepared = self.prepare_create(
+            domain=normalized, san_domains=[n for n in bundle['names'] if n != normalized],
+            dns_provider=dns_provider, account_id=account_id, ca_provider=ca_provider,
+            ca_account_id=ca_account_id, challenge_type=challenge_type,
+            domain_alias=domain_alias, alias_dns_provider=alias_dns_provider,
+            acme_profile=acme_profile, user=user, ip_address=ip_address)
+        if prepared['challenge_type'] not in ('dns-01', 'http-01', 'prevalidated'):
+            raise ValueError('Unsupported challenge type')
+        if prepared['challenge_type'] == 'http-01' and any(n.startswith('*.') for n in bundle['names']):
+            raise ValueError('HTTP-01 cannot renew wildcard certificates')
+        if prepared['challenge_type'] != 'dns-01' and prepared['domain_alias']:
+            raise ValueError('DNS aliases require DNS-01')
+        ca = self._certs.ca_manager
+        if ca is None:
+            raise ValueError('CA manager is unavailable')
+        settings = self._settings.load_settings()
+        try:
+            ca_config, used_ca_account = ca.get_ca_config(prepared['ca_provider'], ca_account_id)
+        except ValueError:
+            # A global email is sufficient for Let's Encrypt, as in ordinary issuance.
+            configured = settings.get('ca_providers', {}).get(prepared['ca_provider'])
+            if prepared['ca_provider'] == 'letsencrypt_staging':
+                configured = configured or settings.get('ca_providers', {}).get('letsencrypt')
+            if (prepared['ca_provider'] not in ('letsencrypt', 'letsencrypt_staging')
+                    or ca_account_id not in (None, '', 'default') or configured):
+                raise
+            ca_config, used_ca_account = {'email': prepared['email']}, 'default'
+        ca.get_acme_server_url(prepared['ca_provider'], account_config=ca_config)
+        ca.get_eab_credentials(prepared['ca_provider'], ca_config)
+        if (any(n.startswith('*.') for n in bundle['names'])
+                and not ca.ca_providers[prepared['ca_provider']]['supports_wildcard']):
+            raise ValueError('Selected CA does not support wildcard certificates')
+        if ca_account_id and used_ca_account != ca_account_id:
+            raise ValueError('Selected CA account is not configured')
+        prepared['ca_account_id'] = used_ca_account
+        prepared['acme_profile'] = self._certs._resolve_acme_profile(
+            normalized, False, prepared['acme_profile'], ca_config)
+        if prepared['challenge_type'] == 'dns-01':
+            dns_config, used_account = self._certs.dns_manager.get_dns_provider_account_config(
+                prepared['dns_provider'], account_id, settings)
+            if (not dns_config or (account_id and used_account != account_id)
+                    or not self._certs.dns_manager._account_has_credentials(prepared['dns_provider'], dns_config)):
+                raise ValueError('Selected DNS provider account is not configured')
+            prepared['account_id'] = used_account
+            if prepared['domain_alias']:
+                alias_provider = prepared['alias_dns_provider'] or prepared['dns_provider']
+                if alias_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
+                    raise ValueError('DNS alias mode does not support this DNS provider yet')
+                alias_config, _ = self._certs.dns_manager.get_dns_provider_account_config(
+                    alias_provider, account_id, settings)
+                if (not alias_config or
+                        not self._certs.dns_manager._account_has_credentials(alias_provider, alias_config)):
+                    raise ValueError('Alias DNS provider account is not configured')
+                if alias_provider != prepared['dns_provider']:
+                    # An omitted account means each provider uses its own default.
+                    prepared['account_id'] = account_id
+        metadata = {k: prepared[k] for k in (
+            'domain', 'email', 'san_domains', 'ca_provider', 'ca_account_id',
+            'challenge_type', 'dns_provider', 'account_id', 'domain_alias',
+            'alias_dns_provider', 'acme_profile')}
+        metadata.update(bundle['key_options'], created_at=bundle['created_at'], imported_at=utc_now_iso())
+        metadata['auto_renew'] = prepared['auto_renew'] = auto_renew
+        with self._certs.domain_lock(normalized):
+            warning = self._certs.store_imported_certificate(normalized, bundle['files'], metadata)
+            try:
+                if not self._settings.update(_add_domain_entry(prepared), 'certificate_imported'):
+                    raise RuntimeError('Renewal registration was not saved')
+            except (OSError, RuntimeError):
+                # Keep the valid bundle: a settings failure must not destroy the upload.
+                self._audit_emit(audit_ctx, 'import', normalized, 'failure',
+                                 error='Certificate stored but renewal registration failed')
+                raise RuntimeError('Certificate imported, but registering it in settings failed. '
+                                    'The certificate files are preserved; restore settings persistence '
+                                    'so the renewal sweep can recover registration.') from None
+        self._audit_emit(audit_ctx, 'import', normalized, 'success', details={
+            'ca_provider': metadata['ca_provider'], 'challenge_type': metadata['challenge_type'],
+            'san_count': len(metadata['san_domains'])})
+        self._publish('certificate_created', {
+            'domain': normalized, 'san_domains': metadata['san_domains'],
+            'dns_provider': metadata['dns_provider'], 'ca_provider': metadata['ca_provider'],
+            'imported': True})
+        return {'success': True, 'domain': normalized, 'san_domains': metadata['san_domains'],
+                'storage_warning': warning}
 
     def create_batch(self, *, domains, dns_provider=None, account_id=None,
                      ca_provider=None, ca_account_id=None, challenge_type=None,
@@ -1011,26 +1123,27 @@ def _add_domain_entry(prepared):
         prepared['domain'],
         (None if prepared['challenge_type'] == 'prevalidated' else
          prepared['dns_provider'] or prepared['_settings_dns_provider']),
-        prepared['account_id'])
+        prepared['account_id'], auto_renew=prepared.get('auto_renew'))
 
 
-def _make_add_domain(domain, dns_provider, account_id):
+def _make_add_domain(domain, dns_provider, account_id, *, auto_renew=None):
     """Build the idempotent ``settings_manager.update`` mutator that appends
     *domain* to the tracked domains list unless it is already present."""
 
     def _add_domain(s):
         domains_list = s.get('domains', []) or []
-        already_present = any(
-            (d == domain if isinstance(d, str) else d.get('domain') == domain)
-            for d in domains_list
-        )
-        if already_present:
-            return
+        for index, entry in enumerate(domains_list):
+            if entry_domain(entry) == domain:
+                if auto_renew is not None:
+                    domains_list[index] = {**normalize_entry(entry), 'auto_renew': auto_renew}
+                return
         domains_list.append({
             'domain': domain,
             'dns_provider': dns_provider,
             'dns_account_id': account_id,
         })
+        if auto_renew is not None:
+            domains_list[-1]['auto_renew'] = auto_renew
         s['domains'] = domains_list
 
     return _add_domain

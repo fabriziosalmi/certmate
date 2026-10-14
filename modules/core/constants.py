@@ -654,6 +654,10 @@ METADATA_SCHEMA_VERSION = 1
 #                                   enough (#1184). The cache statistics give
 #                                   it the entries its scope covers (#1181).
 #                                   2.44. Counted as 2.43 was.
+#                                   2.45, MINOR: import existing server certificates
+#                                   without issuance; certificate reads expose
+#                                   imported_at, renewal_info.status = imported,
+#                                   and the selected ca_account_id.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -679,7 +683,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.44'
+API_CONTRACT_VERSION = '2.45'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
@@ -696,4 +700,3 @@ DEFAULT_CACHE_TTL = 300
 # / 60s per IP, 10 / 300s per username), and a lone DEFAULT_LOGIN_RATE_LIMIT
 # could only misdescribe them. They stay next to the algorithm that reads
 # them.
-

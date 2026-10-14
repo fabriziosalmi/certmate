@@ -778,6 +778,8 @@
                 return '<span class="text-warning-fg"' + checked + '>The CA did not answer at the last check</span>';
             case 'no_identifier':
                 return '<span class="text-muted"' + checked + '>Cannot be asked: no Authority Key Identifier</span>';
+            case 'imported':
+                return '<span class="text-muted"' + checked + '>Not asked: imported certificate; renewal CA is not its issuer</span>';
             case 'disabled':
                 return '<span class="text-muted">Off (ari_enabled is false)</span>';
         }
@@ -862,6 +864,7 @@
             // cert.domain_alias flow in unescaped; the helper escapes them.
             var providerLabel = providerDisplayName(cert.dns_provider);
             var caLabel = caDisplayName(cert.ca_provider);
+            if (caLabel && cert.imported_at) caLabel = 'Renewal: ' + caLabel;
             var caCell = caLabel ? '<span>' + caLabel + '</span>' : CA_NOT_RECORDED;
             var domainAlias = cert.domain_alias || '';
 
@@ -1256,6 +1259,7 @@
         var safeDomainAlias = escapeHtml(cert.domain_alias || '');
         var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
         var caDetailLabel = caDisplayName(cert.ca_provider);
+        if (caDetailLabel && cert.imported_at) caDetailLabel = 'Renewal: ' + caDetailLabel;
         var sanDomains = Array.isArray(cert.san_domains) ? cert.san_domains : [];
         var sanDomainsHtml = sanDomains.map(function (san) {
             return '<div class="break-all">' + escapeHtml(san) + '</div>';
@@ -2048,6 +2052,7 @@
     var caAccountSelectProvider = '';
     var configuredCAs = [];
     var defaultCAProvider = 'letsencrypt';
+    var defaultChallengeType = 'dns-01';
     var defaultCAAccounts = {};
     var globalCAEmail = '';
     var CA_NAMES = {
@@ -2076,6 +2081,7 @@
                 select.replaceChildren();
                 var defaultCA = settings.default_ca || 'letsencrypt';
                 defaultCAProvider = defaultCA;
+                defaultChallengeType = settings.challenge_type || 'dns-01';
                 if (configuredCAs.indexOf(defaultCA) !== -1) {
                     var config = caAccounts[defaultCA] || {};
                     var ids = Object.keys(config.accounts || {});
@@ -2744,11 +2750,16 @@
     var reissueEditingDomain = null;
 
     function startEditReissue(domain) {
+        if (isCreatingCert) {
+            showMessage('Wait for the current certificate operation to finish before editing.', 'warning');
+            return;
+        }
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
         if (!cert) {
             showMessage('Certificate data is not loaded yet. Refresh and try again.', 'error');
             return;
         }
+        resetCertificateImport();
         reissueEditingDomain = domain;
         closeCertDetail();
         openCreateCertForm();
@@ -2809,6 +2820,7 @@
     function setReissueFormMode(editing, domain) {
         var form = document.getElementById('createCertForm');
         if (!form) return;
+        document.getElementById('certificateImportMode').classList.toggle('hidden', editing);
         var submitBtn = form.querySelector('button[type="submit"]');
         var banner = document.getElementById('reissue-edit-banner');
         // The drawer header must state the actual operation (#382): opened
@@ -2880,6 +2892,209 @@
 
     // Create certificate
     var isCreatingCert = false;
+    var importPreviewVersion = 0;
+    var importFileFields = {certificate: 'importCertificateFile', chain: 'importChainFile', private_key: 'importPrivateKeyFile'};
+    function setImportFileStates(valid) {
+        document.querySelectorAll('[data-import-dropzone]').forEach(function (zone) {
+            var input = zone.querySelector('input');
+            var selected = !!(input.files && input.files[0]);
+            zone.dataset.state = selected ? (valid ? 'valid' : 'selected') : 'empty';
+            zone.classList.toggle('bg-surface-2', !selected);
+            zone.classList.toggle('border-border', !selected);
+            zone.classList.toggle('bg-warning-surface', selected && !valid);
+            zone.classList.toggle('border-warning-line', selected && !valid);
+            zone.classList.toggle('bg-success-surface', selected && valid);
+            zone.classList.toggle('border-success-line', selected && valid);
+        });
+    }
+
+    async function previewImportCertificate() {
+        var version = ++importPreviewVersion;
+        var keys = Object.keys(importFileFields);
+        var files = keys.map(function (key) {
+            var input = document.getElementById(importFileFields[key]);
+            return input.files && input.files[0];
+        });
+        var file = files[0];
+        var complete = files.every(Boolean);
+        var payload = {};
+        setImportFileStates(false);
+        var preview = document.getElementById('importCertificatePreview');
+        var status = document.getElementById('importCertificatePreviewStatus');
+        var names = document.getElementById('importCertificatePreviewNames');
+        var cn = document.getElementById('importCertificatePreviewCN');
+        var san = document.getElementById('importCertificatePreviewSAN');
+        preview.classList.toggle('hidden', !files.some(Boolean));
+        names.classList.add('hidden');
+        cn.textContent = '';
+        san.textContent = '';
+        if (!file) { status.textContent = 'Select the certificate to preview its identity.'; return; }
+        status.textContent = complete ? 'Checking certificate, chain and private key…' : 'Reading certificate…';
+        try {
+            var selectedFiles = complete ? files : [file];
+            if (selectedFiles.some(function (item) { return !item.size || item.size > 64 * 1024; })) {
+                throw new Error('Select non-empty PEM files (each at most 64 KiB).');
+            }
+            var contents = await Promise.all(selectedFiles.map(function (item) { return item.text(); }));
+            if (version !== importPreviewVersion) return;
+            selectedFiles.forEach(function (item, index) { payload[keys[index]] = contents[index]; });
+            var response = await fetch('/api/web/certificates/import/preview', {
+                method: 'POST', headers: API_HEADERS, body: JSON.stringify(payload)
+            });
+            var result = await response.json();
+            if (version !== importPreviewVersion) return;
+            if (!response.ok) throw new Error(result.error || 'Could not read certificate');
+            cn.textContent = result.common_names.join('\n') || 'Not present';
+            san.textContent = result.sans.join('\n') || 'Not present';
+            names.classList.remove('hidden');
+            var valid = complete && result.validated === true;
+            setImportFileStates(valid);
+            status.textContent = valid ? 'Certificate, chain and private key match. Ready to import.' :
+                'File selected. Select all three files to check that they match.';
+        } catch (error) {
+            if (version === importPreviewVersion) status.textContent = error.message || 'Could not read certificate';
+        } finally {
+            delete payload.private_key;
+        }
+    }
+
+    function updateImportFileName(input) {
+        var file = input.files && input.files[0];
+        var name = document.getElementById(input.id + 'Name');
+        name.textContent = file ? file.name : 'Drop or click';
+        name.title = file ? file.name : '';
+        previewImportCertificate();
+    }
+
+    document.querySelectorAll('[data-import-dropzone]').forEach(function (zone) {
+        var input = zone.querySelector('input');
+        input.addEventListener('change', function () { updateImportFileName(input); });
+        zone.addEventListener('dragover', function (event) {
+            event.preventDefault();
+            if (!input.disabled) zone.classList.add('border-primary');
+        });
+        zone.addEventListener('dragleave', function (event) {
+            if (!zone.contains(event.relatedTarget)) zone.classList.remove('border-primary');
+        });
+        zone.addEventListener('drop', function (event) {
+            event.preventDefault();
+            zone.classList.remove('border-primary');
+            if (input.disabled) return;
+            var files = event.dataTransfer.files;
+            if (files.length !== 1 || !files[0].size || files[0].size > 64 * 1024) {
+                showMessage('Drop one non-empty PEM file per tile (at most 64 KiB).', 'error');
+                return;
+            }
+            input.files = files;
+            updateImportFileName(input);
+        });
+    });
+
+    function toggleCertificateImport() {
+        var importing = document.getElementById('importExistingCertificate').checked;
+        if (!importing) document.getElementById('importAutoRenew').checked = true;
+        var form = document.getElementById('createCertForm');
+        document.getElementById('certificateImportFiles').classList.toggle('hidden', !importing);
+        document.getElementById('drawerSubtitle').classList.toggle('hidden', importing);
+        ['importCertificateFile', 'importChainFile', 'importPrivateKeyFile'].forEach(function (id) {
+            var input = document.getElementById(id);
+            input.disabled = !importing;
+            input.required = importing;
+            if (!importing) {
+                input.value = '';
+                updateImportFileName(input);
+            }
+        });
+        form.querySelectorAll('[data-issuance-only]').forEach(function (section) {
+            section.classList.toggle('hidden', importing);
+            section.querySelectorAll('input, select, textarea, button').forEach(function (input) {
+                if (importing) {
+                    if (input.dataset.importDisabled === undefined) input.dataset.importDisabled = String(input.disabled);
+                    input.disabled = true;
+                } else if (input.dataset.importDisabled !== undefined) {
+                    input.disabled = input.dataset.importDisabled === 'true';
+                    delete input.dataset.importDisabled;
+                }
+            });
+        });
+        [form.querySelector('button[type="submit"]'), document.getElementById('drawerTitle')].forEach(function (el) {
+            if (importing) {
+                if (el.dataset.importHtml === undefined) el.dataset.importHtml = el.innerHTML;
+                el.textContent = 'Import Certificate';
+            } else if (el.dataset.importHtml !== undefined) {
+                el.innerHTML = el.dataset.importHtml;
+                delete el.dataset.importHtml;
+            }
+        });
+        document.getElementById('createCertFormContainer').setAttribute('aria-label', importing ? 'Import certificate' : 'New certificate');
+    }
+
+    function resetCertificateImport() {
+        var mode = document.getElementById('importExistingCertificate');
+        if (!mode.checked || isCreatingCert) return;
+        mode.checked = false;
+        toggleCertificateImport();
+    }
+
+    async function importCertificate(form) {
+        var payload = {auto_renew: document.getElementById('importAutoRenew').checked};
+        var fields = importFileFields;
+        var inputs = form.querySelectorAll('input, select, textarea, button');
+        var disabled = Array.from(inputs, function (input) { return input.disabled; });
+        var imported = false;
+        isCreatingCert = true;
+        try {
+            var files = Object.keys(fields).map(function (key) {
+                var file = document.getElementById(fields[key]).files[0];
+                if (!file || !file.size || file.size > 64 * 1024) {
+                    throw new Error('Select all three PEM files (each non-empty and at most 64 KiB).');
+                }
+                return file;
+            });
+            var sourceFields = {
+                ca_provider: 'ca_provider_select', ca_account_id: 'ca_account_id',
+                challenge_type: 'challenge_type_select', dns_provider: 'dns_provider_select',
+                account_id: 'account_select', domain_alias: 'dns_alias_domain', acme_profile: 'cert_acme_profile'
+            };
+            Object.keys(sourceFields).forEach(function (key) {
+                var input = document.getElementById(sourceFields[key]);
+                if (input.value) payload[key] = input.value;
+            });
+            var challenge = payload.challenge_type || defaultChallengeType;
+            if (challenge === 'prevalidated' || challenge === 'http-01') {
+                delete payload.dns_provider;
+                delete payload.account_id;
+                delete payload.domain_alias;
+            }
+            inputs.forEach(function (input) { input.disabled = true; });
+            var contents = await Promise.all(files.map(function (file) { return file.text(); }));
+            Object.keys(fields).forEach(function (key, i) { payload[key] = contents[i]; });
+            var response = await fetch('/api/certificates/import', {
+                method: 'POST', headers: API_HEADERS, body: JSON.stringify(payload)
+            });
+            var result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Certificate import failed');
+            imported = true;
+            showMessage('Certificate imported for ' + result.domain + '. No certificate was issued.', 'success');
+            if (result.storage_warning) showMessage(result.storage_warning, 'warning');
+            loadCertificates();
+        } catch (error) {
+            showMessage(error.message || 'Certificate import failed', 'error');
+        } finally {
+            // Do not keep key PEMs in error context, logs or browser storage.
+            delete payload.private_key;
+            inputs.forEach(function (input, i) { input.disabled = disabled[i]; });
+            isCreatingCert = false;
+            if (imported) {
+                resetCertificateImport();
+                clearCreateFormAfterSubmit();
+                if (typeof closeCertDrawer === 'function') closeCertDrawer();
+            } else if (document.getElementById('createCertFormContainer').classList.contains('translate-x-full')) {
+                resetCertificateImport();
+            }
+        }
+    }
+
     document.getElementById('createCertForm').addEventListener('submit', async function (e) {
         e.preventDefault();
 
@@ -2890,6 +3105,10 @@
         // early-returns below run before we acquire the lock, so a rejected
         // submit doesn't leave the form stuck.
         if (isCreatingCert) return;
+        if (document.getElementById('importExistingCertificate').checked) {
+            await importCertificate(e.target);
+            return;
+        }
 
         // Primary domain: apply the same paste-normalization as SAN inputs
         // (lowercase, strip scheme/port/path/trailing-dot) so the request
@@ -3917,6 +4136,8 @@
     window.exportAllCertificates = exportAllCertificates;
     window.openCertDetail = openCertDetail;
     window.startEditReissue = startEditReissue;
+    window.resetCertificateImport = resetCertificateImport;
+    window.toggleCertificateImport = toggleCertificateImport;
     window.cancelEditReissue = cancelEditReissue;
     window.closeCertDetail = closeCertDetail;
     window.renewCertificate = renewCertificate;
@@ -3959,7 +4180,7 @@
         'dismissPendingJob', 'downloadCertificate', 'exportAllCertificates',
         'invalidateAllCache', 'loadCertificates', 'reissueKeyless', 'renewCertificate',
         'retryCreateJob', 'runDeployHooks', 'setStatusFilter', 'showCacheStats',
-        'sortCertificates', 'startEditReissue', 'toggleAdvancedOptions', 'toggleAutoRenew',
+        'sortCertificates', 'startEditReissue', 'toggleCertificateImport', 'toggleAdvancedOptions', 'toggleAutoRenew',
         'toggleCertKeyOptions', 'toggleDebugConsole', 'toggleDnsProviderVisibility',
         'updateAccountSelection', 'updateCAProviderInfo'
     ]);

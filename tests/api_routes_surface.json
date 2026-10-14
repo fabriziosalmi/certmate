@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.44",
+ "contract_version": "2.45",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -711,6 +711,9 @@
     "[].auto_renew": [
      "bool"
     ],
+    "[].ca_account_id": [
+     "str"
+    ],
     "[].ca_provider": [
      "str"
     ],
@@ -754,6 +757,9 @@
      "str"
     ],
     "[].expiry_date": [
+     "str"
+    ],
+    "[].imported_at": [
      "str"
     ],
     "[].latest_issuance": [
@@ -859,6 +865,9 @@
     "auto_renew": [
      "bool"
     ],
+    "ca_account_id": [
+     "str"
+    ],
     "ca_provider": [
      "str"
     ],
@@ -902,6 +911,9 @@
      "str"
     ],
     "expiry_date": [
+     "str"
+    ],
+    "imported_at": [
      "str"
     ],
     "needs_renewal": [
@@ -4121,6 +4133,59 @@
     ]
    }
   },
+  "POST /api/certificates/import": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "domain": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "san_domains": [
+     "list"
+    ],
+    "storage_warning": [
+     "null"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.certificate": [
+     "str"
+    ],
+    "errors.chain": [
+     "str"
+    ],
+    "errors.private_key": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "409": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
   "POST /api/certificates/reissue-keyless": {
    "202": {
     ".": [
@@ -5664,6 +5729,9 @@
   ],
   "POST /api/certificates/deployment-status/browser": [
    "skipped"
+  ],
+  "POST /api/certificates/import": [
+   "san_domains"
   ],
   "POST /api/certificates/reissue-keyless": [
    "refused"

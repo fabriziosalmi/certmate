@@ -29,7 +29,7 @@ EXPECTED_RESOURCES = {
     'HealthCheck', 'MetricsList', 'DiagnosticsSnapshot',
     'Settings', 'DNSProviders', 'CAProviderTest',
     'CacheStats', 'CacheClear',
-    'CertificateList', 'CreateCertificate', 'CertificateDetail',
+    'CertificateList', 'CreateCertificate', 'ImportCertificate', 'CertificateDetail',
     'CertificateDeploymentStatus', 'CertificateDeploymentBrowserReports',
     'DownloadCertificate', 'DownloadCertificateFile',
     'RenewCertificate', 'CertificateReissue', 'ReissueKeyless',

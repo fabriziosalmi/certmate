@@ -3,16 +3,42 @@ import zipfile
 import tempfile
 import os
 from flask import request, jsonify, send_file, after_this_request
+from cryptography import x509
+from cryptography.exceptions import UnsupportedAlgorithm
 
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
+from ..core.cert_import import (
+    INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError, preview_import_certificate,
+    validate_import_bundle, validate_import_renewability,
+)
 from modules.core.auth import not_for_domain_restricted_keys
 from modules.core.request_fields import json_booleans
 from modules.core.structured_logging import scrub_log_value
 
 
 logger = logging.getLogger(__name__)
+
+
+def preview_certificate_import_web():
+    """Preview identity and optionally validate a bundle, without writes or issuance."""
+    if request.content_length and request.content_length > 4 * MAX_IMPORT_PEM_BYTES:
+        return jsonify({'error': 'Certificate preview request is too large'}), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'A JSON object is required'}), 400
+    try:
+        result = preview_import_certificate(data.get('certificate'))
+        if data.get('chain') is not None or data.get('private_key') is not None:
+            bundle = validate_import_bundle(data.get('certificate'), data.get('chain'), data.get('private_key'))
+            validate_import_renewability(bundle)
+            result['validated'] = True
+        return jsonify(result)
+    except CertificateImportError as error:
+        return jsonify({'error': str(error)}), 400
+    except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
+        return jsonify({'error': INVALID_IMPORT_BUNDLE}), 400
 
 
 def register_cert_routes(app, managers, require_web_auth, auth_manager,
@@ -26,6 +52,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
         certificate_manager, settings_manager, auth_manager,
         audit_logger=audit_logger, event_bus=managers.get('events'),
     )
+
+    app.add_url_rule('/api/web/certificates/import/preview', methods=['POST'],
+                     view_func=auth_manager.require_role('operator')(preview_certificate_import_web))
 
     # NOTE: only the /api/web/... path is registered here. The bare
     # /api/certificates/create is owned by the flask-restx CreateCertificate
