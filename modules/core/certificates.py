@@ -14,7 +14,7 @@ import time
 import logging
 import signal
 import shutil
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime
 from dataclasses import dataclass, field
 
@@ -5316,8 +5316,8 @@ class CertificateManager:
         """Enable or disable automatic renewal for a single domain (issue #111).
 
         Returns True if the domain was found in settings and updated, False
-        otherwise. Legacy string-form entries are upgraded to dict form so the
-        flag can be persisted.
+        when absent. Save failures raise. Legacy string-form entries are upgraded
+        to dict form so the flag can be persisted.
         """
         # Flip the flag as a read-modify-write on the FRESH on-disk list, under
         # the lock. The previous shape — load_settings() (a request-cache hit)
@@ -5345,10 +5345,13 @@ class CertificateManager:
                 raise _DomainNotInSettings
             s['domains'] = new_domains
 
+        metadata = self._load_metadata(domain)
+        # Only imports have a recovery copy protected by the issuance lock.
+        lock = self.domain_lock(domain) if metadata.get('imported_at') else nullcontext()
         try:
-            with self.domain_lock(domain):
+            with lock:
                 if not self.settings_manager.update(_flip, reason='set_auto_renew'):
-                    return False
+                    raise RuntimeError('Failed to save auto-renew setting')
                 metadata = self._load_metadata(domain)
                 if metadata.get('imported_at') and 'auto_renew' in metadata:
                     metadata['auto_renew'] = bool(enabled)

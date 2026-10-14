@@ -14,7 +14,9 @@ from ..core.audit_context import audit_context_from_request
 from ..core.request_fields import json_booleans
 from ..core.cert_jobs import IssuanceQueueFull
 from ..core.cert_service import DomainOutOfScope
-from ..core.certificates import CREATION_FAILED, DomainOperationInProgress
+from ..core.certificates import (
+    CREATION_FAILED, DomainOperationInProgress, MetadataWriteFailed, MetadataWriteRefused,
+)
 from ..core.utils import classify_renewal_error
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import (
@@ -23,6 +25,16 @@ from .resource_context import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _auto_renew_failure(error):
+    if isinstance(error, DomainOperationInProgress):
+        return {'error': 'A certificate operation is already in progress for this domain',
+                'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
+    message = 'Failed to update auto-renew setting'
+    if isinstance(error, (MetadataWriteFailed, MetadataWriteRefused)):
+        message = 'Auto-renew setting was saved, but its recovery copy in metadata could not be updated.'
+    return {'error': message, 'code': 'AUTO_RENEW_UPDATE_FAILED'}, 500
 
 
 def _submit(ctx, operation, domain, fn):
@@ -522,7 +534,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 }, 200
             except Exception as e:
                 logger.error(f"Failed to toggle auto-renew for {domain}: {e}")
-                return {'error': 'Failed to update auto-renew setting', 'code': 'AUTO_RENEW_UPDATE_FAILED'}, 500
+                return _auto_renew_failure(e)
 
     return {
         'CreateCertificate': CreateCertificate,

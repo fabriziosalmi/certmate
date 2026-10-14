@@ -656,7 +656,8 @@ METADATA_SCHEMA_VERSION = 1
 #                                   2.44. Counted as 2.43 was.
 #                                   2.45, MINOR: import existing server certificates
 #                                   without issuance; certificate reads expose
-#                                   imported_at and the selected ca_account_id.
+#                                   imported_at, renewal_info.status = imported,
+#                                   and the selected ca_account_id.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the

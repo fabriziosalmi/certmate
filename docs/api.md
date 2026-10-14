@@ -455,6 +455,11 @@ A missing `enabled` is `400 AUTO_RENEW_FLAG_REQUIRED`; a domain that is not
 tracked in settings is `404 DOMAIN_NOT_IN_SETTINGS`, because only those have a
 renewal flag to toggle. The change is audited and published on the event
 stream as `certificate_auto_renew_changed`.
+An imported certificate whose domain is busy answers `409 DOMAIN_OPERATION_IN_PROGRESS`;
+ordinary certificates can still be toggled during issuance. A failed settings save
+answers `500 AUTO_RENEW_UPDATE_FAILED`. If settings were saved but the import's
+recovery metadata could not be updated, the same code explicitly reports that partial
+success; retry the toggle to synchronize the recovery copy.
 
 #### Change a certificate's probe, notes or tags
 

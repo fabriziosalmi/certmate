@@ -508,6 +508,50 @@ def test_import_opt_out_can_be_enabled_then_recovered_after_settings_loss(instan
     assert summary['skipped_disabled'] == 0
 
 
+@pytest.mark.parametrize('imported', [False, True])
+def test_auto_renew_only_locks_imports(instance, bundle, monkeypatch, imported):
+    assert instance.post(import_payload(bundle, auto_renew=False)).status_code == 201
+    if not imported:
+        metadata = instance.certs._load_metadata(DOMAIN)
+        del metadata['imported_at']
+        instance.certs.write_metadata(DOMAIN, metadata)
+    monkeypatch.setattr(instance.certs, '_domain_lock_timeout', lambda: 0)
+    with instance.certs.domain_lock(DOMAIN):
+        response = instance.client.put(f'/api/certificates/{DOMAIN}/auto-renew',
+                                       json={'enabled': True}, headers=instance.headers)
+    assert response.status_code == (409 if imported else 200)
+    if imported:
+        assert response.get_json()['code'] == 'DOMAIN_OPERATION_IN_PROGRESS'
+    entry = instance.managers['settings'].load_settings()['domains'][0]
+    assert entry['auto_renew'] is (not imported)
+
+
+def test_auto_renew_save_failure_is_not_a_missing_domain(instance, bundle, monkeypatch):
+    assert instance.post(import_payload(bundle, auto_renew=False)).status_code == 201
+    monkeypatch.setattr(instance.managers['settings'], 'save_settings', lambda *args, **kwargs: False)
+    response = instance.client.put(f'/api/certificates/{DOMAIN}/auto-renew',
+                                   json={'enabled': True}, headers=instance.headers)
+    assert response.status_code == 500
+    assert response.get_json()['code'] == 'AUTO_RENEW_UPDATE_FAILED'
+    assert instance.certs._load_metadata(DOMAIN)['auto_renew'] is False
+
+
+def test_auto_renew_metadata_failure_reports_the_saved_switch(instance, bundle, monkeypatch):
+    from modules.core.certificates import MetadataWriteFailed
+    assert instance.post(import_payload(bundle, auto_renew=False)).status_code == 201
+    monkeypatch.setattr(instance.certs, 'write_metadata', MagicMock(side_effect=MetadataWriteFailed('private path')))
+    response = instance.client.put(f'/api/certificates/{DOMAIN}/auto-renew',
+                                   json={'enabled': True}, headers=instance.headers)
+    assert response.status_code == 500
+    body = response.get_json()
+    assert body['code'] == 'AUTO_RENEW_UPDATE_FAILED'
+    assert 'setting was saved' in body['error']
+    assert 'metadata could not be updated' in body['error']
+    assert 'private path' not in body['error']
+    assert instance.managers['settings'].load_settings()['domains'][0]['auto_renew'] is True
+    assert instance.certs._load_metadata(DOMAIN)['auto_renew'] is False
+
+
 @pytest.mark.parametrize('with_identifier', [False, True])
 def test_import_does_not_ask_future_ca_for_renewal_window(instance, with_identifier):
     extensions = [x509.AuthorityKeyIdentifier(b'issuer-key-id', None, None)] if with_identifier else []
