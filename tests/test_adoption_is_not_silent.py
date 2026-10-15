@@ -88,10 +88,24 @@ def _record_discovered(container, fingerprint='fp', cn='example.com'):
 def _make_adoptable(container):
     """Seed the state adoption needs: an inventory record, an account email,
     a DNS provider that can validate the domain, and an issuance that does not
-    shell out to certbot."""
+    shell out to certbot.
+
+    The issuance goes through the REAL CertificateService, with only the shell
+    replaced. These tests used to stand a fake service in its place, and the
+    fake announced nothing, so they could not see that the real service and
+    the adopt handler each published `certificate_created`: every adoption ran
+    the deploy hooks twice.
+    """
+    from modules.core.shell import MockShellExecutor
+
     inv = _record_discovered(container)
-    container.managers['settings'].update(
-        lambda s: s.__setitem__('email', 'a@b.com'), 'seed')
+
+    def seed(settings):
+        settings['email'] = 'a@b.com'
+        settings['dns_provider'] = 'cloudflare'
+        settings['dns_providers'] = {
+            'cloudflare': {'accounts': {'default': {'api_token': 'test-token'}}}}
+    container.managers['settings'].update(seed, 'seed')
 
     class _FakeDNS:
         settings_manager = container.managers['settings']
@@ -102,12 +116,8 @@ def _make_adoptable(container):
         def get_available_providers(self):
             return [{'name': 'cloudflare', 'configured': True}]
 
-    class _FakeService:
-        def create(self, **kwargs):
-            return {'domain': kwargs['domain'], 'status': 'issued'}
-
     container.managers['dns'] = _FakeDNS()
-    container.managers['cert_service'] = _FakeService()
+    container.managers['certificates'].shell_executor = MockShellExecutor()
     return inv
 
 
@@ -140,6 +150,40 @@ def test_adoption_publishes_an_issuance_event(app_container, client, container):
     assert 'certificate_created' in names, (
         f'expected certificate_created on the bus, got {names}'
     )
+
+
+def test_adoption_is_announced_once(app_container, client, container):
+    """One adoption, one issuance, one announcement.
+
+    The service publishes `certificate_created` for every create, and the adopt
+    handler published it again afterwards, so the deploy hooks and targets ran
+    twice for one certificate. The record is taken synchronously, at publish
+    time, so a second announcement cannot hide behind listener threads that
+    have not run yet.
+    """
+    app, _ = app_container
+    _make_adoptable(container)
+
+    bus = app.config['EVENT_BUS']
+    published = []
+    original = bus.publish
+
+    def recording_publish(event, data=None, *args, **kwargs):
+        published.append((event, dict(data or {})))
+        return original(event, data, *args, **kwargs)
+
+    bus.publish = recording_publish
+    try:
+        _adopt(client)
+    finally:
+        bus.publish = original
+
+    created = [data for event, data in published if event == 'certificate_created']
+    assert len(created) == 1, (
+        f'adoption announced the certificate {len(created)} times: {created}')
+    assert created[0]['domain'] == 'example.com'
+    assert created[0].get('adopted') is True
+    assert created[0].get('fingerprint') == 'fp'
 
 
 def test_adoption_invalidates_the_cached_deployment_verdict(
@@ -233,11 +277,15 @@ def test_the_event_name_is_one_every_subscriber_honours():
     that change would restore silent deploy hooks unless all three are updated
     together.
 
-    So this reads the name the adopt handler actually publishes and requires
+    So this reads the name the adoption path actually publishes and requires
     every subscriber to know it. Written the other way round — asserting that
     the three subscribers mention `certificate_created` — it would have passed
     unchanged while adoption published something none of them handles, which is
     the whole failure being guarded against.
+
+    Adoption announces through the service's create, the one place every
+    create publishes; the handler adds only the `adopted` marker. A publish of
+    its own in the handler is what announced every adoption twice.
     """
     import inspect
     import re
@@ -245,13 +293,18 @@ def test_the_event_name_is_one_every_subscriber_honours():
     from modules.api import resources_inventory
     from modules import factory
     from modules.core.cache import CacheManager
+    from modules.core.cert_service import CertificateService
     from modules.core.deployer import DeployManager
 
+    assert not re.search(r"\.publish\(", inspect.getsource(resources_inventory)), (
+        'the inventory resources publish an event of their own; adoption is '
+        'announced by the service, and a second publish runs every hook twice')
+
     published = re.findall(
-        r"event_bus\.publish\(\s*'([a-z_]+)'",
-        inspect.getsource(resources_inventory),
+        r"_publish\(\s*'([a-z_]+)'",
+        inspect.getsource(CertificateService._issue_create),
     )
-    assert published, 'the adopt handler publishes nothing at all'
+    assert published, 'the create path the adoption goes through publishes nothing'
 
     # The notifier bridge is checked against its title table rather than its
     # source: the session-scoped fixture from #702 repoints

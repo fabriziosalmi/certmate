@@ -191,7 +191,7 @@ class CertificateService:
                account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
                domain_alias=None, alias_dns_provider=None, key_type=None,
                key_size=None, elliptic_curve=None, user=None, ip_address=None,
-               audit_ctx=None, csr_pem=None, acme_profile=None):
+               audit_ctx=None, csr_pem=None, acme_profile=None, event_details=None):
         """Validate, scope-check, resolve defaults, issue, and persist a new
         certificate; returns the ``CertificateManager.create_certificate``
         result dict. Raises ``ValueError`` (bad input / missing config),
@@ -207,8 +207,14 @@ class CertificateService:
         ``audit_context_from_request``); it is carried into ``issue_create`` so
         the success/failure audit record names the actor and trigger even on the
         deferred async path.
+
+        ``event_details`` are extra fields for the ``certificate_created``
+        announcement this create makes. Adoption passes its ``adopted`` marker
+        and the inventory fingerprint here instead of announcing a second time
+        itself, which ran every deploy hook twice. They never replace a field
+        the issuance itself reports.
         """
-        return self.issue_create(self.prepare_create(
+        prepared = self.prepare_create(
             domain=domain, san_domains=san_domains, dns_provider=dns_provider,
             account_id=account_id, ca_provider=ca_provider, ca_account_id=ca_account_id,
             challenge_type=challenge_type, domain_alias=domain_alias,
@@ -216,7 +222,10 @@ class CertificateService:
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             user=user, ip_address=ip_address, audit_ctx=audit_ctx,
             csr_pem=csr_pem, acme_profile=acme_profile,
-        ))
+        )
+        if event_details:
+            prepared['_event_details'] = dict(event_details)
+        return self.issue_create(prepared)
 
     def prepare_create(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
@@ -403,12 +412,15 @@ class CertificateService:
             'challenge_type': prepared.get('challenge_type'),
             'san_count': len(prepared.get('san_domains') or []),
         })
-        self._publish('certificate_created', {
+        announcement = {
             'domain': domain,
             'san_domains': prepared.get('san_domains') or [],
             'dns_provider': result.get('dns_provider'),
             'ca_provider': result.get('ca_provider'),
-        })
+        }
+        for key, value in (prepared.get('_event_details') or {}).items():
+            announcement.setdefault(key, value)
+        self._publish('certificate_created', announcement)
         return result
 
     def import_certificate(self, *, certificate, chain, private_key, domain=None,

@@ -62,7 +62,7 @@ BUDGET = {
     'modules/api/resources_settings.py::create_settings_resources': 50,
     'modules/api/resources_backup.py::create_backup_resources': 52,
     'modules/api/resources_certificates.py::create_certificates_resources': 46,
-    'modules/api/resources_inventory.py::create_inventory_resources': 46,
+    'modules/api/resources_inventory.py::create_inventory_resources': 45,
     # The two that are genuinely one algorithm each, and the ones worth
     # decomposing first: everything above is a container for handlers, these
     # two are a single unit a reader has to hold in their head at once.
