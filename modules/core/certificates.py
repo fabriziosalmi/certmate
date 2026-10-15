@@ -35,7 +35,7 @@ from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStr
                              check_certbot_plugin_installed, clamp_propagation_seconds,
                              manual_hook_arguments)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
-                        DEFAULT_RENEWAL_THRESHOLD_DAYS)
+                        DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs)
 from .inventory_sources import collect_domain_sources
 from . import acme_profiles, renewal_policy
 from .domain_entries import entry_auto_renew, entry_domain, entry_external
@@ -1205,13 +1205,14 @@ class CertificateManager:
 
         The metadata is read every time. The settings entry is read only when a
         certificate is on disk, because an external certificate always has its
-        files: they are stored before it is registered, and a directory without
-        ``cert.pem`` is not a certificate (see `iter_cert_domain_dirs`).
+        files: they are stored before it is registered. "On disk" is what
+        `iter_cert_domain_dirs` lists, matched by name, so no path is built
+        from the requested domain here.
         """
         metadata = self._load_metadata(domain)
         if isinstance(metadata, dict) and metadata.get('external') is True:
             raise ExternalCertificate(domain)
-        if (certificate_dir(self.cert_dir, domain) / 'cert.pem').exists():
+        if any(path.name == domain for path in iter_cert_domain_dirs(self.cert_dir)):
             self.refuse_external(domain, metadata=metadata)
 
     @contextmanager

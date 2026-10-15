@@ -170,6 +170,11 @@ def test_what_an_external_certificate_may_be(instance, case, accepted):
 # Names another certificate already covers
 # --------------------------------------------------------------------------- #
 
+def _names_refused(body):
+    """The names a NAMES_ALREADY_MANAGED refusal lists, after its colon."""
+    return body['error'].rsplit(': ', 1)[1].split(', ')
+
+
 def _managed(instance, names):
     response = instance.post(ordinary(make_bundle(names=names), names[0]))
     assert response.status_code == 201, response.get_json()
@@ -188,7 +193,7 @@ def test_a_name_already_covered_refuses_the_import(instance, managed, imported):
     assert response.status_code == 409, response.get_json()
     body = response.get_json()
     assert body['code'] == 'NAMES_ALREADY_MANAGED'
-    assert 'shared.example.com' in body['error'] or '*.example.com' in body['error']
+    assert _names_refused(body) == [name for name in imported if name in managed]
     assert not (instance.cert_root / imported[0]).exists() or imported[0] == managed[0]
 
 
@@ -196,7 +201,7 @@ def test_the_refusal_names_only_the_imports_own_names(instance):
     """The other certificate may be outside a scoped key's domains."""
     _managed(instance, ('owner.example.com', 'shared.example.com'))
     body = instance.post(external(make_bundle(names=('shared.example.com',)))).get_json()
-    assert 'shared.example.com' in body['error']
+    assert _names_refused(body) == ['shared.example.com']
     assert 'owner.example.com' not in body['error']
 
 
