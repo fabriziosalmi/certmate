@@ -10,6 +10,7 @@ each name another certificate already covers.
 import json
 import secrets
 import threading
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -17,7 +18,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
-from modules.core.certificates import ExternalCertificate
+from modules.core.certificates import DomainOperationInProgress, ExternalCertificate
 from tests.test_certificate_import import make_bundle
 
 pytestmark = pytest.mark.unit
@@ -677,3 +678,58 @@ def test_a_replacement_and_an_import_sharing_a_name_cannot_both_pass(instance, m
     second.join(10)
     assert sorted(results) == ['CertificateNamesTaken', 'done']
 
+
+
+def test_a_replacement_request_too_large_is_refused_before_it_is_read(instance):
+    import_external(instance)
+    bundle = make_bundle(names=(EXT,), end=200)
+    response = replace(instance, {**bundle, 'certificate': bundle['certificate'] + ' ' * (4 * 64 * 1024)})
+    assert response.status_code == 413
+    assert response.get_json()['code'] == 'REQUEST_TOO_LARGE'
+
+
+def test_a_name_that_is_not_a_domain_is_refused(instance):
+    response = replace(instance, make_bundle(names=(EXT,), end=200), domain='not_a_domain!')
+    assert response.status_code == 400
+    assert response.get_json()['code'] == 'INVALID_REQUEST'
+
+
+def test_a_busy_certificate_is_not_replaced(instance, monkeypatch):
+    import_external(instance)
+    before = (instance.cert_root / EXT / 'cert.pem').read_bytes()
+
+    @contextmanager
+    def busy(domain):
+        raise DomainOperationInProgress(domain)
+        yield
+
+    monkeypatch.setattr(instance.certs, 'domain_lock', busy)
+    response = replace(instance, make_bundle(names=(EXT, EXT_SAN), end=200))
+    assert response.status_code == 409
+    assert response.get_json()['code'] == 'DOMAIN_OPERATION_IN_PROGRESS'
+    assert (instance.cert_root / EXT / 'cert.pem').read_bytes() == before
+
+
+def test_a_replacement_that_cannot_be_written_says_so_and_nothing_of_the_key(instance, monkeypatch, caplog):
+    import_external(instance)
+    new = make_bundle(names=(EXT, EXT_SAN), end=200)
+
+    def unwritable(*args, **kwargs):
+        raise OSError('disk full while writing ' + new['private_key'])
+
+    monkeypatch.setattr(instance.certs, 'replace_external_certificate', unwritable)
+    response = replace(instance, new)
+    assert response.status_code == 500
+    assert response.get_json()['code'] == 'CERTIFICATE_REPLACE_FAILED'
+    assert 'PRIVATE KEY' not in response.get_data(as_text=True)
+    assert 'PRIVATE KEY' not in caplog.text
+    assert not [event for event, _ in instance.published if event == 'certificate_renewed']
+
+
+def test_the_service_takes_only_a_boolean_for_an_earlier_expiry(instance):
+    import_external(instance)
+    bundle = make_bundle(names=(EXT, EXT_SAN), end=60)
+    with pytest.raises(ValueError, match='allow_earlier_expiry must be a boolean'):
+        instance.managers['cert_service'].replace_external(
+            domain=EXT, certificate=bundle['certificate'], chain=bundle['chain'],
+            private_key=bundle['private_key'], allow_earlier_expiry='yes', user={'username': 'admin'})

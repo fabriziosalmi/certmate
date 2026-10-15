@@ -90,9 +90,9 @@ def create_import_resources(api, models, ctx):
 
 
 def _replace_refusal(error):
-    """The answer to a replacement refused with *error*, or None when it is not
-    a refusal this maps. Messages are the refusals' own fixed text, never a
-    parser's: the upload contains a private key."""
+    """The answer to a replacement refused with *error*. Messages are the
+    refusals' own text, never a parser's: the upload contains a private key,
+    and the service turns every parser error into INVALID_IMPORT_BUNDLE."""
     if isinstance(error, DomainOutOfScope):
         return {'error': str(error), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
     if isinstance(error, FileNotFoundError):
@@ -102,11 +102,8 @@ def _replace_refusal(error):
                 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
     if isinstance(error, (ReplacementRefused, CertificateNamesTaken)):
         return {'error': str(error), 'code': error.code}, 409
-    if isinstance(error, (CertificateImportError, ValueError)):
-        return {'error': str(error), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
-    if isinstance(error, (x509.DuplicateExtension, UnsupportedAlgorithm)):
-        return {'error': INVALID_IMPORT_BUNDLE, 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
-    return None
+    # CertificateImportError and the service's own ValueErrors: the request is wrong.
+    return {'error': str(error), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
 
 
 def create_replace_resources(api, models, ctx):
@@ -135,12 +132,10 @@ def create_replace_resources(api, models, ctx):
             _, error = validate_domain_path(domain, ctx.file_ops.cert_dir)
             if error:
                 return {'error': error, 'code': 'INVALID_REQUEST'}, 400
+            # The model has refused anything but an object, and a flag that is
+            # not a JSON boolean, before this runs.
             data = api.payload
-            if not isinstance(data, dict):
-                return {'error': 'A JSON object is required', 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
-            allow_earlier_expiry, error = json_bool(data, 'allow_earlier_expiry', default=False)
-            if error:
-                return {'error': error, 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
+            allow_earlier_expiry = data.get('allow_earlier_expiry', False)
             try:
                 result = ctx.cert_service.replace_external(
                     domain=domain, certificate=data.get('certificate'), chain=data.get('chain'),
@@ -148,9 +143,7 @@ def create_replace_resources(api, models, ctx):
                     user=getattr(request, 'current_user', None) or {},
                     ip_address=request.remote_addr, audit_ctx=audit_context_from_request())
                 return {**result, 'message': 'Certificate replaced; no certificate was issued'}, 200
-            except (DomainOutOfScope, FileNotFoundError, DomainOperationInProgress, ReplacementRefused,
-                    CertificateNamesTaken, CertificateImportError, ValueError,
-                    x509.DuplicateExtension, UnsupportedAlgorithm) as e:
+            except (DomainOutOfScope, FileNotFoundError, DomainOperationInProgress, ValueError) as e:
                 return _replace_refusal(e)
             except (OSError, RuntimeError):
                 # Never log the request or parser exceptions: the upload contains a private key.
