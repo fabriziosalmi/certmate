@@ -15,7 +15,7 @@ The CertMate MCP server exposes the following tools to AI assistants:
 
 **Lifecycle operations**
 6. **`certmate_create_certificate`** — Requests a new TLS certificate for a domain (optional DNS provider, account, CA). The server always asks for async issuance, so this returns a `job_id` (HTTP 202) to poll.
-7. **`certmate_renew_certificate`** — Forces renewal of an existing certificate. Also async: returns a `job_id`.
+7. **`certmate_renew_certificate`** — Renews an existing certificate if CertMate considers it due under its renewal policy; one that is not yet due is left as it is, and the job reports `renewed: false`. Also async: returns a `job_id`.
 8. **`certmate_get_job`** — Polls an async create/renew/update job by `job_id` until its status is `succeeded` or `failed` (`queued` and `running` are not final).
 9. **`certmate_set_auto_renew`** — Enables or disables automatic renewal for a single domain.
 10. **`certmate_deploy_certificate`** — Manually executes all configured deployment hooks for a domain.
@@ -110,7 +110,7 @@ schedule and call MCP tools will work.
 1. `certmate_list_certificates` (or `certmate_get_certificate` per domain) to read `days_left` / status.
 2. Decide per your condition, e.g. *renew when `days_left < 14`*.
 3. `certmate_renew_certificate` for each due domain.
-4. Each renewal returns a `job_id`; call `certmate_get_job` until it reports `succeeded` / `failed`.
+4. Each renewal returns a `job_id`; call `certmate_get_job` until it reports `succeeded` / `failed`. A certificate CertMate does not yet consider due succeeds with `renewed: false`: nothing was issued.
 5. On failure, surface it. A failed renew or reissue job also emits `certificate_failed`, so CertMate's own notification channels (email, Slack, Discord, Telegram, ntfy, Gotify) push it regardless. Two exceptions: a job that failed because another operation already held the domain (`error_code: DOMAIN_OPERATION_IN_PROGRESS`) does not emit it, and a failed async create does not either, so for those the agent's own report is the signal.
 
 ### Example scheduled prompts
