@@ -22,8 +22,8 @@ import re
 # The leaf names of the fields that carry a date-time, wherever they sit in an answer.
 TIMESTAMP_KEYS = frozenset({
     'timestamp', 'created', 'created_at', 'renewed_at', 'expires_at', 'revoked_at', 'imported_at',
-    'superseded_at', 'submitted_at', 'started_at', 'finished_at', 'first_seen', 'last_seen',
-    'checked_at', 'generated_at', 'exported_at', 'probed_at', 'this_update', 'next_update',
+    'replaced_at', 'superseded_at', 'submitted_at', 'started_at', 'finished_at', 'first_seen',
+    'last_seen', 'checked_at', 'generated_at', 'exported_at', 'probed_at', 'this_update', 'next_update',
     'last_update', 'not_before', 'not_after', 'window_start', 'window_end', 'renew_at',
     'renews_at', 'acme_profile_withdrawn_at', 'updated_at', 'last_used_at', 'confirmed_at',
 })

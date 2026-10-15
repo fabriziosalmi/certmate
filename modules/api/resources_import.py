@@ -1,4 +1,5 @@
-"""Import existing server certificates without contacting an issuing CA."""
+"""Import existing server certificates without contacting an issuing CA, and
+replace an external one by upload."""
 import logging
 
 from cryptography import x509
@@ -9,8 +10,9 @@ from flask_restx import Resource
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError
 from ..core.cert_service import CertificateNamesTaken, DomainOutOfScope
-from ..core.certificates import DomainOperationInProgress, ExternalCertificate
+from ..core.certificates import DomainOperationInProgress, ExternalCertificate, ReplacementRefused
 from ..core.request_fields import json_bool
+from .path_validation import validate_domain_path
 
 logger = logging.getLogger(__name__)
 
@@ -85,3 +87,68 @@ def create_import_resources(api, models, ctx):
                         'code': 'CERTIFICATE_IMPORT_FAILED'}, 500
 
     return {'ImportCertificate': ImportCertificate}
+
+
+def _replace_refusal(error):
+    """The answer to a replacement refused with *error*. Messages are the
+    refusals' own text, never a parser's: the upload contains a private key,
+    and the service turns every parser error into INVALID_IMPORT_BUNDLE."""
+    if isinstance(error, DomainOutOfScope):
+        return {'error': str(error), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+    if isinstance(error, FileNotFoundError):
+        return {'error': 'Certificate not found', 'code': 'CERTIFICATE_NOT_FOUND'}, 404
+    if isinstance(error, DomainOperationInProgress):
+        return {'error': 'An operation is already in progress for this domain',
+                'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
+    if isinstance(error, (ReplacementRefused, CertificateNamesTaken)):
+        return {'error': str(error), 'code': error.code}, 409
+    # CertificateImportError and the service's own ValueErrors: the request is wrong.
+    return {'error': str(error), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
+
+
+def create_replace_resources(api, models, ctx):
+    """The replacement of an external certificate by upload (#1159). Its own
+    group, so the import's complexity is not its sum with this one."""
+
+    class ReplaceCertificate(Resource):
+        @api.doc(security='Bearer', responses={
+            200: 'Certificate replaced; deploy hooks run as for a renewal',
+            400: 'Invalid certificate bundle, or the bundle does not name the domain',
+            404: 'No certificate for this domain',
+            409: 'Not an external certificate, the same certificate, an earlier expiry, a name '
+                 'already covered by a managed certificate, or an operation in progress'})
+        @api.expect(models['replace_cert_model'])
+        @ctx.auth.require_role('operator')
+        def post(self, domain):
+            """Replace an external certificate with an uploaded certificate, chain and key.
+
+            The certificate must name this domain; its other names may change.
+            Refused for a certificate CertMate renews through a CA, for the
+            certificate already in place, and for one that expires earlier
+            unless ``allow_earlier_expiry`` is true.
+            """
+            if request.content_length and request.content_length > 4 * MAX_IMPORT_PEM_BYTES:
+                return {'error': 'Certificate replacement request is too large', 'code': 'REQUEST_TOO_LARGE'}, 413
+            _, error = validate_domain_path(domain, ctx.file_ops.cert_dir)
+            if error:
+                return {'error': error, 'code': 'INVALID_REQUEST'}, 400
+            # The model has refused anything but an object, and a flag that is
+            # not a JSON boolean, before this runs.
+            data = api.payload
+            allow_earlier_expiry = data.get('allow_earlier_expiry', False)
+            try:
+                result = ctx.cert_service.replace_external(
+                    domain=domain, certificate=data.get('certificate'), chain=data.get('chain'),
+                    private_key=data.get('private_key'), allow_earlier_expiry=allow_earlier_expiry,
+                    user=getattr(request, 'current_user', None) or {},
+                    ip_address=request.remote_addr, audit_ctx=audit_context_from_request())
+                return {**result, 'message': 'Certificate replaced; no certificate was issued'}, 200
+            except (DomainOutOfScope, FileNotFoundError, DomainOperationInProgress, ValueError) as e:
+                return _replace_refusal(e)
+            except (OSError, RuntimeError):
+                # Never log the request or parser exceptions: the upload contains a private key.
+                logger.error('Certificate replacement failed')
+                return {'error': 'Could not complete the replacement. Check storage and settings.',
+                        'code': 'CERTIFICATE_REPLACE_FAILED'}, 500
+
+    return {'ReplaceCertificate': ReplaceCertificate}

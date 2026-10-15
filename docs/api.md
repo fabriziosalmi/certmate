@@ -207,6 +207,7 @@ rather than written by hand:
   "ca_account_id": "default",
   "imported_at": null,
   "external": false,
+  "replaced_at": null,
   "challenge_type": "dns-01",
   "account_id": "default",
   "storage_warning": null,
@@ -446,6 +447,9 @@ refused the same way rather than risk a duplicate.
 Returns **201** with `domain`, `san_domains`, `external: true` and an optional
 `storage_warning`. The certificate reads with `external: true`, `auto_renew:
 false`, and `null` CA and DNS fields; its `renewal_info` status is `external`.
+Since API contract **2.47** its `renews_at` is `null`, since nothing renews it,
+and `needs_renewal` is `true` only when its private key is missing or does not
+match.
 `certificate_created` is published with `imported: true` and `external: true`.
 
 Afterwards, every path that would ask a CA for it answers **409**
@@ -453,8 +457,52 @@ Afterwards, every path that would ask a CA for it answers **409**
 for the same domain, and turning automatic renewal on. Turning it off still
 answers **200**. The renewal sweep counts it under `external` and leaves it
 alone, with or without its settings entry. Expiry warnings say that nothing
-renews it. To put a new certificate in its place, delete it and import the new
-one.
+renews it. Its owner puts the next certificate in its place by uploading it, below.
+
+##### Replace an external certificate
+
+`POST /api/certificates/<domain>/replace` requires **operator**. It puts an
+uploaded certificate, chain and key in place of an external certificate: what a
+renewal is for a certificate a CA renews, done by its owner. Available since API
+contract **2.47**.
+
+<!-- request: POST /api/certificates/<domain>/replace -->
+```json
+{
+  "certificate": "-----BEGIN CERTIFICATE-----\n...",
+  "chain": "-----BEGIN CERTIFICATE-----\n...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+  "allow_earlier_expiry": false
+}
+```
+
+The bundle is checked as for an external import, and the certificate must name
+`<domain>`: that name is the certificate's identity, so a new primary name means
+deleting it and importing again. Its other names may change. A name it adds that
+another managed certificate already covers is **409** `NAMES_ALREADY_MANAGED`,
+and a name it drops is free afterwards. Every name must be in the caller's scope.
+
+Refused with **409**, and nothing changes:
+
+| `code` | When |
+| --- | --- |
+| `CERTIFICATE_NOT_EXTERNAL` | The certificate is renewed through a CA. Only an external certificate is replaced by upload. |
+| `REPLACEMENT_UNCHANGED` | The upload is the certificate already in place. |
+| `REPLACEMENT_EXPIRES_EARLIER` | The upload expires before the certificate in place. Send `"allow_earlier_expiry": true` if that is meant; the check is there against uploading an old file by mistake. |
+| `CERTIFICATE_HAS_LINEAGE` | The certificate's directory holds a certbot lineage, which the startup reconcile would copy back over the upload. |
+
+An unknown domain is **404** `CERTIFICATE_NOT_FOUND`, whatever the upload
+names. A served certificate that cannot be read is not compared and is
+replaced: the upload is how it gets repaired.
+
+Returns **200** with `domain`, `san_domains`, `replaced_at` and an optional
+`storage_warning`. The four files are published together, as a renewal
+publishes them; the storage backend copy and the PFX follow, and the metadata
+keeps the deployment probe, notes, tags and `imported_at`. If either record of
+the external marker had been lost, the replacement writes it back.
+`certificate_renewed` is published with `replaced: true` and `external: true`,
+so deploy hooks run with `CERTMATE_EVENT=renewed`. The certificate then reads
+with the new expiry and `replaced_at`.
 
 #### Reissue every certificate that lost its key
 
@@ -2467,7 +2515,10 @@ and may be reworded.
 | `METADATA_SCHEMA_DOWNGRADE` | 409 | `metadata.json` was written by a newer build; the write was refused |
 | `DOMAIN_NOT_IN_SETTINGS` | 409 | The certificate exists on disk but no settings entry names it |
 | `EXTERNAL_CERTIFICATE` | 409 | The certificate was imported as external: CertMate does not issue, renew or reissue it |
-| `NAMES_ALREADY_MANAGED` | 409 | An external import names a DNS name another managed certificate already covers |
+| `NAMES_ALREADY_MANAGED` | 409 | An external import or replacement names a DNS name another managed certificate already covers |
+| `CERTIFICATE_NOT_EXTERNAL` | 409 | A replacement by upload for a certificate CertMate renews through a CA |
+| `REPLACEMENT_UNCHANGED` / `REPLACEMENT_EXPIRES_EARLIER` | 409 | A replacement uploads the certificate in place, or one that expires earlier without `allow_earlier_expiry` |
+| `CERTIFICATE_HAS_LINEAGE` | 409 | A replacement for a certificate whose directory holds a certbot lineage |
 | `ACME_RATE_LIMITED` | 422 | The CA refused because a rate limit was reached — waiting is the fix, retrying is the cause |
 | `CERTIFICATE_CREATION_FAILED` / `CERTIFICATE_REISSUE_FAILED` / `CERTIFICATE_REISSUE_REJECTED` | 422 | Issuance was attempted and refused |
 | `RENEWAL_CONFIG_BROKEN` | 422 | certbot's renewal config for this lineage no longer resolves; reissue |
@@ -2476,7 +2527,7 @@ and may be reworded.
 | `ISSUANCE_QUEUE_FULL` | 429 | Too much async issuance is already queued or running; the body carries the depth and the limit |
 | `ADOPTION_UNAVAILABLE` | 503 | Discovery/adoption is not available on this build |
 | `ASYNC_ISSUANCE_DISABLED` | 503 | Async issuance is switched off |
-| `CERTIFICATE_CREATION_ERROR` / `CERTIFICATE_RENEWAL_ERROR` / `CERTIFICATE_REISSUE_ERROR` / `CERTIFICATE_DOWNLOAD_ERROR` / `AUTO_RENEW_UPDATE_FAILED` | 500 | The operation failed unexpectedly; the server log has the cause |
+| `CERTIFICATE_CREATION_ERROR` / `CERTIFICATE_RENEWAL_ERROR` / `CERTIFICATE_REISSUE_ERROR` / `CERTIFICATE_DOWNLOAD_ERROR` / `AUTO_RENEW_UPDATE_FAILED` / `CERTIFICATE_REPLACE_FAILED` | 500 | The operation failed unexpectedly; the server log has the cause |
 | `INTERNAL_SERVER_ERROR` | 500 | An exception escaped a handler |
 | `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `REQUEST_ENTITY_TOO_LARGE`, … | 4xx | Refused by the HTTP layer; the symbol is the status name |
 

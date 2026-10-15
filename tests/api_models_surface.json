@@ -1,5 +1,5 @@
 {
- "contract_version": "2.46",
+ "contract_version": "2.47",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -386,6 +386,9 @@
      "type": "string"
     },
     "renews_at": {
+     "type": "string"
+    },
+    "replaced_at": {
      "type": "string"
     },
     "san_domains": {
@@ -1007,6 +1010,27 @@
     }
    },
    "required": []
+  },
+  "ReplaceCertificate": {
+   "properties": {
+    "allow_earlier_expiry": {
+     "type": "boolean"
+    },
+    "certificate": {
+     "type": "string"
+    },
+    "chain": {
+     "type": "string"
+    },
+    "private_key": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "certificate",
+    "chain",
+    "private_key"
+   ]
   },
   "Route53Config": {
    "properties": {
@@ -1819,6 +1843,28 @@
    },
    "responses": {
     "200": null
+   }
+  },
+  "POST /certificates/{X}/replace": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/ReplaceCertificate"
+     }
+    },
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null,
+    "400": null,
+    "404": null,
+    "409": null
    }
   },
   "POST /client-certs/batch": {

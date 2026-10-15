@@ -12,6 +12,10 @@ PagerDuty, an ITSM endpoint, your own service.
 `certificate_revoked`, `certificate_failed`, `certificate_deployed`,
 `domain_expiring`, `deploy_hook_failed`, `certificate_deploy_incomplete`.
 
+`certificate_renewed` also announces the [replacement of an external
+certificate](api.md#replace-an-external-certificate) by upload; its details then
+carry `replaced: true` and `external: true`.
+
 Two event lists narrow what is sent, and an empty list means every event: the
 global **Notify on Events** list (`notifications.events`) applies to every
 channel, email included, and each webhook can then be limited further by its

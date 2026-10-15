@@ -10,6 +10,7 @@ each name another certificate already covers.
 import json
 import secrets
 import threading
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -17,7 +18,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
-from modules.core.certificates import ExternalCertificate
+from modules.core.certificates import DomainOperationInProgress, ExternalCertificate
 from tests.test_certificate_import import make_bundle
 
 pytestmark = pytest.mark.unit
@@ -126,6 +127,26 @@ def test_an_external_certificate_reads_as_one(instance):
     # Not the global provider borrowed from settings: nothing validates it.
     assert cert['dns_provider'] is None
     assert cert['auto_renew'] is False
+
+
+def test_an_external_certificate_is_never_due_for_a_renewal(instance):
+    """A day from expiry a renewed certificate is long past its renewal
+    instant. An external one has none: nothing renews it, and a client told
+    "renews at" or "needs renewal" would wait for a renewal that never comes."""
+    assert instance.post(external(make_bundle(names=(EXT,), start=-60, end=1))).status_code == 201
+    cert = instance.client.get(f'/api/certificates/{EXT}', headers=instance.headers).get_json()
+    assert cert['renews_at'] is None
+    assert cert['needs_renewal'] is False
+    assert cert['days_left'] <= 1
+
+
+def test_a_missing_key_still_needs_attention(instance):
+    import_external(instance)
+    (instance.cert_root / EXT / 'privkey.pem').unlink()
+    instance.certs._invalidate_certificate_info_cache(EXT)
+    cert = instance.client.get(f'/api/certificates/{EXT}', headers=instance.headers).get_json()
+    assert cert['renews_at'] is None
+    assert cert['needs_renewal'] is True
 
 
 @pytest.mark.parametrize('field,value', [
@@ -348,8 +369,9 @@ def test_auto_renew_cannot_be_turned_on(instance):
     assert off.status_code == 200
 
 
-def test_a_replacement_is_deleted_then_imported(instance):
-    """What docs/api.md tells an operator to do until a replace endpoint exists."""
+def test_a_certificate_can_still_be_deleted_and_imported_again(instance):
+    """The way to give an external certificate another primary name, which a
+    replacement keeps."""
     import_external(instance)
     assert instance.post(external(make_bundle(names=(EXT, EXT_SAN)))).status_code == 409
     deleted = instance.client.delete(f'/api/certificates/{EXT}', headers=instance.headers)
@@ -448,9 +470,266 @@ def test_its_expiry_is_announced_as_nobody_renews_it_even_without_an_entry(tmp_p
 def test_the_marker_survives_azure_key_vault_tags():
     from modules.core.storage_backends import _AzureKeyVaultCertificateImporter as importer
     tags = importer._build_tags({'domain': EXT, 'external': True,
-                                 'imported_at': '2026-10-15T00:00:00Z'})
+                                 'imported_at': '2026-10-15T00:00:00Z',
+                                 'replaced_at': '2026-10-16T00:00:00Z'})
     assert tags['external'] == 'true'
     restored = importer._tags_to_metadata(tags)
     assert restored['external'] is True
     assert restored['imported_at'] == '2026-10-15T00:00:00Z'
+    assert restored['replaced_at'] == '2026-10-16T00:00:00Z'
     assert 'external' not in importer._tags_to_metadata(importer._build_tags({'domain': EXT}))
+
+
+# --------------------------------------------------------------------------- #
+# Replacement by upload
+# --------------------------------------------------------------------------- #
+
+def replace(instance, bundle, domain=EXT, headers=None, **options):
+    return instance.client.post(
+        f'/api/certificates/{domain}/replace',
+        json={'certificate': bundle['certificate'], 'chain': bundle['chain'],
+              'private_key': bundle['private_key'], **options},
+        headers=headers or instance.headers)
+
+
+def served(instance, domain=EXT):
+    return x509.load_pem_x509_certificate((instance.cert_root / domain / 'cert.pem').read_bytes())
+
+
+def fingerprint_of(bundle):
+    from cryptography.hazmat.primitives import hashes
+    return x509.load_pem_x509_certificate(bundle['certificate'].encode()).fingerprint(hashes.SHA256())
+
+
+def test_a_replacement_serves_the_new_bundle_and_is_announced_as_a_renewal(instance):
+    from cryptography.hazmat.primitives import hashes
+    import_external(instance)
+    patched = instance.client.patch(f'/api/certificates/{EXT}', json={'notes': 'vendor portal'},
+                                    headers=instance.headers)
+    assert patched.status_code == 200, patched.get_json()
+    before = metadata(instance, EXT)
+    new = make_bundle(names=(EXT, EXT_SAN), end=200, key=rsa.generate_private_key(65537, 3072))
+
+    response = replace(instance, new)
+
+    assert response.status_code == 200, response.get_json()
+    body = response.get_json()
+    assert body['domain'] == EXT and body['san_domains'] == [EXT_SAN] and body['replaced_at']
+    assert served(instance).fingerprint(hashes.SHA256()) == fingerprint_of(new)
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    key = load_pem_private_key((instance.cert_root / EXT / 'privkey.pem').read_bytes(), None)
+    assert key.public_key().public_numbers() == served(instance).public_key().public_numbers()
+    stored = metadata(instance, EXT)
+    assert stored['external'] is True and stored['auto_renew'] is False
+    assert stored['key_type'] == 'rsa' and stored['key_size'] == 3072
+    assert stored.get('elliptic_curve') is None
+    assert stored['notes'] == 'vendor portal'
+    assert stored['imported_at'] == before['imported_at']
+    assert stored['created_at'] == before['created_at']
+    from modules.api.timestamps import with_z
+    assert with_z(stored['replaced_at']) == body['replaced_at']
+    renewed = [data for event, data in instance.published if event == 'certificate_renewed']
+    assert renewed == [{'domain': EXT, 'san_domains': [EXT_SAN], 'replaced': True, 'external': True}]
+    read = instance.client.get(f'/api/certificates/{EXT}', headers=instance.headers).get_json()
+    assert read['external'] is True and read['replaced_at']
+    assert read['days_left'] > 150
+    instance.shell.run.assert_not_called()
+
+
+def test_a_replacement_may_change_the_other_names(instance):
+    import_external(instance)
+    response = replace(instance, make_bundle(names=(EXT, 'added.example.com'), end=200))
+    assert response.status_code == 200, response.get_json()
+    assert metadata(instance, EXT)['san_domains'] == ['added.example.com']
+    # The name it no longer carries is free for another certificate.
+    import_external(instance, names=(EXT_SAN,))
+
+
+@pytest.mark.parametrize('case,code', [
+    ('does not name it', 'INVALID_CERTIFICATE_IMPORT'),
+    ('same certificate', 'REPLACEMENT_UNCHANGED'),
+    ('expires earlier', 'REPLACEMENT_EXPIRES_EARLIER'),
+    ('name taken', 'NAMES_ALREADY_MANAGED'),
+    ('lineage', 'CERTIFICATE_HAS_LINEAGE'),
+    ('not a bundle', 'INVALID_CERTIFICATE_IMPORT'),
+    ('flag not a boolean', None),
+])
+def test_what_a_replacement_refuses(instance, case, code):
+    first = make_bundle(names=(EXT, EXT_SAN), end=120)
+    assert instance.post(external(first)).status_code == 201
+    options = {}
+    if case == 'does not name it':
+        bundle = make_bundle(names=(EXT_SAN,), end=200)
+    elif case == 'same certificate':
+        bundle = first
+    elif case == 'expires earlier':
+        bundle = make_bundle(names=(EXT, EXT_SAN), end=60)
+    elif case == 'name taken':
+        _managed(instance, ('taken.example.com',))
+        bundle = make_bundle(names=(EXT, 'taken.example.com'), end=200)
+    elif case == 'lineage':
+        (instance.cert_root / EXT / 'live').mkdir()
+        bundle = make_bundle(names=(EXT, EXT_SAN), end=200)
+    elif case == 'not a bundle':
+        bundle = {**make_bundle(names=(EXT,), end=200), 'private_key': 'not a key'}
+    else:
+        bundle, options = make_bundle(names=(EXT,), end=200), {'allow_earlier_expiry': 'yes'}
+    before = (instance.cert_root / EXT / 'cert.pem').read_bytes()
+
+    response = replace(instance, bundle, **options)
+
+    assert response.status_code in (400, 409), response.get_json()
+    # A flag that is not a boolean is refused by the model, before the route.
+    assert response.get_json().get('code') == code
+    assert (instance.cert_root / EXT / 'cert.pem').read_bytes() == before
+    assert not [event for event, _ in instance.published if event == 'certificate_renewed']
+
+
+def test_an_earlier_expiry_is_accepted_when_asked_for(instance):
+    import_external(instance)
+    response = replace(instance, make_bundle(names=(EXT, EXT_SAN), end=60), allow_earlier_expiry=True)
+    assert response.status_code == 200, response.get_json()
+    assert instance.client.get(f'/api/certificates/{EXT}', headers=instance.headers).get_json()['days_left'] < 61
+
+
+def test_only_an_external_certificate_is_replaced(instance):
+    _managed(instance, ('renewed.example.com',))
+    response = replace(instance, make_bundle(names=('renewed.example.com',), end=200),
+                       domain='renewed.example.com')
+    assert response.status_code == 409
+    assert response.get_json()['code'] == 'CERTIFICATE_NOT_EXTERNAL'
+
+
+@pytest.mark.parametrize('names', [('nothing.example.com',), (EXT,)])
+def test_a_certificate_that_does_not_exist_is_not_found(instance, names):
+    """Whatever the upload names: the certificate is looked for first."""
+    response = replace(instance, make_bundle(names=names, end=200), domain='nothing.example.com')
+    assert response.status_code == 404
+    assert response.get_json()['code'] == 'CERTIFICATE_NOT_FOUND'
+    assert not (instance.cert_root / 'nothing.example.com').exists()
+
+
+def test_a_served_certificate_that_does_not_parse_is_replaced(instance):
+    """The upload is how a broken certificate is repaired, so a served copy
+    that cannot be read is not compared, and not kept."""
+    import_external(instance)
+    (instance.cert_root / EXT / 'cert.pem').write_text('not a certificate')
+    response = replace(instance, make_bundle(names=(EXT, EXT_SAN), end=60))
+    assert response.status_code == 200, response.get_json()
+
+
+@pytest.mark.parametrize('lost', ['metadata', 'settings'])
+def test_a_replacement_restores_the_marker_it_lost(instance, lost):
+    import_external(instance)
+    _lose(instance, lost)
+    response = replace(instance, make_bundle(names=(EXT, EXT_SAN), end=200))
+    assert response.status_code == 200, response.get_json()
+    stored = metadata(instance, EXT)
+    assert stored['external'] is True and stored['imported_at'] and stored['created_at']
+    entry = settings_entry(instance, EXT)
+    assert entry['external'] is True and entry['auto_renew'] is False
+
+
+def test_a_scoped_key_must_cover_every_name_of_the_replacement(instance):
+    import_external(instance, names=(EXT,))
+    ok, key = instance.managers['auth'].create_api_key('scoped', role='operator', allowed_domains=[EXT])
+    assert ok
+    headers = {'Authorization': 'Bearer ' + key['token']}
+    widened = replace(instance, make_bundle(names=(EXT, 'elsewhere.example.org'), end=200), headers=headers)
+    assert widened.status_code == 403
+    assert replace(instance, make_bundle(names=(EXT,), end=200), headers=headers).status_code == 200
+
+
+def test_a_replacement_and_an_import_sharing_a_name_cannot_both_pass(instance, monkeypatch):
+    """The replacement checks the names and writes under the lock the import
+    takes, so the name both add ends up with one of them."""
+    import_external(instance, names=(EXT,))
+    service = instance.managers['cert_service']
+    write = instance.certs.replace_external_certificate
+    writing = threading.Event()
+
+    def slow_write(*args, **kwargs):
+        writing.set()
+        threading.Event().wait(0.3)
+        return write(*args, **kwargs)
+
+    monkeypatch.setattr(instance.certs, 'replace_external_certificate', slow_write)
+    results = []
+    replacement = make_bundle(names=(EXT, 'shared.example.com'), end=200)
+    other = make_bundle(names=('other.example.com', 'shared.example.com'))
+
+    def run(call):
+        try:
+            call()
+            results.append('done')
+        except ValueError as error:
+            results.append(type(error).__name__)
+
+    first = threading.Thread(target=run, args=(lambda: service.replace_external(
+        domain=EXT, certificate=replacement['certificate'], chain=replacement['chain'],
+        private_key=replacement['private_key'], user={'username': 'admin'}),))
+    first.start()
+    assert writing.wait(5)
+    second = threading.Thread(target=run, args=(lambda: service.import_certificate(
+        certificate=other['certificate'], chain=other['chain'], private_key=other['private_key'],
+        external=True, auto_renew=False, user={'username': 'admin'}),))
+    second.start()
+    first.join(10)
+    second.join(10)
+    assert sorted(results) == ['CertificateNamesTaken', 'done']
+
+
+
+def test_a_replacement_request_too_large_is_refused_before_it_is_read(instance):
+    import_external(instance)
+    bundle = make_bundle(names=(EXT,), end=200)
+    response = replace(instance, {**bundle, 'certificate': bundle['certificate'] + ' ' * (4 * 64 * 1024)})
+    assert response.status_code == 413
+    assert response.get_json()['code'] == 'REQUEST_TOO_LARGE'
+
+
+def test_a_name_that_is_not_a_domain_is_refused(instance):
+    response = replace(instance, make_bundle(names=(EXT,), end=200), domain='not_a_domain!')
+    assert response.status_code == 400
+    assert response.get_json()['code'] == 'INVALID_REQUEST'
+
+
+def test_a_busy_certificate_is_not_replaced(instance, monkeypatch):
+    import_external(instance)
+    before = (instance.cert_root / EXT / 'cert.pem').read_bytes()
+
+    @contextmanager
+    def busy(domain):
+        raise DomainOperationInProgress(domain)
+        yield
+
+    monkeypatch.setattr(instance.certs, 'domain_lock', busy)
+    response = replace(instance, make_bundle(names=(EXT, EXT_SAN), end=200))
+    assert response.status_code == 409
+    assert response.get_json()['code'] == 'DOMAIN_OPERATION_IN_PROGRESS'
+    assert (instance.cert_root / EXT / 'cert.pem').read_bytes() == before
+
+
+def test_a_replacement_that_cannot_be_written_says_so_and_nothing_of_the_key(instance, monkeypatch, caplog):
+    import_external(instance)
+    new = make_bundle(names=(EXT, EXT_SAN), end=200)
+
+    def unwritable(*args, **kwargs):
+        raise OSError('disk full while writing ' + new['private_key'])
+
+    monkeypatch.setattr(instance.certs, 'replace_external_certificate', unwritable)
+    response = replace(instance, new)
+    assert response.status_code == 500
+    assert response.get_json()['code'] == 'CERTIFICATE_REPLACE_FAILED'
+    assert 'PRIVATE KEY' not in response.get_data(as_text=True)
+    assert 'PRIVATE KEY' not in caplog.text
+    assert not [event for event, _ in instance.published if event == 'certificate_renewed']
+
+
+def test_the_service_takes_only_a_boolean_for_an_earlier_expiry(instance):
+    import_external(instance)
+    bundle = make_bundle(names=(EXT, EXT_SAN), end=60)
+    with pytest.raises(ValueError, match='allow_earlier_expiry must be a boolean'):
+        instance.managers['cert_service'].replace_external(
+            domain=EXT, certificate=bundle['certificate'], chain=bundle['chain'],
+            private_key=bundle['private_key'], allow_earlier_expiry='yes', user={'username': 'admin'})
