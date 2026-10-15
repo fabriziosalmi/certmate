@@ -14,6 +14,8 @@ Pure and side-effect-free: it reads config through the DNS manager but issues
 nothing, so it is safe to call for a live "can I adopt this?" affordance.
 """
 
+from .ca_manager import resolve_ca_account
+
 # Key sizes / curves the create flow accepts. Anything else on the observed
 # cert falls back to the configured defaults rather than being forced through.
 _RSA_SIZES = {2048, 3072, 4096}
@@ -53,7 +55,7 @@ def _derive_key_options(record):
     return None, None, None
 
 
-def build_adoption_plan(record, dns_manager, settings=None):
+def build_adoption_plan(record, dns_manager, ca_manager, settings=None):
     """Assess whether *record* can be adopted and pre-fill the create request.
 
     Returns a dict:
@@ -96,7 +98,14 @@ def build_adoption_plan(record, dns_manager, settings=None):
     if settings is None:
         settings = dns_manager.settings_manager.load_settings()
 
-    plan['email_configured'] = bool(settings.get('email'))
+    ca_config = None
+    ca_error = None
+    try:
+        ca_config, _ = resolve_ca_account(ca_manager,
+                                         settings.get('default_ca', 'letsencrypt'), settings=settings)
+    except ValueError as e:
+        ca_error = str(e)
+    plan['email_configured'] = bool((ca_config or {}).get('email') or settings.get('email'))
 
     provider, _confidence = dns_manager.suggest_dns_provider_for_domain(domain, settings=settings)
     plan['dns_provider'] = provider
@@ -108,6 +117,9 @@ def build_adoption_plan(record, dns_manager, settings=None):
         plan['dns_provider_configured'] = bool(configured.get(provider))
 
     # Feasibility: a validated domain needs DNS credentials AND an ACME email.
+    if ca_error:
+        plan['reason'] = ca_error
+        return plan
     if not plan['dns_provider_configured']:
         which = f" for {domain}" if domain else ""
         plan['reason'] = (

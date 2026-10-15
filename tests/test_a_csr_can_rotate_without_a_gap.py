@@ -61,6 +61,8 @@ def service(tmp_path, monkeypatch):
     (cert_dir / DOMAIN / 'cert.pem').write_text('existing certificate')
 
     class _Certs:
+        ca_manager = None
+
         def __init__(self):
             self.cert_dir = cert_dir
             self.calls = []

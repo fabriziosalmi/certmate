@@ -341,7 +341,7 @@ def test_import_is_listed_downloadable_and_never_issues(instance, bundle):
     stored = json.loads((instance.directory / 'metadata.json').read_text())
     assert stored['ca_provider'] == 'sectigo' and stored['ca_account_id'] == 'paid'
     assert stored['challenge_type'] == 'prevalidated' and stored['dns_provider'] is None
-    assert stored['email'] == 'ops@example.com'
+    assert stored['email'] == 'ca@example.com'
     assert stored['san_domains'] == [SAN]
     assert stored['key_type'] == 'ecdsa' and stored['imported_at']
     assert stat.S_IMODE((instance.directory / 'privkey.pem').stat().st_mode) == 0o600
@@ -415,8 +415,8 @@ def test_alias_providers_keep_their_own_default_accounts_at_first_renewal(instan
 
 
 @pytest.mark.parametrize('global_email,account_email,expected', [
-    ('', 'ca@example.com', None),
-    ('ops@example.com', 'ca@example.com', 'ops@example.com'),
+    ('', 'ca@example.com', 'ca@example.com'),
+    ('ops@example.com', 'ca@example.com', 'ca@example.com'),
     ('ops@example.com', '', 'ops@example.com'),
     ('', '', None),
 ])

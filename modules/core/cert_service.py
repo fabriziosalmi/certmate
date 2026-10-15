@@ -23,6 +23,7 @@ from cryptography.exceptions import UnsupportedAlgorithm
 
 from .structured_logging import scrub_log_value
 from . import acme_profiles
+from .ca_manager import resolve_ca_account
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
@@ -104,6 +105,10 @@ class CertificateNamesTaken(ValueError):
             message = ('These names are already covered by a certificate CertMate manages: '
                        + ', '.join(self.names))
         super().__init__(message)
+
+
+class EmailNotConfigured(ValueError):
+    """Neither the selected CA account nor global settings supplies an email."""
 
 
 class DomainOutOfScope(PermissionError):
@@ -361,11 +366,9 @@ class CertificateService:
         acme_profile = _checked_profile(acme_profile)
 
         settings = self._settings.load_settings()
-        email = settings.get('email')
-        if not email:
-            raise ValueError('Email not configured')
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
+        email = self.resolve_ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
         if challenge_type == 'prevalidated':
@@ -1100,11 +1103,10 @@ class CertificateService:
         acme_profile = _checked_profile(acme_profile)
 
         settings = self._settings.load_settings()
-        email = settings.get('email')
-        if not email:
-            raise ValueError('Email not configured')
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
+        ca_account_id = metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None
+        email = self.resolve_ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
         if challenge_type == 'prevalidated':
@@ -1125,7 +1127,7 @@ class CertificateService:
             'dns_provider': dns_provider,
             'account_id': account_id,
             'ca_provider': ca_provider,
-            'ca_account_id': metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None,
+            'ca_account_id': ca_account_id,
             'domain_alias': domain_alias,
             'alias_dns_provider': alias_dns_provider,
             'san_domains': san_domains,
@@ -1138,6 +1140,15 @@ class CertificateService:
             '_settings_dns_provider': settings.get('dns_provider'),
             '_audit_ctx': audit_ctx,
         }
+
+    def resolve_ca_email(self, settings, ca_provider, ca_account_id):
+        """Return the issuance email, or refuse the missing CA/email before work starts."""
+        email = settings.get('email')
+        ca_config, _ = resolve_ca_account(self._certs.ca_manager, ca_provider, ca_account_id, settings=settings)
+        email = (ca_config or {}).get('email') or email
+        if not email:
+            raise EmailNotConfigured('Email not configured')
+        return email
 
     def issue_reissue(self, prepared):
         """Blocking half of edit-and-reissue: certbot re-runs over the

@@ -161,6 +161,8 @@ class _FakeSettings:
 
 
 class _FakeCerts:
+    ca_manager = None
+
     def __init__(self, fail=False):
         self.fail = fail
 
