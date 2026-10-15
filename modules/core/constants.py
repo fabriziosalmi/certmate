@@ -666,6 +666,11 @@ METADATA_SCHEMA_VERSION = 1
 #                                   auto-renew on answer 409 EXTERNAL_CERTIFICATE.
 #                                   Import answers 409 NAMES_ALREADY_MANAGED
 #                                   when a name is already covered.
+#                                   2.47, MINOR: POST /api/certificates/<domain>/
+#                                   replace puts an uploaded bundle in place of
+#                                   an external certificate and announces it as
+#                                   certificate_renewed (replaced: true).
+#                                   Certificate reads gain replaced_at.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -691,7 +696,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.46'
+API_CONTRACT_VERSION = '2.47'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

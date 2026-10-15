@@ -110,6 +110,27 @@ def certificates(plan):
     call('get', '/api/certificates')
     call('delete', '/api/certificates/<domain>', path=f'/api/certificates/{imported_domain}')
 
+    # --- an external certificate, and its replacement by upload.
+    external_domain = 'external.example.test'
+    first, first_key = make_cert(external_domain, san_dns=[external_domain],
+                                 issuer=root, issuer_key=root_key)
+    second, second_key = make_cert(external_domain, san_dns=[external_domain],
+                                   issuer=root, issuer_key=root_key)
+    replace_route = '/api/certificates/<domain>/replace'
+    replace_path = f'/api/certificates/{external_domain}/replace'
+    replacement = {'certificate': pem(second).decode(), 'chain': pem(root).decode(),
+                   'private_key': key_pem(second_key).decode()}
+    call('post', '/api/certificates/import', body={
+        'certificate': pem(first).decode(), 'chain': pem(root).decode(),
+        'private_key': key_pem(first_key).decode(), 'external': True})               # 201
+    call('post', replace_route, path=replace_path, body={})                                  # 400
+    call('post', replace_route, path=replace_path, body=replacement)                         # 200
+    call('post', replace_route, path=replace_path, body=replacement)                         # 409: unchanged
+    call('post', replace_route, path=f'/api/certificates/{UNKNOWN}/replace', body=replacement)  # 404
+    call('get', '/api/certificates/<domain>', path=f'/api/certificates/{external_domain}')
+    call('get', '/api/certificates')                                                         # replaced_at set
+    call('delete', '/api/certificates/<domain>', path=f'/api/certificates/{external_domain}')
+
     # --- issue: bad requests, then the real thing, then a failure at the CA
     call('post', '/api/certificates/create', body={})                                       # 400: validation
     call('post', '/api/certificates/create', body={'domain': 'not-a-domain', 'dns_provider': 'cloudflare'})

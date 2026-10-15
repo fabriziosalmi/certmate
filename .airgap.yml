@@ -15,4 +15,4 @@ deviations: []                  # MUSTs are NEVER waivable (AG-GOV-01)
 # AG-CSP-02 (HIGH) — closed by #314. script-src is 'self' and a per-response nonce: no 'unsafe-eval'
 #   (Alpine is the @alpinejs/csp build), no 'unsafe-inline' (no markup carries an event handler, and
 #   the inline <script> blocks carry the nonce).
-#   held by: tests/test_the_policy_allows_no_eval_and_no_inline_script.py   evidence: modules/factory.py:1727
+#   held by: tests/test_the_policy_allows_no_eval_and_no_inline_script.py   evidence: modules/factory.py:1728

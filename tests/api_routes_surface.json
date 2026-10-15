@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.46",
+ "contract_version": "2.47",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -813,6 +813,9 @@
     "[].renews_at": [
      "str"
     ],
+    "[].replaced_at": [
+     "str"
+    ],
     "[].san_domains": [
      "list"
     ],
@@ -962,6 +965,9 @@
      "str"
     ],
     "renews_at": [
+     "str"
+    ],
+    "replaced_at": [
      "str"
     ],
     "san_domains": [
@@ -3905,6 +3911,73 @@
     ]
    }
   },
+  "POST /api/certificates/<X>/replace": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "domain": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ],
+    "replaced_at": [
+     "str"
+    ],
+    "san_domains": [
+     "list"
+    ],
+    "storage_warning": [
+     "null"
+    ],
+    "success": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.certificate": [
+     "str"
+    ],
+    "errors.chain": [
+     "str"
+    ],
+    "errors.private_key": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "409": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
   "POST /api/certificates/check-caa": {
    "200": {
     ".": [
@@ -4146,6 +4219,9 @@
     ],
     "domain": [
      "str"
+    ],
+    "external": [
+     "bool"
     ],
     "message": [
      "str"
@@ -5726,6 +5802,9 @@
   ],
   "POST /api/backups/restore/<X>": [
    "reissue_required"
+  ],
+  "POST /api/certificates/<X>/replace": [
+   "san_domains"
   ],
   "POST /api/certificates/check-caa": [
    "domains[].records"

@@ -20,6 +20,7 @@ import threading
 import time
 from cryptography import x509
 from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives import hashes
 
 from .structured_logging import scrub_log_value
 from . import acme_profiles
@@ -31,8 +32,8 @@ from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError, validat
                           validate_import_bundle, validate_import_renewability)
 from .utils import utc_now_iso, validate_domain, validate_key_options
 from .domain_paths import certificate_dir
-from .domain_entries import entry_domain, normalize_entry
-from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS, CertificateNamesUnknown
+from .domain_entries import entry_domain, entry_external, normalize_entry
+from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS, CertificateNamesUnknown, ReplacementRefused
 from .inventory_sources import collect_domain_sources
 
 logger = logging.getLogger(__name__)
@@ -615,14 +616,7 @@ class CertificateService:
             if name != normalized:
                 self._enforce_scope(name, 'import_san', user, ip_address)
         san_domains = [n for n in bundle['names'] if n != normalized]
-        # The marker, and nothing that names a CA: a missing CA means "the
-        # default CA" on every issuing path, which is why CertificateManager
-        # also refuses on the settings entry's marker.
-        metadata = {'domain': normalized, 'san_domains': san_domains, 'external': True,
-                    'email': None, 'ca_provider': None, 'ca_account_id': None,
-                    'challenge_type': None, 'dns_provider': None, 'account_id': None,
-                    'domain_alias': None, 'alias_dns_provider': None, 'acme_profile': None,
-                    'auto_renew': False}
+        metadata = _external_metadata(normalized, san_domains)
         metadata.update(bundle['key_options'], created_at=bundle['created_at'],
                         imported_at=utc_now_iso())
         with _EXTERNAL_IMPORT_LOCK:
@@ -650,7 +644,102 @@ class CertificateService:
         return {'success': True, 'domain': normalized, 'san_domains': san_domains,
                 'external': True, 'storage_warning': warning}
 
-    def _names_already_managed(self, names):
+    def replace_external(self, *, domain, certificate, chain, private_key,
+                         allow_earlier_expiry=False, user=None, ip_address=None, audit_ctx=None):
+        """Put an uploaded bundle in place of the external certificate *domain*.
+
+        What a renewal is for a certificate a CA renews, done by its owner: the
+        same certificate, by name, with a new certificate and key, announced as
+        a renewal so deploy hooks ship it. The bundle is checked as an external
+        import is, and must still name *domain*: the name is the certificate's
+        identity. Its other names may change, and one another certificate
+        covers refuses it, as for an import.
+
+        Two refusals guard against uploading the wrong file: the certificate
+        already in place, and one that expires before it, unless
+        *allow_earlier_expiry* says that is meant. A certificate that is not
+        external is refused: its CA renews it, and an upload would put it out
+        of step with what the CA issued.
+        """
+        if not isinstance(allow_earlier_expiry, bool):
+            raise ValueError('allow_earlier_expiry must be a boolean')
+        self._enforce_certificate_scope(domain, 'replace', user, ip_address)
+        # Asked first, so a name with no certificate is not found whatever the
+        # upload; asked again under the lock, where it counts.
+        if not self._certs.has_certificate(domain):
+            raise FileNotFoundError(f'No certificate found for domain: {domain}')
+        try:
+            bundle = validate_import_bundle(certificate, chain, private_key)
+            bundle.update(validate_external_identity(bundle))
+        except CertificateImportError:
+            raise
+        except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
+            raise CertificateImportError(INVALID_IMPORT_BUNDLE) from None
+        key = _name_key(domain)
+        if key not in {_name_key(name) for name in bundle['names']}:
+            raise ValueError(f'The uploaded certificate does not name {domain}, so it cannot replace it')
+        san_domains = [name for name in bundle['names'] if _name_key(name) != key]
+        for name in san_domains:
+            self._enforce_scope(name, 'replace_san', user, ip_address)
+        fingerprint = bundle['certificate'].fingerprint(hashes.SHA256()).hex()
+        replaced_at = utc_now_iso()
+        # Every key field is named, so a new key of another type leaves no
+        # field of the previous one behind.
+        owned = _external_metadata(domain, san_domains)
+        owned.update({'key_type': None, 'key_size': None, 'elliptic_curve': None},
+                     **bundle['key_options'], replaced_at=replaced_at)
+        with _EXTERNAL_IMPORT_LOCK:
+            with self._certs.domain_lock(domain):
+                current = self._certs.served_certificate(domain)
+                if not self._certs.is_external(domain):
+                    raise ReplacementRefused(ReplacementRefused.NOT_EXTERNAL, domain)
+                taken = self._names_already_managed(bundle['names'], owner=domain)
+                if taken:
+                    raise CertificateNamesTaken(taken)
+                previous = None
+                if current is not None:
+                    # An unreadable served certificate is no reason to keep it:
+                    # the upload is how it gets repaired, so only a readable one
+                    # is compared.
+                    previous = current.fingerprint(hashes.SHA256()).hex()
+                    if previous == fingerprint:
+                        raise ReplacementRefused(ReplacementRefused.UNCHANGED, domain)
+                    if (bundle['certificate'].not_valid_after_utc < current.not_valid_after_utc
+                            and not allow_earlier_expiry):
+                        raise ReplacementRefused(ReplacementRefused.EXPIRES_EARLIER, domain)
+                # A metadata file that was lost comes back whole.
+                recorded = self._certs._load_metadata(domain)
+                for field, value in (('imported_at', replaced_at), ('created_at', bundle['created_at'])):
+                    if not recorded.get(field):
+                        owned[field] = value
+                warning = self._certs.replace_external_certificate(domain, bundle['files'], owned)
+                self._register_external(domain)
+        self._audit_emit(audit_ctx, 'replace', domain, 'success', details={
+            'external': True, 'san_count': len(san_domains),
+            'previous_fingerprint': previous, 'fingerprint': fingerprint})
+        # A renewal to everything that listens: deploy hooks run with
+        # CERTMATE_EVENT=renewed and the cached reads are dropped.
+        self._publish('certificate_renewed', {
+            'domain': domain, 'san_domains': san_domains, 'replaced': True, 'external': True})
+        return {'success': True, 'domain': domain, 'san_domains': san_domains,
+                'replaced_at': replaced_at, 'storage_warning': warning}
+
+    def _register_external(self, domain):
+        """Restore the settings entry's marker when it was lost, and write
+        nothing when it is there. Best effort: the metadata carries the same
+        marker, and either one keeps every issuing path off the certificate."""
+        domains = self._settings.load_settings().get('domains') or []
+        if any(entry_domain(raw) == domain and entry_external(raw) for raw in domains):
+            return
+        try:
+            if self._settings.update(_add_external_entry(domain), 'certificate_replaced'):
+                return
+        except (OSError, RuntimeError):
+            pass
+        logger.error("Replaced %s, but its settings entry could not be restored; "
+                     "its metadata still marks it external", _scrub_log(domain))
+
+    def _names_already_managed(self, names, owner=None):
         """The import's names a managed certificate already covers.
 
         Exact names, compared without case or a trailing dot. A wildcard
@@ -659,11 +748,15 @@ class CertificateService:
         name with nothing on disk covers only itself, since settings record no
         SANs. A certificate whose names cannot be read refuses the import
         rather than letting it through on the names that could be read.
+        *owner* is the certificate a replacement replaces: its own names are
+        not taken from it.
         """
         wanted = {_name_key(n): n for n in names}
         settings = self._settings.load_settings()
         taken = []
         for source in collect_domain_sources(settings, self._certs.cert_dir).values():
+            if owner is not None and source.domain == owner:
+                continue
             if not source.on_disk:
                 covered = [source.domain]
             else:
@@ -1309,6 +1402,18 @@ def _primary_name(names, requested):
 def _name_key(name):
     """A DNS name as compared for a collision: no case, no trailing dot."""
     return name.strip().rstrip('.').casefold()
+
+
+def _external_metadata(domain, san_domains):
+    """What the metadata of an external certificate says about it: the
+    marker, and nothing that names a CA. A missing CA means "the default CA"
+    on every issuing path, which is why CertificateManager also refuses on the
+    settings entry's marker."""
+    return {'domain': domain, 'san_domains': san_domains, 'external': True,
+            'email': None, 'ca_provider': None, 'ca_account_id': None,
+            'challenge_type': None, 'dns_provider': None, 'account_id': None,
+            'domain_alias': None, 'alias_dns_provider': None, 'acme_profile': None,
+            'auto_renew': False}
 
 
 def _add_external_entry(domain):

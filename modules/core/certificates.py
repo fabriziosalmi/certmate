@@ -27,6 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import ClassVar
 from cryptography import x509
 from .ca_manager import CAManager, resolve_ca_account
 from .cert_labels import tags_from_metadata
@@ -142,6 +143,33 @@ class ExternalCertificate(ValueError):
         super().__init__(
             f"{domain} is an external certificate: CertMate stores and deploys it, "
             f"but does not issue, renew or reissue it")
+
+
+class ReplacementRefused(ValueError):
+    """A replacement by upload that is not made, with why as ``code``.
+
+    Every message is fixed text and the domain: nothing from the upload or
+    from an exception reaches it. The API answers it with 409.
+    """
+    NOT_EXTERNAL = 'CERTIFICATE_NOT_EXTERNAL'
+    UNCHANGED = 'REPLACEMENT_UNCHANGED'
+    EXPIRES_EARLIER = 'REPLACEMENT_EXPIRES_EARLIER'
+    HAS_LINEAGE = 'CERTIFICATE_HAS_LINEAGE'
+
+    _MESSAGES: ClassVar[dict] = {
+        NOT_EXTERNAL: ('{domain} is renewed through a CA, so it is not replaced by upload. '
+                       'Only an external certificate is.'),
+        UNCHANGED: 'The uploaded certificate is the one {domain} already serves.',
+        EXPIRES_EARLIER: ('The uploaded certificate expires before the one {domain} serves. '
+                          'Send allow_earlier_expiry: true if that is intended.'),
+        HAS_LINEAGE: ('{domain} has a certbot lineage, which would be copied back over an '
+                      'uploaded certificate. It is not replaced.'),
+    }
+
+    def __init__(self, code, domain):
+        self.code = code
+        self.domain = domain
+        super().__init__(self._MESSAGES[code].format(domain=domain))
 
 
 class CertificateNamesUnknown(Exception):
@@ -1212,8 +1240,68 @@ class CertificateManager:
         metadata = self._load_metadata(domain)
         if isinstance(metadata, dict) and metadata.get('external') is True:
             raise ExternalCertificate(domain)
-        if any(path.name == domain for path in iter_cert_domain_dirs(self.cert_dir)):
+        if self._listed_certificate_dir(domain) is not None:
             self.refuse_external(domain, metadata=metadata)
+
+    def _listed_certificate_dir(self, domain):
+        """The directory of the certificate *domain*, as `iter_cert_domain_dirs`
+        lists it, or None when there is no certificate by that name.
+
+        Matched by name in the listing rather than built from it, so a path
+        that reaches the filesystem never comes from a request.
+        """
+        return next((path for path in iter_cert_domain_dirs(self.cert_dir)
+                     if path.name == domain), None)
+
+    def has_certificate(self, domain):
+        """Whether a certificate by the name *domain* is on disk."""
+        return self._listed_certificate_dir(domain) is not None
+
+    def served_certificate(self, domain):
+        """The leaf certificate *domain* serves, or None when it cannot be parsed.
+
+        Raises FileNotFoundError when there is no certificate by that name.
+        """
+        directory = self._listed_certificate_dir(domain)
+        if directory is None:
+            raise FileNotFoundError(f'No certificate found for domain: {domain}')
+        try:
+            return x509.load_pem_x509_certificate((directory / 'cert.pem').read_bytes())
+        except (OSError, ValueError):
+            return None
+
+    def replace_external_certificate(self, domain, cert_files, owned_metadata):
+        """Publish an uploaded bundle in place of the external certificate
+        *domain*; the caller holds the domain lock and has checked the bundle.
+
+        The four files are staged beside the certificate and promoted by
+        `_publish_flat_files`, the publish a renewal uses, so a reader sees the
+        previous pair or the new one. The metadata keeps everything the upload
+        does not own (deployment probe, notes, tags, when it was imported) and
+        takes *owned_metadata* for the rest, which restores the external marker
+        if the file had been lost. Then the commit every issuance makes: the
+        backend copy, the metadata, the cache and the PFX.
+
+        Refused when a certbot lineage is there: the startup reconcile would
+        copy it back over the upload.
+        """
+        directory = self._listed_certificate_dir(domain)
+        if directory is None:
+            raise FileNotFoundError(f'No certificate found for domain: {domain}')
+        if (directory / 'live').is_dir():
+            raise ReplacementRefused(ReplacementRefused.HAS_LINEAGE, domain)
+        with tempfile.TemporaryDirectory(prefix='.replace-', dir=self.cert_dir) as temp:
+            staging = Path(temp)
+            for name in CERTIFICATE_FILES:
+                path = staging / name
+                with open(path, 'xb') as handle:
+                    os.chmod(path, 0o600)
+                    handle.write(cert_files[name])
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            published = self._publish_flat_files(staging, directory)
+        metadata = {**self._load_metadata(domain), **owned_metadata}
+        return self._commit_certificate(domain, published, metadata)
 
     @contextmanager
     def domain_lock(self, domain: str):
@@ -2611,6 +2699,7 @@ class CertificateManager:
                 'ca_account_id': metadata.get('ca_account_id'),
                 'imported_at': metadata.get('imported_at'),
                 'external': external,
+                'replaced_at': metadata.get('replaced_at'),
                 'challenge_type': challenge_type,
                 'account_id': account_id,
                 # Surfaced so a failed external-storage save (DR copy missing
@@ -2664,6 +2753,7 @@ class CertificateManager:
             'ca_account_id': metadata.get('ca_account_id'),
             'imported_at': metadata.get('imported_at'),
             'external': external,
+            'replaced_at': metadata.get('replaced_at'),
             'challenge_type': challenge_type,
             'account_id': account_id,
             'storage_warning': metadata.get('storage_warning'),
