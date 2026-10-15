@@ -56,7 +56,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_renew_certificate",
-        description: "Force renewal of an existing certificate for a domain. Runs asynchronously: the call returns a job_id (HTTP 202) to poll with certmate_get_job.",
+        description: "Renew an existing certificate for a domain if CertMate considers it due under its renewal policy. A certificate that is not yet due is left as it is: the job succeeds with renewed=false and nothing is issued. Runs asynchronously: the call returns a job_id (HTTP 202) to poll with certmate_get_job.",
         inputSchema: {
           type: "object",
           properties: {

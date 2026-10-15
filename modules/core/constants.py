@@ -654,6 +654,32 @@ METADATA_SCHEMA_VERSION = 1
 #                                   enough (#1184). The cache statistics give
 #                                   it the entries its scope covers (#1181).
 #                                   2.44. Counted as 2.43 was.
+#                                   2.45, MINOR: import existing server certificates
+#                                   without issuance; certificate reads expose
+#                                   imported_at, renewal_info.status = imported,
+#                                   and the selected ca_account_id.
+#                                   2.46, MINOR: import an external certificate
+#                                   (external: true), one no CA here renews.
+#                                   Certificate reads gain external,
+#                                   renewal_info.status gains external, and renew,
+#                                   reissue, create over one, and turning its
+#                                   auto-renew on answer 409 EXTERNAL_CERTIFICATE.
+#                                   Import answers 409 NAMES_ALREADY_MANAGED
+#                                   when a name is already covered.
+#                                   2.47, MINOR: POST /api/certificates/<domain>/
+#                                   replace puts an uploaded bundle in place of
+#                                   an external certificate and announces it as
+#                                   certificate_renewed (replaced: true).
+#                                   Certificate reads gain replaced_at. An
+#                                   external certificate reads with renews_at
+#                                   null and needs_renewal only for its key.
+#                                   2.48, MINOR: create, reissue, batch and an
+#                                   import through a CA answer 409
+#                                   NAMES_ALREADY_MANAGED for a name an
+#                                   external certificate covers, and the
+#                                   adoption plan is unavailable. MINOR because
+#                                   external certificates are new in 2.46: no
+#                                   released contract answered this condition.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -679,7 +705,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.44'
+API_CONTRACT_VERSION = '2.48'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
@@ -696,4 +722,3 @@ DEFAULT_CACHE_TTL = 300
 # / 60s per IP, 10 / 300s per username), and a lone DEFAULT_LOGIN_RATE_LIMIT
 # could only misdescribe them. They stay next to the algorithm that reads
 # them.
-

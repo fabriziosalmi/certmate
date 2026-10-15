@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from modules.core.ca_manager import CAManager
 from modules.core.cert_service import CertificateService, DomainOutOfScope
 from modules.core.certificates import DomainOperationInProgress
 
@@ -32,6 +33,7 @@ def _make_service(*, allowed=True, settings=None):
         'default_ca': 'letsencrypt',
         'challenge_type': 'dns-01',
     }
+    certs.ca_manager = CAManager(settings_mgr)
     auth = MagicMock()
     auth.user_can_access_domain.return_value = allowed
     audit = MagicMock()
@@ -41,11 +43,15 @@ def _make_service(*, allowed=True, settings=None):
 
 class TestCreate:
     def test_selected_ca_account_reaches_issuance(self):
-        svc, certs, *_ = _make_service()
+        svc, certs, settings_mgr, *_ = _make_service()
+        settings_mgr.load_settings.return_value['ca_providers'] = {
+            'sectigo': {'accounts': {'production-ov': {'email': 'ca@example.com'}}},
+        }
         svc.create(domain='shiny.example.com', ca_provider='sectigo',
                    ca_account_id='production-ov', user={}, ip_address='1.2.3.4')
         assert certs.create_certificate.call_args.kwargs['ca_provider'] == 'sectigo'
         assert certs.create_certificate.call_args.kwargs['ca_account_id'] == 'production-ov'
+        assert certs.create_certificate.call_args.kwargs['email'] == 'ca@example.com'
 
     def test_happy_path_calls_manager_and_persists(self):
         svc, certs, settings_mgr, _auth, _audit = _make_service()

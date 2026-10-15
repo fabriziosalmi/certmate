@@ -1,6 +1,6 @@
 # Server MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM a14882fc878f55e6 -->
+<!-- CERTMATE-TRANSLATED-FROM 8ff9ffe2c5fe3b5b -->
 
 CertMate include un server MCP (Model Context Protocol) integrato scritto in Node.js. Questo consente agli assistenti IA agentici (come Claude o Gemini) di ispezionare lo stato dei certificati, attivare rinnovi, richiedere diagnostiche e interagire direttamente con l'API CertMate.
 
@@ -17,7 +17,7 @@ Il server MCP CertMate espone i seguenti strumenti agli assistenti IA:
 
 **Operazioni sul ciclo di vita**
 6. **`certmate_create_certificate`** — Richiede un nuovo certificato TLS per un dominio (provider DNS, account, CA opzionali). Il server chiede sempre l'emissione asincrona, quindi restituisce un `job_id` (HTTP 202) da interrogare.
-7. **`certmate_renew_certificate`** — Forza il rinnovo di un certificato esistente. Anch'esso asincrono: restituisce un `job_id`.
+7. **`certmate_renew_certificate`** — Rinnova un certificato esistente se CertMate lo considera in scadenza secondo la sua politica di rinnovo; uno non ancora in scadenza resta com'è, e il job riporta `renewed: false`. Anch'esso asincrono: restituisce un `job_id`.
 8. **`certmate_get_job`** — Interroga un job asincrono di creazione/rinnovo/modifica tramite `job_id` finché il suo stato non è `succeeded` o `failed` (`queued` e `running` non sono stati finali).
 9. **`certmate_set_auto_renew`** — Abilita o disabilita il rinnovo automatico per un singolo dominio.
 10. **`certmate_deploy_certificate`** — Esegue manualmente tutti i deploy hook configurati per un dominio.
@@ -106,7 +106,7 @@ La maggior parte degli assistenti di punta supporta ora i **task pianificati** (
 1. `certmate_list_certificates` (o `certmate_get_certificate` per dominio) per leggere `days_left` / stato.
 2. Decisione in base alla tua condizione, ad es. *rinnova quando `days_left < 14`*.
 3. `certmate_renew_certificate` per ogni dominio interessato.
-4. Ogni rinnovo restituisce un `job_id`; chiama `certmate_get_job` finché non segnala `succeeded` / `failed`.
+4. Ogni rinnovo restituisce un `job_id`; chiama `certmate_get_job` finché non segnala `succeeded` / `failed`. Un certificato che CertMate non considera ancora in scadenza termina con `succeeded` e `renewed: false`: non è stato emesso nulla.
 5. In caso di fallimento, segnalalo. Un job di rinnovo o di riemissione fallito emette anche `certificate_failed`, così i canali di notifica di CertMate (email, Slack, Discord, Telegram, ntfy, Gotify) inviano comunque una notifica. Due eccezioni: un job fallito perché un'altra operazione teneva già il dominio (`error_code: DOMAIN_OPERATION_IN_PROGRESS`) non lo emette, e nemmeno una creazione asincrona fallita, quindi in quei casi il segnale è il resoconto dell'agente.
 
 ### Esempi di prompt pianificati

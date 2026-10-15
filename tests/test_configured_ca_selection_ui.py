@@ -14,7 +14,8 @@ def test_ca_and_account_selection(node):
     script = r"""
 const fs = require('fs');
 global.window = global;
-global.document = { addEventListener() {}, getElementById(id) { return elements[id] || null; } };
+global.document = { addEventListener() {}, querySelectorAll() { return []; },
+    getElementById(id) { return elements[id] || null; } };
 global.setInterval = () => 0;
 const select = () => ({value: '', options: [], replaceChildren() { this.options = []; this.value = ''; },
     add(option) { this.options.push(option); }, querySelector() { return null; }});

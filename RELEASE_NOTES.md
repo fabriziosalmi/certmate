@@ -4,6 +4,14 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.49.0 (certificates CertMate did not issue: imported with a CA for their next renewal, or external and replaced by their owner)
+
+[Read the notes](docs/releases/v2.49.0.md)
+
+## v2.48.6 (the renewal sweep asks about a name itself, and two of its recovery paths say what happened)
+
+[Read the notes](docs/releases/v2.48.6.md)
+
 ## v2.48.5 (a second SMTP recipient can be typed, and the places that take a name ask about it)
 
 [Read the notes](docs/releases/v2.48.5.md)
