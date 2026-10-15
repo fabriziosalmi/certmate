@@ -24,6 +24,7 @@ global.window = {};
 global.setInterval = () => 0;
 global.document = {
   addEventListener() {},
+  querySelectorAll() { return []; },
   getElementById(id) {
     return {'challenge_type_select': challenge, 'ca_provider_select': ca,
             'dns-provider-container': dns, 'createCertForm': form}[id] || null;

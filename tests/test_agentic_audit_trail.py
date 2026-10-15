@@ -10,6 +10,8 @@ Phase 1 of the agentic cert-lifecycle audit trail (l0 #408):
 """
 
 
+from pathlib import Path
+
 import pytest
 
 from modules.core.audit import AuditLogger
@@ -161,8 +163,15 @@ class _FakeSettings:
 
 
 class _FakeCerts:
+    ca_manager = None
+    # No certificate on disk: a create here collides with nothing.
+    cert_dir = Path('/nonexistent/certmate-agentic-audit')
+
     def __init__(self, fail=False):
         self.fail = fail
+
+    def refuse_external(self, domain, **records):
+        pass  # nothing here was imported as external
 
     def create_certificate(self, **kwargs):
         if self.fail:

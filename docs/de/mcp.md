@@ -19,7 +19,7 @@ Der CertMate MCP Server stellt folgenden KI-Assistenten diese Tools zur Verfügu
 
 **Lebenszyklus-Operationen**
 6. **`certmate_create_certificate`** — Fordert ein neues TLS-Zertifikat für eine Domain an (optionaler DNS-Anbieter, Account, CA). Kann bei asynchroner Ausstellung eine `job_id` (HTTP 202) zurückgeben.
-7. **`certmate_renew_certificate`** — Erzwingt die Erneuerung eines vorhandenen Zertifikats (kann ebenfalls eine `job_id` zurückgeben).
+7. **`certmate_renew_certificate`** — Erneuert ein vorhandenes Zertifikat, wenn CertMate es nach seiner Erneuerungsrichtlinie für fällig hält; ein noch nicht fälliges bleibt unverändert, und der Job meldet `renewed: false` (kann ebenfalls eine `job_id` zurückgeben).
 8. **`certmate_get_job`** — Fragt einen asynchronen Erstellungs-/Erneuerungsauftrag per `job_id` ab, bis dieser als abgeschlossen oder fehlgeschlagen gemeldet wird.
 9. **`certmate_set_auto_renew`** — Aktiviert oder deaktiviert die automatische Erneuerung für eine einzelne Domain.
 10. **`certmate_deploy_certificate`** — Führt alle konfigurierten deploy hooks für eine Domain manuell aus.

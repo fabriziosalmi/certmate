@@ -1,5 +1,5 @@
 {
- "contract_version": "2.44",
+ "contract_version": "2.48",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -306,6 +306,9 @@
     "auto_renew": {
      "type": "boolean"
     },
+    "ca_account_id": {
+     "type": "string"
+    },
     "ca_provider": {
      "type": "string"
     },
@@ -351,6 +354,12 @@
     "expiry_date": {
      "type": "string"
     },
+    "external": {
+     "type": "boolean"
+    },
+    "imported_at": {
+     "type": "string"
+    },
     "latest_issuance": {
      "type": "string"
     },
@@ -377,6 +386,9 @@
      "type": "string"
     },
     "renews_at": {
+     "type": "string"
+    },
+    "replaced_at": {
      "type": "string"
     },
     "san_domains": {
@@ -773,6 +785,62 @@
    },
    "required": []
   },
+  "ImportCertificate": {
+   "properties": {
+    "account_id": {
+     "type": "string"
+    },
+    "acme_profile": {
+     "type": "string"
+    },
+    "alias_dns_provider": {
+     "type": "string"
+    },
+    "auto_renew": {
+     "type": "boolean"
+    },
+    "ca_account_id": {
+     "type": "string"
+    },
+    "ca_provider": {
+     "type": "string"
+    },
+    "certificate": {
+     "type": "string"
+    },
+    "chain": {
+     "type": "string"
+    },
+    "challenge_type": {
+     "enum": [
+      "dns-01",
+      "http-01",
+      "prevalidated"
+     ],
+     "type": "string"
+    },
+    "dns_provider": {
+     "type": "string"
+    },
+    "domain": {
+     "type": "string"
+    },
+    "domain_alias": {
+     "type": "string"
+    },
+    "external": {
+     "type": "boolean"
+    },
+    "private_key": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "certificate",
+    "chain",
+    "private_key"
+   ]
+  },
   "InfisicalStorage": {
    "properties": {
     "client_id": {
@@ -925,6 +993,8 @@
     "status": {
      "enum": [
       "disabled",
+      "external",
+      "imported",
       "no_identifier",
       "unavailable",
       "unsupported",
@@ -940,6 +1010,27 @@
     }
    },
    "required": []
+  },
+  "ReplaceCertificate": {
+   "properties": {
+    "allow_earlier_expiry": {
+     "type": "boolean"
+    },
+    "certificate": {
+     "type": "string"
+    },
+    "chain": {
+     "type": "string"
+    },
+    "private_key": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "certificate",
+    "chain",
+    "private_key"
+   ]
   },
   "Route53Config": {
    "properties": {
@@ -1682,6 +1773,21 @@
     "200": null
    }
   },
+  "POST /certificates/import": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/ImportCertificate"
+     }
+    }
+   },
+   "responses": {
+    "201": null,
+    "400": null,
+    "409": null
+   }
+  },
   "POST /certificates/reissue-keyless": {
    "parameters": {},
    "responses": {
@@ -1737,6 +1843,28 @@
    },
    "responses": {
     "200": null
+   }
+  },
+  "POST /certificates/{X}/replace": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/ReplaceCertificate"
+     }
+    },
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null,
+    "400": null,
+    "404": null,
+    "409": null
    }
   },
   "POST /client-certs/batch": {

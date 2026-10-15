@@ -61,6 +61,8 @@ def service(tmp_path, monkeypatch):
     (cert_dir / DOMAIN / 'cert.pem').write_text('existing certificate')
 
     class _Certs:
+        ca_manager = None
+
         def __init__(self):
             self.cert_dir = cert_dir
             self.calls = []
@@ -69,6 +71,9 @@ def service(tmp_path, monkeypatch):
             return {'dns_provider': 'cloudflare', 'challenge_type': 'dns-01',
                     'san_domains': ['inherited.example.com'],
                     'ca_provider': 'letsencrypt'}
+
+        def refuse_external(self, domain, **records):
+            pass  # nothing here was imported as external
 
         def create_certificate(self, **kwargs):
             self.calls.append(kwargs)

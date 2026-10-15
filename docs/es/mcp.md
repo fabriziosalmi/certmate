@@ -19,7 +19,7 @@ El servidor MCP de CertMate expone las siguientes herramientas a los asistentes 
 
 **Operaciones del ciclo de vida**
 6. **`certmate_create_certificate`** — Solicita un nuevo certificado TLS para un dominio (proveedor DNS, account y CA opcionales). Puede devolver un `job_id` (HTTP 202) para emisión asíncrona.
-7. **`certmate_renew_certificate`** — Fuerza la renovación de un certificado existente (también puede devolver un `job_id`).
+7. **`certmate_renew_certificate`** — Renueva un certificado existente si CertMate lo considera pendiente según su política de renovación; uno que aún no lo está queda como está, y el job informa `renewed: false` (también puede devolver un `job_id`).
 8. **`certmate_get_job`** — Consulta un trabajo asíncrono de creación/renovación por `job_id` hasta que notifique que ha completado o fallado.
 9. **`certmate_set_auto_renew`** — Activa o desactiva la renovación automática para un único dominio.
 10. **`certmate_deploy_certificate`** — Ejecuta manualmente todos los deploy hooks configurados para un dominio.

@@ -15,6 +15,7 @@ SUCCESS answer of create, renew and reissue is reached and recorded, next to the
 import io
 
 from tests import contract_world as world
+from tests.tls_support import key_pem, make_cert, pem
 
 DOMAIN = world.DOMAIN
 NEW = 'new.example.test'
@@ -93,6 +94,42 @@ def certificates(plan):
              stream=True)
     call('get', '/api/certificates/<domain>/download/<file_type>', path=f'{detail}/download/nope')   # 400
     call('get', '/api/certificates/<domain>/download', path=f'/api/certificates/{UNKNOWN}/download')   # 404
+
+    # --- import a signed certificate without invoking the Certbot stand-in.
+    imported_domain = 'imported.example.test'
+    root, root_key = make_cert('Import root', is_ca=True)
+    imported, imported_key = make_cert(imported_domain, san_dns=[imported_domain],
+                                      issuer=root, issuer_key=root_key)
+    import_body = {'domain': imported_domain, 'certificate': pem(imported).decode(),
+                   'chain': pem(root).decode(), 'private_key': key_pem(imported_key).decode(),
+                   'ca_provider': 'letsencrypt', 'dns_provider': 'cloudflare'}
+    call('post', '/api/certificates/import', body={})                                       # 400
+    call('post', '/api/certificates/import', body=import_body)                              # 201
+    call('post', '/api/certificates/import', body=import_body)                              # 409
+    call('get', '/api/certificates/<domain>', path=f'/api/certificates/{imported_domain}')
+    call('get', '/api/certificates')
+    call('delete', '/api/certificates/<domain>', path=f'/api/certificates/{imported_domain}')
+
+    # --- an external certificate, and its replacement by upload.
+    external_domain = 'external.example.test'
+    first, first_key = make_cert(external_domain, san_dns=[external_domain],
+                                 issuer=root, issuer_key=root_key)
+    second, second_key = make_cert(external_domain, san_dns=[external_domain],
+                                   issuer=root, issuer_key=root_key)
+    replace_route = '/api/certificates/<domain>/replace'
+    replace_path = f'/api/certificates/{external_domain}/replace'
+    replacement = {'certificate': pem(second).decode(), 'chain': pem(root).decode(),
+                   'private_key': key_pem(second_key).decode()}
+    call('post', '/api/certificates/import', body={
+        'certificate': pem(first).decode(), 'chain': pem(root).decode(),
+        'private_key': key_pem(first_key).decode(), 'external': True})               # 201
+    call('post', replace_route, path=replace_path, body={})                                  # 400
+    call('post', replace_route, path=replace_path, body=replacement)                         # 200
+    call('post', replace_route, path=replace_path, body=replacement)                         # 409: unchanged
+    call('post', replace_route, path=f'/api/certificates/{UNKNOWN}/replace', body=replacement)  # 404
+    call('get', '/api/certificates/<domain>', path=f'/api/certificates/{external_domain}')
+    call('get', '/api/certificates')                                                         # replaced_at set
+    call('delete', '/api/certificates/<domain>', path=f'/api/certificates/{external_domain}')
 
     # --- issue: bad requests, then the real thing, then a failure at the CA
     call('post', '/api/certificates/create', body={})                                       # 400: validation
@@ -325,4 +362,3 @@ def settings(plan):
          body={'ca_provider': 'letsencrypt', 'config': {}})                                  # sealed
     call('post', '/api/settings/test-ca-provider',
          body={'ca_provider': 'no-such-ca', 'config': {}})
-
