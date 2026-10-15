@@ -414,7 +414,8 @@ Some certificates come from a CA CertMate cannot reach: a vendor portal, an
 internal CA without ACME, a certificate bought elsewhere. Send `"external": true`
 to import one that CertMate stores, lists, downloads, deploys and watches for
 expiry, and **never** issues, renews or reissues. Available since API contract
-**2.46**.
+**2.46**. In the dashboard, it is **Import an existing certificate** with
+**Renewal** set to **Not by CertMate**; the form then asks nothing about a CA.
 
 <!-- request: POST /api/certificates/import -->
 ```json
@@ -464,7 +465,9 @@ renews it. Its owner puts the next certificate in its place by uploading it, bel
 `POST /api/certificates/<domain>/replace` requires **operator**. It puts an
 uploaded certificate, chain and key in place of an external certificate: what a
 renewal is for a certificate a CA renews, done by its owner. Available since API
-contract **2.47**.
+contract **2.47**. In the dashboard, an external certificate is marked
+**External**, and its row and detail panel offer **Replace certificate** where
+another certificate has renew and reissue.
 
 <!-- request: POST /api/certificates/<domain>/replace -->
 ```json

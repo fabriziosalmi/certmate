@@ -25,7 +25,8 @@ const classes = () => {
 const make = () => ({value: '', disabled: false, checked: false, dataset: {},
   classList: classes(), innerHTML: 'Create', setAttribute() {}, addEventListener() {}});
 const elements = {};
- ['createCertForm', 'importExistingCertificate', 'importAutoRenew', 'certificateImportFiles', 'drawerTitle', 'drawerSubtitle',
+ ['createCertForm', 'importExistingCertificate', 'importAutoRenew', 'importRenewalCa', 'importRenewalExternal',
+ 'importAutoRenewOption', 'certificateImportFiles', 'drawerTitle', 'drawerSubtitle',
  'createCertFormContainer', 'importCertificateFile', 'importChainFile', 'importPrivateKeyFile',
  'domain', 'ca_provider_select', 'ca_account_id', 'challenge_type_select', 'dns_provider_select',
  'account_select', 'dns_alias_domain', 'cert_acme_profile', 'cert_csr', 'san_entry',
@@ -36,6 +37,7 @@ const elements = {};
    elements[id] = make(); elements[id].id = id;
   });
 elements.importAutoRenew.checked = true;
+elements.importRenewalCa.checked = true;
 const dropZones = ['importCertificateFile', 'importChainFile', 'importPrivateKeyFile'].map(id => {
   const input = elements[id];
   const handlers = {};
@@ -48,9 +50,16 @@ global.openCreateCertForm = () => {};
 const button = make(); const form = elements.createCertForm;
 const sourceOnly = [elements.domain, elements.cert_csr, elements.san_entry];
 const sections = [{classList: classes(), querySelectorAll() { return sourceOnly; }}];
+// The renewal source stays in place for an import a CA renews.
+const renewalSource = [elements.ca_provider_select, elements.ca_account_id, elements.challenge_type_select,
+  elements.dns_provider_select, elements.account_select, elements.dns_alias_domain, elements.cert_acme_profile];
+const renewalSections = [{classList: classes(), querySelectorAll() { return renewalSource; }}];
+const externalHidden = [{classList: classes()}];
 const inputs = Object.values(elements).concat(button);
 form.querySelector = () => button;
-form.querySelectorAll = selector => selector === '[data-issuance-only]' ? sections : inputs;
+form.querySelectorAll = selector => selector === '[data-issuance-only]' ? sections
+  : selector === '[data-renewal-source]' ? renewalSections
+  : selector === '[data-external-hidden]' ? externalHidden : inputs;
 let submit;
 form.addEventListener = (event, fn) => { if (event === 'submit') submit = fn; };
 global.document = {addEventListener() {}, querySelectorAll(selector) {
@@ -170,6 +179,8 @@ async function run() {
   elements.account_select.value = 'dns-prod';
   elements.cert_csr.value = 'OLD CSR';
   check(sourceOnly.every(el => el.disabled), 'Issuance-only inputs still enabled');
+  check(renewalSource.every(el => !el.disabled) && !renewalSections[0].classList.contains('hidden'),
+    'An import a CA renews lost its renewal source');
   const event = {preventDefault() {}, target: form};
   await Promise.all([submit(event), submit(event)]);
   check(calls.length === 1 && calls[0].url === '/api/certificates/import', 'Import issued or double-submitted');
