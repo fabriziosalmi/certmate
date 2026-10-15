@@ -8,7 +8,7 @@
     "test": "node test-smoke.js && node test-tools.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.0"
+    "@modelcontextprotocol/sdk": "^1.32.1"
   },
   "engines": {
     "node": ">=20.0.0"
