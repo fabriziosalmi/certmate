@@ -7,7 +7,7 @@ from cryptography import x509
 from cryptography.exceptions import UnsupportedAlgorithm
 
 from ..core.certificates import DomainOperationInProgress, ExternalCertificate
-from ..core.cert_service import CertificateService, DomainOutOfScope
+from ..core.cert_service import CertificateService, DomainOutOfScope, EmailNotConfigured
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import (
     INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError, preview_import_certificate,
@@ -19,6 +19,20 @@ from modules.core.structured_logging import scrub_log_value
 
 
 logger = logging.getLogger(__name__)
+
+
+def _batch_email_refusal(cert_service, settings, data):
+    try:
+        cert_service.resolve_ca_email(
+            settings, data.get('ca_provider') or settings.get('default_ca', 'letsencrypt'),
+            data.get('ca_account_id'))
+    except EmailNotConfigured:
+        return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
+    except ValueError as error:
+        logger.info('Batch CA configuration rejected: %s', scrub_log_value(error))
+        return jsonify({'error': 'The selected CA or CA account is not configured on this instance. '
+                        'Configure it in Settings, or choose one that is configured.'}), 400
+    return None
 
 
 def preview_certificate_import_web():
@@ -131,9 +145,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Batch size limit exceeded: maximum 50 domains per request'}), 400
 
             settings = settings_manager.load_settings()
-            cert_service.resolve_ca_email(
-                settings, data.get('ca_provider') or settings.get('default_ca', 'letsencrypt'),
-                data.get('ca_account_id'))
+            refusal = _batch_email_refusal(cert_service, settings, data)
+            if refusal:
+                return refusal
 
             # Each domain through the service's own create steps (account,
             # scope, audit, event), registered in ONE settings write (#666,
@@ -151,8 +165,6 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 audit_ctx=audit_context_from_request(),
             )
             return jsonify(results)
-        except ValueError as e:
-            return jsonify({'error': str(e)}), 400
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")
             return jsonify({'error': 'Batch creation failed'}), 500

@@ -107,6 +107,10 @@ class CertificateNamesTaken(ValueError):
         super().__init__(message)
 
 
+class EmailNotConfigured(ValueError):
+    """Neither the selected CA account nor global settings supplies an email."""
+
+
 class DomainOutOfScope(PermissionError):
     """Raised when a scoped API key's ``allowed_domains`` does not cover the
     requested domain. Adapters map this to HTTP 403 with the machine code
@@ -1143,7 +1147,7 @@ class CertificateService:
         ca_config, _ = resolve_ca_account(self._certs.ca_manager, ca_provider, ca_account_id, settings=settings)
         email = (ca_config or {}).get('email') or email
         if not email:
-            raise ValueError('Email not configured')
+            raise EmailNotConfigured('Email not configured')
         return email
 
     def issue_reissue(self, prepared):

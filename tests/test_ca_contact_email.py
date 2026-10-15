@@ -142,6 +142,7 @@ def test_batch_and_adoption_follow_the_single_create_email_rule(tmp_path, global
             assert command[command.index('--email') + 1] == expected
     else:
         assert not shell.commands_executed
+        assert response.get_json()['error'] == 'Email not configured. Set it in Settings first.'
     plan = build_adoption_plan(_rec(), _FakeDNS(), manager.ca_manager, settings=settings.load_settings.return_value)
     assert plan['email_configured'] is bool(expected)
     assert plan['available'] is bool(expected)
@@ -198,8 +199,23 @@ def test_batch_reports_unconfigured_ca_not_missing_email(missing_ca):
     response = app.test_client().post('/api/web/certificates/batch', json={
         'domains': ['example.com'], 'ca_provider': 'digicert'})
     assert response.status_code == 400
-    assert "CA provider 'digicert' is not configured" in response.get_json()['error']
+    assert response.get_json()['error'] == (
+        'The selected CA or CA account is not configured on this instance. '
+        'Configure it in Settings, or choose one that is configured.')
     assert shell.commands_executed == []
+
+
+def test_batch_does_not_return_exceptions_from_batch_execution(missing_ca):
+    settings, manager, auth, _ = missing_ca
+    service = MagicMock()
+    service.create_batch.side_effect = ValueError('internal exception details')
+    app = Flask(__name__)
+    register_cert_routes(app, {'cert_service': service}, lambda function: function, auth, manager,
+                         lambda domain: domain, MagicMock(), settings, MagicMock(), CERTIFICATE_FILES)
+    response = app.test_client().post('/api/web/certificates/batch', json={'domains': ['example.com']})
+    assert response.status_code == 500
+    assert response.get_json() == {'error': 'Batch creation failed'}
+    service.create_batch.assert_called_once()
 
 
 def test_adoption_reports_email_and_dns_even_when_ca_is_not_configured(missing_ca):
