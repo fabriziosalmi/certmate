@@ -15,7 +15,8 @@ from ..core.request_fields import json_booleans
 from ..core.cert_jobs import IssuanceQueueFull
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import (
-    CREATION_FAILED, DomainOperationInProgress, MetadataWriteFailed, MetadataWriteRefused,
+    CREATION_FAILED, DomainOperationInProgress, ExternalCertificate, MetadataWriteFailed,
+    MetadataWriteRefused,
 )
 from ..core.utils import classify_renewal_error
 from .path_validation import validate_domain_path as _validate_domain_path
@@ -27,7 +28,17 @@ from .resource_context import (
 logger = logging.getLogger(__name__)
 
 
+def _refusal(error):
+    """403 for a domain outside the key's scope; 409 for an external
+    certificate, which no CA here issues for."""
+    if isinstance(error, ExternalCertificate):
+        return {'error': str(error), 'code': error.code}, 409
+    return {'error': str(error), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+
+
 def _auto_renew_failure(error):
+    if isinstance(error, ExternalCertificate):
+        return {'error': str(error), 'code': error.code}, 409
     if isinstance(error, DomainOperationInProgress):
         return {'error': 'A certificate operation is already in progress for this domain',
                 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
@@ -243,8 +254,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     'duration': result.get('duration')
                 }, 201
 
-            except DomainOutOfScope as e:
-                return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+            except (DomainOutOfScope, ExternalCertificate) as e:
+                return _refusal(e)
             except FileExistsError as e:
                 # Previously fell through to the generic 500. The certificate
                 # already exists: 409 with a pointer to the reissue endpoint.
@@ -320,8 +331,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     'duration': result.get('duration')
                 }, 200
 
-            except DomainOutOfScope as e:
-                return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+            except (DomainOutOfScope, ExternalCertificate) as e:
+                return _refusal(e)
             except DomainOperationInProgress as e:
                 # Domain busy is not a failure; do not publish a failure event.
                 return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
@@ -402,8 +413,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
 
             except FileNotFoundError as e:
                 return {'error': str(e), 'code': 'CERTIFICATE_NOT_FOUND'}, 404
-            except DomainOutOfScope as e:
-                return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+            except (DomainOutOfScope, ExternalCertificate) as e:
+                return _refusal(e)
             except ValueError as e:
                 return {'error': str(e), 'code': 'CERTIFICATE_REISSUE_REJECTED'}, 400
             except DomainOperationInProgress as e:

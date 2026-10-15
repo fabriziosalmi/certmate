@@ -206,6 +206,7 @@ rather than written by hand:
   "ca_provider": "letsencrypt",
   "ca_account_id": "default",
   "imported_at": null,
+  "external": false,
   "challenge_type": "dns-01",
   "account_id": "default",
   "storage_warning": null,
@@ -304,6 +305,7 @@ sweep asks about the new certificate.
 | `unavailable` | The CA publishes it, and the last sweep got no usable answer. If this lasts, look at the CA. |
 | `no_identifier` | The certificate has no Authority Key Identifier, so ARI cannot name it. Common on hand-made private-CA certificates. |
 | `imported` | No CA was contacted: the configured CA is for future renewal, not the imported certificate's issuer. |
+| `external` | No CA was contacted: the certificate was imported as external, and CertMate never renews it. Since API contract **2.46**. |
 | `disabled` | `ari_enabled` is `false` in settings. Nothing is asked. |
 
 The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the
@@ -405,6 +407,55 @@ Use HTTPS for imports: the upload contains the private key. It is stored with
 restricted filesystem permissions, never returned by the import response or
 written to the import audit record.
 
+##### External certificates: no CA
+
+Some certificates come from a CA CertMate cannot reach: a vendor portal, an
+internal CA without ACME, a certificate bought elsewhere. Send `"external": true`
+to import one that CertMate stores, lists, downloads, deploys and watches for
+expiry, and **never** issues, renews or reissues. Available since API contract
+**2.46**.
+
+<!-- request: POST /api/certificates/import -->
+```json
+{
+  "certificate": "-----BEGIN CERTIFICATE-----\n...",
+  "chain": "-----BEGIN CERTIFICATE-----\n...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+  "external": true
+}
+```
+
+The request carries no renewal configuration. Sending any of `ca_provider`,
+`ca_account_id`, `challenge_type`, `dns_provider`, `account_id`, `domain_alias`,
+`alias_dns_provider` or `acme_profile` with `external` is **400**, and so is
+`auto_renew: true`; omitted, `auto_renew` is `false`. The bundle is validated as
+for any import, and the certificate must also name at least one DNS name and
+nothing but DNS names (no IP addresses or e-mail addresses), with an RSA key of
+at least 2048 bits or an ECDSA key on P-256, P-384 or P-521. `domain` and the
+scope rule are the same as above.
+
+A name may belong to one certificate only. If any DNS name of the import is
+already covered by a certificate CertMate manages, as its domain or as a SAN,
+including a domain registered with no certificate yet, the import is
+**409** `NAMES_ALREADY_MANAGED`. Names are compared exactly, without case: a
+wildcard conflicts with the same wildcard, not with the names it matches. The
+message lists only names of the import, never the other certificate. When
+CertMate cannot read the names of a certificate it manages, the import is
+refused the same way rather than risk a duplicate.
+
+Returns **201** with `domain`, `san_domains`, `external: true` and an optional
+`storage_warning`. The certificate reads with `external: true`, `auto_renew:
+false`, and `null` CA and DNS fields; its `renewal_info` status is `external`.
+`certificate_created` is published with `imported: true` and `external: true`.
+
+Afterwards, every path that would ask a CA for it answers **409**
+`EXTERNAL_CERTIFICATE`: renew (forced or not, sync or async), reissue, create
+for the same domain, and turning automatic renewal on. Turning it off still
+answers **200**. The renewal sweep counts it under `external` and leaves it
+alone, with or without its settings entry. Expiry warnings say that nothing
+renews it. To put a new certificate in its place, delete it and import the new
+one.
+
 #### Reissue every certificate that lost its key
 
 **Endpoint**: `POST /api/certificates/reissue-keyless` — operator
@@ -453,7 +504,8 @@ off by default, because a reissue changes the key and deploy hooks ship it.
 `enabled` is a JSON boolean. Answers `{"message", "domain", "auto_renew"}`.
 A missing `enabled` is `400 AUTO_RENEW_FLAG_REQUIRED`; a domain that is not
 tracked in settings is `404 DOMAIN_NOT_IN_SETTINGS`, because only those have a
-renewal flag to toggle. The change is audited and published on the event
+renewal flag to toggle. Turning it on for an external certificate is
+`409 EXTERNAL_CERTIFICATE`. The change is audited and published on the event
 stream as `certificate_auto_renew_changed`.
 An imported certificate whose domain is busy answers `409 DOMAIN_OPERATION_IN_PROGRESS`;
 ordinary certificates can still be toggled during issuance. A failed settings save
@@ -1416,7 +1468,7 @@ explicitly changed (no key flags are sent and certbot keeps the lineage key).
 
 **Response** (200 OK, or 202 Accepted with `async`): message, domain, dns_provider, ca_provider, duration.
 
-**Errors**: 404 when no certificate exists for the domain (use create), 403 scope, 400 validation, 409 operation in progress, 422 certbot failure (the previous certificate is still in place).
+**Errors**: 404 when no certificate exists for the domain (use create), 403 scope, 400 validation, 409 operation in progress or `EXTERNAL_CERTIFICATE`, 422 certbot failure (the previous certificate is still in place).
 
 **Example**:
 ```bash
@@ -1470,7 +1522,7 @@ Renews through certbot, which renews only what is due unless `force` is true.
 always `null` before API contract **2.37**.
 
 **Errors**: 404 when no certificate exists for the domain, 403 scope, 409 operation in
-progress, 422 renewal failed (`RENEWAL_FAILED`, or `REISSUE_REQUIRED` when no private key is left).
+progress or `EXTERNAL_CERTIFICATE`, 422 renewal failed (`RENEWAL_FAILED`, or `REISSUE_REQUIRED` when no private key is left).
 
 ---
 
@@ -2414,6 +2466,8 @@ and may be reworded.
 | `DOMAIN_OPERATION_IN_PROGRESS` | 409 | Another create/renew holds this domain's lock |
 | `METADATA_SCHEMA_DOWNGRADE` | 409 | `metadata.json` was written by a newer build; the write was refused |
 | `DOMAIN_NOT_IN_SETTINGS` | 409 | The certificate exists on disk but no settings entry names it |
+| `EXTERNAL_CERTIFICATE` | 409 | The certificate was imported as external: CertMate does not issue, renew or reissue it |
+| `NAMES_ALREADY_MANAGED` | 409 | An external import names a DNS name another managed certificate already covers |
 | `ACME_RATE_LIMITED` | 422 | The CA refused because a rate limit was reached — waiting is the fix, retrying is the cause |
 | `CERTIFICATE_CREATION_FAILED` / `CERTIFICATE_REISSUE_FAILED` / `CERTIFICATE_REISSUE_REJECTED` | 422 | Issuance was attempted and refused |
 | `RENEWAL_CONFIG_BROKEN` | 422 | certbot's renewal config for this lineage no longer resolves; reissue |

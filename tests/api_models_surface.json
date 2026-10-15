@@ -1,5 +1,5 @@
 {
- "contract_version": "2.45",
+ "contract_version": "2.46",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -353,6 +353,9 @@
     },
     "expiry_date": {
      "type": "string"
+    },
+    "external": {
+     "type": "boolean"
     },
     "imported_at": {
      "type": "string"
@@ -822,6 +825,9 @@
     "domain_alias": {
      "type": "string"
     },
+    "external": {
+     "type": "boolean"
+    },
     "private_key": {
      "type": "string"
     }
@@ -984,6 +990,7 @@
     "status": {
      "enum": [
       "disabled",
+      "external",
       "imported",
       "no_identifier",
       "unavailable",

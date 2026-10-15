@@ -70,6 +70,9 @@ def service(tmp_path, monkeypatch):
                     'san_domains': ['inherited.example.com'],
                     'ca_provider': 'letsencrypt'}
 
+        def refuse_external(self, domain, **records):
+            pass  # nothing here was imported as external
+
         def create_certificate(self, **kwargs):
             self.calls.append(kwargs)
             return {'success': True}

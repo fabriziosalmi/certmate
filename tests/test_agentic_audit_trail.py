@@ -164,6 +164,9 @@ class _FakeCerts:
     def __init__(self, fail=False):
         self.fail = fail
 
+    def refuse_external(self, domain, **records):
+        pass  # nothing here was imported as external
+
     def create_certificate(self, **kwargs):
         if self.fail:
             raise RuntimeError('certbot exploded')

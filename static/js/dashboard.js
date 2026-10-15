@@ -780,6 +780,8 @@
                 return '<span class="text-muted"' + checked + '>Cannot be asked: no Authority Key Identifier</span>';
             case 'imported':
                 return '<span class="text-muted"' + checked + '>Not asked: imported certificate; renewal CA is not its issuer</span>';
+            case 'external':
+                return '<span class="text-muted"' + checked + '>Not asked: external certificate, not renewed by CertMate</span>';
             case 'disabled':
                 return '<span class="text-muted">Off (ari_enabled is false)</span>';
         }
