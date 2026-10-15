@@ -307,7 +307,7 @@ class _Manager:
         self.real._certificate_info_cache = DeploymentStatusCache()
         self._directory = directory
 
-    def get_ca_config(self, provider, account_id):
+    def get_ca_config(self, provider, account_id, *, settings=None):
         return {}, account_id
 
     def get_acme_server_url(self, provider, staging=False, account_config=None):

@@ -578,7 +578,7 @@ class _AzureKeyVaultCertificateImporter:
     # contaminate the metadata returned to the rest of CertMate.
     _STRING_METADATA_KEYS = (
         'domain', 'dns_provider', 'challenge_type', 'email', 'account_id', 'created_at',
-        'ca_provider', 'ca_account_id',
+        'ca_provider', 'ca_account_id', 'imported_at', 'replaced_at',
     )
     _CSV_TRUNCATION_MARKER = '...'
 
@@ -602,6 +602,10 @@ class _AzureKeyVaultCertificateImporter:
         staging = metadata.get('staging')
         if staging is not None:
             tags['staging'] = 'true' if staging else 'false'
+        # The external marker survives a read from Key Vault: without it the
+        # certificate would come back looking like one a CA renews.
+        if metadata.get('external') is True:
+            tags['external'] = 'true'
         san_domains = metadata.get('san_domains') or []
         if san_domains:
             csv = ','.join(str(d) for d in san_domains)
@@ -624,6 +628,8 @@ class _AzureKeyVaultCertificateImporter:
         }
         if 'staging' in tags:
             metadata['staging'] = tags['staging'] == 'true'
+        if tags.get('external') == 'true':
+            metadata['external'] = True
         san_csv = tags.get('san_domains')
         if san_csv:
             was_truncated = san_csv.endswith(cls._CSV_TRUNCATION_MARKER)

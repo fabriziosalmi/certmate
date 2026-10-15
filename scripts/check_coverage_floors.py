@@ -59,6 +59,7 @@ FLOORS = {
     # than 84 leaves room for a collector added without its own test to be a
     # review comment instead of a red gate.
     'modules/api/resources_health.py': 80,
+    'modules/api/resources_import.py': 85,
     # 80 -> 85 on 2026-09-23, measured 87.7%. The domain-health resource
     # arrived and took the module below 80, which is the gate working; what
     # brought it back was tests through the app for the new endpoint's scope
@@ -130,6 +131,7 @@ FLOORS = {
     'modules/core/cert_adopt.py': 95,
     'modules/core/cert_discovery.py': 95,
     'modules/core/cert_inventory.py': 95,
+    'modules/core/cert_import.py': 90,
     'modules/core/cert_jobs.py': 90,
     'modules/core/cert_labels.py': 95,
     'modules/core/cert_probe.py': 80,

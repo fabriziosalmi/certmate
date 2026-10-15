@@ -134,7 +134,9 @@ def test_nothing_is_left_that_silently_substitutes_a_ca():
     today, and the harm is about a provider nobody remembered to check."""
     import inspect
 
-    source = inspect.getsource(CertificateManager._resolve_ca)
+    from modules.core.ca_manager import resolve_ca_account
+
+    source = inspect.getsource(resolve_ca_account)
     handler = source[source.index('except Exception'):]
     assert "ca_provider = 'letsencrypt" not in handler, (
         'the CA is reassigned while handling a failure to load its config; '

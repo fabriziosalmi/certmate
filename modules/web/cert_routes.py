@@ -3,16 +3,72 @@ import zipfile
 import tempfile
 import os
 from flask import request, jsonify, send_file, after_this_request
+from cryptography import x509
+from cryptography.exceptions import UnsupportedAlgorithm
 
-from ..core.certificates import DomainOperationInProgress
-from ..core.cert_service import CertificateService, DomainOutOfScope
+from ..core.certificates import DomainOperationInProgress, ExternalCertificate
+from ..core.cert_service import CertificateNamesTaken, CertificateService, DomainOutOfScope, EmailNotConfigured
 from ..core.audit_context import audit_context_from_request
+from ..core.cert_import import (
+    INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError, preview_import_certificate,
+    validate_import_bundle, validate_import_renewability,
+)
 from modules.core.auth import not_for_domain_restricted_keys
 from modules.core.request_fields import json_booleans
 from modules.core.structured_logging import scrub_log_value
 
 
 logger = logging.getLogger(__name__)
+
+
+def _batch_email_refusal(cert_service, settings, data):
+    try:
+        cert_service.resolve_ca_email(
+            settings, data.get('ca_provider') or settings.get('default_ca', 'letsencrypt'),
+            data.get('ca_account_id'))
+    except EmailNotConfigured:
+        return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
+    except ValueError as error:
+        logger.info('Batch CA configuration rejected: %s', scrub_log_value(error))
+        return jsonify({'error': 'The selected CA or CA account is not configured on this instance. '
+                        'Configure it in Settings, or choose one that is configured.'}), 400
+    return None
+
+
+def preview_certificate_import_web():
+    """Preview identity and optionally validate a bundle, without writes or issuance."""
+    if request.content_length and request.content_length > 4 * MAX_IMPORT_PEM_BYTES:
+        return jsonify({'error': 'Certificate preview request is too large'}), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'A JSON object is required'}), 400
+    try:
+        result = preview_import_certificate(data.get('certificate'))
+        if data.get('chain') is not None or data.get('private_key') is not None:
+            bundle = validate_import_bundle(data.get('certificate'), data.get('chain'), data.get('private_key'))
+            validate_import_renewability(bundle)
+            result['validated'] = True
+        return jsonify(result)
+    except CertificateImportError as error:
+        return jsonify({'error': str(error)}), 400
+    except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
+        return jsonify({'error': INVALID_IMPORT_BUNDLE}), 400
+
+
+def _refusal(error):
+    """The answer to an issuing request this caller, or this certificate, does
+    not allow: a domain outside the key's scope, an external certificate, or a
+    name an external certificate covers. Fixed text: the web routes never
+    return an exception's."""
+    if isinstance(error, ExternalCertificate):
+        return jsonify({'error': 'This is an external certificate: CertMate stores and deploys it, '
+                                 'but does not issue, renew or reissue it.',
+                        'code': ExternalCertificate.code}), 409
+    if isinstance(error, CertificateNamesTaken):
+        return jsonify({'error': 'A name in this request is already covered by a certificate CertMate '
+                                 'manages, which CertMate does not renew.',
+                        'code': CertificateNamesTaken.code}), 409
+    return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
 
 
 def register_cert_routes(app, managers, require_web_auth, auth_manager,
@@ -26,6 +82,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
         certificate_manager, settings_manager, auth_manager,
         audit_logger=audit_logger, event_bus=managers.get('events'),
     )
+
+    app.add_url_rule('/api/web/certificates/import/preview', methods=['POST'],
+                     view_func=auth_manager.require_role('operator')(preview_certificate_import_web))
 
     # NOTE: only the /api/web/... path is registered here. The bare
     # /api/certificates/create is owned by the flask-restx CreateCertificate
@@ -56,8 +115,8 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 audit_ctx=audit_context_from_request(),
             )
             return jsonify(result)
-        except DomainOutOfScope:
-            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+        except (DomainOutOfScope, ExternalCertificate, CertificateNamesTaken) as error:
+            return _refusal(error)
         except FileExistsError:
             # "Already exists" is a distinct, expected condition — 409 with a
             # reissue hint, not a generic 400 (matches the flask-restx path).
@@ -92,8 +151,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Batch size limit exceeded: maximum 50 domains per request'}), 400
 
             settings = settings_manager.load_settings()
-            if not settings.get('email'):
-                return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
+            refusal = _batch_email_refusal(cert_service, settings, data)
+            if refusal:
+                return refusal
 
             # Each domain through the service's own create steps (account,
             # scope, audit, event), registered in ONE settings write (#666,
@@ -248,8 +308,8 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 'message': result.get('message', 'Certificate renewed successfully'),
                 'renewed': bool(result.get('renewed', True)),
             })
-        except DomainOutOfScope:
-            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+        except (DomainOutOfScope, ExternalCertificate, CertificateNamesTaken) as error:
+            return _refusal(error)
         except FileNotFoundError as e:
             logger.info("Certificate renewal target not found: %s", e)
             return jsonify({'error': 'Certificate not found'}), 404

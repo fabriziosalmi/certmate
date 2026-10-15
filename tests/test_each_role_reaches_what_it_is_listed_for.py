@@ -77,8 +77,9 @@ OPERATOR_READS = VIEWER_READS | {'GET /api/certificates/jobs', 'GET /api/certifi
     f'{BUNDLE}?{form}' for form in KEY_BEARING_FORMS}
 
 OPERATOR_ACTS = VIEWER_ACTS | {
-    'POST /api/certificates/create', 'POST /api/certificates/<X>/renew',
-    'POST /api/certificates/<X>/reissue', 'POST /api/certificates/reissue-keyless',
+    'POST /api/certificates/create', 'POST /api/certificates/import', 'POST /api/certificates/<X>/renew',
+    'POST /api/certificates/<X>/reissue', 'POST /api/certificates/<X>/replace',
+    'POST /api/certificates/reissue-keyless',
     'PATCH /api/certificates/<X>', 'PUT /api/certificates/<X>/auto-renew',
     'POST /api/client-certs/create', 'POST /api/client-certs/batch',
     'POST /api/client-certs/<X>/renew',
