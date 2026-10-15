@@ -128,6 +128,26 @@ def test_an_external_certificate_reads_as_one(instance):
     assert cert['auto_renew'] is False
 
 
+def test_an_external_certificate_is_never_due_for_a_renewal(instance):
+    """A day from expiry a renewed certificate is long past its renewal
+    instant. An external one has none: nothing renews it, and a client told
+    "renews at" or "needs renewal" would wait for a renewal that never comes."""
+    assert instance.post(external(make_bundle(names=(EXT,), start=-60, end=1))).status_code == 201
+    cert = instance.client.get(f'/api/certificates/{EXT}', headers=instance.headers).get_json()
+    assert cert['renews_at'] is None
+    assert cert['needs_renewal'] is False
+    assert cert['days_left'] <= 1
+
+
+def test_a_missing_key_still_needs_attention(instance):
+    import_external(instance)
+    (instance.cert_root / EXT / 'privkey.pem').unlink()
+    instance.certs._invalidate_certificate_info_cache(EXT)
+    cert = instance.client.get(f'/api/certificates/{EXT}', headers=instance.headers).get_json()
+    assert cert['renews_at'] is None
+    assert cert['needs_renewal'] is True
+
+
 @pytest.mark.parametrize('field,value', [
     ('ca_provider', 'sectigo'), ('ca_account_id', 'paid'), ('challenge_type', 'dns-01'),
     ('dns_provider', 'cloudflare'), ('account_id', 'dns-prod'), ('domain_alias', 'alias.example.net'),

@@ -234,7 +234,8 @@ def create_api_models(api):
                 'Whether the certificate needs renewing: true from renews_at '
                 'on, or now when its private key is missing or does not match. '
                 'Since API contract 2.40 decided by the same rule the renewal '
-                'sweep acts on.'
+                'sweep acts on. For an external certificate, only the key '
+                'counts (2.47).'
             )),
         'acme_profile': fields.String(
             description=(
@@ -254,8 +255,9 @@ def create_api_models(api):
                 'with a Z: the threshold where it is at most half the lifetime, '
                 'otherwise a third of the lifetime (half under 10 days), or the '
                 "CA's recorded ARI window, never with less than a sixth of the "
-                'lifetime left. Null when the certificate could not be parsed. '
-                'Added in API contract 2.40.'
+                'lifetime left. Null when the certificate could not be parsed, '
+                'and for an external certificate, which CertMate never renews '
+                '(2.47). Added in API contract 2.40.'
             )),
         'usable': fields.Boolean(
             description=(

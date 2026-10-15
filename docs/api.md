@@ -447,6 +447,9 @@ refused the same way rather than risk a duplicate.
 Returns **201** with `domain`, `san_domains`, `external: true` and an optional
 `storage_warning`. The certificate reads with `external: true`, `auto_renew:
 false`, and `null` CA and DNS fields; its `renewal_info` status is `external`.
+Since API contract **2.47** its `renews_at` is `null`, since nothing renews it,
+and `needs_renewal` is `true` only when its private key is missing or does not
+match.
 `certificate_created` is published with `imported: true` and `external: true`.
 
 Afterwards, every path that would ask a CA for it answers **409**

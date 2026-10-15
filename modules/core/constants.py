@@ -670,7 +670,9 @@ METADATA_SCHEMA_VERSION = 1
 #                                   replace puts an uploaded bundle in place of
 #                                   an external certificate and announces it as
 #                                   certificate_renewed (replaced: true).
-#                                   Certificate reads gain replaced_at.
+#                                   Certificate reads gain replaced_at. An
+#                                   external certificate reads with renews_at
+#                                   null and needs_renewal only for its key.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the

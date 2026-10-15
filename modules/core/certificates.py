@@ -2683,10 +2683,13 @@ class CertificateManager:
                 # listing path never fetches the key, so only a key we looked
                 # for and did not find (or one that does not match) forces
                 # attention here.
-                'needs_renewal': (now_utc >= renew_instant
+                # An external certificate has no renewal: nothing here renews
+                # it, so it has no instant to report and is never due, though
+                # a key that is gone or wrong still needs attention now.
+                'needs_renewal': ((not external and now_utc >= renew_instant)
                                   or key_state in ('missing', 'mismatched')),
                 # The instant the sweep renews it at, so a client is told when, not only whether.
-                'renews_at': renewal_policy.stamp(renew_instant),
+                'renews_at': None if external else renewal_policy.stamp(renew_instant),
                 'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
                 'reissue_required': self._reissue_required(domain, key_state),
