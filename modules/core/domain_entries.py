@@ -69,6 +69,17 @@ def entry_auto_renew(raw: Any) -> bool:
     return True
 
 
+def entry_external(raw: Any) -> bool:
+    """Whether this entry registers an external certificate: one CertMate stores
+    and deploys, and never issues, renews or reissues.
+
+    Absent means not external, in both spellings. The certificate's metadata
+    carries the same marker; see ``CertificateManager.is_external`` for why the
+    two are kept and either one is enough.
+    """
+    return isinstance(raw, dict) and raw.get('external') is True
+
+
 def normalize_entry(raw: Any) -> Optional[dict]:
     """One entry in the object form, or None if it is not an entry at all.
 

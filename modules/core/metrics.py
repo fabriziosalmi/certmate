@@ -494,6 +494,10 @@ class CertMateMetricsCollector:
                     # (renewal_policy, #393), which the certificate's answer
                     # carries; now when it is already due.
                     renews_at = renewal_policy.parse_instant(cert_info.get('renews_at'))
+                    if cert_info.get('external'):
+                        # Nothing here renews an external certificate, so there
+                        # is no next renewal to report.
+                        renews_at = None
                     if renews_at is not None:
                         certificate_next_renewal.labels(
                             domain=domain,

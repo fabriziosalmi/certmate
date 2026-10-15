@@ -16,6 +16,7 @@ denial can be audited here and raised as :class:`DomainOutOfScope`, which the
 adapters map to HTTP 403.
 """
 import logging
+import threading
 import time
 from cryptography import x509
 from cryptography.exceptions import UnsupportedAlgorithm
@@ -25,12 +26,13 @@ from . import acme_profiles
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
-from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError,
+from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError, validate_external_identity,
                           validate_import_bundle, validate_import_renewability)
 from .utils import utc_now_iso, validate_domain, validate_key_options
 from .domain_paths import certificate_dir
 from .domain_entries import entry_domain, normalize_entry
-from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS
+from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS, CertificateNamesUnknown
+from .inventory_sources import collect_domain_sources
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,43 @@ def _checked_profile(value):
     if not ok:
         raise ValueError(profile)
     return profile
+
+# Serialises the external imports' check that their names are free with
+# storing them, so two imports sharing a name cannot both pass the check. Imports
+# are rare and brief, so one lock for all of them costs nothing. It does not
+# cover an ACME issuance in flight, whose SANs are on record only once it
+# completes; that window is the one #854's name reservation would close.
+_EXTERNAL_IMPORT_LOCK = threading.Lock()
+
+# The fields that configure renewal through a CA. An external certificate has
+# none, and sending one with it is refused rather than ignored.
+_RENEWAL_FIELDS = ('ca_provider', 'ca_account_id', 'challenge_type', 'dns_provider',
+                   'account_id', 'domain_alias', 'alias_dns_provider', 'acme_profile')
+
+
+class CertificateNamesTaken(ValueError):
+    """An import names a DNS name a certificate CertMate manages already covers,
+    as its primary name or a SAN.
+
+    The message lists only the import's own names, which the caller sent and
+    passed the scope check for. It never names the other certificate, which may
+    be outside a scoped key's domains. ``unknown`` is the fail-closed case: the
+    names of a managed certificate could not be read, so nothing proves the
+    import's names are free.
+    """
+    code = 'NAMES_ALREADY_MANAGED'
+
+    def __init__(self, names=(), *, unknown=False):
+        self.names = list(names)
+        self.unknown = unknown
+        if unknown:
+            message = ('CertMate could not read the names of every certificate it manages, '
+                       'so it cannot confirm these names are free. The server log names the certificate.')
+        else:
+            message = ('These names are already covered by a certificate CertMate manages: '
+                       + ', '.join(self.names))
+        super().__init__(message)
+
 
 class DomainOutOfScope(PermissionError):
     """Raised when a scoped API key's ``allowed_domains`` does not cover the
@@ -307,6 +346,10 @@ class CertificateService:
             san_clean = san.strip() if isinstance(san, str) else ''
             if san_clean:
                 self._enforce_scope(san_clean, 'create_san', user, ip_address)
+        # A create over an external certificate is refused as that, here so an
+        # async request does not answer 202 first. The manager refuses it again
+        # under the lock.
+        self._certs.refuse_external(domain)
 
         # Key-option validation runs after the scope checks so its
         # field-specific messages never reach a caller who could not see the
@@ -427,8 +470,19 @@ class CertificateService:
                            dns_provider=None, account_id=None, ca_provider=None,
                            ca_account_id=None, challenge_type=None, domain_alias=None,
                            alias_dns_provider=None, acme_profile=None, auto_renew=True,
-                           user=None, ip_address=None, audit_ctx=None):
-        """Check, store and register an existing certificate, never issue one."""
+                           external=False, user=None, ip_address=None, audit_ctx=None):
+        """Check, store and register an existing certificate, never issue one.
+
+        ``external=True`` imports one no CA here renews; see :meth:`_import_external`.
+        """
+        if external:
+            return self._import_external(
+                certificate=certificate, chain=chain, private_key=private_key, domain=domain,
+                renewal={'dns_provider': dns_provider, 'account_id': account_id,
+                         'ca_provider': ca_provider, 'ca_account_id': ca_account_id,
+                         'challenge_type': challenge_type, 'domain_alias': domain_alias,
+                         'alias_dns_provider': alias_dns_provider, 'acme_profile': acme_profile},
+                auto_renew=auto_renew, user=user, ip_address=ip_address, audit_ctx=audit_ctx)
         try:
             bundle = validate_import_bundle(certificate, chain, private_key)
             bundle.update(validate_import_renewability(bundle))
@@ -438,13 +492,7 @@ class CertificateService:
             raise CertificateImportError(INVALID_IMPORT_BUNDLE) from None
         if not isinstance(auto_renew, bool):
             raise ValueError('auto_renew must be a boolean')
-        if domain is None or domain == '':
-            domain = bundle['names'][0]
-        if not isinstance(domain, str):
-            raise ValueError('Domain is required')
-        ok, normalized = validate_domain(domain.strip())
-        if not ok or normalized not in bundle['names']:
-            raise ValueError('Primary domain must be one of the certificate DNS names')
+        normalized = _primary_name(bundle['names'], domain)
         prepared = self.prepare_create(
             domain=normalized, san_domains=[n for n in bundle['names'] if n != normalized],
             dns_provider=dns_provider, account_id=account_id, ca_provider=ca_provider,
@@ -528,6 +576,105 @@ class CertificateService:
             'imported': True})
         return {'success': True, 'domain': normalized, 'san_domains': metadata['san_domains'],
                 'storage_warning': warning}
+
+    def _import_external(self, *, certificate, chain, private_key, domain, renewal,
+                         auto_renew, user, ip_address, audit_ctx):
+        """Store and register a certificate no CA here can renew (#1159).
+
+        CertMate keeps it, deploys it and warns before it expires, and never
+        issues, renews or reissues it: the owner replaces it. So nothing about a
+        CA is asked or accepted, and the checks are the bundle's integrity and
+        what CertMate needs to hold it, not whether it could issue the same.
+
+        Every name must be free: a name a managed certificate already covers,
+        as its primary name or a SAN, refuses the import, so an external
+        certificate never shares a name with one CertMate issues. The check and
+        the store run under one lock, so two imports sharing a name cannot both
+        pass.
+        """
+        sent = sorted(k for k in _RENEWAL_FIELDS if renewal.get(k) not in (None, ''))
+        if sent:
+            raise ValueError('An external certificate has no CA, so it takes no renewal '
+                             'configuration: remove ' + ', '.join(sent))
+        if auto_renew is not False:
+            raise ValueError('An external certificate is never renewed by CertMate: '
+                             'auto_renew must be false')
+        try:
+            bundle = validate_import_bundle(certificate, chain, private_key)
+            bundle.update(validate_external_identity(bundle))
+        except CertificateImportError:
+            raise
+        except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
+            raise CertificateImportError(INVALID_IMPORT_BUNDLE) from None
+        normalized = _primary_name(bundle['names'], domain)
+        self._enforce_scope(normalized, 'import', user, ip_address)
+        for name in bundle['names']:
+            if name != normalized:
+                self._enforce_scope(name, 'import_san', user, ip_address)
+        san_domains = [n for n in bundle['names'] if n != normalized]
+        # The marker, and nothing that names a CA: a missing CA means "the
+        # default CA" on every issuing path, which is why CertificateManager
+        # also refuses on the settings entry's marker.
+        metadata = {'domain': normalized, 'san_domains': san_domains, 'external': True,
+                    'email': None, 'ca_provider': None, 'ca_account_id': None,
+                    'challenge_type': None, 'dns_provider': None, 'account_id': None,
+                    'domain_alias': None, 'alias_dns_provider': None, 'acme_profile': None,
+                    'auto_renew': False}
+        metadata.update(bundle['key_options'], created_at=bundle['created_at'],
+                        imported_at=utc_now_iso())
+        with _EXTERNAL_IMPORT_LOCK:
+            taken = self._names_already_managed(bundle['names'])
+            if taken:
+                raise CertificateNamesTaken(taken)
+            with self._certs.domain_lock(normalized):
+                warning = self._certs.store_imported_certificate(normalized, bundle['files'], metadata)
+                try:
+                    if not self._settings.update(_add_external_entry(normalized), 'certificate_imported'):
+                        raise RuntimeError('Registration was not saved')
+                except (OSError, RuntimeError):
+                    # The files stay, as for any import, and their metadata
+                    # marks them external, so nothing renews them meanwhile.
+                    self._audit_emit(audit_ctx, 'import', normalized, 'failure',
+                                     error='Certificate stored but registration failed')
+                    raise RuntimeError('Certificate imported, but registering it in settings failed. '
+                                       'The certificate files are preserved and marked external, '
+                                       'so nothing renews them.') from None
+        self._audit_emit(audit_ctx, 'import', normalized, 'success', details={
+            'external': True, 'san_count': len(san_domains)})
+        self._publish('certificate_created', {
+            'domain': normalized, 'san_domains': san_domains, 'dns_provider': None,
+            'ca_provider': None, 'imported': True, 'external': True})
+        return {'success': True, 'domain': normalized, 'san_domains': san_domains,
+                'external': True, 'storage_warning': warning}
+
+    def _names_already_managed(self, names):
+        """The import's names a managed certificate already covers.
+
+        Exact names, compared without case or a trailing dot. A wildcard
+        conflicts only with the same wildcard: a wildcard and a name it matches
+        are two certificates today, and #854 keeps that possible. A registered
+        name with nothing on disk covers only itself, since settings record no
+        SANs. A certificate whose names cannot be read refuses the import
+        rather than letting it through on the names that could be read.
+        """
+        wanted = {_name_key(n): n for n in names}
+        settings = self._settings.load_settings()
+        taken = []
+        for source in collect_domain_sources(settings, self._certs.cert_dir).values():
+            if not source.on_disk:
+                covered = [source.domain]
+            else:
+                try:
+                    covered = self._certs.names_covered(source.domain)
+                except CertificateNamesUnknown:
+                    logger.warning("Refused an import: the names covered by %s could not be read",
+                                   _scrub_log(source.domain))
+                    raise CertificateNamesTaken(unknown=True) from None
+            for name in covered:
+                key = _name_key(name)
+                if key in wanted and wanted[key] not in taken:
+                    taken.append(wanted[key])
+        return taken
 
     def create_batch(self, *, domains, dns_provider=None, account_id=None,
                      ca_provider=None, ca_account_id=None, challenge_type=None,
@@ -880,6 +1027,9 @@ class CertificateService:
             )
 
         metadata = self._certs._load_metadata(domain)
+        # Refused before anything is resolved: with no CA recorded, the
+        # resolution below would pick the default CA and reissue from it.
+        self._certs.refuse_external(domain, metadata=metadata)
         dns_provider_was_named = dns_provider is not None
         dns_account_was_named = account_id is not None
 
@@ -1069,6 +1219,9 @@ class CertificateService:
         :meth:`issue_renew`.
         """
         self._enforce_certificate_scope(domain, 'renew', user, ip_address)
+        # Here as well as in the manager, so an async request is refused at
+        # once instead of answering 202 and failing in the job.
+        self._certs.refuse_external(domain)
         return {'domain': domain, '_audit_ctx': audit_ctx}
 
     def issue_renew(self, prepared, *, force=False):
@@ -1127,6 +1280,47 @@ class CertificateService:
             metadata = {}
         self._certs._record_renewal_metrics(
             domain, metadata, success, time.monotonic() - started, error=error)
+
+
+def _primary_name(names, requested):
+    """The import's primary name: the one requested, normalised, which must be
+    one of the certificate's DNS names; the first of them when none is asked for."""
+    if requested is None or requested == '':
+        requested = names[0]
+    if not isinstance(requested, str):
+        raise ValueError('Domain is required')
+    ok, normalized = validate_domain(requested.strip())
+    if not ok or normalized not in names:
+        raise ValueError('Primary domain must be one of the certificate DNS names')
+    return normalized
+
+
+def _name_key(name):
+    """A DNS name as compared for a collision: no case, no trailing dot."""
+    return name.strip().rstrip('.').casefold()
+
+
+def _add_external_entry(domain):
+    """The settings entry of an external certificate, as one mutator.
+
+    No DNS provider, since none validates it; auto-renew off; and the marker,
+    which together with the certificate's metadata keeps every issuing path
+    off it (see CertificateManager.is_external).
+    """
+    entry = {'domain': domain, 'dns_provider': None, 'dns_account_id': None,
+             'auto_renew': False, 'external': True}
+
+    def _add(settings):
+        domains_list = settings.get('domains', []) or []
+        for index, existing in enumerate(domains_list):
+            if entry_domain(existing) == domain:
+                domains_list[index] = {**normalize_entry(existing), **entry}
+                break
+        else:
+            domains_list.append(dict(entry))
+        settings['domains'] = domains_list
+
+    return _add
 
 
 def _add_domain_entry(prepared):

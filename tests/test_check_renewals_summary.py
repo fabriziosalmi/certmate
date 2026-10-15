@@ -84,6 +84,9 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         'reissue_required': 0,
         'auto_reissued': 0,
         'early_forced': 0, 'early_deferred': 0,
+        # Imported as external (#1159): no CA here renews them, so they are
+        # counted apart from the certificates someone switched off. None here.
+        'external': 0,
     }
     # The sweep also reports its own shape now — how long it took and how many
     # entries it looked at — so an instance that is slowly outgrowing its

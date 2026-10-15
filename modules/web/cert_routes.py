@@ -6,7 +6,7 @@ from flask import request, jsonify, send_file, after_this_request
 from cryptography import x509
 from cryptography.exceptions import UnsupportedAlgorithm
 
-from ..core.certificates import DomainOperationInProgress
+from ..core.certificates import DomainOperationInProgress, ExternalCertificate
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import (
@@ -39,6 +39,16 @@ def preview_certificate_import_web():
         return jsonify({'error': str(error)}), 400
     except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
         return jsonify({'error': INVALID_IMPORT_BUNDLE}), 400
+
+
+def _refusal(error):
+    """The answer to an issuing request this caller, or this certificate, does
+    not allow: a domain outside the key's scope, or an external certificate."""
+    if isinstance(error, ExternalCertificate):
+        return jsonify({'error': 'This is an external certificate: CertMate stores and deploys it, '
+                                 'but does not issue, renew or reissue it.',
+                        'code': ExternalCertificate.code}), 409
+    return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
 
 
 def register_cert_routes(app, managers, require_web_auth, auth_manager,
@@ -85,8 +95,8 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 audit_ctx=audit_context_from_request(),
             )
             return jsonify(result)
-        except DomainOutOfScope:
-            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+        except (DomainOutOfScope, ExternalCertificate) as error:
+            return _refusal(error)
         except FileExistsError:
             # "Already exists" is a distinct, expected condition — 409 with a
             # reissue hint, not a generic 400 (matches the flask-restx path).
@@ -277,8 +287,8 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 'message': result.get('message', 'Certificate renewed successfully'),
                 'renewed': bool(result.get('renewed', True)),
             })
-        except DomainOutOfScope:
-            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+        except (DomainOutOfScope, ExternalCertificate) as error:
+            return _refusal(error)
         except FileNotFoundError as e:
             logger.info("Certificate renewal target not found: %s", e)
             return jsonify({'error': 'Certificate not found'}), 404

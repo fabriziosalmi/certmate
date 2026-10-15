@@ -205,10 +205,50 @@ def validate_import_renewability(bundle):
     ok, error = validate_key_options(shape['key_type'], shape.get('key_size'), shape.get('elliptic_curve'))
     if not ok:
         raise CertificateImportError(error)
+    names = _dns_names(cert, non_dns='Only DNS names are supported for automatic renewal',
+                       unusable='Certificate contains a DNS name CertMate cannot renew')
+    return {'names': names, 'key_options': shape}
+
+
+# The curves an external certificate may use. Wider than what CertMate issues
+# (P-521 is here), because the vendor chose the key, and still only the curves
+# the key-state check, the PFX writer and Azure Key Vault all handle.
+_EXTERNAL_CURVES = frozenset({'secp256r1', 'secp384r1', 'secp521r1'})
+
+
+def validate_external_identity(bundle):
+    """Check that an external certificate can be identified and served.
+
+    No CA renews it, so nothing here asks whether CertMate could issue the same
+    shape. What remains is what the rest of CertMate needs to hold it: DNS names
+    to file it under and to check scope against, and a key the key-state check,
+    the downloads and the storage backends can handle. RSA from 2048 bits, of
+    any length a vendor issues, and the three NIST curves.
+    """
+    key = bundle['private_key']
+    if isinstance(key, rsa.RSAPrivateKey):
+        if key.key_size < 2048:
+            raise CertificateImportError('RSA keys shorter than 2048 bits are not accepted')
+        shape = {'key_type': 'rsa', 'key_size': key.key_size}
+    elif isinstance(key, ec.EllipticCurvePrivateKey):
+        if key.curve.name not in _EXTERNAL_CURVES:
+            raise CertificateImportError('Only the P-256, P-384 and P-521 curves are supported')
+        shape = {'key_type': 'ecdsa', 'elliptic_curve': key.curve.name}
+    else:
+        raise CertificateImportError('Only RSA and ECDSA keys are supported')
+    names = _dns_names(bundle['certificate'],
+                       non_dns='Only DNS names are supported for an external certificate',
+                       unusable='Certificate contains a DNS name CertMate cannot use')
+    return {'names': names, 'key_options': shape}
+
+
+def _dns_names(cert, *, non_dns, unusable):
+    """The certificate's DNS names, normalised, primary first; refused with the
+    caller's wording when a name is not DNS or not usable as a certificate name."""
     try:
         san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
         if any(not isinstance(name, x509.DNSName) for name in san):
-            raise CertificateImportError('Only DNS names are supported for automatic renewal')
+            raise CertificateImportError(non_dns)
         names = san.get_values_for_type(x509.DNSName)
     except x509.ExtensionNotFound:
         names = [a.value for a in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
@@ -218,7 +258,7 @@ def validate_import_renewability(bundle):
     for name in names:
         ok, domain = validate_domain(name)
         if not ok or domain != name.lower().rstrip('.'):
-            raise CertificateImportError('Certificate contains a DNS name CertMate cannot renew')
+            raise CertificateImportError(unusable)
         if domain not in normalized:
             normalized.append(domain)
-    return {'names': normalized, 'key_options': shape}
+    return normalized

@@ -119,7 +119,10 @@ class ExpiryWatch:
             if not info or not info.get('exists'):
                 continue
             days_left = info.get('days_left')
-            auto_renew = auto_renew_for(settings, domain)
+            # An external certificate is never renewed here, whatever its entry
+            # says or whether it still has one: warned as early as one with
+            # auto-renew off, since only its owner can replace it.
+            auto_renew = auto_renew_for(settings, domain) and not info.get('external')
             margin = renewal_policy.margin_days(info)
             threshold = due_threshold(days_left, thresholds_for_certificate(
                 auto_renew, threshold_days if margin is None else margin))

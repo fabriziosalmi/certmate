@@ -8,8 +8,8 @@ from flask_restx import Resource
 
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError
-from ..core.cert_service import DomainOutOfScope
-from ..core.certificates import DomainOperationInProgress
+from ..core.cert_service import CertificateNamesTaken, DomainOutOfScope
+from ..core.certificates import DomainOperationInProgress, ExternalCertificate
 from ..core.request_fields import json_bool
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,8 @@ def create_import_resources(api, models, ctx):
         @api.doc(security='Bearer', responses={
             201: 'Certificate imported without issuance',
             400: 'Invalid certificate bundle or renewal configuration',
-            409: 'Certificate already exists or an operation is in progress'})
+            409: 'Certificate already exists, an operation is in progress, or a name is '
+                 'already covered by a managed certificate (NAMES_ALREADY_MANAGED)'})
         @api.expect(models['import_cert_model'])
         @ctx.auth.require_role('operator')
         def post(self):
@@ -29,13 +30,22 @@ def create_import_resources(api, models, ctx):
             The CA/account/challenge selection applies to the next renewal,
             not to validation of the certificate's current issuer. No ACME
             request is made on import. Existing certificates are not replaced.
+
+            With ``external: true`` the certificate has no CA at all: CertMate
+            stores, deploys and watches it and never renews it, and none of the
+            renewal fields may be sent.
             """
             if request.content_length and request.content_length > 4 * MAX_IMPORT_PEM_BYTES:
                 return {'error': 'Certificate import request is too large', 'code': 'REQUEST_TOO_LARGE'}, 413
             data = api.payload
             if not isinstance(data, dict):
                 return {'error': 'A JSON object is required', 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
-            auto_renew, error = json_bool(data, 'auto_renew', default=True)
+            external, error = json_bool(data, 'external', default=False)
+            if error:
+                return {'error': error, 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
+            # Absent means on for a certificate a CA renews, and off for an
+            # external one; sent as true with external, the service refuses it.
+            auto_renew, error = json_bool(data, 'auto_renew', default=not external)
             if error:
                 return {'error': error, 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
             config_keys = ('domain', 'dns_provider', 'account_id', 'ca_provider',
@@ -47,7 +57,7 @@ def create_import_resources(api, models, ctx):
                 result = ctx.cert_service.import_certificate(
                     certificate=data.get('certificate'), chain=data.get('chain'),
                     private_key=data.get('private_key'),
-                    auto_renew=auto_renew,
+                    auto_renew=auto_renew, external=external,
                     **{k: data.get(k) for k in config_keys},
                     user=getattr(request, 'current_user', None) or {},
                     ip_address=request.remote_addr, audit_ctx=audit_context_from_request())
@@ -61,6 +71,8 @@ def create_import_resources(api, models, ctx):
                         'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
             except CertificateImportError as e:
                 return {'error': str(e), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
+            except (CertificateNamesTaken, ExternalCertificate) as e:
+                return {'error': str(e), 'code': e.code}, 409
             except ValueError as e:
                 return {'error': str(e), 'code': 'INVALID_CERTIFICATE_IMPORT'}, 400
             except (x509.DuplicateExtension, UnsupportedAlgorithm):

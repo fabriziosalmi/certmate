@@ -167,7 +167,7 @@ def create_api_models(api):
     renewal_info_model = api.model('RenewalInfo', {
         'status': fields.String(
             enum=['window', 'unsupported', 'unavailable', 'no_identifier',
-                  'disabled', 'imported'],
+                  'disabled', 'imported', 'external'],
             description=(
                 "'window': the CA answered with a renewal window. "
                 "'unsupported': it publishes no renewalInfo, which will not "
@@ -175,7 +175,9 @@ def create_api_models(api):
                 "usable answer. 'no_identifier': the certificate has no "
                 "Authority Key Identifier to name it by. 'disabled': "
                 "ari_enabled is false, so nothing is asked. 'imported': the configured "
-                "CA is for future renewal, not the current issuer, so nothing is asked.")),
+                "CA is for future renewal, not the current issuer, so nothing is asked. "
+                "'external': the certificate was imported with no CA and CertMate never "
+                "renews it, so nothing is asked.")),
         'checked_at': fields.String(
             description='When the sweep asked, RFC 3339 UTC with Z.'),
         'window_start': fields.String(
@@ -304,6 +306,9 @@ def create_api_models(api):
             'CA account used at issuance, or selected for renewal of an imported certificate')),
         'imported_at': fields.String(description=(
             'When the currently served certificate was imported, ISO 8601; null after it is replaced by issuance')),
+        'external': fields.Boolean(description=(
+            'Imported with no CA: CertMate stores, deploys and watches it, and never issues, '
+            'renews or reissues it. Renew, reissue and enabling auto-renew answer 409 EXTERNAL_CERTIFICATE.')),
         'challenge_type': fields.String(description=(
             'Challenge used at issuance, or selected for renewal of an imported certificate (from metadata)')),
         'account_id': fields.String(description='DNS provider account used at issuance (from metadata)'),
@@ -401,8 +406,14 @@ def create_api_models(api):
     })
 
     import_cert_model = api.model('ImportCertificate', {
+        'external': fields.Boolean(default=False, description=(
+            'Import a certificate no CA here can renew: CertMate stores, deploys and watches it, and never '
+            'issues, renews or reissues it. No renewal field may be sent with it, and auto_renew must be '
+            'absent or false. Refused with 409 NAMES_ALREADY_MANAGED when any of its names is already '
+            'covered by a certificate CertMate manages.')),
         'auto_renew': fields.Boolean(default=True, description=(
-            'Enable automatic renewal; false keeps the imported certificate until manual action')),
+            'Enable automatic renewal; false keeps the imported certificate until manual action. '
+            'Defaults to false, and must stay false, for an external certificate')),
         'domain': fields.String(description='Optional primary identity; defaults to the first DNS name in the certificate'),
         'certificate': fields.String(required=True, description='One leaf certificate in PEM format (max 64 KiB)'),
         'chain': fields.String(required=True, description=(
