@@ -91,12 +91,25 @@
                             Import an existing certificate
                         </label>
                         <div id="certificateImportFiles" class="hidden space-y-3">
-                            <p class="text-sm text-muted">No certificate will be issued now. Names and key type are read from the certificate. Select the CA, account and challenge below for its next renewal, under the normal renewal policy.</p>
-                            <label class="flex items-center gap-2 text-sm font-semibold text-label">
-                                <input id="importAutoRenew" type="checkbox" checked class="rounded border-border text-primary focus:ring-primary">
-                                Automatically renew this certificate
-                            </label>
-                            <p class="text-xs text-muted">Enabled: a certificate already due may renew at the next sweep, with the CA's normal fees. Disable to keep it until a manual renewal.</p>
+                            <p class="text-sm text-muted">No certificate will be issued now. Names and key type are read from the certificate.</p>
+                            <fieldset class="space-y-2">
+                                <legend class="text-sm font-semibold text-label">Renewal</legend>
+                                <label class="flex items-start gap-2 text-sm text-label">
+                                    <input id="importRenewalCa" type="radio" name="import_renewal" value="ca" checked data-change="toggleCertificateImport" class="mt-0.5 border-border text-primary focus:ring-primary">
+                                    <span>Through a CA configured here. Select the CA, account and challenge below for its next renewal, under the normal renewal policy.</span>
+                                </label>
+                                <label class="flex items-start gap-2 text-sm text-label">
+                                    <input id="importRenewalExternal" type="radio" name="import_renewal" value="external" data-change="toggleCertificateImport" class="mt-0.5 border-border text-primary focus:ring-primary">
+                                    <span>Not by CertMate: an external certificate. CertMate stores, deploys and watches it, and warns before it expires. You replace it by uploading the next one.</span>
+                                </label>
+                            </fieldset>
+                            <div id="importAutoRenewOption" class="space-y-1">
+                                <label class="flex items-center gap-2 text-sm font-semibold text-label">
+                                    <input id="importAutoRenew" type="checkbox" checked class="rounded border-border text-primary focus:ring-primary">
+                                    Automatically renew this certificate
+                                </label>
+                                <p class="text-xs text-muted">Enabled: a certificate already due may renew at the next sweep, with the CA's normal fees. Disable to keep it until a manual renewal.</p>
+                            </div>
                             <div class="grid grid-cols-3 gap-2 sm:gap-3">
                                 {% for id, label, icon, accept, description in [
                                     ('importCertificateFile', 'Certificate', 'fa-certificate', '.pem,.crt,.cer', 'Certificate (PEM, leaf only)'),
@@ -205,7 +218,7 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <div data-renewal-source>
                                 <label for="ca_provider_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-certificate mr-2 text-green-500"></i>
                                     Certificate Authority
@@ -231,7 +244,7 @@
                         </div>
                         
                         <div class="space-y-4">
-                            <div>
+                            <div data-renewal-source>
                                 <label for="challenge_type_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-shield-alt mr-2 text-teal-500"></i>
                                     Challenge Type
@@ -250,7 +263,7 @@
                                 </p>
                             </div>
 
-                            <div id="dns-provider-container">
+                            <div id="dns-provider-container" data-renewal-source>
                             <div>
                                 <label for="dns_provider_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-server mr-2 text-purple-500"></i>
@@ -314,8 +327,10 @@
                         </div>
                     </div>
                     
-                    <!-- Advanced Options (Collapsible) -->
-                    <div class="border-t border-border pt-6">
+                    <!-- Advanced Options (Collapsible). Hidden as a whole for an
+                         external import, whose inputs below are all either
+                         issuance-only or renewal source. -->
+                    <div class="border-t border-border pt-6" data-external-hidden>
                         <button type="button" data-click="toggleAdvancedOptions" id="advancedOptionsToggle"
                                 aria-expanded="false" aria-controls="advanced-options"
                                 class="flex items-center text-sm font-medium text-label hover:text-primary transition-colors duration-200">
@@ -342,7 +357,7 @@
                             </div>
 
                             <!-- DNS-01 Alias Mode -->
-                            <div class="mt-4">
+                            <div class="mt-4" data-renewal-source>
                                 <label for="dns_alias_domain" class="block text-sm font-medium text-label mb-1">
                                     <i class="fas fa-random mr-1 text-blue-500"></i>
                                     DNS-01 Alias Domain <span class="text-xs font-normal text-muted">(optional)</span>
@@ -407,7 +422,7 @@
                             </div>
 
                             <!-- ACME profile (#395) -->
-                            <div class="mt-4">
+                            <div class="mt-4" data-renewal-source>
                                 <label for="cert_acme_profile" class="block text-sm font-medium text-label mb-1">
                                     <i class="fas fa-hourglass-half mr-1 text-purple-500"></i>
                                     ACME Profile <span class="text-xs font-normal text-muted">(optional)</span>
