@@ -17,8 +17,8 @@ from flask_restx import Resource
 import logging
 
 from ..core.audit_context import audit_context_from_request
-from ..core.cert_service import DomainOutOfScope
-from ..core.certificates import DomainOperationInProgress
+from ..core.cert_service import CertificateNamesTaken, DomainOutOfScope
+from ..core.certificates import DomainOperationInProgress, ExternalCertificate
 from ..core.inventory_view import build_inventory_view, build_registrations_view, superseded_fingerprints
 from ..core.utils import ALREADY_RUNNING, utc_now_iso
 from .resource_context import (
@@ -240,6 +240,28 @@ def _inventory_domains_resource(api, ctx):
     return InventoryDomains
 
 
+def _adoption_plan(record, dns_mgr, ctx):
+    """The adoption plan, unavailable for a certificate CertMate must not
+    issue: one whose names an external certificate holds (#1159). The plan is
+    what the dashboard offers Adopt from, so it says why before the click.
+    """
+    from ..core.cert_adopt import build_adoption_plan
+    plan = build_adoption_plan(record, dns_mgr, ctx.managers.get('ca'))
+    svc = ctx.managers.get('cert_service')
+    conflict = svc.external_conflict(plan.get('domain'), plan.get('san_domains') or []) if svc else None
+    if conflict:
+        plan = {**plan, 'available': False, 'reason': conflict}
+    return plan
+
+
+def _adoption_conflict(error):
+    """409 for an adoption that collides with something: an operation already
+    running for the domain, or names an external certificate covers (#1159)."""
+    if isinstance(error, DomainOperationInProgress):
+        return {'error': 'An operation is already in progress for this domain'}, 409
+    return {'error': str(error), 'code': error.code}, 409
+
+
 def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
     """Build the inventory resources against *ctx*."""
 
@@ -455,7 +477,6 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
         def get(self, fingerprint):
             """Return the adoption plan for a discovered certificate: the
             pre-filled create parameters and whether adoption is possible."""
-            from ..core.cert_adopt import build_adoption_plan
             inventory = ctx.managers.get('cert_inventory')
             dns_mgr = ctx.managers.get('dns')
             if inventory is None or dns_mgr is None:
@@ -463,7 +484,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             record = inventory.get(fingerprint)
             if record is None or not _record_in_scope(record):
                 return {'error': 'Certificate not found in inventory'}, 404
-            return build_adoption_plan(record, dns_mgr, ctx.managers.get('ca'))
+            return _adoption_plan(record, dns_mgr, ctx)
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('operator')
@@ -471,7 +492,6 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             """Adopt a discovered certificate: issue/manage it from the observed
             metadata, then flag the inventory record managed. Refuses (400) when
             the domain cannot be validated (no DNS credentials / no email)."""
-            from ..core.cert_adopt import build_adoption_plan
             inventory = ctx.managers.get('cert_inventory')
             dns_mgr = ctx.managers.get('dns')
             svc = ctx.managers.get('cert_service')
@@ -482,7 +502,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
             if record is None or not _record_in_scope(record):
                 return {'error': 'Certificate not found in inventory'}, 404
 
-            plan = build_adoption_plan(record, dns_mgr, ctx.managers.get('ca'))
+            plan = _adoption_plan(record, dns_mgr, ctx)
             if not plan['available']:
                 return {'error': plan['reason'], 'code': 'ADOPTION_UNAVAILABLE'}, 400
 
@@ -519,8 +539,8 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                 )
             except DomainOutOfScope as e:
                 return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
-            except DomainOperationInProgress:
-                return {'error': 'An operation is already in progress for this domain'}, 409
+            except (DomainOperationInProgress, CertificateNamesTaken, ExternalCertificate) as e:
+                return _adoption_conflict(e)
             except ValueError as e:
                 return {'error': str(e)}, 400
             except Exception as e:

@@ -33,7 +33,8 @@ from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError, validat
 from .utils import utc_now_iso, validate_domain, validate_key_options
 from .domain_paths import certificate_dir
 from .domain_entries import entry_domain, entry_external, normalize_entry
-from .certificates import DNS_ALIAS_SUPPORTED_PROVIDERS, CertificateNamesUnknown, ReplacementRefused
+from .certificates import (DNS_ALIAS_SUPPORTED_PROVIDERS, CertificateNamesUnknown, ExternalCertificate,
+                           ReplacementRefused)
 from .inventory_sources import collect_domain_sources
 
 logger = logging.getLogger(__name__)
@@ -337,12 +338,13 @@ class CertificateService:
         # for something the CA will not deliver, so it is refused rather than
         # silently ignored — the certificate would come back different from
         # what the caller asked for, with nothing to say why (#599).
+        csr_names = None
         if csr_pem is not None:
-            self._check_csr(csr_pem, domain, san_domains=san_domains,
-                            key_type=key_type, key_size=key_size,
-                            elliptic_curve=elliptic_curve,
-                            scope_action='create_san',
-                            user=user, ip_address=ip_address)
+            csr_names = self._check_csr(csr_pem, domain, san_domains=san_domains,
+                                        key_type=key_type, key_size=key_size,
+                                        elliptic_curve=elliptic_curve,
+                                        scope_action='create_san',
+                                        user=user, ip_address=ip_address)
 
         # Scope: the primary AND every SAN must be in the key's
         # allowed_domains — a partial create would leak one tenant's domain
@@ -356,6 +358,7 @@ class CertificateService:
         # async request does not answer 202 first. The manager refuses it again
         # under the lock.
         self._certs.refuse_external(domain)
+        self._refuse_external_names(csr_names or [domain, *san_domains])
 
         # Key-option validation runs after the scope checks so its
         # field-specific messages never reach a caller who could not see the
@@ -739,6 +742,62 @@ class CertificateService:
         logger.error("Replaced %s, but its settings entry could not be restored; "
                      "its metadata still marks it external", _scrub_log(domain))
 
+    def external_conflict(self, domain, san_domains=()):
+        """Why CertMate must not issue a certificate for these names, or None:
+        the domain is an external certificate, or one of the names is covered
+        by one (#1159). Said rather than raised, for an adoption plan, which is
+        shown before anything is asked. A name that is not a domain is left to
+        the checks that refuse it.
+        """
+        ok, normalized = validate_domain(domain) if isinstance(domain, str) else (False, None)
+        if not ok:
+            return None
+        try:
+            self._certs.refuse_external(normalized)
+            self._refuse_external_names([normalized, *san_domains])
+        except (ExternalCertificate, CertificateNamesTaken) as refusal:
+            return str(refusal)
+        return None
+
+    def _refuse_external_names(self, names, owner=None):
+        """Refuse a certificate CertMate would issue that names what an
+        external certificate covers (#1159).
+
+        The other half of the import's rule: an external certificate takes no
+        name a managed one covers, and a create, reissue, adoption or import
+        through a CA takes none an external one covers. Names compare as they
+        do for the import, a wildcard only with the same wildcard. Only
+        external certificates count: two certificates CertMate issues may share
+        a name today (#854). *owner* is the certificate being reissued.
+
+        Not under the import lock: an issuance is long, and holding the lock
+        across it would stop every import for its duration. An external import
+        and a create of the same name started together can both pass; #854's
+        name reservation is what closes that.
+        """
+        wanted = {_name_key(n): n for n in names if isinstance(n, str) and n.strip()}
+        settings = self._settings.load_settings()
+        taken = []
+        for source in collect_domain_sources(settings, self._certs.cert_dir).values():
+            if source.domain == owner or not self._certs.is_external(source.domain, settings=settings):
+                continue
+            covered = [source.domain]
+            if source.on_disk:
+                try:
+                    covered = self._certs.names_covered(source.domain)
+                except CertificateNamesUnknown:
+                    # Its own name is still its own. Refusing every create
+                    # until it is readable would stop all issuance for one
+                    # unreadable file.
+                    logger.warning("The names covered by external certificate %s could not be read; "
+                                   "only its own name is protected", _scrub_log(source.domain))
+            for name in covered:
+                key = _name_key(name)
+                if key in wanted and wanted[key] not in taken:
+                    taken.append(wanted[key])
+        if taken:
+            raise CertificateNamesTaken(taken)
+
     def _names_already_managed(self, names, owner=None):
         """The import's names a managed certificate already covers.
 
@@ -811,6 +870,10 @@ class CertificateService:
             except DomainOutOfScope:
                 results.append({'domain': reason, 'success': False,
                                 'message': 'API key not authorized for this domain'})
+                continue
+            except (CertificateNamesTaken, ExternalCertificate):
+                results.append({'domain': reason, 'success': False,
+                                'message': 'A name is covered by an external certificate'})
                 continue
             except ValueError as e:
                 logger.info("Batch create rejected %s: %s", _scrub_log(reason), e)
@@ -1177,17 +1240,19 @@ class CertificateService:
             if san_clean:
                 self._enforce_scope(san_clean, 'reissue_san', user, ip_address)
 
+        csr_names = None
         if csr_pem is not None:
-            self._check_csr(csr_pem, domain,
-                            san_domains=san_domains if sans_were_named else None,
-                            key_type=key_type, key_size=key_size,
-                            elliptic_curve=elliptic_curve,
-                            scope_action='reissue_san',
-                            user=user, ip_address=ip_address)
+            csr_names = self._check_csr(csr_pem, domain,
+                                        san_domains=san_domains if sans_were_named else None,
+                                        key_type=key_type, key_size=key_size,
+                                        elliptic_curve=elliptic_curve,
+                                        scope_action='reissue_san',
+                                        user=user, ip_address=ip_address)
             # The CSR carries the names. Anything inherited from the previous
             # certificate would be added to what it asks for, which is not a
             # reissue of that CSR.
             san_domains = []
+        self._refuse_external_names(csr_names or [domain, *san_domains], owner=domain)
 
         if key_type is not None or key_size is not None or elliptic_curve is not None:
             ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)

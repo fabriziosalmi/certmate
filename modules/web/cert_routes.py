@@ -7,7 +7,7 @@ from cryptography import x509
 from cryptography.exceptions import UnsupportedAlgorithm
 
 from ..core.certificates import DomainOperationInProgress, ExternalCertificate
-from ..core.cert_service import CertificateService, DomainOutOfScope, EmailNotConfigured
+from ..core.cert_service import CertificateNamesTaken, CertificateService, DomainOutOfScope, EmailNotConfigured
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import (
     INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError, preview_import_certificate,
@@ -57,11 +57,17 @@ def preview_certificate_import_web():
 
 def _refusal(error):
     """The answer to an issuing request this caller, or this certificate, does
-    not allow: a domain outside the key's scope, or an external certificate."""
+    not allow: a domain outside the key's scope, an external certificate, or a
+    name an external certificate covers. Fixed text: the web routes never
+    return an exception's."""
     if isinstance(error, ExternalCertificate):
         return jsonify({'error': 'This is an external certificate: CertMate stores and deploys it, '
                                  'but does not issue, renew or reissue it.',
                         'code': ExternalCertificate.code}), 409
+    if isinstance(error, CertificateNamesTaken):
+        return jsonify({'error': 'A name in this request is already covered by a certificate CertMate '
+                                 'manages, which CertMate does not renew.',
+                        'code': CertificateNamesTaken.code}), 409
     return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
 
 
@@ -109,7 +115,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 audit_ctx=audit_context_from_request(),
             )
             return jsonify(result)
-        except (DomainOutOfScope, ExternalCertificate) as error:
+        except (DomainOutOfScope, ExternalCertificate, CertificateNamesTaken) as error:
             return _refusal(error)
         except FileExistsError:
             # "Already exists" is a distinct, expected condition — 409 with a
@@ -302,7 +308,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 'message': result.get('message', 'Certificate renewed successfully'),
                 'renewed': bool(result.get('renewed', True)),
             })
-        except (DomainOutOfScope, ExternalCertificate) as error:
+        except (DomainOutOfScope, ExternalCertificate, CertificateNamesTaken) as error:
             return _refusal(error)
         except FileNotFoundError as e:
             logger.info("Certificate renewal target not found: %s", e)

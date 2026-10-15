@@ -455,7 +455,19 @@ match.
 
 Afterwards, every path that would ask a CA for it answers **409**
 `EXTERNAL_CERTIFICATE`: renew (forced or not, sync or async), reissue, create
-for the same domain, and turning automatic renewal on. Turning it off still
+for the same domain, and turning automatic renewal on.
+
+Its names stay its own. Since API contract **2.48**, a create (sync, async,
+from a CSR, or in a batch), a reissue or an import through a CA that names any
+DNS name an external certificate covers, as its domain or a SAN, answers
+**409** `NAMES_ALREADY_MANAGED`, listing only the names of the request. Names
+compare as for the import, so a wildcard conflicts only with the same
+wildcard. An adoption is refused by its plan, which reads `available: false`
+with the reason, so adopting it is **400** `ADOPTION_UNAVAILABLE`; it is the
+409 when the collision appears between the plan and the issuance. Two
+certificates CertMate issues may still share a name. An external certificate
+whose names cannot be read keeps its own domain, and does not stop other
+issuance. Turning it off still
 answers **200**. The renewal sweep counts it under `external` and leaves it
 alone, with or without its settings entry. Expiry warnings say that nothing
 renews it. Its owner puts the next certificate in its place by uploading it, below.
@@ -1519,7 +1531,7 @@ explicitly changed (no key flags are sent and certbot keeps the lineage key).
 
 **Response** (200 OK, or 202 Accepted with `async`): message, domain, dns_provider, ca_provider, duration.
 
-**Errors**: 404 when no certificate exists for the domain (use create), 403 scope, 400 validation, 409 operation in progress or `EXTERNAL_CERTIFICATE`, 422 certbot failure (the previous certificate is still in place).
+**Errors**: 404 when no certificate exists for the domain (use create), 403 scope, 400 validation, 409 operation in progress, `EXTERNAL_CERTIFICATE` or `NAMES_ALREADY_MANAGED`, 422 certbot failure (the previous certificate is still in place).
 
 **Example**:
 ```bash
@@ -2518,7 +2530,7 @@ and may be reworded.
 | `METADATA_SCHEMA_DOWNGRADE` | 409 | `metadata.json` was written by a newer build; the write was refused |
 | `DOMAIN_NOT_IN_SETTINGS` | 409 | The certificate exists on disk but no settings entry names it |
 | `EXTERNAL_CERTIFICATE` | 409 | The certificate was imported as external: CertMate does not issue, renew or reissue it |
-| `NAMES_ALREADY_MANAGED` | 409 | An external import or replacement names a DNS name another managed certificate already covers |
+| `NAMES_ALREADY_MANAGED` | 409 | An external import or replacement names a DNS name another managed certificate already covers, or a create, reissue or import through a CA names one an external certificate covers |
 | `CERTIFICATE_NOT_EXTERNAL` | 409 | A replacement by upload for a certificate CertMate renews through a CA |
 | `REPLACEMENT_UNCHANGED` / `REPLACEMENT_EXPIRES_EARLIER` | 409 | A replacement uploads the certificate in place, or one that expires earlier without `allow_earlier_expiry` |
 | `CERTIFICATE_HAS_LINEAGE` | 409 | A replacement for a certificate whose directory holds a certbot lineage |

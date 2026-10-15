@@ -13,7 +13,7 @@ from flask_restx import Resource
 from ..core.audit_context import audit_context_from_request
 from ..core.request_fields import json_booleans
 from ..core.cert_jobs import IssuanceQueueFull
-from ..core.cert_service import DomainOutOfScope
+from ..core.cert_service import CertificateNamesTaken, DomainOutOfScope
 from ..core.certificates import (
     CREATION_FAILED, DomainOperationInProgress, ExternalCertificate, MetadataWriteFailed,
     MetadataWriteRefused,
@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 def _refusal(error):
     """403 for a domain outside the key's scope; 409 for an external
-    certificate, which no CA here issues for."""
-    if isinstance(error, ExternalCertificate):
+    certificate, which no CA here issues for, and for a name one covers."""
+    if isinstance(error, (ExternalCertificate, CertificateNamesTaken)):
         return {'error': str(error), 'code': error.code}, 409
     return {'error': str(error), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
 
@@ -254,7 +254,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     'duration': result.get('duration')
                 }, 201
 
-            except (DomainOutOfScope, ExternalCertificate) as e:
+            except (DomainOutOfScope, ExternalCertificate, CertificateNamesTaken) as e:
                 return _refusal(e)
             except FileExistsError as e:
                 # Previously fell through to the generic 500. The certificate
@@ -331,7 +331,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     'duration': result.get('duration')
                 }, 200
 
-            except (DomainOutOfScope, ExternalCertificate) as e:
+            except (DomainOutOfScope, ExternalCertificate, CertificateNamesTaken) as e:
                 return _refusal(e)
             except DomainOperationInProgress as e:
                 # Domain busy is not a failure; do not publish a failure event.
@@ -413,7 +413,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
 
             except FileNotFoundError as e:
                 return {'error': str(e), 'code': 'CERTIFICATE_NOT_FOUND'}, 404
-            except (DomainOutOfScope, ExternalCertificate) as e:
+            except (DomainOutOfScope, ExternalCertificate, CertificateNamesTaken) as e:
                 return _refusal(e)
             except ValueError as e:
                 return {'error': str(e), 'code': 'CERTIFICATE_REISSUE_REJECTED'}, 400

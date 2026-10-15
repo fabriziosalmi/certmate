@@ -99,6 +99,9 @@ def test_adopt_post_success_marks_managed(client, container):
     calls = {}
 
     class _FakeService:
+        def external_conflict(self, domain, san_domains=()):
+            return None  # no external certificate here (#1159)
+
         def create(self, **kwargs):
             calls.update(kwargs)
             return {'domain': kwargs['domain'], 'status': 'issued'}
@@ -137,6 +140,9 @@ def test_adopt_post_issuance_valueerror_is_400(client, container):
             return [{'name': 'cloudflare', 'configured': True}]
 
     class _BoomService:
+        def external_conflict(self, domain, san_domains=()):
+            return None  # no external certificate here (#1159)
+
         def create(self, **kwargs):
             raise ValueError('DNS credentials invalid')
 

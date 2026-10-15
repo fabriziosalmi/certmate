@@ -18,6 +18,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
+from modules.core.cert_service import CertificateNamesTaken
 from modules.core.certificates import DomainOperationInProgress, ExternalCertificate
 from tests.test_certificate_import import make_bundle
 
@@ -733,3 +734,189 @@ def test_the_service_takes_only_a_boolean_for_an_earlier_expiry(instance):
         instance.managers['cert_service'].replace_external(
             domain=EXT, certificate=bundle['certificate'], chain=bundle['chain'],
             private_key=bundle['private_key'], allow_earlier_expiry='yes', user={'username': 'admin'})
+
+
+# --------------------------------------------------------------------------- #
+# Names an external certificate covers: no issuance takes them
+# --------------------------------------------------------------------------- #
+
+def _prepare_create(instance, domain, sans=()):
+    return instance.managers['cert_service'].prepare_create(
+        domain=domain, san_domains=list(sans), dns_provider='cloudflare', account_id='dns-prod',
+        user={'username': 'admin'})
+
+
+def _create(instance, domain, sans=(), **options):
+    return instance.client.post('/api/certificates/create', headers=instance.headers, json={
+        'domain': domain, 'san_domains': list(sans), 'dns_provider': 'cloudflare',
+        'account_id': 'dns-prod', **options})
+
+
+@pytest.mark.parametrize('domain,sans,taken', [
+    ('new.example.com', (EXT_SAN,), EXT_SAN),              # its SAN, as a SAN
+    (EXT_SAN, ('new.example.com',), EXT_SAN),              # its SAN, as the primary
+    ('new.example.com', (EXT,), EXT),                      # its primary, as a SAN
+    ('new.example.com', ('EXT-SAN.Example.COM',), 'EXT-SAN.Example.COM'),  # without case
+])
+@pytest.mark.parametrize('mode', ['sync', 'async'])
+def test_a_create_cannot_take_a_name_an_external_certificate_covers(instance, domain, sans, taken, mode):
+    import_external(instance)
+    response = _create(instance, domain, sans, **({'async': True} if mode == 'async' else {}))
+    assert response.status_code == 409, response.get_json()
+    body = response.get_json()
+    assert body['code'] == 'NAMES_ALREADY_MANAGED'
+    assert _names_refused(body) == [taken]
+    instance.shell.run.assert_not_called()
+
+
+def test_the_refusal_does_not_name_the_external_certificate(instance):
+    import_external(instance)
+    body = _create(instance, 'new.example.com', (EXT_SAN,)).get_json()
+    assert EXT not in body['error'].replace(EXT_SAN, '')
+
+
+def test_a_wildcard_takes_only_the_same_wildcard(instance):
+    import_external(instance, names=('*.wild.example.com',))
+    _prepare_create(instance, 'a.wild.example.com')
+    with pytest.raises(CertificateNamesTaken):
+        _prepare_create(instance, 'other.example.com', ('*.wild.example.com',))
+
+
+def test_two_certificates_certmate_issues_may_still_share_a_name(instance):
+    """#854: only an external certificate keeps its names to itself."""
+    _managed(instance, ('owner.example.com', 'shared.example.com'))
+    _prepare_create(instance, 'new.example.com', ('shared.example.com',))
+
+
+@pytest.mark.parametrize('lost', [None, 'metadata', 'settings'])
+def test_either_record_of_the_marker_protects_its_names(instance, lost):
+    import_external(instance)
+    _lose(instance, lost)
+    with pytest.raises(CertificateNamesTaken):
+        _prepare_create(instance, 'new.example.com', (EXT_SAN,))
+
+
+def test_an_unreadable_external_certificate_keeps_its_own_name_and_blocks_nothing_else(instance, caplog):
+    import_external(instance)
+    (instance.cert_root / EXT / 'cert.pem').write_text('not a certificate')
+    stored = metadata(instance, EXT)
+    stored.pop('san_domains')
+    (instance.cert_root / EXT / 'metadata.json').write_text(json.dumps(stored))
+    _prepare_create(instance, 'free.example.com')
+    _prepare_create(instance, 'new.example.com', (EXT_SAN,))
+    assert 'could not be read' in caplog.text
+    with pytest.raises(CertificateNamesTaken):
+        _prepare_create(instance, 'new.example.com', (EXT,))
+
+
+def test_a_create_from_a_csr_cannot_take_one_either(instance):
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.x509.oid import NameOID
+    import_external(instance)
+    key = ec.generate_private_key(ec.SECP256R1())
+    csr = (x509.CertificateSigningRequestBuilder()
+           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'device.example.com')]))
+           .add_extension(x509.SubjectAlternativeName(
+               [x509.DNSName('device.example.com'), x509.DNSName(EXT_SAN)]), critical=False)
+           .sign(key, hashes.SHA256()))
+    response = _create(instance, 'device.example.com', csr=csr.public_bytes(serialization.Encoding.PEM).decode())
+    assert response.status_code == 409, response.get_json()
+    assert _names_refused(response.get_json()) == [EXT_SAN]
+
+
+def test_the_dashboard_create_cannot_take_one(instance):
+    import_external(instance)
+    response = instance.client.post('/api/web/certificates/create', headers=instance.headers, json={
+        'domain': 'new.example.com', 'san_domains': [EXT_SAN], 'dns_provider': 'cloudflare'})
+    assert response.status_code == 409, response.get_json()
+    assert response.get_json()['code'] == 'NAMES_ALREADY_MANAGED'
+    instance.shell.run.assert_not_called()
+
+
+def test_a_batch_refuses_the_one_that_takes_a_name(instance):
+    import_external(instance)
+    response = instance.client.post('/api/web/certificates/batch', headers=instance.headers, json={
+        'domains': [EXT_SAN, EXT], 'dns_provider': 'cloudflare'})
+    assert response.status_code == 200, response.get_json()
+    results = {item['domain']: item for item in response.get_json()}
+    for name in (EXT_SAN, EXT):
+        assert results[name]['success'] is False
+        assert results[name]['message'] == 'A name is covered by an external certificate'
+    instance.shell.run.assert_not_called()
+
+
+def test_a_reissue_cannot_add_one(instance):
+    import_external(instance)
+    _managed(instance, ('owner.example.com',))
+    response = instance.client.post('/api/certificates/owner.example.com/reissue', headers=instance.headers,
+                                    json={'san_domains': [EXT_SAN]})
+    assert response.status_code == 409, response.get_json()
+    assert response.get_json()['code'] == 'NAMES_ALREADY_MANAGED'
+    assert _names_refused(response.get_json()) == [EXT_SAN]
+    # Its own names are its own.
+    instance.managers['cert_service'].prepare_reissue(domain='owner.example.com', user={'username': 'admin'})
+    instance.shell.run.assert_not_called()
+
+
+def test_an_import_renewed_through_a_ca_cannot_take_one(instance):
+    import_external(instance)
+    response = instance.post(ordinary(make_bundle(names=('owner.example.com', EXT_SAN)), 'owner.example.com'))
+    assert response.status_code == 409, response.get_json()
+    assert response.get_json()['code'] == 'NAMES_ALREADY_MANAGED'
+    assert not (instance.cert_root / 'owner.example.com').exists()
+
+
+def _discovered(instance, fingerprint, names):
+    instance.managers['cert_inventory'].record_certificate(
+        {'fingerprint_sha256': fingerprint, 'subject_cn': names[0], 'san_dns': list(names),
+         'key': {'type': 'EC', 'curve': 'secp256r1'}, 'not_after': '2099-01-01T00:00:00Z'},
+        source='ct-log')
+
+
+def _adoption_plan(instance, fingerprint):
+    return instance.client.get(f'/api/inventory/{fingerprint}/adopt', headers=instance.headers).get_json()
+
+
+def test_an_adoption_plan_says_a_name_is_taken(instance):
+    """The plan is what the dashboard offers Adopt from: it says so before the click."""
+    _discovered(instance, 'fp-free', ('adopted.example.com',))
+    assert _adoption_plan(instance, 'fp-free')['available'] is True
+    import_external(instance)
+    _discovered(instance, 'fp-adopt', ('adopted.example.com', EXT_SAN))
+    plan = _adoption_plan(instance, 'fp-adopt')
+    assert plan['available'] is False
+    assert EXT_SAN in plan['reason']
+    response = instance.client.post('/api/inventory/fp-adopt/adopt', headers=instance.headers)
+    assert response.status_code == 400
+    assert response.get_json()['code'] == 'ADOPTION_UNAVAILABLE'
+    instance.shell.run.assert_not_called()
+
+
+def test_an_adoption_plan_of_the_external_certificate_says_what_it_is(instance):
+    import_external(instance, names=(EXT,))
+    _discovered(instance, 'fp-self', (EXT,))
+    plan = _adoption_plan(instance, 'fp-self')
+    assert plan['available'] is False
+    assert 'external certificate' in plan['reason']
+
+
+def test_a_discovered_name_that_is_not_a_domain_is_left_to_the_checks_that_refuse_it(instance):
+    """Discovery reads names from CT logs and remote hosts: the external check
+    neither builds a path from one nor hides the refusal that follows."""
+    _discovered(instance, 'fp-odd', ('../not a domain',))
+    response = instance.client.get('/api/inventory/fp-odd/adopt', headers=instance.headers)
+    assert response.status_code == 200
+    adopted = instance.client.post('/api/inventory/fp-odd/adopt', headers=instance.headers)
+    assert adopted.status_code == 400
+    assert 'Invalid domain' in adopted.get_json()['error']
+
+
+def test_an_adoption_that_meets_one_during_issuance_is_a_conflict(instance, monkeypatch):
+    """An external import between the plan and the issuance: the service refuses."""
+    import_external(instance)
+    _discovered(instance, 'fp-race', ('adopted.example.com', EXT_SAN))
+    monkeypatch.setattr(instance.managers['cert_service'], 'external_conflict', lambda *args: None)
+    response = instance.client.post('/api/inventory/fp-race/adopt', headers=instance.headers)
+    assert response.status_code == 409, response.get_json()
+    assert response.get_json()['code'] == 'NAMES_ALREADY_MANAGED'
+    instance.shell.run.assert_not_called()
