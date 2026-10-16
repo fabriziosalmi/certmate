@@ -1,6 +1,8 @@
 # Guía de pruebas
 
 <!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Esta traducción no se corresponde con la versión en inglés** ([`docs/testing.md`](../testing.md)), que es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
 
 Esta guía cubre el framework de pruebas de CertMate, incluyendo pruebas unitarias, pruebas de integración y validación de endpoints API.
 

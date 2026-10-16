@@ -1,6 +1,8 @@
 # CertMate Certificats Clients - Guide d'utilisation
 
 <!-- CERTMATE-TRANSLATED-FROM 88bb16eb976577c4 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Cette traduction ne correspond pas à la version anglaise** ([`docs/guide.md`](../guide.md)), qui fait foi. En cas de divergence, le document anglais prévaut.
 
 ## Vue d'ensemble
 
