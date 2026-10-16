@@ -149,6 +149,10 @@
                         // Searched but not shown (#1043): what an operator wrote
                         // about a certificate finds it the same way its name does.
                         keywords: ((c.tags || []).join(' ') + ' ' + (c.notes || '')).trim(),
+                        // Every other name it covers finds it too (#1247); see onSearch.
+                        sans: Array.isArray(c.san_domains) ? c.san_domains.filter(function (n) {
+                            return typeof n === 'string';
+                        }) : [],
                         domain: c.domain
                     };
                 }) : [];
@@ -181,14 +185,28 @@
         if (certCache) allItems = allItems.concat(certCache);
         if (clientCertCache) allItems = allItems.concat(clientCertCache);
 
+        function matches(text) { return !!text && text.toLowerCase().indexOf(query) !== -1; }
+
         if (!query) {
             currentResults = allItems.slice(0, 8);
         } else {
-            currentResults = allItems.filter(function(item) {
-                return item.label.toLowerCase().indexOf(query) !== -1 ||
-                       (item.desc && item.desc.toLowerCase().indexOf(query) !== -1) ||
-                       (item.keywords && item.keywords.toLowerCase().indexOf(query) !== -1);
-            }).slice(0, 10);
+            currentResults = [];
+            allItems.forEach(function(item) {
+                if (currentResults.length >= 10) return;
+                if (matches(item.label) || matches(item.desc) || matches(item.keywords)) {
+                    currentResults.push(item);
+                    return;
+                }
+                // A certificate is found by any name it covers (#1247), and says
+                // which one: otherwise example.com answering www.example.com
+                // reads as a wrong result.
+                var san = (item.sans || []).filter(matches)[0];
+                if (san) {
+                    currentResults.push(Object.assign({}, item, {
+                        desc: (item.desc ? item.desc + ' · ' : '') + 'SAN ' + san
+                    }));
+                }
+            });
         }
 
         selectedIndex = 0;
