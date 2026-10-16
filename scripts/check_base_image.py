@@ -13,6 +13,12 @@ is not the one the tag points at today AND the pinned image is older than MAX_AG
 the tag has not moved past is fine at any age (nothing to fix), and a pin that is behind but young
 is fine (a base moves weekly; a release must not be refused for a tag that moved yesterday).
 
+The tag is an index over many platforms, and it moves when any of them is rebuilt. On 2026-10-16 it
+moved because `linux/riscv64` was, while the `linux/amd64` and `linux/arm64` images were the pinned
+ones: the image CertMate builds was the same, and the gate called it behind. So "moved" is judged on
+the platforms CertMate publishes. When the registry does not say what those images are, the index
+digest decides, as before.
+
     scripts/check_base_image.py                 check, exit 1 when stale
     scripts/check_base_image.py --update        write the current digest into the Dockerfile
     scripts/check_base_image.py --allow-stale "reason"
@@ -84,15 +90,40 @@ def age_days(created, now):
     return (now - min(stamps)).days
 
 
-def evaluate(dockerfile_text, current, pinned_info, now, allow_stale=None):
+def platform_images(manifest):
+    """{platform: image digest} for the published PLATFORMS in an index *manifest*, as
+    `docker buildx imagetools inspect` prints it. Attestations name no platform and are skipped."""
+    images = {}
+    for entry in (manifest or {}).get('manifests') or []:
+        platform = entry.get('platform') or {}
+        key = f"{platform.get('os')}/{platform.get('architecture')}"
+        if key in PLATFORMS and key not in images and entry.get('digest'):
+            images[key] = entry['digest']
+    return images
+
+
+def same_published_images(current_images, pinned_images):
+    """Whether the tag and the pin hold the same image for every published platform. Unknown is
+    not the same: without both answers the index digest decides."""
+    return bool(current_images) and bool(pinned_images) and all(
+        current_images.get(p) is not None and current_images.get(p) == pinned_images.get(p) for p in PLATFORMS)
+
+
+def evaluate(dockerfile_text, current, pinned_info, now, allow_stale=None,
+             current_images=None, pinned_images=None):
     """(ok, lines). *current* is the digest the tag points at today; *pinned_info* is the
-    {platform: created} of the pinned digest."""
+    {platform: created} of the pinned digest; *current_images* and *pinned_images* are the
+    {platform: image digest} of each, when the registry said."""
     image, digest = single_pin(dockerfile_text)
     age = age_days(pinned_info, now)
     lines = [f'base image: {image}', f'  pinned:  sha256:{digest[:16]}... (created {age} days ago)',
              f'  current: {current[:23]}...' if current.startswith('sha256:') else f'  current: {current}']
     if current == f'sha256:{digest}':
         lines.append('  the tag has not moved past the pin: nothing to fix')
+        return True, lines
+    if same_published_images(current_images, pinned_images):
+        lines.append(f'  the tag moved, but not for {" or ".join(PLATFORMS)}: the images CertMate is built from '
+                     'are the pinned ones, so there is nothing to fix')
         return True, lines
     if age <= MAX_AGE_DAYS:
         lines.append(f'  behind the tag, but {age} days old is within the {MAX_AGE_DAYS} allowed')
@@ -127,6 +158,7 @@ def inspect_with_docker(reference):
                              'this gate needs Docker and the network, as the image build does') from exc
     data = json.loads(out)
     return {'digest': data['manifest']['digest'],
+            'images': platform_images(data['manifest']),
             'created': {platform: image.get('created') for platform, image in (data.get('image') or {}).items()
                         if image.get('created')}}
 
@@ -140,7 +172,8 @@ def main(argv=None, inspect=inspect_with_docker, now=None, dockerfile=DOCKERFILE
     try:
         text = pathlib.Path(dockerfile).read_text(encoding='utf-8')
         image, digest = single_pin(text)
-        current = inspect(image)['digest']
+        tag = inspect(image)
+        current = tag['digest']
         if args.update:
             if current == f'sha256:{digest}':
                 print(f'already on the current digest ({current[:23]}...)')
@@ -148,8 +181,9 @@ def main(argv=None, inspect=inspect_with_docker, now=None, dockerfile=DOCKERFILE
             pathlib.Path(dockerfile).write_text(update(text, current), encoding='utf-8')
             print(f'{image}: sha256:{digest[:16]}... -> {current[:23]}...')
             return 0
-        pinned_info = inspect(f'{image}@sha256:{digest}')['created']
-        ok, lines = evaluate(text, current, pinned_info, now, args.allow_stale)
+        pinned = inspect(f'{image}@sha256:{digest}')
+        ok, lines = evaluate(text, current, pinned['created'], now, args.allow_stale,
+                             current_images=tag.get('images'), pinned_images=pinned.get('images'))
     except BaseImageError as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         return 1
