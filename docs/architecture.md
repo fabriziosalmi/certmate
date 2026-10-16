@@ -25,7 +25,7 @@ CertMate is a modular, pluggable SSL/TLS certificate management system built wit
 **Key Facts:**
 - **Language**: Python 3.12 (Flask, Flask-RESTX)
 - **Storage**: Local filesystem default + 5 remote backends (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible)
-- **CA Providers**: Let's Encrypt, DigiCert ACME, Private CA
+- **CA Providers**: Let's Encrypt, ZeroSSL, Google Trust Services, DigiCert ACME, SSL.com, Actalis, Sectigo, and any other ACME CA through the Private CA entry; see [CA Providers](./ca-providers.md)
 - **DNS Providers**: Cloudflare, AWS Route53, Azure, Google and more — see [DNS Providers](./dns-providers.md) for the full list
 - **API**: REST with Swagger/OpenAPI via Flask-RESTX
 - **Current Certificate Types**: Server-side TLS (DV, OV, EV)
@@ -36,22 +36,22 @@ CertMate is a modular, pluggable SSL/TLS certificate management system built wit
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  CertMate Application               │
+│                 CertMate Application                │
 │                                                     │
 │  ┌───────────────────────────────────────────────┐  │
-│  │             Web Layer (Flask)                  │  │
-│  │  Dashboard    Settings    Help    Client Certs │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
-│  ┌──────────────────┐   ┌────────────────────────┐  │
-│  │  REST API         │   │  Web Routes            │  │
-│  │  /api/certificates│   │  /api/web/certificates │  │
-│  │  /api/client-certs│   │  /client-certificates  │  │
-│  └────────┬─────────┘   └────────┬───────────────┘  │
-│           └──────────┬───────────┘                   │
-│                      ↓                               │
+│  │             Web Layer (Flask)                 │  │
+│  │  Dashboard   Settings   Help   Client Certs   │  │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
+│  ┌───────────────────┐  ┌────────────────────────┐  │
+│  │  REST API         │  │  Web Routes            │  │
+│  │  /api/certificates│  │  /api/web/certificates │  │
+│  │  /api/client-certs│  │  /client-certificates  │  │
+│  └─────────┬─────────┘  └───────────┬────────────┘  │
+│            └───────────┬────────────┘               │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Manager Layer (Business Logic)        │  │
+│  │          Manager Layer (Business Logic)       │  │
 │  │                                               │  │
 │  │  CertificateManager    CAManager              │  │
 │  │  DNSManager            StorageManager         │  │
@@ -59,28 +59,29 @@ CertMate is a modular, pluggable SSL/TLS certificate management system built wit
 │  │  CacheManager          FileOperations         │  │
 │  │  ClientCertManager     OCSPResponder          │  │
 │  │  CRLManager            AuditLogger            │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Execution Layer                       │  │
-│  │  Certbot (server certs via DNS-01 ACME)       │  │
+│  │          Execution Layer                      │  │
+│  │  Certbot (server certs over ACME)             │  │
 │  │  PrivateCA (client certs via direct signing)  │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Storage Layer (Pluggable Backends)    │  │
-│  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
+│  │          Storage Layer (Pluggable Backends)   │  │
+│  │  Local FS │ Azure KV │ AWS SM │ Vault         │  │
+│  │  Infisical │ S3-compatible                    │  │
 │  └───────────────────────────────────────────────┘  │
 │                                                     │
 └─────────────────────────────────────────────────────┘
 
-        ┌─────────────────────────────────────┐
-        │  Composition root — modules/factory.py
-        │                                     │
-        │  create_app() constructs every       │
-        │  manager and REGISTERS the API and   │
-        │  web layers onto the Flask app.      │
-        └───┬──────────────┬──────────────┬────┘
+        ┌─────────────────────────────────────────┐
+        │  Composition root — modules/factory.py  │
+        │                                         │
+        │  create_app() constructs every          │
+        │  manager and REGISTERS the API and      │
+        │  web layers onto the Flask app.         │
+        └───┬──────────────┬──────────────┬───────┘
             │ constructs   │ registers    │ registers
             ▼              ▼              ▼
       Manager Layer   REST API      Web Routes
@@ -140,7 +141,7 @@ CertMateApp (main application)
 ```
 1. User submits: domain, email, DNS provider, CA provider
 2. Validate inputs (domain format, email, provider existence)
-3. Get CA config (ACME URL, EAB credentials if DigiCert)
+3. Get CA config (ACME URL, EAB credentials if the CA requires them)
 4. Get DNS config (account credentials from settings)
 5. Create directory: certificates/{domain}/
 6. Build certbot command:
@@ -339,11 +340,10 @@ Renewals always preserve the shape that was in effect at creation time: certbot 
 |--------|----------|---------|
 | GET | `/api/health` | Health check |
 | GET | `/api/certificates` | List all certificates |
-| POST | `/api/certificates` | Create new certificate |
+| POST | `/api/certificates/create` | Create new certificate |
 | GET | `/api/certificates/{domain}` | Get certificate info |
 | POST | `/api/certificates/{domain}/renew` | Renew certificate |
 | GET | `/api/certificates/{domain}/download` | Download: ZIP by default; `?file=<cert.pem\|chain.pem\|fullchain.pem\|privkey.pem\|combined.pem\|cert.pfx>` for one file; `?format=json` for every PEM inline |
-| GET | `/{domain}/tls` | Direct fullchain download |
 
 ### Client Certificates
 
@@ -376,7 +376,7 @@ Renewals always preserve the shape that was in effect at creation time: certbot 
 
 ## Key Limitations
 
-1. **Certbot-only for server certs**: DNS-01 ACME challenges only
+1. **Certbot-only for server certs**: issued over ACME and validated by DNS-01, by HTTP-01 (no wildcards), or by a Sectigo SCM account that already authorizes the names
 2. **Domain-centric server storage**: One cert per domain directory
 3. **No DB**: Single JSON file for configuration
 4. **Server cert key usage**: No control over keyUsage/extendedKeyUsage extensions
@@ -790,7 +790,7 @@ Each certificate has a `metadata.json` file containing:
 
 - **File Permissions**: 0600 (read/write for owner only)
 - **Key Format**: PEM with OpenSSL Traditional format
-- **No Key Encryption**: Keys stored encrypted at REST if using storage backends
+- **No Key Encryption**: private keys are written unencrypted, protected by the file permissions above; a remote storage backend holds its copy under whatever encryption at rest that service applies
 
 ### Certificate Signing
 
@@ -824,13 +824,13 @@ Each certificate has a `metadata.json` file containing:
 ### API Performance
 
 - **Rate Limiting**: Prevents resource exhaustion
-- **Stateless Design**: Can run multiple instances
+- **Single instance**: one gunicorn worker runs the API and the renewal scheduler; see [Availability and failover](#availability-and-failover)
 - **Batch Operations**: up to 100 rows per request (the API rejects more with a 400)
 
 ### Auto-Renewal
 
 - **Scheduled**: Daily, server certificates between 01:00 and 03:00 (02:00 with an hour of random offset either way), client certificates between 02:00 and 04:00
-- **When**: 30 days before expiry by default (`renewal_threshold_days`), a third of the lifetime for a certificate that lives under 60 days (half under 10 days), or where the CA's renewal window (ARI) puts it; see [the guide](./guide.md#when-a-certificate-renews)
+- **When**: 30 days before expiry by default (`renewal_threshold_days`), with a third of its lifetime left for a certificate that lives under 60 days (half under 10 days), or where the CA's renewal window (ARI) puts it; see [the guide](./guide.md#when-a-certificate-renews)
 - **Graceful**: Continues on errors, logs for review
 
 ---
@@ -900,7 +900,7 @@ for, and it being down for an hour does not take anything else down with it.
 - Can export certificates via API
 - Can query status via OCSP
 - Can retrieve CRL for validation
-- Supports webhook/callback integration (future)
+- Sends [webhook notifications](./webhooks.md) on certificate events and runs [deploy hooks](./deploy-hooks.md)
 
 ---
 
@@ -909,10 +909,7 @@ for, and it being down for an hour does not take anything else down with it.
 ### Planned Enhancements
 
 1. **CA Password Protection** - Encrypt CA keys with password
-2. **Advanced Audit** - Role-based access control
-3. **Webhook Notifications** - On certificate events
-4. **Certificate Signing** - Accept CSRs from external sources
-5. **Hardware Tokens** - PKCS#11 support for HSMs
+2. **Hardware Tokens** - PKCS#11 support for HSMs
 
 ### Extension Points
 

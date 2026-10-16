@@ -152,8 +152,8 @@ uses its manual authenticator with a non-publishing hook only to satisfy its
 non-interactive requirement: when the CA returns valid ACME authorizations,
 the hook is never called. If SCM returns a pending authorization, the hook
 publishes no validation material, so CertMate cannot satisfy it in this mode.
-Use DNS-01 or HTTP-01 when the names are not already authorized. Before
-renewal, the same account must still be authorized in SCM.
+Use DNS-01 or HTTP-01 when the names are not already authorized. At
+renewal, SCM must still authorize the names for that account.
 This mode is available only when Sectigo is selected explicitly as the CA.
 Existing Sectigo configurations under Private CA continue to work unchanged.
 

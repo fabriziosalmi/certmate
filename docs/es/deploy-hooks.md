@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM 6f553b4bf83856da -->
+<!-- CERTMATE-TRANSLATED-FROM 0d31dc7a82589489 -->
 
 Cierra [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -16,14 +16,16 @@ Esta guía cubre:
 4. [Ventanas de mantenimiento](#ventanas-de-mantenimiento)
 5. [Disparo manual](#disparo-manual)
 6. [Modelo de seguridad: por qué algunos comandos son rechazados](#modelo-de-seguridad)
-7. [Recetas comunes](#recetas-comunes)
-8. [Auditoría, historial y depuración](#auditoría-historial-y-depuración)
+7. [Dónde se ejecuta un hook](#dónde-se-ejecuta-un-hook)
+8. [Recetas comunes](#recetas-comunes)
+9. [Auditoría, historial y depuración](#auditoría-historial-y-depuración)
+10. [Destinos de despliegue tipados](#destinos-de-despliegue-tipados)
 
 ---
 
 ## Qué es un hook
 
-Un hook es un objeto JSON con cinco campos:
+Un hook es un objeto JSON con estos campos:
 
 | Campo | Tipo | Requerido | Notas |
 |---|---|---|---|
@@ -505,7 +507,7 @@ No hay un `privkey` a secas: las dos grafías hacen visible la elección, y una 
 
 **Qué se registra y qué no.** Un resultado es un estado y una frase que nombra el host: nunca la dirección, la query, las cabeceras, el cuerpo que enviaste ni el cuerpo con el que respondió el receptor, que puede repetir lo que se le envió. Una entrega que llevaba la clave privada queda marcada en el registro de auditoría: adónde fue (`key_sent_to`), para qué dominio, la huella del certificado, el estado y los intentos, y nunca la clave. Un reset después del handshake TLS se registra como posiblemente enviado, porque no se puede distinguir de uno anterior al handshake.
 
-**No hay "enviar una prueba" para un destino que envía la clave**, a propósito. Una prueba que entregara una clave a un appliance que acepta subidas la instalaría en lugar de la real. Usa en su lugar la **vista previa** ([`POST /api/deploy/targets/preview`](./api.md)): renderiza la petición contra un certificado y una clave de ejemplo, no lee ningún archivo y no envía nada. Para entregar de verdad una vez, usa *Ejecutar los hooks de un dominio* (admin), que es una acción explícita.
+**No hay "enviar una prueba" para un destino que envía la clave**, a propósito. Una prueba que entregara una clave a un appliance que acepta subidas la instalaría en lugar de la real. Usa en su lugar la **vista previa** ([`POST /api/deploy/targets/preview`](./api.md)): renderiza la petición contra un certificado y una clave de ejemplo, no lee ningún archivo y no envía nada. Para entregar de verdad una vez, usa [*Ejecutar todos los hooks de un dominio*](#ejecutar-todos-los-hooks-de-un-dominio-admin) (admin), que es una acción explícita.
 
 **Contra qué protege y contra qué no.**
 
@@ -533,7 +535,7 @@ Comprobado con n8n 2.41.4 con un certificado real, un nodo Webhook y el payload 
 2. **El nodo Webhook:** HTTP Method `POST`, un Path como `certmate`, Respond *Immediately*, y publica el workflow. El destino debe llamar a la URL de **producción** (`https://host:5678/webhook/certmate`), no a la de prueba.
 3. **Qué recibe el nodo.** `$json.body` es el payload que escribiste, así que el ejemplo de arriba da `{{ $json.body.certificates.fullchain }}` y así sucesivamente, como una cadena PEM multilínea normal. Las cabeceras están en `$json.headers`: `x-certmate-event`, `idempotency-key` (la misma para un reintento de una entrega, de modo que un workflow puede ignorar una repetición) y `user-agent: CertMate-Deploy/1`. En la comprobación, cada certificado llegó idéntico al archivo, la clave PKCS#8 idéntica a `privkey.pem`, y la clave en la forma tradicional (`RSA PRIVATE KEY` o `EC PRIVATE KEY`) era la clave del certificado, tanto para un certificado RSA como para uno EC.
 
-**n8n guarda lo que recibe.** Con su configuración por defecto, n8n almacenó cada cuerpo de petición en su propia base de datos, y en la comprobación la clave privada se podía leer de esos datos de ejecución. Trata la base de datos de n8n y sus copias de seguridad como si contuvieran la clave, o deja las variables de clave fuera de un destino n8n y obtén la clave de otra forma. Configurar el workflow para que no guarde las ejecuciones **no** se comportó como se esperaba en la misma comprobación (las ejecuciones se quedaron en estado `running` con sus datos), así que no confíes en ese ajuste sin mirar lo que guarda tu propia instancia. Este es el caso al que se refiere la tabla de arriba con "un receptor que guarda lo que se le envía".
+**n8n guarda lo que recibe.** Con su configuración por defecto, n8n almacenó cada cuerpo de petición en su propia base de datos, y en la comprobación la clave privada se podía leer de esos datos de ejecución. Trata la base de datos de n8n y sus copias de seguridad como si contuvieran la clave, o deja las variables de clave fuera de un destino n8n y obtén la clave de otra forma. Configurar el workflow para que no guarde las ejecuciones **no** se comportó como se esperaba en la misma comprobación (las ejecuciones se quedaron en estado `running` con sus datos), así que no confíes en ese ajuste sin mirar lo que guarda tu propia instancia. Este es el caso al que se refiere la tabla de arriba con "algunas plataformas de automatización guardan cada cuerpo de petición en un historial de ejecuciones".
 
 ---
 

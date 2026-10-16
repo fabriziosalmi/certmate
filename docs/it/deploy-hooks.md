@@ -1,6 +1,6 @@
 # Deploy Hook
 
-<!-- CERTMATE-TRANSLATED-FROM 6f553b4bf83856da -->
+<!-- CERTMATE-TRANSLATED-FROM 0d31dc7a82589489 -->
 
 Chiude [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -16,14 +16,16 @@ Questa guida illustra:
 4. [Finestre di manutenzione](#finestre-di-manutenzione)
 5. [Attivazione manuale](#attivazione-manuale)
 6. [Modello di sicurezza: perché alcuni comandi vengono rifiutati](#modello-di-sicurezza)
-7. [Ricette comuni](#ricette-comuni)
-8. [Audit, cronologia e debug](#audit-cronologia-e-debug)
+7. [Dove gira un hook](#dove-gira-un-hook)
+8. [Ricette comuni](#ricette-comuni)
+9. [Audit, cronologia e debug](#audit-cronologia-e-debug)
+10. [Deploy target tipizzati](#deploy-target-tipizzati)
 
 ---
 
 ## Cos'è un hook
 
-Un hook è un oggetto JSON con cinque campi:
+Un hook è un oggetto JSON con questi campi:
 
 | Campo | Tipo | Obbligatorio | Note |
 |---|---|---|---|
@@ -505,7 +507,7 @@ Non esiste un `privkey` semplice: le due grafie rendono visibile la scelta, e un
 
 **Cosa viene registrato, e cosa no.** Un risultato è uno status e una frase che nomina l'host: mai l'indirizzo, la query, gli header, il body che hai inviato o il body con cui ha risposto il ricevente, che può ripetere ciò che gli è stato inviato. Una consegna che ha trasportato la chiave privata viene segnata nel log di audit: dove è andata (`key_sent_to`), per quale dominio, l'impronta del certificato, lo status e i tentativi, e mai la chiave. Un reset dopo l'handshake TLS viene registrato come possibilmente inviato, perché non si può distinguere da uno avvenuto prima.
 
-**Non esiste un "invia un test" per un target che invia la chiave**, di proposito. Un test che consegnasse una chiave a un'appliance che accetta upload la installerebbe al posto di quella reale. Usa invece l'**anteprima** ([`POST /api/deploy/targets/preview`](./api.md)): esegue il rendering della richiesta con un certificato e una chiave di esempio, non legge alcun file e non invia nulla. Per consegnare davvero una volta, usa *Eseguire gli hook per un dominio* (admin), che è un'azione esplicita.
+**Non esiste un "invia un test" per un target che invia la chiave**, di proposito. Un test che consegnasse una chiave a un'appliance che accetta upload la installerebbe al posto di quella reale. Usa invece l'**anteprima** ([`POST /api/deploy/targets/preview`](./api.md)): esegue il rendering della richiesta con un certificato e una chiave di esempio, non legge alcun file e non invia nulla. Per consegnare davvero una volta, usa [*Eseguire tutti gli hook per un dominio*](#eseguire-tutti-gli-hook-per-un-dominio-admin) (admin), che è un'azione esplicita.
 
 **Da cosa protegge, e da cosa no.**
 
@@ -533,7 +535,7 @@ Verificato con n8n 2.41.4 usando un certificato reale, un nodo Webhook e il payl
 2. **Il nodo Webhook:** HTTP Method `POST`, un Path come `certmate`, Respond *Immediately*, e pubblica il workflow. Il target deve chiamare l'URL di **produzione** (`https://host:5678/webhook/certmate`), non quello di test.
 3. **Cosa riceve il nodo.** `$json.body` è il payload che hai scritto, quindi l'esempio sopra dà `{{ $json.body.certificates.fullchain }}` e così via, come normale stringa PEM su più righe. Gli header sono in `$json.headers`: `x-certmate-event`, `idempotency-key` (lo stesso per un nuovo tentativo di una consegna, così un workflow può ignorare una ripetizione) e `user-agent: CertMate-Deploy/1`. Nella verifica, ogni certificato è arrivato identico al file, la chiave PKCS#8 identica a `privkey.pem`, e la chiave nella forma tradizionale (`RSA PRIVATE KEY` o `EC PRIVATE KEY`) era la chiave del certificato, sia per un certificato RSA sia per uno EC.
 
-**n8n conserva ciò che riceve.** Con le impostazioni predefinite n8n ha salvato ogni body di richiesta nel proprio database, e nella verifica la chiave privata poteva essere letta da quei dati di esecuzione. Considera il database di n8n e i suoi backup come contenitori della chiave, oppure lascia fuori le variabili della chiave da un target n8n e recupera la chiave in altro modo. Impostare il workflow in modo che non salvi le esecuzioni **non** si è comportato come previsto nella stessa verifica (le esecuzioni sono rimaste nello stato `running` con i loro dati), quindi non fare affidamento su quell'impostazione senza guardare cosa memorizza la tua istanza. È questo il caso che la tabella sopra intende con "un ricevente che conserva ciò che gli viene inviato".
+**n8n conserva ciò che riceve.** Con le impostazioni predefinite n8n ha salvato ogni body di richiesta nel proprio database, e nella verifica la chiave privata poteva essere letta da quei dati di esecuzione. Considera il database di n8n e i suoi backup come contenitori della chiave, oppure lascia fuori le variabili della chiave da un target n8n e recupera la chiave in altro modo. Impostare il workflow in modo che non salvi le esecuzioni **non** si è comportato come previsto nella stessa verifica (le esecuzioni sono rimaste nello stato `running` con i loro dati), quindi non fare affidamento su quell'impostazione senza guardare cosa memorizza la tua istanza. È questo il caso che la tabella sopra intende con "alcune piattaforme di automazione conservano ogni body di richiesta in una cronologia delle esecuzioni".
 
 ---
 

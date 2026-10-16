@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM 6f553b4bf83856da -->
+<!-- CERTMATE-TRANSLATED-FROM 0d31dc7a82589489 -->
 
 Schließt [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -16,14 +16,16 @@ Diese Anleitung behandelt:
 4. [Wartungsfenster](#wartungsfenster)
 5. [Manuelles Auslösen](#manuelles-auslösen)
 6. [Sicherheitsmodell: warum bestimmte Befehle abgelehnt werden](#sicherheitsmodell)
-7. [Häufige Rezepte](#häufige-rezepte)
-8. [Audit, Verlauf und Debugging](#audit-verlauf-und-debugging)
+7. [Wo ein Hook läuft](#wo-ein-hook-läuft)
+8. [Häufige Rezepte](#häufige-rezepte)
+9. [Audit, Verlauf und Debugging](#audit-verlauf-und-debugging)
+10. [Typisierte Deploy-Ziele](#typisierte-deploy-ziele)
 
 ---
 
 ## Was ein Hook ist
 
-Ein Hook ist ein JSON-Objekt mit fünf Feldern:
+Ein Hook ist ein JSON-Objekt mit diesen Feldern:
 
 | Feld | Typ | Erforderlich | Hinweise |
 |---|---|---|---|
@@ -618,7 +620,7 @@ der einen Schlüssel an eine Appliance auslieferte, die Uploads annimmt, würde 
 des echten installieren. Verwenden Sie stattdessen die **Vorschau**
 ([`POST /api/deploy/targets/preview`](./api.md)): Sie rendert die Anfrage gegen ein
 Beispielzertifikat und einen Beispielschlüssel, liest keine Datei und sendet nichts. Um einmal wirklich
-auszuliefern, verwenden Sie *Alle Hooks für eine Domain ausführen* (Admin), was eine ausdrückliche Aktion ist.
+auszuliefern, verwenden Sie [*Alle Hooks für eine Domain ausführen*](#alle-hooks-für-eine-domain-ausführen-admin) (Admin), was eine ausdrückliche Aktion ist.
 
 **Wovor das schützt und wovor nicht.**
 
@@ -670,8 +672,8 @@ Ausführungsdaten auslesen. Behandeln Sie die Datenbank von n8n und ihre Backups
 Schlüsselvariablen aus einem n8n-Ziel weg und holen Sie den Schlüssel auf anderem Weg. Den Workflow so einzustellen, dass er
 keine Ausführungen speichert, verhielt sich in derselben Prüfung **nicht** wie erwartet (die Ausführungen blieben
 mit ihren Daten im Zustand `running`), verlassen Sie sich also nicht auf diese Einstellung, ohne nachzusehen,
-was Ihre eigene Instanz speichert. Das ist der Fall, den die Tabelle oben mit „ein Empfänger, der
-aufbewahrt, was ihm gesendet wird" meint.
+was Ihre eigene Instanz speichert. Das ist der Fall, den die Tabelle oben mit „Manche Automatisierungsplattformen
+bewahren jeden Request-Body in einem Ausführungsverlauf auf" meint.
 
 ---
 

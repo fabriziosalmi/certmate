@@ -1,6 +1,6 @@
 # Architecture de CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 48da74fc37400a36 -->
+<!-- CERTMATE-TRANSLATED-FROM 16b7294196819288 -->
 
 Ce document couvre l'architecture complète de CertMate — à la fois le système de certificats serveur principal et le sous-système de certificats clients.
 
@@ -27,7 +27,7 @@ CertMate est un système modulaire et extensible de gestion de certificats SSL/T
 **Points clés :**
 - **Langage** : Python 3.12 (Flask, Flask-RESTX)
 - **Stockage** : Système de fichiers local par défaut + 5 backends distants (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible)
-- **Fournisseurs CA** : Let's Encrypt, DigiCert ACME, CA privée
+- **Fournisseurs CA** : Let's Encrypt, ZeroSSL, Google Trust Services, DigiCert ACME, SSL.com, Actalis, Sectigo, et toute autre CA ACME via l'entrée CA privée ; voir [Fournisseurs CA](./ca-providers.md)
 - **Fournisseurs DNS** : Cloudflare, AWS Route53, Azure, Google et d'autres — voir [Fournisseurs DNS](./dns-providers.md) pour la liste complète
 - **API** : REST avec Swagger/OpenAPI via Flask-RESTX
 - **Types de certificats actuels** : TLS côté serveur (DV, OV, EV)
@@ -38,22 +38,22 @@ CertMate est un système modulaire et extensible de gestion de certificats SSL/T
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  CertMate Application               │
+│                 CertMate Application                │
 │                                                     │
 │  ┌───────────────────────────────────────────────┐  │
-│  │             Web Layer (Flask)                  │  │
-│  │  Dashboard    Settings    Help    Client Certs │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
-│  ┌──────────────────┐   ┌────────────────────────┐  │
-│  │  REST API         │   │  Web Routes            │  │
-│  │  /api/certificates│   │  /api/web/certificates │  │
-│  │  /api/client-certs│   │  /client-certificates  │  │
-│  └────────┬─────────┘   └────────┬───────────────┘  │
-│           └──────────┬───────────┘                   │
-│                      ↓                               │
+│  │             Web Layer (Flask)                 │  │
+│  │  Dashboard   Settings   Help   Client Certs   │  │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
+│  ┌───────────────────┐  ┌────────────────────────┐  │
+│  │  REST API         │  │  Web Routes            │  │
+│  │  /api/certificates│  │  /api/web/certificates │  │
+│  │  /api/client-certs│  │  /client-certificates  │  │
+│  └─────────┬─────────┘  └───────────┬────────────┘  │
+│            └───────────┬────────────┘               │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Manager Layer (Business Logic)        │  │
+│  │          Manager Layer (Business Logic)       │  │
 │  │                                               │  │
 │  │  CertificateManager    CAManager              │  │
 │  │  DNSManager            StorageManager         │  │
@@ -61,28 +61,29 @@ CertMate est un système modulaire et extensible de gestion de certificats SSL/T
 │  │  CacheManager          FileOperations         │  │
 │  │  ClientCertManager     OCSPResponder          │  │
 │  │  CRLManager            AuditLogger            │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Execution Layer                       │  │
-│  │  Certbot (server certs via DNS-01 ACME)       │  │
+│  │          Execution Layer                      │  │
+│  │  Certbot (server certs over ACME)             │  │
 │  │  PrivateCA (client certs via direct signing)  │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Storage Layer (Pluggable Backends)    │  │
-│  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
+│  │          Storage Layer (Pluggable Backends)   │  │
+│  │  Local FS │ Azure KV │ AWS SM │ Vault         │  │
+│  │  Infisical │ S3-compatible                    │  │
 │  └───────────────────────────────────────────────┘  │
 │                                                     │
 └─────────────────────────────────────────────────────┘
 
-        ┌─────────────────────────────────────┐
-        │  Composition root — modules/factory.py
-        │                                     │
-        │  create_app() constructs every       │
-        │  manager and REGISTERS the API and   │
-        │  web layers onto the Flask app.      │
-        └───┬──────────────┬──────────────┬────┘
+        ┌─────────────────────────────────────────┐
+        │  Composition root — modules/factory.py  │
+        │                                         │
+        │  create_app() constructs every          │
+        │  manager and REGISTERS the API and      │
+        │  web layers onto the Flask app.         │
+        └───┬──────────────┬──────────────┬───────┘
             │ constructs   │ registers    │ registers
             ▼              ▼              ▼
       Manager Layer   REST API      Web Routes
@@ -142,7 +143,7 @@ CertMateApp (main application)
 ```
 1. User submits: domain, email, DNS provider, CA provider
 2. Validate inputs (domain format, email, provider existence)
-3. Get CA config (ACME URL, EAB credentials if DigiCert)
+3. Get CA config (ACME URL, EAB credentials if the CA requires them)
 4. Get DNS config (account credentials from settings)
 5. Create directory: certificates/{domain}/
 6. Build certbot command:
@@ -322,11 +323,10 @@ Les renouvellements préservent toujours la forme qui était en vigueur à la cr
 |--------|----------|---------|
 | GET | `/api/health` | Vérification de santé |
 | GET | `/api/certificates` | Lister tous les certificats |
-| POST | `/api/certificates` | Créer un nouveau certificat |
+| POST | `/api/certificates/create` | Créer un nouveau certificat |
 | GET | `/api/certificates/{domain}` | Obtenir les infos d'un certificat |
 | POST | `/api/certificates/{domain}/renew` | Renouveler un certificat |
 | GET | `/api/certificates/{domain}/download` | Téléchargement : ZIP par défaut ; `?file=<cert.pem\|chain.pem\|fullchain.pem\|privkey.pem\|combined.pem\|cert.pfx>` pour un seul fichier ; `?format=json` pour tous les PEM inclus dans la réponse |
-| GET | `/{domain}/tls` | Téléchargement direct fullchain |
 
 ### Certificats clients
 
@@ -359,7 +359,7 @@ Les renouvellements préservent toujours la forme qui était en vigueur à la cr
 
 ## Limitations clés
 
-1. **Certbot uniquement pour les certificats serveur** : Défis DNS-01 ACME seulement
+1. **Certbot uniquement pour les certificats serveur** : émis via ACME et validés par DNS-01, par HTTP-01 (pas de wildcards) ou par un compte Sectigo SCM qui autorise déjà les noms
 2. **Stockage serveur centré sur le domaine** : Un certificat par répertoire de domaine
 3. **Pas de base de données** : Un seul fichier JSON pour la configuration
 4. **Usage des clés des certificats serveur** : Pas de contrôle sur les extensions keyUsage/extendedKeyUsage
@@ -773,7 +773,7 @@ Chaque certificat a un fichier `metadata.json` contenant :
 
 - **Permissions des fichiers** : 0600 (lecture/écriture pour le propriétaire uniquement)
 - **Format des clés** : PEM au format traditionnel OpenSSL
-- **Pas de chiffrement des clés** : Clés stockées chiffrées au repos si utilisation de backends de stockage
+- **Pas de chiffrement des clés** : les clés privées sont écrites non chiffrées, protégées par les permissions de fichiers ci-dessus ; un backend de stockage distant conserve sa copie sous le chiffrement au repos qu'applique ce service
 
 ### Signature des certificats
 
@@ -807,13 +807,13 @@ Chaque certificat a un fichier `metadata.json` contenant :
 ### Performance API
 
 - **Limitation de débit** : Empêche l'épuisement des ressources
-- **Conception sans état** : Peut exécuter plusieurs instances
+- **Instance unique** : un seul worker gunicorn exécute l'API et l'ordonnanceur de renouvellement ; voir [Disponibilité et bascule](#disponibilité-et-bascule)
 - **Opérations par lots** : jusqu'à 100 lignes par requête (l'API rejette davantage avec un 400)
 
 ### Renouvellement automatique
 
 - **Planifié** : Tous les jours, les certificats serveur entre 01:00 et 03:00 (02:00 avec un décalage aléatoire d'une heure dans un sens ou dans l'autre), les certificats clients entre 02:00 et 04:00
-- **Quand** : 30 jours avant l'expiration par défaut (`renewal_threshold_days`), un tiers de la durée de vie pour un certificat qui vit moins de 60 jours (la moitié en dessous de 10 jours), ou là où la fenêtre de renouvellement de la CA (ARI) le place ; voir [le guide](./guide.md#quand-un-certificat-est-renouvele)
+- **Quand** : 30 jours avant l'expiration par défaut (`renewal_threshold_days`), lorsqu'il reste un tiers de sa durée de vie pour un certificat qui vit moins de 60 jours (la moitié en dessous de 10 jours), ou là où la fenêtre de renouvellement de la CA (ARI) le place ; voir [le guide](./guide.md#quand-un-certificat-est-renouvele)
 - **Tolérant aux erreurs** : Continue en cas d'erreur, journalise pour examen
 
 ---
@@ -885,7 +885,7 @@ heure n'entraîne rien d'autre avec elle.
 - Peut exporter des certificats via l'API
 - Peut interroger le statut via OCSP
 - Peut récupérer la CRL pour validation
-- Supporte l'intégration webhook/callback (futur)
+- Envoie des [notifications webhook](../webhooks.md) lors des événements de certificats et exécute les [hooks de déploiement](./deploy-hooks.md)
 
 ---
 
@@ -894,10 +894,7 @@ heure n'entraîne rien d'autre avec elle.
 ### Améliorations prévues
 
 1. **Protection par mot de passe de la CA** — Chiffrer les clés CA avec un mot de passe
-2. **Audit avancé** — Contrôle d'accès basé sur les rôles
-3. **Notifications Webhook** — Lors d'événements de certificats
-4. **Signature de certificats** — Accepter les CSR de sources externes
-5. **Jetons matériels** — Support PKCS#11 pour les HSM
+2. **Jetons matériels** — Support PKCS#11 pour les HSM
 
 ### Points d'extension
 
