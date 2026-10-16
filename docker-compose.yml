@@ -36,6 +36,18 @@ services:
       # default because a passphrase this file invented would be the same on
       # every installation that never changed it.
       - CERTMATE_BACKUP_PASSPHRASE=${CERTMATE_BACKUP_PASSPHRASE:-}
+      # Optional: the subject of the private CA that signs client certificates,
+      # used when that CA is created (first start, or a reset with no subject).
+      # An empty value keeps the default for its field. Changing them later
+      # does not replace an existing CA; POST /api/client-certs/ca/reset does.
+      - CERTMATE_CLIENT_CA_COUNTRY=${CERTMATE_CLIENT_CA_COUNTRY:-}
+      - CERTMATE_CLIENT_CA_STATE=${CERTMATE_CLIENT_CA_STATE:-}
+      - CERTMATE_CLIENT_CA_ORGANIZATION=${CERTMATE_CLIENT_CA_ORGANIZATION:-}
+      - CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT=${CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT:-}
+      - CERTMATE_CLIENT_CA_COMMON_NAME=${CERTMATE_CLIENT_CA_COMMON_NAME:-}
+      # Optional: C and ST of client certificates issued without them.
+      - CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY=${CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY:-}
+      - CERTMATE_CLIENT_CERT_DEFAULT_STATE=${CERTMATE_CLIENT_CERT_DEFAULT_STATE:-}
     # Bind mounts, so these four directories keep the HOST's ownership and
     # shadow the permissions the image sets. Docker creates them root-owned if
     # they do not exist, and CertMate runs as a non-root user, so on a fresh
