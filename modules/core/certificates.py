@@ -4705,7 +4705,7 @@ class CertificateManager:
         except (TypeError, ValueError):
             return cls.EARLY_RENEWAL_DEFAULT_PER_SWEEP
 
-    def _may_force_early(self, domain, settings, summary, lifetime):
+    def _may_force_early(self, domain, settings, summary, lifetime, now=None):
         """The two guards on a forced early renewal (#966, part 2).
 
         The cap counts attempts, not successes: it limits orders sent to the
@@ -4716,13 +4716,20 @@ class CertificateManager:
         unreadable age does not block a renewal that is due. The age is a week
         or a third of the lifetime, whichever is less (#393): a fixed week would
         never let a 160-hour certificate through.
+
+        The age is measured at `now`, the instant the sweep decided on. Measured
+        on the wall clock instead, it disagreed with the decision whenever the
+        two differ, which is exactly what tests/test_ari_staging_e2e.py does to
+        reach a CA's window: with 64-day certificates the threshold is ahead of
+        the lifetime rule, the renewal is early, and a certificate due at the
+        sweep's instant was measured as just issued and deferred.
         """
         if summary.get('early_forced', 0) >= self._early_renewal_cap(settings):
             logger.info("%s is due by the threshold, but this sweep already "
                         "forced its %d early renewals; it waits for the next.",
                         domain, self._early_renewal_cap(settings))
             return False
-        age = self._certificate_age_seconds(domain)
+        age = self._certificate_age_seconds(domain, now)
         min_age = renewal_policy.early_min_age_seconds(lifetime)
         if age is not None and age < min_age:
             logger.info("%s is due by the threshold but was issued less than "
@@ -4730,14 +4737,15 @@ class CertificateManager:
             return False
         return True
 
-    def _certificate_age_seconds(self, domain):
-        """Seconds since the served certificate's notBefore, or None."""
+    def _certificate_age_seconds(self, domain, now=None):
+        """Seconds from the served certificate's notBefore to `now`, or None."""
         try:
             with open(certificate_dir(self.cert_dir, domain) / 'cert.pem', 'rb') as f:
                 cert = x509.load_pem_x509_certificate(f.read())
         except (OSError, ValueError):
             return None
-        return int((utc_now() - cert.not_valid_before_utc.replace(tzinfo=None)).total_seconds())
+        now = now or utc_now()
+        return int((now - cert.not_valid_before_utc.replace(tzinfo=None)).total_seconds())
 
     #: Default for `auto_reissue_keyless_per_sweep` (#966, step 4).
     AUTO_REISSUE_DEFAULT_PER_SWEEP = 5
@@ -4868,7 +4876,7 @@ class CertificateManager:
             logger.info("%s is not due by the configured threshold, but its CA "
                         "says its renewal window has opened; renewing now.", domain)
         elif timing and timing['early']:
-            if not self._may_force_early(domain, settings, summary, timing['lifetime']):
+            if not self._may_force_early(domain, settings, summary, timing['lifetime'], now):
                 summary['early_deferred'] += 1
                 return False
             summary['early_forced'] += 1

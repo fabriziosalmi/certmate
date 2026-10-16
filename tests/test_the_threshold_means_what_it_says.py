@@ -251,3 +251,79 @@ def test_only_a_renewal_the_threshold_brings_ahead_of_the_lifetime_rule_is_early
     later = now + datetime.timedelta(days=15)                                      # 25 days left
     assert renewal_policy.is_early(not_before, not_after, 45, later) is False     # the lifetime rule
     assert renewal_policy.is_early(not_before, not_after, 60, now) is False       # over half: ignored
+
+
+def _served_certificate(tmp_path, domain, *, issued_days_ago, lifetime_days):
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, domain)])
+    not_before = datetime.datetime.now(datetime.UTC) - datetime.timedelta(
+        days=issued_days_ago)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+            .public_key(key.public_key()).serial_number(1)
+            .not_valid_before(not_before)
+            .not_valid_after(not_before + datetime.timedelta(days=lifetime_days))
+            .sign(key, hashes.SHA256()))
+    (tmp_path / domain).mkdir()
+    (tmp_path / domain / 'cert.pem').write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+
+
+def test_the_age_is_measured_at_the_instant_the_sweep_decided_on(tmp_path):
+    """One clock for the decision, the age guard included.
+
+    Measured on 2026-10-16: Let's Encrypt staging issues 64-day certificates.
+    With a 30-day threshold the threshold is then ahead of the lifetime rule
+    (a third of 64 days), so a renewal it calls due is early and the age guard
+    applies. tests/test_ari_staging_e2e.py moves the sweep's clock into the
+    CA's window, weeks ahead; the guard measured the age on the wall clock,
+    called the certificate just issued, and deferred the renewal the CA asked
+    for. In production the two clocks are the same, so this changes nothing
+    there; it makes the guard agree with the decision it guards.
+    """
+    from modules.core import ari
+
+    domain = 'clock.example.com'
+    manager, calls = _manager(tmp_path, seconds_left=63 * DAY, lifetime_days=64)
+    _served_certificate(tmp_path, domain, issued_days_ago=1, lifetime_days=64)
+    manager._certificate_age_seconds = CertificateManager._certificate_age_seconds.__get__(manager)
+    moved = utc_now() + datetime.timedelta(days=40)
+    manager._ari_client = ari.RenewalInfoClient(clock=lambda: moved)
+
+    summary = _sweep(manager, [domain], {'renewal_threshold_days': 30})
+
+    assert summary['early_deferred'] == 0, summary
+    assert summary['early_forced'] == 1 and summary['renewed'] == 1, summary
+    assert calls == [(domain, True)]
+
+
+def test_a_certificate_young_at_the_sweep_s_instant_is_still_held(tmp_path):
+    """CONTROL: the guard still holds. The same early renewal, at the same
+    moved instant, for a served certificate issued two days before it: younger
+    than the week the guard asks for, so it is deferred."""
+    from modules.core import ari
+
+    domain = 'young.example.com'
+    manager, calls = _manager(tmp_path, seconds_left=63 * DAY, lifetime_days=64)
+    moved = utc_now() + datetime.timedelta(days=40)
+    _served_certificate(tmp_path, domain, issued_days_ago=-38, lifetime_days=64)
+    manager._certificate_age_seconds = CertificateManager._certificate_age_seconds.__get__(manager)
+    manager._ari_client = ari.RenewalInfoClient(clock=lambda: moved)
+
+    summary = _sweep(manager, [domain], {'renewal_threshold_days': 30})
+
+    assert calls == [] and summary['early_deferred'] == 1, summary
+
+
+def test_the_age_function_reads_the_instant_it_is_given(tmp_path):
+    _served_certificate(tmp_path, 'at.example.com', issued_days_ago=2, lifetime_days=64)
+    manager = CertificateManager.__new__(CertificateManager)
+    manager.cert_dir = tmp_path
+    later = utc_now() + datetime.timedelta(days=10)
+
+    age = manager._certificate_age_seconds('at.example.com', later)
+
+    assert 12 * DAY - 60 <= age <= 12 * DAY + 60
