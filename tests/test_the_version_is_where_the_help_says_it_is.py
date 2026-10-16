@@ -61,6 +61,16 @@ def client(tmp_path_factory):
             'ops', 'Str0ng-Passw0rd-For-A-Test!', 'admin')
         container.managers['auth'].enable_local_auth(True)
         test_client = application.test_client()
+        # The login rate limiter's buckets are module globals of the PROCESS,
+        # so a test that logged in earlier on the same xdist worker spent this
+        # fixture's budget: about one full run in two, the login answered 429
+        # and all 15 tests here errored at setup (measured 2026-10-16). Emptied
+        # before, as tests/contract_routes.py does for the same reason (#1098),
+        # and after, so this module leaves nothing behind either.
+        from modules.web import routes as web_routes
+        buckets = (web_routes._login_attempts_by_ip, web_routes._login_attempts_by_user)
+        for bucket in buckets:
+            bucket.clear()
         # Signed in: an anonymous request is redirected to login.html, the one
         # page that does not extend base.html, so an anonymous run would test
         # the login screen six times over.
@@ -69,6 +79,8 @@ def client(tmp_path_factory):
             json={'username': 'ops', 'password': 'Str0ng-Passw0rd-For-A-Test!'})
         assert signed_in.status_code == 200, signed_in.get_data(as_text=True)
         yield test_client
+        for bucket in buckets:
+            bucket.clear()
 
 
 def test_the_version_under_test_is_a_version():
