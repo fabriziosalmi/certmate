@@ -155,7 +155,7 @@ def test_batch_prevalidated_skips_default_dns_and_tracks_renewal(tmp_path, reque
         'email': 'ops@example.com', 'dns_provider': 'cloudflare',
         'default_ca': 'sectigo', 'challenge_type': 'prevalidated',
     }
-    manager = MagicMock(cert_dir=tmp_path)
+    manager = MagicMock(cert_dir=tmp_path, ca_manager=None)
     manager.create_certificate.return_value = {
         'dns_provider': None, 'ca_provider': 'sectigo', 'success': True}
     auth = MagicMock()
@@ -191,7 +191,7 @@ def test_batch_prevalidated_keeps_explicit_dns_provider_for_validation(tmp_path)
     settings.load_settings.return_value = {
         'email': 'ops@example.com', 'dns_provider': 'cloudflare',
     }
-    manager = MagicMock(cert_dir=tmp_path)
+    manager = MagicMock(cert_dir=tmp_path, ca_manager=None)
     auth = MagicMock()
     auth.require_role.side_effect = lambda role: lambda fn: fn
     auth.user_can_access_domain.return_value = True

@@ -148,6 +148,16 @@ server.listen(0, "127.0.0.1", () => {
         if (!ren.body || ren.body.async !== true) {
           fail(`renew must request async issuance; sent ${JSON.stringify(ren.body)}`);
         }
+        // The tool described itself as forcing a renewal while it never sent
+        // `force`, so an agent was told one thing and CertMate did another.
+        // What the description promises and what the request asks must agree.
+        const renewDescription = (require("fs").readFileSync(INDEX, "utf8")
+          .match(/name:\s*"certmate_renew_certificate",\s*description:\s*"([^"]*)"/) || [])[1];
+        if (!renewDescription) fail("could not read the renew tool's description");
+        const sendsForce = Object.prototype.hasOwnProperty.call(ren.body, "force");
+        if (/\bforce/i.test(renewDescription) !== sendsForce) {
+          fail(`renew description and request disagree about forcing: "${renewDescription}" vs ${JSON.stringify(ren.body)}`);
+        }
         console.log("OK: create / renew / update all request async issuance (202 + job_id)");
         console.log("OK: delete -> DELETE; update -> POST reissue (body, and san_domains omitted when sans absent); get_file -> GET ?file= returning raw PEM");
         console.log("PASS");

@@ -14,7 +14,7 @@ import time
 import logging
 import signal
 import shutil
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime
 from dataclasses import dataclass, field
 
@@ -27,18 +27,19 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import ClassVar
 from cryptography import x509
-from .ca_manager import CAManager
+from .ca_manager import CAManager, resolve_ca_account
 from .cert_labels import tags_from_metadata
 from .shell import ShellExecutor
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
                              check_certbot_plugin_installed, clamp_propagation_seconds,
                              manual_hook_arguments)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
-                        DEFAULT_RENEWAL_THRESHOLD_DAYS)
+                        DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs)
 from .inventory_sources import collect_domain_sources
 from . import acme_profiles, renewal_policy
-from .domain_entries import entry_auto_renew, entry_domain
+from .domain_entries import entry_auto_renew, entry_domain, entry_external
 from .structured_logging import LogContext, new_correlation_id, scrub_log_value
 from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
@@ -127,6 +128,50 @@ class ChallengeRecordInUse(DomainOperationInProgress):
                      f"try {domain} again when it finishes",)
 
 
+class ExternalCertificate(ValueError):
+    """The certificate was imported as external: CertMate stores, deploys and
+    watches it, and never issues, renews or reissues it, because no CA here can.
+
+    A ValueError, so a caller with no mapping of its own still refuses it as a
+    bad request rather than reporting a server failure. The API answers it with
+    409 and the code below.
+    """
+    code = 'EXTERNAL_CERTIFICATE'
+
+    def __init__(self, domain):
+        self.domain = domain
+        super().__init__(
+            f"{domain} is an external certificate: CertMate stores and deploys it, "
+            f"but does not issue, renew or reissue it")
+
+
+class ReplacementRefused(ValueError):
+    """A replacement by upload that is not made, with why as ``code``.
+
+    Every message is fixed text and the domain: nothing from the upload or
+    from an exception reaches it. The API answers it with 409.
+    """
+    NOT_EXTERNAL = 'CERTIFICATE_NOT_EXTERNAL'
+    UNCHANGED = 'REPLACEMENT_UNCHANGED'
+    EXPIRES_EARLIER = 'REPLACEMENT_EXPIRES_EARLIER'
+    HAS_LINEAGE = 'CERTIFICATE_HAS_LINEAGE'
+
+    _MESSAGES: ClassVar[dict] = {
+        NOT_EXTERNAL: ('{domain} is renewed through a CA, so it is not replaced by upload. '
+                       'Only an external certificate is.'),
+        UNCHANGED: 'The uploaded certificate is the one {domain} already serves.',
+        EXPIRES_EARLIER: ('The uploaded certificate expires before the one {domain} serves. '
+                          'Send allow_earlier_expiry: true if that is intended.'),
+        HAS_LINEAGE: ('{domain} has a certbot lineage, which would be copied back over an '
+                      'uploaded certificate. It is not replaced.'),
+    }
+
+    def __init__(self, code, domain):
+        self.code = code
+        self.domain = domain
+        super().__init__(self._MESSAGES[code].format(domain=domain))
+
+
 class CertificateNamesUnknown(Exception):
     """A certificate exists for *domain* but the names it covers cannot be read:
     no certificate anywhere it is kept could be parsed, and no record lists them.
@@ -165,7 +210,7 @@ class ReissueRequired(RuntimeError):
 _REISSUE_OWNED_METADATA_KEYS = frozenset({
     'domain', 'san_domains', 'dns_provider', 'challenge_type', 'created_at',
     'email', 'staging', 'account_id', 'ca_provider', 'ca_account_id',
-    'domain_alias', 'alias_dns_provider', 'storage_warning',
+    'domain_alias', 'alias_dns_provider', 'storage_warning', 'imported_at',
     # The ACME profile (#395) is the issuance's: a reissue that clears it clears it, and what
     # the last issuance found about it (withdrawn by the CA) goes with it.
     'acme_profile', 'acme_profile_withdrawn_at',
@@ -398,6 +443,14 @@ def _reject_path_escaping_domain(domain):
     precondition, which is exactly the shape CodeQL flags — and it was right.
     """
     reject_unsafe_domain(domain)
+
+
+def _confined_import_path(path, directory):
+    """Resolve symlinks before checking containment, and use that checked path."""
+    resolved = os.path.realpath(path)
+    if not resolved.startswith(os.path.realpath(directory) + os.sep):
+        raise ValueError('Invalid imported certificate path')
+    return Path(resolved)
 
 
 @dataclass
@@ -1147,6 +1200,109 @@ class CertificateManager:
         except ChallengeRecordBusy as busy:
             raise ChallengeRecordInUse(domain, str(busy)) from None
 
+    def is_external(self, domain, *, metadata=None, settings=None):
+        """Whether *domain* was imported as an external certificate.
+
+        Two records say so, the certificate's metadata and its settings entry,
+        and either one is enough. One record would not do: a missing
+        ``ca_provider`` already means "the default CA" on every issuing path, so
+        losing the marker would not make the certificate unknown, it would make
+        it a certificate CertMate reissues from its default CA. Metadata that
+        fails to parse is quarantined and read back empty, and a settings entry
+        can be lost to a restore or a hand edit; the two do not fail together.
+        """
+        if metadata is None:
+            metadata = self._load_metadata(domain)
+        if isinstance(metadata, dict) and metadata.get('external') is True:
+            return True
+        if settings is None:
+            settings = self.settings_manager.load_settings()
+        domains = settings.get('domains') if isinstance(settings, dict) else None
+        return any(entry_domain(raw) == domain and entry_external(raw)
+                   for raw in domains or [])
+
+    def refuse_external(self, domain, **records):
+        """Raise :class:`ExternalCertificate` when *domain* is external."""
+        if self.is_external(domain, **records):
+            raise ExternalCertificate(domain)
+
+    def _refuse_external_issuance(self, domain):
+        """`refuse_external` for `create_certificate`, which must not load
+        settings for nothing: a fully specified HTTP-01 create needs none, and
+        that is the issuance hot path (see `_LazySettings`).
+
+        The metadata is read every time. The settings entry is read only when a
+        certificate is on disk, because an external certificate always has its
+        files: they are stored before it is registered. "On disk" is what
+        `iter_cert_domain_dirs` lists, matched by name, so no path is built
+        from the requested domain here.
+        """
+        metadata = self._load_metadata(domain)
+        if isinstance(metadata, dict) and metadata.get('external') is True:
+            raise ExternalCertificate(domain)
+        if self._listed_certificate_dir(domain) is not None:
+            self.refuse_external(domain, metadata=metadata)
+
+    def _listed_certificate_dir(self, domain):
+        """The directory of the certificate *domain*, as `iter_cert_domain_dirs`
+        lists it, or None when there is no certificate by that name.
+
+        Matched by name in the listing rather than built from it, so a path
+        that reaches the filesystem never comes from a request.
+        """
+        return next((path for path in iter_cert_domain_dirs(self.cert_dir)
+                     if path.name == domain), None)
+
+    def has_certificate(self, domain):
+        """Whether a certificate by the name *domain* is on disk."""
+        return self._listed_certificate_dir(domain) is not None
+
+    def served_certificate(self, domain):
+        """The leaf certificate *domain* serves, or None when it cannot be parsed.
+
+        Raises FileNotFoundError when there is no certificate by that name.
+        """
+        directory = self._listed_certificate_dir(domain)
+        if directory is None:
+            raise FileNotFoundError(f'No certificate found for domain: {domain}')
+        try:
+            return x509.load_pem_x509_certificate((directory / 'cert.pem').read_bytes())
+        except (OSError, ValueError):
+            return None
+
+    def replace_external_certificate(self, domain, cert_files, owned_metadata):
+        """Publish an uploaded bundle in place of the external certificate
+        *domain*; the caller holds the domain lock and has checked the bundle.
+
+        The four files are staged beside the certificate and promoted by
+        `_publish_flat_files`, the publish a renewal uses, so a reader sees the
+        previous pair or the new one. The metadata keeps everything the upload
+        does not own (deployment probe, notes, tags, when it was imported) and
+        takes *owned_metadata* for the rest, which restores the external marker
+        if the file had been lost. Then the commit every issuance makes: the
+        backend copy, the metadata, the cache and the PFX.
+
+        Refused when a certbot lineage is there: the startup reconcile would
+        copy it back over the upload.
+        """
+        directory = self._listed_certificate_dir(domain)
+        if directory is None:
+            raise FileNotFoundError(f'No certificate found for domain: {domain}')
+        if (directory / 'live').is_dir():
+            raise ReplacementRefused(ReplacementRefused.HAS_LINEAGE, domain)
+        with tempfile.TemporaryDirectory(prefix='.replace-', dir=self.cert_dir) as temp:
+            staging = Path(temp)
+            for name in CERTIFICATE_FILES:
+                path = staging / name
+                with open(path, 'xb') as handle:
+                    os.chmod(path, 0o600)
+                    handle.write(cert_files[name])
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            published = self._publish_flat_files(staging, directory)
+        metadata = {**self._load_metadata(domain), **owned_metadata}
+        return self._commit_certificate(domain, published, metadata)
+
     @contextmanager
     def domain_lock(self, domain: str):
         """Hold the per-domain lock for the duration of the block.
@@ -1292,6 +1448,31 @@ class CertificateManager:
         self._invalidate_certificate_info_cache(domain)
         self._write_pfx(domain)
         return storage_warning
+
+    def store_imported_certificate(self, domain, cert_files, metadata):
+        """Publish a NEW validated bundle atomically; caller holds domain_lock."""
+        _reject_path_escaping_domain(domain)
+        destination = certificate_dir(self.cert_dir, domain)
+        if destination.exists() or destination.is_symlink():
+            raise FileExistsError(f'Certificate directory for {domain} already exists')
+        if self.storage_manager and self.storage_manager.certificate_exists(domain):
+            raise FileExistsError(f'Certificate for {domain} already exists in storage')
+        # Stage outside inventory: readers must never see a cert without its key/config.
+        with tempfile.TemporaryDirectory(prefix='.import-', dir=self.cert_dir) as temp:
+            staging = certificate_dir(temp, domain)
+            staging.mkdir(mode=0o700)
+            for name in CERTIFICATE_FILES:
+                path = staging / name
+                with open(path, 'xb') as handle:
+                    os.chmod(path, 0o600)
+                    handle.write(cert_files[name])
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            self._atomic_json_write(staging / 'metadata.json', {
+                **metadata, 'metadata_schema_version': METADATA_SCHEMA_VERSION})
+            staging.rename(destination)
+            _fsync_directory(self.cert_dir)
+        return self._commit_certificate(domain, cert_files, metadata)
 
     def _merge_reissue_metadata(self, domain: str, issuance: dict) -> dict:
         """Carry forward the metadata a reissue does not own (#421).
@@ -2430,8 +2611,11 @@ class CertificateManager:
         account_id = metadata.get('account_id')
         if settings is None:
             settings = self.settings_manager.load_settings()
-        if not dns_provider:
-            # Fall back to current settings
+        external = self.is_external(domain, metadata=metadata, settings=settings)
+        if not dns_provider and not external:
+            # Fall back to current settings. Not for an external certificate:
+            # no DNS provider validates it, and borrowing the global one would
+            # label it, and its metrics, with a provider it does not use.
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
 
         # Get configurable renewal threshold (default 30 days for backward
@@ -2499,10 +2683,13 @@ class CertificateManager:
                 # listing path never fetches the key, so only a key we looked
                 # for and did not find (or one that does not match) forces
                 # attention here.
-                'needs_renewal': (now_utc >= renew_instant
+                # An external certificate has no renewal: nothing here renews
+                # it, so it has no instant to report and is never due, though
+                # a key that is gone or wrong still needs attention now.
+                'needs_renewal': ((not external and now_utc >= renew_instant)
                                   or key_state in ('missing', 'mismatched')),
                 # The instant the sweep renews it at, so a client is told when, not only whether.
-                'renews_at': renewal_policy.stamp(renew_instant),
+                'renews_at': None if external else renewal_policy.stamp(renew_instant),
                 'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
                 'reissue_required': self._reissue_required(domain, key_state),
@@ -2512,6 +2699,10 @@ class CertificateManager:
                 'alias_dns_provider': alias_dns_provider,
                 'san_domains': san_domains,
                 'ca_provider': ca_provider,
+                'ca_account_id': metadata.get('ca_account_id'),
+                'imported_at': metadata.get('imported_at'),
+                'external': external,
+                'replaced_at': metadata.get('replaced_at'),
                 'challenge_type': challenge_type,
                 'account_id': account_id,
                 # Surfaced so a failed external-storage save (DR copy missing
@@ -2562,6 +2753,10 @@ class CertificateManager:
             'alias_dns_provider': alias_dns_provider,
             'san_domains': san_domains,
             'ca_provider': ca_provider,
+            'ca_account_id': metadata.get('ca_account_id'),
+            'imported_at': metadata.get('imported_at'),
+            'external': external,
+            'replaced_at': metadata.get('replaced_at'),
             'challenge_type': challenge_type,
             'account_id': account_id,
             'storage_warning': metadata.get('storage_warning'),
@@ -2660,42 +2855,9 @@ class CertificateManager:
         logger.info(f"Using CA provider: {ca_provider}")
 
         # Get CA account configuration if CA manager is available
-        ca_account_config = None
-        used_ca_account_id = None
-        if self.ca_manager:
-            try:
-                ca_account_config, used_ca_account_id = self.ca_manager.get_ca_config(ca_provider, ca_account_id)
-                logger.info(f"Using CA account: {used_ca_account_id}")
-            except Exception as e:
-                if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
-                    # The one CA that needs no saved configuration: certbot's
-                    # defaults are the configuration. With none on disk the
-                    # plain-certbot branch below handles it (staging via
-                    # --staging). Do NOT reset the provider here — that would
-                    # silently flip a staging request to production issuance.
-                    logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
-                else:
-                    # Everything else fails closed. This used to fall back to
-                    # Let's Encrypt and answer 201, so a request for DigiCert,
-                    # ZeroSSL, Google, SSL.com, Actalis or a PRIVATE CA came
-                    # back as a certificate from a different authority, with a
-                    # log warning as the only signal. Measured, six providers
-                    # did it; only Sectigo refused, because it was added after
-                    # the fallback and carved itself out (#884).
-                    #
-                    # The private-CA case is the one that settles it. An
-                    # operator asking their internal CA for an internal name
-                    # and receiving a publicly-trusted certificate has had
-                    # that name published, and no log line undoes it.
-                    #
-                    # There is no safe substitute for the CA that was asked
-                    # for, so there is nothing to substitute.
-                    raise ValueError(
-                        f"CA provider '{ca_provider}' is not configured on this "
-                        f"instance, and issuing from a different CA is not a "
-                        f"substitute for the one you asked for. Configure it in "
-                        f"Settings, or request a CA that is configured. ({e})"
-                    ) from e
+        ca_account_config, used_ca_account_id = resolve_ca_account(self.ca_manager, ca_provider, ca_account_id)
+        if used_ca_account_id is not None:
+            logger.info("Using CA account: %s", scrub_log_value(used_ca_account_id))
         return ca_provider, staging, ca_account_config, used_ca_account_id
 
     def _resolve_challenge_and_dns(self, settings, domain, challenge_type,
@@ -3162,7 +3324,7 @@ class CertificateManager:
             return ''
         return f"\n\n{sentence}" if sentence else ''
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False, acme_profile=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False, acme_profile=None, imported_renewal_force=None):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -3204,12 +3366,15 @@ class CertificateManager:
                 None means "not said": the CA account's default for a new
                 certificate, the recorded profile for a reissue or a CSR
                 renewal. '' means the CA's own default, explicitly.
-            renewal: Keyword-only, and passed by one caller:
-                `_renew_from_stored_csr`, which renews a CSR-only certificate
-                by re-running issuance. The certificate is not new, so its
+            renewal: Keyword-only; CSR and first-import renewals re-run
+                issuance. The certificate is not new, so its
                 `created_at` is kept, `renewed_at` is stamped, and the run is
                 not counted as a creation; the caller counts the renewal
                 (#666, D4).
+            imported_renewal_force: Explicit first-import renewal entry point.
+                None keeps ordinary issuance behavior, including renewal=True.
+                False resolves import metadata under the lock and checks the due date;
+                True does the same but bypasses the due-date gate.
             replace: Reissue over the existing certbot lineage (#267). The
                 same ``--cert-name`` with a different ``-d`` set makes
                 certbot replace the lineage's domain set (expand AND
@@ -3241,6 +3406,18 @@ class CertificateManager:
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
             raise DomainOperationInProgress(domain)
+        # Every certbot certonly runs through here: create, reissue, a CSR or
+        # first-import renewal, and the sweep's auto-reissue. Asked under the
+        # lock an import holds while it stores, and before the try below, so a
+        # refusal is not counted as a failed creation. The first-import renewal
+        # asks inside its branch instead, once its paths are confined: nothing
+        # there may read the metadata before they are.
+        if imported_renewal_force is None:
+            try:
+                self._refuse_external_issuance(domain)
+            except ExternalCertificate:
+                domain_lock.release()
+                raise
 
         # Track timing for metrics
         start_time = time.time()
@@ -3255,6 +3432,33 @@ class CertificateManager:
         artifacts = _IssuanceArtifacts()
 
         try:
+            if imported_renewal_force is not None:
+                # First import renewal: resolve under the issuance lock so a concurrent
+                # config edit is honored and two renewals cannot buy two certificates.
+                output, path_error = validate_domain_path(domain, self.cert_dir)
+                if path_error:
+                    raise ValueError('Invalid imported certificate domain')
+                cert_path = _confined_import_path(output / 'cert.pem', output)
+                lineage_path = _confined_import_path(renewal_conf(output, domain), output)
+                if not cert_path.exists():
+                    raise FileNotFoundError(f'No imported certificate found for domain: {domain}')
+                if lineage_path.exists():
+                    return {'success': True, 'renewed': False, 'domain': domain,
+                            'message': 'Imported certificate already has a renewal lineage'}
+                metadata = self._load_metadata(domain)
+                self.refuse_external(domain, metadata=metadata)
+                if not metadata.get('imported_at'):
+                    raise FileNotFoundError(f'No imported certificate found for domain: {domain}')
+                if not imported_renewal_force and not self.get_certificate_info(domain, use_cache=False)['needs_renewal']:
+                    return {'success': True, 'renewed': False, 'domain': domain,
+                            'message': 'Imported certificate is not yet due for renewal'}
+                (email, dns_provider, account_id, ca_provider, ca_account_id,
+                 domain_alias, alias_dns_provider, san_domains, challenge_type,
+                 key_type, key_size, elliptic_curve, acme_profile) = (
+                    metadata.get(k) for k in ('email', 'dns_provider', 'account_id',
+                    'ca_provider', 'ca_account_id', 'domain_alias', 'alias_dns_provider',
+                    'san_domains', 'challenge_type', 'key_type', 'key_size',
+                    'elliptic_curve', 'acme_profile'))
             prepared = self._prepare_issuance(
                 domain=domain, email=email, dns_provider=dns_provider,
                 dns_config=dns_config, account_id=account_id, staging=staging,
@@ -3667,8 +3871,8 @@ class CertificateManager:
         has_keys = any(archive.glob('privkey*.pem'))
         return has_certs and not has_keys
 
-    def renew_certificate(self, domain, force=False):
-        """Renew a certificate"""
+    def _renew_without_lineage(self, domain, force):
+        """CSR certificates and new imports need issuance, not `certbot renew`."""
         # A CSR-only certificate has no certbot lineage, so `certbot renew`
         # will never touch it — certbot says so on issuance: "Certificates
         # created using --csr will not be renewed automatically by Certbot. You
@@ -3683,6 +3887,25 @@ class CertificateManager:
         csr_renewal = self._csr_renewal_request(domain)
         if csr_renewal is not None:
             return self._renew_from_stored_csr(domain, csr_renewal)
+
+        metadata = self._load_metadata(domain)
+        if metadata.get('imported_at') and not renewal_conf(certificate_dir(self.cert_dir, domain), domain).exists():
+            result = self.create_certificate(
+                domain=domain, email=metadata.get('email'),
+                replace=True, renewal=True, imported_renewal_force=force)
+            result.setdefault('renewed', True)
+            result.setdefault('message', 'Imported certificate renewed successfully')
+            return result
+        return None
+
+    def renew_certificate(self, domain, force=False):
+        """Renew a certificate."""
+        # The lineage branch below runs `certbot renew` without passing
+        # through create_certificate, so it is refused here as well.
+        self.refuse_external(domain)
+        result = self._renew_without_lineage(domain, force)
+        if result is not None:
+            return result
 
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
@@ -4001,6 +4224,10 @@ class CertificateManager:
 
         Returns the result dict `renew_certificate` returns unchanged.
         """
+        live_dir = lineage_live_dir(domain_dir, domain)
+        # A first-import issuance may have finished before its publication or metadata save failed.
+        if metadata.get('imported_at') and all((live_dir / name).is_file() for name in CERTIFICATE_FILES):
+            return self._publish_renewed_certificate(domain, domain_dir, metadata)
         # Before returning: does the flat copy still agree with
         # live/? This branch is where a half-finished publish
         # became permanent — it returns before the copy below, so
@@ -4088,6 +4315,7 @@ class CertificateManager:
         # Stamp the renewal BEFORE storing, so the external copy
         # carries the same renewed_at as the local one; then persist
         # metadata once, with the resulting storage state (#423).
+        metadata.pop('imported_at', None)
         metadata['renewed_at'] = utc_now_iso()
         # Persist when there is metadata to update OR a warning to record: a
         # domain with no metadata.json would otherwise lose the only signal
@@ -4290,7 +4518,10 @@ class CertificateManager:
                    # than a week or a third of its lifetime.
                    'early_forced': 0, 'early_deferred': 0,
                    # Reissued by the sweep itself, opt-in (#966, step 4).
-                   'auto_reissued': 0}
+                   'auto_reissued': 0,
+                   # Imported as external: no CA here can renew them, so they
+                   # are counted apart from the certificates switched off.
+                   'external': 0}
         # Every domain this sweep took a decision about, so the reconciliation
         # below can name the certificates it never reached. Collected rather
         # than re-derived from `domains`, because a malformed entry is skipped
@@ -4322,6 +4553,13 @@ class CertificateManager:
                 per_cert_auto_renew = entry_auto_renew(domain_entry)
 
                 considered.add(domain)
+
+                # External certificates are skipped before the opt-out: their
+                # auto_renew is off as well, and counting them as switched off
+                # would read as a choice someone could reverse.
+                if entry_external(domain_entry) or self.is_external(domain, settings=settings):
+                    summary['external'] += 1
+                    continue
 
                 # Per-certificate opt-out: skip when auto_renew is explicitly
                 # disabled on this domain entry. The global auto_renew flag is
@@ -4391,17 +4629,18 @@ class CertificateManager:
         summary['duration_seconds'] = round(duration, 2)
         summary['examined'] = (
             summary['checked'] + summary['skipped_disabled']
-            + summary['skipped_invalid'])
+            + summary['skipped_invalid'] + summary['external'])
         self._mark_sweep_finished(summary, duration)
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
-            "%d failed, %d disabled, %d invalid, %d not-due, %d busy, "
-            "%d unmanaged, %d re-registered, %d need reissue, "
+            "%d failed, %d disabled, %d external, %d invalid, %d not-due, "
+            "%d busy, %d unmanaged, %d re-registered, %d need reissue, "
             "%d auto-reissued, %d early (forced), %d early deferred, "
             "%d brought forward by the CA, %d postponed by the CA",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
-            summary['skipped_disabled'], summary['skipped_invalid'],
+            summary['skipped_disabled'], summary['external'],
+            summary['skipped_invalid'],
             summary['skipped_not_due'], summary['skipped_busy'],
             summary['unmanaged'], summary['reregistered'],
             summary['reissue_required'], summary['auto_reissued'],
@@ -4820,6 +5059,10 @@ class CertificateManager:
 
         client = self._renewal_info_client()
         now = now or client.now()
+        if cert_info.get('external'):
+            # No CA here renews it, so there is no CA to ask about it.
+            self._record_renewal_info(domain, ari.observation(None, ari.STATUS_EXTERNAL, None, now))
+            return ari.STATUS_EXTERNAL
         try:
             raw = (certificate_dir(self.cert_dir, domain) / 'cert.pem').read_bytes()
             cert_id = ari.certificate_id(x509.load_pem_x509_certificate(raw))
@@ -4827,9 +5070,12 @@ class CertificateManager:
             # A self-signed certificate with no Authority Key Identifier
             # cannot be named in ARI at all; so can an unreadable file.
             logger.info("Cannot build an ARI identifier for %s: %s", domain, e)
-            self._record_renewal_info(domain, ari.observation(
-                None, ari.STATUS_NO_IDENTIFIER, None, now))
-            return ari.STATUS_NO_IDENTIFIER
+            status = ari.STATUS_IMPORTED if cert_info.get('imported_at') else ari.STATUS_NO_IDENTIFIER
+            self._record_renewal_info(domain, ari.observation(None, status, None, now))
+            return status
+        if cert_info.get('imported_at'):
+            self._record_renewal_info(domain, ari.observation(cert_id, ari.STATUS_IMPORTED, None, now))
+            return ari.STATUS_IMPORTED
         directory_url = self._acme_directory_url(cert_info)
         if not directory_url:
             # No usable ACME directory is, from here, a CA that publishes no
@@ -4936,6 +5182,16 @@ class CertificateManager:
         as something else. After this, the warning only ever names
         certificates the sweep genuinely could not take on.
         """
+        metadata = self._load_metadata(domain)
+        if self.is_external(domain, metadata=metadata, settings=settings):
+            # No CA here can renew it, so it is neither renewed nor reported
+            # as unmanaged. It is not written back to settings either: the
+            # re-registration below writes auto_renew on.
+            summary['external'] += 1
+            return
+        if metadata.get('imported_at') and metadata.get('auto_renew') is False:
+            summary['skipped_disabled'] += 1
+            return
         renewable, reason = self._unregistered_is_renewable(domain, settings)
         if not renewable:
             summary['unmanaged'] += 1
@@ -5222,8 +5478,8 @@ class CertificateManager:
         """Enable or disable automatic renewal for a single domain (issue #111).
 
         Returns True if the domain was found in settings and updated, False
-        otherwise. Legacy string-form entries are upgraded to dict form so the
-        flag can be persisted.
+        when absent. Save failures raise. Legacy string-form entries are upgraded
+        to dict form so the flag can be persisted.
         """
         # Flip the flag as a read-modify-write on the FRESH on-disk list, under
         # the lock. The previous shape — load_settings() (a request-cache hit)
@@ -5238,6 +5494,11 @@ class CertificateManager:
         class _DomainNotInSettings(Exception):
             pass
 
+        # Turning it on for an external certificate would promise a renewal no
+        # CA here can make. Turning it off is what it already is.
+        if enabled:
+            self.refuse_external(domain)
+
         def _flip(s):
             self.settings_manager.migrate_domains_format(s)
             new_domains = []
@@ -5251,8 +5512,17 @@ class CertificateManager:
                 raise _DomainNotInSettings
             s['domains'] = new_domains
 
+        metadata = self._load_metadata(domain)
+        # Only imports have a recovery copy protected by the issuance lock.
+        lock = self.domain_lock(domain) if metadata.get('imported_at') else nullcontext()
         try:
-            self.settings_manager.update(_flip, reason='set_auto_renew')
+            with lock:
+                if not self.settings_manager.update(_flip, reason='set_auto_renew'):
+                    raise RuntimeError('Failed to save auto-renew setting')
+                metadata = self._load_metadata(domain)
+                if metadata.get('imported_at') and 'auto_renew' in metadata:
+                    metadata['auto_renew'] = bool(enabled)
+                    self.write_metadata(domain, metadata)
         except _DomainNotInSettings:
             return False
         logger.info(f"auto_renew set to {bool(enabled)} for {domain}")

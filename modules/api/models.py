@@ -167,14 +167,17 @@ def create_api_models(api):
     renewal_info_model = api.model('RenewalInfo', {
         'status': fields.String(
             enum=['window', 'unsupported', 'unavailable', 'no_identifier',
-                  'disabled'],
+                  'disabled', 'imported', 'external'],
             description=(
                 "'window': the CA answered with a renewal window. "
                 "'unsupported': it publishes no renewalInfo, which will not "
                 "change. 'unavailable': it does, and the last sweep got no "
                 "usable answer. 'no_identifier': the certificate has no "
                 "Authority Key Identifier to name it by. 'disabled': "
-                "ari_enabled is false, so nothing is asked.")),
+                "ari_enabled is false, so nothing is asked. 'imported': the configured "
+                "CA is for future renewal, not the current issuer, so nothing is asked. "
+                "'external': the certificate was imported with no CA and CertMate never "
+                "renews it, so nothing is asked.")),
         'checked_at': fields.String(
             description='When the sweep asked, RFC 3339 UTC with Z.'),
         'window_start': fields.String(
@@ -231,7 +234,8 @@ def create_api_models(api):
                 'Whether the certificate needs renewing: true from renews_at '
                 'on, or now when its private key is missing or does not match. '
                 'Since API contract 2.40 decided by the same rule the renewal '
-                'sweep acts on.'
+                'sweep acts on. For an external certificate, only the key '
+                'counts (2.47).'
             )),
         'acme_profile': fields.String(
             description=(
@@ -251,8 +255,9 @@ def create_api_models(api):
                 'with a Z: the threshold where it is at most half the lifetime, '
                 'otherwise a third of the lifetime (half under 10 days), or the '
                 "CA's recorded ARI window, never with less than a sixth of the "
-                'lifetime left. Null when the certificate could not be parsed. '
-                'Added in API contract 2.40.'
+                'lifetime left. Null when the certificate could not be parsed, '
+                'and for an external certificate, which CertMate never renews '
+                '(2.47). Added in API contract 2.40.'
             )),
         'usable': fields.Boolean(
             description=(
@@ -298,8 +303,18 @@ def create_api_models(api):
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
         'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
-        'ca_provider': fields.String(description='CA provider the certificate was issued with (from metadata; null for older certificates)'),
-        'challenge_type': fields.String(description='Challenge type used at issuance (from metadata)'),
+        'ca_provider': fields.String(description='CA used at issuance, or selected for the next renewal of an imported certificate (from metadata)'),
+        'ca_account_id': fields.String(description=(
+            'CA account used at issuance, or selected for renewal of an imported certificate')),
+        'imported_at': fields.String(description=(
+            'When the currently served certificate was imported, ISO 8601; null after it is replaced by issuance')),
+        'external': fields.Boolean(description=(
+            'Imported with no CA: CertMate stores, deploys and watches it, and never issues, '
+            'renews or reissues it. Renew, reissue and enabling auto-renew answer 409 EXTERNAL_CERTIFICATE.')),
+        'replaced_at': fields.String(description=(
+            'When an external certificate was last replaced by upload, ISO 8601; null until it is')),
+        'challenge_type': fields.String(description=(
+            'Challenge used at issuance, or selected for renewal of an imported certificate (from metadata)')),
         'account_id': fields.String(description='DNS provider account used at issuance (from metadata)'),
         'storage_warning': fields.String(
             description=(
@@ -392,6 +407,41 @@ def create_api_models(api):
                          'fails although the record appears shortly after. POST it '
                          'whole: providers left out return to their defaults. '
                          'Returned since API contract 2.30.')),
+    })
+
+    import_cert_model = api.model('ImportCertificate', {
+        'external': fields.Boolean(default=False, description=(
+            'Import a certificate no CA here can renew: CertMate stores, deploys and watches it, and never '
+            'issues, renews or reissues it. No renewal field may be sent with it, and auto_renew must be '
+            'absent or false. Refused with 409 NAMES_ALREADY_MANAGED when any of its names is already '
+            'covered by a certificate CertMate manages.')),
+        'auto_renew': fields.Boolean(default=True, description=(
+            'Enable automatic renewal; false keeps the imported certificate until manual action. '
+            'Defaults to false, and must stay false, for an external certificate')),
+        'domain': fields.String(description='Optional primary identity; defaults to the first DNS name in the certificate'),
+        'certificate': fields.String(required=True, description='One leaf certificate in PEM format (max 64 KiB)'),
+        'chain': fields.String(required=True, description=(
+            'PEM issuers in order, intermediate first (max 64 KiB; root optional)')),
+        'private_key': fields.String(required=True, description='Matching unencrypted PEM private key (max 64 KiB)'),
+        'ca_provider': fields.String(description='CA to use for the next renewal'),
+        'ca_account_id': fields.String(description='CA account for the next renewal'),
+        'challenge_type': fields.String(enum=['dns-01', 'http-01', 'prevalidated']),
+        'dns_provider': fields.String(description='DNS provider for renewal'),
+        'account_id': fields.String(description='DNS account for renewal'),
+        'domain_alias': fields.String(description='Optional DNS-01 alias domain'),
+        'alias_dns_provider': fields.String(description='Optional provider hosting the alias zone'),
+        'acme_profile': fields.String(description='Optional ACME profile for renewal'),
+    })
+
+    replace_cert_model = api.model('ReplaceCertificate', {
+        'certificate': fields.String(required=True, description=(
+            'One leaf certificate in PEM format (max 64 KiB). It must name the domain being replaced.')),
+        'chain': fields.String(required=True, description=(
+            'PEM issuers in order, intermediate first (max 64 KiB; root optional)')),
+        'private_key': fields.String(required=True, description='Matching unencrypted PEM private key (max 64 KiB)'),
+        'allow_earlier_expiry': fields.Boolean(default=False, description=(
+            'Accept a certificate that expires before the one in place. Without it that is refused '
+            'with 409 REPLACEMENT_EXPIRES_EARLIER, against uploading an old file by mistake.')),
     })
 
     create_cert_model = api.model('CreateCertificate', {
@@ -737,6 +787,8 @@ def create_api_models(api):
         'deployment_status_model': deployment_status_model,
         'certificate_model': certificate_model,
         'create_cert_model': create_cert_model,
+        'import_cert_model': import_cert_model,
+        'replace_cert_model': replace_cert_model,
         'reissue_cert_model': reissue_cert_model,
         'cache_entry_model': cache_entry_model,
         'backup_metadata_model': backup_metadata_model,

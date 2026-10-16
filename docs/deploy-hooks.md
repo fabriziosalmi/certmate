@@ -113,7 +113,7 @@ Every invocation sets these in the hook's process environment:
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
 | `CERTMATE_CHAIN_PATH` | `/app/certificates/api.example.com/chain.pem` (intermediates only, no leaf — for targets that want the chain as a separate file) |
 | `CERTMATE_TAGS` | `loadbalancer,env:prod` — the certificate's [tags](api.md), comma-separated and lower case; **empty** when it has none, and always set, so a hook can rely on it (since API contract 2.33) |
-| `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` (Deploy Now) / `test` (per-hook test) |
+| `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` (Deploy Now) / `test` (per-hook test). `renewed` also follows the [replacement of an external certificate](api.md#replace-an-external-certificate) by upload. |
 | `CERTMATE_DRY_RUN` | Set to `1` only for a per-hook test (`/api/deploy/test/<id>`, the **Test** button); absent otherwise, including for Deploy Now. The command still runs; this is only a signal your script can check. |
 
 The paths are under CertMate's certificate directory: `/app/certificates` in the Docker image, or wherever `CERTMATE_CERT_DIR` points.

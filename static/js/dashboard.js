@@ -793,6 +793,12 @@
         '<span class="text-muted" title="Not recorded \u2014 this certificate was ' +
         'issued before CertMate stored the CA, or by an older version">\u2014</span>';
 
+    // An external certificate (#1159): imported with no CA, never renewed
+    // here. Its owner replaces it by upload.
+    var EXTERNAL_TITLE = 'External: CertMate stores, deploys and watches it, and never renews it. ' +
+        'Replace it by uploading the next certificate.';
+    var EXTERNAL_LABEL = '<span title="' + EXTERNAL_TITLE + '">External</span>';
+
     // When the CA would like this certificate replaced (ARI, RFC 9773), from
     // the record the renewal sweep keeps (#962) — the dashboard never asks the
     // CA itself. Every state renders as a sentence: "not checked yet" is an
@@ -847,6 +853,10 @@
                 return '<span class="text-warning-fg"' + checked + '>The CA did not answer at the last check</span>';
             case 'no_identifier':
                 return '<span class="text-muted"' + checked + '>Cannot be asked: no Authority Key Identifier</span>';
+            case 'imported':
+                return '<span class="text-muted"' + checked + '>Not asked: imported certificate; renewal CA is not its issuer</span>';
+            case 'external':
+                return '<span class="text-muted"' + checked + '>Not asked: external certificate, not renewed by CertMate</span>';
             case 'disabled':
                 return '<span class="text-muted">Off (ari_enabled is false)</span>';
         }
@@ -931,7 +941,9 @@
             // rowRaw() to opt out of re-escaping. cert.domain and
             // cert.domain_alias flow in unescaped; the helper escapes them.
             var providerLabel = providerDisplayName(cert.dns_provider);
-            var caLabel = caDisplayName(cert.ca_provider);
+            var external = cert.external === true;
+            var caLabel = external ? EXTERNAL_LABEL : caDisplayName(cert.ca_provider);
+            if (caLabel && cert.imported_at && !external) caLabel = 'Renewal: ' + caLabel;
             var caCell = caLabel ? '<span>' + caLabel + '</span>' : CA_NOT_RECORDED;
             var domainAlias = cert.domain_alias || '';
 
@@ -1047,15 +1059,15 @@
                     </div>
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${keylessRow ? LOST_KEY_TITLE : ''}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
-                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${expiryStr}</div></td>
+                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${external ? 'Replace by ' + expiryStr : expiryStr}</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
-                        ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
+                        ${roleAtLeast('operator') ? (external ? actionBtn('replace', cert.domain, 'green', 'Replace certificate', 'fa-file-arrow-up') : actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt')) : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
-                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
+                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-external="' + (external ? '1' : '0') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
                     </div>
                 </td>
             </tr>`;
@@ -1075,6 +1087,7 @@
                 var domain = btn.dataset.domain;
                 switch (btn.dataset.action) {
                     case 'renew': renewCertificate(domain); break;
+                    case 'replace': openCertDetail(domain); openReplaceCertificate(domain); break;
                     case 'force-renew': renewCertificate(domain, true); break;
                     case 'download': downloadCertificate(domain); break;
                     case 'curl': copyCurlCommand(domain); break;
@@ -1123,10 +1136,14 @@
         var autoOn = btn.getAttribute('data-autorenew') === 'true';
         var isOp = btn.getAttribute('data-op') === '1';
         var isAdmin = btn.getAttribute('data-admin') === '1';
+        // Nothing renews an external certificate: no renewal to force and no
+        // switch to turn, and its replacement is in their place.
+        var external = btn.getAttribute('data-external') === '1';
         var actions = [];
-        if (isOp) actions.push({ html: _menuItem('fa-bolt', 'Force renew'), fn: function () { renewCertificate(domain, true); } });
+        if (isOp && external) actions.push({ html: _menuItem('fa-file-arrow-up', 'Replace certificate'), fn: function () { openCertDetail(domain); openReplaceCertificate(domain); } });
+        if (isOp && !external) actions.push({ html: _menuItem('fa-bolt', 'Force renew'), fn: function () { renewCertificate(domain, true); } });
         actions.push({ html: _menuItem('fa-code', 'Copy API command'), fn: function () { copyCurlCommand(domain); } });
-        if (isOp) actions.push({ html: _menuItem(autoOn ? 'fa-toggle-on' : 'fa-toggle-off', autoOn ? 'Disable auto-renew' : 'Enable auto-renew'), fn: function () { toggleAutoRenew(domain, autoOn); } });
+        if (isOp && !external) actions.push({ html: _menuItem(autoOn ? 'fa-toggle-on' : 'fa-toggle-off', autoOn ? 'Disable auto-renew' : 'Enable auto-renew'), fn: function () { toggleAutoRenew(domain, autoOn); } });
         if (isAdmin) actions.push({ html: '<div class="my-1 border-t border-border"></div>' + _menuItem('fa-trash-can', 'Delete certificate', true), fn: function () { deleteCertificate(domain); } });
         if (!actions.length) return;
         var menu = document.createElement('div');
@@ -1321,7 +1338,9 @@
         var providerLabel = providerDisplayName(cert.dns_provider);
         var safeDomainAlias = escapeHtml(cert.domain_alias || '');
         var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
+        var external = cert.external === true;
         var caDetailLabel = caDisplayName(cert.ca_provider);
+        if (caDetailLabel && cert.imported_at) caDetailLabel = 'Renewal: ' + caDetailLabel;
         var sanDomains = Array.isArray(cert.san_domains) ? cert.san_domains : [];
         var sanDomainsHtml = sanDomains.map(function (san) {
             return '<div class="break-all">' + escapeHtml(san) + '</div>';
@@ -1399,13 +1418,17 @@
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
                 (keylessDetail ? '<div class="text-sm ' + statusClass + ' mt-1">' + LOST_KEY_TITLE + ' Use Edit &amp; Reissue, or Reissue all on the dashboard.</div>' : '') +
+                (external ? '<div class="text-sm ' + statusClass + ' mt-1">Not renewed by CertMate: upload its replacement before it expires.</div>' : '') +
                 '</div>' +
                 // Auto-Renew moved into the banner's empty right side (point 1).
+                // An external certificate has no switch to turn: it says what it is.
                 '<div class="flex-shrink-0 flex items-center gap-2">' +
-                '<span class="text-[11px] font-semibold uppercase tracking-wide ' + statusClass + ' opacity-80">Auto-renew</span>' +
-                (roleAtLeast('operator')
-                    ? autoRenewSwitchHtml(cert.domain, autoOn)
-                    : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>') +
+                (external
+                    ? '<span data-external-badge class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-surface-2 text-label ring-1 ring-inset ring-border" title="' + EXTERNAL_TITLE + '">External</span>'
+                    : '<span class="text-[11px] font-semibold uppercase tracking-wide ' + statusClass + ' opacity-80">Auto-renew</span>' +
+                      (roleAtLeast('operator')
+                          ? autoRenewSwitchHtml(cert.domain, autoOn)
+                          : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>')) +
                 '</div>' +
                 '</div>' +
                 // Details
@@ -1415,10 +1438,13 @@
                 // an operator goes to ask "what is this certificate", and
                 // "not recorded" is an answer; silence would read as "public,
                 // like everything else".
-                detailRow('Issuing CA', caDetailLabel || CA_NOT_RECORDED) +
-                detailRow('Renews', renewsAtHtml(cert)) +
-                detailRow('CA renewal window', renewalWindowHtml(cert.renewal_info)) +
-                detailRow('ACME profile', acmeProfileHtml(cert)) +
+                (external
+                    ? detailRow('Renewal', '<span class="text-muted" title="' + EXTERNAL_TITLE + '">Not by CertMate: replaced by upload</span>') +
+                      (cert.replaced_at ? detailRow('Replaced', escapeHtml(CertMate.formatDateTime(cert.replaced_at))) : '')
+                    : detailRow('Issuing CA', caDetailLabel || CA_NOT_RECORDED) +
+                      detailRow('Renews', renewsAtHtml(cert)) +
+                      detailRow('CA renewal window', renewalWindowHtml(cert.renewal_info)) +
+                      detailRow('ACME profile', acmeProfileHtml(cert))) +
                 (sanDomains.length ? detailRow('SANs', '<div class="text-right">' + sanDomainsHtml + '</div>') : '') +
                 (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
                 (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +
@@ -1442,7 +1468,10 @@
                 '<div>' +
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
-                (roleAtLeast('operator')
+                (roleAtLeast('operator') && external
+                    ? actIcon('openReplaceCertificate', [cert.domain], 'fa-file-arrow-up', 'green', 'Replace certificate')
+                    : '') +
+                (roleAtLeast('operator') && !external
                     ? actIcon('renewCertificate', [cert.domain], 'fa-sync-alt', 'green', 'Renew certificate') +
                       actIcon('renewCertificate', [cert.domain, true], 'fa-bolt', 'amber', 'Force renew') +
                       actIcon('startEditReissue', [cert.domain], 'fa-pen', 'blue', 'Edit & reissue')
@@ -1455,10 +1484,14 @@
                 '</div>' +
                 '</div>' +
                 '</div>' +
+                (external && roleAtLeast('operator') ? replaceSectionHtml(cert) : '') +
                 '</div>';
         }
 
         if (cert.exists) wireLabelsSection(cert.domain);
+        if (cert.exists && external && roleAtLeast('operator')) {
+            bundlePicker('replace', content.querySelectorAll('[data-replace-dropzone]'), 'replace');
+        }
 
         // Reveal the backdrop and modal, then animate the card in (scale +
         // fade) on the next frame so the transition actually plays. Focus moves
@@ -2092,6 +2125,7 @@
     var caAccountSelectProvider = '';
     var configuredCAs = [];
     var defaultCAProvider = 'letsencrypt';
+    var defaultChallengeType = 'dns-01';
     var defaultCAAccounts = {};
     var globalCAEmail = '';
     var CA_NAMES = {
@@ -2120,6 +2154,7 @@
                 select.replaceChildren();
                 var defaultCA = settings.default_ca || 'letsencrypt';
                 defaultCAProvider = defaultCA;
+                defaultChallengeType = settings.challenge_type || 'dns-01';
                 if (configuredCAs.indexOf(defaultCA) !== -1) {
                     var config = caAccounts[defaultCA] || {};
                     var ids = Object.keys(config.accounts || {});
@@ -2788,11 +2823,16 @@
     var reissueEditingDomain = null;
 
     function startEditReissue(domain) {
+        if (isCreatingCert) {
+            showMessage('Wait for the current certificate operation to finish before editing.', 'warning');
+            return;
+        }
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
         if (!cert) {
             showMessage('Certificate data is not loaded yet. Refresh and try again.', 'error');
             return;
         }
+        resetCertificateImport();
         reissueEditingDomain = domain;
         closeCertDetail();
         openCreateCertForm();
@@ -2853,6 +2893,7 @@
     function setReissueFormMode(editing, domain) {
         var form = document.getElementById('createCertForm');
         if (!form) return;
+        document.getElementById('certificateImportMode').classList.toggle('hidden', editing);
         var submitBtn = form.querySelector('button[type="submit"]');
         var banner = document.getElementById('reissue-edit-banner');
         // The drawer header must state the actual operation (#382): opened
@@ -2922,8 +2963,367 @@
         setReissueFormMode(false);
     }
 
+    // Replacing an external certificate by upload (#1159): the same three
+    // tiles and preview as the import, in the certificate's own panel, and
+    // POST /api/certificates/<domain>/replace. Its deploy hooks run as for a
+    // renewal.
+    function bundleTilesHtml(prefix, attribute) {
+        var tiles = [
+            ['CertificateFile', 'Certificate', 'fa-certificate', '.pem,.crt,.cer', 'Certificate (PEM, leaf only)'],
+            ['ChainFile', 'Chain', 'fa-layer-group', '.pem,.crt,.cer', 'Chain (PEM, intermediate first; root optional)'],
+            ['PrivateKeyFile', 'Private key', 'fa-key', '.pem,.key', 'Private key (unencrypted PEM)']
+        ];
+        return '<div class="grid grid-cols-3 gap-2 sm:gap-3">' + tiles.map(function (tile) {
+            var id = prefix + tile[0];
+            return '<label for="' + id + '" ' + attribute + ' title="' + tile[4] + '" ' +
+                'class="relative h-24 min-w-0 flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-surface-2 p-2 text-center cursor-pointer hover:border-primary focus-within:ring-2 focus-within:ring-primary transition-colors">' +
+                '<input id="' + id + '" type="file" accept="' + tile[3] + '" aria-label="' + tile[4] + '" aria-describedby="' + id + 'Name" class="sr-only">' +
+                '<i class="fas ' + tile[2] + ' text-xl text-primary" aria-hidden="true"></i>' +
+                '<span class="text-sm font-semibold text-label">' + tile[1] + '</span>' +
+                '<span id="' + id + 'Name" class="block w-full truncate text-xs text-muted" aria-live="polite">Drop or click</span>' +
+                '</label>';
+        }).join('') + '</div>';
+    }
+
+    function replaceSectionHtml(cert) {
+        return '<div id="certReplaceSection" class="hidden space-y-3 pt-4 border-t border-border">' +
+            '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Replace certificate</h4>' +
+            '<p class="text-sm text-muted">Upload the certificate that replaces this one, with its chain and private key. ' +
+            'It must name ' + escapeHtml(cert.domain) + '; its other names may change. Deploy hooks run as for a renewal.</p>' +
+            bundleTilesHtml('replace', 'data-replace-dropzone') +
+            '<div id="replaceCertificatePreview" class="hidden rounded-lg border border-border bg-surface-2 p-3 text-sm" aria-live="polite">' +
+            '<p id="replaceCertificatePreviewStatus" class="text-xs text-muted"></p>' +
+            '<dl id="replaceCertificatePreviewNames" class="hidden mt-2 space-y-2">' +
+            '<div><dt class="font-semibold text-label">Common Name (CN)</dt><dd id="replaceCertificatePreviewCN" class="break-all text-foreground"></dd></div>' +
+            '<div><dt class="font-semibold text-label">Subject Alternative Names (SAN)</dt><dd id="replaceCertificatePreviewSAN" class="break-all whitespace-pre-line text-foreground"></dd></div>' +
+            '</dl></div>' +
+            '<label class="flex items-center gap-2 text-sm text-label">' +
+            '<input id="replaceAllowEarlierExpiry" type="checkbox" class="rounded border-border text-primary focus:ring-primary">' +
+            'Accept a certificate that expires before this one</label>' +
+            '<div class="flex justify-end gap-2">' +
+            '<button type="button"' + CertMate.does('click', 'closeReplaceCertificate', []) + 'class="px-3 py-1.5 text-sm rounded-lg border border-border text-label hover:bg-hover">Cancel</button>' +
+            '<button type="button" id="replaceCertificateSubmit"' + CertMate.does('click', 'submitReplaceCertificate', [cert.domain]) + 'class="btn-cta px-4 py-1.5 text-sm">Replace certificate</button>' +
+            '</div></div>';
+    }
+
+    function openReplaceCertificate(domain) {
+        var section = document.getElementById('certReplaceSection');
+        if (!section || document.getElementById('detailDomain').textContent !== domain) return;
+        section.classList.remove('hidden');
+        if (section.scrollIntoView) section.scrollIntoView({block: 'nearest'});
+        var first = document.getElementById('replaceCertificateFile');
+        if (first && first.focus) first.focus();
+    }
+
+    function closeReplaceCertificate() {
+        var section = document.getElementById('certReplaceSection');
+        if (section) section.classList.add('hidden');
+    }
+
+    var isReplacingCert = false;
+    async function submitReplaceCertificate(domain) {
+        if (isReplacingCert) return;
+        var fields = bundleFields('replace');
+        var allow = document.getElementById('replaceAllowEarlierExpiry');
+        var payload = {allow_earlier_expiry: allow.checked};
+        var controls = document.getElementById('certReplaceSection').querySelectorAll('input, button');
+        var disabled = Array.from(controls, function (control) { return control.disabled; });
+        var replaced = false;
+        var earlier = false;
+        isReplacingCert = true;
+        try {
+            var files = Object.keys(fields).map(function (key) {
+                var input = document.getElementById(fields[key]);
+                var file = input.files && input.files[0];
+                if (!file || !file.size || file.size > 64 * 1024) {
+                    throw new Error('Select all three PEM files (each non-empty and at most 64 KiB).');
+                }
+                return file;
+            });
+            controls.forEach(function (control) { control.disabled = true; });
+            var contents = await Promise.all(files.map(function (file) { return file.text(); }));
+            Object.keys(fields).forEach(function (key, i) { payload[key] = contents[i]; });
+            var response = await fetch('/api/certificates/' + encodeURIComponent(domain) + '/replace', {
+                method: 'POST', headers: API_HEADERS, body: JSON.stringify(payload)
+            });
+            var result = await response.json();
+            if (!response.ok) {
+                // The API names its field; here the same choice is a box.
+                if (result.code === 'REPLACEMENT_EXPIRES_EARLIER') {
+                    earlier = true;
+                    throw new Error('The uploaded certificate expires before the one in place. ' +
+                        'Tick "Accept a certificate that expires before this one" to replace it anyway.');
+                }
+                throw new Error(result.error || 'Certificate replacement failed');
+            }
+            replaced = true;
+            showMessage('Certificate replaced for ' + result.domain + '. Deploy hooks run as for a renewal.', 'success');
+            if (result.storage_warning) showMessage(result.storage_warning, 'warning');
+        } catch (error) {
+            showMessage(error.message || 'Certificate replacement failed', 'error');
+        } finally {
+            // Do not keep key PEMs in error context, logs or browser storage.
+            delete payload.private_key;
+            controls.forEach(function (control, i) { control.disabled = disabled[i]; });
+            isReplacingCert = false;
+            if (earlier && allow.focus) allow.focus();
+            if (replaced) {
+                closeCertDetail();
+                loadCertificates();
+            }
+        }
+    }
+
     // Create certificate
     var isCreatingCert = false;
+    // The three file tiles and the identity preview, for the import form and
+    // for the replacement of an external certificate (#1159): the same files,
+    // the same checks before anything is sent. `prefix` names the elements
+    // (`<prefix>CertificateFile`, `<prefix>CertificatePreview`, ...), `verb`
+    // ends the sentence that says the bundle is ready.
+    function bundleFields(prefix) {
+        return {certificate: prefix + 'CertificateFile', chain: prefix + 'ChainFile',
+                private_key: prefix + 'PrivateKeyFile'};
+    }
+
+    function bundlePicker(prefix, zones, verb) {
+        var version = 0;
+        var fields = bundleFields(prefix);
+        function setStates(valid) {
+            zones.forEach(function (zone) {
+                var input = zone.querySelector('input');
+                var selected = !!(input.files && input.files[0]);
+                zone.dataset.state = selected ? (valid ? 'valid' : 'selected') : 'empty';
+                zone.classList.toggle('bg-surface-2', !selected);
+                zone.classList.toggle('border-border', !selected);
+                zone.classList.toggle('bg-warning-surface', selected && !valid);
+                zone.classList.toggle('border-warning-line', selected && !valid);
+                zone.classList.toggle('bg-success-surface', selected && valid);
+                zone.classList.toggle('border-success-line', selected && valid);
+            });
+        }
+
+        async function preview() {
+            var current = ++version;
+            var keys = Object.keys(fields);
+            var files = keys.map(function (key) {
+                var input = document.getElementById(fields[key]);
+                return input.files && input.files[0];
+            });
+            var file = files[0];
+            var complete = files.every(Boolean);
+            var payload = {};
+            setStates(false);
+            var box = document.getElementById(prefix + 'CertificatePreview');
+            var status = document.getElementById(prefix + 'CertificatePreviewStatus');
+            var names = document.getElementById(prefix + 'CertificatePreviewNames');
+            var cn = document.getElementById(prefix + 'CertificatePreviewCN');
+            var san = document.getElementById(prefix + 'CertificatePreviewSAN');
+            box.classList.toggle('hidden', !files.some(Boolean));
+            names.classList.add('hidden');
+            cn.textContent = '';
+            san.textContent = '';
+            if (!file) { status.textContent = 'Select the certificate to preview its identity.'; return; }
+            status.textContent = complete ? 'Checking certificate, chain and private key…' : 'Reading certificate…';
+            try {
+                var selectedFiles = complete ? files : [file];
+                if (selectedFiles.some(function (item) { return !item.size || item.size > 64 * 1024; })) {
+                    throw new Error('Select non-empty PEM files (each at most 64 KiB).');
+                }
+                var contents = await Promise.all(selectedFiles.map(function (item) { return item.text(); }));
+                if (current !== version) return;
+                selectedFiles.forEach(function (item, index) { payload[keys[index]] = contents[index]; });
+                var response = await fetch('/api/web/certificates/import/preview', {
+                    method: 'POST', headers: API_HEADERS, body: JSON.stringify(payload)
+                });
+                var result = await response.json();
+                if (current !== version) return;
+                if (!response.ok) throw new Error(result.error || 'Could not read certificate');
+                cn.textContent = result.common_names.join('\n') || 'Not present';
+                san.textContent = result.sans.join('\n') || 'Not present';
+                names.classList.remove('hidden');
+                var valid = complete && result.validated === true;
+                setStates(valid);
+                status.textContent = valid ? 'Certificate, chain and private key match. Ready to ' + verb + '.' :
+                    'File selected. Select all three files to check that they match.';
+            } catch (error) {
+                if (current === version) status.textContent = error.message || 'Could not read certificate';
+            } finally {
+                delete payload.private_key;
+            }
+        }
+
+        function updateName(input) {
+            var file = input.files && input.files[0];
+            var name = document.getElementById(input.id + 'Name');
+            name.textContent = file ? file.name : 'Drop or click';
+            name.title = file ? file.name : '';
+            preview();
+        }
+
+        zones.forEach(function (zone) {
+            var input = zone.querySelector('input');
+            input.addEventListener('change', function () { updateName(input); });
+            zone.addEventListener('dragover', function (event) {
+                event.preventDefault();
+                if (!input.disabled) zone.classList.add('border-primary');
+            });
+            zone.addEventListener('dragleave', function (event) {
+                if (!zone.contains(event.relatedTarget)) zone.classList.remove('border-primary');
+            });
+            zone.addEventListener('drop', function (event) {
+                event.preventDefault();
+                zone.classList.remove('border-primary');
+                if (input.disabled) return;
+                var files = event.dataTransfer.files;
+                if (files.length !== 1 || !files[0].size || files[0].size > 64 * 1024) {
+                    showMessage('Drop one non-empty PEM file per tile (at most 64 KiB).', 'error');
+                    return;
+                }
+                input.files = files;
+                updateName(input);
+            });
+        });
+        return {fields: fields, updateName: updateName};
+    }
+
+    var importFileFields = bundleFields('import');
+    var importPicker = bundlePicker('import', document.querySelectorAll('[data-import-dropzone]'), 'import');
+
+    // Hide the sections *selector* names while *off*, with their controls
+    // disabled so nothing in them is sent, and give each control back the state
+    // it had. *key* keeps that state apart for each kind of section.
+    function setSectionsOff(form, selector, off, key) {
+        form.querySelectorAll(selector).forEach(function (section) {
+            section.classList.toggle('hidden', off);
+            section.querySelectorAll('input, select, textarea, button').forEach(function (input) {
+                if (off) {
+                    if (input.dataset[key] === undefined) input.dataset[key] = String(input.disabled);
+                    input.disabled = true;
+                } else if (input.dataset[key] !== undefined) {
+                    input.disabled = input.dataset[key] === 'true';
+                    delete input.dataset[key];
+                }
+            });
+        });
+    }
+
+    function toggleCertificateImport() {
+        var importing = document.getElementById('importExistingCertificate').checked;
+        if (!importing) {
+            document.getElementById('importAutoRenew').checked = true;
+            document.getElementById('importRenewalCa').checked = true;
+            document.getElementById('importRenewalExternal').checked = false;
+        }
+        // External (#1159): no CA renews it, so nothing about its renewal is
+        // asked or sent.
+        var external = importing && document.getElementById('importRenewalExternal').checked;
+        var form = document.getElementById('createCertForm');
+        document.getElementById('certificateImportFiles').classList.toggle('hidden', !importing);
+        document.getElementById('importAutoRenewOption').classList.toggle('hidden', external);
+        document.getElementById('drawerSubtitle').classList.toggle('hidden', importing);
+        ['importCertificateFile', 'importChainFile', 'importPrivateKeyFile'].forEach(function (id) {
+            var input = document.getElementById(id);
+            input.disabled = !importing;
+            input.required = importing;
+            if (!importing) {
+                input.value = '';
+                importPicker.updateName(input);
+            }
+        });
+        // Sections are entered issuance-only first and left renewal source
+        // first, so a control in both gets back the state it had before either.
+        if (external) {
+            setSectionsOff(form, '[data-issuance-only]', importing, 'importDisabled');
+            setSectionsOff(form, '[data-renewal-source]', true, 'externalDisabled');
+        } else {
+            setSectionsOff(form, '[data-renewal-source]', false, 'externalDisabled');
+            setSectionsOff(form, '[data-issuance-only]', importing, 'importDisabled');
+        }
+        form.querySelectorAll('[data-external-hidden]').forEach(function (section) {
+            section.classList.toggle('hidden', external);
+        });
+        [form.querySelector('button[type="submit"]'), document.getElementById('drawerTitle')].forEach(function (el) {
+            if (importing) {
+                if (el.dataset.importHtml === undefined) el.dataset.importHtml = el.innerHTML;
+                el.textContent = 'Import Certificate';
+            } else if (el.dataset.importHtml !== undefined) {
+                el.innerHTML = el.dataset.importHtml;
+                delete el.dataset.importHtml;
+            }
+        });
+        document.getElementById('createCertFormContainer').setAttribute('aria-label', importing ? 'Import certificate' : 'New certificate');
+    }
+
+    function resetCertificateImport() {
+        var mode = document.getElementById('importExistingCertificate');
+        if (!mode.checked || isCreatingCert) return;
+        mode.checked = false;
+        toggleCertificateImport();
+    }
+
+    async function importCertificate(form) {
+        var external = document.getElementById('importRenewalExternal').checked;
+        var payload = external ? {external: true} : {auto_renew: document.getElementById('importAutoRenew').checked};
+        var fields = importFileFields;
+        var inputs = form.querySelectorAll('input, select, textarea, button');
+        var disabled = Array.from(inputs, function (input) { return input.disabled; });
+        var imported = false;
+        isCreatingCert = true;
+        try {
+            var files = Object.keys(fields).map(function (key) {
+                var file = document.getElementById(fields[key]).files[0];
+                if (!file || !file.size || file.size > 64 * 1024) {
+                    throw new Error('Select all three PEM files (each non-empty and at most 64 KiB).');
+                }
+                return file;
+            });
+            var sourceFields = {
+                ca_provider: 'ca_provider_select', ca_account_id: 'ca_account_id',
+                challenge_type: 'challenge_type_select', dns_provider: 'dns_provider_select',
+                account_id: 'account_select', domain_alias: 'dns_alias_domain', acme_profile: 'cert_acme_profile'
+            };
+            Object.keys(sourceFields).forEach(function (key) {
+                var input = document.getElementById(sourceFields[key]);
+                if (input.value && !external) payload[key] = input.value;
+            });
+            var challenge = payload.challenge_type || defaultChallengeType;
+            if (challenge === 'prevalidated' || challenge === 'http-01') {
+                delete payload.dns_provider;
+                delete payload.account_id;
+                delete payload.domain_alias;
+            }
+            inputs.forEach(function (input) { input.disabled = true; });
+            var contents = await Promise.all(files.map(function (file) { return file.text(); }));
+            Object.keys(fields).forEach(function (key, i) { payload[key] = contents[i]; });
+            var response = await fetch('/api/certificates/import', {
+                method: 'POST', headers: API_HEADERS, body: JSON.stringify(payload)
+            });
+            var result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Certificate import failed');
+            imported = true;
+            showMessage(external
+                ? 'External certificate imported for ' + result.domain + '. CertMate will not renew it.'
+                : 'Certificate imported for ' + result.domain + '. No certificate was issued.', 'success');
+            if (result.storage_warning) showMessage(result.storage_warning, 'warning');
+            loadCertificates();
+        } catch (error) {
+            showMessage(error.message || 'Certificate import failed', 'error');
+        } finally {
+            // Do not keep key PEMs in error context, logs or browser storage.
+            delete payload.private_key;
+            inputs.forEach(function (input, i) { input.disabled = disabled[i]; });
+            isCreatingCert = false;
+            if (imported) {
+                resetCertificateImport();
+                clearCreateFormAfterSubmit();
+                if (typeof closeCertDrawer === 'function') closeCertDrawer();
+            } else if (document.getElementById('createCertFormContainer').classList.contains('translate-x-full')) {
+                resetCertificateImport();
+            }
+        }
+    }
+
     document.getElementById('createCertForm').addEventListener('submit', async function (e) {
         e.preventDefault();
 
@@ -2934,6 +3334,10 @@
         // early-returns below run before we acquire the lock, so a rejected
         // submit doesn't leave the form stuck.
         if (isCreatingCert) return;
+        if (document.getElementById('importExistingCertificate').checked) {
+            await importCertificate(e.target);
+            return;
+        }
 
         // Primary domain: apply the same paste-normalization as SAN inputs
         // (lowercase, strip scheme/port/path/trailing-dot) so the request
@@ -3968,6 +4372,11 @@
     window.exportAllCertificates = exportAllCertificates;
     window.openCertDetail = openCertDetail;
     window.startEditReissue = startEditReissue;
+    window.resetCertificateImport = resetCertificateImport;
+    window.toggleCertificateImport = toggleCertificateImport;
+    window.openReplaceCertificate = openReplaceCertificate;
+    window.closeReplaceCertificate = closeReplaceCertificate;
+    window.submitReplaceCertificate = submitReplaceCertificate;
     window.cancelEditReissue = cancelEditReissue;
     window.closeCertDetail = closeCertDetail;
     window.renewCertificate = renewCertificate;
@@ -4005,12 +4414,12 @@
     // `data-input`): see CertMate.actions in certmate.js.
     CertMate.globalActions([
         'cancelEditReissue', 'checkAllDeploymentStatuses', 'checkDnsAliasForCertificate',
-        'clearDebugConsole', 'clearFilters', 'closeCertDetail', 'copyAliasValueToClipboard',
+        'clearDebugConsole', 'clearFilters', 'closeCertDetail', 'closeReplaceCertificate', 'copyAliasValueToClipboard',
         'copyCurlCommand', 'copyDetailDomain', 'copyFromModal', 'deleteCertificate',
         'dismissPendingJob', 'downloadCertificate', 'exportAllCertificates',
-        'invalidateAllCache', 'loadCertificates', 'reissueKeyless', 'renewCertificate',
+        'invalidateAllCache', 'loadCertificates', 'openReplaceCertificate', 'reissueKeyless', 'renewCertificate',
         'retryCreateJob', 'runDeployHooks', 'setStatusFilter', 'showCacheStats',
-        'sortCertificates', 'startEditReissue', 'toggleAdvancedOptions', 'toggleAutoRenew',
+        'sortCertificates', 'startEditReissue', 'submitReplaceCertificate', 'toggleCertificateImport', 'toggleAdvancedOptions', 'toggleAutoRenew',
         'toggleCertKeyOptions', 'toggleDebugConsole', 'toggleDnsProviderVisibility',
         'updateAccountSelection', 'updateCAProviderInfo'
     ]);

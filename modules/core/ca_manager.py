@@ -12,6 +12,45 @@ from .domain_paths import certificate_dir
 logger = logging.getLogger(__name__)
 
 
+def resolve_ca_account(ca_manager, ca_provider, ca_account_id=None, *, settings=None):
+    """Resolve issuance's account, preserving Let's Encrypt's certbot-default fallback."""
+    if ca_manager is None:
+        return None, None
+    try:
+        config, used_account = ca_manager.get_ca_config(ca_provider, ca_account_id, settings=settings)
+        return config, used_account
+    except Exception as e:
+        if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
+            # The one CA that needs no saved configuration: certbot's
+            # defaults are the configuration. With none on disk the
+            # plain-certbot branch handles it (staging via --staging).
+            # Do NOT reset the provider here — that would silently flip
+            # a staging request to production issuance.
+            logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
+            return None, None
+        # Everything else fails closed. This used to fall back to
+        # Let's Encrypt and answer 201, so a request for DigiCert,
+        # ZeroSSL, Google, SSL.com, Actalis or a PRIVATE CA came
+        # back as a certificate from a different authority, with a
+        # log warning as the only signal. Measured, six providers
+        # did it; only Sectigo refused, because it was added after
+        # the fallback and carved itself out (#884).
+        #
+        # The private-CA case is the one that settles it. An
+        # operator asking their internal CA for an internal name
+        # and receiving a publicly-trusted certificate has had
+        # that name published, and no log line undoes it.
+        #
+        # There is no safe substitute for the CA that was asked
+        # for, so there is nothing to substitute.
+        raise ValueError(
+            f"CA provider '{ca_provider}' is not configured on this "
+            f"instance, and issuing from a different CA is not a "
+            f"substitute for the one you asked for. Configure it in "
+            f"Settings, or request a CA that is configured. ({e})"
+        ) from e
+
+
 def acme_directory_refusal(url, what='ACME Directory URL'):
     """Why *url* is not usable as an ACME directory, or None if it is.
 
@@ -175,9 +214,10 @@ class CAManager:
         """Get list of supported Certificate Authorities"""
         return self.ca_providers
     
-    def get_ca_config(self, ca_provider: str, account_id: str = None) -> Tuple[Dict[str, Any], str]:
+    def get_ca_config(self, ca_provider: str, account_id: str = None, *, settings=None) -> Tuple[Dict[str, Any], str]:
         """Get CA configuration for the specified provider and account"""
-        settings = self.settings_manager.load_settings()
+        if settings is None:
+            settings = self.settings_manager.load_settings()
         
         # Get CA provider configuration
         ca_providers = settings.get('ca_providers', {})
