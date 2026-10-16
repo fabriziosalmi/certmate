@@ -25,8 +25,11 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 
 from modules.core.client_certificates import (
-    DEFAULT_COUNTRY, DEFAULT_STATE, check_client_certificate_defaults,
-    default_client_country, default_client_state,
+    DEFAULT_COUNTRY,
+    DEFAULT_STATE,
+    check_client_certificate_defaults,
+    default_client_country,
+    default_client_state,
 )
 
 pytestmark = [pytest.mark.unit]

@@ -877,7 +877,7 @@ class PrivateCAGenerator:
         return self.crl_path.read_bytes()
 
 
-def client_ca_subject_from_environment() -> Optional[Dict[str, str]]:
+def client_ca_subject_from_environment() -> dict[str, str] | None:
     """The client CA's subject as the deployment declares it, or None.
 
     `client_ca_subject` in settings.json is read when the CA is created, which
@@ -923,7 +923,7 @@ def client_ca_subject_from_environment() -> Optional[Dict[str, str]]:
     return subject
 
 
-def resolve_client_ca_subject(settings: Optional[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+def resolve_client_ca_subject(settings: dict[str, Any] | None) -> dict[str, str] | None:
     """The subject a new client CA is created with: settings, then environment.
 
     `client_ca_subject` in settings wins because it is the more deliberate act —

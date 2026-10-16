@@ -29,7 +29,8 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 
 from modules.core.private_ca import (
-    PrivateCAGenerator, client_ca_subject_from_environment,
+    PrivateCAGenerator,
+    client_ca_subject_from_environment,
     resolve_client_ca_subject,
 )
 
@@ -102,7 +103,7 @@ def test_the_compose_file_passing_every_variable_empty_changes_nothing(monkeypat
     """docker-compose.yml passes each variable as `VAR=${VAR:-}`, so an
     operator who sets none of them still hands the container five empty
     strings. That must be the default CA, not one stripped to its CN."""
-    _declare(monkeypatch, {field: '' for field in VARIABLES})
+    _declare(monkeypatch, dict.fromkeys(VARIABLES, ''))
 
     assert client_ca_subject_from_environment() is None
 
