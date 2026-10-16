@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-
 pytestmark = pytest.mark.unit
 
 
@@ -54,7 +53,7 @@ const certs = Array.from({length: 63}, (_, i) => ({domain: `host${String(i).padS
 function check(ok, msg) { if (!ok) throw Error(msg); }
 function rows() { return (list.innerHTML.match(/data-row-domain=/g) || []).length; }
 window.setTestCertificates(certs);
-check(rows() === 25 && elements.certificatePageSummary.textContent === '1–25 of 63', 'First page not bounded');
+check(rows() === 25 && elements.certificatePageSummary.textContent === '1\u201325 of 63', 'First page not bounded');
 check(elements.certificatePreviousPage.disabled && !elements.certificateNextPage.disabled, 'Navigation state wrong');
 actions.changeCertificatePage(1);
 check(rows() === 25 && list.innerHTML.includes('host025') && !list.innerHTML.includes('host000'), 'Second page wrong');
@@ -64,17 +63,18 @@ window.testTag('production');
 check(rows() === 3, 'Tag filter not combined');
 window.clearFilters();
 actions.changeCertificatePageSize({value: '50'});
-check(rows() === 50 && elements.certificatePageSummary.textContent === '1–50 of 63', 'Page size not applied');
+check(rows() === 50 && elements.certificatePageSummary.textContent === '1\u201350 of 63', 'Page size not applied');
 check(savedSize === '50', 'Page size preference not saved');
 actions.changeCertificatePageSize({value: '5000'});
 check(rows() === 50, 'Invalid page size accepted');
 actions.changeCertificatePage(1);
 window.setTestCertificates(certs.slice(0, 2));
-check(rows() === 2 && elements.certificatePageSummary.textContent === '1–2 of 2', 'Page not clamped after deletion');
+check(rows() === 2 && elements.certificatePageSummary.textContent === '1\u20132 of 2', 'Page not clamped after deletion');
 actions.changeCertificatePageSize({value: '25'});
 window.setTestCertificates(certs);
 window.sortCertificates('domain');
-check(rows() === 25 && list.innerHTML.includes('host062') && !list.innerHTML.includes('host000'), 'Sort not applied before pagination');
+check(rows() === 25 && list.innerHTML.includes('host062') && !list.innerHTML.includes('host000'),
+  'Sort not applied before pagination');
 window.sortCertificates('domain');
 window.testChecks();
 const pending = Array.from(callbacks.values()).pop(); pending();
@@ -117,7 +117,8 @@ eval(source);
 const rows = () => (body.innerHTML.match(/data-cc-id=/g) || []).length;
 function check(ok, msg) { if (!ok) throw Error(msg); }
 window.testLoad().then(() => {
-  check(rows() === 25 && elements.clientCertificatePageSummary.textContent === '1–25 of 63', 'Initial client page not bounded');
+  check(rows() === 25 && elements.clientCertificatePageSummary.textContent === '1\u201325 of 63',
+    'Initial client page not bounded');
   actions.ccChangePage(2);
   check(rows() === 13 && elements.clientCertificateNextPage.disabled, 'Last client page wrong');
   window.ccSetStatusFilter('active'); window.ccSetUsageFilter('vpn');
