@@ -15,7 +15,9 @@ from .utils import utc_now
 from typing import Optional, List, Dict, Any, Tuple
 from uuid import uuid4
 
+from cryptography import x509
 from cryptography.hazmat.primitives import serialization
+from cryptography.x509.oid import NameOID
 
 from .private_ca import PrivateCAGenerator
 from .csr_handler import CSRHandler
@@ -344,6 +346,7 @@ class ClientCertificateManager:
             cert_path = cert_subdir / f"{identifier}.crt"
             with open(cert_path, 'wb') as f:
                 f.write(signed_cert.public_bytes(serialization.Encoding.PEM))
+            issued_country, issued_state = self._subject_country_and_state(signed_cert)
 
             # Create metadata
             metadata = {
@@ -353,6 +356,15 @@ class ClientCertificateManager:
                 "email": email,
                 "organization": organization,
                 "organizational_unit": organizational_unit,
+                # The C and ST the certificate carries, read off it rather than
+                # from the arguments, so a CSR's subject is recorded too. A
+                # renewal re-issues from this metadata, and without these two
+                # it took the default: an identity issued as C=IT, ST=Lazio
+                # renewed as C=CH, ST=Switzerland, and an mTLS rule matching on
+                # the subject stopped matching after a renewal nobody chose
+                # (#1256).
+                "country": issued_country,
+                "state": issued_state,
                 "cert_usage": cert_usage,
                 "key_usage": ["digitalSignature", "keyEncipherment"],
                 "extended_key_usage": ["clientAuth"],
@@ -614,6 +626,35 @@ class ClientCertificateManager:
         return max(1, min(configured, headroom))
 
     @staticmethod
+    def _subject_country_and_state(cert) -> tuple[str | None, str | None]:
+        """The C and ST in a certificate's subject, each None when absent."""
+        def first(oid):
+            found = cert.subject.get_attributes_for_oid(oid)
+            return str(found[0].value) if found else None
+        return first(NameOID.COUNTRY_NAME), first(NameOID.STATE_OR_PROVINCE_NAME)
+
+    def _issued_country_and_state(self, identifier: str,
+                                  metadata: dict[str, Any]) -> tuple[str, str]:
+        """The C and ST a renewal keeps, '' for a field the certificate never had.
+
+        From the metadata when it records them; for a certificate issued before
+        it did (#1256), from the certificate itself, which is the identity a
+        relying party matches on. '' lets the issuance fall back to the
+        deployment's default, which is only right when nothing says otherwise.
+        """
+        if 'country' in metadata or 'state' in metadata:
+            return metadata.get('country') or '', metadata.get('state') or ''
+        for cert_dir in self.client_certs_dir.glob(f"*/{identifier}"):
+            crt_path = cert_dir / f"{identifier}.crt"
+            try:
+                cert = x509.load_pem_x509_certificate(crt_path.read_bytes())
+            except (OSError, ValueError):
+                continue
+            country, state = self._subject_country_and_state(cert)
+            return country or '', state or ''
+        return '', ''
+
+    @staticmethod
     def _inherited_days_valid(old_metadata: Dict[str, Any], default: int = 365) -> int:
         """The validity a renewal should reuse (#422).
 
@@ -671,6 +712,8 @@ class ClientCertificateManager:
                     None,
                 )
 
+            country, state = self._issued_country_and_state(identifier, old_metadata)
+
             # Create new certificate with same parameters, INCLUDING the
             # validity the operator chose (#422): renewal used to fall back to
             # the 365-day default, so a 730-day certificate quietly halved its
@@ -683,6 +726,9 @@ class ClientCertificateManager:
                 cert_usage=old_metadata.get("cert_usage", "api-mtls"),
                 days_valid=self._inherited_days_valid(old_metadata),
                 generate_key=True,  # Always generate new key on renewal
+                # The subject it was issued with, not the default (#1256).
+                country=country,
+                state=state,
                 notes=f"Renewal of {identifier}"
             )
 
