@@ -1,6 +1,6 @@
 # Testhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
+<!-- CERTMATE-TRANSLATED-FROM e04070da6afc6acb -->
 
 Dieses Handbuch beschreibt das Test-Framework von CertMate, einschließlich Unit-Tests, Integrationstests und der Validierung von API-Endpoints.
 
@@ -15,13 +15,13 @@ source .venv/bin/activate
 # Testabhängigkeiten installieren
 pip install -r requirements-test.txt
 
-# Alle Tests ausführen. Der Marker-Ausdruck ist nicht optional: ein blosses
-# `pytest` führt auch die Playwright-`ui`-Suite in diesem Prozess aus und
-# die `network`-Tests gegen echte CAs.
+# Alle Tests ausführen. Der Marker-Ausdruck ist nicht optional: ein bloßes
+# `pytest` führt in diesem Prozess auch die Playwright-`ui`-Suite und die
+# `network`-Tests gegen echte CAs aus. CONTRIBUTING.md erklärt, warum.
 pytest -m "not ui and not network"
 
 # Tests mit Coverage ausführen
-pytest --cov=. --cov-report=html
+pytest --cov=modules --cov-report=html
 ```
 
 ---
@@ -29,19 +29,12 @@ pytest --cov=. --cov-report=html
 ## Teststruktur
 
 ```
-Stammverzeichnis:
-  conftest.py                              # Sammlungskonfiguration und gemeinsame Fixtures
+Root directory:
+  conftest.py                              # Richtet die Sammlung auf tests/ aus
   pytest.ini                               # Testkonfiguration und Marker
-  test_certificate_creation.py             # Tests zur Zertifikatserstellung
-  test_certificate_listing.py              # Tests zur Zertifikatsauflistung
-  test_client_certificates_comprehensive.py # Lifecycle-Tests für Client-Zertifikate
-  test_dns_accounts.py                     # Multi-Account-Operationen
-  test_dns_provider.py                     # Grundlegende Provider-Funktionalität
-  test_dns_provider_inheritance.py         # Konfigurationsvererbung
-  test_domain_alias.py                     # Tests für Domain-Aliase
-  test_infisical_backend.py               # Infisical-Storage-Backend
-  test_shell_executor.py                   # Tests zur Shell-Ausführung
-  test_e2e_complete.py                     # End-to-End-Test-Suite
+  tests/
+    conftest.py                            # Gemeinsame Fixtures
+    test_*.py                              # Eine Datei pro Verhalten, nach ihm benannt
 ```
 
 ---
@@ -51,32 +44,32 @@ Stammverzeichnis:
 ### Häufige Befehle
 
 ```bash
-# Alle Tests ausführen. Der Marker-Ausdruck ist nicht optional: ein blosses
-# `pytest` führt auch die Playwright-`ui`-Suite in diesem Prozess aus und
-# die `network`-Tests gegen echte CAs.
+# Alle Tests ausführen. Der Marker-Ausdruck ist nicht optional: ein bloßes
+# `pytest` führt in diesem Prozess auch die Playwright-`ui`-Suite und die
+# `network`-Tests gegen echte CAs aus. CONTRIBUTING.md erklärt, warum.
 pytest -m "not ui and not network"
 
 # Mit ausführlicher Ausgabe ausführen
 pytest -v
 
 # Eine bestimmte Testdatei ausführen
-pytest test_certificate_creation.py
+pytest tests/test_domain_alias.py
 
 # Eine bestimmte Testfunktion ausführen
-pytest test_certificate_creation.py::test_specific_function -v -s
+pytest tests/test_domain_alias.py::test_domain_alias_all_core_providers_use_manual_hook -v -s
 
-# Tests nach einem Muster filtern
+# Tests ausführen, die einem Muster entsprechen
 pytest -k "dns_provider"
 
 # Mit Coverage-Bericht ausführen
-pytest --cov=. --cov-report=html
+pytest --cov=modules --cov-report=html
 open htmlcov/index.html
 ```
 
 ### Mit Make
 
 ```bash
-make test              # Alle Tests ausführen
+make test              # Alles außer der ui- und der e2e-Suite
 make test-unit         # Nur Unit-Tests
 make test-integration  # Nur Integrationstests
 make test-coverage     # Tests mit Coverage
@@ -110,21 +103,21 @@ pytest -m e2e
 
 Standardmäßig bauen die E2E-Fixtures das Docker-Image und verwalten einen Container
 für die gesamte Sitzung. Wenn Docker nicht verfügbar ist (CI-Sandboxes,
-eingeschränkte Netzwerke), kann die Suite auf eine bereits laufende Instanz gezeigt werden:
+eingeschränkte Netzwerke), richten Sie die Suite auf eine bereits laufende Instanz aus:
 
 ```bash
 # Terminal 1: CertMate beliebig starten
 gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 --timeout 300 app:app
 
-# Terminal 2: auf diese Instanz zeigen (überspringt die gesamte Docker-Lifecycle-Verwaltung)
+# Terminal 2: diese Instanz als Ziel verwenden (überspringt die gesamte Docker-Lifecycle-Verwaltung)
 CERTMATE_E2E_BASE_URL=http://localhost:18888 pytest -m "e2e and not ui"
 ```
 
-Die Tests zur echten Zertifikatsausstellung benötigen zusätzlich `CLOUDFLARE_API_TOKEN` und eine
-`CERTMATE_TEST_DOMAIN`, die Sie kontrollieren, und verbrauchen echte Let's Encrypt-Zertifikate —
+Die Tests mit echter Zertifikatsausstellung benötigen zusätzlich `CLOUDFLARE_API_TOKEN` und eine
+`CERTMATE_TEST_DOMAIN`, die Sie kontrollieren, und verbrauchen echte Let's-Encrypt-Zertifikate —
 sie werden automatisch übersprungen, wenn der Token fehlt. Die
-Zielinstanz muss mit einem leeren Datenverzeichnis starten: E2E-Tests setzen
-den Erstkonfigurationszustand voraus, sodass eine Wiederverwendung zwischen Läufen zu
+Zielinstanz muss mit einem sauberen Datenverzeichnis starten: E2E-Tests setzen
+den Zustand beim ersten Start voraus, sodass eine Wiederverwendung über mehrere Läufe hinweg zu
 authentifizierungsabhängigen Fehlern führt.
 
 ---
@@ -133,10 +126,12 @@ authentifizierungsabhängigen Fehlern führt.
 
 ### Test-Suite ausführen
 
-Die Suite ist pytest, aufgeteilt nach Markern (siehe `pytest.ini`): `unit`, `integration`, `api`, `dns`, `e2e` (benötigt einen laufenden Server), `ui` (Playwright, benötigt einen Browser und einen Container).
+Die Suite basiert auf pytest und ist nach Markern aufgeteilt (siehe `pytest.ini`): `unit`,
+`integration`, `api`, `dns`, `e2e` (benötigt einen laufenden Server), `ui`
+(Playwright, benötigt einen Browser und einen Container).
 
 ```bash
-make test                # Unit + Integration
+make test                # alles außer der ui- und der e2e-Suite
 make test-unit
 make test-coverage       # --cov=modules, HTML- und XML-Berichte
 
@@ -145,7 +140,10 @@ pytest -m "not ui"
 pytest -m "not ui and not e2e" -q
 ```
 
-Die CI führt `pytest -m "not ui and not network"` mit einer Coverage-Untergrenze aus; die UI-Suite läuft in einem eigenen Workflow, die CA-Erreichbarkeitsprüfungen laufen wöchentlich (als Pflichtprüfung würden sie jeden PR wegen des Ausfalls eines Dritten rot färben), und das End-to-End-Gate mit echten Zertifikaten läuft vor einem Release gegen Let's Encrypt Staging.
+Die CI führt `pytest -m "not ui and not network"` mit einer Coverage-Untergrenze aus; die UI-Suite
+läuft in einem eigenen Workflow, die CA-Erreichbarkeitsprüfungen laufen nach einem wöchentlichen
+Zeitplan (als Pflichtprüfung würden sie jeden PR wegen des Ausfalls eines Dritten rot färben),
+und das End-to-End-Gate mit echten Zertifikaten läuft vor einem Release gegen Let's Encrypt Staging.
 
 ### Getestete Endpoints
 
@@ -153,9 +151,9 @@ Die CI führt `pytest -m "not ui and not network"` mit einer Coverage-Untergrenz
 |-----------|-----------|
 | **Health** | `GET /api/health`, `GET /health` |
 | **Einstellungen** | `GET /api/settings`, `GET /api/settings/dns-providers`, `POST /api/settings` |
-| **Zertifikate** | `GET /api/certificates`, `POST /api/certificates/create`, download, renew |
+| **Zertifikate** | `GET /api/certificates`, `POST /api/certificates/create`, Download, Erneuerung |
 | **Cache** | `GET /api/cache/stats`, `POST /api/cache/clear` |
-| **Backup** | `GET /api/backups`, `POST /api/backups/create`, `POST /api/backups/cleanup` |
+| **Backup** | `GET /api/backups`, `POST /api/backups/create` |
 | **Web-Interface** | `/`, `/settings`, `/help`, `/docs/`, `/api/swagger.json` |
 
 ### Erwartete Statuscodes
@@ -226,7 +224,7 @@ def test_external_api(mock_get, client):
 
 Die CI-Pipeline läuft bei jedem Push und Pull Request:
 
-1. **Mehrere Python-Versionen**: Tests auf Python 3.12
+1. **Mehrere Python-Versionen**: Tests auf Python 3.12 und 3.14
 2. **Codequalität**: Linting mit flake8
 3. **Sicherheit**: Scanning mit bandit
 4. **Tests**: Vollständige Test-Suite mit Coverage
@@ -235,24 +233,27 @@ Die CI-Pipeline läuft bei jedem Push und Pull Request:
 
 ### Vor dem Push
 
-In diesem Repository gibt es keine Pre-Commit-Konfiguration; führen Sie dieselben Gates aus wie die CI:
+In diesem Repository gibt es keine Pre-Commit-Konfiguration; führen Sie dieselben Gates aus,
+die auch die CI ausführt:
 
 ```bash
-make lint      # flake8 (die Menge, bei der die CI scheitert) und die Komplexitäts- und Ausnahmebudgets
+make lint      # flake8 (die Prüfungen, an denen die CI scheitert) und die Komplexitäts- und Ausnahmebudgets
 make security  # bandit, mittlere Schwere und höher
-make check     # lint + security + Tests (die Auswahl des Release-Gates)
+make check     # lint + security + Tests (die Auswahl, die das Release-Gate ausführt)
 make ci        # der CI-Testjob: benötigt Docker und Node
 ```
 
-Ein Release führt deutlich mehr aus — siehe `scripts/release.sh`: Dort gelten flake8, bandit, die Unit- und Integrationstests, die Playwright-UI-Suite, ein echtes Zertifikat gegen Let's Encrypt Staging und ein Docker-Build als Gates.
+Ein Release führt deutlich mehr aus — siehe `scripts/release.sh`, das als Gates
+flake8, bandit, die Unit- und Integrations-Suites, die Playwright-UI-Suite, ein
+echtes gegen Let's Encrypt Staging ausgestelltes Zertifikat und einen Docker-Build verwendet.
 
 ---
 
 ## Coverage-Anforderungen
 
-- Die CI erzwingt eine Untergrenze von **75%** über `modules/`
-  (`--cov-fail-under`, eine Ratsche: anheben, niemals senken, damit ein Build
-  durchgeht). Der aktuelle Wert liegt komfortabel darüber.
+- Die CI erzwingt eine Untergrenze von **75%** über `modules/` (`--cov-fail-under`, eine Ratsche
+  — anheben, niemals senken, damit ein Build durchgeht). Der aktuelle Wert liegt
+  komfortabel darüber.
 - Alle neuen Funktionen müssen Tests enthalten.
 
 ---
@@ -274,7 +275,7 @@ Ein Release führt deutlich mehr aus — siehe `scripts/release.sh`: Dort gelten
 - Echte API-Keys in Tests verwenden
 - Tests voneinander abhängig machen
 - Testfehler ignorieren
-- Tests für „einfachen" Code weglassen
+- Tests für „einfachen“ Code weglassen
 
 ---
 

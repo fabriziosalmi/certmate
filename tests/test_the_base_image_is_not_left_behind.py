@@ -115,6 +115,58 @@ def test_the_age_is_the_oldest_of_the_published_platforms_and_ignores_the_others
         check.age_days({'linux/386': NOW.isoformat()}, NOW)
 
 
+def _images(amd64='1', arm64='2'):
+    return {'linux/amd64': f'sha256:{amd64 * 64}', 'linux/arm64': f'sha256:{arm64 * 64}'}
+
+
+def test_a_tag_moved_only_for_platforms_not_published_is_nothing_to_fix():
+    """2026-10-16: the index moved because linux/riscv64 was rebuilt; amd64 and arm64 were the pinned images."""
+    ok, lines = check.evaluate(_dockerfile(), f'sha256:{NEW}', _created(check.MAX_AGE_DAYS + 30), NOW,
+                               current_images=_images(), pinned_images=_images())
+    text = '\n'.join(lines)
+    assert ok and 'not for linux/amd64 or linux/arm64' in text and 'nothing to fix' in text
+
+
+@pytest.mark.parametrize('changed', ['amd64', 'arm64'])
+def test_a_tag_moved_for_a_published_platform_is_judged_by_age(changed):
+    current = _images(amd64='3') if changed == 'amd64' else _images(arm64='3')
+    ok, _ = check.evaluate(_dockerfile(), f'sha256:{NEW}', _created(check.MAX_AGE_DAYS + 1), NOW,
+                           current_images=current, pinned_images=_images())
+    assert not ok
+    ok, lines = check.evaluate(_dockerfile(), f'sha256:{NEW}', _created(check.MAX_AGE_DAYS), NOW,
+                               current_images=current, pinned_images=_images())
+    assert ok and 'within' in '\n'.join(lines)
+
+
+@pytest.mark.parametrize('current,pinned', [
+    (None, None), ({}, _images()), (_images(), {'linux/amd64': _images()['linux/amd64']}),
+    ({'linux/amd64': None, 'linux/arm64': None}, {'linux/amd64': None, 'linux/arm64': None}),
+])
+def test_without_both_answers_for_every_published_platform_the_index_decides(current, pinned):
+    ok, _ = check.evaluate(_dockerfile(), f'sha256:{NEW}', _created(check.MAX_AGE_DAYS + 1), NOW,
+                           current_images=current, pinned_images=pinned)
+    assert not ok
+
+
+def _index(entries):
+    return {'digest': f'sha256:{"9" * 64}', 'manifests': entries}
+
+
+def test_the_published_images_are_read_from_the_index_and_nothing_else():
+    """The shape `docker buildx imagetools inspect --format '{{json .}}'` prints for an official
+    image: one entry per platform, arm64 with variant v8, and an attestation after each."""
+    manifest = _index([
+        {'digest': 'sha256:' + 'a' * 64, 'platform': {'os': 'linux', 'architecture': 'amd64'}},
+        {'digest': 'sha256:' + 'f' * 64, 'platform': {'os': 'unknown', 'architecture': 'unknown'},
+         'annotations': {'vnd.docker.reference.type': 'attestation-manifest'}},
+        {'digest': 'sha256:' + 'c' * 64, 'platform': {'os': 'linux', 'architecture': 'arm', 'variant': 'v7'}},
+        {'digest': 'sha256:' + 'b' * 64, 'platform': {'os': 'linux', 'architecture': 'arm64', 'variant': 'v8'}},
+        {'digest': 'sha256:' + 'd' * 64, 'platform': {'os': 'linux', 'architecture': 'riscv64'}},
+    ])
+    assert check.platform_images(manifest) == {'linux/amd64': 'sha256:' + 'a' * 64, 'linux/arm64': 'sha256:' + 'b' * 64}
+    assert check.platform_images({}) == {} and check.platform_images(None) == {}
+
+
 # --- the update --------------------------------------------------------------
 
 def test_update_moves_every_stage_and_nothing_else():
@@ -134,10 +186,14 @@ def test_update_refuses_what_it_cannot_do_safely():
 
 # --- the command, with a stand-in for docker ---------------------------------
 
-def _fake_docker(tmp_path, digest_by_ref, created_days_by_ref, fail=False):
+def _fake_docker(tmp_path, digest_by_ref, created_days_by_ref, fail=False, images_by_ref=None):
     """A `docker` that answers `buildx imagetools inspect <ref> --format {{json .}}` the way the
     real one does, for the references given."""
-    answers = {ref: {'name': ref, 'manifest': {'digest': digest_by_ref[ref]},
+    def manifest(ref):
+        entries = [{'digest': digest, 'platform': dict(zip(('os', 'architecture'), platform.split('/'), strict=True))}
+                   for platform, digest in ((images_by_ref or {}).get(ref) or {}).items()]
+        return {'digest': digest_by_ref[ref], 'manifests': entries}
+    answers = {ref: {'name': ref, 'manifest': manifest(ref),
                      'image': {p: {'created': c} for p, c in _created(created_days_by_ref[ref]).items()}}
                for ref in digest_by_ref}
     script = tmp_path / 'docker'
@@ -179,6 +235,18 @@ def test_the_command_passes_with_a_logged_override_and_rewrites_with_update(tmp_
     assert code == 0 and '--allow-stale: because' in capsys.readouterr().out
     code, text = _command(tmp_path, _dockerfile(), ['--update'], fake)
     assert code == 0 and text.count(f'@sha256:{NEW}') == 2
+
+
+def test_the_command_passes_when_only_a_platform_not_published_moved(tmp_path, capsys):
+    same = {'linux/amd64': 'sha256:' + '1' * 64, 'linux/arm64': 'sha256:' + '2' * 64,
+            'linux/riscv64': 'sha256:' + '3' * 64}
+    moved = {**same, 'linux/riscv64': 'sha256:' + '4' * 64}
+    pinned_ref = f'python:3.12-slim-trixie@sha256:{OLD}'
+    fake = _fake_docker(tmp_path, {'python:3.12-slim-trixie': f'sha256:{NEW}', pinned_ref: f'sha256:{OLD}'},
+                        {'python:3.12-slim-trixie': 1, pinned_ref: 31},
+                        images_by_ref={'python:3.12-slim-trixie': moved, pinned_ref: same})
+    code, _ = _command(tmp_path, _dockerfile(), [], fake)
+    assert code == 0 and 'not for linux/amd64 or linux/arm64' in capsys.readouterr().out
 
 
 def test_an_unreachable_registry_is_a_refusal_that_says_what_is_needed(tmp_path, capsys):

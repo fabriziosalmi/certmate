@@ -117,11 +117,18 @@
         return '<span class="inline-block px-2 py-0.5 rounded text-xs ' + cls + '">' + escapeHtml(source || '?') + '</span>';
     }
 
+    // The key as text, '' when there is none. Shared by the cell and the sort, so
+    // the column is ordered by exactly what it shows.
+    function keyText(key) {
+        if (!key || !key.type) { return ''; }
+        if (key.curve) { return key.type + ' ' + key.curve; }
+        if (key.size) { return key.type + ' ' + key.size; }
+        return String(key.type);
+    }
+
     function keyLabel(key) {
-        if (!key || !key.type) { return '—'; }
-        if (key.curve) { return escapeHtml(key.type + ' ' + key.curve); }
-        if (key.size) { return escapeHtml(key.type + ' ' + key.size); }
-        return escapeHtml(key.type);
+        var text = keyText(key);
+        return text ? escapeHtml(text) : '—';
     }
 
     function subjectCell(r) {
@@ -139,12 +146,22 @@
         return s;
     }
 
+    // The first endpoint, and "+N" for the rest. The rest used to be only a
+    // number: a certificate served on five hosts said "+4" with no way to see
+    // which four short of the API. Hovering the cell now lists every one, one per
+    // line (the native tooltip: no script, nothing the CSP has to allow), and the
+    // same list is in the cell as screen-reader text, which a title alone is not
+    // reliably announced as.
     function endpointsCell(r) {
         var eps = r.endpoints || [];
         if (!eps.length) { return '<span class="text-xs text-muted">—</span>'; }
-        var first = eps[0].host + ':' + eps[0].port;
-        var more = eps.length > 1 ? ' <span class="text-muted">+' + (eps.length - 1) + '</span>' : '';
-        return '<span class="text-xs font-mono">' + escapeHtml(first) + '</span>' + more;
+        var all = eps.map(function (e) { return e.host + ':' + e.port; });
+        var first = '<span class="text-xs font-mono">' + escapeHtml(all[0]) + '</span>';
+        if (all.length === 1) { return first; }
+        return '<span class="cursor-help whitespace-nowrap" title="' + escapeHtml(all.join('\n')) + '">'
+            + first + ' <span class="text-muted" aria-hidden="true">+' + (all.length - 1) + '</span>'
+            + '<span class="sr-only">, ' + escapeHtml(all.slice(1).join(', ')) + '</span>'
+            + '</span>';
     }
 
     function actionsCell(r) {
@@ -200,9 +217,71 @@
         return !!(box && box.checked);
     }
 
+    // Column sorting: the same interaction as the dashboard and client-certificate
+    // tables. A header sorts ascending, a second click descending, and aria-sort and
+    // the glyph follow. Until a header is clicked the list keeps the order the API
+    // returned, so the page looks exactly as it did before anyone sorts it.
+    var sortState = { field: null, dir: 'asc' };
+
+    // What a column sorts by: a number, a lower-cased string, or null when the
+    // record has nothing for it. Expiry is the date, not the badge text, so
+    // "3 days" comes before "12 days" and both before "Expired" in descending order.
+    function sortValue(r, field) {
+        if (field === 'subject') { return (r.subject_cn || '').toLowerCase() || null; }
+        if (field === 'issuer') { return (r.issuer_cn || r.issuer || '').toLowerCase() || null; }
+        if (field === 'expiry') {
+            var when = Date.parse(r.not_after || '');
+            return isNaN(when) ? null : when;
+        }
+        if (field === 'key') { return keyText(r.key).toLowerCase() || null; }
+        if (field === 'source') { return (r.source || '').toLowerCase() || null; }
+        if (field === 'endpoints') { return (r.endpoints || []).length; }
+        return null;
+    }
+
+    function compareRecords(a, b) {
+        var va = sortValue(a, sortState.field);
+        var vb = sortValue(b, sortState.field);
+        // A record with nothing to sort by goes to the bottom in either direction,
+        // rather than heading the list as a block of dashes.
+        if (va === null || vb === null) {
+            if (va === vb) { return 0; }
+            return va === null ? 1 : -1;
+        }
+        var dir = sortState.dir === 'asc' ? 1 : -1;
+        if (typeof va === 'number') { return dir * (va - vb); }
+        // numeric: 'RSA 2048' before 'RSA 4096', 'a2.example' before 'a10.example'.
+        return dir * va.localeCompare(vb, undefined, { numeric: true });
+    }
+
+    function applySort(rows) {
+        // Array.prototype.sort is stable, so equal keys keep the API's order.
+        return sortState.field ? rows.slice().sort(compareRecords) : rows;
+    }
+
+    function sortBy(field) {
+        if (sortState.field === field) {
+            sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortState.field = field;
+            sortState.dir = 'asc';
+        }
+        document.querySelectorAll('[id^="inv-sort-icon-"]').forEach(function (icon) {
+            icon.className = 'fas fa-sort ml-1 text-gray-400';
+        });
+        document.querySelectorAll('[id^="inv-sort-th-"]').forEach(function (th) {
+            th.setAttribute('aria-sort', 'none');
+        });
+        var icon = el('inv-sort-icon-' + field);
+        if (icon) { icon.className = 'fas fa-sort-' + (sortState.dir === 'asc' ? 'up' : 'down') + ' ml-1 text-primary'; }
+        var th = el('inv-sort-th-' + field);
+        if (th) { th.setAttribute('aria-sort', sortState.dir === 'asc' ? 'ascending' : 'descending'); }
+        render();
+    }
+
     function render() {
         var body = el('inventoryBody');
-        var rows = records.filter(passesFilters);
+        var rows = applySort(records.filter(passesFilters));
         el('invCount').textContent = rows.length + ' of ' + records.length
             + (hiddenSuperseded ? ' · ' + hiddenSuperseded + ' superseded hidden' : '');
         if (!rows.length) {
@@ -586,6 +665,7 @@
 
     window.InventoryPage = {
         load: load, render: render, saveConfig: saveConfig, toggleSuperseded: toggleSuperseded,
+        sortBy: sortBy,
         runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl,
         forget: forget, forgetFromEl: forgetFromEl
     };
@@ -602,6 +682,6 @@
     CertMate.globalActions([
         'InventoryPage.adoptFromEl', 'InventoryPage.forgetFromEl', 'InventoryPage.load',
         'InventoryPage.render', 'InventoryPage.runScan', 'InventoryPage.saveConfig',
-        'InventoryPage.toggleSuperseded'
+        'InventoryPage.sortBy', 'InventoryPage.toggleSuperseded'
     ]);
 }());

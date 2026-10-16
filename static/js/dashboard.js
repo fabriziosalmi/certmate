@@ -1826,7 +1826,7 @@
         // Update UI to show checking state
         statusElements.forEach(function (statusElement) {
             statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
-            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
+            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span class="sr-only">Checking deployment</span>';
         });
 
         var deploymentUrl = '/api/certificates/' + encodeURIComponent(domain) + '/deployment-status';

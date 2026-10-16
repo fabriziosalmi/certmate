@@ -1,6 +1,6 @@
 # CertMate Certificats Clients - Guide d'utilisation
 
-<!-- CERTMATE-TRANSLATED-FROM 88bb16eb976577c4 -->
+<!-- CERTMATE-TRANSLATED-FROM 8b55cd3aefbd2dba -->
 
 ## Vue d'ensemble
 
@@ -11,7 +11,7 @@ CertMate Certificats Clients est une solution complète et prête pour la produc
 - **OCSP & CRL** — Statut des certificats en temps réel et listes de révocation
 - **Tableau de bord Web** — Interface intuitive pour la gestion des certificats
 - **API REST** — API complète pour l'automatisation
-- **Opérations par lots** — Importez des certificats clients par CSV (100 lignes maximum par requête)
+- **Opérations par lots** — Importez des certificats clients en masse par CSV (100 lignes maximum par requête)
 - **Journal d'audit** — Suivez toutes les opérations pour la conformité
 - **Limitation de débit** — Protection intégrée contre les abus
 
@@ -36,7 +36,7 @@ python app.py
 ### Premiers pas
 
 1. **Générer la CA** — Créée automatiquement au premier démarrage
-2. **Accéder au tableau de bord** — Allez dans `/client-certificates`
+2. **Accéder au tableau de bord** — Allez sur `/client-certificates`
 3. **Créer un certificat** — Utilisez le formulaire Web ou l'API
 4. **Télécharger les fichiers** — Obtenez le cert, la clé et le CSR
 
@@ -50,12 +50,12 @@ python app.py
 
 #### Panneau de statistiques
 - Total des certificats
-- Nombre actifs
-- Nombre révoqués
+- Nombre d'actifs
+- Nombre de révoqués
 - Répartition par type d'utilisation
 
 #### Tableau des certificats
-- Liste tous les certificats
+- Liste de tous les certificats
 - Recherche par nom commun
 - Filtre par type d'utilisation
 - Filtre par statut
@@ -65,7 +65,7 @@ python app.py
 
 **Champs du formulaire** :
 - Nom commun (obligatoire)
-- Adresse email
+- Adresse e-mail
 - Organisation
 - Unité organisationnelle
 - Type d'utilisation (VPN, API-mTLS, etc.)
@@ -75,14 +75,14 @@ python app.py
 
 **Exemple** :
 ```
-Nom commun : user@example.com
-Email : user@example.com
-Organisation : ACME Corp
-Type d'utilisation : api-mtls
-Jours de validité : 365
+Common Name: user@example.com
+Email: user@example.com
+Organization: ACME Corp
+Usage Type: api-mtls
+Days Valid: 365
 ```
 
-#### Import CSV par lots
+#### Import CSV en masse
 
 1. Cliquez sur l'onglet "Import en vrac"
 2. Préparez un fichier CSV avec les en-têtes :
@@ -91,8 +91,8 @@ Jours de validité : 365
  user1@example.com,user1@example.com,ACME Corp,api-mtls,365
  user2@example.com,user2@example.com,ACME Corp,vpn,365
  ```
-3. Glissez-déposez ou cliquez pour importer
-4. Visionnez l'aperçu
+3. Glissez-déposez le fichier ou cliquez pour l'envoyer
+4. Vérifiez l'aperçu
 5. Cliquez sur "Importer"
 
 ---
@@ -103,7 +103,7 @@ Jours de validité : 365
 
 #### Via le tableau de bord Web
 
-1. Allez dans `/client-certificates`
+1. Allez sur `/client-certificates`
 2. Remplissez le formulaire "Créer un certificat"
 3. Cliquez sur "Créer"
 4. Le certificat apparaît dans le tableau
@@ -115,12 +115,12 @@ curl -X POST http://localhost:8000/api/client-certs/create \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
-   "common_name": "user@example.com",
-   "email": "user@example.com",
-   "organization": "ACME Corp",
-   "cert_usage": "api-mtls",
-   "days_valid": 365,
-   "generate_key": true
+ "common_name": "user@example.com",
+ "email": "user@example.com",
+ "organization": "ACME Corp",
+ "cert_usage": "api-mtls",
+ "days_valid": 365,
+ "generate_key": true
  }'
 ```
 
@@ -131,11 +131,11 @@ curl -X POST http://localhost:8000/api/client-certs/create \
 #### Via le tableau de bord Web
 
 1. Trouvez le certificat dans le tableau
-2. Cliquez sur l'icône de téléchargement
+2. Cliquez sur l'icône "Télécharger"
 3. Sélectionnez le type de fichier :
    - **CRT** — Certificat (public)
    - **KEY** — Clé privée (à garder secrète)
-   - **CSR** — Demande de signature de certificat
+   - **CSR** — Demande de signature de certificat (Certificate Signing Request)
 
 #### Via l'API
 
@@ -143,12 +143,12 @@ curl -X POST http://localhost:8000/api/client-certs/create \
 # Télécharger le certificat
 curl http://localhost:8000/api/client-certs/CERT_ID/download/crt \
  -H "Authorization: Bearer TOKEN" \
- -o mon-cert.crt
+ -o my-cert.crt
 
 # Télécharger la clé
 curl http://localhost:8000/api/client-certs/CERT_ID/download/key \
  -H "Authorization: Bearer TOKEN" \
- -o ma-cle.key
+ -o my-key.key
 ```
 
 ---
@@ -169,7 +169,7 @@ curl -X POST http://localhost:8000/api/client-certs/CERT_ID/revoke \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
-   "reason": "compromised"
+ "reason": "compromised"
  }'
 ```
 
@@ -209,7 +209,7 @@ curl -X POST http://localhost:8000/api/client-certs/CERT_ID/renew \
 #### Via le tableau de bord Web
 
 1. Allez dans le tableau des certificats
-2. Utilisez la zone de recherche pour le nom commun
+2. Utilisez la zone "Rechercher" pour le nom commun
 3. Utilisez le menu déroulant "Type d'usage" pour filtrer
 4. Utilisez le menu déroulant "Statut" (Actif/Révoqué)
 5. Cliquez sur "Appliquer les filtres"
@@ -241,16 +241,16 @@ curl "http://localhost:8000/api/client-certs?search=user@" \
 #### Via l'API
 
 ```bash
-curl http://localhost:8000/api/ocsp/status/NUMERO_SERIE \
+curl http://localhost:8000/api/ocsp/status/SERIAL_NUMBER \
  -H "Authorization: Bearer TOKEN"
 ```
 
 **Réponse** :
 ```json
 {
-  "certificate_status": "good",
-  "certificate_serial": 12345678,
-  "this_update": "2024-10-30T18:00:00Z"
+ "certificate_status": "good",
+ "certificate_serial": 12345678,
+ "this_update": "2024-10-30T18:00:00Z"
 }
 ```
 
@@ -272,7 +272,7 @@ curl http://localhost:8000/api/crl/download/der \
  -o ca.crl
 ```
 
-#### Obtenir les informations CRL
+#### Obtenir les informations de la CRL
 
 ```bash
 curl http://localhost:8000/api/crl/download/info \
@@ -307,8 +307,8 @@ user3@example.com,user3@example.com,ACME Corp,api-mtls,730
 ### Via le tableau de bord Web
 
 1. Allez dans l'onglet "Import en vrac"
-2. Importez le fichier CSV
-3. Visionnez l'aperçu
+2. Envoyez le fichier CSV
+3. Vérifiez l'aperçu
 4. Cliquez sur "Tout importer"
 
 ### Via l'API
@@ -318,27 +318,27 @@ curl -X POST http://localhost:8000/api/client-certs/batch \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
-   "headers": ["common_name", "email", "organization"],
-   "rows": [["user1@example.com", "user1@example.com", "ACME Corp"],
-            ["user2@example.com", "user2@example.com", "ACME Corp"],
-            ["user3@example.com", "user3@example.com", "ACME Corp"]
-           ]
+ "headers": ["common_name", "email", "organization"],
+ "rows": [["user1@example.com", "user1@example.com", "ACME Corp"],
+ ["user2@example.com", "user2@example.com", "ACME Corp"],
+ ["user3@example.com", "user3@example.com", "ACME Corp"]
+ ]
  }'
 ```
 
 ### Résultats de l'import
 
-Retourne les compteurs de succès/échec :
+Renvoie les compteurs de succès/échecs :
 ```json
 {
-  "total": 3,
-  "successful": 3,
-  "failed": 0,
-  "errors": [],
-  "certificates": [{"identifier": "cert-batch-001", "common_name": "user1@example.com"},
-                   {"identifier": "cert-batch-002", "common_name": "user2@example.com"},
-                   {"identifier": "cert-batch-003", "common_name": "user3@example.com"}
-                  ]
+ "total": 3,
+ "successful": 3,
+ "failed": 0,
+ "errors": [],
+ "certificates": [{"identifier": "cert-batch-001", "common_name": "user1@example.com"},
+ {"identifier": "cert-batch-002", "common_name": "user2@example.com"},
+ {"identifier": "cert-batch-003", "common_name": "user3@example.com"}
+ ]
 }
 ```
 
@@ -348,11 +348,11 @@ Retourne les compteurs de succès/échec :
 
 ### API mTLS
 
-Pour l'authentification mutuelle TLS des clients API.
+Pour l'authentification TLS mutuelle des clients d'API.
 
 ```
-Type d'usage : api-mtls
-Validité typique : 1 an (365 jours)
+Usage Type: api-mtls
+Typical Validity: 1 year (365 days)
 ```
 
 ### VPN
@@ -360,8 +360,8 @@ Validité typique : 1 an (365 jours)
 Pour l'authentification des clients VPN.
 
 ```
-Type d'usage : vpn
-Validité typique : 1-2 ans (365-730 jours)
+Usage Type: vpn
+Typical Validity: 1-2 years (365-730 days)
 ```
 
 ### Types personnalisés
@@ -369,9 +369,9 @@ Validité typique : 1-2 ans (365-730 jours)
 Vous pouvez créer des certificats pour tout usage personnalisé :
 
 ```
-Type d'usage : custom-application
-Type d'usage : internal-service
-Type d'usage : mobile-app
+Usage Type: custom-application
+Usage Type: internal-service
+Usage Type: mobile-app
 ```
 
 ---
@@ -380,113 +380,113 @@ Type d'usage : mobile-app
 
 ### Configuration
 
-- **Vérification** : Tous les jours. Les certificats clients entre 02h00 et
+- **Heure de vérification** : Tous les jours. Les certificats clients entre 02h00 et
   04h00 ; les certificats serveur, dont le reste de cette section décrit la
-  règle, entre 01h00 et 03h00 (chaque passage à son heure, avec jusqu'à une
+  règle, entre 01h00 et 03h00 (chaque balayage a lieu à son heure, avec jusqu'à une
   heure de décalage aléatoire dans un sens ou dans l'autre)
 - **Seuil** : 30 jours avant l'expiration (`renewal_threshold_days`), lorsque
   cela ne dépasse pas la moitié de la durée de vie du certificat ; voir plus bas
 - **Action** : Renouvellement automatique si activé
 
-### Quand un certificat est renouvele
+### Quand un certificat est renouvelé
 
-Une seule regle decide, et la reponse du certificat la porte :
-`needs_renewal` devient vrai a `renews_at`, l'instant ou le balayage le
+Une seule règle décide, et la réponse du certificat la porte :
+`needs_renewal` devient vrai à `renews_at`, l'instant où le balayage le
 renouvelle (`GET /api/certificates/<domain>`, depuis le contrat d'API 2.40).
-CertMate prend la decision et demande a certbot de renouveler ; le verrou
-propre de certbot n'intervient plus, donc une mise a jour de certbot ne peut
-pas changer le moment ou CertMate renouvelle.
+CertMate prend la décision et demande à certbot de renouveler ; le verrou
+propre de certbot n'y prend aucune part, donc une mise à jour de certbot ne peut
+pas changer le moment où CertMate renouvelle.
 
-- **Le seuil**, lorsqu'il ne depasse pas la moitie de la duree de vie : 30
-  jours d'un certificat de 90, comme toujours, ou 45 si vous reglez 45.
-- **Sinon la duree de vie** : un tiers, ou la moitie pour un certificat qui
+- **Le seuil**, lorsqu'il ne dépasse pas la moitié de la durée de vie : 30
+  jours d'un certificat de 90 jours, comme toujours, ou 45 si vous réglez 45.
+- **Sinon la durée de vie** : un tiers de celle-ci, ou la moitié pour un certificat qui
   vit moins de 10 jours. 30 jours ne veulent rien dire pour un certificat de
-  45, qui est donc renouvele quand il lui en reste 15 ; un certificat de 160
-  heures quand il lui reste environ 3 jours.
-- **La fenetre de la CA**, quand elle en a publie une pour ce certificat (plus
-  bas) : avant ou apres le seuil.
+  45 jours, qui est donc renouvelé quand il lui en reste 15 ; un certificat de 160
+  heures, quand il lui reste environ 3 jours.
+- **La fenêtre de la CA**, quand elle en a publié une pour ce certificat (plus
+  bas) : avant ou après le seuil.
 
-Pour un certificat de 90 jours avec les 30 jours par defaut, les
+Pour un certificat de 90 jours avec les 30 jours par défaut, les
 renouvellements ont lieu quand ils ont toujours eu lieu.
 
 ### Quand la CA n'est pas d'accord avec le seuil (ARI)
 
-Le seuil est l'avis de CertMate, et c'est le meme avis pour chaque
+Le seuil est l'avis de CertMate, et c'est le même avis pour chaque
 certificat et chaque CA. Depuis la [RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)
 une CA peut publier le sien, par certificat : un endpoint `renewalInfo` qui
-repond par une fenetre pendant laquelle elle souhaite voir ce certificat
-remplace. Let's Encrypt en expose un, en production et en staging. step-ca pas
-encore (0.30.2, mesure ; voir smallstep/certificates#2162) : sur une step-ca
-privee seul le seuil decide, et le panneau du certificat indique que la CA ne
-publie pas de fenetre.
+répond par une fenêtre pendant laquelle elle souhaite voir ce certificat
+remplacé. Let's Encrypt en sert un, en production et en staging. step-ca pas
+encore (0.30.2, mesuré ; voir smallstep/certificates#2162) : sur une step-ca
+privée, le seuil décide donc seul, et le panneau du certificat indique que la CA ne
+publie pas de fenêtre.
 
 Le balayage de renouvellement TLS pose la question, pour chaque certificat, et
-la fenetre decide dans les deux sens. Elle **avance** un renouvellement : c'est
-ainsi qu'une instance apprend un remplacement en masse — une emission erronee,
-un intermediaire compromis, une decision du CA/Browser Forum — des jours avant
-l'arrivee de la revocation, au lieu de le decouvrir quand le certificat cesse
+la fenêtre décide dans les deux sens. Elle **avance** un renouvellement : c'est
+ainsi qu'une instance apprend un remplacement en masse — une émission erronée,
+un intermédiaire compromis, une décision du CA/Browser Forum — des jours avant
+l'arrivée de la révocation, plutôt qu'au moment où le certificat cesse
 de fonctionner. Et elle **reporte** un renouvellement que le seuil aurait
-fait, jusqu'au point de la fenetre demande par la CA.
+déclenché, jusqu'au point de la fenêtre demandé par la CA.
 
-**Un report a un plancher.** Une fenetre ne retient jamais un certificat
-lorsqu'il ne lui reste qu'un sixieme de sa duree de vie (15 jours sur 90, 7,5
-sur 45, environ un sur 160 heures), ni au-dela de la fin de la fenetre
-elle-meme : une CA qui se trompe, ou une fenetre perimee, ne peut donc pas
+**Un report a un plancher.** Une fenêtre ne retient jamais un certificat
+dès qu'il ne lui reste qu'un sixième de sa durée de vie (15 jours sur 90, 7,5
+sur 45, environ un sur 160 heures), ni au-delà de la fin de la fenêtre
+elle-même : une CA qui se trompe, ou une fenêtre périmée, ne peut donc pas
 pousser un certificat vers l'expiration. Chaque absence — une CA qui ne publie
-pas `renewalInfo`, un endpoint injoignable, une reponse malformee, un
-certificat auto-signe sans Authority Key Identifier par lequel le nommer — ne
-laisse aucune fenetre, et le seuil decide. La fenetre est conservee sur disque,
+pas de `renewalInfo`, un endpoint injoignable, une réponse malformée, un
+certificat auto-signé sans Authority Key Identifier par lequel le nommer — ne
+laisse aucune fenêtre, et le seuil décide. La fenêtre est conservée sur disque,
 donc un report dure d'un balayage au suivant.
 
-Dans la fenetre, CertMate choisit un point, derive de l'identifiant propre du
-certificat, de sorte que le choix est le meme a chaque balayage et que deux
-certificats ne tombent pas sur le meme instant. C'est a cela que sert la
-fenetre : une CA ne veut pas que tous ses clients renouvellent en meme temps.
+Dans la fenêtre, CertMate choisit un point, dérivé de l'identifiant propre du
+certificat, de sorte que le choix est le même à chaque balayage et que deux
+certificats ne tombent pas sur le même instant. C'est à cela que sert la
+fenêtre : une CA ne veut pas que tous ses clients renouvellent en même temps.
 
-Le resume du balayage les compte comme `ari_advanced` et `ari_postponed`, afin
-qu'un renouvellement que votre configuration n'explique pas, ou qu'elle ne
-fait pas, reste attribuable.
+Le résumé du balayage les compte comme `ari_advanced` et `ari_postponed`, afin
+qu'un renouvellement que votre configuration n'explique pas, ou un renouvellement
+qu'elle ne fait pas, reste attribuable.
 
-Le panneau de detail du certificat montre ce que la CA a dit au dernier
-balayage, sous **CA renewal window** : la fenetre, l'instant a l'interieur
-duquel CertMate renouvelle, et le lien d'explication de la CA quand elle en a
-donne un. Sans fenetre, il dit de quelle absence il s'agit : la CA n'en publie
-pas, la CA n'a pas repondu au dernier controle, ou le certificat ne peut pas
-etre nomme dans ARI. Le meme enregistrement est renvoye comme `renewal_info`
+Le panneau de détail du certificat montre ce que la CA a dit au dernier
+balayage, sous **CA renewal window** : la fenêtre, l'instant de cette fenêtre
+auquel CertMate renouvelle, et le lien d'explication de la CA quand elle en a
+donné un. Quand il n'y a pas de fenêtre, il indique de quelle absence il s'agit : la CA n'en publie
+pas, la CA n'a pas répondu au dernier contrôle, ou le certificat ne peut pas
+être nommé dans ARI. Le même enregistrement est renvoyé comme `renewal_info`
 par `GET /api/certificates/<domain>`. Il est lu dans ce que le balayage a
-conserve, donc ouvrir le tableau de bord n'envoie jamais de requete a la CA.
-Juste apres un renouvellement il affiche "Not checked yet" jusqu'a ce que le
-balayage suivant interroge sur le nouveau certificat.
+conservé, donc ouvrir le tableau de bord n'envoie jamais de requête à la CA.
+Juste après un renouvellement, il affiche "Not checked yet" jusqu'à ce que le
+balayage suivant interroge la CA sur le nouveau certificat.
 
-Mettez `"ari_enabled": false` dans `settings.json` pour le desactiver ; il est
-actif par defaut et coute un GET non authentifie par certificat et par
-balayage, plus un par CA et par heure pour le repertoire.
+Mettez `"ari_enabled": false` dans `settings.json` pour le désactiver ; il est
+actif par défaut et coûte un GET non authentifié par certificat et par
+balayage, plus un par CA et par heure pour le répertoire.
 
-### Un seuil au-dela de 30 jours
+### Un seuil au-delà de 30 jours
 
-Avant la version 2.40.0, CertMate demandait a certbot de renouveler sans le
+Avant la version 2.40.0, CertMate demandait à certbot de renouveler sans
 forcer, et le verrou propre de certbot ne renouvelait que dans les 30 derniers
 jours avant l'expiration : un `renewal_threshold_days` de 45 se comportait
-donc comme 30. La version 2.40.0 a force les renouvellements qu'un seuil
-au-dela de 30 jours declarait dus, et depuis le contrat d'API 2.40 tout
-renouvellement decide par CertMate est force : un seuil de 45 renouvelle un
+donc comme 30. La version 2.40.0 a forcé les renouvellements qu'un seuil
+au-delà de 30 jours déclarait dus, et depuis le contrat d'API 2.40 tout
+renouvellement décidé par CertMate est forcé : un seuil de 45 renouvelle un
 certificat de 90 jours 45 jours avant son expiration. Un renouvellement que le
-seuil avance par rapport a la regle de la duree de vie s'accompagne de deux
+seuil avance par rapport à la règle de la durée de vie s'accompagne de deux
 protections :
 
-- **Au plus `early_renewals_per_sweep` par balayage** (10 par defaut, entre 1
-  et 50). Relever le seuil sur un grand parc etale les renouvellements anticipes
-  sur plusieurs nuits au lieu d'envoyer toutes les commandes a la CA en une
-  seule. Le resume les compte comme `early_forced`, et ceux laisses au balayage
+- **Au plus `early_renewals_per_sweep` par balayage** (10 par défaut, entre 1
+  et 50). Relever le seuil sur un grand parc étale les renouvellements anticipés
+  sur plusieurs nuits au lieu d'envoyer toutes les commandes à la CA en une
+  seule. Le résumé du balayage les compte comme `early_forced`, et ceux laissés au balayage
   suivant comme `early_deferred`.
-- **Un certificat plus jeune qu'une semaine, ou qu'un tiers de sa duree de
-  vie, n'est jamais renouvele en avance.** Un seuil au-dela de la moitie de la
-  duree de vie ne compte plus (la duree de vie decide) : cette protection est
-  la derniere defense contre un certificat dont les dates ne concordent pas.
+- **Un certificat âgé de moins d'une semaine, ou de moins d'un tiers de sa durée de
+  vie, n'est jamais renouvelé en avance.** Un seuil au-delà de la moitié de la
+  durée de vie ne compte plus du tout (la durée de vie décide), donc cette protection est
+  la dernière défense contre un certificat dont les dates ne concordent pas.
 
-Un certificat qui demande de l'attention pour une autre raison, une cle servie
-absente ou qui ne correspond pas, n'est pas force : il est repare depuis sa
-lignee, sans nouvelle cle.
+Un certificat qui demande de l'attention pour une autre raison, une clé servie
+absente ou qui ne correspond pas, n'est pas forcé : il est réparé à partir de sa
+lignée, sans nouvelle clé.
 
 ### Activation du renouvellement automatique
 
@@ -500,10 +500,10 @@ curl http://localhost:8000/api/client-certs/CERT_ID \
 Recherchez :
 ```json
 {
-  "renewal": {
-    "renewal_enabled": true,
-    "renewal_threshold_days": 30
-  }
+ "renewal": {
+ "renewal_enabled": true,
+ "renewal_threshold_days": 30
+ }
 }
 ```
 
@@ -529,7 +529,7 @@ En cas de renouvellement automatique :
 
 **Solutions** :
 1. Vérifiez que le nom commun est valide
-2. Vérifiez que tous les champs obligatoires sont remplis
+2. Vérifiez tous les champs obligatoires
 3. Vérifiez que la CA est initialisée
 4. Consultez les logs pour plus de détails
 
@@ -554,9 +554,9 @@ En cas de renouvellement automatique :
 4. Vérifiez la limite de votre endpoint
 
 Le corps indique quelle limite a été atteinte. `"code": "ISSUANCE_QUEUE_FULL"`
-signifie que trop de tâches de certificat sont en file ou en cours : réessayez
+signifie que trop de tâches de certificat sont en file d'attente ou en cours : réessayez
 quand certaines se terminent, ou augmentez `CERTMATE_ISSUANCE_QUEUE_LIMIT` /
-`CERTMATE_ISSUANCE_WORKERS`. La limite de l'API et celle des tentatives de
+`CERTMATE_ISSUANCE_WORKERS`. La limite de débit de l'API et la limite des tentatives de
 connexion renvoient toutes deux `retry_after` en secondes.
 
 ### Consultation des logs
@@ -581,9 +581,9 @@ tail -f logs/audit/certificate_audit.log
 ### Clés privées
 
 - **NE JAMAIS** partager vos clés privées
-- **NE JAMAIS** commiter les clés dans git
+- **NE JAMAIS** commiter de clés dans git
 - Stockez les clés de manière sécurisée
-- Utilisez les permissions 0600
+- Utilisez les permissions de fichier 0600
 
 ### Certificats
 
@@ -592,12 +592,12 @@ tail -f logs/audit/certificate_audit.log
 - Révoquez immédiatement les certificats compromis
 - Conservez les logs d'audit pour la conformité
 
-### Jetons API
+### Tokens API
 
-- Effectuez une rotation régulière des jetons
+- Effectuez une rotation régulière des tokens
 - Utilisez HTTPS en production
-- Ne codez pas en dur les jetons
-- Utilisez les variables d'environnement
+- Ne codez pas les tokens en dur
+- Utilisez des variables d'environnement
 
 ### Révocation
 
@@ -605,7 +605,7 @@ Révoquez toujours quand :
 - La clé est compromise
 - Le certificat est remplacé
 - Un utilisateur quitte l'organisation
-- Le service est désaffecté
+- Le service est mis hors service
 
 ---
 
@@ -615,7 +615,7 @@ Révoquez toujours quand :
 
 Utilisez les opérations par lots au lieu de créations individuelles :
 ```bash
-# Bien : Une requête pour 1000 certificats
+# Bien : une requête pour 1000 certificats
 POST /api/client-certs/batch
 
 # Mal : 1000 requêtes pour 1000 certificats
@@ -626,10 +626,10 @@ POST /api/client-certs/create × 1000
 
 Filtrez côté serveur :
 ```bash
-# Bien : Le serveur filtre
+# Bien : le serveur filtre
 GET /api/client-certs?usage=api-mtls
 
-# Mal : Le client filtre tout
+# Mal : le client filtre tout
 GET /api/client-certs
 ```
 

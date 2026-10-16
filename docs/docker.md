@@ -208,10 +208,10 @@ volumes:
 
 ```bash
 # Start with .env file in the same directory
-docker-compose up -d
+docker compose up -d
 
 # Or specify a different env file
-docker-compose --env-file /path/to/.env up -d
+docker compose --env-file /path/to/.env up -d
 ```
 
 ---
@@ -346,12 +346,17 @@ the volume, or for a bind mount apply the `chgrp 0 … && chmod g+rwX …` above
 
 ## Upgrading
 
-CertMate keeps all persistent state in the mounted volumes — chiefly `./data`
-(`settings.json`, the admin users, the auto-generated `.secret_key`, the audit
-signing key, and the scheduler database) and `./certificates`. Because state
-lives in those volumes and **not** in the image, upgrading is just pulling a
-newer image and recreating the container; your configuration, certificates, and
-login carry forward.
+CertMate keeps its persistent state in `/app/data` (`settings.json`, the admin
+users, the auto-generated `.secret_key`, the audit signing key, and the
+scheduler database) and `/app/certificates`. That state survives an upgrade
+because those paths are mounted from outside the container, as in every example
+on this page, and **not** kept in the image: upgrading is pulling a newer image
+and recreating the container with the same mounts, and your configuration,
+certificates, and login carry forward.
+
+Backups are written to `/app/backups`. The Quick Start above does not mount it,
+so a backup taken there goes with the container when it is removed: download it
+first, or mount `/app/backups` as well, as the example below does.
 
 ```bash
 # Recommended: take a backup first (Settings → Backup, or the API)
@@ -360,12 +365,14 @@ login carry forward.
 docker compose pull          # fetch the new image
 docker compose up -d         # recreate the container (data/ + certificates/ persist)
 
-# Plain docker run — stop/remove and re-run with the SAME volume mounts
+# Plain docker run: stop/remove and re-run with the SAME mounts you started
+# with. These are the Quick Start's named volumes, plus one for backups; use
+# your host paths instead if you started with bind mounts.
 docker pull fabriziosalmi/certmate:latest
 docker rm -f certmate
 docker run -d --name certmate --env-file .env -p 127.0.0.1:8000:8000 \
-  -v "$(pwd)/data:/app/data" -v "$(pwd)/certificates:/app/certificates" \
-  -v "$(pwd)/logs:/app/logs" -v "$(pwd)/backups:/app/backups" \
+  -v certmate_data:/app/data -v certmate_certificates:/app/certificates \
+  -v certmate_backups:/app/backups \
   fabriziosalmi/certmate:latest
 ```
 
@@ -387,7 +394,6 @@ CertMate supports multi-platform Docker images for both ARM and AMD64 architectu
 | `linux/amd64` | Intel/AMD 64-bit | Most cloud servers, desktops |
 | `linux/arm64` | ARM 64-bit | Apple Silicon, ARM cloud instances |
 | `linux/arm/v7` | ARM 32-bit v7 | Raspberry Pi 3+ — **not published**: buildable on request (see below), the release images are amd64 + arm64 |
-| `linux/arm/v6` | ARM 32-bit v6 | Raspberry Pi 1, Zero |
 
 ### Manual Docker Buildx
 

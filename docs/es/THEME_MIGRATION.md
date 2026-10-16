@@ -1,8 +1,8 @@
-# Migración de tema — desacoplamiento claro/oscuro mediante tokens CSS
+# Migración de tema — desacoplamiento claro/oscuro mediante tokens de variables CSS
 
-<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
 
-Estado: **entregado** (Fases 0-5 en v2.9.0; Fase 6 sigue) · Propietario: Fabrizio · Creado: 2026-05-25
+Estado: **entregado** (Fases 0–5 en v2.9.0, Fases 6–9 después; Fase 10 planificada) · Propietario: Fabrizio · Creado: 2026-05-25
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ Hoy, cambiar el tema implica editar los colores en ~19 templates y el JS del fro
 | Métrica | Valor |
 |---|---|
 | Referencias de clases de color en los templates | ~3 197 en 19 archivos |
-| Pares `dark:` en los templates | ~1 665 |
+| Pares de variantes `dark:` en los templates | ~1 665 |
 | Clases de color en el JS de la aplicación (no vendorizado) | ~789 (dashboard.js 372, settings.js 150, setup-wizard.js 131, certmate.js 60, client-certs.js 57, …) |
 | Hex codificados en el JS de la aplicación | ~17 (paletas toast/gráfico); 80 más en `redoc.standalone.js` son **vendorizados, ignorar** |
 | Clases de componentes R-3 adoptadas | `.card` solo (12×); `.btn-*`, `.badge-*`, `.form-*` = 0 |
@@ -22,7 +22,7 @@ Archivos más pesados: `partials/settings_dns.html` (635 / 395 dark:), `index.ht
 
 ## Riesgos de proceso a corregir primero
 
-1. **El CSS compilado se confirma a mano.** `package.json` solo tiene `css:build` / `css:watch`; ningún CI reconstruye `static/css/tailwind.min.css`. Editar `input.css` sin reconstruir entrega silenciosamente un CSS obsoleto. → añadir compilación CI + verificación de frescura en la Fase 0.
+1. **El CSS compilado se confirma a mano.** `package.json` solo tiene `css:build` / `css:watch`; ninguna CI reconstruye `static/css/tailwind.min.css`. Editar `input.css` sin reconstruir entrega silenciosamente un CSS obsoleto. → añadir compilación CI + verificación de frescura en la Fase 0.
 2. **~3 200 ediciones manuales = regresiones garantizadas.** Se necesita una referencia visual (capturas de pantalla claro+oscuro de cada página) y un codemod semi-automático para los pares `dark:` mecánicos, no una sustitución ciega.
 
 ## Estrategia: propiedades CSS personalizadas como fuente única
@@ -40,7 +40,7 @@ Estilo shadcn sobre Tailwind v3: los colores se convierten en variables CSS en `
 | `text-muted` | `text-gray-500 dark:text-gray-400` | texto secundario |
 | `border-border` | `border-gray-200 dark:border-gray-700` | bordes |
 | `bg-primary` / `text-primary` | marca (ahora basado en var) | marca |
-| `*-success/warning/danger/info` | verde=válido, rojo=expirado… | **estado**, no superficies |
+| `*-success/warning/danger/info` | verde=válido, rojo=expirado… | **estado, no superficies** |
 
 ## Fases
 
@@ -48,9 +48,9 @@ Cada fase = un commit atómico (dividir los partials de la Fase 3 en sus propios
 
 ### Fase 0 — Fundamentos y salvaguardas (sin cambio visual)
 - [x] Paso de CI que ejecuta `npm run css:build` y falla si `tailwind.min.css` está obsoleto (`git diff --exit-code`). → job `frontend-css` en `.github/workflows/ci.yml`. El bundle confirmado ya había divergido; reconstruido y confirmado.
-- [x] Definir la capa de tokens: variables CSS en `:root` / `.dark` (input.css) + mapping en `tailwind.config.js`, **en paralelo** con la paleta existente — sin tocar ningún template. Tokens: `bg-background`, `bg-surface`, `bg-surface-2`, `text-foreground`, `text-muted`, `border-border` (en safelist).
+- [x] Definir la capa de tokens: variables CSS en `:root` / `.dark` (input.css) + mapping en `tailwind.config.js`, **en paralelo** con la paleta existente — todavía sin tocar ningún template. Tokens: `bg-background`, `bg-surface`, `bg-surface-2`, `text-foreground`, `text-muted`, `border-border` (en safelist).
 - [x] Escribir el codemod: `scripts/theme_codemod.py` — tabla de correspondencia de los pares `dark:` recurrentes → tokens, informe dry-run + `--apply`. Informe de ambigüedad a continuación.
-- [x] Herramientas de captura de pantalla: `scripts/theme_baseline.py` — construye Docker con un directorio de datos efímero, inicializa un administrador desechable, captura cada página real de la UI en claro + oscuro. Volver a ejecutar tras cada fase y comparar. **Captura aún pendiente** (requiere `playwright install chromium` + una construcción Docker local).
+- [x] Herramientas de captura de pantalla: `scripts/theme_baseline.py` — construye Docker con un directorio de datos efímero nuevo, inicializa un administrador desechable, captura cada página real de la UI en claro + oscuro. Volver a ejecutar tras cada fase y comparar. **Ejecución de la captura aún pendiente** (requiere `playwright install chromium` + una construcción Docker local).
 
 #### Alcance de la referencia (solo páginas reales)
 Capturadas: `/` (setup, luego index), `/login`, `/settings`, `/help`, `/activity`, `/redoc` — 7 páginas × claro/oscuro.
@@ -98,7 +98,7 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
 3. **Inputs glass / `dark:border-white/5` trazo fino / variantes hover / colores de estado**: intencionalmente NO tokenizados — los controles glass no tienen contrapartida en modo claro, el trazo fino white/5 es el borde canónico de `.card`, y hover/estado requieren su propia pasada de tokens de variante (una fase posterior).
 
 ### Fase 2 — Panel de control ✅
-- [x] `index.html` (chrome del panel de control): formulario de creación, tarjetas de lista/estadísticas, cabeceras de tabla + divisores, panel de detalle, modales. Los ternarios Alpine `:class` y `divide-border` tratados a mano.
+- [x] `index.html` (chrome del panel de control): formulario de creación de certificados, tarjetas de lista/estadísticas, cabeceras de tabla + divisores, panel de detalle, modales. Los ternarios Alpine `:class` y `divide-border` tratados a mano.
 - [x] `static/js/dashboard.js`: filas renderizadas en JS, estadísticas, estados vacíos/bienvenida, panel de detalle, salida de verificación de alias. `node --check` limpio.
 - Los colores de estado de salud/despliegue (verde/ámbar/rojo/azul) se dejan intencionalmente como colores de estado literales — llevan significado y tendrán una pasada de tokens de estado dedicada más adelante, no tokens de superficie.
 - Los inputs de formulario glass (`dark:bg-gray-700`/`dark:text-white`), los labels de formulario y las variantes hover se dejan para su propio tratamiento (coherente con el piloto).
@@ -106,16 +106,16 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
 ### Fase 3 — Cluster de ajustes ✅
 - [x] `settings.html` + 10 partials + `_modal`: 441 pares reducidos. Los pares interiores de los ternarios Alpine `:class` tokenizados por el codemod (las comillas solo unen las clases de borde de rama); estructura ternaria verificada intacta.
 - [x] `settings.js` + `setup-wizard.js`: 49 pares, `node --check` limpio. Los demás `settings-*.js` no tienen clases de color.
-- Dejado como está (coherente con las fases anteriores): inputs glass (`dark:bg-gray-700` ~99), labels de formulario (`dark:text-gray-300` ~78, aplazado), badges de estado, superficies de opacidad, variantes hover, y clases de borde de rama ternarios.
+- Dejado como está (coherente con las fases anteriores): inputs glass (`dark:bg-gray-700` ~99), labels de formulario (`dark:text-gray-300` ~78, aplazado), badges de estado, superficies de opacidad, variantes hover, y clases de borde de rama de los ternarios.
 
 ### Fase 4 — Páginas restantes ✅
 - [x] Templates: activity, help, setup, `_client_certs` (123 pares; sin ternarios Alpine aquí).
 - [x] JS: client-certs.js, cmd-palette.js, report-issue.js, shortcuts.js (26 pares, `node --check` limpio). setup-wizard.js ya se hizo en la Fase 3.
-- Las mismas exclusiones que antes: inputs glass, grises de cuerpo/label, superficies de opacidad, colores de estado, hover, y clases en los límites de concatenación de cadenas.
+- Las mismas exclusiones que antes: inputs glass, grises de cuerpo/label, superficies de opacidad, colores de estado, hover:, y clases en los límites de concatenación de cadenas.
 
 ### Fase 5 — Limpieza y consolidación ✅
 - [x] Decisión sobre el label cerrada: token `text-label` + 137 sitios migrados (véase más arriba).
-- [x] Punto ciego del codemod detectado: solo escaneaba `class="..."`, omitiendo las asignaciones `className='...'` y la concatenación de cadenas JS. Añadida una **pasada literal consciente de los límites** (colapsa subcadenas `CLARO OSCURO` adyacentes en cualquier contexto) + la puerta `--check`. Volver a ejecutar el barrido completo colapsó los pares JS restantes (diálogos confirm/prompt, modales de report-issue + shortcuts).
+- [x] Punto ciego del codemod detectado: solo escaneaba `class="..."`, omitiendo las asignaciones `className='...'` y la concatenación de cadenas JS. Añadida una **pasada literal consciente de los límites** (colapsa subcadenas `LIGHT DARK` adyacentes en cualquier contexto) + la puerta `--check`. Volver a ejecutar el barrido completo colapsó los pares JS restantes (diálogos confirm/prompt, modales de report-issue + shortcuts).
 - [x] Eliminados los alias legacy no utilizados `success`/`warning`/`danger` de `tailwind.config.js` (0 sitios de llamada). Se conservan `primary` (~375) y `secondary` (degradados).
 - [x] **Salvaguarda CI**: `python3 scripts/theme_codemod.py --check` en el job `frontend-css` — falla la compilación si se reintroduce algún par claro+oscuro colapsable en un template o archivo JS de primera parte.
 - **Hex JS dejado como está, por diseño:** la paleta `#60a5fa`/etc. en `certmate.js` es el **logger de consola de depuración** sobre una superficie fija siempre oscura (`bg-black`); `TOAST_COLORS` son clases de estado literales. Ambos son acentos de estado independientes del tema — convencionalmente no pertenecen al theming claro/oscuro — por lo que permanecen literales en lugar de convertirse en tokens de tema. Una futura **pasada de tokens de estado** (success/warning/danger/info como vars) es el lugar adecuado para unificarlos si algún día se desea.
@@ -129,10 +129,10 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
   que colapsa los pares verde/rojo/ámbar/azul de las info-box sobre los tokens —
   normalizando la desviación 50-vs-100 / 700-vs-800 que llevaban los callouts inline.
   **300 pares colapsados** en templates + JS de primera parte.
-- [x] `--check` ahora también guarda los pares de estado (viven en `MAPPINGS`), por lo que
+- [x] `--check` ahora también protege los pares de estado (viven en `MAPPINGS`), por lo que
   un par claro+oscuro de estado reintroducido falla en CI como cualquier otro.
 - Dejado literal por diseño: los acentos de estado únicos sin par claro/oscuro
-  (icono `text-*-500`), y los tintes solo-oscuro (sin contrapartida clara).
+  (icono `text-*-500`), y los tintes aislados solo-oscuro (sin contrapartida clara).
 
 ### Fase 7 — Superficie de campos de formulario ✅ (v2.9.1)
 - [x] Añadido `--color-input` (blanco / gray-700) → `bg-input`; colapso de 40
@@ -147,7 +147,7 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
 - [x] Las reglas `@apply` de los componentes R-3 (`.card`, `.form-input`/`.form-select`/
   `.form-label`, `.btn-secondary`, `.btn-ghost`, `.nav-active`, `.nav-inactive`)
   eran un **punto ciego del codemod** — `--check` escanea `class="…"`, no `@apply` —
-  y seguían llevando clases raw gray/blue. Migradas a los tokens.
+  y seguían llevando clases gray/blue en bruto. Migradas a los tokens.
 - [x] Añadido un token `accent` sensible al tema (blue-600 → blue-400 en oscuro) para que
   `.nav-active` no codifique el azul de forma fija; este es el acento de superficie que
   faltaba en #254.
@@ -159,7 +159,7 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
 
 ### Fase 10 — Descomposición de colas de color (planificada, gradual)
 El desacoplamiento dejó **565 utilitarios `dark:`** que el codemod no puede colapsar: no
-tienen un sibling claro con el que emparejarse, por lo que `--check` nunca los detecta. La
+tienen una clase hermana clara con la que emparejarse, por lo que `--check` nunca los detecta. La
 auditoría (2026-05-25) muestra que no se trata de un solo problema sino de tres, con perfiles
 de riesgo opuestos:
 
@@ -188,7 +188,7 @@ Orden, por riesgo UX creciente:
   lugar, bloque a bloque con QA de capturas antes/después. Decidido: **contrato α**
   (color = significado).
 
-## Contrato de color (la norma que los 565 escaparon)
+## Contrato de color (la norma de la que escaparon los 565)
 Decidido el 2026-05-25. Cuatro reglas; los tokens ya entregados son la única paleta.
 
 1. **El color se gana, nunca es decorativo.** Un tono aparece solo si lleva
@@ -204,7 +204,7 @@ Decidido el 2026-05-25. Cuatro reglas; los tokens ya entregados son la única pa
 
 Aplicación: la puerta `--check` gana una regla que falla en CI con cualquier
 `purple|indigo|orange` en bruto (y cualquier color no tokenizado) en `templates/` — un
-contrato con un compilador detrás, que no puede volver a degradarse.
+contrato con un compilador detrás, para que no pueda pudrirse de nuevo hasta volver al túnel rave.
 
 ## Colores de estado — ahora tokenizados (Fase 6)
 Las fases anteriores aplazaron deliberadamente los colores de estado (verde/ámbar/rojo/azul
@@ -219,11 +219,3 @@ claro/oscuro.
 - Cero emoji en commits/PRs/notas de versión.
 - Commits atómicos (uno por fase, o por partial en la Fase 3); un PR por versión.
 - Antes del push público: smoke de Docker + emisión de certificado real contra el dominio de Fab con subdominios aleatorios.
-
----
-
-<div align="center">
-
-[← Volver a la documentación](./README.md)
-
-</div>

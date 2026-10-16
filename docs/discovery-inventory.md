@@ -239,7 +239,12 @@ truncation is logged, and the next run picks up what was left.
 **Issued by CertMate** and **Discovered / unmanaged** — with columns for
 subject/SAN, issuer, expiry (days remaining + status colour), key
 algorithm/size, source, and endpoints. Filter by group, source, expiry, or free
-text. Summary cards give an **expiry forecast** (expired / within 7 / 30 / 90
+text. Click a column header to sort by it, and again to reverse: expiry sorts by
+the date, key size numerically, endpoints by how many there are, and a
+certificate with nothing in that column (no issuer, no key) goes to the bottom
+either way. Until you click one, the list keeps the order the API returns. A
+certificate seen on several endpoints shows the first and `+N`; hover it to list
+every one. Summary cards give an **expiry forecast** (expired / within 7 / 30 / 90
 days) across *everything*, not just issued certs, plus a count of certificates
 a verified answer says are **revoked**. Each row shows its revocation answer
 under the expiry badge; a certificate that could not be checked says so in grey
