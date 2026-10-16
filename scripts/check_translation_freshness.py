@@ -108,6 +108,12 @@ SCHEME = re.compile(r'^[a-z][a-z0-9+.-]*:')
 # The two marker comments, and the notice text that follows the second, say
 # what the page is; they are no part of it.
 MARKERS = re.compile(rf'^<!--\s*({MARKER}|{NOTICE})\b.*-->$')
+# Each docs README draws its own directory as a tree, and
+# tests/test_docs_navigation.py::test_file_structure_listing_matches_disk
+# holds every one of them to the files on disk in that directory. A translated
+# README therefore lists its own locale's files, not the English ones, and that
+# block is compared there rather than here; it still has to be there.
+LISTING = re.compile(r'^docs/')
 
 
 def _split(text: str) -> tuple[list[str], list[list[str]], list[list[str]]]:
@@ -220,6 +226,10 @@ def _target(page: Path, url: str, docs: Path) -> tuple[str, str | None]:
     if len(inside.parts) == 2 and inside.parts[0] in LOCALES:
         name = inside.parts[1]
         inside = Path(ENGLISH_NAME.get(name, name))
+    elif inside.parts and inside.parts[0] in LOCALES and destination.is_dir():
+        # A translated page's link to its own index, `./` from docs/it/, plays
+        # the part the English link to docs/ does.
+        inside = Path('.')
     if anchor and destination.suffix == '.md' and anchor not in _anchors(destination):
         return str(inside), f'links to #{anchor} in {url}, which no heading there produces'
     return str(inside), None
@@ -257,6 +267,9 @@ def drift(english: Path, translated: Path, docs: Path = DOCS) -> list[str]:
         found.append(f'{len(blocks)} code blocks where the English has '
                      f'{len(english_blocks)}')
     for number, (theirs, ours) in enumerate(zip(english_blocks, blocks, strict=False), 1):
+        if (translated.name == 'README.md' and len(theirs) > 1 and len(ours) > 1
+                and LISTING.match(theirs[1]) and LISTING.match(ours[1])):
+            continue
         if len(theirs) != len(ours):
             found.append(f'code block {number} has {len(ours)} lines where the '
                          f'English has {len(theirs)}')

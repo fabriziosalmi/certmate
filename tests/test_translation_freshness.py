@@ -274,3 +274,60 @@ def test_a_page_in_step_may_not_carry_the_notice(tmp_path, monkeypatch):
                          TRANSLATED_PAGE.replace('-->\n', '-->\n' + NOTICE_LINES, 1))
 
     assert len(found) == 1 and 'Remove the notice' in found[0]
+
+
+def _readme_pair(tmp_path, english, translated, name='README.md'):
+    docs = tmp_path / 'docs'
+    (docs / 'it').mkdir(parents=True)
+    (docs / name).write_text(english, encoding='utf-8')
+    (docs / 'it' / name).write_text(translated, encoding='utf-8')
+    return docs, docs / name, docs / 'it' / name
+
+
+ENGLISH_INDEX = '''# Documentation
+
+```
+docs/
+  README.md      this file
+  api.md         the API
+  webhooks.md    webhooks
+```
+
+[Documentation](./)
+'''
+
+ITALIAN_INDEX = '''# Documentazione
+
+```
+docs/it/
+  README.md      questo file
+```
+
+[Documentazione](./)
+'''
+
+
+def test_a_readme_lists_its_own_directory(tmp_path):
+    """tests/test_docs_navigation.py holds each README's listing to the files
+    in its own directory, so a translated listing differs from the English
+    one by design, and its link to its own index plays the part of the
+    English link to docs/. Before this, no translated README could pass."""
+    docs, english, page = _readme_pair(tmp_path, ENGLISH_INDEX, ITALIAN_INDEX)
+
+    assert CHECK['drift'](english, page, docs) == []
+
+
+def test_only_the_readme_listing_is_left_to_the_navigation_test(tmp_path):
+    """CONTROL: the same block in any other page is code like any other."""
+    docs, english, page = _readme_pair(tmp_path, ENGLISH_INDEX, ITALIAN_INDEX,
+                                       name='index.md')
+
+    assert any('code block 1' in d for d in CHECK['drift'](english, page, docs))
+
+
+def test_the_listing_still_has_to_be_there(tmp_path):
+    docs, english, page = _readme_pair(
+        tmp_path, ENGLISH_INDEX,
+        ITALIAN_INDEX.replace('```\ndocs/it/\n  README.md      questo file\n```\n\n', ''))
+
+    assert any('code blocks' in d for d in CHECK['drift'](english, page, docs))
