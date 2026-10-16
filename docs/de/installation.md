@@ -37,7 +37,7 @@ Was es tut:
 
 Für eine neue VM bei jedem Anbieter, der User Data akzeptiert (Hetzner, DigitalOcean, AWS, Azure, GCP, OpenStack, Proxmox): Fügen Sie [`deploy/cloud-init/certmate.yaml`](../../deploy/cloud-init/certmate.yaml) beim Anlegen der VM in das Feld "User Data" bzw. "cloud-init" ein ([Rohdatei](https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/cloud-init/certmate.yaml)). Es installiert Docker, lädt das [Produktions-Compose-Bundle](docker.md#produktion-mit-docker-compose), erzeugt die Geheimnisse auf der VM in `/srv/certmate/.env` (Modus 600, nie in den User Data) und startet CertMate.
 
-CertMate lauscht innerhalb der VM auf `127.0.0.1:8000`. Erreichen Sie es über einen SSH-Tunnel, `ssh -L 8000:127.0.0.1:8000 <benutzer>@<vm>`, und öffnen Sie dann `http://127.0.0.1:8000`. Die erste Seite legt das Administratorkonto an und verlangt das Token: `sudo grep API_BEARER_TOKEN /srv/certmate/.env`.
+CertMate lauscht innerhalb der VM auf `127.0.0.1:8000`. Erreichen Sie es über einen SSH-Tunnel, `ssh -L 8000:127.0.0.1:8000 <user>@<vm>`, und öffnen Sie dann `http://127.0.0.1:8000`. Die erste Seite legt das Administratorkonto an und verlangt das Token: `sudo grep API_BEARER_TOKEN /srv/certmate/.env`.
 
 Verifiziert mit dem Ubuntu-24.04-Cloud-Image: cloud-init endet mit `done`, CertMate ist wenige Minuten nach dem Booten gesund und kommt nach einem Neustart zurück.
 
@@ -183,17 +183,18 @@ SECRET_KEY_FILE=/run/secrets/secret_key
 # HAProxy, Traefik, Cloudflare usw. betrieben wird. Ohne diese Einstellung
 # löst request.remote_addr für jede Anfrage die IP des Proxys auf, was
 # das Rate-Limiting pro Client in einen einzelnen Bucket zusammenführt.
-# Siehe den Abschnitt "Hinter einem Reverse Proxy" unter Produktions-Deployment.
+# Details im Abschnitt "Hinter einem Reverse Proxy" unter Produktions-Deployment.
 BEHIND_PROXY=true
 
 # Backup-Verschlüsselung im Ruhezustand (optional, empfohlen).
 # Wenn gesetzt, werden einheitliche Backups als verschlüsselte .zip.enc-Dateien
-# geschrieben (PBKDF2-SHA256-Schlüsselableitung + Fernet/AES) statt als
-# Klartext-ZIP. Backups enthalten jeden privaten Zertifikatsschlüssel; ohne
-# diese Einstellung stellt eine exfiltrierte Backup-Datei einen vollständigen
-# Schlüssel-Kompromiss dar. Dieselbe Passphrase muss für die Wiederherstellung
-# vorhanden sein. Bewusst nur per Umgebungsvariable: eine in settings.json
-# gespeicherte Passphrase würde selbst in Klartext-Backups landen.
+# geschrieben (PBKDF2-SHA256-Schlüsselableitung + Fernet/AES) statt als Klartext-.zip.
+# Ein Disaster-Recovery-Backup (include_secrets=true) enthält jeden privaten
+# Zertifikatsschlüssel und alle Zugangsdaten, ohne diese Einstellung ist eine
+# exfiltrierte Kopie also eine vollständige Kompromittierung; das standardmäßige,
+# zum Weitergeben sichere Backup enthält keines von beiden. Dieselbe Passphrase
+# muss für die Wiederherstellung vorhanden sein. Bewusst nur per Umgebungsvariable:
+# eine in settings.json gespeicherte Passphrase würde selbst in Klartext-Backups landen.
 CERTMATE_BACKUP_PASSPHRASE=choose-a-long-random-passphrase
 
 # DNS-Provider. Cloudflare ist der einzige Provider, der aus der Umgebung
@@ -261,10 +262,29 @@ proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
 ```
 
+#### Das mitgelieferte nginx-Profil
+
+`docker-compose.yml` enthält einen optionalen `nginx`-Service (`--profile nginx`),
+der TLS vor CertMate terminiert. Seine Konfiguration wird **nicht** als
+`nginx.conf` versioniert — diese Datei gehört Ihnen und wird von git ignoriert —, sondern als
+`nginx.conf.example`, nach demselben Muster wie `.env.example` / `.env`:
+
+```bash
+cp nginx.conf.example nginx.conf
+# nginx.conf bearbeiten: jedes <your-domain> in ssl_certificate / ssl_certificate_key ersetzen
+docker compose --profile nginx up -d
+```
+
+Kopieren Sie **vor** `up`: Existiert `nginx.conf` auf dem Host nicht, wenn der
+Bind-Mount angelegt wird, erstellt Docker es als leeres *Verzeichnis*, und nginx
+startet nicht. Upgrade von einem Release, in dem `nginx.conf` versioniert war:
+Ihre bearbeitete Kopie bleibt an ihrem Platz (git ignoriert sie jetzt); vergleichen Sie sie nach einem Pull
+per diff mit der neuen `nginx.conf.example`, um Änderungen aus dem Upstream zu übernehmen.
+
 #### Beispiel: Zion (Rust-TLS-Gateway + WAF)
 
-[Zion](https://github.com/fabriziosalmi/zion) ist ein hochperformanter Rust-TLS-
-Reverse Proxy mit integriertem WAF — eine gute Wahl vor CertMate, wenn Sie
+[Zion](https://github.com/fabriziosalmi/zion) ist ein hochperformanter
+Rust-TLS-Reverse-Proxy mit integriertem WAF — eine gute Wahl vor CertMate, wenn Sie
 TLS-1.3-Terminierung und Request-Filterung am Edge wünschen. CertMate bleibt
 im internen Netzwerk auf einfachem HTTP; Zion terminiert TLS und leitet weiter.
 

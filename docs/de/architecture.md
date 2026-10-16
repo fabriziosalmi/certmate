@@ -1,8 +1,6 @@
 # CertMate Architektur
 
-<!-- CERTMATE-TRANSLATED-FROM 80c544b5f465e5d7 -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Diese Übersetzung ist nicht aktuell.** Die englische Fassung ([`docs/architecture.md`](../architecture.md)) wurde seitdem geändert und ist maßgeblich. Bei Abweichungen gilt das englische Dokument.
+<!-- CERTMATE-TRANSLATED-FROM 16b7294196819288 -->
 
 Dieses Dokument beschreibt die vollständige Architektur von CertMate — sowohl das Hauptsystem für Server-Zertifikate als auch das Teilsystem für Client-Zertifikate.
 
@@ -29,7 +27,7 @@ CertMate ist ein modulares, erweiterbares SSL/TLS-Zertifikatsverwaltungssystem, 
 **Wichtige Fakten:**
 - **Sprache**: Python 3.12 (Flask, Flask-RESTX)
 - **Speicher**: Lokales Dateisystem als Standard + 5 entfernte Backends (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible)
-- **CA-Anbieter**: Let's Encrypt, DigiCert ACME, Private CA
+- **CA-Anbieter**: Let's Encrypt, ZeroSSL, Google Trust Services, DigiCert ACME, SSL.com, Actalis, Sectigo und jede andere ACME-CA über den Eintrag Private CA; siehe [CA-Anbieter](./ca-providers.md)
 - **DNS-Anbieter**: Cloudflare, AWS Route53, Azure, Google und weitere — siehe [DNS-Anbieter](./dns-providers.md) für die vollständige Liste
 - **API**: REST mit Swagger/OpenAPI via Flask-RESTX
 - **Aktuelle Zertifikatstypen**: Server-seitiges TLS (DV, OV, EV)
@@ -40,22 +38,22 @@ CertMate ist ein modulares, erweiterbares SSL/TLS-Zertifikatsverwaltungssystem, 
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  CertMate Application               │
+│                 CertMate Application                │
 │                                                     │
 │  ┌───────────────────────────────────────────────┐  │
-│  │             Web Layer (Flask)                  │  │
-│  │  Dashboard    Settings    Help    Client Certs │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
-│  ┌──────────────────┐   ┌────────────────────────┐  │
-│  │  REST API         │   │  Web Routes            │  │
-│  │  /api/certificates│   │  /api/web/certificates │  │
-│  │  /api/client-certs│   │  /client-certificates  │  │
-│  └────────┬─────────┘   └────────┬───────────────┘  │
-│           └──────────┬───────────┘                   │
-│                      ↓                               │
+│  │             Web Layer (Flask)                 │  │
+│  │  Dashboard   Settings   Help   Client Certs   │  │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
+│  ┌───────────────────┐  ┌────────────────────────┐  │
+│  │  REST API         │  │  Web Routes            │  │
+│  │  /api/certificates│  │  /api/web/certificates │  │
+│  │  /api/client-certs│  │  /client-certificates  │  │
+│  └─────────┬─────────┘  └───────────┬────────────┘  │
+│            └───────────┬────────────┘               │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Manager Layer (Business Logic)        │  │
+│  │          Manager Layer (Business Logic)       │  │
 │  │                                               │  │
 │  │  CertificateManager    CAManager              │  │
 │  │  DNSManager            StorageManager         │  │
@@ -63,27 +61,49 @@ CertMate ist ein modulares, erweiterbares SSL/TLS-Zertifikatsverwaltungssystem, 
 │  │  CacheManager          FileOperations         │  │
 │  │  ClientCertManager     OCSPResponder          │  │
 │  │  CRLManager            AuditLogger            │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Execution Layer                       │  │
-│  │  Certbot (server certs via DNS-01 ACME)       │  │
+│  │          Execution Layer                      │  │
+│  │  Certbot (server certs over ACME)             │  │
 │  │  PrivateCA (client certs via direct signing)  │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Storage Layer (Pluggable Backends)    │  │
-│  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
+│  │          Storage Layer (Pluggable Backends)   │  │
+│  │  Local FS │ Azure KV │ AWS SM │ Vault         │  │
+│  │  Infisical │ S3-compatible                    │  │
 │  └───────────────────────────────────────────────┘  │
+│                                                     │
 └─────────────────────────────────────────────────────┘
+
+        ┌─────────────────────────────────────────┐
+        │  Composition root — modules/factory.py  │
+        │                                         │
+        │  create_app() constructs every          │
+        │  manager and REGISTERS the API and      │
+        │  web layers onto the Flask app.         │
+        └───┬──────────────┬──────────────┬───────┘
+            │ constructs   │ registers    │ registers
+            ▼              ▼              ▼
+      Manager Layer   REST API      Web Routes
+        (core/)        (api/)         (web/)
 ```
+
+Jeder Pfeil zeigt nach unten. Die Composition Root liegt **oberhalb** der drei Schichten, die sie zusammensetzt, nämlich in `modules/factory.py`; deshalb importiert `modules/core/` weder `modules/api/` noch `modules/web/`.
+
+Das war nicht immer so. Bis #668 lag die Root in `modules/core/factory.py` und importierte die beiden Schichten darüber — die einzige nach oben gerichtete Kante im System, in diesem Diagramm eingezeichnet und als bewusste Ausnahme begründet. Die Begründung war stichhaltig, soweit sie reichte: Eine Composition Root muss wissen, was sie zusammensetzt, und die Alternativen sind eine Schicht, die ihre eigenen Abhängigkeiten konstruiert, oder eine Registry, die dieselbe Kante hinter einer Indirektion versteckt.
+
+Was die Begründung übersah: Die dritte Option ist die billige. Eine Composition Root muss nicht *innerhalb* einer der Schichten liegen, die sie zusammensetzt. Die Datei ein Verzeichnis nach oben zu verschieben, beseitigt die Ausnahme, statt sie zu dokumentieren, und der Zyklus, der sie unvermeidbar erscheinen ließ, erwies sich als genau eine Funktion breit: `api/client_certificates.py` importierte `error_code_for_status` aus der Root zurück, und die Ableitung von `NOT_FOUND` aus 404 gehörte nie dorthin. Sie liegt jetzt in `modules/core/http_errors.py`.
+
+Eine einzelne dokumentierte Ausnahme ist ein Design; trotzdem lohnt es sich zu prüfen, ob sie eine sein muss. `tests/test_the_layers_point_one_way.py` sorgt dafür, dass dieser Absatz wahr bleibt.
 
 ---
 
 ## Manager-Klassen
 
 ```
-CertMateApp (Hauptanwendung)
+CertMateApp (main application)
   ├── FileOperations          # Datei-Ein-/Ausgabe, Sicherungen
   ├── SettingsManager         # Laden/Speichern von settings.json
   ├── AuthManager             # Token-Validierung
@@ -108,7 +128,7 @@ CertMateApp (Hauptanwendung)
 ```
 1. User submits: domain, email, DNS provider, CA provider
 2. Validate inputs (domain format, email, provider existence)
-3. Get CA config (ACME URL, EAB credentials if DigiCert)
+3. Get CA config (ACME URL, EAB credentials if the CA requires them)
 4. Get DNS config (account credentials from settings)
 5. Create directory: certificates/{domain}/
 6. Build certbot command:
@@ -185,7 +205,13 @@ Alle Backends implementieren `CertificateStorageBackend`:
 | **AWS Secrets Manager** | AWS Secrets Manager |
 | **HashiCorp Vault** | Vault KV v1/v2 |
 | **Infisical** | Infisical-Secrets |
-| **S3-compatible** | Any S3 API: MinIO/Ceph self-hosted, or Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
+| **S3-compatible** | Jede S3-API: MinIO/Ceph selbst gehostet oder Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
+
+#### HashiCorp Vault — Redirects
+
+Die Anfrage an Vault enthält den privaten Schlüssel und den Vault-Token. CertMate folgt einem Redirect nur innerhalb der Adresse, mit der es konfiguriert wurde (gleiches Schema, gleicher Host und Port), und **verweigert** einen Redirect auf einen anderen Host oder von https auf http, bevor irgendetwas dorthin gesendet wird. Die Fehlermeldung sagt das ausdrücklich und nennt den Host.
+
+Ein Standby-Knoten, der Anfragen nicht weiterleitet, antwortet mit genau einem solchen Redirect auf den aktiven Knoten. Mit eingeschaltetem Request Forwarding (der Standard) passiert das nie. Läuft Ihr Vault ohne Request Forwarding, setzen Sie `vault_url` auf den aktiven Knoten oder auf einen Load Balancer, der zu ihm routet.
 
 #### Azure Key Vault — Speichermodi
 
@@ -276,11 +302,10 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
 |--------|----------|---------|
 | GET | `/api/health` | Statusprüfung |
 | GET | `/api/certificates` | Alle Zertifikate auflisten |
-| POST | `/api/certificates` | Neues Zertifikat erstellen |
+| POST | `/api/certificates/create` | Neues Zertifikat erstellen |
 | GET | `/api/certificates/{domain}` | Zertifikatsinformationen abrufen |
 | POST | `/api/certificates/{domain}/renew` | Zertifikat erneuern |
-| GET | `/api/certificates/{domain}/download` | Als ZIP herunterladen |
-| GET | `/{domain}/tls` | Direkter Fullchain-Download |
+| GET | `/api/certificates/{domain}/download` | Download: standardmäßig als ZIP; `?file=<cert.pem\|chain.pem\|fullchain.pem\|privkey.pem\|combined.pem\|cert.pfx>` für eine einzelne Datei; `?format=json` für alle PEM-Dateien inline |
 
 ### Client-Zertifikate
 
@@ -313,7 +338,7 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
 
 ## Bekannte Einschränkungen
 
-1. **Nur Certbot für Server-Zertifikate**: Ausschließlich DNS-01-ACME-Challenges
+1. **Nur Certbot für Server-Zertifikate**: ausgestellt über ACME und validiert per DNS-01, per HTTP-01 (keine Wildcards) oder durch ein Sectigo-SCM-Konto, das die Namen bereits autorisiert
 2. **Domain-zentrierter Server-Speicher**: Ein Zertifikat pro Domain-Verzeichnis
 3. **Keine Datenbank**: Einzelne JSON-Datei für die Konfiguration
 4. **Schlüsselverwendung bei Server-Zertifikaten**: Keine Kontrolle über keyUsage/extendedKeyUsage-Erweiterungen
@@ -330,11 +355,13 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
  (/client-certificates web dashboard) 
 
  
+
  API Layer 
  (/api/client-certs, /api/ocsp, /api/crl) 
  (REST endpoints with Flask-RESTX) 
 
  
+
  Managers Layer 
  
  ClientCertificateManager (lifecycle + metadata) 
@@ -345,6 +372,7 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
  
 
  
+
  Core Modules Layer 
  
  PrivateCAGenerator (CA management) 
@@ -357,6 +385,7 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
  
 
  
+
  Cryptography & Storage Layer 
  
  Cryptography Library (OpenSSL) 
@@ -461,7 +490,7 @@ data/certs/client/
  "locality": "San Francisco",
  "serial_number": "12345678901234567890",
  "key_usage": ["digitalSignature", "keyEncipherment"],
- "extended_key_usage": ["serverAuth", "clientAuth"],
+ "extended_key_usage": ["clientAuth"],
  "created_at": "2024-10-30T18:00:00Z",
  "expires_at": "2025-10-30T18:00:00Z",
  "cert_usage": "api-mtls",
@@ -723,7 +752,7 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 
 - **Dateiberechtigungen**: 0600 (nur Lesen/Schreiben für den Eigentümer)
 - **Schlüsselformat**: PEM im traditionellen OpenSSL-Format
-- **Keine Schlüsselverschlüsselung**: Schlüssel werden verschlüsselt im Ruhezustand gespeichert, wenn Storage-Backends verwendet werden
+- **Keine Schlüsselverschlüsselung**: Private Schlüssel werden unverschlüsselt geschrieben und durch die obigen Dateiberechtigungen geschützt; ein entferntes Storage-Backend hält seine Kopie unter der Verschlüsselung im Ruhezustand, die der jeweilige Dienst anwendet
 
 ### Zertifikatssignierung
 
@@ -757,13 +786,13 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 ### API-Performance
 
 - **Rate Limiting**: Verhindert Ressourcenerschöpfung
-- **Zustandsloses Design**: Kann in mehreren Instanzen betrieben werden
+- **Einzelne Instanz**: Ein Gunicorn-Worker führt die API und den Erneuerungs-Scheduler aus; siehe [Verfügbarkeit und Failover](#verfügbarkeit-und-failover)
 - **Batch-Operationen**: höchstens 100 Zeilen pro Anfrage (darüber antwortet die API mit 400)
 
 ### Automatische Erneuerung
 
-- **Geplant**: Täglich um 3 Uhr (konfigurierbar)
-- **Schwellenwert**: 30 Tage vor Ablauf (konfigurierbar)
+- **Geplant**: Täglich, Server-Zertifikate zwischen 01:00 und 03:00 Uhr (02:00 Uhr mit bis zu einer Stunde zufälliger Abweichung in beide Richtungen), Client-Zertifikate zwischen 02:00 und 04:00 Uhr
+- **Wann**: Standardmäßig 30 Tage vor Ablauf (`renewal_threshold_days`), bei einem Zertifikat mit weniger als 60 Tagen Laufzeit bei einem verbleibenden Drittel der Laufzeit (unter 10 Tagen bei der Hälfte), oder dort, wo das Erneuerungsfenster der CA (ARI) die Erneuerung ansetzt; siehe [die Anleitung](./guide.md#wann-ein-zertifikat-erneuert-wird)
 - **Fehlertolerant**: Setzt bei Fehlern fort und protokolliert zur Überprüfung
 
 ---
@@ -783,7 +812,7 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 - Audit-Protokollierung zur Compliance aktivieren
 - Rate Limiting entsprechend der Last konfigurieren
 - Regelmäßige CRL-Aktualisierungen (täglich oder bei Sperrungen)
-- CA-Schlüssel und Metadaten sichern
+- CA-Schlüssel und Metadaten mit einem Disaster-Recovery-Archiv sichern (`include_secrets=true` + `CERTMATE_BACKUP_PASSPHRASE`); das standardmäßige, zur Weitergabe sichere Backup lässt den CA-Schlüssel absichtlich weg
 - Audit-Protokolle auf verdächtige Aktivitäten überwachen
 
 ### Verfügbarkeit und Failover
@@ -806,8 +835,11 @@ So sieht Verfügbarkeit stattdessen aus — **aktiv/standby**:
    unabhängig vom Knoten liegt.
 3. **Eine** Instanz betreiben. Bei einem Ausfall einen Ersatz gegen dieselben
    Daten starten und den Ingress darauf zeigen lassen. Ein verpasstes
-   Erneuerungsfenster ist nicht dringend: die Erneuerung beginnt 30 Tage vor
-   Ablauf, ein Failover hat also Wochen Spielraum.
+   Erneuerungsfenster ist bei einem 90-Tage-Zertifikat nicht dringend: die
+   Erneuerung beginnt 30 Tage vor Ablauf, ein Failover hat also Wochen
+   Spielraum. Bei kurzlebigen Zertifikaten ist es das sehr wohl: ein
+   160-Stunden-Zertifikat wird mit etwa 80 verbleibenden Stunden erneuert, ein
+   Failover hat also Tage, nicht Wochen.
 4. [Disaster-Recovery-Backups](./guide.md) mit gesetztem
    `CERTMATE_BACKUP_PASSPHRASE` pflegen, damit ein Neuaufbau von Grund auf
    möglich bleibt, wenn das Volume selbst verloren geht.
@@ -832,7 +864,7 @@ und wenn es eine Stunde ausfällt, reißt es nichts anderes mit.
 - Kann Zertifikate über die API exportieren
 - Kann den Status über OCSP abfragen
 - Kann die CRL zur Validierung abrufen
-- Unterstützt Webhook/Callback-Integration (zukünftig)
+- Sendet [Webhook-Benachrichtigungen](../webhooks.md) bei Zertifikatsereignissen und führt [Deploy Hooks](./deploy-hooks.md) aus
 
 ---
 
@@ -841,10 +873,7 @@ und wenn es eine Stunde ausfällt, reißt es nichts anderes mit.
 ### Geplante Verbesserungen
 
 1. **CA-Passwortschutz** — CA-Schlüssel mit Passwort verschlüsseln
-2. **Erweitertes Audit** — Rollenbasierte Zugriffskontrolle
-3. **Webhook-Benachrichtigungen** — Bei Zertifikatsereignissen
-4. **Zertifikatssignierung** — CSRs von externen Quellen akzeptieren
-5. **Hardware-Token** — PKCS#11-Unterstützung für HSMs
+2. **Hardware-Token** — PKCS#11-Unterstützung für HSMs
 
 ### Erweiterungspunkte
 

@@ -1,19 +1,19 @@
 # Theme-Migration — Entkopplung von Hell/Dunkel über CSS-Variable-Tokens
 
-<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
 
-Status: **ausgeliefert** (Phasen 0–5 in v2.9.0; Phase 6 folgt) · Verantwortlicher: Fabrizio · Erstellt: 2026-05-25
+Status: **ausgeliefert** (Phasen 0–5 in v2.9.0, Phasen 6–9 danach; Phase 10 geplant) · Verantwortlicher: Fabrizio · Erstellt: 2026-05-25
 
 ## Ziel
 
-Bisher bedeutet ein Themenwechsel, Farben in ~19 Templates und im Frontend-JS zu bearbeiten. Diese Migration macht einen einzigen Block von CSS Custom Properties zur einzigen Quelle der Wahrheit für die gesamte Palette — ein Retheming (oder das Hinzufügen eines neuen Themes) erfordert danach nur noch die Bearbeitung von `:root` / `.dark` in einer einzigen Datei, nicht an Hunderten von Verwendungsstellen.
+Heute bedeutet ein Themenwechsel, Farben in ~19 Templates und im Frontend-JS zu bearbeiten. Diese Migration macht einen einzigen Block von CSS Custom Properties zur Quelle der Wahrheit für die gesamte Palette, sodass ein Retheming (oder das Hinzufügen eines neuen Themes) die Bearbeitung von `:root` / `.dark` in einer einzigen Datei bedeutet — nicht an Hunderten von Verwendungsstellen.
 
 ## Ausgangszustand (gemessen am 2026-05-25)
 
 | Metrik | Wert |
 |---|---|
 | Farbklassen-Referenzen in Templates | ~3.197 in 19 Dateien |
-| `dark:`-Paare in Templates | ~1.665 |
+| `dark:`-Variantenpaare in Templates | ~1.665 |
 | Farbklassen im Anwendungs-JS (nicht vendored) | ~789 (dashboard.js 372, settings.js 150, setup-wizard.js 131, certmate.js 60, client-certs.js 57, …) |
 | Hartcodierte Hex-Werte im Anwendungs-JS | ~17 (Toast-/Diagramm-Paletten); 80 weitere in `redoc.standalone.js` sind **vendored, ignorieren** |
 | Übernommene R-3-Komponentenklassen | nur `.card` (12×); `.btn-*`, `.badge-*`, `.form-*` = 0 |
@@ -101,7 +101,7 @@ Einige Überreste (`dark:text-gray-400{%`, `dark:text-gray-300'`) sind Klassenat
 
 #### Offene Designentscheidungen (durch den Pilot aufgedeckt)
 1. **Formularlabel-Text** (`text-gray-700 dark:text-gray-300`). **In Phase 5 gelöst → Option (b):** `--color-label`-Token mit den genauen gray-700/gray-300-Werten hinzugefügt (treu, keine visuelle Änderung) und alle 137 Vorkommen auf `text-label` migriert. Das Zusammenführen mit `text-foreground` wurde abgelehnt (würde den Hellmodus von 27 %→11 % L abdunkeln).
-2. **Rahmenvereinheitlichung**: `border-gray-300` (Inputs) wird jetzt auf `border-border` (= gray-200) abgebildet, sodass Input-Rahmen im Hellmodus eine Stufe heller werden. Für den Piloten akzeptiert (ein einziger Rahmen-Token ist das Ziel); mit `--color-input-border` nochmals überdenken, falls die Review es ablehnt.
+2. **Rahmenvereinheitlichung**: `border-gray-300` (Inputs) wird jetzt auf `border-border` (= gray-200) abgebildet, sodass Input-Rahmen im Hellmodus eine Stufe heller werden. Für den Piloten akzeptiert (ein einziger Rahmen-Token ist das Ziel); nur dann mit `--color-input-border` nochmals überdenken, falls die Review es ablehnt.
 3. **Glass-Inputs / `dark:border-white/5`-Haarlinie / hover:-Varianten / Statusfarben**: absichtlich NICHT tokenisiert — Glass-Steuerelemente haben kein Hell-Gegenstück, die white/5-Haarlinie ist der kanonische `.card`-Rand, und Hover/Status benötigen ihren eigenen Varianten-Token-Durchlauf (eine spätere Phase).
 
 ### Phase 2 — Dashboard ✅
@@ -122,7 +122,7 @@ Einige Überreste (`dark:text-gray-400{%`, `dark:text-gray-300'`) sind Klassenat
 
 ### Phase 5 — Bereinigung und Festschreibung ✅
 - [x] Label-Entscheidung abgeschlossen: `text-label`-Token + 137 Stellen migriert (siehe oben).
-- [x] Blinden Fleck des Codemods entdeckt: Er scannte nur `class="..."` und übersah `className='...'`-Zuweisungen sowie JS-String-Verkettung. Ein **grenzenbewusster Literal-Durchlauf** hinzugefügt (fasst benachbarte `HELL DUNKEL`-Teilstrings in beliebigem Kontext zusammen) + das `--check`-Gate. Das erneute Ausführen des vollständigen Durchlaufs fasste die verbleibenden JS-Paare zusammen (confirm/prompt-Dialog, report-issue + shortcuts-Modale).
+- [x] Blinden Fleck des Codemods entdeckt: Er scannte nur `class="..."` und übersah `className='...'`-Zuweisungen sowie JS-String-Verkettung. Ein **grenzenbewusster Literal-Durchlauf** hinzugefügt (fasst benachbarte `LIGHT DARK`-Teilstrings in beliebigem Kontext zusammen) + das `--check`-Gate. Das erneute Ausführen des vollständigen Durchlaufs fasste die verbleibenden JS-Paare zusammen (confirm/prompt-Dialog, report-issue + shortcuts-Modale).
 - [x] Ungenutzte Legacy-Aliasse `success`/`warning`/`danger` aus `tailwind.config.js` entfernt (0 Verwendungsstellen). `primary` (~375) und `secondary` (Verläufe) beibehalten.
 - [x] **CI-Absicherung**: `python3 scripts/theme_codemod.py --check` im `frontend-css`-Job — schlägt den Build fehl, wenn ein zusammenfassbares Hell+Dunkel-Paar in einem Template oder einer First-Party-JS-Datei wieder eingeführt wird.
 - **JS-Hex unverändert belassen, by design:** Die `#60a5fa`/etc.-Palette in `certmate.js` ist der **Debug-Konsolen-Logger** auf einer festen, immer dunklen Oberfläche (`bg-black`); `TOAST_COLORS` sind buchstäbliche Statusklassen. Beides sind themenunabhängige Statusakzente — konventionell kein Bestandteil von Hell/Dunkel-Theming — und bleiben daher buchstäblich statt zu Theme-Tokens zu werden. Ein künftiger **Status-Token-Durchlauf** (success/warning/danger/info als Variablen) ist der richtige Ort, um sie zu vereinheitlichen, falls je gewünscht.
@@ -147,8 +147,8 @@ Einige Überreste (`dark:text-gray-400{%`, `dark:text-gray-300'`) sind Klassenat
 
 ### Phase 8 — Hover- und eingesenkte Oberflächen ✅ (v2.9.1)
 - [x] `--color-hover` (gray-100/700), `border.strong` (gray-300/500) und
-  `--color-sunken` (gray-50/700) hinzugefügt; 51 Hover-/eingesenkte Paare zusammengefasst. Minderheit
-  der Hover-Abstufungen buchstäblich belassen, damit der Durchlauf strikt nullverändernd bleibt.
+  `--color-sunken` (gray-50/700) hinzugefügt; 51 Hover-/eingesenkte Paare zusammengefasst. Seltenere
+  Hover-Abstufungen buchstäblich belassen, damit der Durchlauf strikt ohne Farbverschiebung bleibt.
 
 ### Phase 9 — Komponentenschicht-Tokenisierung + Akzent ✅
 - [x] Die `@apply`-Regeln der R-3-Komponenten (`.card`, `.form-input`/`.form-select`/
@@ -201,12 +201,12 @@ Entschieden am 2026-05-25. Vier Regeln; die bereits ausgelieferten Tokens sind d
    (background/surface/surface-2/sunken/border/foreground/muted/label).
 2. **Identität kommt aus der Struktur, nicht aus der Farbe.** Abschnitte werden durch
    Abstände, Überschriften, Icons, Trennlinien unterschieden — nicht durch einen Füllton.
-3. **Eine einzige Betonungsprimitiv.** Konfigurations-/erweiterte Blöcke verwenden ein einzelnes neutrales
+3. **Ein einziges Betonungsprimitiv.** Konfigurations-/erweiterte Blöcke verwenden ein einzelnes neutrales
    eingesenktes Panel (`bg-sunken border-border rounded-md`); ein optionaler linker Markenrand markiert "aktiv/wichtig". Keine abschnittsspezifische Palette.
 4. **Icons erhalten nur Marken- oder Statusfarbe.** Keine lila/indigo/orange-Icon-Töne.
 
 Durchsetzung: Das `--check`-Gate erhält eine Regel, die den CI bei rohem
-`purple|indigo|orange` (und jeder nicht-tokenisierten Farbe) unter `templates/` fehlschlagen lässt — ein Vertrag mit einem Compiler dahinter, sodass er nicht wieder verfallen kann.
+`purple|indigo|orange` (und jeder nicht-tokenisierten Farbe) unter `templates/` fehlschlagen lässt — ein Vertrag mit einem Compiler dahinter, sodass er nicht wieder zum Raver-Tunnel verkommen kann.
 
 ## Statusfarben — jetzt tokenisiert (Phase 6)
 Frühere Phasen haben Statusfarben (grün/amber/rot/blau mit ihren `dark:`-Varianten) bewusst als
@@ -217,11 +217,3 @@ separaten, optionalen Durchlauf zurückgestellt — sie tragen Bedeutung und sin
 - Kein Emoji in Commits/PRs/Release-Notes.
 - Atomare Commits (einer pro Phase, oder pro Partial in Phase 3); ein PR pro Release.
 - Vor dem öffentlichen Push: Docker-Smoke-Test + echte Zertifikatsausstellung gegen Fabs Domain mit zufälligen Subdomains.
-
----
-
-<div align="center">
-
-[← Zurück zur Dokumentation](./README.md)
-
-</div>

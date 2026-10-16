@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM 88bb16eb976577c4 -->
+<!-- CERTMATE-TRANSLATED-FROM 8b55cd3aefbd2dba -->
 
 ## Übersicht
 
@@ -131,7 +131,7 @@ curl -X POST http://localhost:8000/api/client-certs/create \
 #### Über das Web-Dashboard
 
 1. Zertifikat in der Tabelle suchen
-2. Auf das Download-Symbol klicken ()
+2. Auf das Download-Symbol klicken
 3. Dateityp auswählen:
  - **CRT** — Zertifikat (öffentlich)
  - **KEY** — Privater Schlüssel (geheim halten)
@@ -158,7 +158,7 @@ curl http://localhost:8000/api/client-certs/CERT_ID/download/key \
 #### Über das Web-Dashboard
 
 1. Zertifikat in der Tabelle suchen
-2. Auf die Schaltfläche "Widerrufen" klicken ()
+2. Auf die Schaltfläche "Widerrufen" klicken
 3. Widerrufsgrund eingeben (optional)
 4. Bestätigen
 
@@ -186,7 +186,7 @@ curl -X POST http://localhost:8000/api/client-certs/CERT_ID/revoke \
 #### Über das Web-Dashboard
 
 1. Zertifikat in der Tabelle suchen
-2. Auf die Schaltfläche "Erneuern" klicken ()
+2. Auf die Schaltfläche "Erneuern" klicken
 3. Erneuerung bestätigen
 
 #### Über die API

@@ -14,14 +14,16 @@ This guide walks through:
 4. [Maintenance windows](#maintenance-windows)
 5. [Manual triggering](#manual-triggering)
 6. [Security model: why some commands are rejected](#security-model)
-7. [Common recipes](#common-recipes)
-8. [Audit, history, and debugging](#audit-history-and-debugging)
+7. [Where a hook runs](#where-a-hook-runs)
+8. [Common recipes](#common-recipes)
+9. [Audit, history, and debugging](#audit-history-and-debugging)
+10. [Typed deploy targets](#typed-deploy-targets)
 
 ---
 
 ## What a hook is
 
-A hook is a JSON object with five fields:
+A hook is a JSON object with these fields:
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -616,7 +618,7 @@ that delivered a key to an appliance that accepts uploads would install it in
 place of the real one. Use the **preview** instead
 ([`POST /api/deploy/targets/preview`](api.md)): it renders the request against an
 example certificate and key, reads no file and sends nothing. To deliver for real
-once, use *Run hooks for a domain* (admin), which is an explicit action.
+once, use [*Run all hooks for a domain*](#run-all-hooks-for-a-domain-admin) (admin), which is an explicit action.
 
 **What this protects against, and what it does not.**
 
@@ -668,8 +670,8 @@ execution data. Treat n8n's database and its backups as holding the key, or leav
 variables out of an n8n target and fetch the key some other way. Setting the workflow not
 to save executions did **not** behave as expected in the same check (the executions stayed
 in the `running` state with their data), so do not rely on that setting without looking at
-what your own instance stores. This is the case the table above means by "a receiver that
-keeps what it is sent".
+what your own instance stores. This is the case the table above means by "some automation
+platforms keep every request body in an execution history".
 
 ---
 
