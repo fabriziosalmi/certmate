@@ -159,7 +159,6 @@ Azure DNS is not answered by a certbot plugin: CertMate writes the challenge rec
     "powerdns": {
       "api_url": "https://your-powerdns-server:8081",
       "api_key": "your_powerdns_api_key"
-```
     }
   }
 }
@@ -176,7 +175,7 @@ Azure DNS is not answered by a certbot plugin: CertMate writes the challenge rec
       "username": "user",
       "password": "password",
       "dns_name": "dns_name",
-      "dnsview_name": "optionnal",
+      "dnsview_name": "optional",
       "propagation_seconds": 120
     }
   }

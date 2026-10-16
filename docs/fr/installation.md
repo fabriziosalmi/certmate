@@ -1,8 +1,6 @@
 # Guide d'installation
 
 <!-- CERTMATE-TRANSLATED-FROM 43c1d4c62fbc16b4 -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Cette traduction ne correspond pas à la version anglaise** ([`docs/installation.md`](../installation.md)), qui fait foi. En cas de divergence, le document anglais prévaut.
 
 Ce guide couvre toutes les méthodes d'installation et de déploiement de CertMate.
 
@@ -20,7 +18,7 @@ Ce qu'il fait :
 
 - installe `curl`, `tar`, `gzip` et `openssl` seulement s'ils manquent ;
 - télécharge la dernière version dans `/opt/certmate`, propriété de root et en lecture seule pour le service ;
-- récupère avec [uv](https://docs.astral.sh/uv/) un Python 3.12 autonome dans `/opt/certmate` et installe `requirements.lock`, le même ensemble épinglé que celui de l'image conteneur. Le Python du système n'est pas utilisé, c'est pourquoi les distributions livrant un Python plus ancien, comme Debian 12 et RHEL 9, fonctionnent aussi ;
+- récupère avec [uv](https://docs.astral.sh/uv/) un Python 3.12 autonome dans `/opt/certmate` et installe `requirements.lock`, le même ensemble épinglé que celui à partir duquel l'image conteneur est construite. Le Python du système n'est pas utilisé, c'est pourquoi les distributions livrant un Python plus ancien, comme Debian 12 et RHEL 9, fonctionnent aussi ;
 - crée l'utilisateur système `certmate`, propriétaire uniquement de `certificates`, `data`, `backups`, `logs` et `letsencrypt` ;
 - écrit `/etc/certmate/certmate.env` avec `API_BEARER_TOKEN`, `SECRET_KEY` et `CERTMATE_BACKUP_PASSPHRASE` générés, seulement si le fichier n'existe pas ;
 - installe et démarre le service systemd `certmate`, à l'écoute sur `127.0.0.1:8000`.
@@ -31,7 +29,7 @@ Ouvrez `http://127.0.0.1:8000`. La première page crée le compte administrateur
 - **Mise à jour :** relancez la même commande. Le code et le virtualenv sont remplacés ; certificats, données, sauvegardes et `certmate.env` restent.
 - **Écouter ailleurs :** définissez `CERTMATE_BIND` dans `/etc/certmate/certmate.env` (par exemple `0.0.0.0:8000`, ou gardez le loopback derrière un reverse proxy et définissez `BEHIND_PROXY=true`), puis `sudo systemctl restart certmate`.
 - **Journaux :** `journalctl -u certmate`.
-- **SELinux :** l'installeur n'a pas encore été vérifié avec SELinux en mode enforcing. Si le service ne démarre pas sur un tel hôte, le journal indique pourquoi ; signalez-le-nous.
+- **SELinux :** l'installeur n'a pas encore été vérifié avec SELinux en mode enforcing. Si le service ne démarre pas sur un tel hôte, le journal indiquera pourquoi ; merci de nous le signaler.
 
 ---
 
@@ -39,7 +37,7 @@ Ouvrez `http://127.0.0.1:8000`. La première page crée le compte administrateur
 
 Pour une nouvelle VM chez tout fournisseur qui accepte des user data (Hetzner, DigitalOcean, AWS, Azure, GCP, OpenStack, Proxmox) : collez [`deploy/cloud-init/certmate.yaml`](../../deploy/cloud-init/certmate.yaml) dans le champ « user data » ou « cloud-init » de la VM à sa création ([fichier brut](https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/cloud-init/certmate.yaml)). Il installe Docker, télécharge le [bundle compose de production](docker.md#en-production-avec-docker-compose), génère les secrets sur la VM dans `/srv/certmate/.env` (mode 600, jamais dans les user data) et démarre CertMate.
 
-CertMate écoute sur `127.0.0.1:8000` dans la VM. Accédez-y par un tunnel SSH, `ssh -L 8000:127.0.0.1:8000 <utilisateur>@<vm>`, puis ouvrez `http://127.0.0.1:8000`. La première page crée le compte administrateur et demande le jeton : `sudo grep API_BEARER_TOKEN /srv/certmate/.env`.
+CertMate écoute sur `127.0.0.1:8000` dans la VM. Accédez-y par un tunnel SSH, `ssh -L 8000:127.0.0.1:8000 <user>@<vm>`, puis ouvrez `http://127.0.0.1:8000`. La première page crée le compte administrateur et demande le jeton : `sudo grep API_BEARER_TOKEN /srv/certmate/.env`.
 
 Vérifié sur l'image cloud Ubuntu 24.04 : cloud-init se termine en `done`, CertMate est sain quelques minutes après le démarrage et revient après un redémarrage.
 
@@ -66,9 +64,7 @@ cd certmate
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-.\venv\Scripts\activate   # Windows
+source venv/bin/activate  # Sous Windows : venv\Scripts\activate
 ```
 
 ### 3. Installer les dépendances
@@ -138,7 +134,7 @@ brew install python3 openssl libffi
 
 ## Configuration du fournisseur DNS
 
-Après l'installation, configurez les identifiants de votre fournisseur DNS. Voir le [Guide des fournisseurs DNS](./dns-providers.md) pour les instructions détaillées.
+Après l'installation, configurez les identifiants de votre fournisseur DNS. Voir le [Guide des fournisseurs DNS](./dns-providers.md) pour les instructions de configuration détaillées de chaque fournisseur pris en charge.
 
 Configuration rapide pour les fournisseurs courants :
 
@@ -164,7 +160,7 @@ Configuration rapide pour les fournisseurs courants :
 
 1. Créez un compte de service avec le rôle DNS Administrator
 2. Téléchargez le fichier JSON de clé
-3. Importez dans les paramètres CertMate
+3. Importez-le dans les paramètres CertMate
 
 ---
 
@@ -173,35 +169,39 @@ Configuration rapide pour les fournisseurs courants :
 ```bash
 # Authentification API (auto-générée si aucune n'est définie)
 # Option A : valeur directe
-API_BEARER_TOKEN=votre_token_securise
+API_BEARER_TOKEN=your_secure_token_here
 # Option B : chemin vers un fichier contenant le token (prioritaire sur API_BEARER_TOKEN)
 API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token
 
 # Clé secrète de session Flask (auto-générée si aucune n'est définie)
 # Option A : valeur directe
-SECRET_KEY=votre_cle_secrete_flask
+SECRET_KEY=your_flask_secret_key
 # Option B : chemin vers un fichier contenant la clé (prioritaire sur SECRET_KEY)
 SECRET_KEY_FILE=/run/secrets/secret_key
 
 # Proxy inverse — mettre à 'true' quand CertMate est derrière Nginx,
 # HAProxy, Traefik, Cloudflare, etc. Sans cela, request.remote_addr
 # résout sur l'IP du proxy pour chaque requête, ce qui fusionne la
-# limitation de débit par client en un seul bucket.
+# limitation de débit par client en un seul bucket. Voir la section « Derrière
+# un proxy inverse » sous Déploiement en production pour les détails.
 BEHIND_PROXY=true
 
 # Chiffrement des sauvegardes au repos (optionnel, recommandé).
-# Quand défini, les sauvegardes unifiées sont écrites sous forme de
-# fichiers .zip.enc chiffrés (dérivation PBKDF2-SHA256 + Fernet/AES)
-# au lieu de .zip en clair. Les sauvegardes contiennent chaque clé
-# privée de certificat ; sans cela, un fichier de sauvegarde exfiltré
-# est une compromission totale des clés.
-CERTMATE_BACKUP_PASSPHRASE=choisissez-une-longue-phrase-de-passe-aleatoire
+# Quand défini, les sauvegardes unifiées sont écrites sous forme de fichiers
+# .zip.enc chiffrés (dérivation PBKDF2-SHA256 + Fernet/AES) au lieu de .zip en clair.
+# Une sauvegarde de reprise après sinistre (include_secrets=true) embarque chaque
+# clé privée de certificat et chaque identifiant ; sans cela, une copie exfiltrée
+# est donc une compromission totale. La sauvegarde par défaut, partageable sans
+# risque, ne contient ni l'un ni l'autre. La même phrase secrète
+# doit être présente pour restaurer. Volontairement limitée à l'environnement : une
+# phrase secrète stockée dans settings.json finirait elle-même dans des sauvegardes en clair.
+CERTMATE_BACKUP_PASSPHRASE=choose-a-long-random-passphrase
 
 # Fournisseur DNS. Cloudflare est le seul fournisseur lu depuis l'environnement :
 # ce token configure le compte Cloudflare par défaut. Route53, Azure, Google Cloud
 # DNS, PowerDNS et les autres se configurent dans Paramètres -> Fournisseurs DNS
 # ou via l'API ; AWS_*, AZURE_* et les variables similaires n'ont ici aucun effet.
-CLOUDFLARE_TOKEN=votre_token_cloudflare
+CLOUDFLARE_TOKEN=your_cloudflare_token
 ```
 
 ### Ordre de résolution
@@ -210,7 +210,7 @@ CLOUDFLARE_TOKEN=votre_token_cloudflare
 |----------|----------|
 | `API_BEARER_TOKEN_FILE` | La plus haute — si défini, `API_BEARER_TOKEN` n'est jamais lu |
 | `API_BEARER_TOKEN` | Utilisé seulement quand `API_BEARER_TOKEN_FILE` est absent |
-| *(généré)* | Repli quand aucun n'est défini ou que la valeur échoue la validation |
+| *(généré)* | Repli quand aucun n'est défini ou que la valeur échoue à la validation |
 | `SECRET_KEY_FILE` | La plus haute — si défini, `SECRET_KEY` n'est jamais lu |
 | `SECRET_KEY` | Utilisé seulement quand `SECRET_KEY_FILE` est absent |
 | *(généré + persisté)* | Écrit dans `data/.secret_key` pour que les sessions survivent aux redémarrages |
@@ -223,10 +223,19 @@ CLOUDFLARE_TOKEN=votre_token_cloudflare
 
 ### Derrière un proxy inverse
 
-Si CertMate est derrière un proxy inverse (Nginx, HAProxy, Traefik, Cloudflare, Kubernetes Ingress) — ce qui est la manière recommandée de l'exécuter pour la terminaison TLS — définissez `BEHIND_PROXY=true` dans l'environnement du conteneur. Cela active le middleware `ProxyFix` de Werkzeug afin que les éléments suivants fassent confiance aux en-têtes `X-Forwarded-*` de votre proxy :
+Si CertMate est derrière un proxy inverse (Nginx, HAProxy, Traefik,
+Cloudflare, Kubernetes Ingress) — ce qui est la manière recommandée de
+l'exécuter pour la terminaison TLS — définissez `BEHIND_PROXY=true` dans
+l'environnement du conteneur. Cela active le middleware `ProxyFix` de Werkzeug
+afin que les éléments suivants fassent confiance aux en-têtes `X-Forwarded-*`
+de votre proxy :
 
-- `request.remote_addr` résout sur l'IP client d'origine au lieu de l'IP du proxy. La limitation de débit, les entrées de journal d'audit et les avertissements "tentative de token API invalide depuis X" deviennent par client au lieu de par proxy.
-- Le schéma / hôte / préfixe du proxy sont respectés, ce qui maintient l'exactitude des URL générées et des scopes de cookies.
+- `request.remote_addr` résout sur l'IP client d'origine au lieu de
+  l'IP du proxy. La limitation de débit, les entrées du journal d'audit et les
+  avertissements "invalid API token attempt from X" deviennent par client
+  au lieu de par proxy.
+- Les en-têtes de schéma / hôte / préfixe du proxy sont respectés, ce qui
+  maintient l'exactitude des URL générées et des scopes de cookies.
 
 ```yaml
 # Extrait docker-compose.yml
@@ -239,7 +248,10 @@ services:
       - ./data:/app/data
 ```
 
-**Quand NE PAS l'activer.** Si vous exposez CertMate directement sur le réseau sans proxy devant, laissez `BEHIND_PROXY` non défini. Avec cette option activée, quiconque peut atteindre le listener pourrait usurper `X-Forwarded-For` et contourner les limites de débit par client. Le proxy est la frontière de confiance.
+**Quand NE PAS l'activer.** Si vous exposez CertMate directement sur le
+réseau sans proxy devant, laissez `BEHIND_PROXY` non défini. Avec cette option
+définie, quiconque peut atteindre le listener pourrait usurper `X-Forwarded-For`
+et contourner les limites de débit par client. Le proxy est la frontière de confiance.
 
 Votre proxy doit bien sûr transmettre les en-têtes. Exemple Nginx :
 
@@ -250,9 +262,31 @@ proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
 ```
 
+#### Le profil nginx fourni
+
+`docker-compose.yml` fournit un service `nginx` optionnel (`--profile nginx`)
+qui termine le TLS devant CertMate. Sa configuration n'est **pas** versionnée
+sous `nginx.conf` — ce fichier est le vôtre et il est ignoré par git — mais sous
+`nginx.conf.example`, sur le même modèle que `.env.example` / `.env` :
+
+```bash
+cp nginx.conf.example nginx.conf
+# modifiez nginx.conf : remplacez chaque <your-domain> dans ssl_certificate / ssl_certificate_key
+docker compose --profile nginx up -d
+```
+
+Copiez **avant** `up` : si `nginx.conf` n'existe pas sur l'hôte au moment où le
+bind mount est créé, Docker le crée sous forme de *répertoire* vide et nginx ne
+démarre pas. Mise à jour depuis une version où `nginx.conf` était versionné :
+votre copie modifiée reste en place (git l'ignore désormais) ; comparez-la avec
+le nouveau `nginx.conf.example` après un pull pour reprendre les changements upstream.
+
 #### Exemple : Zion (passerelle TLS Rust + WAF)
 
-[Zion](https://github.com/fabriziosalmi/zion) est un proxy inverse Rust haute performance avec un WAF intégré — un bon choix devant CertMate quand vous souhaitez la terminaison TLS 1.3 et le filtrage des requêtes en périphérie. CertMate reste en HTTP simple sur le réseau interne ; Zion termine le TLS et transmet.
+[Zion](https://github.com/fabriziosalmi/zion) est un proxy inverse TLS Rust haute
+performance avec un WAF intégré — un bon choix devant CertMate quand vous
+souhaitez la terminaison TLS 1.3 et le filtrage des requêtes en périphérie.
+CertMate reste en HTTP simple sur le réseau interne ; Zion termine le TLS et transmet.
 
 `zion.toml` :
 
@@ -262,7 +296,7 @@ listen_http  = "0.0.0.0:8080"
 listen_https = "0.0.0.0:8443"
 
 [tls]
-cert_path = "/etc/ssl/zion/tls.crt"
+cert_path = "/etc/ssl/zion/tls.crt"   # votre certificat, ou utilisez l'ACME de Zion (--features acme)
 key_path  = "/etc/ssl/zion/tls.key"
 min_version = "1.3"
 alpn = ["h2", "http/1.1"]
@@ -270,6 +304,8 @@ alpn = ["h2", "http/1.1"]
 [upstream.backend]
 url = "http://certmate:8000"
 
+# Route fourre-tout vers le backend. La route "/" explicite est sans effet et documente
+# l'intention ; les versions récentes de Zion enregistrent aussi "/" automatiquement pour un fourre-tout à la racine.
 [[route]]
 path = "/"
 upstream = "backend"
@@ -284,16 +320,16 @@ upstream = "backend"
 ```yaml
 services:
   certmate:
-    image: certmate:latest
+    image: certmate:latest          # l'image publiée, ou votre build local
     environment:
-      BEHIND_PROXY: "true"
+      BEHIND_PROXY: "true"          # faire confiance aux en-têtes X-Forwarded-* de Zion
     expose:
-      - "8000"
+      - "8000"                       # interne uniquement ; non publié sur l'hôte
     volumes:
       - ./data:/app/data
 
   zion:
-    image: zion:latest
+    image: zion:latest              # l'image publiée, ou votre build local
     depends_on:
       - certmate
     environment:
@@ -302,132 +338,57 @@ services:
       - ./zion.toml:/etc/zion/zion.toml:ro
       - ./certs:/etc/ssl/zion:ro
     ports:
-      - "443:8443"
-      - "80:8080"
+      - "443:8443"                   # hôte 443 -> listener HTTPS de Zion
+      - "80:8080"                    # hôte 80  -> listener HTTP de Zion
 ```
 
-Gardez `BEHIND_PROXY=true` sur le service CertMate : Zion ajoute `X-Forwarded-For`, ce qui permet à la limitation de débit par client, aux entrées d'audit et aux avertissements d'échec d'authentification de résoudre sur la vraie IP client plutôt que celle de Zion.
+Gardez `BEHIND_PROXY=true` sur le service CertMate : Zion ajoute
+`X-Forwarded-For`, ce qui permet à la limitation de débit par client, aux entrées
+d'audit et aux avertissements d'échec d'authentification de résoudre sur la vraie
+IP client plutôt que sur celle de Zion.
 
-### Utiliser Gunicorn
-
-```bash
-pip install gunicorn
-gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 300 app:app
-```
-
-### Utiliser systemd
-
-Créez `/etc/systemd/system/certmate.service` :
-
-```ini
-[Unit]
-Description=CertMate Gestionnaire de Certificats SSL
-After=network.target
-
-[Service]
-Type=simple
-User=certmate
-WorkingDirectory=/opt/certmate
-Environment=PATH=/opt/certmate/venv/bin
-Environment=GUNICORN_TIMEOUT=300
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Backup et restauration
-
-```bash
-# Créer une sauvegarde
-curl -X POST http://localhost:8000/api/backups/create \
-  -H "Authorization: Bearer VOTRE_TOKEN_API"
-
-# Lister les sauvegardes
-curl http://localhost:8000/api/backups \
-  -H "Authorization: Bearer VOTRE_TOKEN_API"
-
-# Restaurer une sauvegarde
-curl -X POST http://localhost:8000/api/backups/restore \
-  -H "Authorization: Bearer VOTRE_TOKEN_API" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "backup_20240101_120000.zip"}'
-```
-
----
-
-## Dépannage
-
-### Conflits de versions de plugins DNS
-
-Installez depuis le fichier requirements livré avec CertMate. Cet ensemble est
-résolu, construit et démarré par la CI à chaque exécution ; une liste assemblée
-à la main, non.
-
-```bash
-pip install -r requirements.txt            # tous les fournisseurs inclus
-pip install -r requirements-minimal.txt    # certbot + Cloudflare uniquement
-pip install -r requirements-extended.txt   # d'autres fournisseurs, par-dessus minimal
-pip install -r requirements-aws.txt        # Route53, par-dessus l'un ou l'autre
-```
-
-> Cette page publiait sa propre liste de versions, qui avait dérivé jusqu'à
-> `certbot==4.1.1` dans les cinq langues alors que le projet était épinglé à
-> `2.10.0`. Le projet utilise maintenant certbot `5.8.0` (ticket #103).
->
-> Corriger ces numéros ne suffit pas, et c'est pourquoi la liste a été supprimée
-> plutôt que mise à jour. Ce qui tient la pile ensemble, ce ne sont pas les
-> versions des plugins mais le fait que certbot, `acme`, `josepy`, les plugins
-> officiels, `cryptography` et `pyopenssl` s'accordent entre eux : certbot et
-> `acme` 5.8.0 exigent `cryptography>=47`, et pyOpenSSL 26.4.0 exige `>=49,<51`.
-> Assemblé à la main, un pin finit hors de cette fenêtre ; le fichier fourni par
-> CertMate est l'ensemble résolu, construit et démarré en CI. Voir SECURITY.md,
-> « Known dependency constraint ».
->
-> `certbot-dns-powerdns` demande son propre environnement : il requiert
-> `dns-lexicon<=3.5.6` alors que les plugins Linode, OVH, RFC2136, DNSMadeEasy
-> et NS1 requièrent `>=3.14.1`, et pip ne peut satisfaire les deux.
-
-### Commandes de validation
-
-```bash
-# Vérifier les plugins certbot
-certbot plugins --text
-
-# Vérifier que le service fonctionne
-curl -X GET http://localhost:8000/api/health
-```
-
-### Erreurs courantes
-
-| Erreur | Solution |
-|--------|----------|
-| `ModuleNotFoundError` | Exécutez `pip install -r requirements.txt` |
-| `Port already in use` | Changez le port dans les variables d'environnement |
-| `certbot not found` | Installez certbot : `pip install certbot` |
-| `Permission denied` | Vérifiez les permissions sur `/app/data` et `/app/certificates` |
-| `Token API invalide` | Vérifiez `API_BEARER_TOKEN` dans votre fichier `.env` |
-
-### Mode débogage
-
-```bash
-export CERTMATE_LOG_LEVEL=DEBUG
-python app.py
-```
+> **`/metrics` est servi par Zion, pas relayé.** Zion expose son propre endpoint
+> Prometheus sur `/metrics` (séries `zion_*` pour le proxy), qui masque le
+> `/metrics` de CertMate. Collectez-les séparément : le `/metrics` de Zion depuis
+> l'intérieur du réseau de l'hôte / du cluster (Zion le réserve aux IP source
+> privées et renvoie 403 aux clients publics), et les `certmate_*` de CertMate
+> directement sur le `certmate:8000` interne avec un Bearer token d'administrateur
+> (voir [`monitoring/`](../../monitoring/) pour le tableau de bord et la
+> configuration de collecte).
 
 ### Confinement du trafic sortant (durcissement de l'egress)
 
-CertMate établit des connexions sortantes vers les autorités de certification ACME, les API des fournisseurs DNS, le stockage d'objets et les webhooks de notification via HTTP(S), ainsi que SMTP pour les notifications email. Vous pouvez confiner et auditer le trafic **HTTP(S)** en le routant via un **proxy direct (forward proxy)** et en refusant à CertMate toute autre route vers internet.
+CertMate établit des connexions sortantes vers les autorités de certification ACME,
+les API des fournisseurs DNS, le stockage d'objets et les webhooks de notification
+via HTTP(S), ainsi que SMTP pour les notifications email. Vous pouvez confiner et
+auditer le trafic **HTTP(S)** en le routant via un **proxy direct (forward proxy)**
+et en refusant à CertMate toute autre route vers internet.
 
-Les clients HTTP(S) de CertMate (`requests`, `certbot`, livraison webhook via `urllib`, `boto3`) respectent les variables d'environnement standard `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, donc aucune modification de code n'est nécessaire. Les sondes TLS aussi : la vérification de l'état de déploiement, le balayage de l'inventaire, l'endpoint `POST /api/probe`, le contrôle des en-têtes HSTS et celui de TLS 1.0/1.1 font tous passer leur segment TCP par HTTP CONNECT, et la récupération OCSP/CRL pour la révocation — en HTTP simple — passe par `HTTP_PROXY`. Une cible qui résout vers une adresse privée ou de loopback est toujours contactée directement, car aucun proxy sortant ne la dessert.
+Les clients HTTP(S) de CertMate (`requests`, `certbot`, livraison webhook via
+`urllib`, `boto3`) respectent les variables d'environnement standard `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`,
+donc aucune modification de code n'est nécessaire. Les sondes TLS aussi :
+la vérification de l'état de déploiement, le balayage de l'inventaire, l'endpoint
+`POST /api/probe`, le contrôle HSTS/en-têtes et celui de TLS 1.0/1.1 font tous passer
+leur segment TCP par HTTP CONNECT, et la récupération OCSP/CRL pour la révocation — en
+HTTP simple — passe par `HTTP_PROXY`. Une cible qui résout vers une adresse privée
+ou de loopback est toujours contactée directement, car aucun proxy sortant ne la dessert.
 
 **Deux choses ne passent pas par le proxy :**
 
-- **SMTP.** Les notifications email utilisent `smtplib`, qui ouvre une connexion TCP directe et ne consulte **pas** les variables de proxy HTTP. Autorisez directement le `host:port` de votre relais SMTP (règle de pare-feu / NetworkPolicy), ou utilisez un canal de notification webhook au lieu de l'email.
-- **WHOIS.** La vérification d'expiration d'enregistrement se rabat sur WHOIS sur le port 43 pour les TLD sans RDAP, et un proxy HTTP ne peut pas transporter ce protocole. RDAP — qui est en HTTPS, et que répondent la plupart des TLD — passe bien par le proxy. Autorisez le port 43 vers les registres nécessaires, ou laissez ces TLD rapporter `unavailable`.
+- **SMTP.** Les notifications email utilisent `smtplib`, qui ouvre une connexion
+  TCP directe et ne consulte **pas** les variables de proxy HTTP. Autorisez
+  directement le `host:port` de votre relais SMTP (règle de pare-feu / NetworkPolicy),
+  ou utilisez un canal de notification webhook au lieu de l'email.
+- **WHOIS.** La vérification d'expiration d'enregistrement se rabat sur WHOIS sur le
+  port 43 pour les TLD sans RDAP, et un proxy HTTP ne peut pas transporter ce
+  protocole. RDAP — qui est en HTTPS, et que répondent la plupart des TLD — passe bien
+  par le proxy. Autorisez le port 43 vers les registres nécessaires, ou laissez ces
+  TLD rapporter `unavailable`.
 
-Exemple avec [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager), un proxy direct auto-hébergé basé sur Squid avec un WAF, un DNS sinkhole et — depuis v3.9.0 — une liste d'autorisation egress **default-deny** (seules les destinations explicitement approuvées sont atteignables ; tout le reste est refusé) :
+Exemple avec [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager),
+un proxy direct auto-hébergé basé sur Squid avec un WAF, un DNS sinkhole et — depuis
+v3.9.0 — une **liste d'autorisation egress default-deny** native (seules les
+destinations explicitement approuvées sont atteignables ; tout le reste est refusé) :
 
 ```yaml
 services:
@@ -439,27 +400,81 @@ services:
       NO_PROXY:    "localhost,127.0.0.1"
     networks:
       - egress            # CertMate peut atteindre UNIQUEMENT le proxy sur ce réseau
+  # La stack Secure Proxy Manager fournit le service `proxy` sur :3128.
+  # Rattachez ce proxy À LA FOIS au réseau `egress` (pour que CertMate puisse l'atteindre)
+  # ET à un second réseau, non interne (pour que le proxy lui-même atteigne
+  # internet). Le proxy est alors la seule route de sortie de CertMate.
 networks:
   egress:
     internal: true        # pas de passerelle : CertMate n'a pas d'internet direct
 ```
 
-Placer CertMate sur un réseau `internal` (pas de passerelle) partagé avec le proxy fait du proxy son **seul** chemin sortant. Le trafic sortant devient un point de contrôle unique et vérifiable : autorisez les destinations dont CertMate a réellement besoin (votre CA, fournisseur DNS, stockage d'objets, endpoints de notification), refusez le reste.
+Placer CertMate sur un réseau `internal` (pas de passerelle) partagé avec le proxy
+fait du proxy son **seul** chemin sortant. Le trafic sortant devient un point de
+contrôle unique et vérifiable : autorisez les destinations dont CertMate a réellement
+besoin (votre CA, fournisseur DNS, stockage d'objets, endpoints de notification),
+refusez le reste ; les destinations données sous forme d'IP littérale sont bloquées au
+proxy plutôt qu'acceptées aveuglément. Si vous utilisez la délégation DNS-alias / CNAME,
+autorisez aussi `cloudflare-dns.com` — CertMate résout ces CNAME via DoH.
 
-**Kubernetes :** une `NetworkPolicy` egress default-deny qui n'autorise le trafic que vers le Service du proxy, plus les variables d'environnement `HTTP(S)_PROXY` sur le Deployment.
+Avec Secure Proxy Manager v3.9.0+, c'est un mode intégré plutôt qu'un exercice
+d'ACL manuel : activez **Default-deny egress** dans Settings et remplissez
+l'**Egress Allowlist** avec les destinations dont CertMate a besoin. Chaque entrée est un
+domaine ou une IP/CIDR (classée automatiquement), et l'endpoint `/api/egress-allowlist`
+permet de gérer la liste depuis l'IaC. Une liste d'autorisation de départ représentative :
 
-**systemd :** `Environment=HTTPS_PROXY=...` dans l'unité, plus des règles de pare-feu hôte qui restreignent l'egress au proxy.
+- l'hôte d'API de votre CA ACME — par ex. `acme-v02.api.letsencrypt.org` (plus
+  `acme-staging-v02.api.letsencrypt.org` si vous émettez contre l'environnement de staging), ou
+  l'endpoint de la CA que vous avez configurée ;
+- l'hôte d'API de votre fournisseur DNS — variable selon le fournisseur (par exemple
+  `api.cloudflare.com`) ;
+- l'endpoint de votre stockage d'objets, si la sauvegarde hors site est activée ;
+- l'hôte de vos notifications — l'endpoint webhook, Gotify, ntfy ou Telegram, s'il
+  est utilisé ;
+- `cloudflare-dns.com`, si vous utilisez la délégation DNS-alias / CNAME (résolue via
+  DoH, comme ci-dessus).
+
+Tout le reste est refusé au proxy, de sorte qu'une erreur de configuration ou une
+dépendance compromise ne peut pas exfiltrer discrètement vers un hôte arbitraire. Pour
+HTTPS, la liste d'autorisation compare l'hôte de la requête `CONNECT`, elle fonctionne
+donc sans interception TLS.
+
+- **Kubernetes :** une `NetworkPolicy` egress default-deny qui n'autorise le trafic
+  que vers le Service du proxy, plus les variables d'environnement `HTTP(S)_PROXY` sur le Deployment.
+- **systemd :** `Environment=HTTPS_PROXY=...` dans l'unité, plus des règles de pare-feu
+  hôte qui restreignent l'egress au proxy.
+
+**Inspection du contenu HTTPS (optionnelle, avancée).** Un proxy direct ne voit que le
+SNI / l'hôte / l'IP d'une connexion HTTPS — l'autorisation ou le refus par destination
+fonctionne sur cette base sans déchiffrement. Si vous activez en plus l'interception TLS
+(SSL-bump) sur le proxy pour inspecter le *contenu* sortant, CertMate doit **faire
+confiance à la CA d'interception du proxy** : pointez `REQUESTS_CA_BUNDLE` (et `SSL_CERT_FILE`)
+vers un bundle qui l'inclut, ou ajoutez-la au magasin de confiance système du conteneur.
+**Excluez (`splice`) les endpoints ACME de l'interception** — vous ne voulez pas faire de
+MITM sur la connexion à votre autorité de certification, et certains endpoints épinglent
+leurs certificats. Il ne s'agit pas de TLS mutuel ; c'est une confiance à sens unique
+envers une CA privée.
 
 ### Emplacement de stockage pour le répertoire de données
 
-CertMate utilise les E/S fichiers bloquantes standard de Python pour tout ce qui se trouve sous `data/` (paramètres, certificats, journal d'audit, stockage SQLite du planificateur). Le disque local est fortement recommandé.
+CertMate utilise les E/S fichiers bloquantes standard de Python pour tout ce qui se
+trouve sous `data/` (paramètres, certificats, journal d'audit, stockage SQLite du
+planificateur). Le disque local est fortement recommandé.
 
 Si vous montez `data/` sur un système de fichiers réseau (NFS, SMB), sachez que :
 
-- Un serveur NFS gelé peut bloquer les lectures de fichiers Python indéfiniment sans timeout intégré. Le worker de renouvellement, le rédacteur du journal d'audit et la sonde /health se bloqueront tous sur le même point de montage.
-- Le mode journal WAL de SQLite nécessite des sémantiques de verrouillage que NFS ne fournit pas toujours. CertMate journalise un avertissement s'il a dû revenir à un mode journal plus faible ; l'exactitude est préservée, mais la concurrence diminue.
+- Un serveur NFS gelé peut bloquer les lectures de fichiers Python indéfiniment sans
+  timeout intégré. Le worker de renouvellement, le rédacteur du journal d'audit et la
+  sonde /health se bloqueront tous sur le même point de montage.
+- Le mode journal WAL de SQLite nécessite des sémantiques de verrouillage que NFS ne
+  fournit pas toujours. CertMate journalise un avertissement s'il a dû revenir à un
+  mode journal plus faible ; l'exactitude est préservée, mais la concurrence diminue.
 
-Si NFS est inévitable, montez avec `soft,timeo=30,retrans=3` (ou l'équivalent de votre distribution) pour que les E/S échouent rapidement au lieu de bloquer sur un serveur arrêté.
+Si NFS est inévitable, montez avec `soft,timeo=30,retrans=3` (ou l'équivalent de votre
+distribution) pour que les E/S échouent rapidement au lieu de bloquer sur un serveur
+arrêté, et vérifiez dans le journal de l'application l'avertissement de repli WAL
+après le premier démarrage (stdout, ou le fichier désigné par `CERTMATE_LOG_FILE` si
+vous en avez défini un).
 
 ### Utiliser Gunicorn
 
@@ -473,7 +488,7 @@ Créez `/etc/systemd/system/certmate.service` :
 
 ```ini
 [Unit]
-Description=CertMate Gestionnaire de Certificats SSL
+Description=CertMate SSL Certificate Manager
 After=network.target
 
 [Service]
@@ -519,6 +534,36 @@ services:
 
 ## Dépannage
 
+### Conflits de versions de plugins DNS
+
+Installez depuis le fichier requirements livré avec CertMate. Cet ensemble est
+résolu, construit et démarré par la CI à chaque exécution ; une liste assemblée
+à la main, non.
+
+```bash
+pip install -r requirements.txt            # tous les fournisseurs inclus
+pip install -r requirements-minimal.txt    # certbot + Cloudflare uniquement
+pip install -r requirements-extended.txt   # d'autres fournisseurs, par-dessus minimal
+pip install -r requirements-aws.txt        # Route53, par-dessus l'un ou l'autre
+```
+
+> Cette page publiait sa propre liste de versions, qui avait dérivé jusqu'à
+> `certbot==4.1.1` dans les cinq langues alors que le projet était épinglé à
+> `2.10.0`. Le projet utilise maintenant certbot `5.8.0` (ticket #103).
+>
+> Corriger ces numéros ne suffit pas, et c'est pourquoi la liste a été supprimée
+> plutôt que mise à jour. Ce qui tient la pile ensemble, ce ne sont pas les
+> versions des plugins mais le fait que certbot, `acme`, `josepy`, les plugins
+> officiels, `cryptography` et `pyopenssl` s'accordent entre eux : certbot et
+> `acme` 5.8.0 exigent `cryptography>=47`, et pyOpenSSL 26.4.0 exige `>=49,<51`.
+> Assemblé à la main, un pin finit hors de cette fenêtre ; le fichier fourni par
+> CertMate est l'ensemble résolu, construit et démarré en CI. Voir SECURITY.md,
+> « Known dependency constraint ».
+>
+> `certbot-dns-powerdns` demande son propre environnement : il requiert
+> `dns-lexicon<=3.5.6` alors que les plugins Linode, OVH, RFC2136, DNSMadeEasy
+> et NS1 requièrent `>=3.14.1`, et pip ne peut satisfaire les deux.
+
 ### Installation manuelle des dépendances
 
 Si un fournisseur ne s'installe pas, ajoutez-le par-dessus une base qui
@@ -545,23 +590,6 @@ certbot plugins --text
 curl -X GET http://localhost:8000/api/health
 ```
 
-### Erreurs courantes
-
-| Erreur | Solution |
-|--------|----------|
-| `ModuleNotFoundError` | Exécutez `pip install -r requirements.txt` |
-| `Port already in use` | Changez le port dans les variables d'environnement |
-| `certbot not found` | Installez certbot : `pip install certbot` |
-| `Permission denied` | Vérifiez les permissions sur `/app/data` et `/app/certificates` |
-| `Token API invalide` | Vérifiez `API_BEARER_TOKEN` dans votre fichier `.env` |
-
-### Mode débogage
-
-```bash
-export CERTMATE_LOG_LEVEL=DEBUG
-python app.py
-```
-
 ---
 
 ## Support
@@ -570,7 +598,7 @@ Si vous rencontrez des problèmes :
 
 1. Vérifiez les journaux pour les erreurs spécifiques
 2. Vérifiez les identifiants de votre fournisseur DNS
-3. Consultez le [Guide des fournisseurs DNS](./dns-providers.md) pour le dépannage spécifique
+3. Consultez le [Guide des fournisseurs DNS](./dns-providers.md) pour le dépannage spécifique à chaque fournisseur
 4. Consultez le [Guide de test](./testing.md) pour exécuter des diagnostics
 
 ---

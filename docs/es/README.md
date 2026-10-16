@@ -1,8 +1,6 @@
 # Documentación de CertMate
 
 <!-- CERTMATE-TRANSLATED-FROM 93e1cdc178f48147 -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Esta traducción no se corresponde con la versión en inglés** ([`docs/README.md`](../README.md)), que es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
 
 Bienvenido a la documentación de CertMate. Esta carpeta contiene guías completas para todas las funcionalidades.
 
@@ -16,8 +14,8 @@ Bienvenido a la documentación de CertMate. Esta carpeta contiene guías complet
 - **[Notas de Kubernetes](./kubernetes.md)** — Recursos de producción, dimensionamiento OOM, parches de runtime
 
 ### Funcionalidades principales
-- **[Proveedores DNS](./dns-providers.md)** — Proveedores soportados, multi-cuenta, alias de dominio
-- **[Script DNS personalizado](../custom-dns-script.md)** — cualquier proveedor sin plugin, gobernado por tus propios scripts *(en inglés)*
+- **[Proveedores DNS](./dns-providers.md)** — proveedores soportados, multi-cuenta, alias de dominio
+- **[Script DNS personalizado](../custom-dns-script.md)** — cualquier proveedor sin plugin, gobernado por tus propios hooks *(en inglés)*
 - **[Proveedores CA](./ca-providers.md)** — Let's Encrypt, DigiCert, CA privada
 - **[Certificados de cliente](./guide.md)** — Ciclo de vida de certificados de cliente, panel web, operaciones por lotes
 - **[Servidor MCP (Model Context Protocol)](./mcp.md)** — Servidor Node.js independiente para integraciones con agentes de IA
@@ -26,12 +24,12 @@ Bienvenido a la documentación de CertMate. Esta carpeta contiene guías complet
 - **[Referencia de API](./api.md)** — Documentación completa de la API REST
 - **[Arquitectura](./architecture.md)** — Diseño del sistema, componentes, flujo de datos
 - **[Guía de pruebas](./testing.md)** — Framework de pruebas, CI/CD, cobertura
-- **[Descubrimiento e inventario](../discovery-inventory.md)** — Descubrimiento por sonda/CT-log, inventario, adopción, madurez criptográfica *(en inglés)*
-- **[Certificados a partir de CSR](../csr-only-certificates.md)** — Emisión desde una CSR, con la clave privada en el dispositivo *(en inglés)*
-- **[Webhooks genéricos](../webhooks.md)** — Notificaciones HTTP de eventos del ciclo de vida: payload, firma, reintentos *(en inglés)*
-- **[Deploy hooks](./deploy-hooks.md)** — Hooks posteriores a la emisión: configuración, pruebas, redacción de la salida
-- **[Cumplimiento](./compliance.md)** — Cadena de auditoría, atribución de acciones, postura NIS2/eIDAS
-- **[Sondas de despliegue](./probes.md)** — Comprobar que el certificado renovado se sirve de verdad
+- **[Descubrimiento e inventario de certificados](../discovery-inventory.md)** — descubrimiento por sonda/CT-log, inventario, adopción, preparación criptográfica *(en inglés)*
+- **[Deploy hooks](./deploy-hooks.md)** — hooks posteriores a la emisión: configuración, pruebas, redacción de la salida, ventanas de mantenimiento
+- **[Certificados a partir de CSR](../csr-only-certificates.md)** — emisión y renovación cuando la clave privada permanece en el dispositivo *(en inglés)*
+- **[Webhooks](../webhooks.md)** — webhooks genéricos: plantillas de payload, autenticación, verificación de firma *(en inglés)*
+- **[Cumplimiento](./compliance.md)** — cadena de auditoría, atribución de acciones, postura NIS2/eIDAS
+- **[Sondas de despliegue](./probes.md)** — comprobar que el certificado renovado se sirve de verdad
 
 ---
 
@@ -52,23 +50,23 @@ Bienvenido a la documentación de CertMate. Esta carpeta contiene guías complet
 ### Para administradores
 
 1. **[Despliegue con Docker](./docker.md)** — Configuración de Docker para producción
-2. **[Notas de Kubernetes](./kubernetes.md)** — Dimensionamiento de pods y parches operativos
+2. **[Notas de Kubernetes](./kubernetes.md)** — Dimensionamiento de pods en producción y parches operativos
 3. **[Proveedores CA](./ca-providers.md)** — Configurar autoridades de certificación
-4. **[Proveedores DNS](./dns-providers.md#multi-account-support)** — Configuración empresarial multi-cuenta
+4. **[Proveedores DNS](./dns-providers.md#soporte-multi-cuenta)** — Configuración empresarial multi-cuenta
 
 ---
 
 ## Descripción general de funcionalidades
 
 ### Certificados de servidor
-- **Todos los proveedores DNS admitidos** para los desafíos DNS-01 de Let's Encrypt (ver [Proveedores DNS](./dns-providers.md) para la lista completa)
+- **Todos los proveedores DNS soportados** para los desafíos DNS-01 de Let's Encrypt (ver [Proveedores DNS](./dns-providers.md) para la lista completa)
 - **Múltiples proveedores CA**: Let's Encrypt, DigiCert, CA privada
 - **Soporte multi-cuenta** por proveedor DNS
 - **Backends de almacenamiento intercambiables**: Local, Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible
 - **Renovación automática** con umbrales configurables
 - **Soporte Docker** con builds multiplataforma (ARM64 + AMD64)
 - **Log Sanitizer** — Elimina automáticamente tokens de API, claves privadas y credenciales sensibles de los logs de CertMate
-- **Zombie Certificate Scanner** — Sonda multihilo que pregunta si los nombres de sus certificados gestionados siguen resolviendo y respondiendo
+- **Zombie Certificate Scanner** — Sonda multihilo que pregunta si los nombres de tus certificados gestionados siguen resolviendo y respondiendo
 - **Servidor MCP (Model Context Protocol)** — Servidor Node.js independiente para integrarse con asistentes de IA agénticos
 
 ### Certificados de cliente
@@ -76,7 +74,7 @@ Bienvenido a la documentación de CertMate. Esta carpeta contiene guías complet
 - **Gestión completa del ciclo de vida** — crear, renovar, revocar, supervisar
 - **OCSP & CRL** — estado en tiempo real y listas de revocación
 - **Panel web** en `/client-certificates`
-- **Operaciones por lotes** — importación CSV, máximo 100 filas por solicitud
+- **Operaciones por lotes** — importar certificados de cliente en bloque mediante CSV (hasta 100 filas por solicitud)
 - **Registro de auditoría** y **limitación de peticiones**
 
 ---
@@ -108,7 +106,7 @@ Todas las funcionalidades están exhaustivamente probadas:
 # Ejecutar pruebas
 # La suite de UI dirige Playwright contra un servidor vivo y no puede
 # compartir proceso con el resto; e2e necesita una instancia en marcha.
-# La misma seleccion que usan `make test` y scripts/release.sh.
+# La misma selección que usan `make test` y scripts/release.sh.
 pytest -v --tb=short -m "not ui and not e2e"
 ```
 
@@ -140,6 +138,15 @@ La cobertura de pruebas incluye:
 - Consultas **multi-filtro** eficientes
 - Planificación de **renovación automática**
 - **Operaciones por lotes** con seguimiento de errores
+
+---
+
+## ¿Necesitas ayuda?
+
+1. **¿Problemas de instalación?** → Ver la [sección de instalación](./guide.md#instalación)
+2. **¿Preguntas sobre la API?** → Ver la [Referencia de API](./api.md)
+3. **¿Preguntas sobre la arquitectura?** → Ver el [documento de arquitectura](./architecture.md)
+4. **¿Otra cosa?** → Abre un [issue](https://github.com/fabriziosalmi/certmate/issues)
 
 ---
 
@@ -191,9 +198,9 @@ docs/es/
 
 ## Estado de las pruebas
 
-Aqui no hay una tabla de pruebas mantenida a mano. Un recuento de pruebas queda obsoleto al dia siguiente de escribirlo: este decia `27/27` mientras la suite ya pasaba de dos mil.
+Aquí no hay un marcador de pruebas mantenido a mano. Una tabla de recuentos de pruebas queda obsoleta al día siguiente de escribirse — esta decía `27/27` cuando la suite ya pasaba de dos mil.
 
-La senal autorizada es la CI en `main`: las insignias al principio del [README del proyecto](../../README.md) y el minimo de cobertura impuesto en [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+La señal de referencia es la CI en `main`: las insignias al principio del [README del proyecto](../../README.md) y el mínimo de cobertura impuesto en [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
 ---
 
@@ -252,6 +259,6 @@ CertMate está publicado bajo la licencia MIT. Ver el archivo LICENSE en el repo
 
 <div align="center">
 
-[Inicio](../README.md) • [Documentación](./) • [GitHub](https://github.com/fabriziosalmi/certmate)
+[Inicio](../../README.md) • [Documentación](./) • [GitHub](https://github.com/fabriziosalmi/certmate)
 
 </div>

@@ -1,8 +1,6 @@
 # Provider DNS
 
-<!-- CERTMATE-TRANSLATED-FROM ec6ce2fc0c36db8b -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Questa traduzione non è allineata alla versione inglese** ([`docs/dns-providers.md`](../dns-providers.md)), che è quella che fa fede. In caso di discordanza vale il documento inglese.
+<!-- CERTMATE-TRANSLATED-FROM d1a7beba338a46dc -->
 
 CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let's Encrypt tramite plugin certbot individuali. La lista completa si trova nella tabella seguente.
 
@@ -17,6 +15,7 @@ CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let'
 | **Azure DNS** | Hook proprio di CertMate (`azure-mgmt-dns`) | Service Principal | Cloud principale |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Cloud principale |
 | **PowerDNS** | `certbot-dns-powerdns` | URL API, Chiave API | Enterprise |
+| **EfficientIP SOLIDserver** | script personalizzato su API REST | Host, Credenziali API | Enterprise |
 | **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | Chiave API, Secret Key | Enterprise |
 | **NS1** | `certbot-dns-nsone` | Chiave API | Enterprise |
 | **DigitalOcean** | `certbot-dns-digitalocean` | API Token | Cloud |
@@ -36,10 +35,10 @@ CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let'
 | **ACME-DNS** | _integrato_ (nessun plugin) | URL API, Nome utente, Password, Sottodominio | Specializzato |
 | **Hurricane Electric** | `certbot-dns-he-ddns` | Nome utente, Password | DNS gratuito |
 | **Dynu** | `certbot-dns-dynudns` | API Token | DNS dinamico |
-| **DuckDNS** | `certbot-dns-duckdns` | Token account | DDNS gratuito (senza dominio) |
+| **DuckDNS** | `certbot-dns-duckdns` | Token account | DDNS gratuito (nessun dominio richiesto) |
 | **deSEC** | `certbot-dns-desec` | API Token | Gratuito, UE (DE), DNSSEC — delegare NS a `ns1.desec.io` / `ns2.desec.org` |
 | **Scaleway** | `certbot-dns-scaleway` | Chiave segreta API | Cloud sovrano UE (FR) — plugin della community (alpha), installare separatamente: `pip install certbot-dns-scaleway` |
-| **Script personalizzato** | nessuno (certbot `--manual`) | Percorso script auth (+ script cleanup opzionale) | Porta il tuo |
+| **Script personalizzato** | nessuno (core di certbot, `--manual`) | Percorso dello script di auth hook (+ cleanup hook opzionale) | Porta il tuo |
 
 ---
 
@@ -127,7 +126,7 @@ Facoltativamente, impostare `assume_role_arn` per assumere un altro ruolo con pe
 }
 ```
 
-Azure DNS non viene risolto da un plugin certbot: CertMate scrive da sé il record della challenge con l'SDK di Azure, usando lo stesso service principal. Il principal deve poter leggere e scrivere i record TXT della zona (il ruolo `DNS Zone Contributor` sul gruppo di risorse basta). I certificati emessi in precedenza tramite `certbot-dns-azure` passano a questo metodo al prossimo rinnovo; non c'è nulla da cambiare. L'attesa prima della validazione è l'impostazione di propagazione del provider (180 secondi per impostazione predefinita).
+Azure DNS non viene gestito da un plugin certbot: CertMate scrive da sé il record della challenge con l'SDK di Azure, usando lo stesso service principal. Il principal deve poter leggere e scrivere i record TXT della zona (il ruolo `DNS Zone Contributor` sul gruppo di risorse è sufficiente). I certificati emessi in precedenza tramite `certbot-dns-azure` passano a questo metodo al prossimo rinnovo, e non c'è nulla da cambiare. L'attesa prima della validazione è l'impostazione di propagazione del provider (180 secondi per impostazione predefinita).
 
 ### Google Cloud DNS
 
@@ -152,6 +151,24 @@ Azure DNS non viene risolto da un plugin certbot: CertMate scrive da sé il reco
     "powerdns": {
       "api_url": "https://your-powerdns-server:8081",
       "api_key": "your_powerdns_api_key"
+    }
+  }
+}
+```
+
+### EfficientIP SOLIDserver
+
+```json
+{
+  "dns_provider": "solidserver",
+  "dns_providers": {
+    "solidserver": {
+      "host": "your-solidserver.example.com",
+      "username": "user",
+      "password": "password",
+      "dns_name": "dns_name",
+      "dnsview_name": "optional",
+      "propagation_seconds": 120
     }
   }
 }
@@ -219,7 +236,7 @@ Per server DNS BIND o altri compatibili RFC2136 (incluso **Technitium DNS Server
 
 ### Hetzner (API DNS legacy)
 
-> **Avviso di deprecazione:** L'API console DNS Hetzner verrà dismessa a maggio 2025. I nuovi utenti devono utilizzare il provider **Hetzner Cloud** indicato di seguito. Gli utenti esistenti devono migrare a `hetzner-cloud` prima della data di dismissione. Consulta la [pagina di stato Hetzner](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) per i dettagli.
+> **Avviso di deprecazione:** L'API della console DNS Hetzner verrà dismessa a maggio 2025. I nuovi utenti devono utilizzare il provider **Hetzner Cloud** indicato di seguito. Gli utenti esistenti devono migrare a `hetzner-cloud` prima della data di dismissione. Consulta la [pagina di stato Hetzner](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) per i dettagli.
 
 ```json
 {
@@ -364,9 +381,12 @@ Utilizza la nuova [API Hetzner Cloud](https://docs.hetzner.cloud/reference/cloud
 }
 ```
 
-### DuckDNS (senza dominio richiesto)
+### DuckDNS (nessun dominio richiesto)
 
-DuckDNS assegna gratuitamente sottodomini `<nome>.duckdns.org` — il modo più semplice per ottenere un certificato di fiducia pubblica quando non si possiede un dominio. Casi d'uso tipici: homelab, servizi self-hosted, dispositivi IoT, dashboard interni precedentemente vincolati a certificati auto-firmati.
+DuckDNS assegna gratuitamente sottodomini `<name>.duckdns.org`: il modo più semplice
+per ottenere un certificato di fiducia pubblica quando non si possiede un dominio.
+Casi d'uso tipici: homelab, servizi self-hosted, dispositivi IoT, dashboard
+interne finora costrette a usare certificati auto-firmati.
 
 1. Accedi su <https://www.duckdns.org/> (SSO Google / GitHub / Twitter / Reddit).
 2. Scegli un sottodominio (ad es. `mybox` → `mybox.duckdns.org`).
@@ -384,13 +404,21 @@ DuckDNS assegna gratuitamente sottodomini `<nome>.duckdns.org` — il modo più 
 }
 ```
 
-I wildcard come `*.mybox.duckdns.org` sono supportati con lo stesso token. Poiché DuckDNS memorizza un solo record TXT per dominio alla volta, è necessaria una singola esecuzione certbot per sottodominio DuckDNS — i certificati SAN che coprono più sottodomini DuckDNS non sono supportati.
+I wildcard come `*.mybox.duckdns.org` sono supportati con lo stesso token.
+Poiché DuckDNS memorizza un solo record TXT per dominio alla volta, è necessaria
+una singola esecuzione di certbot per ciascun sottodominio DuckDNS: i certificati SAN
+che coprono più sottodomini DuckDNS non sono supportati.
 
 ### Script personalizzato (porta il tuo provider)
 
-Per i provider DNS privi di plugin certbot — Oracle Cloud (OCI), Total Uptime, Netriplex, DNS interno, API di appliance — punta CertMate ai tuoi script e li gestirà tramite la modalità `--manual` di certbot. Non è richiesta alcuna installazione di plugin.
+Per i provider DNS privi di un plugin certbot — Oracle Cloud (OCI), Total Uptime,
+Netriplex, DNS interno, API di appliance — punta CertMate ai tuoi script e CertMate
+li pilota tramite la modalità `--manual` del core di certbot. Non è richiesta
+alcuna installazione di plugin.
 
-**[Script DNS personalizzato](../custom-dns-script.md)** è la guida completa: le regole sui percorsi e perché sono severe, l'ambiente esatto con cui il tuo script viene chiamato, il caso wildcard più apice, cosa usa il rinnovo e un esempio funzionante. *(in inglese)*
+**[Script DNS personalizzato](../custom-dns-script.md)** è la guida completa: le regole sui percorsi
+e perché sono severe, l'ambiente esatto con cui il tuo script viene chiamato, il
+caso wildcard più apex, cosa usa il rinnovo e un esempio pratico.
 
 ```json
 {
@@ -404,15 +432,21 @@ Per i provider DNS privi di plugin certbot — Oracle Cloud (OCI), Total Uptime,
 }
 ```
 
-certbot invoca l'auth hook una volta per ogni challenge di validazione con l'ambiente standard [manual-hook](https://eff-certbot.readthedocs.io/en/stable/using.html#hooks): `CERTBOT_DOMAIN` (il dominio in fase di validazione) e `CERTBOT_VALIDATION` (il valore TXT). Lo script deve creare il record TXT `_acme-challenge.$CERTBOT_DOMAIN` **e attendere che si propaghi** — certbot valida immediatamente dopo il ritorno dell'hook. Il cleanup hook opzionale viene eseguito dopo la validazione per rimuovere il record.
+certbot invoca l'auth hook una volta per ogni challenge di validazione con
+l'[ambiente manual-hook](https://eff-certbot.readthedocs.io/en/stable/using.html#hooks) standard:
+`CERTBOT_DOMAIN` (il dominio in fase di validazione) e `CERTBOT_VALIDATION`
+(il valore TXT). Lo script deve creare il record TXT
+`_acme-challenge.$CERTBOT_DOMAIN` **e attendere che si sia
+propagato**: certbot valida immediatamente dopo il ritorno dell'hook.
+Il cleanup hook opzionale viene eseguito dopo la validazione per rimuovere il record.
 
-Esempio per OCI DNS (copre [#285](https://github.com/fabriziosalmi/certmate/issues/285)). Si noti che un certificato che copre sia `example.com` che `*.example.com` produce DUE challenge di validazione sullo stesso nome `_acme-challenge.example.com`, e certbot esegue tutti gli auth hook prima di validare — quindi l'hook deve AGGIUNGERE al rrset TXT, non mai sostituirlo (un semplice `rrset update` sovrascriverebbe il primo token con il secondo):
+Esempio pratico per OCI DNS (copre [#285](https://github.com/fabriziosalmi/certmate/issues/285)). Si noti che un certificato che copre sia `example.com` sia `*.example.com` produce DUE challenge di validazione sullo stesso nome `_acme-challenge.example.com`, e certbot esegue tutti gli auth hook prima di validare: quindi l'hook deve AGGIUNGERE al rrset TXT, mai sostituirlo (un semplice `rrset update` cancellerebbe il primo token sostituendolo con il secondo):
 
 Questo esempio usa la CLI `oci`, che l'immagine standard di CertMate **non**
 contiene: lo stadio di runtime installa `bash`, `curl` e `tini` e nient'altro.
-Va fornita a parte — un layer sopra l'immagine, oppure il binario e la sua
-configurazione montati nel container. L'hook gira dentro CertMate, quindi la
-CLI deve stare nel PATH di CertMate, non in quello dell'host.
+Va fornita a parte: aggiungere un layer sopra l'immagine, oppure montare con un
+bind-mount il binario e la sua configurazione nel container. L'hook gira dentro
+CertMate, quindi la CLI deve stare nel PATH di CertMate, non in quello dell'host.
 
 ```bash
 #!/bin/sh
@@ -444,10 +478,22 @@ sleep "${CERTMATE_DNS_PROPAGATION_SECONDS:-60}"
 
 Requisiti e modello di fiducia:
 
-- I percorsi devono essere **assoluti**, i file devono esistere, essere **eseguibili**, non scrivibili da tutti gli utenti **né dal gruppo** (`chmod 755` o più restrittivo), e non contenere spazi o metacaratteri della shell (certbot esegue gli hook tramite la shell). Un hook con `chmod 775` — un modo ordinario per uno script di proprietà di un gruppo di deploy — viene rifiutato: chiunque appartenga a quel gruppo potrebbe riscrivere ciò che CertMate sta per eseguire. Validati all'emissione e dall'endpoint API di test (`POST /api/web/certificates/test-provider`)
-- Gli script vengono eseguiti con i privilegi di CertMate — stesso modello di fiducia dei deploy hook: solo gli amministratori possono configurarli, trattali come parte del tuo deployment
-- L'impostazione `dns_propagation_seconds` per provider viene esportata agli script come `CERTMATE_DNS_PROPAGATION_SECONDS` (un campo `propagation_seconds` a livello di account lo sovrascrive)
-- I rinnovi usano i percorsi degli hook configurati adesso, come l'emissione: se sposti uno script, aggiorna il percorso nelle Impostazioni e il rinnovo successivo userà quello
+- I percorsi devono essere **assoluti**, i file devono esistere, essere **eseguibili**,
+  non devono essere scrivibili da tutti gli utenti **né dal gruppo** (`chmod 755` o più restrittivo), e
+  non devono contenere spazi o metacaratteri della shell (certbot esegue
+  gli hook tramite la shell). Un hook con `chmod 775` — una modalità comune per uno
+  script di proprietà di un gruppo di deploy — viene rifiutato: chiunque appartenga a quel gruppo
+  potrebbe riscrivere ciò che CertMate sta per eseguire. Validati all'emissione e
+  dall'endpoint API test-provider
+  (`POST /api/web/certificates/test-provider`)
+- Gli script vengono eseguiti con i privilegi di CertMate — stesso modello di fiducia dei
+  deploy hook: solo gli amministratori possono configurarli, trattali come parte del tuo
+  deployment
+- L'impostazione `dns_propagation_seconds` per provider viene esportata agli
+  script come `CERTMATE_DNS_PROPAGATION_SECONDS` (un campo
+  `propagation_seconds` a livello di account la sovrascrive)
+- I rinnovi usano i percorsi degli hook configurati adesso, come l'emissione: se sposti uno
+  script e ne aggiorni il percorso nelle Impostazioni, il rinnovo successivo usa quello
 - I certificati wildcard funzionano (l'hook riceve ogni record di validazione)
 
 ---
@@ -492,13 +538,13 @@ curl -X POST http://localhost:8000/api/certificates/create \
 
 ## Supporto multi-account
 
-CertMate supporta più account per provider DNS per ambienti enterprise.
+CertMate supporta più account per provider DNS per gli ambienti enterprise.
 
 ### Casi d'uso
 
-- **Separazione degli ambienti**: Account production, staging e DR
-- **Multi-regione**: Account diversi per domini US, UE, APAC
-- **Isolamento dei permessi**: Account admin, limitato e CI/CD
+- **Separazione degli ambienti**: account di produzione, staging e DR
+- **Multi-regione**: account diversi per domini US, UE, APAC
+- **Isolamento dei permessi**: account admin, con permessi limitati e CI/CD
 
 ### Aggiunta di più account
 
@@ -610,7 +656,7 @@ Con il DNS multi-master (ad es. deSEC + gcore), puoi configurare un solo provide
 
 La validazione tramite alias DNS funziona mediante delega CNAME. Let's Encrypt segue le catene CNAME durante la validazione DNS-01; CertMate scrive il record TXT richiesto sul nome di validazione delegato.
 
-1. **Crea un dominio di validazione** su un provider supportato (ad es. `validation.example.org` su Cloudflare, PowerDNS, Route53 o ACME-DNS)
+1. **Crea un dominio di validazione** su un provider di prima classe supportato (ad es. `validation.example.org` su Cloudflare, PowerDNS, Route53 o ACME-DNS)
 2. **Aggiungi record CNAME** in tutti i tuoi provider DNS che puntano al dominio di validazione:
    ```dns
    _acme-challenge.example.com. 300 IN CNAME _acme-challenge.validation.example.org.
@@ -627,15 +673,15 @@ La validazione tramite alias DNS funziona mediante delega CNAME. Let's Encrypt s
      }'
    ```
 
-   Quando `domain_alias` è impostato con un provider supportato, CertMate utilizza un hook DNS manuale di certbot per creare il record TXT su `_acme-challenge.validation.example.org`. Il CNAME garantisce che Let's Encrypt trovi quel valore TXT interrogando `_acme-challenge.example.com`.
+   Quando `domain_alias` è impostato con un provider supportato, CertMate utilizza un hook DNS manuale di certbot per creare il record TXT su `_acme-challenge.validation.example.org`. Il CNAME garantisce che Let's Encrypt trovi quel valore TXT quando interroga `_acme-challenge.example.com`.
 
 ### Vantaggi
 
 - Funziona indipendentemente dal provider DNS che risponde alla query
 - Non richiede sincronizzazione tra provider
-- Funziona con provider non nativamente supportati da CertMate (deSEC, gcore)
-- Le credenziali DNS sono limitate al solo dominio di validazione
-- Implementato per i provider DNS di prima classe di CertMate; i provider generici vengono rifiutati finché non esistono adapter alias dedicati
+- Funziona con provider non supportati nativamente da CertMate (deSEC, gcore)
+- Le credenziali API DNS sono limitate al solo dominio di validazione
+- Implementato per i provider DNS di prima classe di CertMate; i provider generici di fallback vengono rifiutati finché non esistono adapter alias dedicati
 
 ### Esempi per provider
 
@@ -650,6 +696,16 @@ Cloudflare, PowerDNS e Route53 utilizzano tutti la stessa forma di richiesta:
 ```
 
 Per ACME-DNS, `domain_alias` deve corrispondere esattamente al `subdomain`/fulldomain ACME-DNS configurato. CertMate aggiorna direttamente quel record ACME-DNS e non tenta la pulizia perché ACME-DNS memorizza l'ultimo valore di validazione.
+
+Per **RFC2136** (BIND, Technitium e altri server con aggiornamento dinamico), `domain_alias` scrive il TXT `_acme-challenge.<alias>` nella zona dell'alias con un aggiornamento dinamico firmato TSIG, usando gli stessi `nameserver` / `tsig_key` / `tsig_secret` (e il `tsig_algorithm` opzionale, predefinito HMAC-SHA512) dell'emissione normale. CertMate individua la zona di appartenenza dal SOA del server, quindi una sola chiave TSIG può servire più zone, compresi domini gestiti esternamente i cui proprietari hanno solo aggiunto il CNAME di delega:
+
+```json
+{
+  "domain": "external.example.com",
+  "dns_provider": "rfc2136",
+  "domain_alias": "internal.example.net"
+}
+```
 
 ### Certificati wildcard con alias di dominio
 
@@ -725,7 +781,7 @@ POWERDNS_API_KEY=your_api_key
 
 ## Tempi di propagazione DNS
 
-| Velocita | Provider | Secondi |
+| Velocità | Provider | Secondi |
 |----------|----------|---------|
 | Molto rapida | ACME-DNS | 30 |
 | Rapida | Cloudflare, Route53, PowerDNS, DuckDNS | 60 |
@@ -735,12 +791,12 @@ POWERDNS_API_KEY=your_api_key
 
 ---
 
-## Funzionalita di sicurezza
+## Funzionalità di sicurezza
 
 - **Mascheramento delle credenziali** nell'interfaccia Web e nelle risposte API
 - **Permessi file sicuri** (600) per tutti i file di credenziali
 - **Validazione del token API** prima della creazione del certificato
-- **Supporto variabili d'ambiente** per i workflow CI/CD
+- **Supporto alle variabili d'ambiente** per i workflow CI/CD
 - **Audit logging** per tutte le operazioni sui provider DNS
 - **Isolamento degli account** — le credenziali di ciascun account sono memorizzate separatamente
 
@@ -752,24 +808,24 @@ POWERDNS_API_KEY=your_api_key
 
 | Classe | File | Scopo |
 |--------|------|-------|
-| `DNSManager` | `modules/core/dns_providers.py` | Gestione configurazione multi-account |
-| `CertificateManager` | `modules/core/certificates.py` | Creazione certificati con provider DNS |
+| `DNSManager` | `modules/core/dns_providers.py` | Gestione della configurazione multi-account |
+| `CertificateManager` | `modules/core/certificates.py` | Creazione dei certificati con i provider DNS |
 | `SettingsManager` | `modules/core/settings.py` | Persistenza e migrazione delle impostazioni |
 | `Utils` | `modules/core/utils.py` | Generazione e validazione dei file di credenziali |
 
 ### Metodi di archiviazione delle credenziali
 
-1. **File delle impostazioni** (`data/settings.json`) — il piu comune
+1. **File delle impostazioni** (`data/settings.json`) — il più comune
 2. **Variabili d'ambiente** — per CI/CD
-3. **File di configurazione temporanei** (`letsencrypt/config/[provider].ini`) — creati durante le richieste di certificato, eliminati dopo
+3. **File di configurazione temporanei** (`letsencrypt/config/[provider].ini`) — creati durante le richieste di certificato, eliminati al termine
 
 ### Aggiunta di un nuovo provider DNS
 
 1. Aggiungi il plugin a `requirements.txt`: `certbot-dns-newprovider`
 2. Crea una funzione di configurazione in `modules/core/utils.py`
 3. Aggiungi la definizione delle credenziali in `utils.py`
-4. Importa e gestisci in `modules/core/certificates.py`
-5. Aggiungi all'elenco dei provider supportati in `modules/core/settings.py`
+4. Importalo e gestiscilo in `modules/core/certificates.py`
+5. Aggiungilo all'elenco dei provider supportati in `modules/core/settings.py`
 6. Aggiorna la documentazione
 
 Consulta la [Guida all'architettura](./architecture.md) per i dettagli completi di implementazione.
@@ -783,11 +839,11 @@ Consulta la [Guida all'architettura](./architecture.md) per i dettagli completi 
 | Errore | Soluzione |
 |--------|-----------|
 | `DNS provider '<provider>' account '<id>' not configured` | L'account indicato dal certificato non ha credenziali salvate. Aggiungile in Impostazioni o scegli un account esistente |
-| "Certificate creation failed" | Controlla i permessi DNS e la proprieta del dominio |
+| "Certificate creation failed" | Controlla i permessi DNS e la proprietà del dominio |
 | `The certbot plugin '<plugin>' is not installed` | Esegui `pip install certbot-<plugin>` oppure ricostruisci l'immagine Docker con `REQUIREMENTS_FILE=requirements.txt` |
 | "Provider detection failing" | Controlla il campo `dns_provider` nelle impostazioni del dominio |
 
-### Modalita di debug
+### Modalità di debug
 
 ```bash
 # Avviando app.py direttamente usa il flag: --log-level vale INFO
@@ -809,9 +865,9 @@ curl -X GET http://localhost:8000/api/settings/dns-providers \
 
 ## Guida alla migrazione
 
-### Da un provider singolo a piu provider
+### Da un provider singolo a più provider
 
-Le configurazioni esistenti rimangono invariate. E sufficiente aggiungere i nuovi provider:
+Le configurazioni esistenti rimangono invariate. È sufficiente aggiungere i nuovi provider:
 
 ```json
 {
