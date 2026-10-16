@@ -1,6 +1,6 @@
 # Fornitori di Certificate Authority (CA)
 
-<!-- CERTMATE-TRANSLATED-FROM 041c12604db1ae8f -->
+<!-- CERTMATE-TRANSLATED-FROM b5fbaa66b65585c0 -->
 
 CertMate supporta diversi fornitori di Certificate Authority, consentendoti di scegliere la CA più adatta alle tue esigenze.
 
@@ -155,8 +155,7 @@ interattiva: quando la CA restituisce autorizzazioni ACME valide, l'hook non
 viene mai chiamato. Se SCM restituisce un'autorizzazione in sospeso (pending),
 l'hook non pubblica alcun materiale di validazione, quindi CertMate non può
 soddisfarla in questa modalità. Usa DNS-01 o HTTP-01 quando i nomi non sono già
-autorizzati. Prima del rinnovo, lo stesso account deve risultare ancora
-autorizzato in SCM.
+autorizzati. Al rinnovo, SCM deve autorizzare ancora i nomi per quell'account.
 Questa modalità è disponibile solo quando Sectigo è selezionata esplicitamente come CA.
 Le configurazioni Sectigo esistenti sotto CA Privata continuano a funzionare senza modifiche.
 

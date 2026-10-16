@@ -1,6 +1,6 @@
 # Zertifizierungsstellen (CA) Anbieter
 
-<!-- CERTMATE-TRANSLATED-FROM 041c12604db1ae8f -->
+<!-- CERTMATE-TRANSLATED-FROM b5fbaa66b65585c0 -->
 
 CertMate unterstützt mehrere Zertifizierungsstellen-Anbieter, sodass Sie die für Ihre Anforderungen am besten geeignete CA auswählen können.
 
@@ -157,8 +157,8 @@ erfüllen: Wenn die CA gültige ACME-Autorisierungen zurückgibt, wird der Hook 
 aufgerufen. Gibt SCM eine ausstehende Autorisierung zurück, veröffentlicht der
 Hook kein Validierungsmaterial, sodass CertMate sie in diesem Modus nicht
 erfüllen kann. Verwenden Sie DNS-01 oder HTTP-01, wenn die Namen nicht bereits
-autorisiert sind. Vor der Erneuerung muss dasselbe Konto in SCM weiterhin
-autorisiert sein. Dieser Modus ist nur verfügbar, wenn Sectigo ausdrücklich als
+autorisiert sind. Bei der Erneuerung muss SCM die Namen für dieses Konto weiterhin
+autorisieren. Dieser Modus ist nur verfügbar, wenn Sectigo ausdrücklich als
 CA ausgewählt ist. Bestehende Sectigo-Konfigurationen unter Private CA
 funktionieren unverändert weiter.
 
