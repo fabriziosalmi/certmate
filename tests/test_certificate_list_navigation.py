@@ -41,10 +41,19 @@ CertMate.globalActions = () => {};
 const source = fs.readFileSync(process.argv[2], 'utf8').replace(/\}\)\(\);\s*$/, `
 window.setTestCertificates = certs => { allCertificates = certs; filterCertificates(); };
 window.testTag = setTagFilter;
-window.testChecks = () => { visibleCertificates.forEach(c => c.exists = true); checkVisibleDeployments(); };
+window.testChecks = () => { allCertificates.forEach(c => c.exists = true); checkVisibleDeployments(); };
+window.clearDeploymentCache = () => deploymentCache.clear();
 window.checked = [];
-checkDeploymentStatus = domain => { window.checked.push(domain); return Promise.resolve(); };
-updateDeploymentStats = () => {};
+window.counted = [];
+checkDeploymentStatus = domain => {
+  window.checked.push(domain);
+  deploymentCache.set(domain, {deployed: true, certificate_match: true});
+  return Promise.resolve();
+};
+// What the Deployed card would show, from the same cache the real one reads.
+updateDeploymentStats = () => {
+  window.counted.push(allCertificates.filter(c => c.exists && deploymentCache.get(c.domain)).length);
+};
 })();`);
 eval(source);
 const certs = Array.from({length: 63}, (_, i) => ({domain: `host${String(i).padStart(3, '0')}.example.com`,
@@ -76,15 +85,46 @@ window.sortCertificates('domain');
 check(rows() === 25 && list.innerHTML.includes('host062') && !list.innerHTML.includes('host000'),
   'Sort not applied before pagination');
 window.sortCertificates('domain');
-window.testChecks();
-const pending = Array.from(callbacks.values()).pop(); pending();
-Promise.resolve().then(() => Promise.resolve()).then(() => {
+async function settle() { for (let i = 0; i < 20; i++) await Promise.resolve(); }
+// Fire pending timers oldest first, as the browser would, up to `limit` of them.
+async function runTimers(limit) {
+  let fired = 0;
+  while (callbacks.size && (limit === undefined || fired < limit)) {
+    const [id, fn] = callbacks.entries().next().value;
+    callbacks.delete(id); fn(); fired++; await settle();
+  }
+}
+const page = n => Array.from({length: 25}, (_, i) => `host${String(i + 25 * n).padStart(3, '0')}.example.com`);
+(async () => {
+  window.testChecks();
+  await runTimers();
+  check(window.checked.length === 63 && new Set(window.checked).size === 63,
+    'Not every certificate was checked exactly once');
+  check(page(0).every(d => window.checked.indexOf(d) < 25), 'The page on screen was not checked first');
+  check(window.counted[window.counted.length - 1] === 63, 'The Deployed card does not count the whole list');
+
+  // Everything is cached: another page asks nothing again, and the card is still whole.
+  window.checked = [];
+  const counts = window.counted.length;
+  window.changeCertificatePage(1);
+  await runTimers();
+  check(window.checked.length === 0, 'Cached certificates were asked again');
+  check(window.counted.length > counts && window.counted[window.counted.length - 1] === 63,
+    'The card was not recomputed over the whole list');
+
+  // After a cache clear, a page shown during a pass restarts it with its own rows first.
+  window.clearDeploymentCache(); window.checked = [];
+  window.changeCertificatePage(-1);
+  await runTimers(1);
   check(window.checked.length === 3, 'Probe batch is not bounded');
-  window.testTag('production');
-  const scheduled = Array.from(callbacks.values());
-  scheduled.forEach(fn => fn());
-  check(window.checked.length === 3, 'Obsolete page continued checking off-screen certificates');
-}).catch(e => { console.error(e); process.exitCode = 1; });
+  window.changeCertificatePage(1);
+  await runTimers();
+  check(page(1).every(d => window.checked.indexOf(d) >= 3 && window.checked.indexOf(d) < 28),
+    'The page shown during the pass was not checked next');
+  check(window.checked.length === 63 && new Set(window.checked).size === 63,
+    'The restarted pass did not reach every certificate exactly once');
+  check(window.counted[window.counted.length - 1] === 63, 'The card does not count the whole list after a clear');
+})().catch(e => { console.error(e); process.exitCode = 1; });
 """
     result = subprocess.run([node, '-e', script, str(js / 'certmate.js'),
                              str(js / 'dashboard.js')], capture_output=True, text=True, timeout=30)

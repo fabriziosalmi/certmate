@@ -417,14 +417,28 @@
         return rows;
     }
 
+    // Deployment checks: the rows on screen first, then every other certificate,
+    // so the Deployed card counts the whole list and not the pages that happen
+    // to have been opened. A new page, filter or sort restarts the pass with its
+    // own rows first, and what the cache already holds is not asked again. The
+    // card is recomputed when a pass ends, even one with nothing left to ask.
     function checkVisibleDeployments() {
         clearTimeout(deploymentPageTimer);
         var version = ++deploymentPageVersion;
-        var certs = visibleCertificates.filter(function (cert) { return cert.exists; });
+        var current = {shouldContinue: function () { return version === deploymentPageVersion; }};
+        function due(cert) { return cert.exists && !deploymentCache.get(cert.domain); }
+        var onScreen = {};
+        visibleCertificates.forEach(function (cert) { onScreen[cert.domain] = true; });
+        var shown = visibleCertificates.filter(due);
+        var rest = (Array.isArray(allCertificates) ? allCertificates : []).filter(function (cert) {
+            return due(cert) && !onScreen[cert.domain];
+        });
         deploymentPageTimer = setTimeout(function () {
-            runDeploymentChecks(certs, {shouldContinue: function () {
-                return version === deploymentPageVersion;
-            }});
+            runDeploymentChecks(shown, current).then(function () {
+                if (current.shouldContinue()) return runDeploymentChecks(rest, current);
+            }).then(function () {
+                if (current.shouldContinue()) updateDeploymentStats();
+            });
         }, 300);
     }
 
