@@ -31,6 +31,7 @@ from modules.core.digest import WeeklyDigest
 from modules.core.deployer import DeployManager
 from modules.core.ca_manager import CAManager
 from modules.core.private_ca import resolve_client_ca_subject
+from modules.core.client_certificates import check_client_certificate_defaults
 from modules.api import create_api_models, create_api_resources
 from modules.api.client_certificates import create_client_certificate_resources
 from modules.web import register_web_routes
@@ -688,6 +689,10 @@ def initialize_managers(container: AppContainer, app):
     private_ca.initialize()
 
     client_certs_dir = container.data_dir / "certs" / "client"
+    # At boot, not at the first issuance: a default no certificate can carry
+    # should stop the instance here, naming the variable, rather than fail a
+    # renewal at night.
+    check_client_certificate_defaults()
     client_cert_manager = ClientCertificateManager(client_certs_dir, private_ca)
     ocsp_responder = OCSPResponder(private_ca, client_cert_manager)
 

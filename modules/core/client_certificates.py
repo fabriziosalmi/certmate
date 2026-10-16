@@ -33,6 +33,48 @@ DEFAULT_COUNTRY = "CH"
 DEFAULT_STATE = "Switzerland"
 
 
+# The same two defaults, as this deployment declares them. Read on every call
+# rather than once at import, so the value in force is the one in the process
+# environment now — which is also what lets a test set it. The constants above
+# stay the answer when nothing is declared, for the allowlist reason given
+# there: an instance that sets nothing issues exactly what it always issued.
+#
+# These apply to every certificate issued without an explicit country or
+# state: the create endpoint when the request leaves them out, CSV batches,
+# and renewals, which re-issue from metadata that does not record either.
+
+
+def default_client_country() -> str:
+    """CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY, upper-cased, or DEFAULT_COUNTRY."""
+    declared = (os.environ.get('CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY') or '').strip()
+    return declared.upper() if declared else DEFAULT_COUNTRY
+
+
+def default_client_state() -> str:
+    """CERTMATE_CLIENT_CERT_DEFAULT_STATE, or DEFAULT_STATE."""
+    declared = (os.environ.get('CERTMATE_CLIENT_CERT_DEFAULT_STATE') or '').strip()
+    return declared or DEFAULT_STATE
+
+
+def check_client_certificate_defaults() -> None:
+    """Refuse a declared default that no certificate could carry.
+
+    Called once at startup. Left to the first issuance instead, a mistyped
+    `CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY=Spain` would surface as a 400 to
+    whoever happened to create the next client certificate — or, for a
+    renewal, as a scheduled job failing at night — with nothing pointing at
+    the environment. X.509 `C` is an ISO 3166-1 alpha-2 code.
+    """
+    country = default_client_country()
+    if len(country) != 2 or not country.isalpha():
+        raise ValueError(
+            f"CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY must be a two-letter ISO "
+            f"country code (for example 'ES', 'IT', 'US'), got {country!r}")
+    if len(default_client_state()) > 128:
+        raise ValueError(
+            "CERTMATE_CLIENT_CERT_DEFAULT_STATE must be 128 characters or less")
+
+
 # Characters allowed verbatim in the on-disk identifier slug. Anything else
 # (path separators, NUL, unicode, ...) is collapsed to '-'; runs of '.' are
 # then collapsed so a '..' traversal token can never survive. The allowed set
@@ -176,8 +218,8 @@ class ClientCertificateManager:
         days_valid: int = 365,
         generate_key: bool = True,
         csr_pem: Optional[bytes] = None,
-        country: str = DEFAULT_COUNTRY,
-        state: str = DEFAULT_STATE,
+        country: str = "",
+        state: str = "",
         notes: str = ""
     ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
         """
@@ -235,14 +277,17 @@ class ClientCertificateManager:
                 # issued, for every operator anywhere, claimed to be Swiss.
                 # The defaults keep those values so no existing mTLS rule
                 # that matches on the subject stops matching after an
-                # upgrade — but they are now the caller's to set.
+                # upgrade — but they are now the caller's to set. Empty means
+                # "the deployment's default", resolved here rather than in
+                # the signature: a default argument is evaluated once, at
+                # import, and would never see CERTMATE_CLIENT_CERT_DEFAULT_*.
                 csr_pem, key_pem, error = CSRHandler.create_csr(
                     common_name=common_name,
                     organization=organization,
                     organizational_unit=organizational_unit,
                     email=email,
-                    country=country or DEFAULT_COUNTRY,
-                    state=state or DEFAULT_STATE
+                    country=country or default_client_country(),
+                    state=state or default_client_state()
                 )
 
                 if error:

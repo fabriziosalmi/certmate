@@ -1,6 +1,6 @@
 import logging
 from flask import abort as flask_abort, request, send_file, Response
-from ..core.client_certificates import DEFAULT_COUNTRY, DEFAULT_STATE
+from ..core.client_certificates import default_client_country, default_client_state
 from ..core.domain_paths import IDENTIFIER_RE, is_path_safe_segment
 from werkzeug.exceptions import HTTPException
 from flask_restx import Resource, fields
@@ -125,9 +125,11 @@ def create_client_certificate_models(api):
                          'generate_key is false — the device that made the '
                          'key keeps it and CertMate never sees it.')),
         'country': fields.String(
-            description='Subject country (2 letters). Default: CH'),
+            description=('Subject country (2 letters). Default: '
+                         'CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY, or CH')),
         'state': fields.String(
-            description='Subject state or province. Default: Switzerland'),
+            description=('Subject state or province. Default: '
+                         'CERTMATE_CLIENT_CERT_DEFAULT_STATE, or Switzerland')),
         'notes': fields.String(description='Additional notes')
     })
 
@@ -168,10 +170,10 @@ def _client_cert_create_params(data):
         abort(400, "days_valid must be an integer")
     if days_valid < 1 or days_valid > 3650:
         abort(400, "days_valid must be between 1 and 3650")
-    country = data.get('country', '') or DEFAULT_COUNTRY
+    country = data.get('country', '') or default_client_country()
     if len(country) > 2:
         abort(400, "country must be a 2-letter code")
-    state = data.get('state', '') or DEFAULT_STATE
+    state = data.get('state', '') or default_client_state()
     if len(state) > 128:
         abort(400, "state must be 128 characters or less")
 
