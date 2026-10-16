@@ -4363,6 +4363,8 @@
     window.startEditReissue = startEditReissue;
     window.resetCertificateImport = resetCertificateImport;
     window.toggleCertificateImport = toggleCertificateImport;
+    window.changeCertificatePage = changeCertificatePage;
+    window.changeCertificatePageSize = changeCertificatePageSize;
     window.openReplaceCertificate = openReplaceCertificate;
     window.closeReplaceCertificate = closeReplaceCertificate;
     window.submitReplaceCertificate = submitReplaceCertificate;
@@ -4402,7 +4404,8 @@
     // What the page's controls may ask for by name (`data-click`, `data-change`,
     // `data-input`): see CertMate.actions in certmate.js.
     CertMate.globalActions([
-        'cancelEditReissue', 'checkAllDeploymentStatuses', 'checkDnsAliasForCertificate',
+        'cancelEditReissue', 'changeCertificatePage', 'changeCertificatePageSize',
+        'checkAllDeploymentStatuses', 'checkDnsAliasForCertificate',
         'clearDebugConsole', 'clearFilters', 'closeCertDetail', 'closeReplaceCertificate', 'copyAliasValueToClipboard',
         'copyCurlCommand', 'copyDetailDomain', 'copyFromModal', 'deleteCertificate',
         'dismissPendingJob', 'downloadCertificate', 'exportAllCertificates',
@@ -4413,8 +4416,6 @@
         'updateAccountSelection', 'updateCAProviderInfo'
     ]);
     CertMate.actions({
-        changeCertificatePageSize: changeCertificatePageSize,
-        changeCertificatePage: changeCertificatePage,
         // A row of the list opens its certificate; the name is on the row.
         openCertRow: function (row) { openCertDetail(row.getAttribute('data-row-domain')); },
         // "Check now" in the detail panel: past the cache, with the button to spin.

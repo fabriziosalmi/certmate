@@ -55,22 +55,22 @@ function rows() { return (list.innerHTML.match(/data-row-domain=/g) || []).lengt
 window.setTestCertificates(certs);
 check(rows() === 25 && elements.certificatePageSummary.textContent === '1\u201325 of 63', 'First page not bounded');
 check(elements.certificatePreviousPage.disabled && !elements.certificateNextPage.disabled, 'Navigation state wrong');
-actions.changeCertificatePage(1);
+window.changeCertificatePage(1);
 check(rows() === 25 && list.innerHTML.includes('host025') && !list.innerHTML.includes('host000'), 'Second page wrong');
-actions.changeCertificatePage(1);
+window.changeCertificatePage(1);
 check(rows() === 13 && elements.certificateNextPage.disabled, 'Last page wrong');
 window.testTag('production');
 check(rows() === 3, 'Tag filter not combined');
 window.clearFilters();
-actions.changeCertificatePageSize({value: '50'});
+window.changeCertificatePageSize({value: '50'});
 check(rows() === 50 && elements.certificatePageSummary.textContent === '1\u201350 of 63', 'Page size not applied');
 check(savedSize === '50', 'Page size preference not saved');
-actions.changeCertificatePageSize({value: '5000'});
+window.changeCertificatePageSize({value: '5000'});
 check(rows() === 50, 'Invalid page size accepted');
-actions.changeCertificatePage(1);
+window.changeCertificatePage(1);
 window.setTestCertificates(certs.slice(0, 2));
 check(rows() === 2 && elements.certificatePageSummary.textContent === '1\u20132 of 2', 'Page not clamped after deletion');
-actions.changeCertificatePageSize({value: '25'});
+window.changeCertificatePageSize({value: '25'});
 window.setTestCertificates(certs);
 window.sortCertificates('domain');
 check(rows() === 25 && list.innerHTML.includes('host062') && !list.innerHTML.includes('host000'),
