@@ -62,6 +62,21 @@
             </tbody>
         </table>
     </div>
+    <nav class="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-border text-sm" aria-label="Client certificate pages">
+        <div class="flex items-center gap-2">
+            <label for="clientCertificatePageSize" class="text-muted">Per page</label>
+            <select id="clientCertificatePageSize" data-change="ccChangePageSize" data-pass="el" class="border border-border rounded bg-input text-foreground px-2 py-1">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+            <span id="clientCertificatePageSummary" class="text-muted" role="status" aria-live="polite"></span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="clientCertificatePreviousPage" type="button" data-click="ccChangePage" data-args='[-1]' disabled class="border border-border rounded px-3 py-1 text-label disabled:opacity-50">Previous</button>
+            <button id="clientCertificateNextPage" type="button" data-click="ccChangePage" data-args='[1]' disabled class="border border-border rounded px-3 py-1 text-label disabled:opacity-50">Next</button>
+        </div>
+    </nav>
 </div>
 
 <!-- Modal for certificate details -->

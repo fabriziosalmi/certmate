@@ -714,6 +714,21 @@
                     </tbody>
                 </table>
             </div>
+            <nav class="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-border text-sm" aria-label="Certificate pages">
+                <div class="flex items-center gap-2">
+                    <label for="certificatePageSize" class="text-muted">Per page</label>
+                    <select id="certificatePageSize" data-change="changeCertificatePageSize" data-pass="el" class="border border-border rounded bg-input text-foreground px-2 py-1">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span id="certificatePageSummary" class="text-muted" role="status" aria-live="polite"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="certificatePreviousPage" type="button" data-click="changeCertificatePage" data-args='[-1]' disabled class="border border-border rounded px-3 py-1 text-label disabled:opacity-50">Previous</button>
+                    <button id="certificateNextPage" type="button" data-click="changeCertificatePage" data-args='[1]' disabled class="border border-border rounded px-3 py-1 text-label disabled:opacity-50">Next</button>
+                </div>
+            </nav>
         </div>
     </div><!-- /x-show server -->
 
