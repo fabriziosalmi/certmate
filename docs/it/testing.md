@@ -1,8 +1,6 @@
 # Guida ai test
 
 <!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Questa traduzione non è allineata alla versione inglese** ([`docs/testing.md`](../testing.md)), che è quella che fa fede. In caso di discordanza vale il documento inglese.
 
 Questa guida descrive il framework di test di CertMate, inclusi unit test, test di integrazione e la validazione degli endpoint API.
 
@@ -17,9 +15,9 @@ source .venv/bin/activate
 # Installare le dipendenze di test
 pip install -r requirements-test.txt
 
-# Eseguire tutti i test. L'espressione dei marcatori non e' facoltativa:
+# Eseguire tutti i test. L'espressione dei marcatori non è facoltativa:
 # un `pytest` nudo esegue anche la suite Playwright `ui` in questo processo
-# e i test `network` contro CA reali.
+# e i test `network` contro CA reali. CONTRIBUTING.md spiega perché.
 pytest -m "not ui and not network"
 
 # Eseguire i test con la copertura
@@ -31,7 +29,7 @@ pytest --cov=. --cov-report=html
 ## Struttura dei test
 
 ```
-Directory radice:
+Root directory:
   conftest.py                              # Configurazione della raccolta e fixture condivise
   pytest.ini                               # Configurazione e marcatori di test
   test_certificate_creation.py             # Test di creazione dei certificati
@@ -53,9 +51,9 @@ Directory radice:
 ### Comandi comuni
 
 ```bash
-# Eseguire tutti i test. L'espressione dei marcatori non e' facoltativa:
+# Eseguire tutti i test. L'espressione dei marcatori non è facoltativa:
 # un `pytest` nudo esegue anche la suite Playwright `ui` in questo processo
-# e i test `network` contro CA reali.
+# e i test `network` contro CA reali. CONTRIBUTING.md spiega perché.
 pytest -m "not ui and not network"
 
 # Eseguire con output dettagliato
@@ -118,13 +116,13 @@ reti con restrizioni), puntare la suite su un'istanza già in esecuzione:
 # Terminale 1: avviare CertMate come si preferisce
 gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 --timeout 300 app:app
 
-# Terminale 2: puntare all'istanza (ignora tutta la gestione del ciclo di vita Docker)
+# Terminale 2: puntare all'istanza (salta tutta la gestione del ciclo di vita Docker)
 CERTMATE_E2E_BASE_URL=http://localhost:18888 pytest -m "e2e and not ui"
 ```
 
 I test di emissione reale richiedono inoltre `CLOUDFLARE_API_TOKEN` e un
 `CERTMATE_TEST_DOMAIN` sotto il proprio controllo, e consumano certificati
-Let's Encrypt reali — vengono ignorati automaticamente quando il token è assente.
+Let's Encrypt reali; vengono saltati automaticamente quando il token è assente.
 L'istanza di destinazione deve avviarsi da una directory dati pulita: i test e2e
 presuppongono uno stato di primo avvio, quindi il riutilizzo tra esecuzioni provoca
 errori legati all'autenticazione.
@@ -135,7 +133,7 @@ errori legati all'autenticazione.
 
 ### Eseguire la suite di test
 
-La suite è pytest, suddivisa per marker (vedi `pytest.ini`): `unit`, `integration`, `api`, `dns`, `e2e` (richiede un server in esecuzione), `ui` (Playwright, richiede un browser e un container).
+La suite è pytest, suddivisa per marcatore (vedi `pytest.ini`): `unit`, `integration`, `api`, `dns`, `e2e` (richiede un server in esecuzione), `ui` (Playwright, richiede un browser e un container).
 
 ```bash
 make test                # unit + integrazione
@@ -157,7 +155,7 @@ La CI esegue `pytest -m "not ui and not network"` con una soglia minima di coper
 | **Impostazioni** | `GET /api/settings`, `GET /api/settings/dns-providers`, `POST /api/settings` |
 | **Certificati** | `GET /api/certificates`, `POST /api/certificates/create`, download, renew |
 | **Cache** | `GET /api/cache/stats`, `POST /api/cache/clear` |
-| **Backup** | `GET /api/backups`, `POST /api/backups/create`, `POST /api/backups/cleanup` |
+| **Backup** | `GET /api/backups`, `POST /api/backups/create` |
 | **Interfaccia Web** | `/`, `/settings`, `/help`, `/docs/`, `/api/swagger.json` |
 
 ### Codici di stato attesi
@@ -229,7 +227,7 @@ def test_external_api(mock_get, client):
 La pipeline CI viene eseguita ad ogni push e pull request:
 
 1. **Versioni Python multiple**: Test su Python 3.12
-2. **Qualita del codice**: Linting con flake8
+2. **Qualità del codice**: Linting con flake8
 3. **Sicurezza**: Scansione con bandit
 4. **Test**: Suite completa con copertura
 5. **Docker**: Test della build Docker
@@ -237,7 +235,7 @@ La pipeline CI viene eseguita ad ogni push e pull request:
 
 ### Prima di fare push
 
-Questo repository non ha una configurazione pre-commit; eseguire gli stessi controlli della CI:
+Questo repository non ha una configurazione pre-commit; eseguire gli stessi gate che esegue la CI:
 
 ```bash
 make lint      # flake8 (l'insieme su cui la CI fallisce) e i budget di complessità ed eccezioni
@@ -246,7 +244,7 @@ make check     # lint + security + test (la selezione del gate di release)
 make ci        # il job di test della CI: richiede Docker e Node
 ```
 
-Una release esegue molto di più — vedi `scripts/release.sh`, che richiede flake8, bandit, le suite unit e di integrazione, la suite UI Playwright, un certificato reale emesso contro Let's Encrypt staging e una build Docker.
+Una release esegue molto di più: vedi `scripts/release.sh`, che fa da gate su flake8, bandit, le suite unit e di integrazione, la suite UI Playwright, un certificato reale emesso contro Let's Encrypt staging e una build Docker.
 
 ---
 
@@ -263,7 +261,7 @@ Una release esegue molto di più — vedi `scripts/release.sh`, che richiede fla
 
 ### Da fare
 
-- Scrivere test per tutte le nuove funzionalita
+- Scrivere test per tutte le nuove funzionalità
 - Usare nomi di test descrittivi
 - Testare sia i casi di successo che quelli di fallimento
 - Simulare le dipendenze esterne

@@ -813,7 +813,7 @@ Chaque certificat a un fichier `metadata.json` contenant :
 ### Renouvellement automatique
 
 - **Planifié** : Tous les jours, les certificats serveur entre 01:00 et 03:00 (02:00 avec un décalage aléatoire d'une heure dans un sens ou dans l'autre), les certificats clients entre 02:00 et 04:00
-- **Quand** : 30 jours avant l'expiration par défaut (`renewal_threshold_days`), lorsqu'il reste un tiers de sa durée de vie pour un certificat qui vit moins de 60 jours (la moitié en dessous de 10 jours), ou là où la fenêtre de renouvellement de la CA (ARI) le place ; voir [le guide](./guide.md#quand-un-certificat-est-renouvele)
+- **Quand** : 30 jours avant l'expiration par défaut (`renewal_threshold_days`), lorsqu'il reste un tiers de sa durée de vie pour un certificat qui vit moins de 60 jours (la moitié en dessous de 10 jours), ou là où la fenêtre de renouvellement de la CA (ARI) le place ; voir [le guide](./guide.md#quand-un-certificat-est-renouvelé)
 - **Tolérant aux erreurs** : Continue en cas d'erreur, journalise pour examen
 
 ---

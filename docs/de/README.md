@@ -1,8 +1,6 @@
 # CertMate Dokumentation
 
 <!-- CERTMATE-TRANSLATED-FROM 93e1cdc178f48147 -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Diese Übersetzung entspricht nicht der englischen Fassung** ([`docs/README.md`](../README.md)), die maßgeblich ist. Bei Abweichungen gilt das englische Dokument.
 
 Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anleitungen zu allen Funktionen.
 
@@ -16,8 +14,8 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 - **[Kubernetes-Hinweise](./kubernetes.md)** — Produktionsressourcen, OOM-Dimensionierung, Runtime-Patching
 
 ### Kernfunktionen
-- **[DNS-Provider](./dns-providers.md)** — Unterstützte Provider, Multi-Account, Domain-Alias
-- **[Eigenes DNS-Skript](../custom-dns-script.md)** — jeder Provider ohne Plugin, über Ihre eigenen Hooks *(auf Englisch)*
+- **[DNS-Provider](./dns-providers.md)** — unterstützte Provider, Multi-Account, Domain-Alias
+- **[Eigenes DNS-Skript](../custom-dns-script.md)** — jeder Provider ohne Plugin, gesteuert über Ihre eigenen Hooks *(auf Englisch)*
 - **[CA-Provider](./ca-providers.md)** — Let's Encrypt, DigiCert, Private CA
 - **[Client-Zertifikate](./guide.md)** — Lebenszyklus von Client-Zertifikaten, Web-Dashboard, Batch-Operationen
 - **[Model Context Protocol (MCP) Server](./mcp.md)** — Eigenständiger Node.js-Server für KI-Agenten-Integrationen
@@ -26,12 +24,12 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 - **[API-Referenz](./api.md)** — Vollständige REST-API-Dokumentation
 - **[Architektur](./architecture.md)** — Systemdesign, Komponenten, Datenfluss
 - **[Test-Anleitung](./testing.md)** — Test-Framework, CI/CD, Abdeckung
-- **[Discovery & Inventar](../discovery-inventory.md)** — Probe-/CT-Log-Discovery, Inventar, Adopt, Krypto-Readiness *(auf Englisch)*
-- **[CSR-basierte Zertifikate](../csr-only-certificates.md)** — Ausstellung aus einer CSR, der private Schlüssel bleibt auf dem Gerät *(auf Englisch)*
-- **[Generische Webhooks](../webhooks.md)** — HTTP-Benachrichtigungen zu Lebenszyklus-Ereignissen: Payload, Signatur, Wiederholungen *(auf Englisch)*
-- **[Deploy-Hooks](./deploy-hooks.md)** — Hooks nach der Ausstellung: Konfiguration, Test, Redaktion der Ausgabe
+- **[Zertifikats-Discovery & Inventar](../discovery-inventory.md)** — Probe-/CT-Log-Discovery, Inventar, Adopt, Krypto-Readiness *(auf Englisch)*
+- **[Deploy-Hooks](./deploy-hooks.md)** — Hooks nach der Ausstellung: Konfiguration, Test, Redaktion der Ausgabe, Wartungsfenster
+- **[CSR-only-Zertifikate](../csr-only-certificates.md)** — Ausstellung und Erneuerung, wenn der private Schlüssel auf dem Gerät bleibt *(auf Englisch)*
+- **[Webhooks](../webhooks.md)** — generische Webhooks: Payload-Templates, Authentifizierung, Signaturprüfung *(auf Englisch)*
 - **[Compliance](./compliance.md)** — Audit-Kette, Akteur-Attribution, NIS2-/eIDAS-Posture
-- **[Deployment-Probes](./probes.md)** — Prüfen, ob ein erneuertes Zertifikat ausgeliefert wird
+- **[Deployment-Probes](./probes.md)** — Prüfen, ob ein erneuertes Zertifikat tatsächlich ausgeliefert wird
 
 ---
 
@@ -54,7 +52,7 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 1. **[Docker-Deployment](./docker.md)** — Docker-Einrichtung für die Produktion
 2. **[Kubernetes-Hinweise](./kubernetes.md)** — Pod-Dimensionierung und operatives Patching in der Produktion
 3. **[CA-Provider](./ca-providers.md)** — Zertifizierungsstellen konfigurieren
-4. **[DNS-Provider](./dns-providers.md#multi-account-support)** — Unternehmensweite Multi-Account-Einrichtung
+4. **[DNS-Provider](./dns-providers.md#multi-konto-unterstützung)** — Multi-Account-Einrichtung für Unternehmen
 
 ---
 
@@ -76,25 +74,25 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 - **Vollständiges Lifecycle-Management** — erstellen, erneuern, widerrufen, überwachen
 - **OCSP & CRL** — Echtzeit-Status und Sperrlisten
 - **Web-Dashboard** unter `/client-certificates`
-- **Batch-Operationen** — CSV-Import, höchstens 100 Zeilen pro Anfrage
+- **Batch-Operationen** — Client-Zertifikate per CSV in großer Zahl importieren (bis zu 100 Zeilen pro Anfrage)
 - **Audit-Logging** und **Rate Limiting**
 
 ---
 
 ## API-Endpoints Kurzreferenz
 
-| Methode | Endpoint                                 | Beschreibung              |
-| ------- | ---------------------------------------- | ------------------------- |
-| POST    | `/api/client-certs/create`               | Zertifikat erstellen      |
-| GET     | `/api/client-certs`                      | Zertifikate auflisten     |
-| GET     | `/api/client-certs/<id>`                 | Metadaten abrufen         |
-| GET     | `/api/client-certs/<id>/download/<type>` | Zert/Schlüssel/CSR laden  |
-| POST    | `/api/client-certs/<id>/revoke`          | Zertifikat widerrufen     |
-| POST    | `/api/client-certs/<id>/renew`           | Zertifikat erneuern       |
-| GET     | `/api/client-certs/stats`                | Statistiken abrufen       |
-| POST    | `/api/client-certs/batch`                | CSV-Batch-Import          |
-| GET     | `/api/ocsp/status/<serial>`              | OCSP-Status               |
-| GET     | `/api/crl/download/<format>`             | CRL herunterladen         |
+| Methode | Endpoint                                 | Beschreibung                          |
+| ------- | ---------------------------------------- | ------------------------------------- |
+| POST    | `/api/client-certs/create`               | Zertifikat erstellen                  |
+| GET     | `/api/client-certs`                      | Zertifikate auflisten                 |
+| GET     | `/api/client-certs/<id>`                 | Metadaten abrufen                     |
+| GET     | `/api/client-certs/<id>/download/<type>` | Zertifikat/Schlüssel/CSR herunterladen |
+| POST    | `/api/client-certs/<id>/revoke`          | Zertifikat widerrufen                 |
+| POST    | `/api/client-certs/<id>/renew`           | Zertifikat erneuern                   |
+| GET     | `/api/client-certs/stats`                | Statistiken abrufen                   |
+| POST    | `/api/client-certs/batch`                | CSV-Batch-Import                      |
+| GET     | `/api/ocsp/status/<serial>`              | OCSP-Status                           |
+| GET     | `/api/crl/download/<format>`             | CRL herunterladen                     |
 
 Vollständige Dokumentation unter [API-Referenz](./api.md#endpoints).
 
@@ -140,6 +138,15 @@ Die Testabdeckung umfasst:
 - Effiziente **Multi-Filter-Abfragen**
 - **Auto-Renewal**-Planung
 - **Batch-Operationen** mit Fehlerverfolgung
+
+---
+
+## Brauchen Sie Hilfe?
+
+1. **Probleme bei der Installation?** → Siehe [Abschnitt Installation](./guide.md#installation)
+2. **Fragen zur API?** → Siehe [API-Referenz](./api.md)
+3. **Fragen zur Architektur?** → Siehe [Architektur-Dokument](./architecture.md)
+4. **Etwas anderes?** → Eröffnen Sie ein [Issue](https://github.com/fabriziosalmi/certmate/issues)
 
 ---
 
@@ -191,9 +198,9 @@ docs/de/
 
 ## Teststatus
 
-Hier steht keine handgepflegte Punktetabelle. Eine Tabelle mit Testzahlen ist am Tag nach dem Schreiben veraltet — diese sagte `27/27`, wahrend die Suite die zweitausend uberschritten hatte.
+Hier steht keine handgepflegte Punktetabelle. Eine Tabelle mit Testzahlen ist am Tag nach dem Schreiben veraltet — diese sagte `27/27`, während die Suite die zweitausend überschritten hatte.
 
-Das massgebliche Signal ist die CI auf `main`: die Badges oben im [Projekt-README](../../README.md) und die Coverage-Untergrenze in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+Das maßgebliche Signal ist die CI auf `main`: die Badges oben im [Projekt-README](../../README.md) und die Coverage-Untergrenze, die in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) durchgesetzt wird.
 
 ---
 
@@ -252,6 +259,6 @@ CertMate steht unter der MIT-Lizenz. Siehe die LICENSE-Datei im Repository.
 
 <div align="center">
 
-[Startseite](../README.md) • [Dokumentation](./) • [GitHub](https://github.com/fabriziosalmi/certmate)
+[Startseite](../../README.md) • [Dokumentation](./) • [GitHub](https://github.com/fabriziosalmi/certmate)
 
 </div>
