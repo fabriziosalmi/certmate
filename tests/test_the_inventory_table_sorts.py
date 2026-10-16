@@ -124,7 +124,7 @@ const order = () => [...el('inventoryBody').innerHTML.matchAll(/font-medium text
     el('inv-sort-th-' + f); el('inv-sort-icon-' + f);
   }
   page.load(); await new Promise(r => setTimeout(r, 20));
-  const out = { initial: order(), steps: [] };
+  const out = { initial: order(), body: el('inventoryBody').innerHTML, steps: [] };
   for (const step of steps) {
     if (step.search !== undefined) { el('invSearch').value = step.search; page.render(); }
     else { page.sortBy(step.sort); }
@@ -165,8 +165,8 @@ RECORDS = [
 ]
 
 
-def _run(node, steps):
-    payload = {'certificates': RECORDS, 'summary': {}}
+def _run(node, steps, records=None):
+    payload = {'certificates': RECORDS if records is None else records, 'summary': {}}
     done = subprocess.run([node, '-e', HARNESS], cwd=REPO, capture_output=True, text=True, timeout=60,
                           env={'PATH': '/usr/bin:/bin', 'PAYLOAD': json.dumps(payload),
                                'STEPS': json.dumps(steps)})
@@ -231,3 +231,57 @@ def test_sorting_and_filtering_compose(node):
 
     # 'l' is in alpha, charlie (ZeroSSL) and delta, not in bravo or its issuer E5.
     assert out['steps'][2]['order'] == ['delta', 'charlie', 'alpha']
+
+
+# --- the endpoints cell lists every endpoint on hover ----------------------
+
+def _endpoints_cell(body, cn):
+    """The <td> holding the endpoints of the row whose subject is `cn`."""
+    at = body.index('font-medium text-foreground">' + cn)
+    row = body[body.rindex('<tr', 0, at):]
+    row = row[:row.index('</tr>')]
+    return re.findall(r'<td[^>]*>(.*?)</td>', row, re.S)[5]
+
+
+def test_hovering_the_endpoints_lists_every_one(node):
+    """"+2" said how many, not which. The title now holds all of them, one per
+    line, the first included so the tooltip reads as the whole list."""
+    records = [_record('multi', endpoints=[{'host': 'formacion.example.test', 'port': 443},
+                                           {'host': 'b.example.test', 'port': 8443},
+                                           {'host': 'c.example.test', 'port': 443}])]
+    cell = _endpoints_cell(_run(node, [], records)['body'], 'multi')
+
+    title = re.search(r'title="([^"]*)"', cell).group(1)
+    assert title.split('\n') == ['formacion.example.test:443', 'b.example.test:8443', 'c.example.test:443']
+    assert '>+2<' in cell, 'the count is still shown'
+
+
+def test_screen_readers_get_the_list_too(node):
+    """A title is not reliably announced, so the rest of the list is also in
+    the cell as visually hidden text, and the bare "+2" is hidden from them."""
+    records = [_record('multi', endpoints=[{'host': 'a.example.test', 'port': 443},
+                                           {'host': 'b.example.test', 'port': 443}])]
+    cell = _endpoints_cell(_run(node, [], records)['body'], 'multi')
+
+    assert '<span class="sr-only">, b.example.test:443</span>' in cell
+    assert 'aria-hidden="true">+1<' in cell
+
+
+def test_a_single_endpoint_has_nothing_to_reveal(node):
+    """CONTROL: the cell already shows everything, so no tooltip, no help cursor."""
+    records = [_record('single', endpoints=[{'host': 'a.example.test', 'port': 443}])]
+    cell = _endpoints_cell(_run(node, [], records)['body'], 'single')
+
+    assert 'a.example.test:443' in cell
+    assert 'title=' not in cell and 'cursor-help' not in cell
+
+
+def test_an_endpoint_name_cannot_break_out_of_the_tooltip(node):
+    """Endpoint names come from discovery configuration and CT logs. A quote
+    in one must not end the title attribute and start markup of its own."""
+    records = [_record('hostile', endpoints=[{'host': 'a.example.test', 'port': 443},
+                                             {'host': 'x" onmouseover="alert(1)', 'port': 1}])]
+    cell = _endpoints_cell(_run(node, [], records)['body'], 'hostile')
+
+    assert 'onmouseover="' not in cell
+    assert '&quot;' in cell

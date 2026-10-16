@@ -146,12 +146,22 @@
         return s;
     }
 
+    // The first endpoint, and "+N" for the rest. The rest used to be only a
+    // number: a certificate served on five hosts said "+4" with no way to see
+    // which four short of the API. Hovering the cell now lists every one, one per
+    // line (the native tooltip: no script, nothing the CSP has to allow), and the
+    // same list is in the cell as screen-reader text, which a title alone is not
+    // reliably announced as.
     function endpointsCell(r) {
         var eps = r.endpoints || [];
         if (!eps.length) { return '<span class="text-xs text-muted">—</span>'; }
-        var first = eps[0].host + ':' + eps[0].port;
-        var more = eps.length > 1 ? ' <span class="text-muted">+' + (eps.length - 1) + '</span>' : '';
-        return '<span class="text-xs font-mono">' + escapeHtml(first) + '</span>' + more;
+        var all = eps.map(function (e) { return e.host + ':' + e.port; });
+        var first = '<span class="text-xs font-mono">' + escapeHtml(all[0]) + '</span>';
+        if (all.length === 1) { return first; }
+        return '<span class="cursor-help whitespace-nowrap" title="' + escapeHtml(all.join('\n')) + '">'
+            + first + ' <span class="text-muted" aria-hidden="true">+' + (all.length - 1) + '</span>'
+            + '<span class="sr-only">, ' + escapeHtml(all.slice(1).join(', ')) + '</span>'
+            + '</span>';
     }
 
     function actionsCell(r) {
