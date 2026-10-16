@@ -1,6 +1,6 @@
 # DNS-Anbieter
 
-<!-- CERTMATE-TRANSLATED-FROM d1a7beba338a46dc -->
+<!-- CERTMATE-TRANSLATED-FROM 4ef6c0574d30ed43 -->
 
 CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt DNS-01-Challenges über individuelle certbot-Plugins. Die vollständige Liste befindet sich in der nachstehenden Tabelle.
 
@@ -236,7 +236,7 @@ Für BIND oder andere RFC2136-kompatible DNS-Server (einschließlich **Technitiu
 
 ### Hetzner (Legacy-DNS-API)
 
-> **Abkündigungshinweis:** Die Hetzner-DNS-Konsolen-API wird im Mai 2025 abgeschaltet. Neue Nutzer sollten den **Hetzner Cloud**-Anbieter weiter unten verwenden. Bestehende Nutzer sollten vor dem Abschalttermin zu `hetzner-cloud` migrieren. Einzelheiten finden Sie auf der [Hetzner-Statusseite](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44).
+> **Abkündigungshinweis:** Hetzner hat die Abschaltung seiner DNS-Konsolen-API für Mai 2025 angekündigt. Neue Nutzer sollten den **Hetzner Cloud**-Anbieter weiter unten verwenden, und bestehende `hetzner`-Konfigurationen sollten zu `hetzner-cloud` migrieren. Einzelheiten finden Sie auf der [Hetzner-Statusseite](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44).
 
 ```json
 {

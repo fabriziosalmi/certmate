@@ -129,7 +129,7 @@ curl -X POST http://localhost:8000/api/client-certs/create \
 #### Via Web Dashboard
 
 1. Find certificate in the table
-2. Click the "Download" icon ()
+2. Click the "Download" icon
 3. Select file type:
  - **CRT** - Certificate (public)
  - **KEY** - Private key (keep secret)
@@ -156,7 +156,7 @@ curl http://localhost:8000/api/client-certs/CERT_ID/download/key \
 #### Via Web Dashboard
 
 1. Find certificate in table
-2. Click the "Revoke" button ()
+2. Click the "Revoke" button
 3. Enter revocation reason (optional)
 4. Confirm
 
@@ -184,7 +184,7 @@ curl -X POST http://localhost:8000/api/client-certs/CERT_ID/revoke \
 #### Via Web Dashboard
 
 1. Find certificate in table
-2. Click the "Renew" button ()
+2. Click the "Renew" button
 3. Confirm renewal
 
 #### Via API

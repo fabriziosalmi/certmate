@@ -1,8 +1,8 @@
 # Migrazione del tema — disaccoppiamento chiaro/scuro tramite token basati su variabili CSS
 
-<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
 
-Stato: **rilasciata** (Fasi 0–5 nella v2.9.0; segue la Fase 6, passata dei token di stato) · Responsabile: Fabrizio · Creato: 2026-05-25
+Stato: **rilasciata** (Fasi 0–5 nella v2.9.0, Fasi 6–9 dopo di essa; Fase 10 pianificata) · Responsabile: Fabrizio · Creato: 2026-05-25
 
 ## Obiettivo
 

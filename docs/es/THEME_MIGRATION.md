@@ -1,8 +1,8 @@
 # Migración de tema — desacoplamiento claro/oscuro mediante tokens de variables CSS
 
-<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
 
-Estado: **entregado** (Fases 0–5 en v2.9.0; a continuación, la pasada de tokens de estado de la Fase 6) · Propietario: Fabrizio · Creado: 2026-05-25
+Estado: **entregado** (Fases 0–5 en v2.9.0, Fases 6–9 después; Fase 10 planificada) · Propietario: Fabrizio · Creado: 2026-05-25
 
 ## Objetivo
 

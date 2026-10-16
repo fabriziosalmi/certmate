@@ -1,6 +1,6 @@
 # Provider DNS
 
-<!-- CERTMATE-TRANSLATED-FROM d1a7beba338a46dc -->
+<!-- CERTMATE-TRANSLATED-FROM 4ef6c0574d30ed43 -->
 
 CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let's Encrypt tramite plugin certbot individuali. La lista completa si trova nella tabella seguente.
 
@@ -236,7 +236,7 @@ Per server DNS BIND o altri compatibili RFC2136 (incluso **Technitium DNS Server
 
 ### Hetzner (API DNS legacy)
 
-> **Avviso di deprecazione:** L'API della console DNS Hetzner verrà dismessa a maggio 2025. I nuovi utenti devono utilizzare il provider **Hetzner Cloud** indicato di seguito. Gli utenti esistenti devono migrare a `hetzner-cloud` prima della data di dismissione. Consulta la [pagina di stato Hetzner](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) per i dettagli.
+> **Avviso di deprecazione:** Hetzner ha annunciato la dismissione della sua API della console DNS per maggio 2025. I nuovi utenti devono utilizzare il provider **Hetzner Cloud** indicato di seguito, e le configurazioni `hetzner` esistenti devono migrare a `hetzner-cloud`. Consulta la [pagina di stato Hetzner](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) per i dettagli.
 
 ```json
 {

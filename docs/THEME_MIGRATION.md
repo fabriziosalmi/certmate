@@ -1,6 +1,6 @@
 # Theme Migration — decoupling light/dark via CSS-variable tokens
 
-Status: **shipped** (Phases 0–5 in v2.9.0; Phase 6 status-token pass follows) · Owner: Fabrizio · Created: 2026-05-25
+Status: **shipped** (Phases 0–5 in v2.9.0, Phases 6–9 after it; Phase 10 planned) · Owner: Fabrizio · Created: 2026-05-25
 
 ## Goal
 

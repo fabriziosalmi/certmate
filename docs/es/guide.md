@@ -1,6 +1,6 @@
 # CertMate Certificados de Cliente - Guía de uso
 
-<!-- CERTMATE-TRANSLATED-FROM 88bb16eb976577c4 -->
+<!-- CERTMATE-TRANSLATED-FROM 8b55cd3aefbd2dba -->
 
 ## Descripción general
 
@@ -131,7 +131,7 @@ curl -X POST http://localhost:8000/api/client-certs/create \
 #### Mediante el panel de control web
 
 1. Localiza el certificado en la tabla
-2. Haz clic en el icono de descarga ()
+2. Haz clic en el icono de descarga
 3. Selecciona el tipo de archivo:
  - **CRT** — Certificado (público)
  - **KEY** — Clave privada (mantener en secreto)
@@ -158,7 +158,7 @@ curl http://localhost:8000/api/client-certs/CERT_ID/download/key \
 #### Mediante el panel de control web
 
 1. Localiza el certificado en la tabla
-2. Haz clic en el botón "Revocar" ()
+2. Haz clic en el botón "Revocar"
 3. Introduce el motivo de revocación (opcional)
 4. Confirma
 
@@ -186,7 +186,7 @@ curl -X POST http://localhost:8000/api/client-certs/CERT_ID/revoke \
 #### Mediante el panel de control web
 
 1. Localiza el certificado en la tabla
-2. Haz clic en el botón "Renovar" ()
+2. Haz clic en el botón "Renovar"
 3. Confirma la renovación
 
 #### Mediante la API

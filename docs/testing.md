@@ -19,7 +19,7 @@ pip install -r requirements-test.txt
 pytest -m "not ui and not network"
 
 # Run tests with coverage
-pytest --cov=. --cov-report=html
+pytest --cov=modules --cov-report=html
 ```
 
 ---
@@ -28,18 +28,11 @@ pytest --cov=. --cov-report=html
 
 ```
 Root directory:
-  conftest.py                              # Collection config and shared fixtures
+  conftest.py                              # Points collection at tests/
   pytest.ini                               # Test configuration and markers
-  test_certificate_creation.py             # Certificate creation tests
-  test_certificate_listing.py              # Certificate listing tests
-  test_client_certificates_comprehensive.py # Client cert lifecycle tests
-  test_dns_accounts.py                     # Multi-account operations
-  test_dns_provider.py                     # Basic provider functionality
-  test_dns_provider_inheritance.py         # Config inheritance
-  test_domain_alias.py                     # Domain alias tests
-  test_infisical_backend.py               # Infisical storage backend
-  test_shell_executor.py                   # Shell execution tests
-  test_e2e_complete.py                     # End-to-end test suite
+  tests/
+    conftest.py                            # Shared fixtures
+    test_*.py                              # One file per behaviour, named for it
 ```
 
 ---
@@ -58,23 +51,23 @@ pytest -m "not ui and not network"
 pytest -v
 
 # Run a specific test file
-pytest test_certificate_creation.py
+pytest tests/test_domain_alias.py
 
 # Run a specific test function
-pytest test_certificate_creation.py::test_specific_function -v -s
+pytest tests/test_domain_alias.py::test_domain_alias_all_core_providers_use_manual_hook -v -s
 
 # Run tests matching a pattern
 pytest -k "dns_provider"
 
 # Run with coverage report
-pytest --cov=. --cov-report=html
+pytest --cov=modules --cov-report=html
 open htmlcov/index.html
 ```
 
 ### Using Make
 
 ```bash
-make test              # Run all tests
+make test              # Everything except the ui and e2e suites
 make test-unit         # Unit tests only
 make test-integration  # Integration tests only
 make test-coverage     # Tests with coverage
@@ -135,7 +128,7 @@ The suite is pytest, split by marker (see `pytest.ini`): `unit`,
 (Playwright, needs a browser and a container).
 
 ```bash
-make test                # unit + integration
+make test                # everything except the ui and e2e suites
 make test-unit
 make test-coverage       # --cov=modules, HTML + XML reports
 
@@ -229,7 +222,7 @@ def test_external_api(mock_get, client):
 
 The CI pipeline runs on every push and pull request:
 
-1. **Multiple Python Versions**: Tests on Python 3.12
+1. **Multiple Python Versions**: Tests on Python 3.12 and 3.14
 2. **Code Quality**: Linting with flake8
 3. **Security**: Scanning with bandit
 4. **Tests**: Full test suite with coverage

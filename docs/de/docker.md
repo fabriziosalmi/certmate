@@ -1,6 +1,6 @@
 # Docker Build & Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM e7c97bf8776edb69 -->
+<!-- CERTMATE-TRANSLATED-FROM b3c7a928998dc93e -->
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 
@@ -211,10 +211,10 @@ volumes:
 
 ```bash
 # Mit .env-Datei im selben Verzeichnis starten
-docker-compose up -d
+docker compose up -d
 
 # Oder eine andere .env-Datei angeben
-docker-compose --env-file /path/to/.env up -d
+docker compose --env-file /path/to/.env up -d
 ```
 
 ---
@@ -349,12 +349,18 @@ dem Volume `:U` hinzu, oder wenden Sie bei einem Bind-Mount das obige `chgrp 0 �
 
 ## Aktualisieren
 
-CertMate hält den gesamten persistenten Zustand in den eingebundenen Volumes, vor allem in `./data`
-(`settings.json`, die Admin-Benutzer, der automatisch generierte `.secret_key`, der Audit-Signaturschlüssel
-und die Scheduler-Datenbank) und in `./certificates`. Da der Zustand
-in diesen Volumes liegt und **nicht** im Image, bedeutet ein Upgrade lediglich, ein
-neueres Image zu pullen und den Container neu zu erstellen; Ihre Konfiguration, Ihre Zertifikate und
-Ihre Anmeldung bleiben erhalten.
+CertMate hält seinen persistenten Zustand in `/app/data` (`settings.json`, die Admin-Benutzer,
+der automatisch generierte `.secret_key`, der Audit-Signaturschlüssel und die
+Scheduler-Datenbank) und in `/app/certificates`. Dieser Zustand übersteht ein Upgrade,
+weil diese Pfade von außerhalb des Containers eingebunden werden, wie in jedem Beispiel
+auf dieser Seite, und **nicht** im Image liegen: Ein Upgrade bedeutet, ein neueres Image
+zu pullen und den Container mit denselben Mounts neu zu erstellen, und Ihre Konfiguration,
+Ihre Zertifikate und Ihre Anmeldung bleiben erhalten.
+
+Backups werden nach `/app/backups` geschrieben. Der obige Schnellstart bindet dieses
+Verzeichnis nicht ein, sodass ein dort erstelltes Backup mit dem Container verschwindet,
+wenn dieser entfernt wird: Laden Sie es vorher herunter, oder binden Sie `/app/backups`
+ebenfalls ein, wie es das folgende Beispiel tut.
 
 ```bash
 # Empfohlen: zuerst ein Backup erstellen (Einstellungen → Backup, oder über die API)
@@ -363,12 +369,14 @@ Ihre Anmeldung bleiben erhalten.
 docker compose pull          # das neue Image holen
 docker compose up -d         # den Container neu erstellen (data/ + certificates/ bleiben erhalten)
 
-# Einfaches docker run: stoppen/entfernen und mit DENSELBEN Volume-Mounts neu starten
+# Einfaches docker run: stoppen/entfernen und mit DENSELBEN Mounts neu starten, mit
+# denen Sie gestartet haben. Das sind die benannten Volumes des Schnellstarts, plus eines
+# für Backups; verwenden Sie stattdessen Ihre Host-Pfade, wenn Sie mit Bind-Mounts gestartet haben.
 docker pull fabriziosalmi/certmate:latest
 docker rm -f certmate
 docker run -d --name certmate --env-file .env -p 127.0.0.1:8000:8000 \
-  -v "$(pwd)/data:/app/data" -v "$(pwd)/certificates:/app/certificates" \
-  -v "$(pwd)/logs:/app/logs" -v "$(pwd)/backups:/app/backups" \
+  -v certmate_data:/app/data -v certmate_certificates:/app/certificates \
+  -v certmate_backups:/app/backups \
   fabriziosalmi/certmate:latest
 ```
 
@@ -390,7 +398,6 @@ CertMate unterstützt Multi-Plattform-Docker-Images für ARM- und AMD64-Architek
 | `linux/amd64` | Intel/AMD 64-Bit | Die meisten Cloud-Server, Desktops |
 | `linux/arm64` | ARM 64-Bit | Apple Silicon, ARM-Cloud-Instanzen |
 | `linux/arm/v7` | ARM 32-Bit v7 | Raspberry Pi 3+ — **nicht veröffentlicht**: auf Anfrage baubar (siehe unten), die Release-Images sind amd64 + arm64 |
-| `linux/arm/v6` | ARM 32-Bit v6 | Raspberry Pi 1, Zero |
 
 ### Manuelles Docker Buildx
 
