@@ -116,6 +116,28 @@ def test_no_architecture_doc_instructs_a_multi_instance_deployment(doc):
 
 
 @pytest.mark.parametrize('doc', ARCHITECTURE_DOCS, ids=lambda p: p.parent.name)
+def test_no_architecture_doc_says_it_can_run_several_instances(doc):
+    """The recipe went, and a one-line claim stayed: until 2026-10-16 the
+    Scalability section of every architecture doc listed "Stateless Design: Can
+    run multiple instances", thirty lines above the section saying CertMate
+    does not. The test above looks for the recipe, so it passed throughout.
+    """
+    text = re.sub(r'\s+', ' ', doc.read_text().lower())
+    forbidden = [
+        'can run multiple instances',           # en
+        'può eseguire più istanze',             # it
+        'kann in mehreren instanzen',           # de
+        'peut exécuter plusieurs instances',    # fr
+        'puede ejecutar múltiples instancias',  # es
+    ]
+    hit = [phrase for phrase in forbidden if phrase in text]
+    assert not hit, (
+        f'{doc.relative_to(ROOT)} says CertMate can run several instances '
+        f'({hit}); the chart fails at template time for replicaCount != 1'
+    )
+
+
+@pytest.mark.parametrize('doc', ARCHITECTURE_DOCS, ids=lambda p: p.parent.name)
 def test_each_architecture_doc_states_the_constraint(doc):
     """CONTROL for the test above: deleting the section would satisfy a
     forbidden-phrase check while leaving readers with nothing.

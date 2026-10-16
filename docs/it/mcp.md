@@ -17,7 +17,7 @@ Il server MCP CertMate espone i seguenti strumenti agli assistenti IA:
 
 **Operazioni sul ciclo di vita**
 6. **`certmate_create_certificate`** — Richiede un nuovo certificato TLS per un dominio (provider DNS, account, CA opzionali). Il server chiede sempre l'emissione asincrona, quindi restituisce un `job_id` (HTTP 202) da interrogare.
-7. **`certmate_renew_certificate`** — Rinnova un certificato esistente se CertMate lo considera in scadenza secondo la sua politica di rinnovo; uno non ancora in scadenza resta com'è, e il job riporta `renewed: false`. Anch'esso asincrono: restituisce un `job_id`.
+7. **`certmate_renew_certificate`** — Rinnova un certificato esistente se CertMate lo considera da rinnovare secondo la sua politica di rinnovo; uno non ancora da rinnovare resta com'è, e il job riporta `renewed: false`. Anch'esso asincrono: restituisce un `job_id`.
 8. **`certmate_get_job`** — Interroga un job asincrono di creazione/rinnovo/modifica tramite `job_id` finché il suo stato non è `succeeded` o `failed` (`queued` e `running` non sono stati finali).
 9. **`certmate_set_auto_renew`** — Abilita o disabilita il rinnovo automatico per un singolo dominio.
 10. **`certmate_deploy_certificate`** — Esegue manualmente tutti i deploy hook configurati per un dominio.
@@ -50,17 +50,17 @@ Deploy ed elenco degli account sono quelli che sorprendono: entrambi leggono o
 usano credenziali memorizzate, quindi lato server sono `admin` anche se un agente
 che si limita a rinnovare si accontenterebbe di `operator`. Un agente con ruolo
 operator a cui si chiede di "scegliere un account ed emettere" riceverà un 403
-sulla ricerca dell'account: passa l'`account_id` nel prompt, oppure dagli
+sulla ricerca dell'account: passa invece l'`account_id` nel prompt, oppure dagli
 deliberatamente un token admin.
 
-## Configurazione
+## Setup e configurazione
 
 ### Prerequisiti
 - Node.js (>= 20 — `mcp/package.json` dichiara `engines.node: ">=20.0.0"`)
 - npm
 
 ### Installazione
-Naviga nella directory `mcp/` del repository CertMate e installa le dipendenze:
+Spostati nella directory `mcp/` del repository CertMate e installa le dipendenze:
 ```bash
 cd mcp
 npm install
@@ -69,7 +69,7 @@ npm install
 ### Variabili d'ambiente
 Il server MCP comunica con l'API REST CertMate e richiede due variabili d'ambiente:
 - `CERTMATE_URL` — L'URL della tua istanza CertMate (predefinito: `http://localhost:8000`).
-- `CERTMATE_TOKEN` — Un token Bearer API valido con le opportune autorizzazioni di ruolo (solitamente `operator` o `admin`). Per un agente verificabile, usa una chiave contrassegnata come chiave agente (vedi [Attribuzione audit](#attribuzione-audit)).
+- `CERTMATE_TOKEN` — Un token Bearer API valido con le opportune autorizzazioni di ruolo (solitamente `operator` o `admin`). Per un agente tracciabile nell'audit, usa una chiave contrassegnata come chiave agente (vedi [Attribuzione audit](#attribuzione-audit)).
 
 Opzionale:
 - `CERTMATE_AGENT_SESSION` — Sovrascrive l'id di sessione per processo che il server invia a ogni chiamata (`X-CertMate-Agent-Session`), in modo che un'esecuzione possa essere correlata con l'id di un orchestratore esterno. Se non impostato, viene generato un UUID nuovo per ogni processo.
@@ -83,7 +83,7 @@ Per aggiungere il server MCP CertMate a Claude Desktop, aggiungi quanto segue al
   "mcpServers": {
     "certmate": {
       "command": "node",
-      "args": ["/percorso/assoluto/verso/certmate/mcp/index.js"],
+      "args": ["/absolute/path/to/certmate/mcp/index.js"],
       "env": {
         "CERTMATE_URL": "http://localhost:8000",
         "CERTMATE_TOKEN": "your_secure_bearer_token"
@@ -95,35 +95,35 @@ Per aggiungere il server MCP CertMate a Claude Desktop, aggiungi quanto segue al
 
 ### Altri client MCP (Gemini, ecc.)
 
-Il server comunica tramite MCP standard su stdio, quindi qualsiasi client che supporta MCP funziona allo stesso modo: puntalo su `node /percorso/assoluto/verso/certmate/mcp/index.js` e imposta le due variabili d'ambiente. Nulla nel server è specifico per Claude.
+Il server parla MCP standard su stdio, quindi qualsiasi client che supporta MCP funziona allo stesso modo: puntalo su `node /absolute/path/to/certmate/mcp/index.js` e imposta le due variabili d'ambiente. Nulla nel server è specifico per Claude.
 
 ## Utilizzo di CertMate con un agente IA (job pianificati)
 
-La maggior parte degli assistenti di punta supporta ora i **task pianificati** (Claude, Gemini e altri). Combinando questo con il server MCP si ottiene un "custode dei certificati" autonomo: descrivi la policy in linguaggio naturale con condizioni esplicite, il modello si pianifica da solo e a ogni esecuzione usa gli strumenti sopra per applicare la policy. Il pattern è agnostico rispetto al modello — qualsiasi sistema in grado di eseguire un prompt salvato su un calendario e chiamare strumenti MCP funzionerà.
+La maggior parte degli assistenti di punta supporta ora i **task pianificati** (Claude, Gemini e altri). Combinando questa funzione con questo server MCP si ottiene un "custode dei certificati" autonomo: descrivi la policy in linguaggio naturale con condizioni esplicite, il modello si pianifica da solo e a ogni esecuzione usa gli strumenti sopra per applicare la policy. Il pattern è agnostico rispetto al modello: qualsiasi sistema in grado di eseguire un prompt salvato in modo pianificato e di chiamare strumenti MCP funzionerà.
 
 ### Il ciclo eseguito dall'agente
 
 1. `certmate_list_certificates` (o `certmate_get_certificate` per dominio) per leggere `days_left` / stato.
-2. Decisione in base alla tua condizione, ad es. *rinnova quando `days_left < 14`*.
-3. `certmate_renew_certificate` per ogni dominio interessato.
-4. Ogni rinnovo restituisce un `job_id`; chiama `certmate_get_job` finché non segnala `succeeded` / `failed`. Un certificato che CertMate non considera ancora in scadenza termina con `succeeded` e `renewed: false`: non è stato emesso nulla.
-5. In caso di fallimento, segnalalo. Un job di rinnovo o di riemissione fallito emette anche `certificate_failed`, così i canali di notifica di CertMate (email, Slack, Discord, Telegram, ntfy, Gotify) inviano comunque una notifica. Due eccezioni: un job fallito perché un'altra operazione teneva già il dominio (`error_code: DOMAIN_OPERATION_IN_PROGRESS`) non lo emette, e nemmeno una creazione asincrona fallita, quindi in quei casi il segnale è il resoconto dell'agente.
+2. Decidi in base alla tua condizione, ad es. *rinnova quando `days_left < 14`*.
+3. `certmate_renew_certificate` per ogni dominio da rinnovare.
+4. Ogni rinnovo restituisce un `job_id`; chiama `certmate_get_job` finché non segnala `succeeded` / `failed`. Un certificato che CertMate non considera ancora da rinnovare termina con successo con `renewed: false`: non è stato emesso nulla.
+5. In caso di fallimento, segnalalo. Un job di rinnovo o di riemissione fallito emette anche `certificate_failed`, così i canali di notifica propri di CertMate (email, Slack, Discord, Telegram, ntfy, Gotify) lo inviano comunque. Due eccezioni: un job fallito perché un'altra operazione teneva già il dominio (`error_code: DOMAIN_OPERATION_IN_PROGRESS`) non lo emette, e nemmeno una creazione asincrona fallita, quindi in quei casi il segnale è il resoconto dell'agente stesso.
 
 ### Esempi di prompt pianificati
 
 > **Giornaliero, 08:00** — "Usando gli strumenti MCP CertMate, elenca tutti i certificati. Per quelli con `days_left < 14`, chiama `certmate_renew_certificate`, poi interroga `certmate_get_job` fino al termine. Rispondi con un riepilogo di una riga per dominio e segnala eventuali fallimenti."
 
-> **Settimanale** — "Chiama `certmate_get_activity` e `certmate_diagnostics`. Riassumi eventuali anomalie (rinnovi falliti, certificati scaduti, scheduler non in esecuzione) in tre punti. Se non c'è nulla di anomalo, indicalo."
+> **Settimanale** — "Chiama `certmate_get_activity` e `certmate_diagnostics`. Riassumi eventuali anomalie (rinnovi falliti, certificati scaduti, scheduler non in esecuzione) in tre punti. Se non c'è nulla che non va, dillo."
 
-> **Su richiesta** — "Emetti un certificato per `shop.example.com` usando `certmate_list_dns_providers` per scegliere un provider configurato e `certmate_list_dns_accounts` per l'id dell'account, poi monitora il job fino al completamento."
+> **Su richiesta** — "Emetti un certificato per `shop.example.com` usando `certmate_list_dns_providers` per scegliere un provider configurato e `certmate_list_dns_accounts` per l'id dell'account, poi segui il job fino al completamento."
 
-Poiché le condizioni vivono nel prompt, puoi modificare la policy (soglia, domini, azione in caso di fallimento) senza toccare alcun codice. Assegna all'agente un token con scope limitato esattamente a ciò che deve fare — `operator` per il rinnovo, `admin` solo se deve eseguire i deploy hook, elencare gli account DNS, eliminare certificati o leggere la diagnostica.
+Poiché le condizioni vivono nel prompt, puoi regolare la policy (soglia, quali domini, cosa fare in caso di fallimento) senza toccare alcun codice. Assegna all'agente un token con scope limitato esattamente a ciò che deve fare: `operator` per il rinnovo, `admin` solo se deve eseguire i deploy hook, elencare gli account DNS, eliminare certificati o leggere la diagnostica.
 
 ## Sicurezza
 
 1. **Protezione del token** — Il server MCP richiede un `CERTMATE_TOKEN` valido. Invia questo token nell'header `Authorization` di ogni richiesta all'API CertMate. Il `CERTMATE_URL` predefinito è `http://localhost:8000` in chiaro; quando CertMate gira su un altro host, usa un URL `https://`, altrimenti il token attraversa la rete in chiaro.
-2. **Privilegio minimo** — Limita il token a ciò di cui l'agente ha bisogno. Un custode di rinnovi pianificato ha bisogno di `operator`; riserva i token `admin` agli agenti che devono eseguire i deploy hook, elencare gli account DNS, eliminare certificati o estrarre la diagnostica. Revoca il token per disconnettere immediatamente l'agente.
-3. **Compatibilità con la sanificazione dei log** — Strumenti come `certmate_diagnostics` recuperano i dati dopo che il Log Sanitizer ha rimosso le credenziali sensibili, proteggendo chiavi e token da fughe nei contesti LLM.
+2. **Privilegio minimo** — Limita il token a ciò di cui l'agente ha bisogno. Un custode di rinnovi pianificato ha bisogno di `operator`; riserva i token `admin` agli agenti che devono eseguire i deploy hook, elencare gli account DNS, eliminare certificati o estrarre la diagnostica. Revoca il token per escludere immediatamente l'agente.
+3. **Compatibilità con la sanificazione dei log** — Strumenti come `certmate_diagnostics` recuperano i dati dopo che il Log Sanitizer ha rimosso le credenziali sensibili, impedendo che chiavi e token finiscano nei contesti LLM.
 
 ## Attribuzione audit
 
@@ -132,14 +132,6 @@ Affinché la traccia di audit possa distinguere le azioni di un agente da quelle
 1. In CertMate, vai in **Impostazioni → Chiavi API**, crea una chiave e spunta **Chiave agente IA** (oppure invia `"is_agent": true` a `POST /api/keys`). Assegnale il ruolo minimo necessario e, per una chiave `viewer` o `operator`, limitala con `allowed_domains`. Una chiave `admin` non può essere limitata per dominio: il server la rifiuta con un 400.
 2. Imposta quella chiave come `CERTMATE_TOKEN` per il server MCP.
 
-Ogni azione sui certificati eseguita dall'agente viene registrata con `actor.kind="agent"`, l'id stabile della chiave e il `X-CertMate-Agent-Session` per processo inviato dal server — così puoi mostrare esattamente quali modifiche ai certificati ha effettuato un agente IA, sotto quale identità e raggruppate per esecuzione. Il token Bearer globale legacy riduce ogni chiamante a `api_user` senza id di chiave ed è registrato come `api_token`, non `agent`. L'header di sessione agente è un'informazione dichiarativa e non promuove mai autonomamente un chiamante a `agent`.
+Ogni azione sui certificati eseguita poi dall'agente viene registrata con `actor.kind="agent"`, l'id stabile della chiave e il `X-CertMate-Agent-Session` per processo inviato dal server — così puoi in seguito mostrare esattamente quali modifiche ai certificati ha effettuato un agente IA, sotto quale identità e raggruppate per esecuzione. Il token Bearer globale legacy riduce ogni chiamante a `api_user` senza id di chiave ed è registrato come `api_token`, non `agent`. L'header di sessione dell'agente è un'asserzione informativa e da solo non promuove mai un chiamante ad `agent`.
 
-I record risultanti fanno parte della catena di audit a prova di manomissione; vedi [Registro audit](./api.md#audit-logging) e [compliance.md](./compliance.md).
-
----
-
-<div align="center">
-
-[← Torna alla documentazione](./README.md)
-
-</div>
+I record risultanti fanno parte della catena di audit in cui ogni manomissione è rilevabile; vedi [log di audit](./api.md#journalizzazione-dellaudit) e [compliance.md](./compliance.md).

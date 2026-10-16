@@ -1,8 +1,8 @@
-# Migrazione del tema — disaccoppiamento chiaro/scuro tramite token CSS
+# Migrazione del tema — disaccoppiamento chiaro/scuro tramite token basati su variabili CSS
 
-<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
 
-Stato: **rilasciata** (Fasi 0–5 nella v2.9.0; Fase 6 segue) · Responsabile: Fabrizio · Creato: 2026-05-25
+Stato: **rilasciata** (Fasi 0–5 nella v2.9.0, Fasi 6–9 dopo di essa; Fase 10 pianificata) · Responsabile: Fabrizio · Creato: 2026-05-25
 
 ## Obiettivo
 
@@ -18,7 +18,7 @@ significa modificare `:root` / `.dark` in un unico file — non centinaia di pun
 | Riferimenti a classi di colore nei template | ~3 197 in 19 file |
 | Coppie `dark:` nei template | ~1 665 |
 | Classi di colore nel JS applicativo (non vendorizzato) | ~789 (dashboard.js 372, settings.js 150, setup-wizard.js 131, certmate.js 60, client-certs.js 57, …) |
-| Hex codificati nel JS applicativo | ~17 (palette toast/grafici); altri 80 in `redoc.standalone.js` sono **vendorizzati, ignorare** |
+| Hex hardcoded nel JS applicativo | ~17 (palette toast/grafici); altri 80 in `redoc.standalone.js` sono **vendorizzati, ignorare** |
 | Classi di componenti R-3 adottate | solo `.card` (12×); `.btn-*`, `.badge-*`, `.form-*` = 0 |
 
 File più pesanti: `partials/settings_dns.html` (635 / 395 dark:), `index.html`
@@ -55,13 +55,13 @@ esposte a Tailwind come token semantici (triplette di canali HSL affinché le ut
 ## Fasi
 
 Ogni fase = un commit atomico (suddividere i partial della Fase 3 nei propri
-commit). Le fasi si raggruppano in uno o più PR di versione `vX.Y.Z`.
+commit). Le fasi si raggruppano in una o più PR di release `vX.Y.Z`.
 
 ### Fase 0 — Fondamenta e guardrail (nessuna modifica visiva)
 - [x] Step CI che esegue `npm run css:build` e fallisce se `tailwind.min.css` è obsoleto (`git diff --exit-code`). → job `frontend-css` in `.github/workflows/ci.yml`. Il bundle committato aveva già deviato; ricostruito e committato.
-- [x] Definire il layer dei token: variabili CSS in `:root` / `.dark` (input.css) + mapping in `tailwind.config.js`, **in parallelo** alla palette esistente — nessun template modificato. Token: `bg-background`, `bg-surface`, `bg-surface-2`, `text-foreground`, `text-muted`, `border-border` (nella safelist).
+- [x] Definire il layer dei token: variabili CSS in `:root` / `.dark` (input.css) + mapping in `tailwind.config.js`, **in parallelo** alla palette esistente — nessun template ancora modificato. Token: `bg-background`, `bg-surface`, `bg-surface-2`, `text-foreground`, `text-muted`, `border-border` (nella safelist).
 - [x] Scrivere il codemod: `scripts/theme_codemod.py` — tabella di corrispondenza delle coppie `dark:` ricorrenti → token, report dry-run + `--apply`. Report sulle ambiguità di seguito.
-- [x] Strumenti per gli screenshot: `scripts/theme_baseline.py` — costruisce Docker con una directory dati effimera, inizializza un admin usa-e-getta, cattura ogni pagina UI reale in chiaro + scuro. Da rieseguire dopo ogni fase e confrontare. **Esecuzione della cattura ancora in sospeso** (richiede `playwright install chromium` + una build Docker locale).
+- [x] Strumenti per la baseline degli screenshot: `scripts/theme_baseline.py` — costruisce Docker con una directory dati effimera nuova, inizializza un admin usa-e-getta, cattura ogni pagina UI reale in chiaro + scuro. Da rieseguire dopo ogni fase e confrontare. **Esecuzione della cattura ancora in sospeso** (richiede `playwright install chromium` + una build Docker locale).
 
 #### Ambito della baseline (solo pagine reali)
 Catturate: `/` (setup, poi index), `/login`, `/settings`, `/help`, `/activity`, `/redoc` — 7 pagine × chiaro/scuro.
@@ -76,7 +76,7 @@ python scripts/theme_codemod.py --apply templates/base.html
 ```
 Dopo ogni `--apply`: `npm run css:build`, diff rispetto alla baseline, esaminare le varianti `dark:` residue.
 
-#### Panoramica del report (2026-05-25)
+#### Istantanea del report (2026-05-25)
 **607 coppie ridotte automaticamente** su ~1 665 varianti `dark:`:
 
 | Token | Coppie |
@@ -126,7 +126,7 @@ Alcuni residui (`dark:text-gray-400{%`, `dark:text-gray-300'`) sono attributi di
 
 ### Fase 5 — Pulizia e consolidamento ✅
 - [x] Decisione sulle label chiusa: token `text-label` + 137 siti migrati (vedi sopra).
-- [x] Punto cieco del codemod rilevato: scansionava solo `class="..."`, tralasciando `className='...'` e la concatenazione di stringhe JS. Aggiunta una **passata letterale consapevole dei limiti** (riduce le sottostringhe `CHIARO SCURO` adiacenti in qualsiasi contesto) + il gate `--check`. La riesecuzione della scansione completa ha ridotto le coppie JS rimanenti (dialoghi confirm/prompt, modali report-issue + shortcuts).
+- [x] Punto cieco del codemod rilevato: scansionava solo `class="..."`, tralasciando le assegnazioni `className='...'` e la concatenazione di stringhe JS. Aggiunta una **passata letterale consapevole dei limiti** (riduce le sottostringhe `LIGHT DARK` adiacenti in qualsiasi contesto) + il gate `--check`. La riesecuzione della scansione completa ha ridotto le coppie JS rimanenti (dialoghi confirm/prompt, modali report-issue + shortcuts).
 - [x] Rimossi gli alias legacy inutilizzati `success`/`warning`/`danger` da `tailwind.config.js` (0 siti di chiamata). Mantenuti `primary` (~375) e `secondary` (gradienti).
 - [x] **Guardrail CI**: `python3 scripts/theme_codemod.py --check` nel job `frontend-css` — fa fallire la build se una coppia chiaro+scuro riducibile viene reintrodotta in un template o in un file JS di prima parte.
 - **Hex JS lasciati invariati, per scelta progettuale:** la palette `#60a5fa`/ecc. in `certmate.js` è il **logger della console di debug** su una superficie fissa sempre scura (`bg-black`); `TOAST_COLORS` sono classi di stato letterali. Entrambi sono accenti di stato indipendenti dal tema — per convenzione non fanno parte del theming chiaro/scuro — quindi rimangono letterali anziché diventare token di tema. Una futura **passata di token di stato** (success/warning/danger/info come variabili) è il luogo appropriato per unificarli se mai lo si desiderasse.
@@ -134,8 +134,8 @@ Alcuni residui (`dark:text-gray-400{%`, `dark:text-gray-300'`) sono attributi di
 
 ### Fase 6 — Passata dei token di stato ✅
 - [x] Ri-aggiunti `success`/`warning`/`danger` (+ nuovo `info`) come **gruppi di token**
-  (`surface`/`line`/`fg`/`strong`), adossati a variabili in `:root`/`.dark` (HSL,
-  fedeli ai valori inline, superfici scure blended sulla card).
+  (`surface`/`line`/`fg`/`strong`), basati su variabili in `:root`/`.dark` (HSL,
+  fedeli ai valori inline, superfici scure miscelate sopra la card).
 - [x] Esteso il codemod con una tabella generata tonalità×sfumatura (`_expand_status`)
   che piega le coppie verde/rosso/ambra/blu delle info-box sui token —
   normalizzando la deriva 50-vs-100 / 700-vs-800 dei callout inline.
@@ -143,7 +143,7 @@ Alcuni residui (`dark:text-gray-400{%`, `dark:text-gray-300'`) sono attributi di
 - [x] `--check` ora verifica anche le coppie di stato (vivono in `MAPPINGS`), quindi
   una coppia chiaro+scuro di stato reintrodotta fa fallire la CI come qualsiasi altra.
 - Lasciato letterale per scelta progettuale: i singoli accenti di stato senza coppia chiaro/scuro
-  (icona `text-*-500`), e le tinte solo-scuro (senza controparte chiara).
+  (icona `text-*-500`), e le tinte isolate solo-scuro (senza controparte chiara).
 
 ### Fase 7 — Superficie dei campi form ✅ (v2.9.1)
 - [x] Aggiunto `--color-input` (bianco / gray-700) → `bg-input`; riduzione di 40
@@ -152,7 +152,7 @@ Alcuni residui (`dark:text-gray-400{%`, `dark:text-gray-300'`) sono attributi di
 ### Fase 8 — Superfici hover e rientranti ✅ (v2.9.1)
 - [x] Aggiunto `--color-hover` (gray-100/700), `border.strong` (gray-300/500) e
   `--color-sunken` (gray-50/700); riduzione di 51 coppie hover/rientranti. Le
-  sfumature hover minoritarie lasciate letterali per mantenere la passata strettamente senza modifiche.
+  sfumature hover minoritarie lasciate letterali per mantenere la passata strettamente a scostamento zero.
 
 ### Fase 9 — Tokenizzazione del layer dei componenti + accent ✅
 - [x] Le regole `@apply` dei componenti R-3 (`.card`, `.form-input`/`.form-select`/
@@ -170,7 +170,7 @@ Alcuni residui (`dark:text-gray-400{%`, `dark:text-gray-300'`) sono attributi di
 
 ### Fase 10 — Decostruzione delle code di colore (pianificata, progressiva)
 Il disaccoppiamento ha lasciato **565 utility `dark:`** che il codemod non riesce a ridurre: non
-hanno un sibling chiaro con cui accoppiarsi, quindi `--check` non le vede mai. L'audit
+hanno una controparte chiara con cui accoppiarsi, quindi `--check` non le vede mai. L'audit
 (2026-05-25) mostra che non si tratta di un unico problema ma di tre, con profili di rischio opposti:
 
 | Gruppo | Conteggio | Si risolve in | Nuovi token |
@@ -214,7 +214,7 @@ Deciso il 2026-05-25. Quattro regole; i token già rilasciati sono l'unica palet
 
 Applicazione: il gate `--check` acquisisce una regola che fa fallire la CI sul raw
 `purple|indigo|orange` (e su qualsiasi colore non tokenizzato) in `templates/` — un
-contratto con un compilatore alle spalle, che non può regredire.
+contratto con un compilatore alle spalle, così non può degradare di nuovo nel tunnel da rave.
 
 ## Colori di stato — ora tokenizzati (Fase 6)
 Le fasi precedenti hanno deliberatamente rimandato i colori di stato (verde/ambra/rosso/blu con
@@ -226,13 +226,5 @@ rimangono letterali — sono indipendenti dal tema e non fanno parte del theming
 
 ## Allineamento del workflow
 - Zero emoji in commit/PR/note di rilascio.
-- Commit atomici (uno per fase, o per partial nella Fase 3); un PR per versione.
+- Commit atomici (uno per fase, o per partial nella Fase 3); una PR per release.
 - Prima del push pubblico: smoke test Docker + emissione certificato reale sul dominio di Fab con sottodomini casuali.
-
----
-
-<div align="center">
-
-[← Torna alla documentazione](./README.md)
-
-</div>

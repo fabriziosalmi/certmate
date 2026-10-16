@@ -1,6 +1,6 @@
 # Build e distribuzione con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM e7c97bf8776edb69 -->
+<!-- CERTMATE-TRANSLATED-FROM b3c7a928998dc93e -->
 
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
 
@@ -110,6 +110,10 @@ Crea un file `.env` sull'host (non nell'immagine Docker):
 ```bash
 SECRET_KEY=your-super-secret-key-here
 # SECRET_KEY_FILE=/run/secrets/secret_key  # Alternative: takes precedence over SECRET_KEY
+# Imposta API_BEARER_TOKEN prima di esporre in rete un'istanza non ancora
+# configurata: finché non esiste il primo admin, un'istanza senza token offre
+# il bypass della configurazione iniziale a chiunque possa raggiungerla. Quando
+# è impostato, incollalo una volta nella schermata di primo avvio per creare l'admin.
 API_BEARER_TOKEN=your-api-bearer-token-here
 # API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative: takes precedence over API_BEARER_TOKEN
 CLOUDFLARE_TOKEN=your-cloudflare-api-token
@@ -146,14 +150,14 @@ docker run -d --name certmate \
 | Variabile | Richiesta | Descrizione |
 |-----------|-----------|-------------|
 | `SECRET_KEY` | No | Chiave segreta Flask per le sessioni (generata automaticamente se non impostata) |
-| `SECRET_KEY_FILE` | No | Percorso di un file contenente la chiave segreta Flask (ha precedenza su `SECRET_KEY`) |
-| `API_BEARER_TOKEN` | No (auto-generato) | Token di autenticazione API. Generato automaticamente se non impostato, ma impostalo prima di esporre in rete un'istanza non ancora configurata; quando impostato, incollalo una volta nella schermata di primo avvio per creare l'admin |
+| `SECRET_KEY_FILE` | No | Percorso di un file contenente la chiave segreta Flask (ha precedenza su `SECRET_KEY`). Se è impostata e il file non si può leggere o è vuoto, CertMate si rifiuta di partire: un segreto che non è stato montato è un errore di configurazione, e generare al suo posto una chiave disconnetterebbe ogni utente, a ogni riavvio, con sessioni firmate da una chiave che non hai scelto tu. |
+| `API_BEARER_TOKEN` | No (auto-generato) | Token di autenticazione API. Generato automaticamente se non impostato, ma impostalo prima di esporre in rete un'istanza non ancora configurata; quando impostato, incollalo una volta nella schermata di primo avvio per creare l'admin. **Questo valore fa fede:** se è diverso dal token già memorizzato, quello memorizzato viene sostituito all'avvio e smette di funzionare. È questo che rende effettiva l'aggiunta o la rotazione della variabile su un'installazione esistente — in precedenza il controllo d'accesso usava questo valore mentre l'autenticazione verificava ancora quello vecchio, e la schermata di primo avvio chiedeva un token che poi rifiutava |
 | `API_BEARER_TOKEN_FILE` | No | Percorso di un file contenente il token bearer API (ha precedenza su `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | No | `INFO` (predefinito), `DEBUG`, `WARNING`, `ERROR` |
-| `CERTMATE_BACKUP_PASSPHRASE` | No | Se impostata, i backup unificati vengono cifrati a riposo (`.zip.enc`, PBKDF2-SHA256 + Fernet). La stessa passphrase è richiesta per il ripristino. Non impostata = backup in chiaro `.zip` (comportamento precedente) |
-| `CLOUDFLARE_TOKEN` | No | Token API dell'account DNS Cloudflare predefinito. Route53 usa le credenziali configurate in Impostazioni → Provider DNS, salvo quando l'account seleziona esplicitamente la modalità IAM: allora Certbot usa la catena di credenziali AWS del container (inclusi i ruoli IAM). |
+| `CERTMATE_BACKUP_PASSPHRASE` | **Impostala se vuoi backup automatici da cui poter ripristinare** | Cifra a riposo i backup unificati (`.zip.enc`, PBKDF2-SHA256 + Fernet), ed è ciò che rende *completi* i backup automatici — con essa possono ripristinare questa istanza, senza di essa mantengono le credenziali mascherate e non possono farlo. La stessa passphrase è richiesta per ripristinarli, e CertMate non la memorizza mai al posto tuo. Conservala in un luogo diverso dalla macchina che contiene i backup |
+| `CLOUDFLARE_TOKEN` | No | Token API dell'account DNS Cloudflare predefinito. Route53 usa normalmente le credenziali configurate in Impostazioni → Provider DNS, ma quando il suo account seleziona esplicitamente `auth_mode: iam_role`, Certbot usa la catena di credenziali AWS del container (inclusi i ruoli IAM). |
 
-Consulta la [Guida all'installazione](./installation.md#environment-variables) per l'elenco completo.
+Consulta la [Guida all'installazione](./installation.md#variabili-dambiente) per l'elenco completo.
 
 ### Tenere i token DNS fuori da `settings.json`
 
@@ -207,21 +211,24 @@ volumes:
 
 ```bash
 # Avvia con il file .env nella stessa directory
-docker-compose up -d
+docker compose up -d
 
 # Oppure specifica un file .env diverso
-docker-compose --env-file /path/to/.env up -d
+docker compose --env-file /path/to/.env up -d
 ```
 
 ---
 
 ## Podman (Quadlet, rootless) e OpenShift
 
+### Quadlet: CertMate come servizio systemd
+
 [`deploy/podman/certmate.container`](../../deploy/podman/certmate.container) è una unit Quadlet: Podman la trasforma in un servizio systemd. Esegue l'immagine pubblicata con volumi con nome, la porta solo su loopback, i segreti come Podman secret, un healthcheck e il supporto a `podman auto-update`.
 
-Rootless, con il tuo utente (i tre segreti si creano una volta e non compaiono in nessun file; `enable-linger` lo tiene attivo senza sessione e lo avvia al boot):
+Rootless, con il tuo utente:
 
 ```bash
+# I tre segreti, creati una volta sola. Non compaiono mai in un file.
 for s in certmate-api-token certmate-secret-key certmate-backup-passphrase; do
   openssl rand -hex 32 | tr -d '\n' | podman secret create "$s" -
 done
@@ -232,14 +239,152 @@ curl -fsSL -o ~/.config/containers/systemd/certmate.container \
 systemctl --user daemon-reload
 systemctl --user start certmate
 
+# Lo tiene attivo senza una sessione di login e lo avvia al boot.
 sudo loginctl enable-linger "$USER"
 ```
 
-Rootful: metti il file in `/etc/containers/systemd/`, crea i segreti come root, poi `sudo systemctl daemon-reload && sudo systemctl start certmate`.
+Rootful, invece: metti il file in `/etc/containers/systemd/`, crea i segreti come root, poi esegui `sudo systemctl daemon-reload && sudo systemctl start certmate`.
 
 Apri `http://127.0.0.1:8000`. La prima pagina crea l'account amministratore e chiede il token API: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
 
-Verificato su Fedora 44 con Podman 5.8, rootful e rootless: il servizio parte sano, il token autorizza l'API e riparte dopo un riavvio (rootless tramite lingering). I volumi usano `:U`: in rootless Podman lasciava a root la radice del volume `backups` e CertMate non partiva. UID arbitrari, bind mount e podman-compose sono descritti nella [pagina inglese](../docker.md#podman-quadlet-rootless-and-openshift).
+Verificato su Fedora 44 con Podman 5.8, rootful e rootless: il servizio parte sano, il token autorizza l'API e il servizio riparte dopo un riavvio (rootless tramite lingering).
+
+### UID arbitrari (Podman rootless, OpenShift)
+
+Per impostazione predefinita l'immagine gira come utente non root `1000`, ma segue
+anche lo schema **UID arbitrario** di OpenShift: le directory scrivibili a runtime
+(`/app/data`, `/app/certificates`, `/app/logs`, `/app/backups`) appartengono al
+**gruppo 0 (gruppo root)** e sono scrivibili dal gruppo + setgid. Un processo del
+container che gira con *qualsiasi* UID appartenente al gruppo 0 — che è il modo in
+cui podman rootless e OpenShift avviano i container — può quindi creare e
+rinominare file senza un `chown -R 1000:1000` manuale dei volumi. I file segreti
+che l'applicazione scrive (la chiave privata della CA, la chiave di firma
+dell'audit, i file delle credenziali DNS, `.secret_key`) vengono sempre creati
+`0600`, accessibili solo al proprietario, quindi le directory scrivibili dal
+gruppo non espongono mai una chiave. (Issue [#380](https://github.com/fabriziosalmi/certmate/issues/380).)
+
+### Volumi con nome
+
+Un **volume con nome** appena creato eredita i permessi del gruppo 0 dell'immagine
+con Podman rootful e con Docker. Con Podman **rootless** non sempre: misurato su
+Podman 5.8, la radice del volume `backups`, la cui directory nell'immagine non è
+vuota, è rimasta di proprietà di root, e CertMate si è rifiutato di partire con
+*"Required directories are not writable"*. Aggiungi `:U`, che assegna ogni volume
+all'utente del container:
+
+```bash
+podman run -d --name certmate \
+  -p 127.0.0.1:8000:8000 \
+  -v certmate_data:/app/data:U \
+  -v certmate_certificates:/app/certificates:U \
+  -v certmate_logs:/app/logs:U \
+  -v certmate_backups:/app/backups:U \
+  docker.io/fabriziosalmi/certmate:latest
+```
+
+### Bind mount (directory dell'host)
+
+Un bind mount mantiene la proprietà della directory dell'**host**, che prevale sui
+permessi dell'immagine. Rendi una volta per tutte le directory dell'host
+scrivibili dal gruppo 0, poi esegui:
+
+```bash
+# Crea le directory dell'host scrivibili dal gruppo 0 (qualsiasi UID del gruppo 0 può scrivere)
+mkdir -p ./{data,certificates,logs,backups}
+chgrp -R 0 ./{data,certificates,logs,backups}
+chmod -R g+rwX ./{data,certificates,logs,backups}
+
+podman run -d --name certmate \
+  -p 8000:8000 \
+  -v ./data:/app/data \
+  -v ./certificates:/app/certificates \
+  -v ./logs:/app/logs \
+  -v ./backups:/app/backups \
+  docker.io/fabriziosalmi/certmate:latest
+```
+
+In alternativa lascia che sia podman a sistemare la proprietà con l'opzione di
+mount `:U` (esegue un chown ricorsivo della sorgente perché corrisponda a UID/GID del container):
+
+```bash
+podman run -d --name certmate \
+  -p 8000:8000 \
+  -v ./data:/app/data:U \
+  -v ./certificates:/app/certificates:U \
+  -v ./logs:/app/logs:U \
+  -v ./backups:/app/backups:U \
+  docker.io/fabriziosalmi/certmate:latest
+```
+
+### podman-compose rootless
+
+```yaml
+services:
+  certmate:
+    image: docker.io/fabriziosalmi/certmate:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - certmate_data:/app/data:U
+      - certmate_certificates:/app/certificates:U
+      - certmate_logs:/app/logs:U
+      - certmate_backups:/app/backups:U
+    restart: unless-stopped
+
+volumes:
+  certmate_data:
+  certmate_certificates:
+  certmate_logs:
+  certmate_backups:
+```
+
+Se l'avvio si interrompe con *"Required directories are not writable by the CertMate
+process"*, il mount non è scrivibile dall'utente del container — aggiungi `:U` al
+volume oppure, per un bind mount, applica il `chgrp 0 … && chmod g+rwX …` visto sopra.
+
+> **Kubernetes / OpenShift:** non serve alcuna modifica. Imposta
+> `spec.securityContext.fsGroup: 0` (oppure affidati alla SCC restricted predefinita,
+> che assegna già un UID arbitrario nel gruppo 0) e i volumi montati
+> diventano automaticamente scrivibili dal gruppo 0.
+
+---
+
+## Aggiornamento
+
+CertMate conserva il suo stato persistente in `/app/data` (`settings.json`, gli utenti
+admin, la `.secret_key` generata automaticamente, la chiave di firma dell'audit e il
+database dello scheduler) e in `/app/certificates`. Quello stato sopravvive a un
+aggiornamento perché quei percorsi sono montati dall'esterno del container, come in
+ogni esempio di questa pagina, e **non** conservati nell'immagine: aggiornare significa
+scaricare un'immagine più recente e ricreare il container con gli stessi mount, e
+configurazione, certificati e login vengono mantenuti.
+
+I backup vengono scritti in `/app/backups`. L'Avvio rapido qui sopra non lo monta,
+quindi un backup creato lì se ne va con il container quando questo viene rimosso:
+scaricalo prima, oppure monta anche `/app/backups`, come fa l'esempio qui sotto.
+
+```bash
+# Consigliato: esegui prima un backup (Impostazioni → Backup, oppure l'API)
+
+# Docker Compose
+docker compose pull          # scarica la nuova immagine
+docker compose up -d         # ricrea il container (data/ + certificates/ restano)
+
+# docker run semplice: ferma/rimuovi e riesegui con gli STESSI mount con cui
+# l'avevi avviato. Questi sono i volumi con nome dell'Avvio rapido, più uno per
+# i backup; se eri partito con dei bind mount, usa invece i tuoi percorsi host.
+docker pull fabriziosalmi/certmate:latest
+docker rm -f certmate
+docker run -d --name certmate --env-file .env -p 127.0.0.1:8000:8000 \
+  -v certmate_data:/app/data -v certmate_certificates:/app/certificates \
+  -v certmate_backups:/app/backups \
+  fabriziosalmi/certmate:latest
+```
+
+Le migrazioni del formato delle impostazioni vengono eseguite automaticamente all'avvio.
+In produzione, fissa un tag di versione (es. `fabriziosalmi/certmate:2.19`) invece di
+`:latest`, così che un nuovo pull non ti sorprenda con un aggiornamento non voluto —
+la build multi-piattaforma pubblica i tag `MAJOR`, `MAJOR.MINOR` e `MAJOR.MINOR.PATCH`.
 
 ---
 
@@ -253,8 +398,7 @@ CertMate supporta immagini Docker multi-piattaforma per le architetture ARM e AM
 |-------------|-------------|-------------------|
 | `linux/amd64` | Intel/AMD 64-bit | La maggior parte dei server cloud, desktop |
 | `linux/arm64` | ARM 64-bit | Apple Silicon, istanze cloud ARM |
-| `linux/arm/v7` | ARM 32-bit v7 | Raspberry Pi 3+ |
-| `linux/arm/v6` | ARM 32-bit v6 | Raspberry Pi 1, Zero |
+| `linux/arm/v7` | ARM 32-bit v7 | Raspberry Pi 3+ — **non pubblicata**: compilabile su richiesta (vedi sotto), le immagini di release sono amd64 + arm64 |
 
 ### Docker Buildx manuale
 

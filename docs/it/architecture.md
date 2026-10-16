@@ -1,8 +1,6 @@
 # Architettura di CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 80c544b5f465e5d7 -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Questa traduzione non è aggiornata.** La versione inglese ([`docs/architecture.md`](../architecture.md)) è stata modificata da allora ed è quella che fa fede. In caso di discordanza vale il documento inglese.
+<!-- CERTMATE-TRANSLATED-FROM 16b7294196819288 -->
 
 Questo documento descrive l'architettura completa di CertMate — sia il sistema principale per i certificati server che il sottosistema per i certificati client.
 
@@ -12,7 +10,7 @@ Questo documento descrive l'architettura completa di CertMate — sia il sistema
 
 - [Architettura del sistema principale](#architettura-del-sistema-principale)
 - [Diagramma ad alto livello](#diagramma-ad-alto-livello)
-- [Classi di gestione (Manager)](#classi-di-gestione-managers)
+- [Classi di gestione (Manager)](#classi-di-gestione-manager)
 - [Flusso di creazione del certificato](#flusso-di-creazione-del-certificato)
 - [Architettura di archiviazione](#architettura-di-archiviazione)
 - [Struttura di configurazione](#struttura-di-configurazione)
@@ -29,7 +27,7 @@ CertMate è un sistema modulare ed estensibile per la gestione di certificati SS
 **Informazioni principali:**
 - **Linguaggio**: Python 3.12 (Flask, Flask-RESTX)
 - **Archiviazione**: filesystem locale come impostazione predefinita + 5 backend remoti (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible)
-- **Provider CA**: Let's Encrypt, DigiCert ACME, CA privata
+- **Provider CA**: Let's Encrypt, ZeroSSL, Google Trust Services, DigiCert ACME, SSL.com, Actalis, Sectigo e qualunque altra CA ACME tramite la voce CA Privata; vedere [Provider CA](./ca-providers.md)
 - **Provider DNS**: Cloudflare, AWS Route53, Azure, Google e altri — vedere [Provider DNS](./dns-providers.md) per l'elenco completo
 - **API**: REST con Swagger/OpenAPI tramite Flask-RESTX
 - **Tipi di certificati attuali**: TLS lato server (DV, OV, EV)
@@ -40,22 +38,22 @@ CertMate è un sistema modulare ed estensibile per la gestione di certificati SS
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│              Applicazione CertMate                  │
+│                 CertMate Application                │
 │                                                     │
 │  ┌───────────────────────────────────────────────┐  │
-│  │           Livello Web (Flask)                  │  │
-│  │  Dashboard    Impostazioni    Aiuto    Cert. Cl│  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
-│  ┌──────────────────┐   ┌────────────────────────┐  │
-│  │  API REST         │   │  Route Web             │  │
-│  │  /api/certificates│   │  /api/web/certificates │  │
-│  │  /api/client-certs│   │  /client-certificates  │  │
-│  └────────┬─────────┘   └────────┬───────────────┘  │
-│           └──────────┬───────────┘                   │
-│                      ↓                               │
+│  │             Web Layer (Flask)                 │  │
+│  │  Dashboard   Settings   Help   Client Certs   │  │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
+│  ┌───────────────────┐  ┌────────────────────────┐  │
+│  │  REST API         │  │  Web Routes            │  │
+│  │  /api/certificates│  │  /api/web/certificates │  │
+│  │  /api/client-certs│  │  /client-certificates  │  │
+│  └─────────┬─────────┘  └───────────┬────────────┘  │
+│            └───────────┬────────────┘               │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │     Livello Manager (Logica applicativa)       │  │
+│  │          Manager Layer (Business Logic)       │  │
 │  │                                               │  │
 │  │  CertificateManager    CAManager              │  │
 │  │  DNSManager            StorageManager         │  │
@@ -63,32 +61,70 @@ CertMate è un sistema modulare ed estensibile per la gestione di certificati SS
 │  │  CacheManager          FileOperations         │  │
 │  │  ClientCertManager     OCSPResponder          │  │
 │  │  CRLManager            AuditLogger            │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │          Livello di esecuzione                 │  │
-│  │  Certbot (cert server via DNS-01 ACME)        │  │
-│  │  PrivateCA (cert client via firma diretta)    │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       ↓                             │
+│  │          Execution Layer                      │  │
+│  │  Certbot (server certs over ACME)             │  │
+│  │  PrivateCA (client certs via direct signing)  │  │
+│  └─────────────────────┬─────────────────────────┘  │
+│                        ↓                            │
 │  ┌───────────────────────────────────────────────┐  │
-│  │     Livello di archiviazione (Backend plug.)  │  │
-│  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
+│  │          Storage Layer (Pluggable Backends)   │  │
+│  │  Local FS │ Azure KV │ AWS SM │ Vault         │  │
+│  │  Infisical │ S3-compatible                    │  │
 │  └───────────────────────────────────────────────┘  │
+│                                                     │
 └─────────────────────────────────────────────────────┘
+
+        ┌─────────────────────────────────────────┐
+        │  Composition root — modules/factory.py  │
+        │                                         │
+        │  create_app() constructs every          │
+        │  manager and REGISTERS the API and      │
+        │  web layers onto the Flask app.         │
+        └───┬──────────────┬──────────────┬───────┘
+            │ constructs   │ registers    │ registers
+            ▼              ▼              ▼
+      Manager Layer   REST API      Web Routes
+        (core/)        (api/)         (web/)
 ```
+
+Ogni freccia punta verso il basso. La composition root sta **sopra** i tre
+livelli che compone, in `modules/factory.py`, quindi `modules/core/` non importa
+né `modules/api/` né `modules/web/`.
+
+Non è sempre stato così. Fino alla #668 la root si trovava in
+`modules/core/factory.py` e importava i due livelli sopra di essa — l'unico arco
+verso l'alto del sistema, disegnato in questo diagramma e difeso come eccezione
+deliberata. L'argomento reggeva, fin dove arrivava: una composition root deve
+conoscere ciò che compone, e le alternative sono un livello che costruisce le
+proprie dipendenze o un registro che nasconde lo stesso arco dietro
+un'indirezione.
+
+Ciò che l'argomento trascurava è che la terza opzione è quella economica. Una
+composition root non deve per forza stare *dentro* uno dei livelli che compone.
+Spostare il file di una directory verso l'alto elimina l'eccezione invece di
+documentarla, e il ciclo che la faceva sembrare inevitabile si è rivelato largo
+una sola funzione: `api/client_certificates.py` importava
+`error_code_for_status` all'indietro dalla root, e ricavare `NOT_FOUND` da 404
+non era mai stato compito suo. Ora sta in `modules/core/http_errors.py`.
+
+Una singola eccezione documentata è una scelta di progetto; vale comunque la
+pena verificare se debba per forza essere un'eccezione. È
+`tests/test_the_layers_point_one_way.py` a mantenere vero questo paragrafo.
 
 ---
 
-## Classi di gestione (Managers)
+## Classi di gestione (Manager)
 
 ```
-CertMateApp (applicazione principale)
+CertMateApp (main application)
   ├── FileOperations          # I/O file, backup
   ├── SettingsManager         # Caricamento/salvataggio settings.json
   ├── AuthManager             # Validazione token
   ├── CertificateManager      # Crea/rinnova/info (cert server)
-  ├── CAManager               # Configurazione provider CA, costruzione certbot
+  ├── CAManager               # Configurazione provider CA, costruzione del comando Certbot
   ├── DNSManager              # Account provider DNS
   ├── CacheManager            # Cache di deployment
   ├── StorageManager          # Astrazione dei backend
@@ -106,35 +142,35 @@ CertMateApp (applicazione principale)
 ### Certificati server (via Certbot + ACME)
 
 ```
-1. L'utente invia: dominio, email, provider DNS, provider CA
-2. Validazione degli input (formato del dominio, email, esistenza del provider)
-3. Recupero della configurazione CA (URL ACME, credenziali EAB se DigiCert)
-4. Recupero della configurazione DNS (credenziali account dalle impostazioni)
-5. Creazione della directory: certificates/{dominio}/
-6. Costruzione del comando certbot:
+1. User submits: domain, email, DNS provider, CA provider
+2. Validate inputs (domain format, email, provider existence)
+3. Get CA config (ACME URL, EAB credentials if the CA requires them)
+4. Get DNS config (account credentials from settings)
+5. Create directory: certificates/{domain}/
+6. Build certbot command:
    certbot certonly --non-interactive --agree-tos
      --server {acme_url}
      --email {email}
      --{dns_plugin} --{dns_plugin}-credentials {cred_file}
      --{dns_plugin}-propagation-seconds {timeout}
-     --eab-kid/--eab-hmac-key (se richiesto)
-     -d {dominio}
-7. Creazione del file temporaneo delle credenziali DNS (permessi 600)
-8. Esecuzione di certbot (timeout di 30 minuti)
-9. Risoluzione dei symlink, copia dei file del certificato nella directory radice del dominio
-10. Archiviazione tramite il backend configurato + creazione di metadata.json
-11. Pulizia del file delle credenziali
+     --eab-kid/--eab-hmac-key (if required)
+     -d {domain}
+7. Create temporary DNS credentials file (600 permissions)
+8. Execute certbot (30-minute timeout)
+9. Resolve symlinks, copy cert files to domain root
+10. Store via configured backend + create metadata.json
+11. Clean up credentials file
 ```
 
 ### Certificati client (via CA privata)
 
 ```
-1. L'utente invia: common_name, email, organizzazione, cert_usage
-2. Inizializzazione o caricamento della CA esistente (RSA 4096 bit)
-3. Generazione del CSR (o accettazione di un CSR fornito)
-4. Firma del CSR con la CA privata
-5. Archiviazione dei file cert/chiave/csr + metadata.json
-6. Registrazione nella traccia di audit
+1. User submits: common_name, email, organization, cert_usage
+2. Initialize or load existing CA (4096-bit RSA)
+3. Generate CSR (or accept provided CSR)
+4. Sign CSR with private CA
+5. Store cert/key/csr files + metadata.json
+6. Log in audit trail
 ```
 
 ---
@@ -180,22 +216,35 @@ Tutti i backend implementano `CertificateStorageBackend`:
 
 | Backend | Posizione di archiviazione |
 |---------|---------------------------|
-| **Filesystem locale** | `certificates/{dominio}/` (predefinito) |
+| **Filesystem locale** | `certificates/{domain}/` (predefinito) |
 | **Azure Key Vault** | Secret, oggetti Certificate nativi, o entrambi — vedere sotto |
 | **AWS Secrets Manager** | AWS Secrets Manager |
 | **HashiCorp Vault** | Vault KV v1/v2 |
 | **Infisical** | Secret Infisical |
-| **S3-compatible** | Any S3 API: MinIO/Ceph self-hosted, or Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
+| **S3-compatible** | Qualsiasi API S3: MinIO/Ceph self-hosted, oppure Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
+
+#### HashiCorp Vault — redirect
+
+La richiesta a Vault trasporta la chiave privata e il token di Vault. CertMate
+segue un redirect solo all'interno dell'indirizzo con cui è stato configurato
+(stesso schema, host e porta) e **rifiuta** un redirect verso un altro host, o
+da https a http, prima di inviarvi qualsiasi cosa. Lo dice nell'errore,
+indicando l'host.
+
+Un nodo standby che non inoltra le richieste risponde proprio con un redirect di
+questo tipo verso il nodo attivo. Con il request forwarding attivo (il default)
+questo non accade mai. Se Vault gira senza, impostare `vault_url` sul nodo
+attivo, oppure su un load balancer che instrada verso di esso.
 
 #### Azure Key Vault — modalità di archiviazione
 
-Il backend Azure Key Vault può conservare i certificati come Secret (impostazione predefinita), come oggetti Certificate nativi, o entrambi, controllato da `certificate_storage.azure_keyvault.storage_mode` in `settings.json`.
+Il backend Azure Key Vault può conservare i certificati come Secret (impostazione predefinita), come oggetti Certificate nativi, o entrambi, a seconda di `certificate_storage.azure_keyvault.storage_mode` in `settings.json`.
 
 | Modalità | Scrive Secret | Scrive oggetto Certificate | Quando utilizzarla |
 |---|---|---|---|
 | `secrets` (predefinita) | sì | no | Comportamento retrocompatibile. Ogni `cert.pem` / `chain.pem` / `fullchain.pem` / `privkey.pem` e i metadati sono archiviati come Secret di Key Vault separati. |
 | `certificate` | no | sì | Collegamento diretto da App Service, Application Gateway, Front Door, API Management, AKS Ingress, ecc. Il cert + catena + chiave privata vengono importati come singolo oggetto `Certificate` PKCS12 con `issuer_name="Unknown"` in modo che Key Vault non tenti di rinnovarlo. |
-| `both` | sì | sì | Configurazioni transitorie o con consumatori misti. Le letture preferiscono sempre il percorso dei Secret (meno costoso). |
+| `both` | sì | sì | Configurazioni transitorie o con consumatori misti. Le letture preferiscono comunque il percorso dei Secret (meno costoso). |
 
 Un'azione manuale **Backfill Certificate objects** nel pannello delle impostazioni di archiviazione (`POST /api/storage/azure-keyvault/backfill-certificates`) importa un oggetto Certificate per ogni dominio che esiste già nel vault come Secret ma non ne ha ancora uno. Gli oggetti Certificate esistenti vengono ignorati. L'endpoint accetta un parametro di query opzionale `?limit=N` per limitare il numero di domini elaborati per chiamata; i vault di grandi dimensioni possono paginare chiamando ripetutamente fino a quando la risposta segnala `0` rimanenti.
 
@@ -264,7 +313,7 @@ Tre chiavi di primo livello controllano la forma della chiave pubblica dei certi
 
 È supportato un override per singolo certificato: ogni voce in `domains` può includere un `key_type` opzionale più `key_size` (RSA) o `elliptic_curve` (ECDSA). Quando l'override è presente, ha la precedenza; altrimenti si applica il valore globale predefinito. I valori predefiniti `rsa`/`2048` rispecchiano il default implicito di certbot che CertMate applicava prima dell'introduzione di questa impostazione, pertanto le installazioni aggiornate non subiscono alcuna variazione a meno che l'operatore non scelga qualcos'altro.
 
-I rinnovi preservano sempre la forma in uso al momento della creazione: certbot persiste `--key-type`, `--rsa-key-size` e `--elliptic-curve` nel proprio `renewal/<dominio>.conf` durante la prima emissione, e `certbot renew --cert-name <dominio>` riutilizza automaticamente quei valori.
+I rinnovi preservano sempre la forma in uso al momento della creazione: certbot persiste `--key-type`, `--rsa-key-size` e `--elliptic-curve` nel proprio `renewal/<domain>.conf` durante la prima emissione, e `certbot renew --cert-name <domain>` riutilizza automaticamente quei valori.
 
 ---
 
@@ -276,11 +325,10 @@ I rinnovi preservano sempre la forma in uso al momento della creazione: certbot 
 |--------|----------|-------|
 | GET | `/api/health` | Verifica dello stato |
 | GET | `/api/certificates` | Elenca tutti i certificati |
-| POST | `/api/certificates` | Crea un nuovo certificato |
+| POST | `/api/certificates/create` | Crea un nuovo certificato |
 | GET | `/api/certificates/{domain}` | Ottieni informazioni sul certificato |
 | POST | `/api/certificates/{domain}/renew` | Rinnova il certificato |
-| GET | `/api/certificates/{domain}/download` | Scarica come ZIP |
-| GET | `/{domain}/tls` | Download diretto della fullchain |
+| GET | `/api/certificates/{domain}/download` | Download: ZIP per impostazione predefinita; `?file=<cert.pem\|chain.pem\|fullchain.pem\|privkey.pem\|combined.pem\|cert.pfx>` per un singolo file; `?format=json` per tutti i PEM inline |
 
 ### Certificati client
 
@@ -313,7 +361,7 @@ I rinnovi preservano sempre la forma in uso al momento della creazione: certbot 
 
 ## Limitazioni principali
 
-1. **Solo Certbot per i certificati server**: esclusivamente challenge DNS-01 ACME
+1. **Solo Certbot per i certificati server**: emessi via ACME e validati con DNS-01, con HTTP-01 (niente wildcard) o da un account Sectigo SCM che autorizza già i nomi
 2. **Archiviazione server centrata sul dominio**: un certificato per directory di dominio
 3. **Nessun database**: un singolo file JSON per la configurazione
 4. **Utilizzo delle chiavi nei certificati server**: nessun controllo sulle estensioni keyUsage/extendedKeyUsage
@@ -326,44 +374,47 @@ I rinnovi preservano sempre la forma in uso al momento della creazione: certbot 
 
 ```
 
- Livello Interfaccia Web
- (dashboard web /client-certificates)
+ Web UI Layer 
+ (/client-certificates web dashboard) 
 
  
 
- Livello API
- (/api/client-certs, /api/ocsp, /api/crl)
- (endpoint REST con Flask-RESTX)
+ API Layer 
+ (/api/client-certs, /api/ocsp, /api/crl) 
+ (REST endpoints with Flask-RESTX) 
 
  
 
- Livello Manager
-
- ClientCertificateManager (ciclo di vita + metadati)
- OCSPResponder (interrogazioni sullo stato dei certificati)
- CRLManager (generazione delle liste di revoca)
- AuditLogger (tracciamento delle operazioni)
- SimpleRateLimiter (limitazione delle richieste)
+ Managers Layer 
+ 
+ ClientCertificateManager (lifecycle + metadata) 
+ OCSPResponder (certificate status queries) 
+ CRLManager (revocation list generation) 
+ AuditLogger (operation tracking) 
+ SimpleRateLimiter (request throttling) 
+ 
 
  
 
- Livello Moduli principali
-
- PrivateCAGenerator (gestione CA)
- CSRHandler (validazione e creazione CSR)
- ClientCertificateManager (operazioni sui certificati)
- OCSPResponder (risposte di stato)
- CRLManager (liste di revoca)
- AuditLogger (registrazione)
- RateLimitConfig/SimpleRateLimiter (limitazione)
+ Core Modules Layer 
+ 
+ PrivateCAGenerator (CA management) 
+ CSRHandler (CSR validation & creation) 
+ ClientCertificateManager (cert operations) 
+ OCSPResponder (status responses) 
+ CRLManager (revocation lists) 
+ AuditLogger (logging) 
+ RateLimitConfig/SimpleRateLimiter (limiting) 
+ 
 
  
 
- Livello Crittografia e archiviazione
-
- Cryptography Library (OpenSSL)
- Archiviazione filesystem (data/certs/)
- Backend di archiviazione (Azure, AWS, Vault, ecc.)
+ Cryptography & Storage Layer 
+ 
+ Cryptography Library (OpenSSL) 
+ File System Storage (data/certs/) 
+ Storage Backends (Azure, AWS, Vault, etc) 
+ 
 
 ```
 
@@ -380,7 +431,7 @@ I rinnovi preservano sempre la forma in uso al momento della creazione: certbot 
 - Periodo di validità di 10 anni
 - Certificati auto-firmati con estensioni appropriate
 - Funzionalità di backup e ripristino della CA
-- Capacità di firma CRL
+- Capacità di firma della CRL
 
 **File creati**:
 - `data/certs/ca/ca.crt` — Certificato CA (PEM)
@@ -430,7 +481,7 @@ save_csr_and_key() # Salvare CSR e chiave in file
 - Rinnova certificati (stesso CN, nuovo numero seriale)
 - Pianificazione del rinnovo automatico
 - Archiviazione dei metadati (JSON per certificato)
-- Supporto per 30.000+ certificati simultanei
+- Supporto per oltre 30.000 certificati simultanei
 
 **Struttura di archiviazione**:
 ```
@@ -462,7 +513,7 @@ data/certs/client/
  "locality": "San Francisco",
  "serial_number": "12345678901234567890",
  "key_usage": ["digitalSignature", "keyEncipherment"],
- "extended_key_usage": ["serverAuth", "clientAuth"],
+ "extended_key_usage": ["clientAuth"],
  "created_at": "2024-10-30T18:00:00Z",
  "expires_at": "2025-10-30T18:00:00Z",
  "cert_usage": "api-mtls",
@@ -496,7 +547,7 @@ get_statistics() # Ottenere le statistiche di utilizzo
 
 ### 4. OCSPResponder (`modules/core/ocsp_crl.py`)
 
-**Scopo**: Fornire risposte al protocollo Online Certificate Status Protocol (OCSP)
+**Scopo**: Fornire risposte Online Certificate Status Protocol (OCSP)
 
 **Funzionalità principali**:
 - Interroga lo stato del certificato (good/revoked/unknown)
@@ -628,51 +679,51 @@ Stato HTTP: `429 Too Many Requests`
 ### Flusso di creazione del certificato
 
 ```
-Richiesta Utente/API
+User/API Request
  ↓
 ClientCertificateManager.create_client_certificate()
- Generare il CSR (o accettare un CSR fornito)
- Firmare il CSR con la CA privata
- Creare metadata.json
- Archiviare i file cert/chiave/csr
- Registrare nella traccia di audit
- Restituire i dati del certificato
+ Generate CSR (or accept provided CSR)
+ Sign CSR with private CA
+ Create metadata.json
+ Store cert/key/csr files
+ Log in audit trail
+ Return cert data
  ↓
-Risposta all'Utente
+Response to User
 ```
 
 ### Flusso di revoca del certificato
 
 ```
-Richiesta Utente/API (endpoint di revoca)
+User/API Request (revoke endpoint)
  ↓
 ClientCertificateManager.revoke_certificate()
- Caricare i metadati del certificato
- Aggiornare lo stato di revoca
- Salvare i metadati aggiornati
- Registrare nella traccia di audit
- Avviare l'aggiornamento della CRL
- Restituire il successo
+ Load certificate metadata
+ Update revocation status
+ Save updated metadata
+ Log in audit trail
+ Trigger CRL update
+ Return success
  ↓
-Risposta all'Utente
+Response to User
 ```
 
 ### Flusso di interrogazione OCSP
 
 ```
-Richiesta OCSP del client (numero seriale)
+Client OCSP Request (serial number)
  ↓
 OCSPResponder.get_cert_status()
- Ricercare il certificato per numero seriale
- Verificare lo stato di revoca
- Restituire lo stato (good/revoked/unknown)
+ Search certificate by serial
+ Check revocation status
+ Return status (good/revoked/unknown)
  ↓
 OCSPResponder.generate_ocsp_response()
- Formattare la risposta OCSP
- Aggiungere i timestamp
- Restituire la risposta
+ Format OCSP response
+ Add timestamps
+ Return response
  ↓
-Risposta al Client
+Response to Client
 ```
 
 ---
@@ -683,27 +734,27 @@ Risposta al Client
 
 ```
 data/certs/
-  ca/                      # Certificate Authority
-    ca.crt                 # Certificato CA (pubblico)
-    ca.key                 # Chiave privata CA (0600)
-    ca_metadata.json       # Metadati CA
-    crl.pem                # Lista di revoca dei certificati
+ ca/ # Certificate Authority
+ ca.crt # Certificato CA (pubblico)
+ ca.key # Chiave privata CA (0600)
+ ca_metadata.json # Metadati CA
+ crl.pem # Lista di revoca dei certificati
 
-  client/                  # Certificati client
-    api-mtls/              # Certificati API mTLS
-      cert-001/
-        cert.crt
-        cert.key
-        cert.csr
-        metadata.json
-      ...
-    vpn/                   # Certificati VPN
-      ...
-    other/                 # Altri tipi di utilizzo
-      ...
+ client/ # Certificati client
+ api-mtls/ # Certificati API mTLS
+ cert-001/
+ cert.crt
+ cert.key
+ cert.csr
+ metadata.json
+ ...
+ vpn/ # Certificati VPN
+ ...
+ other/ # Altri tipi di utilizzo
+ ...
 
-  crl/                     # Archiviazione CRL
-    (CRL generate)
+ crl/ # Archiviazione CRL
+ (generated CRLs)
 ```
 
 ### File di metadati
@@ -724,7 +775,7 @@ Ogni certificato ha un file `metadata.json` contenente:
 
 - **Permessi dei file**: 0600 (lettura/scrittura solo per il proprietario)
 - **Formato delle chiavi**: PEM nel formato tradizionale OpenSSL
-- **Cifratura delle chiavi**: chiavi archiviate cifrate a riposo se si utilizzano backend di archiviazione
+- **Nessuna cifratura delle chiavi**: le chiavi private vengono scritte in chiaro, protette dai permessi dei file indicati sopra; un backend di archiviazione remoto conserva la sua copia con la cifratura a riposo che quel servizio applica
 
 ### Firma dei certificati
 
@@ -758,14 +809,14 @@ Ogni certificato ha un file `metadata.json` contenente:
 ### Prestazioni dell'API
 
 - **Rate Limiting**: previene l'esaurimento delle risorse
-- **Progettazione stateless**: può eseguire più istanze
+- **Istanza singola**: un solo worker gunicorn esegue l'API e lo scheduler dei rinnovi; vedere [Disponibilità e failover](#disponibilità-e-failover)
 - **Operazioni in batch**: massimo 100 righe per richiesta (oltre, l'API risponde 400)
 
 ### Rinnovo automatico
 
-- **Pianificato**: ogni giorno alle ore 3:00 (configurabile)
-- **Soglia**: 30 giorni prima della scadenza (configurabile)
-- **Progressivo**: continua in caso di errori, registra per la revisione
+- **Pianificato**: ogni giorno, i certificati server tra le 01:00 e le 03:00 (alle 02:00 con fino a un'ora di scarto casuale, prima o dopo), i certificati client tra le 02:00 e le 04:00
+- **Quando**: per impostazione predefinita 30 giorni prima della scadenza (`renewal_threshold_days`), quando resta un terzo della durata per un certificato che vive meno di 60 giorni (metà sotto i 10 giorni), oppure dove lo colloca la finestra di rinnovo della CA (ARI); vedere [la guida](./guide.md#quando-si-rinnova-un-certificato)
+- **Tollerante agli errori**: continua in caso di errori, registra per la revisione
 
 ---
 
@@ -784,7 +835,7 @@ Ogni certificato ha un file `metadata.json` contenente:
 - Abilitare la registrazione di audit per la conformità
 - Configurare il rate limiting in base al carico
 - Aggiornamenti regolari della CRL (giornalieri o alla revoca)
-- Effettuare il backup delle chiavi CA e dei metadati
+- Effettuare il backup delle chiavi CA e dei metadati con un archivio di disaster recovery (`include_secrets=true` + `CERTMATE_BACKUP_PASSPHRASE`); il backup predefinito, sicuro da condividere, lascia fuori di proposito la chiave della CA
 - Monitorare i registri di audit per attività sospette
 
 ### Disponibilità e failover
@@ -804,14 +855,16 @@ Come si ottiene invece la disponibilità — **attivo/standby**:
    audit, CA privata e i certificati stessi.
 2. Configurare un [backend di archiviazione](#backend-di-archiviazione) (Azure Key
    Vault, AWS Secrets Manager, Vault, Infisical, S3-compatible) perché anche il materiale dei
-   certificati viva indipendentemente dal nodo.
+   certificati viva da qualche parte indipendentemente dal nodo.
 3. Far girare **una** istanza. In caso di guasto, avviarne una di ricambio
    sugli stessi dati e puntarci l'ingress. Una finestra di rinnovo mancata non
-   è urgente: il rinnovo parte 30 giorni prima della scadenza, quindi un
-   failover ha settimane di margine.
+   è urgente per un certificato da 90 giorni — il rinnovo parte 30 giorni prima
+   della scadenza, quindi un failover ha settimane di margine. Lo è per quelli
+   a breve durata: un certificato da 160 ore si rinnova quando ne restano circa
+   80, quindi un failover ha giorni, non settimane.
 4. Mantenere [backup di disaster recovery](./guide.md) con
    `CERTMATE_BACKUP_PASSPHRASE` impostata, così una ricostruzione da zero resta
-   possibile anche perdendo il volume.
+   possibile quando si perde il volume stesso.
 
 Ad essere altamente disponibili devono essere i consumatori dei certificati.
 CertMate emette e distribuisce; non sta nel percorso delle richieste dei
@@ -825,7 +878,7 @@ servizi per cui emette, e se resta giù un'ora non trascina giù nient'altro.
 
 - Utilizza i backend di archiviazione esistenti di CertMate
 - Integrato nei manager di app.py
-- Integrato nella struttura API Flask-RESTX
+- Parte della struttura API Flask-RESTX
 - Pianificato con APScheduler
 
 ### Sistemi esterni
@@ -833,7 +886,7 @@ servizi per cui emette, e se resta giù un'ora non trascina giù nient'altro.
 - Può esportare certificati tramite API
 - Può interrogare lo stato tramite OCSP
 - Può recuperare la CRL per la validazione
-- Supporta l'integrazione webhook/callback (futuro)
+- Invia [notifiche webhook](../webhooks.md) sugli eventi dei certificati ed esegue i [deploy hook](./deploy-hooks.md)
 
 ---
 
@@ -842,10 +895,7 @@ servizi per cui emette, e se resta giù un'ora non trascina giù nient'altro.
 ### Miglioramenti previsti
 
 1. **Protezione con password della CA** — Cifrare le chiavi CA con password
-2. **Audit avanzato** — Controllo degli accessi basato sui ruoli
-3. **Notifiche webhook** — Per eventi sui certificati
-4. **Firma di certificati** — Accettare CSR da fonti esterne
-5. **Token hardware** — Supporto PKCS#11 per HSM
+2. **Token hardware** — Supporto PKCS#11 per HSM
 
 ### Punti di estensione
 
@@ -870,7 +920,7 @@ servizi per cui emette, e se resta giù un'ora non trascina giù nient'altro.
 
 - Disponibilità della CA
 - Funzionamento del registro di audit
-- Reattività del limitatore di velocità
+- Reattività del rate limiter
 - Stato di generazione della CRL
 
 ---
