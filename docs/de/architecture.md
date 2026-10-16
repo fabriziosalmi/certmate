@@ -1,8 +1,6 @@
 # CertMate Architektur
 
-<!-- CERTMATE-TRANSLATED-FROM 80c544b5f465e5d7 -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Diese Übersetzung ist nicht aktuell.** Die englische Fassung ([`docs/architecture.md`](../architecture.md)) wurde seitdem geändert und ist maßgeblich. Bei Abweichungen gilt das englische Dokument.
+<!-- CERTMATE-TRANSLATED-FROM 48da74fc37400a36 -->
 
 Dieses Dokument beschreibt die vollständige Architektur von CertMate — sowohl das Hauptsystem für Server-Zertifikate als auch das Teilsystem für Client-Zertifikate.
 
@@ -75,15 +73,36 @@ CertMate ist ein modulares, erweiterbares SSL/TLS-Zertifikatsverwaltungssystem, 
 │  │          Storage Layer (Pluggable Backends)    │  │
 │  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
 │  └───────────────────────────────────────────────┘  │
+│                                                     │
 └─────────────────────────────────────────────────────┘
+
+        ┌─────────────────────────────────────┐
+        │  Composition root — modules/factory.py
+        │                                     │
+        │  create_app() constructs every       │
+        │  manager and REGISTERS the API and   │
+        │  web layers onto the Flask app.      │
+        └───┬──────────────┬──────────────┬────┘
+            │ constructs   │ registers    │ registers
+            ▼              ▼              ▼
+      Manager Layer   REST API      Web Routes
+        (core/)        (api/)         (web/)
 ```
+
+Jeder Pfeil zeigt nach unten. Die Composition Root liegt **oberhalb** der drei Schichten, die sie zusammensetzt, nämlich in `modules/factory.py`; deshalb importiert `modules/core/` weder `modules/api/` noch `modules/web/`.
+
+Das war nicht immer so. Bis #668 lag die Root in `modules/core/factory.py` und importierte die beiden Schichten darüber — die einzige nach oben gerichtete Kante im System, in diesem Diagramm eingezeichnet und als bewusste Ausnahme begründet. Die Begründung war stichhaltig, soweit sie reichte: Eine Composition Root muss wissen, was sie zusammensetzt, und die Alternativen sind eine Schicht, die ihre eigenen Abhängigkeiten konstruiert, oder eine Registry, die dieselbe Kante hinter einer Indirektion versteckt.
+
+Was die Begründung übersah: Die dritte Option ist die billige. Eine Composition Root muss nicht *innerhalb* einer der Schichten liegen, die sie zusammensetzt. Die Datei ein Verzeichnis nach oben zu verschieben, beseitigt die Ausnahme, statt sie zu dokumentieren, und der Zyklus, der sie unvermeidbar erscheinen ließ, erwies sich als genau eine Funktion breit: `api/client_certificates.py` importierte `error_code_for_status` aus der Root zurück, und die Ableitung von `NOT_FOUND` aus 404 gehörte nie dorthin. Sie liegt jetzt in `modules/core/http_errors.py`.
+
+Eine einzelne dokumentierte Ausnahme ist ein Design; trotzdem lohnt es sich zu prüfen, ob sie eine sein muss. `tests/test_the_layers_point_one_way.py` sorgt dafür, dass dieser Absatz wahr bleibt.
 
 ---
 
 ## Manager-Klassen
 
 ```
-CertMateApp (Hauptanwendung)
+CertMateApp (main application)
   ├── FileOperations          # Datei-Ein-/Ausgabe, Sicherungen
   ├── SettingsManager         # Laden/Speichern von settings.json
   ├── AuthManager             # Token-Validierung
@@ -185,7 +204,13 @@ Alle Backends implementieren `CertificateStorageBackend`:
 | **AWS Secrets Manager** | AWS Secrets Manager |
 | **HashiCorp Vault** | Vault KV v1/v2 |
 | **Infisical** | Infisical-Secrets |
-| **S3-compatible** | Any S3 API: MinIO/Ceph self-hosted, or Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
+| **S3-compatible** | Jede S3-API: MinIO/Ceph selbst gehostet oder Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
+
+#### HashiCorp Vault — Redirects
+
+Die Anfrage an Vault enthält den privaten Schlüssel und den Vault-Token. CertMate folgt einem Redirect nur innerhalb der Adresse, mit der es konfiguriert wurde (gleiches Schema, gleicher Host und Port), und **verweigert** einen Redirect auf einen anderen Host oder von https auf http, bevor irgendetwas dorthin gesendet wird. Die Fehlermeldung sagt das ausdrücklich und nennt den Host.
+
+Ein Standby-Knoten, der Anfragen nicht weiterleitet, antwortet mit genau einem solchen Redirect auf den aktiven Knoten. Mit eingeschaltetem Request Forwarding (der Standard) passiert das nie. Läuft Ihr Vault ohne Request Forwarding, setzen Sie `vault_url` auf den aktiven Knoten oder auf einen Load Balancer, der zu ihm routet.
 
 #### Azure Key Vault — Speichermodi
 
@@ -279,7 +304,7 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
 | POST | `/api/certificates` | Neues Zertifikat erstellen |
 | GET | `/api/certificates/{domain}` | Zertifikatsinformationen abrufen |
 | POST | `/api/certificates/{domain}/renew` | Zertifikat erneuern |
-| GET | `/api/certificates/{domain}/download` | Als ZIP herunterladen |
+| GET | `/api/certificates/{domain}/download` | Download: standardmäßig als ZIP; `?file=<cert.pem\|chain.pem\|fullchain.pem\|privkey.pem\|combined.pem\|cert.pfx>` für eine einzelne Datei; `?format=json` für alle PEM-Dateien inline |
 | GET | `/{domain}/tls` | Direkter Fullchain-Download |
 
 ### Client-Zertifikate
@@ -330,11 +355,13 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
  (/client-certificates web dashboard) 
 
  
+
  API Layer 
  (/api/client-certs, /api/ocsp, /api/crl) 
  (REST endpoints with Flask-RESTX) 
 
  
+
  Managers Layer 
  
  ClientCertificateManager (lifecycle + metadata) 
@@ -345,6 +372,7 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
  
 
  
+
  Core Modules Layer 
  
  PrivateCAGenerator (CA management) 
@@ -357,6 +385,7 @@ Erneuerungen behalten stets die Form bei, die zum Zeitpunkt der Erstellung gült
  
 
  
+
  Cryptography & Storage Layer 
  
  Cryptography Library (OpenSSL) 
@@ -461,7 +490,7 @@ data/certs/client/
  "locality": "San Francisco",
  "serial_number": "12345678901234567890",
  "key_usage": ["digitalSignature", "keyEncipherment"],
- "extended_key_usage": ["serverAuth", "clientAuth"],
+ "extended_key_usage": ["clientAuth"],
  "created_at": "2024-10-30T18:00:00Z",
  "expires_at": "2025-10-30T18:00:00Z",
  "cert_usage": "api-mtls",
@@ -762,8 +791,8 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 
 ### Automatische Erneuerung
 
-- **Geplant**: Täglich um 3 Uhr (konfigurierbar)
-- **Schwellenwert**: 30 Tage vor Ablauf (konfigurierbar)
+- **Geplant**: Täglich, Server-Zertifikate zwischen 01:00 und 03:00 Uhr (02:00 Uhr mit bis zu einer Stunde zufälliger Abweichung in beide Richtungen), Client-Zertifikate zwischen 02:00 und 04:00 Uhr
+- **Wann**: Standardmäßig 30 Tage vor Ablauf (`renewal_threshold_days`), bei einem Zertifikat mit weniger als 60 Tagen Laufzeit bei einem verbleibenden Drittel der Laufzeit (unter 10 Tagen bei der Hälfte), oder dort, wo das Erneuerungsfenster der CA (ARI) die Erneuerung ansetzt; siehe [die Anleitung](./guide.md#wann-ein-zertifikat-erneuert-wird)
 - **Fehlertolerant**: Setzt bei Fehlern fort und protokolliert zur Überprüfung
 
 ---
@@ -783,7 +812,7 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 - Audit-Protokollierung zur Compliance aktivieren
 - Rate Limiting entsprechend der Last konfigurieren
 - Regelmäßige CRL-Aktualisierungen (täglich oder bei Sperrungen)
-- CA-Schlüssel und Metadaten sichern
+- CA-Schlüssel und Metadaten mit einem Disaster-Recovery-Archiv sichern (`include_secrets=true` + `CERTMATE_BACKUP_PASSPHRASE`); das standardmäßige, zur Weitergabe sichere Backup lässt den CA-Schlüssel absichtlich weg
 - Audit-Protokolle auf verdächtige Aktivitäten überwachen
 
 ### Verfügbarkeit und Failover
@@ -806,8 +835,11 @@ So sieht Verfügbarkeit stattdessen aus — **aktiv/standby**:
    unabhängig vom Knoten liegt.
 3. **Eine** Instanz betreiben. Bei einem Ausfall einen Ersatz gegen dieselben
    Daten starten und den Ingress darauf zeigen lassen. Ein verpasstes
-   Erneuerungsfenster ist nicht dringend: die Erneuerung beginnt 30 Tage vor
-   Ablauf, ein Failover hat also Wochen Spielraum.
+   Erneuerungsfenster ist bei einem 90-Tage-Zertifikat nicht dringend: die
+   Erneuerung beginnt 30 Tage vor Ablauf, ein Failover hat also Wochen
+   Spielraum. Bei kurzlebigen Zertifikaten ist es das sehr wohl: ein
+   160-Stunden-Zertifikat wird mit etwa 80 verbleibenden Stunden erneuert, ein
+   Failover hat also Tage, nicht Wochen.
 4. [Disaster-Recovery-Backups](./guide.md) mit gesetztem
    `CERTMATE_BACKUP_PASSPHRASE` pflegen, damit ein Neuaufbau von Grund auf
    möglich bleibt, wenn das Volume selbst verloren geht.
