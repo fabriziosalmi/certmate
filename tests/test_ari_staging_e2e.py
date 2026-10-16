@@ -174,7 +174,9 @@ def test_03_the_window_drives_a_real_renewal(instance):
     # also calls the certificate due at that instant, so the renewal is not one the CA brought
     # forward. Before #393 the threshold ran on the wall clock and this was always 1. Either
     # way the renewal is forced and reaches the CA, which is what the assertions around this
-    # one hold.
+    # one hold. Measured on 2026-10-16, staging issues 64-day certificates: its window then
+    # falls after the threshold's point, so this renewal is the threshold's and an early one,
+    # and it passes the age guard only because the guard measures the age on this clock too.
     planned = cert_before.not_valid_after_utc.replace(tzinfo=None) - timedelta(days=30)
     assert summary['ari_advanced'] == (1 if renew_at < planned else 0), (renew_at, planned, summary)
 
