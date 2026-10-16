@@ -97,9 +97,6 @@
     // Clear filters function
     function clearFilters() {
         currentTagFilter = '';
-        certificateSearch = '';
-        var search = document.getElementById('certificateSearch');
-        if (search) search.value = '';
         renderTagFilterBar();
         setStatusFilter('all');
     }
@@ -378,7 +375,6 @@
     // Active tag filter (#1043): one tag, or '' for none. Combined with the status
     // chips, so "expiring" + "loadbalancer" is a question the page can answer.
     var currentTagFilter = '';
-    var certificateSearch = '';
     var certificatePage = 1;
     var certificatePageSize = 25;
     var filteredCertificates = [];
@@ -389,12 +385,6 @@
         var savedPageSize = Number(localStorage.getItem('certificate-page-size'));
         if ([25, 50, 100].indexOf(savedPageSize) !== -1) certificatePageSize = savedPageSize;
     } catch (e) { /* browser storage unavailable */ }
-
-    function searchCertificates(input) {
-        certificateSearch = input.value.trim().toLowerCase();
-        certificatePage = 1;
-        filterCertificates();
-    }
 
     function changeCertificatePageSize(select) {
         var size = Number(select.value);
@@ -448,7 +438,8 @@
         }
 
         var filteredCerts = allCertificates.filter(function (cert) {
-            // Search and filters apply across the whole list, before pagination.
+            // Status and tag filters apply to the whole list, before pagination.
+            // Free-text search lives in the ⌘K palette.
             var matchesStatus = true;
             if (statusFilter !== 'all') {
                 var isExpired = cert.exists && hasExpired(cert);
@@ -471,9 +462,7 @@
             var matchesTag = !currentTagFilter ||
                 (Array.isArray(cert.tags) && cert.tags.indexOf(currentTagFilter) !== -1);
 
-            var searchable = [cert.domain, cert.dns_provider, cert.ca_provider, cert.notes]
-                .concat(cert.san_domains || [], cert.tags || []).join(' ').toLowerCase();
-            return matchesStatus && matchesTag && (!certificateSearch || searchable.indexOf(certificateSearch) !== -1);
+            return matchesStatus && matchesTag;
         });
 
         displayCertificates(filteredCerts);
@@ -874,7 +863,7 @@
         checkVisibleDeployments();
 
         if (certificates.length === 0) {
-            var isFiltered = currentStatusFilter !== 'all' || currentTagFilter || certificateSearch;
+            var isFiltered = currentStatusFilter !== 'all' || currentTagFilter;
             thead.style.display = 'none';
 
             if (isFiltered) {
@@ -4424,7 +4413,6 @@
         'updateAccountSelection', 'updateCAProviderInfo'
     ]);
     CertMate.actions({
-        searchCertificates: searchCertificates,
         changeCertificatePageSize: changeCertificatePageSize,
         changeCertificatePage: changeCertificatePage,
         // A row of the list opens its certificate; the name is on the row.

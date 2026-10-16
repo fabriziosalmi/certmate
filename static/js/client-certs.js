@@ -8,7 +8,6 @@
     var escapeHtml = CertMate.escapeHtml;
     var currentCertId = null;
     var certificatesData = [];
-    var ccSearch = '';
     var ccPage = 1;
     var ccPageSize = 25;
     try {
@@ -142,13 +141,13 @@
     function ccRenderCertificates() {
         var tbody = document.getElementById('certTableBody');
         if (!tbody) return;
+        // The chips filter what was loaded, before pagination; free-text CN/email
+        // search lives in the global ⌘K palette.
         var filtered = ccApplySort(certificatesData.filter(function (cert) {
             var usage = !ccCurrentUsage || cert.cert_usage === ccCurrentUsage;
             var status = !ccCurrentStatus || (ccCurrentStatus === 'active' && !cert.revoked) ||
                 (ccCurrentStatus === 'revoked' && cert.revoked);
-            var text = [cert.common_name, cert.email, cert.identifier, cert.cert_usage,
-                cert.organization].join(' ').toLowerCase();
-            return usage && status && (!ccSearch || text.indexOf(ccSearch) !== -1);
+            return usage && status;
         }));
         var pages = Math.max(1, Math.ceil(filtered.length / ccPageSize));
         ccPage = Math.max(1, Math.min(ccPage, pages));
@@ -164,7 +163,7 @@
         if (filtered.length === 0) {
             // Distinguish "none exist yet" (offer a CTA) from "none match the
             // active usage/status filter" (offer a reorientation hint).
-            var isFiltered = ccCurrentUsage || ccCurrentStatus || ccSearch;
+            var isFiltered = ccCurrentUsage || ccCurrentStatus;
             if (isFiltered) {
                 tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
                     '<div class="mx-auto max-w-sm text-center">' +
@@ -582,11 +581,6 @@
         'ccToggleCsrBlock', 'closeCertModal', 'downloadCertFile'
     ]);
     CertMate.actions({
-        ccSearchCertificates: function (input) {
-            ccSearch = input.value.trim().toLowerCase();
-            ccPage = 1;
-            ccRenderCertificates();
-        },
         ccChangePageSize: function (select) {
             var size = Number(select.value);
             if ([25, 50, 100].indexOf(size) === -1) return;

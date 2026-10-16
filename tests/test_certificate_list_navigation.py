@@ -1,4 +1,9 @@
-"""Search and pagination bound rendering and automatic deployment checks."""
+"""Pagination bounds rendering and automatic deployment checks.
+
+The certificate lists have no search field of their own: the ⌘K palette is the
+one place certificates are searched (the redesign's decision, recorded in the
+templates), so the same query cannot give two answers.
+"""
 
 import subprocess
 from pathlib import Path
@@ -23,7 +28,7 @@ global.localStorage = {getItem() { return null; }, setItem(key, value) { savedSi
 const list = {innerHTML: '', children: [1], querySelectorAll() { return []; }, querySelector() { return null; }};
 const elements = {
   createCertForm: {addEventListener() {}}, certificatesList: list,
-  certificateSearch: {value: ''}, certificatePageSummary: {textContent: ''},
+  certificatePageSummary: {textContent: ''},
   certificatePreviousPage: {}, certificateNextPage: {}
 };
 const head = {style: {}};
@@ -55,11 +60,6 @@ actions.changeCertificatePage(1);
 check(rows() === 25 && list.innerHTML.includes('host025') && !list.innerHTML.includes('host000'), 'Second page wrong');
 actions.changeCertificatePage(1);
 check(rows() === 13 && elements.certificateNextPage.disabled, 'Last page wrong');
-actions.searchCertificates({value: 'SPECIAL'});
-check(rows() === 1 && list.innerHTML.includes('host062'), 'Search misses SAN on another page');
-actions.searchCertificates({value: 'ticket 1234'});
-check(rows() === 1 && list.innerHTML.includes('host061'), 'Search misses notes');
-actions.searchCertificates({value: ''});
 window.testTag('production');
 check(rows() === 3, 'Tag filter not combined');
 window.clearFilters();
@@ -80,7 +80,7 @@ window.testChecks();
 const pending = Array.from(callbacks.values()).pop(); pending();
 Promise.resolve().then(() => Promise.resolve()).then(() => {
   check(window.checked.length === 3, 'Probe batch is not bounded');
-  actions.searchCertificates({value: 'not-found'});
+  window.testTag('production');
   const scheduled = Array.from(callbacks.values());
   scheduled.forEach(fn => fn());
   check(window.checked.length === 3, 'Obsolete page continued checking off-screen certificates');
@@ -120,9 +120,6 @@ window.testLoad().then(() => {
   check(rows() === 25 && elements.clientCertificatePageSummary.textContent === '1–25 of 63', 'Initial client page not bounded');
   actions.ccChangePage(2);
   check(rows() === 13 && elements.clientCertificateNextPage.disabled, 'Last client page wrong');
-  actions.ccSearchCertificates({value: 'USER62@EXAMPLE.COM'});
-  check(rows() === 1 && body.innerHTML.includes('client062'), 'Client email search misses another page');
-  actions.ccSearchCertificates({value: ''});
   window.ccSetStatusFilter('active'); window.ccSetUsageFilter('vpn');
   check(rows() === 1 && requests === 1, 'Client filters refetch instead of using loaded data');
   window.ccSetUsageFilter(''); actions.ccChangePageSize({value: '50'});
@@ -131,10 +128,17 @@ window.testLoad().then(() => {
   check(body.innerHTML.includes('client000'), 'Client sort not applied before pagination');
   window.ccSetStatusFilter('revoked');
   check(rows() === 1 && body.innerHTML.includes('client061'), 'Revoked client filter wrong');
-  actions.ccSearchCertificates({value: 'missing'});
+  window.ccSetUsageFilter('vpn');
   check(rows() === 0 && body.innerHTML.includes('No matching client certificates'), 'Empty filtered view incorrect');
 }).catch(e => {console.error(e); process.exitCode = 1;});
 """
     result = subprocess.run([node, '-e', script, str(js / 'certmate.js'),
                              str(js / 'client-certs.js')], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_the_certificate_lists_have_no_search_field_of_their_own():
+    templates = Path(__file__).resolve().parent.parent / 'templates'
+    for name in ('index.html', 'partials/_client_certs.html'):
+        assert 'type="search"' not in (templates / name).read_text(encoding='utf-8'), name
+
