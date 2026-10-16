@@ -893,9 +893,15 @@ def client_ca_subject_from_environment() -> Optional[Dict[str, str]]:
         CERTMATE_CLIENT_CA_COMMON_NAME          CN
 
     A variable that is not set keeps the default for its field, so setting
-    only the organisation does not also strip the state. A variable set to the
-    empty string leaves the field out, which is how `_build_subject` already
-    treats an empty value — except the common name, which falls back.
+    only the organisation does not also strip the state.
+
+    Empty counts as not set. The shipped compose files pass each variable as
+    `VAR=${VAR:-}`, so every one of them reaches the container — empty when
+    the operator said nothing. Reading empty as "leave the field out" would
+    have turned an install that configures nothing into a CA named only
+    `CN=CertMate CA`. To leave a field out deliberately, use
+    `client_ca_subject` or the `subject` of the reset endpoint, where an
+    empty value already means exactly that.
 
     Each name is written out rather than built in a loop, because
     tests/test_every_env_var_is_documented.py finds the variables by reading
@@ -909,7 +915,7 @@ def client_ca_subject_from_environment() -> Optional[Dict[str, str]]:
         'common_name': os.environ.get('CERTMATE_CLIENT_CA_COMMON_NAME'),
     }
     present = {field: value.strip() for field, value in declared.items()
-               if value is not None}
+               if value and value.strip()}
     if not present:
         return None
     subject = dict(PrivateCAGenerator.DEFAULT_SUBJECT)

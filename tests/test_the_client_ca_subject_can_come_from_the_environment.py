@@ -14,8 +14,10 @@ The properties that matter:
 
 * **nothing set, nothing changes** — the control, and the compatibility
   guarantee for every existing install;
-* **an unset variable keeps its field's default**, so naming only the
-  organisation does not strip the state as a side effect;
+* **an unset or empty variable keeps its field's default**, so naming only
+  the organisation does not strip the state as a side effect — and the
+  compose files, which pass every variable through as `${VAR:-}`, do not
+  turn a default install into a CA with no organisation;
 * **the setting still wins**, because it is the deliberate act for this
   instance and the environment is the bootstrap;
 * **an existing CA is never replaced** because a variable changed — the same
@@ -96,16 +98,29 @@ def test_a_field_not_declared_keeps_its_default(monkeypatch):
         assert subject[field] == PrivateCAGenerator.DEFAULT_SUBJECT[field]
 
 
-def test_a_field_declared_empty_is_left_out_of_the_ca(monkeypatch, tmp_path):
-    """`CERTMATE_CLIENT_CA_STATE=` is how to say "we have no state", which is
-    what an empty value already means in the setting."""
-    _declare(monkeypatch, dict(ACME, state=''))
+def test_the_compose_file_passing_every_variable_empty_changes_nothing(monkeypatch, tmp_path):
+    """docker-compose.yml passes each variable as `VAR=${VAR:-}`, so an
+    operator who sets none of them still hands the container five empty
+    strings. That must be the default CA, not one stripped to its CN."""
+    _declare(monkeypatch, {field: '' for field in VARIABLES})
 
-    ca = PrivateCAGenerator(tmp_path / 'ca', subject=client_ca_subject_from_environment())
+    assert client_ca_subject_from_environment() is None
+
+    ca = PrivateCAGenerator(tmp_path / 'ca', subject=resolve_client_ca_subject({}))
     assert ca.initialize()
+    assert _value(tmp_path / 'ca', NameOID.COUNTRY_NAME) == 'CH'
+    assert _value(tmp_path / 'ca', NameOID.ORGANIZATION_NAME) == 'CertMate'
 
-    assert _value(tmp_path / 'ca', NameOID.STATE_OR_PROVINCE_NAME) is None
-    assert _value(tmp_path / 'ca', NameOID.ORGANIZATION_NAME) == 'Acme SL'
+
+def test_a_field_passed_empty_keeps_its_default(monkeypatch):
+    """The same rule one field at a time: the compose file sets the state to
+    '' when only the organisation was named in .env."""
+    _declare(monkeypatch, {'organization': 'Acme SL', 'state': '  '})
+
+    subject = client_ca_subject_from_environment()
+
+    assert subject['organization'] == 'Acme SL'
+    assert subject['state'] == PrivateCAGenerator.DEFAULT_SUBJECT['state']
 
 
 def test_surrounding_whitespace_is_not_part_of_the_name(monkeypatch):
