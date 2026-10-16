@@ -1,8 +1,6 @@
 # Guía de pruebas
 
 <!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
-<!-- CERTMATE-STALE-TRANSLATION -->
-> **Esta traducción no se corresponde con la versión en inglés** ([`docs/testing.md`](../testing.md)), que es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
 
 Esta guía cubre el framework de pruebas de CertMate, incluyendo pruebas unitarias, pruebas de integración y validación de endpoints API.
 
@@ -19,7 +17,7 @@ pip install -r requirements-test.txt
 
 # Ejecutar todas las pruebas. La expresión de marcadores no es opcional:
 # un `pytest` a secas ejecuta también la suite Playwright `ui` en este
-# proceso y las pruebas `network` contra CA reales.
+# proceso y las pruebas `network` contra CA reales. CONTRIBUTING.md explica por qué.
 pytest -m "not ui and not network"
 
 # Ejecutar las pruebas con cobertura
@@ -31,7 +29,7 @@ pytest --cov=. --cov-report=html
 ## Estructura de las pruebas
 
 ```
-Directorio raíz:
+Root directory:
   conftest.py                              # Configuración de recolección y fixtures compartidas
   pytest.ini                               # Configuración y marcadores de prueba
   test_certificate_creation.py             # Pruebas de creación de certificados
@@ -55,7 +53,7 @@ Directorio raíz:
 ```bash
 # Ejecutar todas las pruebas. La expresión de marcadores no es opcional:
 # un `pytest` a secas ejecuta también la suite Playwright `ui` en este
-# proceso y las pruebas `network` contra CA reales.
+# proceso y las pruebas `network` contra CA reales. CONTRIBUTING.md explica por qué.
 pytest -m "not ui and not network"
 
 # Ejecutar con salida detallada
@@ -147,7 +145,7 @@ pytest -m "not ui"
 pytest -m "not ui and not e2e" -q
 ```
 
-La CI ejecuta `pytest -m "not ui and not network"` con un mínimo de cobertura; la suite de UI se ejecuta en su propio workflow, las comprobaciones de accesibilidad de las CA se ejecutan cada semana (como comprobación obligatoria pondrían en rojo cada PR por la caída de un tercero), y la puerta de extremo a extremo con certificados reales se ejecuta contra Let's Encrypt staging antes de una release.
+La CI ejecuta `pytest -m "not ui and not network"` con un mínimo de cobertura; la suite de UI se ejecuta en su propio workflow, las comprobaciones de que las CA son alcanzables se ejecutan con una programación semanal (como comprobación obligatoria pondrían en rojo cada PR por la caída del servicio de otro), y la puerta de extremo a extremo con certificados reales se ejecuta contra Let's Encrypt staging antes de una release.
 
 ### Endpoints probados
 
@@ -157,7 +155,7 @@ La CI ejecuta `pytest -m "not ui and not network"` con un mínimo de cobertura; 
 | **Ajustes** | `GET /api/settings`, `GET /api/settings/dns-providers`, `POST /api/settings` |
 | **Certificados** | `GET /api/certificates`, `POST /api/certificates/create`, download, renew |
 | **Cache** | `GET /api/cache/stats`, `POST /api/cache/clear` |
-| **Copia de seguridad** | `GET /api/backups`, `POST /api/backups/create`, `POST /api/backups/cleanup` |
+| **Copia de seguridad** | `GET /api/backups`, `POST /api/backups/create` |
 | **Interfaz web** | `/`, `/settings`, `/help`, `/docs/`, `/api/swagger.json` |
 
 ### Códigos de estado esperados
@@ -179,7 +177,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 def test_function_name(client, sample_settings):
-    """Descripción del test."""
+    """Test description."""
     # Arrange
     setup_data = {...}
 
@@ -195,17 +193,17 @@ def test_function_name(client, sample_settings):
 
 ```python
 def test_with_app_context(app):
-    """Prueba que requiere contexto de la aplicación."""
+    """Test that requires app context."""
     with app.app_context():
         pass
 
 def test_api_endpoint(client):
-    """Prueba de endpoint API."""
+    """Test API endpoint."""
     response = client.get('/api/test')
     assert response.status_code == 200
 
 def test_with_mock_data(mock_certificate_data):
-    """Prueba con datos simulados."""
+    """Test with mock data."""
     assert mock_certificate_data['domain'] == 'test.example.com'
 ```
 
@@ -214,7 +212,7 @@ def test_with_mock_data(mock_certificate_data):
 ```python
 @patch('app.requests.get')
 def test_external_api(mock_get, client):
-    """Prueba de llamada a API externa."""
+    """Test external API call."""
     mock_get.return_value.json.return_value = {'status': 'success'}
     response = client.post('/api/certificate/request')
     assert response.status_code == 200
@@ -255,7 +253,7 @@ Una release ejecuta bastante más: véase `scripts/release.sh`, que exige flake8
 - CI impone un mínimo del **75%** sobre `modules/` (`--cov-fail-under`, un
   trinquete: súbalo, nunca lo baje para que pase una build). El número actual
   está cómodamente por encima.
-- Todas las funcionalidades nuevas deben incluir tests.
+- Todas las funcionalidades nuevas deben incluir pruebas.
 
 ---
 
@@ -276,7 +274,7 @@ Una release ejecuta bastante más: véase `scripts/release.sh`, que exige flake8
 - Usar claves API reales en las pruebas
 - Hacer que las pruebas dependan unas de otras
 - Ignorar los fallos de prueba
-- Omitir pruebas para código "simple"
+- Dejar de escribir pruebas para código "simple"
 
 ---
 
@@ -305,7 +303,7 @@ import concurrent.futures
 
 @pytest.mark.slow
 def test_api_load(client):
-    """Prueba de la API bajo carga."""
+    """Test API under load."""
     def make_request():
         return client.get('/api/certificates')
 
