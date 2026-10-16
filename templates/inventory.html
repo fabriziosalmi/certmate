@@ -244,13 +244,25 @@
             <table class="w-full text-sm">
                 <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
                     <tr>
-                        <th class="text-left font-medium px-4 py-2">Subject / SAN</th>
-                        <th class="text-left font-medium px-4 py-2">Issuer</th>
-                        <th class="text-left font-medium px-4 py-2">Expiry</th>
-                        <th class="text-left font-medium px-4 py-2">Key</th>
-                        <th class="text-left font-medium px-4 py-2">Source</th>
-                        <th class="text-left font-medium px-4 py-2">Endpoints</th>
-                        <th class="text-right font-medium px-4 py-2"><span class="sr-only">Actions</span></th>
+                        <th id="inv-sort-th-subject" scope="col" aria-sort="none" class="text-left font-medium px-4 py-2">
+                            <button type="button" data-click="InventoryPage.sortBy" data-args='["subject"]' class="inline-flex items-center uppercase tracking-wide font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Subject / SAN <i class="fas fa-sort ml-1 text-gray-400" id="inv-sort-icon-subject" aria-hidden="true"></i></button>
+                        </th>
+                        <th id="inv-sort-th-issuer" scope="col" aria-sort="none" class="text-left font-medium px-4 py-2">
+                            <button type="button" data-click="InventoryPage.sortBy" data-args='["issuer"]' class="inline-flex items-center uppercase tracking-wide font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Issuer <i class="fas fa-sort ml-1 text-gray-400" id="inv-sort-icon-issuer" aria-hidden="true"></i></button>
+                        </th>
+                        <th id="inv-sort-th-expiry" scope="col" aria-sort="none" class="text-left font-medium px-4 py-2">
+                            <button type="button" data-click="InventoryPage.sortBy" data-args='["expiry"]' class="inline-flex items-center uppercase tracking-wide font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Expiry <i class="fas fa-sort ml-1 text-gray-400" id="inv-sort-icon-expiry" aria-hidden="true"></i></button>
+                        </th>
+                        <th id="inv-sort-th-key" scope="col" aria-sort="none" class="text-left font-medium px-4 py-2">
+                            <button type="button" data-click="InventoryPage.sortBy" data-args='["key"]' class="inline-flex items-center uppercase tracking-wide font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Key <i class="fas fa-sort ml-1 text-gray-400" id="inv-sort-icon-key" aria-hidden="true"></i></button>
+                        </th>
+                        <th id="inv-sort-th-source" scope="col" aria-sort="none" class="text-left font-medium px-4 py-2">
+                            <button type="button" data-click="InventoryPage.sortBy" data-args='["source"]' class="inline-flex items-center uppercase tracking-wide font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Source <i class="fas fa-sort ml-1 text-gray-400" id="inv-sort-icon-source" aria-hidden="true"></i></button>
+                        </th>
+                        <th id="inv-sort-th-endpoints" scope="col" aria-sort="none" class="text-left font-medium px-4 py-2">
+                            <button type="button" data-click="InventoryPage.sortBy" data-args='["endpoints"]' class="inline-flex items-center uppercase tracking-wide font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Endpoints <i class="fas fa-sort ml-1 text-gray-400" id="inv-sort-icon-endpoints" aria-hidden="true"></i></button>
+                        </th>
+                        <th scope="col" class="text-right font-medium px-4 py-2"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody id="inventoryBody" class="divide-y divide-gray-100 dark:divide-gray-700/50">
