@@ -2,7 +2,7 @@
 
 <!-- CERTMATE-TRANSLATED-FROM 13de52d0ee4b09b1 -->
 <!-- CERTMATE-STALE-TRANSLATION -->
-> **Esta traducción no está actualizada.** La versión en inglés ([`docs/api.md`](../api.md)) se ha modificado desde entonces y es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
+> **Esta traducción no se corresponde con la versión en inglés** ([`docs/api.md`](../api.md)), que es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
 
 ## Descripción general
 

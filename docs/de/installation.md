@@ -1,6 +1,8 @@
 # Installationsanleitung
 
 <!-- CERTMATE-TRANSLATED-FROM 43c1d4c62fbc16b4 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung entspricht nicht der englischen Fassung** ([`docs/installation.md`](../installation.md)), die maßgeblich ist. Bei Abweichungen gilt das englische Dokument.
 
 Diese Anleitung beschreibt alle Methoden zur Installation und zum Deployment von CertMate.
 

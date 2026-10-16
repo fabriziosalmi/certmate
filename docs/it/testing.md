@@ -1,6 +1,8 @@
 # Guida ai test
 
 <!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Questa traduzione non è allineata alla versione inglese** ([`docs/testing.md`](../testing.md)), che è quella che fa fede. In caso di discordanza vale il documento inglese.
 
 Questa guida descrive il framework di test di CertMate, inclusi unit test, test di integrazione e la validazione degli endpoint API.
 

@@ -1,6 +1,8 @@
 # CertMate Dokumentation
 
 <!-- CERTMATE-TRANSLATED-FROM 93e1cdc178f48147 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung entspricht nicht der englischen Fassung** ([`docs/README.md`](../README.md)), die maßgeblich ist. Bei Abweichungen gilt das englische Dokument.
 
 Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anleitungen zu allen Funktionen.
 

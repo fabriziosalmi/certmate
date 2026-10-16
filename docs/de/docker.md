@@ -1,6 +1,8 @@
 # Docker Build & Deployment
 
 <!-- CERTMATE-TRANSLATED-FROM e7c97bf8776edb69 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung entspricht nicht der englischen Fassung** ([`docs/docker.md`](../docker.md)), die maßgeblich ist. Bei Abweichungen gilt das englische Dokument.
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 

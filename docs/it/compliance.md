@@ -1,6 +1,8 @@
 # Conformità e traccia di audit
 
 <!-- CERTMATE-TRANSLATED-FROM 0ddda303c6fe494a -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Questa traduzione non è allineata alla versione inglese** ([`docs/compliance.md`](../compliance.md)), che è quella che fa fede. In caso di discordanza vale il documento inglese.
 
 Questa pagina mette in relazione la traccia di audit di CertMate con i regimi che gli operatori chiedono più spesso — l'AI Act dell'UE, NIS2 e ISO/IEC 42001 — quando lasciano che un agente IA/MCP gestisca i certificati su un calendario.
 

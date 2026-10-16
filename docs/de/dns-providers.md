@@ -1,6 +1,8 @@
 # DNS-Anbieter
 
 <!-- CERTMATE-TRANSLATED-FROM ec6ce2fc0c36db8b -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung entspricht nicht der englischen Fassung** ([`docs/dns-providers.md`](../dns-providers.md)), die maßgeblich ist. Bei Abweichungen gilt das englische Dokument.
 
 CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt DNS-01-Challenges über individuelle certbot-Plugins. Die vollständige Liste befindet sich in der nachstehenden Tabelle.
 

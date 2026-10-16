@@ -1,6 +1,8 @@
 # Testhandbuch
 
 <!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Diese Übersetzung entspricht nicht der englischen Fassung** ([`docs/testing.md`](../testing.md)), die maßgeblich ist. Bei Abweichungen gilt das englische Dokument.
 
 Dieses Handbuch beschreibt das Test-Framework von CertMate, einschließlich Unit-Tests, Integrationstests und der Validierung von API-Endpoints.
 

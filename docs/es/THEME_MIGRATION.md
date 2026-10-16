@@ -1,6 +1,8 @@
 # Migración de tema — desacoplamiento claro/oscuro mediante tokens CSS
 
 <!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+<!-- CERTMATE-STALE-TRANSLATION -->
+> **Esta traducción no se corresponde con la versión en inglés** ([`docs/THEME_MIGRATION.md`](../THEME_MIGRATION.md)), que es la de referencia. En caso de discrepancia, prevalece el documento en inglés.
 
 Estado: **entregado** (Fases 0-5 en v2.9.0; Fase 6 sigue) · Propietario: Fabrizio · Creado: 2026-05-25
 
