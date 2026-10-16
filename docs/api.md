@@ -755,15 +755,24 @@ start, and its subject comes from `client_ca_subject` in settings:
 
 Send it with `POST /api/settings` like any other settings key.
 
+On a fresh install the CA exists before anything could have been sent, so the
+same five fields can also come from the environment:
+`CERTMATE_CLIENT_CA_COUNTRY`, `CERTMATE_CLIENT_CA_STATE`,
+`CERTMATE_CLIENT_CA_ORGANIZATION`, `CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT` and
+`CERTMATE_CLIENT_CA_COMMON_NAME`. A variable left unset or empty keeps the
+default for its field, and `client_ca_subject`, when present, takes precedence.
+The README's [environment table](../README.md#client-certificates) has the
+details.
+
 `country` is an ISO 3166-1 alpha-2 code and anything else is refused before a
 key is written. A field left empty is omitted from the subject rather than
 written as an empty attribute; `common_name` falls back to `CertMate CA`. An
 instance that configures nothing keeps the subject it has always had.
 
-That setting is read **when the CA is created and never again**, because
-re-reading it would mean an edit in Settings silently replacing the CA, after
-which every client certificate ever issued would stop verifying. Changing it
-afterwards is this endpoint.
+That setting is read **when the CA is created and never again**, and so are
+the variables, because re-reading them would mean an edit in Settings or a
+redeploy silently replacing the CA, after which every client certificate ever
+issued would stop verifying. Changing the subject afterwards is this endpoint.
 
 **Request**:
 
@@ -778,7 +787,9 @@ afterwards is this endpoint.
 `confirm` is a typed phrase rather than a boolean, because `{"confirm": true}`
 is what a mis-sent form or a retried request produces and neither means
 "discard every certificate we have issued". `subject` is optional; omit it to
-rebuild with the same subject.
+rebuild with the subject resolved at start — `client_ca_subject`, else the
+`CERTMATE_CLIENT_CA_*` variables, else the default. So after changing the
+variables, a restart and a reset without `subject` applies them.
 
 **What it does.** Backs up the existing CA, generates a new one, and removes
 every client certificate the old CA signed, because nothing can verify them
@@ -821,7 +832,14 @@ Create a new client certificate.
 - `cert_usage` (optional) - Usage type: `api-mtls`, `vpn`, or custom
 - `days_valid` (optional) - Validity in days (default: 365)
 - `generate_key` (optional) - Generate private key (default: true)
+- `country` (optional) - Subject country, a two-letter code (default:
+  `CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY`, or `CH`)
+- `state` (optional) - Subject state or province (default:
+  `CERTMATE_CLIENT_CERT_DEFAULT_STATE`, or `Switzerland`)
 - `notes` (optional) - Additional notes
+
+The two defaults also apply to CSV batch rows and to renewals, which carry
+neither field.
 
 **Response** (201 Created):
 <!-- response: POST /api/client-certs/create 201 -->
