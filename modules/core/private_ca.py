@@ -875,3 +875,67 @@ class PrivateCAGenerator:
         if not self.crl_path.exists():
             return None
         return self.crl_path.read_bytes()
+
+
+def client_ca_subject_from_environment() -> dict[str, str] | None:
+    """The client CA's subject as the deployment declares it, or None.
+
+    `client_ca_subject` in settings.json is read when the CA is created, which
+    on a fresh install is the first start — before anyone could have POSTed it.
+    So a container that wanted its own name on the CA had to boot once with
+    `C=CH, O=CertMate`, then be reset through the API. These variables let the
+    environment say it up front:
+
+        CERTMATE_CLIENT_CA_COUNTRY              C   (ISO 3166-1 alpha-2)
+        CERTMATE_CLIENT_CA_STATE                ST
+        CERTMATE_CLIENT_CA_ORGANIZATION         O
+        CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT  OU
+        CERTMATE_CLIENT_CA_COMMON_NAME          CN
+
+    A variable that is not set keeps the default for its field, so setting
+    only the organisation does not also strip the state.
+
+    Empty counts as not set. The shipped compose files pass each variable as
+    `VAR=${VAR:-}`, so every one of them reaches the container — empty when
+    the operator said nothing. Reading empty as "leave the field out" would
+    have turned an install that configures nothing into a CA named only
+    `CN=CertMate CA`. To leave a field out deliberately, use
+    `client_ca_subject` or the `subject` of the reset endpoint, where an
+    empty value already means exactly that.
+
+    Each name is written out rather than built in a loop, because
+    tests/test_every_env_var_is_documented.py finds the variables by reading
+    literal names at the call site.
+    """
+    declared = {
+        'country': os.environ.get('CERTMATE_CLIENT_CA_COUNTRY'),
+        'state': os.environ.get('CERTMATE_CLIENT_CA_STATE'),
+        'organization': os.environ.get('CERTMATE_CLIENT_CA_ORGANIZATION'),
+        'organizational_unit': os.environ.get('CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT'),
+        'common_name': os.environ.get('CERTMATE_CLIENT_CA_COMMON_NAME'),
+    }
+    present = {field: value.strip() for field, value in declared.items()
+               if value and value.strip()}
+    if not present:
+        return None
+    subject = dict(PrivateCAGenerator.DEFAULT_SUBJECT)
+    subject.update(present)
+    return subject
+
+
+def resolve_client_ca_subject(settings: dict[str, Any] | None) -> dict[str, str] | None:
+    """The subject a new client CA is created with: settings, then environment.
+
+    `client_ca_subject` in settings wins because it is the more deliberate act —
+    someone sent it through the API or the settings file for this instance —
+    while the environment is the bootstrap for an instance that has no settings
+    yet. None means the built-in default.
+
+    Like the setting, the result only matters when a CA is created: on first
+    start, or on POST /api/client-certs/ca/reset without a `subject`. An
+    existing CA is never replaced because either of them changed.
+    """
+    configured = (settings or {}).get('client_ca_subject')
+    if isinstance(configured, dict) and configured:
+        return configured
+    return client_ca_subject_from_environment()

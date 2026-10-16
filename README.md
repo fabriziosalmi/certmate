@@ -1198,6 +1198,29 @@ by the schema, with a message naming the accepted set — for example
 | `AUDIT_SIGNING_KEY_FILE` |    | -              | Path to an Ed25519 private key that signs audit checkpoints, so the key can live off this box. If set and unreadable, signing is DISABLED rather than a new key generated — a fresh key would fork the instance's identity and make earlier signatures unverifiable |
 | `CERTMATE_ALLOW_SCHEMA_DOWNGRADE` | | `0`       | Set `1` to let this build read and overwrite a `settings.json` or `metadata.json` written by a NEWER version. It will drop fields it does not understand — that is the whole reason it refuses by default |
 
+#### Client certificates
+
+The private CA that signs client certificates is created once, on the first
+start. These name it before that happens, so a new instance does not have to
+boot as `CertMate CA` and then be reset. A variable left unset — or empty, which
+is how the compose files pass one you did not set — keeps the default for its
+field. `client_ca_subject` in settings, when present, takes precedence. Like
+that setting, they are read **only when the CA is created**: changing them
+later does not replace an existing CA, so every client certificate it signed
+keeps verifying. To apply them to an instance that already has a CA, restart
+with the new values and send `POST /api/client-certs/ca/reset` without a
+`subject` ([docs/api.md](docs/api.md#rebuild-the-client-certificate-authority)).
+
+| Variable                                 | Required | Default                 | Description |
+| ---------------------------------------- | -------- | ----------------------- | ----------- |
+| `CERTMATE_CLIENT_CA_COUNTRY`             |          | `CH`                    | Country (`C`) of the client CA. A two-letter ISO 3166-1 code; anything else stops the start before a key is written |
+| `CERTMATE_CLIENT_CA_STATE`               |          | `Switzerland`           | State or province (`ST`) of the client CA |
+| `CERTMATE_CLIENT_CA_ORGANIZATION`        |          | `CertMate`              | Organisation (`O`) of the client CA |
+| `CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT` |          | `Certificate Authority` | Organisational unit (`OU`) of the client CA |
+| `CERTMATE_CLIENT_CA_COMMON_NAME`         |          | `CertMate CA`           | Common name (`CN`) of the client CA: the issuer name every client certificate shows |
+| `CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY`   |          | `CH`                    | Country of a client certificate issued without one: a create request that leaves it out, every CSV batch row, and every renewal. A value in the request wins. Not a two-letter code: the instance refuses to start, naming the variable |
+| `CERTMATE_CLIENT_CERT_DEFAULT_STATE`     |          | `Switzerland`           | State or province of a client certificate issued without one, in the same cases |
+
 #### Timing and diagnostics
 
 | Variable           | Required | Default        | Description                         |

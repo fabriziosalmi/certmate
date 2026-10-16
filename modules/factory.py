@@ -30,6 +30,8 @@ from modules.core.events import EventBus
 from modules.core.digest import WeeklyDigest
 from modules.core.deployer import DeployManager
 from modules.core.ca_manager import CAManager
+from modules.core.private_ca import resolve_client_ca_subject
+from modules.core.client_certificates import check_client_certificate_defaults
 from modules.api import create_api_models, create_api_resources
 from modules.api.client_certificates import create_client_certificate_resources
 from modules.web import register_web_routes
@@ -679,13 +681,18 @@ def initialize_managers(container: AppContainer, app):
     # PrivateCAGenerator.initialize() returns early when the CA exists, so
     # editing this later changes nothing: a settings edit silently replacing
     # the CA would stop every certificate it ever signed from verifying. The
-    # deliberate path is POST /api/client-certs/ca/reset.
-    client_ca_subject = (settings_manager.load_settings() or {}).get('client_ca_subject')
+    # deliberate path is POST /api/client-certs/ca/reset. Without a setting,
+    # the CERTMATE_CLIENT_CA_* variables name it, so a fresh container can be
+    # born with its own subject instead of booting once as CertMate CA.
     private_ca = PrivateCAGenerator(
-        ca_dir, subject=client_ca_subject if isinstance(client_ca_subject, dict) else None)
+        ca_dir, subject=resolve_client_ca_subject(settings_manager.load_settings()))
     private_ca.initialize()
 
     client_certs_dir = container.data_dir / "certs" / "client"
+    # At boot, not at the first issuance: a default no certificate can carry
+    # should stop the instance here, naming the variable, rather than fail a
+    # renewal at night.
+    check_client_certificate_defaults()
     client_cert_manager = ClientCertificateManager(client_certs_dir, private_ca)
     ocsp_responder = OCSPResponder(private_ca, client_cert_manager)
 
