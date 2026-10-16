@@ -1,8 +1,8 @@
 # Migration de thème — découplage clair/sombre via des tokens de variables CSS
 
-<!-- CERTMATE-TRANSLATED-FROM 0b3dfdad864e8524 -->
+<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
 
-Statut : **livrée** (Phases 0–5 dans v2.9.0 ; la passe des tokens de statut de la Phase 6 suit) · Propriétaire : Fabrizio · Créé : 2026-05-25
+Statut : **livrée** (Phases 0–5 dans v2.9.0, Phases 6–9 ensuite ; Phase 10 planifiée) · Propriétaire : Fabrizio · Créé : 2026-05-25
 
 ## Objectif
 

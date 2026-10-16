@@ -244,7 +244,7 @@ For BIND or other RFC2136-compatible DNS servers (including **Technitium DNS Ser
 
 ### Hetzner (legacy DNS API)
 
-> **Deprecation notice:** The Hetzner DNS console API is being shut down in May 2025. New users should use the **Hetzner Cloud** provider below. Existing users should migrate to `hetzner-cloud` before the shutdown date. See [Hetzner status page](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) for details.
+> **Deprecation notice:** Hetzner announced the shutdown of its DNS console API for May 2025. New users should use the **Hetzner Cloud** provider below, and existing `hetzner` configurations should migrate to `hetzner-cloud`. See [Hetzner status page](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) for details.
 
 ```json
 {

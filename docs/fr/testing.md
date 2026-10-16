@@ -1,6 +1,6 @@
 # Guide de test
 
-<!-- CERTMATE-TRANSLATED-FROM 7cc7e1b319fd54bc -->
+<!-- CERTMATE-TRANSLATED-FROM e04070da6afc6acb -->
 
 Ce guide couvre le framework de test de CertMate, incluant les tests unitaires, les tests d'intégration et la validation des endpoints API.
 
@@ -21,7 +21,7 @@ pip install -r requirements-test.txt
 pytest -m "not ui and not network"
 
 # Exécuter les tests avec couverture
-pytest --cov=. --cov-report=html
+pytest --cov=modules --cov-report=html
 ```
 
 ---
@@ -30,18 +30,11 @@ pytest --cov=. --cov-report=html
 
 ```
 Root directory:
-  conftest.py                              # Configuration de collecte et fixtures partagées
+  conftest.py                              # Oriente la collecte vers tests/
   pytest.ini                               # Configuration et marqueurs de test
-  test_certificate_creation.py             # Tests de création de certificats
-  test_certificate_listing.py              # Tests de listage de certificats
-  test_client_certificates_comprehensive.py # Tests de cycle de vie des certificats clients
-  test_dns_accounts.py                     # Opérations multi-comptes
-  test_dns_provider.py                     # Fonctionnalité de base des fournisseurs
-  test_dns_provider_inheritance.py         # Héritage de configuration
-  test_domain_alias.py                     # Tests d'alias de domaine
-  test_infisical_backend.py               # Backend de stockage Infisical
-  test_shell_executor.py                   # Tests d'exécution shell
-  test_e2e_complete.py                     # Suite de tests de bout en bout
+  tests/
+    conftest.py                            # Fixtures partagées
+    test_*.py                              # Un fichier par comportement, nommé d'après lui
 ```
 
 ---
@@ -60,23 +53,23 @@ pytest -m "not ui and not network"
 pytest -v
 
 # Exécuter un fichier de test spécifique
-pytest test_certificate_creation.py
+pytest tests/test_domain_alias.py
 
 # Exécuter une fonction de test spécifique
-pytest test_certificate_creation.py::test_specific_function -v -s
+pytest tests/test_domain_alias.py::test_domain_alias_all_core_providers_use_manual_hook -v -s
 
 # Exécuter les tests correspondant à un motif
 pytest -k "dns_provider"
 
 # Exécuter avec rapport de couverture
-pytest --cov=. --cov-report=html
+pytest --cov=modules --cov-report=html
 open htmlcov/index.html
 ```
 
 ### Avec Make
 
 ```bash
-make test              # Exécuter tous les tests
+make test              # Tout sauf les suites ui et e2e
 make test-unit         # Tests unitaires uniquement
 make test-integration  # Tests d'intégration uniquement
 make test-coverage     # Tests avec couverture
@@ -138,7 +131,7 @@ La suite est pytest, répartie par marqueurs (voir `pytest.ini`) : `unit`,
 (Playwright, nécessite un navigateur et un conteneur).
 
 ```bash
-make test                # unitaires + intégration
+make test                # tout sauf les suites ui et e2e
 make test-unit
 make test-coverage       # --cov=modules, rapports HTML + XML
 
@@ -232,7 +225,7 @@ def test_external_api(mock_get, client):
 
 Le pipeline CI s'exécute sur chaque push et pull request :
 
-1. **Multiples versions Python** : Tests sur Python 3.12
+1. **Multiples versions Python** : Tests sur Python 3.12 et 3.14
 2. **Qualité du code** : Linting avec flake8
 3. **Sécurité** : Scan avec bandit
 4. **Tests** : Suite complète avec couverture

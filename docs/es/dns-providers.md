@@ -1,6 +1,6 @@
 # Proveedores DNS
 
-<!-- CERTMATE-TRANSLATED-FROM d1a7beba338a46dc -->
+<!-- CERTMATE-TRANSLATED-FROM 4ef6c0574d30ed43 -->
 
 CertMate soporta una amplia gama de proveedores DNS para los desafíos Let's Encrypt DNS-01 mediante plugins de certbot individuales. La lista completa se encuentra en la tabla a continuación.
 
@@ -247,7 +247,7 @@ Para BIND u otros servidores DNS compatibles con RFC2136 (incluido **Technitium 
 
 ### Hetzner (API DNS legacy)
 
-> **Aviso de obsolescencia:** La API de la consola DNS de Hetzner será retirada en mayo de 2025. Los nuevos usuarios deben utilizar el proveedor **Hetzner Cloud** que aparece más abajo. Los usuarios existentes deben migrar a `hetzner-cloud` antes de la fecha de retirada. Consulta la [página de estado de Hetzner](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) para más detalles.
+> **Aviso de obsolescencia:** Hetzner anunció la retirada de la API de su consola DNS para mayo de 2025. Los nuevos usuarios deben utilizar el proveedor **Hetzner Cloud** que aparece más abajo, y las configuraciones `hetzner` existentes deben migrar a `hetzner-cloud`. Consulta la [página de estado de Hetzner](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) para más detalles.
 
 ```json
 {
