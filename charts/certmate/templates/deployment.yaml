@@ -83,6 +83,12 @@ spec:
               path: /health
               port: http
             {{- toYaml .Values.probes.liveness | nindent 12 }}
+          # Readiness polls /health, not /health/ready, on purpose. This
+          # workload has one replica: /health/ready answers 503 when the
+          # scheduler or certbot cannot run, and as a readiness probe it
+          # would take the only pod out of the Service, so the UI that shows
+          # why would be unreachable when it is needed. Alert on
+          # /health/ready instead (docs/monitoring.md).
           readinessProbe:
             httpGet:
               path: /health
