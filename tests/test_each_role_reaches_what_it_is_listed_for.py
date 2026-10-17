@@ -55,7 +55,7 @@ VIEWER_READS = PUBLIC | {
     'GET /api/client-certs/stats',
     'GET /api/inventory', 'GET /api/inventory/<X>/adopt', 'GET /api/inventory/config',
     'GET /api/inventory/crypto-report', 'GET /api/inventory/domains', 'GET /api/inventory/health',
-    'GET /api/metrics', 'GET /api/settings', 'GET /api/settings/dns-providers',
+    'GET /api/dns/providers', 'GET /api/metrics', 'GET /api/settings', 'GET /api/settings/dns-providers',
     'GET /api/storage/info', 'GET /api/web/update-check',
 }
 

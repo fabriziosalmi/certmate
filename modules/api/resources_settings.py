@@ -16,6 +16,7 @@ from flask_restx import Resource
 
 import logging
 
+from ..core import dns_availability
 from .resource_context import ApiContext, instance_wide
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,26 @@ def _failed_delete(dns, provider, account_id):
         return {'error': f"No DNS account called '{account_id}' for provider '{provider}'",
                 'code': 'DNS_ACCOUNT_NOT_FOUND'}, 404
     return {'error': 'Failed to delete account'}, 500
+
+
+def _shell_executor(ctx):
+    """The executor the application runs certbot through, as the health check finds it."""
+    return (ctx.managers.get('shell_executor')
+            or (ctx.certificates and getattr(ctx.certificates, 'shell_executor', None)))
+
+
+def _dns_provider_availability(api, models, ctx):
+    """GET /api/dns/providers. Module level, like _failed_delete, for the closure's budget."""
+
+    class DNSProviderAvailability(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('viewer')
+        @api.marshal_with(models['dns_provider_availability_model'])
+        def get(self):
+            """Which DNS providers this instance can issue with: their certbot plugin is installed, or they need none."""
+            return dns_availability.current(_shell_executor(ctx))
+
+    return DNSProviderAvailability
 
 
 def create_settings_resources(api, models, ctx: ApiContext) -> dict:
@@ -351,4 +372,5 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
         'DNSProviders': DNSProviders,
         'DNSAccounts': DNSAccounts,
         'DNSAccountDetail': DNSAccountDetail,
+        'DNSProviderAvailability': _dns_provider_availability(api, models, ctx),
     }

@@ -367,6 +367,9 @@ def _walk(app, token, trace, certbot, container, seeded, report):
     call('patch', '/api/keys/<key_id>', path='/api/keys/does-not-exist', body={'confirmed': True})
     call('delete', '/api/keys/<key_id>', path='/api/keys/does-not-exist')
 
+    # --- which DNS providers this instance can issue with (asks certbot once)
+    call('get', '/api/dns/providers')
+
     # --- deprecated DNS accounts
     call('post', '/api/dns-providers/accounts',
                    body={'name': 'acct1', 'provider': 'cloudflare', 'config': {'api_token': 'x' * 24}})

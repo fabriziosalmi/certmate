@@ -293,13 +293,15 @@ def test_the_settings_group_builds_from_a_minimal_context(api):
     models = {
         'settings_model': MagicMock(),
         'dns_providers_model': MagicMock(),
+        'dns_provider_availability_model': MagicMock(),
     }
     ctx = _minimal_context(settings=MagicMock(), dns=MagicMock(),
                            audit=MagicMock(), managers={})
     resources = create_settings_resources(api, models, ctx)
 
     assert set(resources) == {
-        'Settings', 'DNSProviders', 'DNSAccounts', 'DNSAccountDetail'}
+        'Settings', 'DNSProviders', 'DNSAccounts', 'DNSAccountDetail',
+        'DNSProviderAvailability'}
     for name, cls in resources.items():
         assert issubclass(cls, Resource), f'{name} is not a Resource'
 

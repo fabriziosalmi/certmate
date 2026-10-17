@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.49",
+ "contract_version": "2.50",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -1996,6 +1996,34 @@
      "str"
     ],
     "[].provider": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/dns/providers": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certbot_answered": [
+     "bool"
+    ],
+    "checked_at": [
+     "str"
+    ],
+    "providers": [
+     "list"
+    ],
+    "providers[]": [
+     "dict"
+    ],
+    "providers[].available": [
+     "bool"
+    ],
+    "providers[].plugin": [
+     "str"
+    ],
+    "providers[].provider": [
      "str"
     ]
    }

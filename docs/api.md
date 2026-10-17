@@ -2496,6 +2496,41 @@ Before API contract **2.37** both were a `500`.
 Not the same as the two above: this returns which providers are configured and
 how, not the list of accounts. Credential values are masked.
 
+#### Providers this instance can issue with
+
+**Endpoint**: `GET /api/dns/providers` — viewer
+
+Since API contract **2.50**. Whether each supported provider can issue on this
+instance. A provider whose certbot plugin is not installed is refused at
+issuance, after its credentials have been saved, and the published image does
+not carry every plugin (see [DNS providers](dns-providers.md#availability)).
+The setup wizard reads this to mark the providers it cannot use.
+
+<!-- response: GET /api/dns/providers 200 -->
+```json
+{
+  "certbot_answered": true,
+  "checked_at": "2026-10-18T09:12:04Z",
+  "providers": [
+    {"provider": "cloudflare", "plugin": "dns-cloudflare", "available": true},
+    {"provider": "azure", "plugin": null, "available": true},
+    {"provider": "namecheap", "plugin": "dns-namecheap", "available": false}
+  ]
+}
+```
+
+`providers` has every provider `dns_provider` accepts. `plugin` is the certbot
+plugin it needs, `null` for the ones CertMate drives with its own hook (Azure,
+EfficientIP SOLIDserver, a custom script, ACME-DNS). `available` is what the
+issuance preflight decides: `true` when the plugin is installed or none is
+needed. It is about the provider's normal DNS-01 flow: a certificate issued
+through a DNS alias uses CertMate's own hook and needs no plugin.
+
+When certbot could not be run, `certbot_answered` is `false` and `available` is
+`null` for every provider that needs a plugin: unknown, not missing. The answer
+is kept for five minutes and `checked_at` says when certbot was asked; a plugin
+only arrives with a new image, which is a restart.
+
 ### Notifications and events
 
 #### Notification configuration
