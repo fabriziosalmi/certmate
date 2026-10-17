@@ -1,6 +1,6 @@
 # CertMate Dokumentation
 
-<!-- CERTMATE-TRANSLATED-FROM 68c98d5fda25d6d4 -->
+<!-- CERTMATE-TRANSLATED-FROM a709b5f6e20de2cd -->
 
 Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anleitungen zu allen Funktionen.
 
@@ -30,6 +30,7 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 - **[Webhooks](../webhooks.md)** — generische Webhooks: Payload-Templates, Authentifizierung, Signaturprüfung *(auf Englisch)*
 - **[Compliance](./compliance.md)** — Audit-Kette, Akteur-Attribution, NIS2-/eIDAS-Posture
 - **[Deployment-Probes](./probes.md)** — Prüfen, ob ein erneuertes Zertifikat tatsächlich ausgeliefert wird
+- **[Monitoring](../monitoring.md)** — Health-Endpunkte, Prometheus-Metriken, Logs, Benachrichtigungskanäle *(auf Englisch)*
 - **[Fehlerbehebung](../troubleshooting.md)** — häufige Fehler, Debug-Logging, Fehler melden *(auf Englisch)*
 
 ---

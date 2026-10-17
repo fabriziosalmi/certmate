@@ -28,6 +28,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
 - **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
+- **[Monitoring](./monitoring.md)** — health endpoints, Prometheus metrics, logs, notification channels
 - **[Troubleshooting](./troubleshooting.md)** — common failures, debug logging, reporting a bug
 
 ---
@@ -174,6 +175,7 @@ docs/
   installation.md         installation and setup
   kubernetes.md           Kubernetes production notes and Helm chart
   mcp.md                  MCP server for AI agents
+  monitoring.md           health endpoints, metrics, logs, notifications
   probes.en.md            deployment probes
   testing.md              test framework and CI/CD
   troubleshooting.md      common failures, debug logging, bug reports
