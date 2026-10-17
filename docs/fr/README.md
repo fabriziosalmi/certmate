@@ -1,6 +1,6 @@
 # Documentation CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM f5b0416f860d2faa -->
+<!-- CERTMATE-TRANSLATED-FROM 8768a3cce1e3de7b -->
 
 Bienvenue dans la documentation de CertMate. Ce dossier contient des guides complets pour toutes les fonctionnalités.
 
@@ -29,6 +29,7 @@ Bienvenue dans la documentation de CertMate. Ce dossier contient des guides comp
 - **[Certificats CSR-only](../csr-only-certificates.md)** — émettre et renouveler quand la clé privée reste sur l'appareil *(en anglais)*
 - **[Webhooks](../webhooks.md)** — webhooks génériques : modèles de payload, authentification, vérification de signature *(en anglais)*
 - **[Conformité](./compliance.md)** — chaîne d'audit, attribution des acteurs, posture NIS2/eIDAS
+- **[Sauvegardes et restauration](../backup.md)** — les deux types d'archive, copies hors de l'hôte, restauration, mot de passe administrateur perdu *(en anglais)*
 - **[Sondes de déploiement](./probes.md)** — vérifier qu'un certificat renouvelé est réellement servi
 - **[Authentification unique (OIDC)](../sso.md)** — connexion OpenID Connect, correspondance des rôles, provisionnement *(en anglais)*
 - **[Stockage des certificats](../storage.md)** — backends de stockage, ce qu'il faut à chacun, migration entre eux *(en anglais)*
