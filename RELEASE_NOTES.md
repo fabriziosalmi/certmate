@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.50.2 (an image without pip, a plain log that redacts, and documentation rewritten from the code)
+
+[Read the notes](docs/releases/v2.50.2.md)
+
 ## v2.50.1 (a client certificate renews with the country and state it was issued with)
 
 [Read the notes](docs/releases/v2.50.1.md)
