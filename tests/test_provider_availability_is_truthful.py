@@ -27,7 +27,9 @@ import pytest
 pytestmark = [pytest.mark.unit]
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
-README = REPO_ROOT / "README.md"
+# The provider table moved from the README to the DNS providers page, which
+# already had one table of providers; it now carries the availability column.
+README = REPO_ROOT / "docs" / "dns-providers.md"
 
 # provider display name (as written in the README) -> PyPI distribution.
 # Derived from the plugin, with the cases where the two names differ. Every
@@ -137,7 +139,8 @@ def test_the_table_is_being_parsed():
         if inside:
             if not line.startswith("|"):
                 break
-            if line.startswith("| ---"):
+            # The separator row, in either style (`| --- |` or `|---|`).
+            if re.match(r"^\|[\s:|-]+$", line):
                 continue
             listed += 1
     assert len(rows) == listed, (

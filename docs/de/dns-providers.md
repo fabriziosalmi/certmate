@@ -1,6 +1,6 @@
 # DNS-Anbieter
 
-<!-- CERTMATE-TRANSLATED-FROM 4ef6c0574d30ed43 -->
+<!-- CERTMATE-TRANSLATED-FROM f2105fc570be338c -->
 
 CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt DNS-01-Challenges über individuelle certbot-Plugins. Die vollständige Liste befindet sich in der nachstehenden Tabelle.
 
@@ -8,37 +8,67 @@ CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt D
 
 ## Unterstützte Anbieter
 
-| Anbieter | Plugin | Erforderliche Zugangsdaten | Kategorie |
-|---|---|---|---|
-| **Cloudflare** | `certbot-dns-cloudflare` | API-Token | Großer Cloud-Anbieter |
-| **AWS Route53** | `certbot-dns-route53` | Access Keys oder AWS-Anmeldekette / IAM-Rolle | Großer Cloud-Anbieter |
-| **Azure DNS** | Eigener CertMate-Hook (`azure-mgmt-dns`) | Service Principal | Großer Cloud-Anbieter |
-| **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Großer Cloud-Anbieter |
-| **PowerDNS** | `certbot-dns-powerdns` | API-URL, API-Schlüssel | Enterprise |
-| **EfficientIP SOLIDserver** | eigenes REST-API-Skript | Host, API-Zugangsdaten | Enterprise |
-| **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | API-Schlüssel, Secret Key | Enterprise |
-| **NS1** | `certbot-dns-nsone` | API-Schlüssel | Enterprise |
-| **DigitalOcean** | `certbot-dns-digitalocean` | API-Token | Cloud |
-| **Linode** (Akamai Connected Cloud) | `certbot-dns-linode` | API-Schlüssel | Cloud |
-| **Akamai Edge DNS** | `certbot-plugin-edgedns` | EdgeGrid `.edgerc` (client_token, client_secret, access_token, host) | Enterprise |
-| **Vultr** | `certbot-dns-vultr` | API-Schlüssel | Cloud |
-| **Hetzner (Legacy-DNS)** | `certbot-dns-hetzner` | API-Token | Cloud |
-| **Hetzner Cloud** | `certbot-dns-hetzner-cloud` | API-Token | Cloud |
-| **Gandi** | `certbot-dns-gandi` | API-Token | Registrar |
-| **Namecheap** | `certbot-dns-namecheap` | Benutzername, API-Schlüssel | Registrar |
-| **Porkbun** | `certbot-dns-porkbun` | API-Schlüssel, Secret Key | Registrar |
-| **GoDaddy** | `certbot-dns-godaddy` | API-Schlüssel, Secret | Registrar |
-| **OVH** | `certbot-dns-ovh` | API-Zugangsdaten | Regional |
-| **Infomaniak** | `certbot-dns-infomaniak` | API-Token | Regional |
-| **ArvanCloud** | `certbot-dns-arvancloud` | API-Schlüssel | Regional |
-| **RFC2136** | `certbot-dns-rfc2136` | Nameserver, TSIG-Schlüssel | Standardprotokoll |
-| **ACME-DNS** | _integriert_ (kein Plugin) | API-URL, Benutzername, Passwort, Subdomain | Spezialisiert |
-| **Hurricane Electric** | `certbot-dns-he-ddns` | Benutzername, Passwort | Kostenloses DNS |
-| **Dynu** | `certbot-dns-dynudns` | API-Token | Dynamisches DNS |
-| **DuckDNS** | `certbot-dns-duckdns` | Konto-Token | Kostenloses DDNS (ohne eigene Domain) |
-| **deSEC** | `certbot-dns-desec` | API-Token | Kostenlos, EU (DE), DNSSEC — NS an `ns1.desec.io` / `ns2.desec.org` delegieren |
-| **Scaleway** | `certbot-dns-scaleway` | Geheimer API-Schlüssel | Souveräne EU-Cloud (FR) — Community-Plugin (Alpha), separat installieren: `pip install certbot-dns-scaleway` |
-| **Custom Script** | keines (certbot-Core `--manual`) | Pfad zum Auth-Hook-Skript (+ optionaler Cleanup-Hook) | Eigene Lösung |
+| Anbieter | Plugin | Erforderliche Zugangsdaten | Kategorie | Verfügbarkeit |
+|---|---|---|---|---|
+| **Cloudflare** | `certbot-dns-cloudflare` | API-Token | Großer Cloud-Anbieter | **Stabil** |
+| **AWS Route53** | `certbot-dns-route53` | Access Keys oder AWS-Anmeldekette / IAM-Rolle | Großer Cloud-Anbieter | **Stabil** |
+| **Azure DNS** | Eigener CertMate-Hook (`azure-mgmt-dns`) | Service Principal | Großer Cloud-Anbieter | **Stabil** |
+| **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Großer Cloud-Anbieter | **Stabil** |
+| **PowerDNS** | `certbot-dns-powerdns` | API-URL, API-Schlüssel | Enterprise | **Separate Installation** |
+| **EfficientIP SOLIDserver** | eigenes REST-API-Skript | Host, API-Zugangsdaten | Enterprise | **Stabil** |
+| **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | API-Schlüssel, Secret Key | Enterprise | **Stabil** |
+| **NS1** | `certbot-dns-nsone` | API-Schlüssel | Enterprise | **Stabil** |
+| **DigitalOcean** | `certbot-dns-digitalocean` | API-Token | Cloud | **Stabil** |
+| **Linode** (Akamai Connected Cloud) | `certbot-dns-linode` | API-Schlüssel | Cloud | **Stabil** |
+| **Akamai Edge DNS** | `certbot-plugin-edgedns` | EdgeGrid `.edgerc` (client_token, client_secret, access_token, host) | Enterprise | **Stabil** |
+| **Vultr** | `certbot-dns-vultr` | API-Schlüssel | Cloud | **Stabil** |
+| **Hetzner (Legacy-DNS)** | `certbot-dns-hetzner` | API-Token | Cloud | **Stabil** |
+| **Hetzner Cloud** | `certbot-dns-hetzner-cloud` | API-Token | Cloud | **Stabil** |
+| **Gandi** | `certbot-dns-gandi` | API-Token | Registrar | **Stabil** |
+| **Namecheap** | `certbot-dns-namecheap` | Benutzername, API-Schlüssel | Registrar | **Nicht verfügbar** |
+| **Porkbun** | `certbot-dns-porkbun` | API-Schlüssel, Secret Key | Registrar | **Stabil** |
+| **GoDaddy** | `certbot-dns-godaddy` | API-Schlüssel, Secret | Registrar | **Stabil** |
+| **OVH** | `certbot-dns-ovh` | API-Zugangsdaten | Regional | **Stabil** |
+| **Infomaniak** | `certbot-dns-infomaniak` | API-Token | Regional | **Stabil** |
+| **ArvanCloud** | `certbot-dns-arvancloud` | API-Schlüssel | Regional | **Stabil** |
+| **RFC2136** | `certbot-dns-rfc2136` | Nameserver, TSIG-Schlüssel | Standardprotokoll | **Stabil** |
+| **ACME-DNS** | _integriert_ (kein Plugin) | API-URL, Benutzername, Passwort, Subdomain | Spezialisiert | **Stabil** |
+| **Hurricane Electric** | `certbot-dns-he-ddns` | Benutzername, Passwort | Kostenloses DNS | **Erweitertes Image** |
+| **Dynu** | `certbot-dns-dynudns` | API-Token | Dynamisches DNS | **Erweitertes Image** |
+| **DuckDNS** | `certbot-dns-duckdns` | Konto-Token | Kostenloses DDNS (ohne eigene Domain) | **Stabil** |
+| **deSEC** | `certbot-dns-desec` | API-Token | Kostenlos, EU (DE), DNSSEC — NS an `ns1.desec.io` / `ns2.desec.org` delegieren | **Stabil** |
+| **Scaleway** | `certbot-dns-scaleway` | Geheimer API-Schlüssel | Souveräne EU-Cloud (FR) — Community-Plugin (Alpha), in keinem Image: siehe [Verfügbarkeit](#verfügbarkeit) | **Separate Installation** |
+| **Custom Script** | keines (certbot-Core `--manual`) | Pfad zum Auth-Hook-Skript (+ optionaler Cleanup-Hook) | Eigene Lösung | **Stabil** |
+
+### Verfügbarkeit
+
+Die letzte Spalte sagt, ob das Docker-Image den Anbieter so nutzen kann, wie es ist:
+
+| Wert | Bedeutung |
+| --- | --- |
+| **Stabil** | Das Plugin ist in `requirements.txt` fixiert und damit im Standard-Image. |
+| **Erweitertes Image** | Fixiert in `requirements-extended.txt`. Mit `--build-arg EXTRA_REQUIREMENTS=requirements-extended.txt` bauen. |
+| **Separate Installation** | In keinem Image. Ein abgeleitetes Image bauen, das es installiert (unten), wo angegeben in einer eigenen Umgebung. |
+| **Nicht verfügbar** | Für den unterstützten Stack gibt es kein nutzbares Plugin. CertMate lässt sich dafür konfigurieren, aber die Ausstellung schlägt fehl. |
+
+`Namecheap` ist der nicht verfügbare: Die einzige Version von `certbot-dns-namecheap` auf PyPI ist 1.0.0, eine Alpha für Python 2.7-3.8, die mit certbot 2 auf Python 3.12 nicht funktioniert. Für Namecheap-Domains ACME-DNS oder das eigene Skript verwenden.
+
+`Scaleway` ist eine Alpha (0.0.7, die Python 2.7 als unterstützt angibt), und `PowerDNS` braucht `dns-lexicon<=3.5.6`, das mit dem Rest des erweiterten Sets kollidiert, daher seine eigene Umgebung.
+
+Das Image hat kein pip. Ein separat installiertes Plugin kommt daher in ein abgeleitetes Image, das pip nur für seinen eigenen Build zurückholt:
+
+```dockerfile
+FROM fabriziosalmi/certmate:latest
+USER root
+RUN /opt/venv/bin/python -m ensurepip && \
+    /opt/venv/bin/python -m pip install --no-cache-dir certbot-dns-scaleway==0.0.7 && \
+    /opt/venv/bin/python -m pip uninstall -y pip
+USER certmate
+```
+
+In diesem Image listet `certbot plugins` dann `dns-scaleway`.
+
+Jeder Anbieter kann mehrere Konten haben, pro Zertifikat ausgewählt; siehe [Multi-Konto-Unterstützung](#multi-konto-unterstützung).
 
 ---
 
