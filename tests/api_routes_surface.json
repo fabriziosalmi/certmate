@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.48",
+ "contract_version": "2.49",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -1318,6 +1318,9 @@
     "certificates[].common_name": [
      "str"
     ],
+    "certificates[].country": [
+     "str"
+    ],
     "certificates[].created_at": [
      "str"
     ],
@@ -1378,6 +1381,9 @@
     "certificates[].serial_number": [
      "str"
     ],
+    "certificates[].state": [
+     "str"
+    ],
     "certificates[].superseded_at": [
      "str"
     ],
@@ -1404,6 +1410,9 @@
      "str"
     ],
     "common_name": [
+     "str"
+    ],
+    "country": [
      "str"
     ],
     "created_at": [
@@ -1464,6 +1473,9 @@
      "str"
     ],
     "serial_number": [
+     "str"
+    ],
+    "state": [
      "str"
     ],
     "superseded_at": [
@@ -4365,6 +4377,9 @@
     "metadata.common_name": [
      "str"
     ],
+    "metadata.country": [
+     "str"
+    ],
     "metadata.created_at": [
      "str"
     ],
@@ -4423,6 +4438,9 @@
      "null"
     ],
     "metadata.serial_number": [
+     "str"
+    ],
+    "metadata.state": [
      "str"
     ],
     "metadata.type": [
@@ -4599,6 +4617,9 @@
     "metadata.common_name": [
      "str"
     ],
+    "metadata.country": [
+     "str"
+    ],
     "metadata.created_at": [
      "str"
     ],
@@ -4657,6 +4678,9 @@
      "null"
     ],
     "metadata.serial_number": [
+     "str"
+    ],
+    "metadata.state": [
      "str"
     ],
     "metadata.type": [
