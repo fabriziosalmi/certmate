@@ -1,6 +1,6 @@
 # Documentation CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM a709b5f6e20de2cd -->
+<!-- CERTMATE-TRANSLATED-FROM f3549290574fadb2 -->
 
 Bienvenue dans la documentation de CertMate. Ce dossier contient des guides complets pour toutes les fonctionnalités.
 
@@ -30,6 +30,7 @@ Bienvenue dans la documentation de CertMate. Ce dossier contient des guides comp
 - **[Webhooks](../webhooks.md)** — webhooks génériques : modèles de payload, authentification, vérification de signature *(en anglais)*
 - **[Conformité](./compliance.md)** — chaîne d'audit, attribution des acteurs, posture NIS2/eIDAS
 - **[Sondes de déploiement](./probes.md)** — vérifier qu'un certificat renouvelé est réellement servi
+- **[Stockage des certificats](../storage.md)** — backends de stockage, ce qu'il faut à chacun, migration entre eux *(en anglais)*
 - **[Supervision](../monitoring.md)** — endpoints de santé, métriques Prometheus, journaux, canaux de notification *(en anglais)*
 - **[Dépannage](../troubleshooting.md)** — échecs courants, journalisation de débogage, signaler un bug *(en anglais)*
 
