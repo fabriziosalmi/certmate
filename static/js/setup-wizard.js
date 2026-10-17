@@ -47,8 +47,56 @@
         'acme-dns':    { label: 'ACME-DNS', icon: 'fa-network-wired', fields: [{ key: 'api_url', label: 'API URL', type: 'text' }, { key: 'username', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }, { key: 'subdomain', label: 'Subdomain', type: 'text' }] },
         'hetzner-cloud': { label: 'Hetzner Cloud', icon: 'fa-server', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         desec:         { label: 'deSEC', icon: 'fa-shield-alt', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
-        scaleway:      { label: 'Scaleway', icon: 'fa-cloud', fields: [{ key: 'application_token', label: 'API Secret Key', type: 'password', placeholder: 'Requires: pip install certbot-dns-scaleway (community alpha plugin)' }] },
+        scaleway:      { label: 'Scaleway', icon: 'fa-cloud', fields: [{ key: 'application_token', label: 'API Secret Key', type: 'password' }] },
         duckdns:       { label: 'DuckDNS', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page' }] }
+    };
+
+    // What to create at the provider, one line each, taken from the plugin's
+    // own documentation (`source` names the plugin) or from
+    // docs/dns-providers.md (`source: 'docs'`). A provider with no such source
+    // gets the link and no line: a guess about someone else's permission model
+    // is worse than none. tests/test_the_wizard_says_what_token_to_create.py
+    // holds every entry to an anchor that exists and to a named source.
+    var DOCS_URL = 'https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md';
+    var GUIDES = {
+        cloudflare:      { docs: '#cloudflare', source: 'certbot-dns-cloudflare', text: 'An API token with Zone:DNS:Edit for only the zones you need certificates for, created under My Profile > API Tokens in the Cloudflare dashboard.' },
+        route53:         { docs: '#aws-route53', source: 'certbot-dns-route53', text: 'Credentials allowed route53:ListHostedZones and route53:GetChange on all resources, and route53:ChangeResourceRecordSets on your hosted zone. With the IAM role option, the host\'s AWS credentials need the same.' },
+        digitalocean:    { docs: '#supported-providers', source: 'certbot-dns-digitalocean', text: 'An API token with the domain scope (read, create, delete), from the API Tokens page of your DigitalOcean account.' },
+        hetzner:         { docs: '#hetzner-legacy-dns-api', source: 'docs', text: 'Hetzner announced the shutdown of this DNS API for May 2025: new accounts should use Hetzner Cloud.' },
+        gandi:           { docs: '#supported-providers' },
+        linode:          { docs: '#supported-providers', source: 'certbot-dns-linode', text: 'A personal access token from the API Tokens page of your Akamai Connected Cloud (Linode) account.' },
+        edgedns:         { docs: '#supported-providers', source: 'certbot-plugin-edgedns', text: 'Edge DNS Remote API credentials: client token, client secret, access token and API host.' },
+        porkbun:         { docs: '#porkbun' },
+        godaddy:         { docs: '#godaddy' },
+        namecheap:       { docs: '#availability' },
+        vultr:           { docs: '#vultr' },
+        solidserver:     { docs: '#efficientip-solidserver' },
+        ovh:             { docs: '#ovh', source: 'certbot-dns-ovh', text: 'Application credentials whose access rules allow GET, PUT, POST and DELETE on /domain/zone/* (or on one zone only).' },
+        azure:           { docs: '#azure-dns', source: 'docs', text: 'A service principal allowed to read and write TXT records in the zone; the DNS Zone Contributor role on its resource group covers it.' },
+        google:          { docs: '#google-cloud-dns', source: 'certbot-dns-google', text: 'A service account that can modify the Cloud DNS managed zones you issue for, and its JSON key.' },
+        powerdns:        { docs: '#powerdns' },
+        rfc2136:         { docs: '#rfc2136', source: 'docs', text: 'A TSIG key that the nameserver accepts for dynamic updates of the zone.' },
+        dnsmadeeasy:     { docs: '#dns-made-easy', source: 'certbot-dns-dnsmadeeasy', text: 'An API key and secret from your DNS Made Easy account page.' },
+        nsone:           { docs: '#ns1', source: 'certbot-dns-nsone', text: 'An API key from your NS1 account settings.' },
+        'he-ddns':       { docs: '#hurricane-electric' },
+        dynudns:         { docs: '#dynu' },
+        arvancloud:      { docs: '#arvancloud' },
+        infomaniak:      { docs: '#infomaniak', source: 'docs', text: 'An API token from Infomaniak Manager, API section, with the Domain scope.' },
+        'acme-dns':      { docs: '#acme-dns' },
+        'hetzner-cloud': { docs: '#hetzner-cloud', source: 'docs', text: 'A Hetzner Cloud API token with DNS read and write permission, from your project in the Hetzner Cloud Console.' },
+        desec:           { docs: '#supported-providers', source: 'certbot-dns-desec', text: 'A deSEC DNS API token from the deSEC website.' },
+        scaleway:        { docs: '#availability' },
+        duckdns:         { docs: '#duckdns-no-domain-required' }
+    };
+
+    // Providers the default image cannot use as it is, as the Availability
+    // column of docs/dns-providers.md says (the test compares the two).
+    var AVAILABILITY = {
+        namecheap: 'No working certbot plugin exists for Namecheap, so issuance fails. Use ACME-DNS or a custom script for Namecheap domains.',
+        'he-ddns': 'Not in the default image: build CertMate with EXTRA_REQUIREMENTS=requirements-extended.txt.',
+        dynudns:   'Not in the default image: build CertMate with EXTRA_REQUIREMENTS=requirements-extended.txt.',
+        scaleway:  'In no image: build a derived image that installs its plugin.',
+        powerdns:  'In no image: build a derived image that installs its plugin, in an environment of its own.'
     };
 
     var state = { step: 1, email: '', provider: '', credentials: {} };
@@ -388,6 +436,11 @@
         if (!pDef) return '';
         var html = '<div class="border-t border-border pt-4">' +
             '<h4 class="text-sm font-medium text-label mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
+        var guide = GUIDES[provider] || {};
+        if (AVAILABILITY[provider]) {
+            html += '<div class="wiz-availability mb-3 p-2.5 rounded-lg border border-warning-line bg-warning-surface text-xs text-warning-strong">' +
+                '<i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(AVAILABILITY[provider]) + '</div>';
+        }
 
         pDef.fields.forEach(function(f) {
             var savedVal = state.credentials[f.key] || f.defaultValue || '';
@@ -409,6 +462,12 @@
                     'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>';
             }
         });
+        if (guide.text || guide.docs) {
+            html += '<p class="wiz-guide text-xs text-muted mt-1"><i class="fas fa-info-circle mr-1"></i>' +
+                (guide.text ? escapeHtml(guide.text) + ' ' : '') +
+                (guide.docs ? '<a href="' + escapeHtml(DOCS_URL + guide.docs) + '" target="_blank" rel="noopener noreferrer" class="underline">How to set it up</a>' : '') +
+                '</p>';
+        }
         html += '</div>';
         return html;
     }
