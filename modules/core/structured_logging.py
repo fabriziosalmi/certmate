@@ -197,16 +197,23 @@ class PlainLineFormatter(logging.Formatter):
     the lines a traceback or a stack adds are indented: only a record's own
     first line starts at the left margin. The JSON format needs neither; it
     escapes inside the string.
+
+    `redact` runs on the message and on the traceback, which is where a failed
+    call quotes the request that carried a credential.
     """
 
+    def __init__(self, *args, redact=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._redact = redact or (lambda text: text)
+
     def formatMessage(self, record):
-        return super().formatMessage(record).replace('\r', '\\r').replace('\n', '\\n')
+        return self._redact(super().formatMessage(record)).replace('\r', '\\r').replace('\n', '\\n')
 
     def formatException(self, ei):
-        return _indent(super().formatException(ei))
+        return _indent(self._redact(super().formatException(ei)))
 
     def formatStack(self, stack_info):
-        return _indent(super().formatStack(stack_info))
+        return _indent(self._redact(super().formatStack(stack_info)))
 
     def format(self, record):
         # logging.Formatter caches the formatted traceback on the record
@@ -540,7 +547,12 @@ def configure_structured_logging(
     if json_output:
         formatter = JSONFormatter()
     else:
-        formatter = PlainLineFormatter(PLAIN_FORMAT, datefmt=PLAIN_DATEFMT)
+        # Redacted with the JSON format's own rules. It used to write a token
+        # or a private key that reached a message as it was: the redaction
+        # lived in JSONFormatter.format alone, and this is the format chosen
+        # to read the log by eye.
+        formatter = PlainLineFormatter(PLAIN_FORMAT, datefmt=PLAIN_DATEFMT,
+                                       redact=sanitize_text)
     
     # Console handler
     console_handler = logging.StreamHandler()
