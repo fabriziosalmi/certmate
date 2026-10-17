@@ -80,6 +80,8 @@ NAMES_NOTHING = {
                          'tests/test_what_a_scoped_key_may_read_in_the_activity.py writes entries for two tenants and looks',
     'GET /api/auth/config': 'whether sign-in is on: what the login page reads, with no credentials',
     'GET /api/auth/oidc/config': 'the SSO button\'s label and address: what the login page reads, with no credentials',
+    'GET /api/dns/providers': 'which providers the code supports and which certbot plugins the image has: '
+                              'a fact about the image, with no domain in it',
     'GET /api/health': 'the instance\'s health, public by design',
     'GET /api/metrics': 'where the metrics are and whether the collector is up; the series are at /metrics, which is scoped',
     'GET /api/web/update-check': 'the version running and the latest published',
