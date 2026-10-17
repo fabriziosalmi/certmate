@@ -438,7 +438,7 @@
             '<h4 class="text-sm font-medium text-label mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
         var guide = GUIDES[provider] || {};
         if (AVAILABILITY[provider]) {
-            html += '<div class="wiz-availability mb-3 p-2.5 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-200">' +
+            html += '<div class="wiz-availability mb-3 p-2.5 rounded-lg border border-warning-line bg-warning-surface text-xs text-warning-strong">' +
                 '<i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(AVAILABILITY[provider]) + '</div>';
         }
 
