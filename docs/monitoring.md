@@ -79,8 +79,8 @@ configure.
 | `CERTMATE_LOG_FILE` | not set | also write a rotated file at this path; the web UI's log stream reads it |
 
 Rotation of that file is set by `CERTMATE_LOG_MAX_BYTES` and
-`CERTMATE_LOG_BACKUP_COUNT`; see the environment table in the
-[README](../README.md#environment-variables). Secrets are redacted before a line
+`CERTMATE_LOG_BACKUP_COUNT`; see [Configuration](./configuration.md). Secrets are
+redacted before a line
 is written. To follow an issuance live from a terminal, see the
 [log stream endpoint](./api.md#log-stream-admin-debugging).
 

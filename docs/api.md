@@ -823,8 +823,7 @@ same five fields can also come from the environment:
 `CERTMATE_CLIENT_CA_ORGANIZATION`, `CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT` and
 `CERTMATE_CLIENT_CA_COMMON_NAME`. A variable left unset or empty keeps the
 default for its field, and `client_ca_subject`, when present, takes precedence.
-The README's [environment table](../README.md#client-certificates) has the
-details.
+[Configuration](./configuration.md#client-certificates) has the details.
 
 `country` is an ISO 3166-1 alpha-2 code and anything else is refused before a
 key is written. A field left empty is omitted from the subject rather than
