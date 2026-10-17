@@ -90,7 +90,10 @@
     };
 
     // Providers the default image cannot use as it is, as the Availability
-    // column of docs/dns-providers.md says (the test compares the two).
+    // column of docs/dns-providers.md says (the test compares the two). Shown
+    // only when this instance says the provider is not available, or when it
+    // could not be asked: an image built with the extended requirements has
+    // Hurricane Electric and Dynu, and must not be told it has not.
     var AVAILABILITY = {
         namecheap: 'No working certbot plugin exists for Namecheap, so issuance fails. Use ACME-DNS or a custom script for Namecheap domains.',
         'he-ddns': 'Not in the default image: build CertMate with EXTRA_REQUIREMENTS=requirements-extended.txt.',
@@ -99,7 +102,9 @@
         powerdns:  'In no image: build a derived image that installs its plugin, in an environment of its own.'
     };
 
-    var state = { step: 1, email: '', provider: '', credentials: {} };
+    // availability: null until GET /api/dns/providers answers, then a map of
+    // provider -> true/false/null, or false when the request failed.
+    var state = { step: 1, email: '', provider: '', credentials: {}, availability: null };
 
     // "Skip wizard" must stick: without persistence the modal re-appeared on
     // every dashboard load until setup was completed. Stored per browser in
@@ -348,7 +353,37 @@
         setTimeout(function() { document.getElementById('wizEmail').focus(); }, 100);
     }
 
+    function loadAvailability() {
+        if (state.availability !== null) return;
+        state.availability = false;  // asked once; a failure leaves the fixed notices
+        fetch('/api/dns/providers', { credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then(function (data) {
+                if (!data || !data.certbot_answered || !Array.isArray(data.providers)) return;
+                var map = {};
+                data.providers.forEach(function (p) { map[p.provider] = p.available; });
+                state.availability = map;
+                if (state.step === 2) renderStep();
+            })
+            .catch(function () { /* keep the fixed notices */ });
+    }
+
+    // What to warn about for *provider*: nothing when this instance can issue
+    // with it, the specific notice or a generic one when it cannot, and the
+    // fixed notice when the instance could not be asked.
+    function availabilityNotice(provider) {
+        var known = state.availability && typeof state.availability[provider] === 'boolean';
+        if (!known) return AVAILABILITY[provider] || '';
+        if (state.availability[provider]) return '';
+        return AVAILABILITY[provider] || 'Its certbot plugin is not installed in this image.';
+    }
+
+    function unavailableHere(provider) {
+        return !!state.availability && state.availability[provider] === false;
+    }
+
     function renderStep2() {
+        loadAvailability();
         var body = document.getElementById('wizardBody');
         var html =
             '<div class="text-center mb-6">' +
@@ -363,7 +398,12 @@
         Object.keys(PROVIDERS).forEach(function(key) {
             var p = PROVIDERS[key];
             var selected = state.provider === key;
-            html += '<button type="button" data-provider="' + key + '" class="wiz-provider flex flex-col items-center p-3 rounded-lg border-2 transition text-sm ' + (selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted hover:border-gray-400') + '">' +
+            var missing = unavailableHere(key);
+            html += '<button type="button" data-provider="' + key + '"' +
+                (missing ? ' title="Not available on this instance"' : '') +
+                ' class="wiz-provider flex flex-col items-center p-3 rounded-lg border-2 transition text-sm ' +
+                (selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted hover:border-gray-400') +
+                (missing ? ' opacity-50' : '') + '">' +
                 '<i class="fas ' + escapeHtml(p.icon) + ' text-lg mb-1"></i>' +
                 '<span class="text-xs font-medium">' + escapeHtml(p.label) + '</span>' +
             '</button>';
@@ -437,9 +477,10 @@
         var html = '<div class="border-t border-border pt-4">' +
             '<h4 class="text-sm font-medium text-label mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
         var guide = GUIDES[provider] || {};
-        if (AVAILABILITY[provider]) {
+        var notice = availabilityNotice(provider);
+        if (notice) {
             html += '<div class="wiz-availability mb-3 p-2.5 rounded-lg border border-warning-line bg-warning-surface text-xs text-warning-strong">' +
-                '<i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(AVAILABILITY[provider]) + '</div>';
+                '<i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(notice) + '</div>';
         }
 
         pDef.fields.forEach(function(f) {
