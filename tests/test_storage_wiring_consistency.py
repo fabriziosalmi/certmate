@@ -173,13 +173,14 @@ def test_every_dispatched_backend_has_a_documented_name():
 def _guides():
     """Every document that states the backend list, in every language.
 
-    architecture.md and the docs landing README both enumerate them. Only the
+    architecture.md, the docs landing README and the storage page enumerate them. Only the
     former was covered at first, and the Italian README slipped through with
     five backends and abbreviated names while the other four were corrected —
     the translations blind spot, inside the very patch that fixed it.
     """
     found = [p for p in _ROOT.glob("docs/**/architecture.md")]
     found += [p for p in _ROOT.glob("docs/**/README.md")]
+    found += [_ROOT / "docs" / "storage.md"]
     return sorted(str(p.relative_to(_ROOT)) for p in found)
 
 
