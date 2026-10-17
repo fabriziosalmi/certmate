@@ -34,7 +34,7 @@ from .cert_labels import tags_from_metadata
 from .shell import ShellExecutor
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
                              check_certbot_plugin_installed, clamp_propagation_seconds,
-                             manual_hook_arguments)
+                             manual_hook_arguments, plugin_install_hint)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs)
 from .inventory_sources import collect_domain_sources
@@ -2933,8 +2933,7 @@ class CertificateManager:
                     pkg = f"certbot-{plugin}"
                     raise RuntimeError(
                         f"The certbot plugin '{plugin}' is not installed. "
-                        f"Install it with: pip install {pkg}  "
-                        f"(Docker users: rebuild with REQUIREMENTS_FILE=requirements.txt)"
+                        f"{plugin_install_hint(pkg)}"
                     )
         return challenge_type, dns_provider, dns_config, strategy
 

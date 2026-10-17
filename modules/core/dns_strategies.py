@@ -5,6 +5,7 @@ Implements the Strategy Pattern for DNS provider configuration and management.
 
 import logging
 import os
+import re
 import sys
 import shlex
 import subprocess
@@ -66,6 +67,43 @@ def check_certbot_plugin_installed(plugin_name: str) -> bool:
         # If we can't check, assume it's available and let certbot fail
         # with its own error message.
         return True
+
+
+_REQUIREMENTS_DIR = Path(__file__).resolve().parents[2]
+
+
+def _pins(filename: str) -> set:
+    """The lowercase package names a requirements file pins; empty if it is not there."""
+    try:
+        lines = (_REQUIREMENTS_DIR / filename).read_text(encoding='utf-8').splitlines()
+    except OSError:
+        return set()
+    return {re.split(r'[=<>!~\[;\s]', line.strip(), maxsplit=1)[0].lower()
+            for line in lines if line.strip() and not line.lstrip().startswith(('#', '-'))}
+
+
+def plugin_install_hint(package: str) -> str:
+    """What to do about a certbot DNS plugin that is not installed.
+
+    The README sorts plugins into three tiers, and each has its own remedy. The
+    message used to name one of them for every plugin: "rebuild with
+    REQUIREMENTS_FILE=requirements.txt", which is the default and only helps an
+    image built from requirements-minimal.txt. The image ships the requirements
+    files (see the Dockerfile) so this can read which tier the plugin is in.
+    """
+    package = package.lower()
+    if package in _pins('requirements.txt'):
+        docker = ('the default image includes it, so this image was built '
+                  'from a smaller requirements file: rebuild it with the '
+                  'default REQUIREMENTS_FILE=requirements.txt')
+    elif package in _pins('requirements-extended.txt'):
+        docker = ('rebuild the image with --build-arg '
+                  'EXTRA_REQUIREMENTS=requirements-extended.txt')
+    else:
+        docker = ('no image includes it: build a derived image that installs '
+                  'it (README, Supported DNS Providers)')
+    return f"From source: pip install {package}. In Docker, {docker}."
+
 
 def manual_hook_arguments(script: Path, config_path: Path) -> list:
     """The certbot arguments that answer a DNS-01 challenge with one of CertMate's own hooks.
