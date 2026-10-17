@@ -29,6 +29,15 @@ Open `http://127.0.0.1:8000`. The first page creates the administrator account a
 - **Logs:** `journalctl -u certmate`.
 - **SELinux:** the installer has not yet been verified with SELinux enforcing. If the service does not start on such a host, the journal will say why; please report it.
 
+### Setting it up by hand
+
+[`deploy/install.sh`](../deploy/install.sh) is a short POSIX shell script, and the list above is all it does, so it is the reference for a manual setup. What a manual setup has to match:
+
+- the unit is [`certmate.service`](../certmate.service) from this repository, installed as `/etc/systemd/system/certmate.service`. Its comments say why each line is there: `PATH` keeps the system directories so deploy hooks can run, one worker because sessions and the login limiter live in one process, `GUNICORN_TIMEOUT=300` because DNS-01 waits on propagation;
+- it runs gunicorn from `/opt/certmate/venv` as the `certmate` user, sandboxed with `ProtectSystem=strict`. The only writable paths are `certificates`, `data`, `backups`, `logs` and `letsencrypt` under `/opt/certmate`, and all five must exist before the service starts;
+- it reads `/etc/certmate/certmate.env`, where the installer writes `API_BEARER_TOKEN`, `SECRET_KEY` and `CERTMATE_BACKUP_PASSPHRASE`, owned by `root:certmate` with mode `0640`. A token shorter than 32 characters, or a placeholder, is refused at startup. Without `CERTMATE_BACKUP_PASSPHRASE`, automatic backups cannot restore the instance;
+- after changing `certmate.env`, use `systemctl restart`: `reload` only signals gunicorn and does not read the file again.
+
 ---
 
 ## A cloud VM with cloud-init
@@ -478,32 +487,7 @@ gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 300 app:app
 
 ### Using systemd
 
-Create `/etc/systemd/system/certmate.service`:
-
-```ini
-[Unit]
-Description=CertMate SSL Certificate Manager
-After=network.target
-
-[Service]
-Type=simple
-User=certmate
-WorkingDirectory=/opt/certmate
-Environment=PATH=/opt/certmate/venv/bin
-Environment=GUNICORN_TIMEOUT=300
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl enable certmate
-sudo systemctl start certmate
-```
+Use the installer, or the repository's unit by hand: see [Linux server with systemd](#linux-server-with-systemd).
 
 ### Using Docker in Production
 
