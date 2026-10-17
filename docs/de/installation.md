@@ -1,6 +1,6 @@
 # Installationsanleitung
 
-<!-- CERTMATE-TRANSLATED-FROM 43c1d4c62fbc16b4 -->
+<!-- CERTMATE-TRANSLATED-FROM 5c5bff50936e6742 -->
 
 Diese Anleitung beschreibt alle Methoden zur Installation und zum Deployment von CertMate.
 
@@ -30,6 +30,15 @@ Was es tut:
 - **Anderswo lauschen:** Setzen Sie `CERTMATE_BIND` in `/etc/certmate/certmate.env` (zum Beispiel `0.0.0.0:8000`, oder bleiben Sie hinter einem Reverse Proxy auf Loopback und setzen `BEHIND_PROXY=true`), dann `sudo systemctl restart certmate`.
 - **Logs:** `journalctl -u certmate`.
 - **SELinux:** Der Installer wurde mit SELinux im Enforcing-Modus noch nicht verifiziert. Startet der Dienst auf einem solchen Host nicht, sagt das Journal warum; bitte melden Sie es.
+
+### Manuell einrichten
+
+[`deploy/install.sh`](../../deploy/install.sh) ist ein kurzes POSIX-Shell-Skript, und die Liste oben ist alles, was es tut. Es ist daher die Referenz für eine manuelle Einrichtung. Was eine manuelle Einrichtung einhalten muss:
+
+- Die Unit ist [`certmate.service`](../../certmate.service) aus diesem Repository, installiert als `/etc/systemd/system/certmate.service`. Ihre Kommentare erklären jede Zeile: `PATH` behält die Systemverzeichnisse, damit Deploy-Hooks laufen können, ein Worker, weil Sitzungen und der Login-Limiter in einem Prozess leben, `GUNICORN_TIMEOUT=300`, weil DNS-01 auf die Propagation wartet;
+- sie startet gunicorn aus `/opt/certmate/venv` als Benutzer `certmate`, abgeschottet mit `ProtectSystem=strict`. Die einzigen beschreibbaren Pfade sind `certificates`, `data`, `backups`, `logs` und `letsencrypt` unter `/opt/certmate`, und alle fünf müssen existieren, bevor der Dienst startet;
+- sie liest `/etc/certmate/certmate.env`, in die der Installer `API_BEARER_TOKEN`, `SECRET_KEY` und `CERTMATE_BACKUP_PASSPHRASE` schreibt, Eigentümer `root:certmate`, Modus `0640`. Ein Token mit weniger als 32 Zeichen oder ein Platzhalter wird beim Start abgelehnt. Ohne `CERTMATE_BACKUP_PASSPHRASE` können automatische Backups die Instanz nicht wiederherstellen;
+- nach einer Änderung an `certmate.env` `systemctl restart` verwenden: `reload` sendet gunicorn nur ein Signal und liest die Datei nicht neu ein.
 
 ---
 
@@ -491,32 +500,7 @@ gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 300 app:app
 
 ### systemd verwenden
 
-Erstellen Sie `/etc/systemd/system/certmate.service`:
-
-```ini
-[Unit]
-Description=CertMate SSL Certificate Manager
-After=network.target
-
-[Service]
-Type=simple
-User=certmate
-WorkingDirectory=/opt/certmate
-Environment=PATH=/opt/certmate/venv/bin
-Environment=GUNICORN_TIMEOUT=300
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Aktivieren und starten:
-
-```bash
-sudo systemctl enable certmate
-sudo systemctl start certmate
-```
+Den Installer verwenden, oder die Unit des Repositorys von Hand: siehe [Linux-Server mit systemd](#linux-server-mit-systemd).
 
 ### Docker im Produktionsbetrieb verwenden
 
