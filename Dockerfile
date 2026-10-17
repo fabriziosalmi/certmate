@@ -28,8 +28,9 @@ COPY requirements*.txt requirements*.lock requirements*.constraints ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install minimal requirements by default (fastest build)
-# Override with --build-arg REQUIREMENTS_FILE=requirements.txt for full install
+# requirements.txt by default: every DNS plugin the README marks Stable.
+# --build-arg REQUIREMENTS_FILE=requirements-minimal.txt builds a smaller image
+# with Cloudflare as its only DNS plugin and no storage SDK.
 ARG REQUIREMENTS_FILE=requirements.txt
 # Optional extra pip installs layered on top of the main requirements.
 # Accepts a SPACE-SEPARATED list so a single image can bundle e.g. the
@@ -214,10 +215,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 #                                          documented in-container recovery
 #                                          (README, and the login page points
 #                                          at it by name)
-#   requirements*.txt                      two error paths tell the operator to
-#                                          install one of these into a running
-#                                          container to add a DNS or storage
-#                                          backend
+#   requirements*.txt                      error messages name them as what to
+#                                          build with to add a DNS plugin or an
+#                                          SDK; the missing-DNS-plugin one reads
+#                                          them to pick which (dns_strategies.
+#                                          plugin_install_hint)
 #
 # scripts/ is copied BY NAME, not as a directory. It was `COPY scripts/`, which
 # put the other twelve files in the image: release.sh with the whole release

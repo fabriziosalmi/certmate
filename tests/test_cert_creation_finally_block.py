@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from modules.core.certificates import CertificateManager
+from modules.core.dns_strategies import plugin_install_hint
 
 
 pytestmark = [pytest.mark.unit]
@@ -52,6 +53,7 @@ def test_plugin_not_installed_surfaces_runtime_error_not_unbound_local(tmp_path)
                 staging=True,
             )
     assert 'is not installed' in str(exc_info.value)
+    assert plugin_install_hint('certbot-dns-duckdns') in str(exc_info.value)
     assert 'UnboundLocalError' not in str(exc_info.value)
 
 
