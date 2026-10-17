@@ -251,9 +251,13 @@ jobs:
       # reported pyjwt 2.9.0 with seven advisories against an image holding
       # 2.13.0 with none, and the same for requests, idna, filelock,
       # protobuf and a pygments that is not installed at all.
+      #
+      # Read with importlib.metadata, not `pip freeze`: the image ships no pip
+      # (#403). On the v2.50.1 image the two lists were the same 125 pins.
       run: |
-        docker run --rm --entrypoint /opt/venv/bin/pip \
-          certmate:scan freeze > resolved-requirements.txt
+        docker run --rm --entrypoint /opt/venv/bin/python certmate:scan -c \
+          "import importlib.metadata as m; print('\n'.join(sorted(f\"{d.metadata['Name']}=={d.version}\" for d in m.distributions())))" \
+          > resolved-requirements.txt
         wc -l < resolved-requirements.txt
 
     - name: Every advisory against a shipped package is in SECURITY.md

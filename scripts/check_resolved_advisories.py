@@ -25,7 +25,7 @@ produces a list that is loud, wrong in both directions, and impossible to keep
 assessed — so nobody assesses it, and a real advisory would land in the middle
 of the noise unnoticed.
 
-This script therefore takes a `pip freeze` captured **inside the built image**,
+This script therefore takes the installed set captured **inside the built image**,
 where every version is exact, asks OSV about that, and fails when a package
 that ships carries an advisory SECURITY.md does not name. Against the same
 image the answer was four advisories, all `cryptography`, all already
@@ -40,9 +40,12 @@ same flaw, and counting them separately is how "four advisories" becomes
 Usage:
     check_resolved_advisories.py <freeze-file>
 
-where the freeze file comes from the image under test, e.g.
+where the freeze file lists `name==version` lines from the image under test.
+The image ships no pip (#403), so CI reads them with importlib.metadata, e.g.
 
-    docker run --rm --entrypoint /opt/venv/bin/pip certmate:scan freeze
+    docker run --rm --entrypoint /opt/venv/bin/python certmate:scan -c \
+      "import importlib.metadata as m; print('\\n'.join(sorted(
+       f\"{d.metadata['Name']}=={d.version}\" for d in m.distributions())))"
 """
 import json
 import os

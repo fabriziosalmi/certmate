@@ -272,7 +272,7 @@ wrong about any particular provider, and four of them were wrong:
 | ----- | ------- |
 | **Stable** | The plugin is pinned in `requirements.txt`, so it is in the default image. |
 | **Extended image** | Pinned in `requirements-extended.txt`. Build with `--build-arg EXTRA_REQUIREMENTS=requirements-extended.txt`. |
-| **Separate install** | Not shipped in any image. `pip install` it yourself, in its own environment where noted. |
+| **Separate install** | Not shipped in any image. Build a derived image that installs it (below), in its own environment where noted. |
 | **Unavailable** | No usable plugin exists for the supported stack. CertMate can be configured for it, but issuance will fail. |
 
 `Namecheap` is the **Unavailable** one: the only release on PyPI is
@@ -282,6 +282,20 @@ said all along. Use ACME-DNS or the custom-script hook for Namecheap domains.
 `Scaleway` is alpha (0.0.7, declares Python 2.7 support) and `PowerDNS` pulls
 `dns-lexicon<=3.5.6`, which conflicts with the rest of the extended set — hence
 its own environment.
+
+The image ships no pip, so a separately installed plugin goes into a derived
+image, which puts a pip back for its own build only:
+
+```dockerfile
+FROM fabriziosalmi/certmate:latest
+USER root
+RUN /opt/venv/bin/python -m ensurepip && \
+    /opt/venv/bin/python -m pip install --no-cache-dir certbot-dns-scaleway==0.0.7 && \
+    /opt/venv/bin/python -m pip uninstall -y pip
+USER certmate
+```
+
+`certbot plugins` inside that image then lists `dns-scaleway`.
 
 ### Provider Categories
 
@@ -2427,7 +2441,7 @@ echo "Version: $(docker exec certmate python -c 'import modules; print(modules._
 echo "Python: $(docker exec certmate python --version)"
 echo "OS: $(docker exec certmate cat /etc/os-release | head -2)"
 echo "Certbot: $(docker exec certmate certbot --version)"
-echo "DNS Plugins: $(docker exec certmate pip list | grep certbot-dns)"
+echo "DNS Plugins: $(docker exec certmate certbot plugins 2>/dev/null | grep '^\* dns-')"
 # DO NOT paste settings.json verbatim into a public issue — it contains
 # credentials. The /api/diagnostics/snapshot endpoint returns a redacted
 # subset; use it instead:
