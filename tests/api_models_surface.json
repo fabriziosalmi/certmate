@@ -1,5 +1,5 @@
 {
- "contract_version": "2.49",
+ "contract_version": "2.50",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -546,6 +546,37 @@
    "required": [
     "domain"
    ]
+  },
+  "DNSProviderAvailability": {
+   "properties": {
+    "certbot_answered": {
+     "type": "boolean"
+    },
+    "checked_at": {
+     "type": "string"
+    },
+    "providers": {
+     "items": {
+      "$ref": "#/definitions/DNSProviderAvailabilityItem"
+     },
+     "type": "array"
+    }
+   },
+   "required": []
+  },
+  "DNSProviderAvailabilityItem": {
+   "properties": {
+    "available": {
+     "type": "boolean"
+    },
+    "plugin": {
+     "type": "string"
+    },
+    "provider": {
+     "type": "string"
+    }
+   },
+   "required": []
   },
   "DNSProviders": {
    "properties": {
@@ -1512,6 +1543,22 @@
    "parameters": {},
    "responses": {
     "200": null
+   }
+  },
+  "GET /dns/providers": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/DNSProviderAvailability"
+    }
    }
   },
   "GET /dns/{X}/accounts": {

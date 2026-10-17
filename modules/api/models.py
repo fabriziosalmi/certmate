@@ -134,6 +134,19 @@ def create_api_models(api):
 
     # multi_provider_model removed as it is now flexible
 
+    dns_provider_availability_item = api.model('DNSProviderAvailabilityItem', {
+        'provider': fields.String(description='Provider name, as dns_provider takes it'),
+        'plugin': fields.String(description='The certbot plugin it needs; null when it needs none '
+                                            '(the manual hook, acme-dns)'),
+        'available': fields.Boolean(description='Whether this instance can issue with it; null when '
+                                                'certbot could not be asked'),
+    })
+    dns_provider_availability_model = api.model('DNSProviderAvailability', {
+        'certbot_answered': fields.Boolean(description='False when `certbot plugins` could not be run'),
+        'checked_at': fields.String(description='When certbot was asked (cached for five minutes)'),
+        'providers': fields.List(fields.Nested(dns_provider_availability_item)),
+    })
+
     dns_providers_model = api.model('DNSProviders', {
         'cloudflare': fields.Nested(cloudflare_model),
         'route53': fields.Nested(route53_model),
@@ -779,6 +792,7 @@ def create_api_models(api):
     return {
         'settings_model': settings_model,
         'dns_providers_model': dns_providers_model,
+        'dns_provider_availability_model': dns_provider_availability_model,
         'cache_stats_model': cache_stats_model,
         'cache_clear_response_model': cache_clear_response_model,
         'browser_deployment_model': browser_deployment_model,

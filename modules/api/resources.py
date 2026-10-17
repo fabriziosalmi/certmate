@@ -228,6 +228,7 @@ def create_api_resources(api, models, managers):
     dns_ns.add_resource(settings_resources['DNSAccounts'], '/<string:provider>/accounts', endpoint='dns_accounts_provider')
     dns_ns.add_resource(settings_resources['DNSAccounts'], '/accounts', endpoint='dns_accounts_global')
     dns_ns.add_resource(settings_resources['DNSAccountDetail'], '/<string:provider>/accounts/<string:account_id>')
+    dns_ns.add_resource(settings_resources['DNSProviderAvailability'], '/providers')
 
     # Return all resource classes (CA provider test will be registered in app.py)
     return {
