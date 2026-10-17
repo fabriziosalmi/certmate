@@ -33,7 +33,7 @@ from flask_restx import Api
 from modules.api.models import create_api_models
 from modules.api.resources import create_api_resources
 from modules.core.certificates import DomainOperationInProgress
-from modules.core.cert_service import DomainOutOfScope
+from modules.core.cert_service import DomainOutOfScope, EmailNotConfigured
 
 pytestmark = [pytest.mark.unit]
 
@@ -211,7 +211,7 @@ def test_a_rejected_create_request_is_400_with_a_hint(client, service):
     """A ValueError here is bad input, and the hint is what makes it
     actionable — it is the difference between "invalid" and "you have no
     email configured"."""
-    service.create.side_effect = ValueError('Email not configured')
+    service.create.side_effect = _missing_email()
 
     response = _create(client)
 
@@ -219,6 +219,26 @@ def test_a_rejected_create_request_is_400_with_a_hint(client, service):
     body = response.get_json()
     assert 'Email not configured' in body['error']
     assert body.get('hint'), 'a 400 with no hint tells the caller nothing'
+    # It used to collect the DNS hint, "Check your DNS provider settings",
+    # and sent the reader to credentials that were fine. Measured on a fresh
+    # install: the first create made without the first-run screen.
+    assert 'email' in body['hint'].lower() and 'Settings > CA' in body['hint']
+    assert 'DNS' not in body['hint']
+
+
+def _missing_email():
+    """The refusal the service raises when no email resolves, with its own
+    message: the hint matches on the text, so the test takes the text from
+    the code that writes it rather than from a copy."""
+    from modules.core.cert_service import CertificateService
+    certs = MagicMock()
+    certs.ca_manager = None   # no saved CA configuration, no global email
+    try:
+        CertificateService(certs, MagicMock(), MagicMock()).resolve_ca_email(
+            {}, 'letsencrypt', None)
+    except EmailNotConfigured as refusal:
+        return refusal
+    raise AssertionError('no email resolved, and nothing was refused')
 
 
 def test_an_existing_certificate_is_reported_as_such(client, service):

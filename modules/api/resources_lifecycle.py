@@ -94,6 +94,14 @@ def _configuration_hint(error_msg: str):
     if 'ca provider' in lowered and 'not configured' in lowered:
         return ('Configure that CA under Settings > Certificate Authority '
                 'providers, or request a CA that is already configured.')
+    # The missing contact email also says "not configured", and collected the
+    # DNS hint below: measured on a fresh install, the first create a reader
+    # makes without the first-run screen sent them to DNS credentials that
+    # were fine.
+    if 'email not configured' in lowered:
+        return ('Set a contact email: on the CA account under Settings > CA, '
+                'or for the whole instance (the first-run screen asks for it, '
+                'or `email` in POST /api/settings).')
     if 'not configured' in lowered:
         return ('Check your DNS provider settings and ensure credentials are '
                 'properly configured.')
