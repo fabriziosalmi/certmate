@@ -28,6 +28,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
 - **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
+- **[Troubleshooting](./troubleshooting.md)** — common failures, debug logging, reporting a bug
 
 ---
 
@@ -175,6 +176,7 @@ docs/
   mcp.md                  MCP server for AI agents
   probes.en.md            deployment probes
   testing.md              test framework and CI/CD
+  troubleshooting.md      common failures, debug logging, bug reports
 ```
 
 ---

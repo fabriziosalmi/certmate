@@ -1690,6 +1690,77 @@ liveness on it would take a working install out of rotation.
 Every response carries `X-CertMate-API-Version`; `/api/health` also reports it
 as `api_contract_version` for anything that already polls here.
 
+#### Diagnostic snapshot
+
+**Endpoint**: `GET /api/diagnostics/snapshot` (admin)
+
+The operational state a bug report needs, collected in one call. The in-app
+**Report this issue** button calls it, and it is what to attach to an issue
+instead of `settings.json`, which holds credentials.
+
+```bash
+curl -sS -H "Authorization: Bearer TOKEN" \
+ https://certmate.example.com/api/diagnostics/snapshot
+```
+
+<!-- response: GET /api/diagnostics/snapshot 200 -->
+```json
+{
+ "certmate_version": "2.50.1",
+ "python_version": "3.12.15",
+ "os_platform": "Linux-6.8.0-aarch64-with-glibc2.41",
+ "container": true,
+ "cryptography_version": "50.0.2",
+ "openssl_version": "OpenSSL 3.5.7 9 Jun 2026",
+ "certbot_version": "certbot 5.8.0",
+ "storage_permissions": {
+   "cert_dir_readable": true,
+   "cert_dir_writable": true,
+   "data_dir_readable": true,
+   "data_dir_writable": true
+ },
+ "scheduler_running": true,
+ "certificate_count": 12,
+ "dns_provider": "cloudflare",
+ "default_ca": null,
+ "challenge_type": "dns-01",
+ "storage_backend": "local_filesystem",
+ "configured_domains_count": 12,
+ "active_dns_providers": {
+   "cloudflare": [
+     {"id": "default", "name": "Default Account", "description": "Legacy single-account config"}
+   ]
+ },
+ "sso_oidc_enabled": false,
+ "disk_free_bytes": 41237659648,
+ "disk_total_bytes": 62671097856,
+ "backup_count": 3,
+ "backup_total_size": 48213,
+ "sanitized_logs": [],
+ "recent_audit": [
+   {"timestamp": "2026-10-17T08:12:44Z", "operation": "renew", "resource_type": "certificate", "status": "success"}
+ ]
+}
+```
+
+What it leaves out, and what it does not:
+
+- `recent_audit` is the last five audit entries with only `timestamp`,
+  `operation`, `resource_type` and `status`: no domain, user, IP address or
+  details.
+- `active_dns_providers` names each configured DNS account (its id, name and
+  description) without its credentials.
+- `sanitized_logs` is the last 50 lines of `certmate.log` in the logs
+  directory, passed through the log sanitizer, which removes credentials but
+  not domain names. It is an empty list when there is no such file, which is
+  the default: CertMate logs to stdout.
+- `default_ca` is `null` when no CA was chosen in settings; issuance then uses
+  Let's Encrypt.
+
+Each section is collected on its own. One that fails is reported under an
+`errors` object, keyed by section, and the rest of the snapshot still comes
+back; `errors` is absent when every section succeeded.
+
 ### Authentication and session
 
 These are the endpoints the login flow uses. They are listed because they are
