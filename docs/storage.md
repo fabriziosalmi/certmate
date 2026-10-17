@@ -18,7 +18,7 @@ its metadata carries a warning that the external copy is missing or stale.
 - **Backups contain the local directory only.** A certificate that exists only
   in an external backend is not in a backup. Automatic backups also leave
   private keys out unless `CERTMATE_BACKUP_PASSPHRASE` is set; see
-  [Backup and Recovery](../README.md#backup-and-recovery).
+  [Backups and recovery](./backup.md).
 - **Nothing encrypts the local directory at rest.** Private keys are written
   readable by their owner only (`0600`).
 

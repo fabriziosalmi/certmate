@@ -2294,6 +2294,17 @@ does not make an instance into a source of traffic.
 
 ### Deployment
 
+#### Deploy-hook configuration
+
+**Endpoint**: `GET /api/deploy/config`, `POST /api/deploy/config` (admin)
+
+Reads and writes the `deploy_hooks` block: the hooks that run after an
+issuance or a renewal, and the targets they deliver to. This is the only way
+to change that block; the bulk settings endpoint refuses `deploy_hooks`. A
+rejected configuration is answered `400` with the reason. Every save is
+audited, without the hook commands themselves. What the block holds and how
+hooks run: [deploy-hooks.md](./deploy-hooks.md).
+
 #### Deploy-hook history
 
 **Endpoint**: `GET /api/deploy/history` — admin

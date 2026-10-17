@@ -27,6 +27,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[CSR-only certificates](./csr-only-certificates.md)** — issuing and renewing when the private key stays on the device
 - **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
+- **[Backups and recovery](./backup.md)** — the two kinds of archive, off-site copies, restoring, lost admin password
 - **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
 - **[Single sign-on (OIDC)](./sso.md)** — OpenID Connect sign-in, role mapping, provisioning
 - **[Certificate storage](./storage.md)** — storage backends, what each needs, migrating between them
@@ -163,6 +164,7 @@ docs/
   THEME_MIGRATION.md      one-off theme migration record
   api.md                  complete REST API reference
   architecture.md         system architecture
+  backup.md               backups and recovery
   ca-providers.md         certificate authorities
   compliance.md           audit chain, attribution, NIS2/eIDAS
   csr-only-certificates.md  issuing when the key stays on the device
