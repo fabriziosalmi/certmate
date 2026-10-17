@@ -1,6 +1,6 @@
 # Documentación de CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 8d255ffe4a5b0a0b -->
+<!-- CERTMATE-TRANSLATED-FROM 68c98d5fda25d6d4 -->
 
 Bienvenido a la documentación de CertMate. Esta carpeta contiene guías completas para todas las funcionalidades.
 
@@ -30,6 +30,7 @@ Bienvenido a la documentación de CertMate. Esta carpeta contiene guías complet
 - **[Webhooks](../webhooks.md)** — webhooks genéricos: plantillas de payload, autenticación, verificación de firma *(en inglés)*
 - **[Cumplimiento](./compliance.md)** — cadena de auditoría, atribución de acciones, postura NIS2/eIDAS
 - **[Sondas de despliegue](./probes.md)** — comprobar que el certificado renovado se sirve de verdad
+- **[Solución de problemas](../troubleshooting.md)** — fallos comunes, registro de depuración, cómo informar de un error *(en inglés)*
 
 ---
 
