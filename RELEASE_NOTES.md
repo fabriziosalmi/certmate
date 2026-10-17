@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.50.1 (a client certificate renews with the country and state it was issued with)
+
+[Read the notes](docs/releases/v2.50.1.md)
+
 ## v2.50.0 (paginated certificate lists, a palette that finds any name a certificate covers, a client CA named by its deployment, and translations that match their English)
 
 [Read the notes](docs/releases/v2.50.0.md)
