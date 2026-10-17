@@ -1350,13 +1350,19 @@ class SettingsManager:
                         disk_parts = [int(p) for p in str(disk_version).split('.')[:2]]
                         curr_parts = [int(p) for p in str(_CERTMATE_VERSION).split('.')[:2]]
                         if tuple(disk_parts) > tuple(curr_parts):
+                            # Not "restore the latest backup": an automatic
+                            # backup taken without a passphrase cannot restore,
+                            # and on an instance that never had one the latest
+                            # archive is one of those.
                             logger.error(
                                 "DOWNGRADE DETECTED: settings.json was written by "
                                 "CertMate %s but this process is %s. The on-disk "
                                 "format may be incompatible. If authentication or "
-                                "certificates are missing, restore the latest backup "
-                                "from %s and restart.",
-                                disk_version, _CERTMATE_VERSION,
+                                "certificates are missing, run %s again, or restore "
+                                "a backup from %s that can restore: GET /api/backups "
+                                "reports can_restore for each, and one taken without "
+                                "CERTMATE_BACKUP_PASSPHRASE cannot.",
+                                disk_version, _CERTMATE_VERSION, disk_version,
                                 self.file_ops.backup_dir / 'unified'
                             )
                         else:

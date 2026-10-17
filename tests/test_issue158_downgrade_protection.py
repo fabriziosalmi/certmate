@@ -78,6 +78,11 @@ def test_load_settings_warns_on_downgrade(settings_manager, caplog):
     assert "DOWNGRADE DETECTED" in caplog.text
     assert "9.9.9" in caplog.text
     assert "2.4.7" in caplog.text
+    # It points at a backup that can restore, not at the latest one: an
+    # automatic backup taken without a passphrase is the latest and cannot.
+    assert "can_restore" in caplog.text
+    assert "CERTMATE_BACKUP_PASSPHRASE" in caplog.text
+    assert "latest backup" not in caplog.text
     # load_settings still returns usable data
     assert settings["email"] == "admin@example.com"
 
