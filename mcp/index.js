@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const {
@@ -23,9 +24,14 @@ const { randomUUID } = require("crypto");
 const AGENT_SESSION = process.env.CERTMATE_AGENT_SESSION || randomUUID();
 const AGENT_ID = process.env.CERTMATE_AGENT_ID || "certmate-mcp-server";
 
+// The version the server reports is package.json's, so the two cannot drift:
+// npm publishes whatever package.json says, and a client asking the server
+// which version it runs must get the same answer.
+const { version: SERVER_VERSION } = require("./package.json");
+
 const server = new Server({
   name: "certmate-mcp-server",
-  version: "1.1.0"
+  version: SERVER_VERSION
 }, {
   capabilities: {
     tools: {}

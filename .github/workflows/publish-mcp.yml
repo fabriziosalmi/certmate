@@ -1,0 +1,85 @@
+name: Publish MCP server (npm)
+
+# Publishes mcp/ as `certmate-mcp-server` on npm (#1017), so an MCP client can
+# run it with `npx -y certmate-mcp-server` instead of cloning this repository.
+#
+# npm Trusted Publishing (OIDC): no npm token is stored anywhere. npm checks
+# that the run comes from this repository, this workflow file and the `npm`
+# environment, as configured in the package's settings on npmjs.com, and
+# attaches a provenance attestation automatically. Requires npm >= 11.5.1 and
+# Node >= 22.14, which is why both are set up explicitly below.
+#
+# Fires on an `mcp-v*` tag, a version stream of its own like the clients'
+# `clients-v*`, so it never collides with the server's `v*` releases. Manual
+# runs default to a dry run: pack, test and `npm publish --dry-run`.
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Pack and verify without publishing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: test and publish
+    runs-on: ubuntu-latest
+    environment: npm
+    # Job-level permissions replace the workflow's, so contents: read is
+    # restated. id-token: write is the only credential trusted publishing needs.
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: npm new enough for trusted publishing
+        run: |
+          npm install -g npm@11
+          npm --version
+
+      - name: Fail unless the tag matches package.json
+        # npm versions are write-once: a tag that disagrees with package.json
+        # would publish the wrong number, permanently.
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          case "$REF" in
+            refs/tags/mcp-v*)
+              tag="${REF#refs/tags/mcp-v}"
+              if [ "$tag" != "$version" ]; then
+                echo "::error::tag says $tag, mcp/package.json says $version" >&2
+                exit 1
+              fi
+              ;;
+          esac
+          echo "certmate-mcp-server $version (ref: $REF)"
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Publish
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            npm publish --dry-run
+          else
+            npm publish
+          fi
