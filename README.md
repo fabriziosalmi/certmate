@@ -2092,110 +2092,7 @@ docker-compose up -d
 echo "Recovery completed from backup: $BACKUP_DATE"
 ```
 
-## Monitoring & Observability
-
-### Health Monitoring
-
-#### Built-in Health Checks
-```bash
-# Basic health check
-curl -f http://localhost:8000/health
-
-# Detailed health with auth
-curl -H "Authorization: Bearer your_token" \
- http://localhost:8000/api/certificates
-```
-
-#### Prometheus Metrics Integration
-
-Nothing to add: `/metrics` is already a registered route
-([`modules/web/misc_routes.py`](modules/web/misc_routes.py)), and the metrics
-themselves are declared in
-[`modules/core/metrics.py`](modules/core/metrics.py). This section used to
-show a snippet headed "Add to app.py", which would have registered a second,
-unauthenticated `/metrics` on top of the real one.
-
-A ready-to-import **Grafana dashboard**, **Prometheus alert rules**, and an
-authenticated **scrape config** ship in [`monitoring/`](monitoring/) — see
-[monitoring/README.md](monitoring/README.md). The `/metrics` endpoint requires
-the viewer role, so scrape it with a viewer-scoped API token (Bearer) — a
-scraper reads, so it does not need admin.
-
-#### Log Aggregation
-```yaml
-# docker-compose.logging.yml
-version: '3.8'
-services:
- certmate:
- logging:
- driver: "fluentd"
- options:
- fluentd-address: localhost:24224
- tag: certmate
- fluentd-async-connect: "true"
- 
- fluentd:
- image: fluent/fluentd:v1.14
- volumes:
- - ./fluentd/conf:/fluentd/etc
- - ./logs:/var/log/fluentd
- ports:
- - "24224:24224"
- - "24224:24224/udp"
-```
-
-### Grafana Dashboard Example
-```json
-{
- "dashboard": {
- "title": "CertMate SSL Certificate Monitoring",
- "panels": [{
- "title": "Certificate Expiry Status",
- "targets": [{
- "expr": "certmate_certificate_expiry_days < 30",
- "legendFormat": "Expiring Soon ({{domain}})"
- }
- ],
- "alert": {
- "conditions": [{
- "query": {"queryType": "", "refId": "A"},
- "reducer": {"type": "last", "params": []},
- "evaluator": {"params": [30], "type": "lt"}
- }
- ],
- "executionErrorState": "alerting",
- "frequency": "1h",
- "handler": 1,
- "name": "Certificate Expiring",
- "noDataState": "no_data",
- "notifications": []
- }
- }
- ]
- }
-}
-```
-
-### Built-in Notifications
-
-CertMate includes a built-in notification system configurable from Settings > Notifications:
-
-- **Email (SMTP)** - Certificate expiry warnings and renewal confirmations
-- **Slack** - Incoming webhook integration for team channels
-- **Discord** - Webhook notifications for Discord servers
-- **Telegram** - Bot API messages (bot token + chat ID)
-- **ntfy** - Push to an [ntfy](https://ntfy.sh) topic (self-hostable); optional access token, per-message priority
-- **Gotify** - Push to a self-hosted [Gotify](https://gotify.net) server (server URL + app token, numeric priority)
-- **Generic Webhooks** - HTTP POST/PUT/PATCH with HMAC-SHA256 signed payloads, bearer/basic/header authentication, and a JSON **payload template** with `{{placeholders}}` so the body fits whatever receives it — see [docs/webhooks.md](docs/webhooks.md)
-- **Weekly Digest** - Scheduled summary of certificate status and upcoming renewals
-
-All notification channels support per-event filtering (created, renewed, expiring, failed) and can be tested from the settings UI.
-
-> **Microsoft Teams:** no dedicated adapter is needed. Use a Teams channel's
-> built-in email address (channel → ... → Get email address) as a recipient on
-> the Email (SMTP) channel — Teams posts the message into the channel for you.
-
-### Downgrades & Recovery
+#### Downgrades & Recovery
 
 Downgrading to a version older than the one that wrote `settings.json` is not supported and may result in a broken configuration or loss of accounts. If you see a `DOWNGRADE DETECTED` message in the logs after rolling back, **restore the most recent backup that can actually restore**.
 
@@ -2229,6 +2126,10 @@ If you have lost the admin password and cannot log in, use the emergency reset s
 ```bash
 docker exec -it certmate python scripts/reset_admin_password.py
 ```
+
+## Monitoring & Observability
+
+Health endpoints, Prometheus metrics with a ready-made dashboard and alert rules, logs, and notification channels are in [docs/monitoring.md](docs/monitoring.md).
 
 ## Troubleshooting Guide
 
