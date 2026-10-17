@@ -859,6 +859,8 @@ neither field.
     "email": "user@example.com",
     "organization": "ACME Corp",
     "organizational_unit": "Engineering",
+    "country": "CH",
+    "state": "Switzerland",
     "cert_usage": "api-mtls",
     "key_usage": [
       "digitalSignature",
@@ -885,7 +887,8 @@ neither field.
 ```
 
 `metadata` is the certificate's record, the same object `GET /api/client-certs/<identifier>`
-answers with. The `identifier` is the common name made safe for a path, and eight hex
+answers with. Since API contract **2.49** it carries `country` and `state`, the C and ST
+of the certificate's subject. The `identifier` is the common name made safe for a path, and eight hex
 characters. Its dates (`created_at`, `expires_at`, and later `revoked_at` and
 `superseded_at`) are UTC with a `Z`, like every date-time ([Date-times](#date-times)).
 
@@ -934,6 +937,8 @@ List all client certificates with optional filtering.
       "email": "user@example.com",
       "organization": "ACME Corp",
       "organizational_unit": "Engineering",
+      "country": "CH",
+      "state": "Switzerland",
       "cert_usage": "api-mtls",
       "key_usage": [
         "digitalSignature",
@@ -963,6 +968,8 @@ List all client certificates with optional filtering.
       "email": "user@example.com",
       "organization": "ACME Corp",
       "organizational_unit": "Engineering",
+      "country": "CH",
+      "state": "Switzerland",
       "cert_usage": "api-mtls",
       "key_usage": [
         "digitalSignature",
@@ -1067,6 +1074,8 @@ stop reading it.
   "email": "user@example.com",
   "organization": "ACME Corp",
   "organizational_unit": "Engineering",
+  "country": "CH",
+  "state": "Switzerland",
   "cert_usage": "api-mtls",
   "key_usage": [
     "digitalSignature",
@@ -1178,7 +1187,8 @@ curl -X POST http://localhost:8000/api/client-certs/user-example.com-3f9c2a71/re
 **Endpoint**: `POST /api/client-certs/<identifier>/renew`
 
 Renew a certificate: a new certificate, with a new identifier and serial and the same
-subject, usage and validity. The answer has the shape of the create answer, and the old
+subject, usage and validity. The subject includes the country and state: before API
+contract **2.49** a renewal replaced them with the default (#1256). The answer has the shape of the create answer, and the old
 certificate is marked as replaced (`superseded_by`, `superseded_at`, `renewal_enabled`
 false; see above). It is not revoked: it stays valid until it expires or is revoked. A
 certificate that does not exist is a `404` (a `400` before API contract **2.37**).
@@ -1201,6 +1211,8 @@ certificate that does not exist is a `404` (a `400` before API contract **2.37**
     "email": "user@example.com",
     "organization": "ACME Corp",
     "organizational_unit": "Engineering",
+    "country": "CH",
+    "state": "Switzerland",
     "cert_usage": "api-mtls",
     "key_usage": [
       "digitalSignature",
