@@ -1,6 +1,6 @@
 # Documentazione CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM f3549290574fadb2 -->
+<!-- CERTMATE-TRANSLATED-FROM f5b0416f860d2faa -->
 
 Benvenuto nella documentazione di CertMate. Questa cartella contiene guide complete per tutte le funzionalità.
 
@@ -30,6 +30,7 @@ Benvenuto nella documentazione di CertMate. Questa cartella contiene guide compl
 - **[Webhook](../webhooks.md)** — webhook generici: template del payload, autenticazione, verifica della firma *(in inglese)*
 - **[Conformità](./compliance.md)** — catena di audit, attribuzione delle azioni, postura NIS2/eIDAS
 - **[Sonde di deployment](./probes.md)** — verificare che il certificato rinnovato sia davvero servito
+- **[Single sign-on (OIDC)](../sso.md)** — accesso con OpenID Connect, mappatura dei ruoli, provisioning *(in inglese)*
 - **[Storage dei certificati](../storage.md)** — backend di storage, cosa serve a ciascuno, migrazione tra di essi *(in inglese)*
 - **[Monitoraggio](../monitoring.md)** — endpoint di salute, metriche Prometheus, log, canali di notifica *(in inglese)*
 - **[Risoluzione dei problemi](../troubleshooting.md)** — errori comuni, log di debug, come segnalare un bug *(in inglese)*

@@ -1807,6 +1807,28 @@ rate-limited.
 Begins the Authorization Code + PKCE flow. The next-URL is validated to be a
 path on this site, so it cannot be used as an open redirect.
 
+#### SSO callback
+
+**Endpoint**: `GET /api/auth/oidc/callback` (no credential required)
+
+Where the identity provider sends the browser back after sign-in, and the URL
+to register at the provider as the redirect URI. It is not rate-limited
+itself: a failed callback counts against the login limit of the caller's IP,
+so the next `GET /api/auth/oidc/login` from that IP backs off. Setting up a
+provider is in [sso.md](./sso.md).
+
+#### SSO settings
+
+**Endpoint**: `GET /api/auth/oidc/settings`, `POST /api/auth/oidc/settings`
+(admin)
+
+Reads and writes the `oidc` settings block. `GET` returns `client_secret`
+masked as `********`. `POST` merges what it receives onto the stored block,
+and a `********` value keeps the stored secret, so what `GET` returned can be
+posted back unchanged. Every write is audited. This is the only way to change
+the block: the bulk settings endpoint refuses the `oidc` key. The keys are
+listed in [sso.md](./sso.md#role-mapping-example).
+
 ### Probing a host
 
 #### Read the certificate a host is serving
