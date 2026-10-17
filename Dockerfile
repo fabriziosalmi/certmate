@@ -53,8 +53,8 @@ ARG EXTRA_REQUIREMENTS=
 # index served on build day. A comment here said those "never reach the runtime
 # stage"; they do, because the runtime stage copies /opt/venv, and the published
 # 2.48.1 image carries wheel 0.48.0 and packaging 26.3. They are locked now, at
-# exactly those versions, and the runtime stage's PIP_VERSION must equal the pip
-# pin in requirements-build.txt (a test holds the two together).
+# exactly those versions. pip itself does the installing and then leaves the
+# venv: the finished image ships no pip (see the runtime stage, #403).
 #
 # shellcheck disable=SC2086 — intentional word-splitting to iterate the list.
 #
@@ -109,7 +109,8 @@ RUN pip install --no-cache-dir --require-hashes -r requirements-build.lock && \
             echo "==> Installing extras from ${req}"; \
             pip install --no-cache-dir -c "${CONSTRAINTS}" -r "${req}"; \
         done; \
-    fi
+    fi && \
+    pip uninstall -y pip
 
 # Production stage — same digest pin as the builder stage above.
 FROM python:3.12-slim-trixie@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f
@@ -166,43 +167,26 @@ WORKDIR /app
 # build-time upgrade. The cost is real: a digest bump has to actually be merged
 # when one lands (#659).
 #
-# The pip upgrade is this stage's, not the builder's. The builder already runs
-# `pip install -U pip`, but that only patches the BUILDER's interpreter — the
-# runtime stage starts from the same base image with its own bundled pip under
-# /usr/local/lib/python3.12/site-packages, which nothing touched. That stale
-# copy is what the Trivy scan keeps reporting (CVE-2026-8643, CVE-2026-6357,
-# CVE-2026-3219 against pip 25.0.1); the app itself runs from /opt/venv and
-# never uses it. See issue #403.
+# No pip in the finished image, in either place it used to be (#403). The app
+# runs from /opt/venv and never calls pip; pip runs while the image is built,
+# and the builder stage above removes it from the venv once the dependencies
+# are in. The base image's own copy, under /usr/local, is removed here.
 #
-# 26.2.1 fixes CVE-2026-13346 in pip itself. It was held at 26.1.2 for a
-# while, on the measurement that a scan of the image found more with 26.2.1
-# than without, the extra findings being in msgpack 1.1.2 and setuptools
-# 70.3.0, "which 26.2.1 vendors". The count was right and the reason was not.
-# 26.1.2 vendors the same msgpack 1.1.2 and setuptools 70.3.0
-# (pip/_vendor/vendor.txt lists both, and msgpack/fallback.py and
-# pkg_resources/__init__.py are byte-identical in the two wheels). What 26.2.1
-# adds is pip/_vendor/bom.cdx.json, a CycloneDX list of what it vendors, and
-# the scanner reads that. The hold did not avoid those findings: it kept them
-# unreported, and kept the CVE.
+# It had been pinned and upgraded instead, to keep the CVEs in pip itself out
+# of the image. That left the ones in what pip vendors: measured on the v2.50.1
+# image (Trivy, 2026-10-17), urllib3 2.7.0, msgpack 1.1.2 and setuptools 70.3.0
+# inside pip 26.2.1, the latest release, made 6 of the 16 findings that have a
+# fix, 4 of them HIGH, and no pip release carries the fixes yet. A pip that is
+# not there carries none of them, and nothing has to be bumped when the next
+# one lands.
 #
-# Measured on 2026-10-05, Trivy 0.70.0 on the image and OSV on each vendored
-# version. Known vulnerabilities in pip and what it vendors: 11 in 26.1.2 (its
-# own, 5 in urllib3 2.6.3, 1 in idna 3.11, 1 in pygments 2.19.2, 1 in msgpack,
-# 2 in setuptools), of which the scan saw one; 6 in 26.2.1 (3 in urllib3
-# 2.7.0, msgpack, setuptools), all of which it sees. So the image's count goes
-# from 254 to 258 while what is actually there goes down (#403). pip is not
-# used at runtime; it runs when the image is built.
-#
-# Pinned, for the same reason the base image is pinned by digest a few lines
-# up: an unpinned `--upgrade pip` would make the runtime stage's contents
-# depend on whatever PyPI happens to serve at build time, so two builds of the
-# same commit could differ. Bump this deliberately when a pip CVE lands.
-ARG PIP_VERSION=26.2.1
+# To add a plugin the image does not ship (README, "Separate install"), build a
+# derived image: `python -m ensurepip` puts a pip back for that build only.
 RUN apt-get update && \
     apt-get install -y -o Acquire::Retries=3 bash curl tini && \
     apt-get install -y -o Acquire::Retries=3 --only-upgrade perl-base && \
     rm -rf /var/lib/apt/lists/* && \
-    pip install --no-cache-dir "pip==${PIP_VERSION}" && \
+    python -m pip uninstall -y pip && \
     useradd --create-home --shell /bin/bash certmate
 
 # Copy virtual environment from builder stage

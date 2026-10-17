@@ -287,13 +287,16 @@ def test_ci_captures_the_freeze_from_inside_the_image_and_runs_this_check():
                if 'scripts/check_resolved_advisories.py' in (s.get('run') or '')]
     assert len(scripts) == 1, 'the check is not wired into security-scan'
 
+    # The installed set, read inside the image. It was `pip freeze` until the
+    # image stopped shipping pip (#403); importlib.metadata gives the same pins.
     capture = [s for s in steps
-               if 'freeze' in (s.get('run') or '')
-               and 'certmate:scan' in (s.get('run') or '')]
+               if 'importlib.metadata' in (s.get('run') or '')
+               and 'certmate:scan' in (s.get('run') or '')
+               and 'resolved-requirements.txt' in (s.get('run') or '')]
     assert capture, (
-        'the freeze must be captured from the image under test; pointing this '
-        'at a requirements file would reintroduce exactly the false positives '
-        'it replaces'
+        'the installed set must be captured from the image under test; pointing '
+        'this at a requirements file would reintroduce exactly the false '
+        'positives it replaces'
     )
     assert steps.index(capture[0]) < steps.index(scripts[0]), (
         'the check runs before the freeze it reads is written'
