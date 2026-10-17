@@ -12,7 +12,8 @@ The CertMate Client Certificates API provides REST endpoints for complete certif
 > resolved to `/api/api/...`. The four translations had lost the base-URL
 > line entirely, which left their relative paths with nothing to resolve
 > against at all.
-**Authentication**: Bearer Token (required on all endpoints)
+**Authentication**: Bearer token, except on the endpoints listed under
+[Authentication](#authentication)
 **Content-Type**: `application/json`
 
 ---
@@ -48,9 +49,70 @@ One field keeps its own form: a certificate's `expiry_date`,
 ([#1114](https://github.com/fabriziosalmi/certmate/issues/1114)); `expires_at` is the
 same instant in the form above.
 
+## API contract version
+
+Two versions appear in answers, and they answer different questions:
+
+| | What it is | When it moves |
+| --- | --- | --- |
+| `version` (in `/health`, and in the Swagger document) | the release | every release |
+| `api_contract_version` (in `/health`), `X-CertMate-API-Version` (on every response) | the interface | only when this surface changes |
+
+A client deciding whether it still works reads the second one.
+
+- A **minor** bump means the surface grew in a way a client can ignore: a
+  new endpoint, a new field in an answer, a new optional request field.
+- A **major** bump means something a client may depend on went away or
+  changed meaning: an endpoint removed, a field removed or retyped, a request
+  field that became required, a status code that changed for an existing
+  condition.
+
+Deprecating something bumps neither; that is the point of deprecating rather
+than removing.
+
+## Deprecation
+
+An endpoint on its way out answers as before and says so in its headers, so
+a client can warn instead of failing:
+
+<!-- illustration: the three headers a deprecated endpoint adds to its answer -->
+```
+Deprecation: @1789689600
+Sunset: Thu, 18 Mar 2027 00:00:00 GMT
+Link: <https://github.com/fabriziosalmi/certmate/blob/main/docs/api.md#dns-provider-accounts>; rel="deprecation"
+```
+
+`Deprecation` (RFC 9745) is when it became deprecated; `Sunset` (RFC 8594)
+is the earliest date it may stop answering, not the date it will.
+
+Deprecated today, since 2026-09-18 with sunset 2027-03-18:
+`/api/dns-providers/accounts` and `/api/dns-providers/accounts/<account_id>`.
+See [DNS provider accounts](#dns-provider-accounts) for what replaces them.
+
+## Request validation
+
+Twelve endpoints declare their request body as a model in
+`/api/swagger.json`, and their bodies are validated against it: a missing
+required field or a wrong type is refused with `400`, naming the field,
+before the request reaches the application. The other endpoints check their
+bodies in their own code.
+
+**Send a field or leave it out; do not send `null`.** Leaving out an optional
+field means "use the default". An explicit `null` is a type error
+(`None is not of type 'integer'`), because `null` is not an integer.
+
+A value outside a documented enum is refused by the application rather than
+by the schema, with a message naming the accepted values, for example
+`key_size must be one of [2048, 3072, 4096], got 1024`.
+
 ## Authentication
 
-All API endpoints require Bearer token authentication.
+Every endpoint needs a Bearer token except these, which answer without a
+credential: the health checks (`/health`, `/health/ready`,
+`GET /api/health`), `POST /api/auth/login` and `POST /api/auth/logout`, the
+SSO flow (`/api/auth/oidc/config`, `/login` and `/callback`), and the client
+certificate authority's public material (its CA certificate, the CRL and
+OCSP). Each of them says so in its entry.
 
 ### Header Format
 
@@ -1479,15 +1541,29 @@ Python representation of the name, `<Name(CN=CertMate CA,...)>`.
 
 Download certificate files for a specific domain. By default, this endpoint returns a ZIP archive containing all certificate components. A specific file can be requested using the `file` query parameter. JSON mode is also available for automation that wants all PEMs in one response.
 
+**Endpoint**: `GET /api/certificates/<domain>/download/<file>`, where `<file>` is
+`cert`, `chain`, `fullchain`, `privkey` or `combined`: the same file as
+`?file=<file>.pem`, in a URL a script can build without a query string.
+
+**Roles**: a viewer can download the public files (`cert.pem`, `chain.pem`,
+`fullchain.pem`). Anything that holds the private key needs operator:
+`privkey.pem`, `combined.pem`, `cert.pfx`, `format=json`, and the default ZIP.
+A viewer gets a ZIP of the public files with `?include_private=0`. A viewer
+asking for key material is answered `403` and the refusal is audited.
+
 **Parameters**:
 - `domain` (Path) - The domain name associated with the certificate.
-- `file` (Query, Optional) - Specify a single file to download. 
-  - Supported values: `fullchain.pem`, `privkey.pem`, `combined.pem`
+- `file` (Query, Optional) - Specify a single file to download.
+  - Supported values: `cert.pem`, `chain.pem`, `fullchain.pem`, `privkey.pem`,
+    `combined.pem` (the full chain followed by the key), `cert.pfx` (only when a
+    PFX password is set in settings)
+- `include_private` (Query, Optional) - `0` for a ZIP of the public files only.
 - `format` (Query, Optional) - Set to `json` to return all certificate files in a JSON object.
 - `key_format` (Query, Optional) - `pkcs1` or `pkcs8`. Certbot writes PKCS#8 (`BEGIN PRIVATE KEY`); some older stacks require the legacy traditional form. Valid with `file=privkey.pem` (serves the converted key) or with `format=json` (adds a converted copy to the response).
 
 **Response** (200 OK):
-- **Default**: `application/zip` (A ZIP file containing all PEM files)
+- **Default**: `application/zip` with `cert.pem`, `chain.pem`, `fullchain.pem`,
+  `privkey.pem`, and `cert.pfx` when one exists
 - **With `file` param**: `application/x-pem-file` (The raw content of the requested file)
 - **With `format=json`**: `application/json` with `domain`, `cert_pem`, `chain_pem`, `fullchain_pem`, and `private_key_pem`
 - **With `format=json&key_format=pkcs1`**: the above plus `private_key_pkcs1_pem`
@@ -1519,6 +1595,113 @@ curl "http://localhost:8000/api/certificates/example.com/download?format=json" \
  -H "Authorization: Bearer TOKEN" \
  -o example_com_bundle.json
 
+```
+
+**Installing a certificate from a script.** The path form is the simplest URL
+to build in a shell. This script installs a certificate and its key and
+reloads nginx only when the certificate changed, so it can run from cron:
+
+```bash
+#!/bin/sh
+# Install a certificate and its key from CertMate, and reload nginx only when
+# the certificate changed. The key is private, so this needs an operator key.
+set -eu
+: "${CERTMATE_URL:?}" "${CERTMATE_TOKEN:?}"
+DOMAIN=${DOMAIN:-app.example.com}
+DIR=${DIR:-/etc/ssl/certmate/$DOMAIN}
+umask 077
+mkdir -p "$DIR"
+for file in fullchain privkey; do
+  curl -fsS -H "Authorization: Bearer $CERTMATE_TOKEN" \
+    -o "$DIR/$file.pem.new" "$CERTMATE_URL/api/certificates/$DOMAIN/download/$file"
+done
+if cmp -s "$DIR/fullchain.pem.new" "$DIR/fullchain.pem"; then
+  rm -f "$DIR/fullchain.pem.new" "$DIR/privkey.pem.new"
+else
+  mv "$DIR/privkey.pem.new" "$DIR/privkey.pem"
+  mv "$DIR/fullchain.pem.new" "$DIR/fullchain.pem"
+  nginx -s reload
+fi
+```
+
+From Python, [certmate-sdk](../clients/certmate-sdk/README.md) wraps the same
+API. There is no Terraform provider for CertMate; from Terraform or Ansible,
+call these endpoints over HTTP.
+
+---
+
+#### Create a certificate
+
+**Endpoint**: `POST /api/certificates/create` (operator)
+
+Issues a certificate for a domain CertMate does not manage yet. Only `domain` is
+required; the rest falls back to the settings (default DNS provider and
+account, default CA, default key type). Every field is in the
+`CreateCertificate` model in `/api/swagger.json`:
+
+- `domain`, and `san_domains` for more names (`["*.example.com"]`);
+- `dns_provider` and `account_id`; `domain_alias` and `alias_dns_provider` for
+  DNS-01 through an alias zone;
+- `ca_provider` and `ca_account_id`; `challenge_type` (`dns-01`, `http-01` or
+  `prevalidated`); `acme_profile` (see [ACME profiles](#acme-profiles));
+- `key_type` (`rsa` or `ecdsa`) with `key_size` or `elliptic_curve`;
+- `csr`, to issue from a CSR whose private key never reaches CertMate (see
+  [CSR-only certificates](./csr-only-certificates.md)); `san_domains` and the
+  key fields must then be left out;
+- `async`, or `?async=1`, to queue the issuance as a job.
+
+<!-- request: POST /api/certificates/create -->
+```json
+{
+  "domain": "app.example.com",
+  "san_domains": ["www.app.example.com"],
+  "dns_provider": "cloudflare",
+  "account_id": "production"
+}
+```
+
+**Response** (201 Created), once the certificate is issued:
+
+<!-- response: POST /api/certificates/create 201 -->
+```json
+{
+  "message": "Certificate created successfully for app.example.com",
+  "domain": "app.example.com",
+  "dns_provider": "cloudflare",
+  "ca_provider": "letsencrypt",
+  "duration": 41.2
+}
+```
+
+With `async`, **202 Accepted** at once, and the job to poll with
+`GET /api/certificates/jobs/<job_id>`:
+
+<!-- response: POST /api/certificates/create 202 -->
+```json
+{
+  "job_id": "0f9c2d4e8b1a4c6f9e2d7b3a5c8e1f40",
+  "status": "queued",
+  "operation": "create",
+  "domain": "app.example.com",
+  "status_url": "/api/certificates/jobs/0f9c2d4e8b1a4c6f9e2d7b3a5c8e1f40"
+}
+```
+
+The answer is not the certificate record; read it with
+`GET /api/certificates/<domain>`.
+
+**Errors**: 400 validation or configuration (the body names the problem),
+403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a
+certificate (renew it, or reissue it to change its configuration) or an
+operation already running on it, 422 when certbot failed, 429
+`ISSUANCE_QUEUE_FULL` with `async` when too many jobs are queued.
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/api/certificates/create \
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{"domain": "app.example.com", "dns_provider": "cloudflare"}'
 ```
 
 ---
@@ -1687,8 +1870,8 @@ wins. A stopped scheduler is `degraded`, not `unhealthy`: renewals have stopped
 firing, which monitoring must see, but the instance still serves and failing
 liveness on it would take a working install out of rotation.
 
-Every response carries `X-CertMate-API-Version`; `/api/health` also reports it
-as `api_contract_version` for anything that already polls here.
+Every response carries `X-CertMate-API-Version`. `/health` also reports
+it as `api_contract_version`; this endpoint does not.
 
 #### Diagnostic snapshot
 
@@ -2243,6 +2426,21 @@ A value in another form is replaced by the default (`browser-fallback`,
 
 The multi-account surface: several credentials per provider, each with its own
 `account_id`, selected per certificate.
+
+The `POST` body: `name` (or `account_id`), the account's identifier;
+`provider`, left out on `/api/dns/<provider>/accounts`; `config`, the
+provider's credentials under the same keys the settings page uses (see
+[DNS providers](dns-providers.md)); and `set_as_default` (optional).
+
+<!-- request: POST /api/dns/accounts -->
+```json
+{
+  "name": "production",
+  "provider": "cloudflare",
+  "config": {"api_token": "your_cloudflare_token"},
+  "set_as_default": true
+}
+```
 
 `GET /api/dns-providers/accounts` and `POST /api/dns-providers/accounts` do the
 same thing, at the same role, through a different implementation, and are
