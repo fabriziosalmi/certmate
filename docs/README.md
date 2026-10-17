@@ -10,6 +10,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Installation Guide](./installation.md)** — Setup, dependencies, production deployment
 - **[Docker Guide](./docker.md)** — Docker builds, multi-platform, Docker Compose
 - **[Kubernetes Notes](./kubernetes.md)** — Production resources, OOM sizing, runtime patching
+- **[Configuration](./configuration.md)** — every environment variable, its default and what it changes
 
 ### Core Features
 - **[DNS Providers](./dns-providers.md)** — supported providers, multi-account, domain alias
@@ -167,6 +168,7 @@ docs/
   backup.md               backups and recovery
   ca-providers.md         certificate authorities
   compliance.md           audit chain, attribution, NIS2/eIDAS
+  configuration.md        environment variables
   csr-only-certificates.md  issuing when the key stays on the device
   deploy-hooks.md         post-issuance deploy hooks
   webhooks.md             generic webhooks: payload templates, auth, signature

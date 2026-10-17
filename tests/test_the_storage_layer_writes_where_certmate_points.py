@@ -148,12 +148,14 @@ def test_no_relative_path_is_left_hardcoded_in_the_backend_selection():
     assert source.count("Path('certificates')") == 1
 
 
-def test_the_readme_states_the_rule_it_now_follows():
+def test_the_configuration_page_states_the_rule_it_now_follows():
     """The row described the variable as moving where certificates live, and
     half the app disagreed. It now also says what beats it, because the
-    interaction is the thing an operator configuring storage will hit."""
-    readme = (pathlib.Path(__file__).resolve().parent.parent /
-              'README.md').read_text(encoding='utf-8')
+    interaction is the thing an operator configuring storage will hit.
+    The row moved with the environment table from the README to
+    docs/configuration.md."""
+    readme = (pathlib.Path(__file__).resolve().parent.parent / 'docs' /
+              'configuration.md').read_text(encoding='utf-8')
     assert 'The local storage backend follows it too' in readme
     assert 'certificate_storage.cert_dir' in readme
 

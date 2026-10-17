@@ -37,7 +37,7 @@ import pytest
 pytestmark = [pytest.mark.unit]
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-DOCS = [REPO / 'README.md', REPO / 'docs' / 'docker.md']
+DOCS = [REPO / 'README.md', REPO / 'docs' / 'docker.md', REPO / 'docs' / 'configuration.md']
 
 # Functions that read the environment using their first argument as the name.
 # Kept explicit, and checked for completeness by a test below: a new helper
