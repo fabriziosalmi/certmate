@@ -1,6 +1,6 @@
 # Documentazione CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 8768a3cce1e3de7b -->
+<!-- CERTMATE-TRANSLATED-FROM bc6b854a04bbb77b -->
 
 Benvenuto nella documentazione di CertMate. Questa cartella contiene guide complete per tutte le funzionalità.
 
@@ -12,6 +12,7 @@ Benvenuto nella documentazione di CertMate. Questa cartella contiene guide compl
 - **[Guida all'installazione](./installation.md)** — Configurazione, dipendenze, deployment in produzione
 - **[Guida Docker](./docker.md)** — Build Docker, multi-piattaforma, Docker Compose
 - **[Note Kubernetes](./kubernetes.md)** — Risorse di produzione, dimensionamento OOM, patching runtime
+- **[Configurazione](../configuration.md)** — ogni variabile d'ambiente, il suo valore predefinito e cosa cambia *(in inglese)*
 
 ### Funzionalità principali
 - **[Provider DNS](./dns-providers.md)** — provider supportati, multi-account, alias di dominio
