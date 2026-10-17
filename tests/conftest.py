@@ -261,6 +261,35 @@ def pytest_sessionstart(session):
         shell.subprocess = _NoRealCertbot(shell.subprocess)
 
 
+def _forget_login_attempts():
+    routes = sys.modules.get('modules.web.routes')
+    if routes is not None:
+        routes._login_attempts_by_ip.clear()
+        routes._login_attempts_by_user.clear()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _a_module_starts_with_no_login_attempts():
+    """Before a module's own fixtures run, so a module-scoped login is covered too.
+
+    The login limiter is module state in modules.web.routes: five attempts from
+    one IP in 60 seconds, and Flask's test client is always 127.0.0.1. Under
+    xdist one worker runs many tests that log in, so a test that logs in once
+    got 429 or not depending on what that worker ran before it.
+    test_after_setup_the_admin_can_do_all_of_it failed 2 runs out of 3 on
+    2026-10-17, and the version-page tests had needed the same reset by hand
+    (#1264).
+    """
+    _forget_login_attempts()
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _a_test_starts_with_no_login_attempts():
+    _forget_login_attempts()
+    yield
+
+
 @pytest.fixture(autouse=True)
 def _real_certbot_for_e2e(request):
     _REAL_CERTBOT['allowed'] = request.node.get_closest_marker('e2e') is not None
