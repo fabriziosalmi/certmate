@@ -220,7 +220,8 @@ class CloudflareStrategy(DNSProviderStrategy):
     
     @property
     def default_propagation_seconds(self) -> int:
-        return 60
+        # The settings default, DEFAULT_CLOUDFLARE_PROPAGATION_SECONDS, which says why.
+        return 20
 
 class Route53Strategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
