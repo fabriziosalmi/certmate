@@ -842,6 +842,13 @@ def backup_can_restore(zf, names, settings):
 #: authoritative nameservers.
 DEFAULT_EDGEDNS_PROPAGATION_SECONDS = 180
 
+#: Cloudflare: the certbot plugin's own default is 10. CertMate waited 60,
+#: which was 60% of the time to a first certificate on a fresh install.
+#: Measured on Let's Encrypt staging from a fresh instance, 33 issuances on
+#: new names: 13 of 13 at 10 seconds, 10 of 10 at 20 and at 30. 20 is twice
+#: the shortest wait that never failed.
+DEFAULT_CLOUDFLARE_PROPAGATION_SECONDS = 20
+
 #: Propagation defaults CertMate used to write, per provider: (retired value,
 #: current value, last version that wrote the retired one). Every install that
 #: ever saved its settings has the default of its day stored in settings.json,
@@ -852,6 +859,7 @@ DEFAULT_EDGEDNS_PROPAGATION_SECONDS = 180
 #: refuse a rollback over a default.
 RETIRED_PROPAGATION_DEFAULTS = {
     'edgedns': (90, DEFAULT_EDGEDNS_PROPAGATION_SECONDS, (2, 40, 0)),
+    'cloudflare': (60, DEFAULT_CLOUDFLARE_PROPAGATION_SECONDS, (2, 50, 2)),
 }
 
 
@@ -1765,7 +1773,7 @@ class SettingsManager:
 
                 # Allow DNS propagation seconds override per provider
                 defaults = {
-                    'cloudflare': 60,
+                    'cloudflare': DEFAULT_CLOUDFLARE_PROPAGATION_SECONDS,
                     'route53': 60,
                     'digitalocean': 120,
                     'linode': 120,
