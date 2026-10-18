@@ -161,6 +161,7 @@ def create_api_models(api):
         'eab_required': fields.Boolean(description='An account needs an External Account Binding'),
         'allowed_identifiers': fields.List(fields.String, description='The names an account enrolled '
                                            'without an EAB key may order; empty, it orders nothing'),
+        'validity_days': fields.Integer(description='How many days a certificate from the ACME CA is valid'),
         'directory_url': fields.String(description='The URL to give ACME clients, as this request reached the server'),
         'eab_keys': fields.List(fields.Nested(acme_eab_key_model)),
     })
@@ -169,6 +170,7 @@ def create_api_models(api):
         'allow_http': fields.Boolean(),
         'eab_required': fields.Boolean(),
         'allowed_identifiers': fields.List(fields.String),
+        'validity_days': fields.Integer(),
     })
 
     dns_provider_availability_item = api.model('DNSProviderAvailabilityItem', {

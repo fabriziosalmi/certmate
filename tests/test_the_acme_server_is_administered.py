@@ -163,3 +163,24 @@ def test_the_server_itself_takes_only_booleans(admin):
     with pytest.raises(AcmeAdminError, match='must list the names'):
         server.create_eab_key(allowed_identifiers='lab.internal')
     assert server.config()['enabled'] is False
+
+
+@pytest.mark.parametrize('value,because', [
+    (0, 'from 1 to 365'),
+    (366, 'from 1 to 365'),
+    ('30', "'30' is not of type 'integer'"),  # request validation
+])
+def test_the_validity_is_a_number_of_days_from_1_to_365(admin, value, because):
+    _app, client = admin
+    response = client.patch('/api/acme/server', json={'validity_days': value})
+    assert response.status_code == 400 and because in response.get_data(as_text=True)
+    assert client.get('/api/acme/server').get_json()['validity_days'] == 30
+
+
+def test_the_validity_is_set(admin):
+    app, client = admin
+    assert client.patch('/api/acme/server', json={'validity_days': 7}).get_json()['validity_days'] == 7
+    assert app.extensions['certmate_container'].managers['acme_server'].validity_days() == 7
+    from modules.core.acme_server import AcmeAdminError
+    with pytest.raises(AcmeAdminError, match='from 1 to 365'):
+        app.extensions['certmate_container'].managers['acme_server'].set_options({'validity_days': True})

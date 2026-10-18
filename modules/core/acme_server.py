@@ -28,13 +28,17 @@ import hmac as _hmac
 import json
 import os
 import re
+import threading
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import josepy
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 from josepy import b64
 
-from . import acme_validation, pinned_https
+from . import acme_ca, acme_validation, pinned_https
 from .acme_jws import (
     MAC_ALGORITHMS,
     check_public_key,
@@ -56,7 +60,16 @@ DEFAULTS = {
     # F1 on #476): with eab_required off, an empty list means such accounts
     # order nothing, rather than anything.
     'allowed_identifiers': [],
+    # How long a certificate from the ACME CA is valid (decision D3 on #476).
+    'validity_days': acme_ca.DEFAULT_VALIDITY_DAYS,
 }
+
+# Section 7.6: the RFC 5280 reasons a client may give. The others are about a
+# CA or an attribute authority, or put a certificate on hold, which this CA
+# does not do.
+REVOCATION_REASONS = {0: 'unspecified', 1: 'keyCompromise', 3: 'affiliationChanged',
+                      4: 'superseded', 5: 'cessationOfOperation'}
+CRL_CACHE_SECONDS = 3600
 
 ORDER_LIFETIME = timedelta(days=7)
 MAX_IDENTIFIERS = 100
@@ -70,6 +83,7 @@ MAX_CONTACT_LENGTH = 320
 # never edited or deleted, so the accounts it enrolled stay attributable to it.
 OPTIONS = ('enabled', 'allow_http', 'eab_required')
 LIST_OPTIONS = ('allowed_identifiers',)
+INT_OPTIONS = {'validity_days': (acme_ca.MIN_VALIDITY_DAYS, acme_ca.MAX_VALIDITY_DAYS)}
 
 KID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 _LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
@@ -116,6 +130,10 @@ class AcmeServer:
         self.http01_port = http01_port
         self.https_port = https_port
         self.resolve = resolve or pinned_https.resolve
+        # Created on first use: an instance that never issues has no ACME root.
+        self.ca = acme_ca.AcmeCA(Path(data_dir) / 'acme' / 'ca')
+        self._crl = {'der': None, 'at': 0.0}
+        self._crl_lock = threading.Lock()
 
     # -- configuration ---------------------------------------------------
 
@@ -151,18 +169,24 @@ class AcmeServer:
             'allow_http': bool(config.get('allow_http')),
             'eab_required': bool(config.get('eab_required', True)),
             'allowed_identifiers': list(config.get('allowed_identifiers') or []),
+            'validity_days': self.validity_days(),
             'eab_keys': [self._public_eab(entry, counts) for entry in config.get('eab_keys') or []
                          if isinstance(entry, dict)],
         }
 
     def set_options(self, changes):
         """Change the options named in *changes*: booleans, and allowed_identifiers as a list of patterns."""
-        unknown = sorted(set(changes) - set(OPTIONS) - set(LIST_OPTIONS))
+        known = OPTIONS + LIST_OPTIONS + tuple(INT_OPTIONS)
+        unknown = sorted(set(changes) - set(known))
         if unknown:
-            raise AcmeAdminError(f'Unknown options: {unknown}. The options are {list(OPTIONS + LIST_OPTIONS)}')
+            raise AcmeAdminError(f'Unknown options: {unknown}. The options are {list(known)}')
         changes = dict(changes)
         for name, value in changes.items():
-            if name in LIST_OPTIONS:
+            if name in INT_OPTIONS:
+                low, high = INT_OPTIONS[name]
+                if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+                    raise AcmeAdminError(f'{name} must be a whole number from {low} to {high}')
+            elif name in LIST_OPTIONS:
                 if not isinstance(value, list) or len(value) > MAX_PATTERNS:
                     raise AcmeAdminError(f'{name} must be a list of at most {MAX_PATTERNS} names')
                 changes[name] = list(dict.fromkeys(name_pattern(item) for item in value))
@@ -253,6 +277,13 @@ class AcmeServer:
 
     # -- orders (section 7.4), authorizations and challenges --------------
 
+    def validity_days(self):
+        value = self.config().get('validity_days')
+        low, high = INT_OPTIONS['validity_days']
+        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+            return acme_ca.DEFAULT_VALIDITY_DAYS
+        return value
+
     def names_for(self, account):
         """The patterns an account's orders are held to (decision F1 on #476).
 
@@ -308,7 +339,72 @@ class AcmeServer:
         }
         if order.get('error'):
             body['error'] = order['error']
+        if status == 'valid':
+            certificate = self.store.certificate_of_order(order['id'])
+            if certificate:
+                body['certificate'] = urls.certificate(certificate['id'])
         return body
+
+    # -- finalize, certificates and revocation (sections 7.4, 7.4.2, 7.6) -----
+
+    def finalize(self, req, order, urls):
+        status = self.order_json(order, urls)['status']
+        if status != 'ready':
+            raise AcmeProblem('orderNotReady', f'The order is {status}, not ready')
+        csr = _csr_for(req.json().get('csr'), [i['value'] for i in order['identifiers']])
+        if not self.store.begin_finalize(order['id']):
+            raise AcmeProblem('orderNotReady', 'The order is being finalized already')
+        issued = None
+        try:
+            names = [i['value'] for i in order['identifiers']]
+            certificate = self.ca.issue(csr, names, self.validity_days())
+            issued = self.store.finish_finalize(
+                order['id'], order['account_id'], format(certificate.serial_number, 'x'), names,
+                certificate.not_valid_after_utc.replace(tzinfo=None).isoformat(),
+                certificate.public_bytes(serialization.Encoding.PEM).decode('ascii'))
+        finally:
+            if issued is None:
+                # Back to ready, so the client can finalize again once the
+                # cause (the CA could not be made, say) is gone.
+                self.store.abort_finalize(order['id'])
+        return self.store.order(order['id'])
+
+    def revoke(self, req):
+        """Section 7.6: by the account that ordered it, or by the certificate's own key (decision G4)."""
+        payload = req.json()
+        try:
+            presented = x509.load_der_x509_certificate(b64.b64decode(payload.get('certificate', '')))
+        except (ValueError, TypeError):
+            raise AcmeProblem('malformed', 'certificate must be the base64url DER of a certificate') from None
+        record = self.store.certificate_by_serial(format(presented.serial_number, 'x'))
+        stored_der = (x509.load_pem_x509_certificate(record['pem'].encode()).public_bytes(serialization.Encoding.DER)
+                      if record else None)
+        if stored_der != presented.public_bytes(serialization.Encoding.DER):
+            raise AcmeProblem('malformed', 'This server did not issue that certificate')
+        if req.account is not None:
+            if req.account['id'] != record['account_id']:
+                raise AcmeProblem('unauthorized', 'Only the account that ordered a certificate, or its own '
+                                  'key, may revoke it')
+        elif _spki(req.jwk.key) != _spki(presented.public_key()):
+            raise AcmeProblem('unauthorized', 'The request is signed by neither the ordering account '
+                              'nor the key of the certificate')
+        reason = payload.get('reason', 0)
+        if isinstance(reason, bool) or reason not in REVOCATION_REASONS:
+            raise AcmeProblem('badRevocationReason', f'The reason must be one of {sorted(REVOCATION_REASONS)}')
+        if not self.store.revoke(record['id'], reason):
+            raise AcmeProblem('alreadyRevoked', 'The certificate is revoked already')
+        with self._crl_lock:
+            self._crl['der'] = None
+
+    def crl_der(self):
+        """The CRL of the ACME CA, made again after a revocation and at least hourly."""
+        with self._crl_lock:
+            if self._crl['der'] is None or time.monotonic() - self._crl['at'] > CRL_CACHE_SECONDS:
+                records = [{'serial_number': int(r['serial'], 16), 'revoked_at': r['revoked_at'],
+                            'reason_revoked': REVOCATION_REASONS.get(r['reason'], 'unspecified')}
+                           for r in self.store.revoked()]
+                self._crl = {'der': self.ca.crl_der(records), 'at': time.monotonic()}
+            return self._crl['der']
 
     def authz_json(self, authz, urls):
         status = authz['status']
@@ -490,6 +586,36 @@ def _order_name(item):
     except AcmeAdminError:
         raise AcmeProblem('rejectedIdentifier', f'{item["value"]!r} is not a DNS name') from None
     return name
+
+
+def _csr_for(value, names):
+    """The CSR of a finalize, checked against the order's names (section 7.4), or badCSR."""
+    try:
+        csr = x509.load_der_x509_csr(b64.b64decode(value or ''))
+    except (ValueError, TypeError):
+        raise AcmeProblem('badCSR', 'csr must be the base64url DER of a certificate signing request') from None
+    if not csr.is_signature_valid:
+        raise AcmeProblem('badCSR', 'The CSR signature does not verify with its own key')
+    refusal = acme_ca.csr_key_refusal(csr.public_key())
+    if refusal:
+        raise AcmeProblem('badCSR', refusal)
+    try:
+        san = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        san = x509.SubjectAlternativeName([])
+    if any(not isinstance(general, x509.DNSName) for general in san):
+        raise AcmeProblem('badCSR', 'The CSR may name DNS names only')
+    asked = {name.lower().rstrip('.') for name in san.get_values_for_type(x509.DNSName)}
+    common = [a.value for a in csr.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)]
+    asked.update(str(c).lower().rstrip('.') for c in common)
+    if asked != set(names):
+        raise AcmeProblem('badCSR', f'The CSR names {sorted(asked)}, and the order {sorted(names)}: '
+                          'they must be the same')
+    return csr
+
+
+def _spki(public_key):
+    return public_key.public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
 
 
 def _expired(stamp):

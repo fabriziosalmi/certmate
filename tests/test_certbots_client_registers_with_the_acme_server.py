@@ -95,23 +95,24 @@ def test_certbots_client_is_told_without_an_eab(served):
     assert refused.value.code == 'externalAccountRequired'
 
 
-def test_certbots_client_orders_and_proves_its_names_with_http01(served):
-    """The order half, as certbot runs it: an order from a CSR, one http-01
-    answer per authorization, then polling until every one is valid."""
+def test_certbots_client_orders_proves_finalizes_and_revokes(served):
+    """The whole flow as certbot runs it: an order from a CSR, one http-01
+    answer per authorization, polling until every one is valid, finalize,
+    the certificate, and revocation."""
     import datetime
 
     from acme import challenges, crypto_util
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec
 
-    from tests.test_the_acme_server_validates_orders import ChallengeServer, _test_resolver
+    from tests.acme_support import ChallengeServer, resolve_for_tests
 
     app, entry, directory_url = served
     responder = ChallengeServer()
     try:
         server = app.extensions['certmate_container'].managers['acme_server']
         server.http01_port = responder.port
-        server.resolve = _test_resolver
+        server.resolve = resolve_for_tests
         key = ec_key()
         client, directory = _client(directory_url, key)
         eab = messages.ExternalAccountBinding.from_data(key.public_key(), entry['kid'], entry['hmac_key'], directory)
@@ -134,5 +135,20 @@ def test_certbots_client_orders_and_proves_its_names_with_http01(served):
         orderr = client.poll_authorizations(orderr, deadline)
         assert [a.body.status for a in orderr.authorizations] == [messages.STATUS_VALID] * 2
         assert sorted(responder.hosts) == sorted(f'{n}:{responder.port}' for n in names)
+
+        # Finalize and download, as certbot does after its challenges.
+        orderr = client.finalize_order(orderr, deadline)
+        from cryptography import x509
+        leaf = x509.load_pem_x509_certificates(orderr.fullchain_pem.encode())[0]
+        assert sorted(leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+                      .get_values_for_type(x509.DNSName)) == sorted(names)
+        root = x509.load_pem_x509_certificate(server.ca.root_pem())
+        leaf.verify_directly_issued_by(root)
+
+        # And revocation, as `certbot revoke` does: reason 4, superseded.
+        client.revoke(leaf, 4)
+        with pytest.raises(messages.Error) as again:
+            client.revoke(leaf, 4)
+        assert again.value.code == 'alreadyRevoked'
     finally:
         responder.close()

@@ -7,13 +7,18 @@ through the `acme` package where it can (the EAB is built by
 acme.messages.ExternalAccountBinding, the code certbot uses), so the server is
 held to what a real client sends, not to what these tests think one sends.
 """
+import http.server
 import json
 import os
+import threading
+import time
 
 import josepy
 from acme import messages
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from josepy import b64
+
+from modules.core import pinned_https
 
 BASE = 'https://localhost'
 
@@ -130,3 +135,76 @@ def problem(response, because=None):
     if because is not None:
         assert because in body['detail'], (because, body['detail'])
     return body['type'].rsplit(':', 1)[-1]
+
+
+class ChallengeServer:
+    """An http-01 responder whose answer each test sets per token."""
+
+    def __init__(self):
+        self.answers = {}
+        self.hosts = []
+        owner = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                owner.hosts.append(self.headers.get('Host'))
+                token = self.path.rsplit('/', 1)[-1]
+                kind, value = owner.answers.get(token, ('status', 404))
+                if kind == 'sleep':
+                    time.sleep(value)
+                    kind, value = 'status', 200
+                if kind == 'redirect':
+                    self.send_response(302)
+                    self.send_header('Location', value)
+                    self.end_headers()
+                    return
+                body = value if kind == 'body' else b''
+                self.send_response(200 if kind == 'body' else value)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        self.httpd = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.port = self.httpd.server_port
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.httpd.shutdown()
+
+
+def resolve_for_tests(host, port, allow_internal):
+    """Test names point at the local challenge server; anything else meets the real guard."""
+    if host.endswith('.lab.internal') or host == 'nas.office.internal':
+        return '127.0.0.1'
+    if host.startswith('nx.'):
+        raise pinned_https.UnsafeDestination(f'{host} does not resolve: no such name')
+    return pinned_https.resolve(host, port, allow_internal)
+
+
+PATTERNS = ['*.lab.internal', 'nas.office.internal']
+
+
+def served_app(responder):
+    """An app whose ACME server checks http-01 against *responder*."""
+    from tests import contract_support
+    application, _token = contract_support.build_app()
+    server = application.extensions['certmate_container'].managers['acme_server']
+    server.http01_port = responder.port
+    server.resolve = resolve_for_tests
+    return application
+
+
+def eab_for(app, patterns=PATTERNS):
+    entry = enable(app)
+    entry['allowed_identifiers'] = list(patterns)
+    enable(app, eab_keys=[entry])
+    return entry
+
+
+def registered_client(app, entry):
+    client = AcmeTestClient(app)
+    assert client.new_account(entry).status_code == 201
+    return client

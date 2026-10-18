@@ -1,5 +1,5 @@
 {
- "contract_version": "2.52",
+ "contract_version": "2.53",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -123,6 +123,9 @@
     },
     "enabled": {
      "type": "boolean"
+    },
+    "validity_days": {
+     "type": "integer"
     }
    },
    "required": []
@@ -143,6 +146,9 @@
     },
     "enabled": {
      "type": "boolean"
+    },
+    "validity_days": {
+     "type": "integer"
     }
    },
    "required": []
