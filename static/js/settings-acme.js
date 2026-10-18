@@ -35,7 +35,7 @@
                 if (!this.created) return '';
                 return CertMateAcme.snippets({
                     directory: this.server.directory_url, kid: this.created.kid, hmac: this.created.hmac_key,
-                    patterns: this.created.allowed_identifiers, validityDays: this.server.validity_days
+                    patterns: this.created.allowed_identifiers
                 })[this.client];
             },
             formatDate: function (value) { return CertMate.formatDate(value); },

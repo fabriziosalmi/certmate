@@ -10,9 +10,10 @@
  * runs in the test suite; its command line here uses the flags `certbot
  * --help all` documents, --eab-kid and --eab-hmac-key.
  *
- * acme.sh renews 29 days after issuance unless given --days; below 45 days of
- * validity its command carries a negative --days, a third of the lifetime
- * before expiry, which is when the others renew.
+ * acme.sh 3.1.5 renews at a moment inside the window the server's renewal
+ * information suggests (RFC 9773), and a --days given to it replaces that
+ * window (both measured with tests/interop/run.sh), so its command carries
+ * none.
  *
  * Pure: no DOM, so tests/test_the_acme_settings_give_client_commands.py runs
  * it under node.
@@ -25,11 +26,6 @@
     function sampleName(patterns) {
         var first = (patterns && patterns[0]) || 'host.example.internal';
         return first.indexOf('*.') === 0 ? 'host.' + first.slice(2) : first;
-    }
-
-    function acmeshDays(validityDays) {
-        if (!validityDays || validityDays >= 45) return '';
-        return ' --days -' + Math.max(1, Math.floor(validityDays / 3));
     }
 
     function snippets(input) {
@@ -55,7 +51,7 @@
             acmesh: [
                 'acme.sh --register-account --server ' + dir + ' \\',
                 '  --eab-kid ' + kid + ' --eab-hmac-key ' + hmac + ' -m ' + email,
-                'acme.sh --issue --standalone --server ' + dir + ' -d ' + name + acmeshDays(input.validityDays)
+                'acme.sh --issue --standalone --server ' + dir + ' -d ' + name
             ].join('\n'),
             certmanager: [
                 'apiVersion: v1',
