@@ -209,3 +209,61 @@ def registered_client(app, entry):
     client = AcmeTestClient(app)
     assert client.new_account(entry).status_code == 201
     return client
+
+
+class DnsResponder:
+    """A DNS server on 127.0.0.1 for dns-01: TXT records and CNAMEs a test sets.
+
+    Real UDP, built with dnspython, so the server's resolver is the one the
+    instance builds from its settings (decision I1), not a stand-in for it.
+    A name with a CNAME is answered with the chain, the way a recursive
+    resolver hands it over.
+    """
+
+    def __init__(self):
+        import socket
+
+        self.txt = {}
+        self.cname = {}
+        self.asked = []
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(('127.0.0.1', 0))
+        self.port = self.sock.getsockname()[1]
+        self.running = True
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def _serve(self):
+        import dns.message
+        import dns.rcode
+        import dns.rrset
+
+        while self.running:
+            try:
+                wire, peer = self.sock.recvfrom(4096)
+            except OSError:
+                return
+            query = dns.message.from_wire(wire)
+            name = query.question[0].name.to_text().rstrip('.').lower()
+            self.asked.append(name)
+            reply = dns.message.make_response(query)
+            seen = name
+            while seen in self.cname:
+                target = self.cname[seen]
+                reply.answer.append(dns.rrset.from_text(seen + '.', 60, 'IN', 'CNAME', target + '.'))
+                seen = target
+            if seen in self.txt:
+                reply.answer.append(dns.rrset.from_text_list(
+                    seen + '.', 60, 'IN', 'TXT', [f'"{value}"' for value in self.txt[seen]]))
+            elif not reply.answer:
+                reply.set_rcode(dns.rcode.NXDOMAIN)
+            self.sock.sendto(reply.to_wire(), peer)
+
+    def close(self):
+        self.running = False
+        self.sock.close()
+
+
+def point_dns_at(app, responder):
+    """Configure the instance's resolver (dns_resolver.nameservers) at *responder*."""
+    settings = app.extensions['certmate_container'].managers['settings']
+    settings.update(lambda s: s.__setitem__('dns_resolver', {'nameservers': [f'127.0.0.1:{responder.port}']}))

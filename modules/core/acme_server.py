@@ -38,7 +38,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from josepy import b64
 
-from . import acme_ca, acme_validation, pinned_https
+from . import acme_ca, acme_validation, dns_resolver, pinned_https
 from .acme_jws import (
     MAC_ALGORITHMS,
     check_public_key,
@@ -337,6 +337,11 @@ class AcmeServer:
             return acme_ca.DEFAULT_VALIDITY_DAYS
         return value
 
+    def dns_resolver(self):
+        """The resolver dns-01 asks (decision I1): the configured nameservers, else the system's."""
+        nameservers = dns_resolver.configured_nameservers(self._settings.load_settings())
+        return dns_resolver.build(timeout=acme_validation.BUDGET_SECONDS, nameservers=nameservers)
+
     def names_for(self, account):
         """The patterns an account's orders are held to (decision F1 on #476).
 
@@ -463,12 +468,16 @@ class AcmeServer:
         status = authz['status']
         if status == 'pending' and _expired(authz['expires']):
             status = 'expired'
-        return {
+        identifier = {'type': authz['identifier']['type'], 'value': authz['identifier']['value']}
+        body = {
             'status': status,
             'expires': _rfc3339(authz['expires']),
-            'identifier': authz['identifier'],
+            'identifier': identifier,
             'challenges': [self.challenge_json(c, urls) for c in self.store.challenges_of(authz['id'])],
         }
+        if authz['identifier'].get('wildcard'):
+            body['wildcard'] = True
+        return body
 
     @staticmethod
     def challenge_json(challenge, urls):
@@ -497,9 +506,13 @@ class AcmeServer:
         if authz['status'] != 'pending' or _expired(authz['expires']):
             raise AcmeProblem('malformed', 'The authorization of this challenge is no longer pending')
         key_authorization = f'{challenge["token"]}.{thumbprint(req.jwk)}'
+        name = authz['identifier']['value']
         try:
-            acme_validation.http01(authz['identifier']['value'], challenge['token'], key_authorization,
-                                   port=self.http01_port, https_port=self.https_port, resolve=self.resolve)
+            if challenge['type'] == 'dns-01':
+                acme_validation.dns01(name, key_authorization, resolver=self.dns_resolver())
+            else:
+                acme_validation.http01(name, challenge['token'], key_authorization,
+                                       port=self.http01_port, https_port=self.https_port, resolve=self.resolve)
         except acme_validation.ValidationFailed as failed:
             self.store.record_challenge(challenge['id'], False, AcmeProblem(failed.kind, failed.detail).to_json())
         else:
@@ -612,7 +625,12 @@ class AcmeServer:
 
 
 def name_allowed(name, patterns):
-    """Is *name* one of *patterns*: the name itself, or below a "*." pattern?"""
+    """Is *name* one of *patterns*: the name itself, or below a "*." pattern?
+
+    The same rule decides a wildcard (decision I2 on #476): *.B ends in ".P"
+    exactly when B is P or below it, so a "*.P" pattern allows it, and an exact
+    name never does, since no exact name starts with "*.".
+    """
     for pattern in patterns:
         if pattern.startswith('*.'):
             if name.endswith(pattern[1:]):
@@ -629,11 +647,8 @@ def _order_name(item):
     if item.get('type') != 'dns':
         raise AcmeProblem('unsupportedIdentifier', f'Only dns identifiers are supported, not {item.get("type")!r}')
     value = item['value'].strip().lower().rstrip('.')
-    if value.startswith('*.'):
-        # Section 7.1.3: a wildcard is validated with dns-01, which this
-        # server does not offer yet (#476).
-        raise AcmeProblem('rejectedIdentifier', f'{value}: a wildcard needs dns-01, which this server '
-                          'does not offer yet')
+    # A wildcard is "*." and a DNS name, the form name_pattern reads; it is
+    # authorized on its base with dns-01 (section 7.1.3, acme_store.create_order).
     try:
         name = name_pattern(value)
     except AcmeAdminError:

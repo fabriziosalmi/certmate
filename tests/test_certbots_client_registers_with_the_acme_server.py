@@ -152,3 +152,42 @@ def test_certbots_client_orders_proves_finalizes_and_revokes(served):
         assert again.value.code == 'alreadyRevoked'
     finally:
         responder.close()
+
+
+def test_certbots_client_gets_a_wildcard_over_dns01(served):
+    """A wildcard, as certbot's client asks for one: the order, the dns-01
+    record its own code computes, polling, and the certificate."""
+    import datetime
+
+    from acme import challenges, crypto_util
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    from tests.acme_support import DnsResponder, point_dns_at
+
+    app, entry, directory_url = served
+    dns = DnsResponder()
+    try:
+        point_dns_at(app, dns)
+        key = ec_key()
+        client, directory = _client(directory_url, key)
+        eab = messages.ExternalAccountBinding.from_data(key.public_key(), entry['kid'], entry['hmac_key'], directory)
+        client.new_account(messages.NewRegistration.from_data(
+            email='ops@lab.internal', terms_of_service_agreed=True, external_account_binding=eab))
+        cert_key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+        orderr = client.new_order(crypto_util.make_csr(cert_key, ['*.team.lab.internal']))
+        [authzr] = orderr.authorizations
+        assert authzr.body.wildcard is True and authzr.body.identifier.value == 'team.lab.internal'
+        challb = next(c for c in authzr.body.challenges if isinstance(c.chall, challenges.DNS01))
+        response, validation = challb.chall.response_and_validation(key)
+        dns.txt[challb.chall.validation_domain_name('team.lab.internal')] = [validation]
+        client.answer_challenge(challb, response)
+        deadline = datetime.datetime.now() + datetime.timedelta(seconds=30)
+        orderr = client.finalize_order(client.poll_authorizations(orderr, deadline), deadline)
+        leaf = x509.load_pem_x509_certificates(orderr.fullchain_pem.encode())[0]
+        assert leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(
+            x509.DNSName) == ['*.team.lab.internal']
+    finally:
+        dns.close()

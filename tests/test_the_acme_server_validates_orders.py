@@ -103,7 +103,7 @@ def test_a_name_outside_the_keys_patterns_is_refused_before_any_check(client, re
 
 
 @pytest.mark.parametrize('identifier,kind,because', [
-    ({'type': 'dns', 'value': '*.lab.internal'}, 'rejectedIdentifier', 'needs dns-01'),
+    ({'type': 'dns', 'value': '*.*.lab.internal'}, 'rejectedIdentifier', 'not a DNS name'),
     ({'type': 'ip', 'value': '10.0.0.1'}, 'unsupportedIdentifier', 'Only dns'),
     ({'type': 'dns', 'value': 'not_a.lab.internal'}, 'rejectedIdentifier', 'not a DNS name'),
     ({'value': 'web.lab.internal'}, 'unsupportedIdentifier', 'Only dns'),

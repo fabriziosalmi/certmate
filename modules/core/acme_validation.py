@@ -1,4 +1,4 @@
-"""The http-01 check of CertMate's ACME server (RFC 8555 section 8.3, #476).
+"""The http-01 and dns-01 checks of CertMate's ACME server (RFC 8555 sections 8.3 and 8.4, #476).
 
 To show it controls a name, a client serves the key authorization at
 http://<name>/.well-known/acme-challenge/<token>, and the server fetches it.
@@ -17,7 +17,14 @@ on a client's behalf, so it is guarded (decision F2 on #476):
 
 The check runs inside the client's POST to the challenge (decision F3), so a
 slow target holds one request thread for at most that budget.
+
+dns-01 asks the resolver the instance is configured with (decision I1 on #476:
+dns_resolver.nameservers, else the system's), with no cache, for the TXT
+records at _acme-challenge.<name>, CNAMEs followed: that is how a DNS alias
+delegates the record to a zone the client can write.
 """
+import base64
+import hashlib
 import http.client
 import socket
 import ssl
@@ -31,6 +38,12 @@ MAX_REDIRECTS = 5
 MAX_BODY_BYTES = 8192
 REDIRECT_PORTS = {'http': 80, 'https': 443}
 _USER_AGENT = 'CertMate-ACME-validation'
+
+
+def dns01_digest(key_authorization):
+    """Section 8.4: base64url of the SHA-256 of the key authorization, unpadded."""
+    digest = hashlib.sha256(key_authorization.encode('ascii')).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b'=').decode('ascii')
 
 
 class ValidationFailed(Exception):
@@ -126,3 +139,23 @@ def _get(url, resolve, deadline, clock):
     finally:
         if conn is not None:
             conn.close()
+
+
+def dns01(name, key_authorization, *, resolver):
+    """Return when a TXT record at _acme-challenge.<name> holds the key authorization's digest."""
+    import dns.exception
+    import dns.resolver
+
+    qname = f'_acme-challenge.{name}'
+    try:
+        answer = resolver.resolve(qname, 'TXT', search=False)
+    except dns.resolver.NXDOMAIN:
+        raise ValidationFailed('dns', f'{qname} does not exist') from None
+    except dns.resolver.NoAnswer:
+        raise ValidationFailed('dns', f'{qname} has no TXT record') from None
+    except (dns.exception.Timeout, dns.resolver.NoNameservers) as error:
+        raise ValidationFailed('dns', f'{qname} could not be resolved: {error.__class__.__name__}') from None
+    found = [b''.join(record.strings).decode('utf-8', 'replace') for record in answer]
+    if dns01_digest(key_authorization) not in found:
+        raise ValidationFailed('incorrectResponse', f'{qname} holds {found[:3]!r}, not the digest of '
+                               'this challenge\'s key authorization')
