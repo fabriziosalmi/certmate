@@ -25,6 +25,7 @@ KINDS = frozenset({
     'invalidContact',
     'malformed',
     'orderNotReady',
+    'rateLimited',
     'rejectedIdentifier',
     'unauthorized',
     'unsupportedContact',
@@ -33,8 +34,8 @@ KINDS = frozenset({
 
 
 # 403 for a request the server understood and will not authorize, which is
-# what 403 means in HTTP; 400 for every other refusal.
-_STATUS = {'unauthorized': 403, 'orderNotReady': 403}
+# what 403 means in HTTP; 429 for a rate limit; 400 for every other refusal.
+_STATUS = {'unauthorized': 403, 'orderNotReady': 403, 'rateLimited': 429}
 
 
 class AcmeProblem(Exception):

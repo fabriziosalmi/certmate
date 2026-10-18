@@ -704,6 +704,9 @@ METADATA_SCHEMA_VERSION = 1
 #                                   what the ACME server issued and revokes it;
 #                                   /api/acme/accounts lists the accounts and
 #                                   deactivates them (#476).
+#                                   2.55, MINOR: /api/settings/rate-limits has
+#                                   an `acme` limit, the requests a minute one
+#                                   address may make to the ACME server (#476).
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -729,7 +732,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.54'
+API_CONTRACT_VERSION = '2.55'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

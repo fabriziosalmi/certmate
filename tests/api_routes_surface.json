@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.54",
+ "contract_version": "2.55",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -3479,6 +3479,9 @@
     "defaults": [
      "dict"
     ],
+    "defaults.acme": [
+     "int"
+    ],
     "defaults.certificate_batch": [
      "int"
     ],
@@ -3514,6 +3517,9 @@
     ],
     "limits": [
      "dict"
+    ],
+    "limits.acme": [
+     "int"
     ],
     "limits.certificate_batch": [
      "int"
@@ -6187,6 +6193,9 @@
     ],
     "limits": [
      "dict"
+    ],
+    "limits.acme": [
+     "int"
     ],
     "limits.certificate_batch": [
      "int"
