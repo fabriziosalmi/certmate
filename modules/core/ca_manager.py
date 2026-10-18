@@ -4,6 +4,7 @@ Handles different CA providers including Let's Encrypt, DigiCert, and Private CA
 """
 
 import logging
+import os
 import tempfile
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
@@ -362,22 +363,50 @@ class CAManager:
 
         return eab_key_id, eab_hmac_key
     
+    @staticmethod
+    def _trust_bundle_dir() -> Path:
+        """A confined directory for the trust bundle, under the certificate
+        tree rather than the shared /tmp. Falls back to the system temp only
+        when the cert tree cannot be written."""
+        base = Path(os.getenv('CERTMATE_CERT_DIR', 'certificates')) / '.ca-bundles'
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+            return base
+        except OSError:
+            return Path(tempfile.gettempdir())
+
     def create_ca_trust_bundle(self, ca_provider: str, account_config: Dict[str, Any] = None) -> Optional[str]:
-        """Create CA trust bundle file for private CAs"""
+        """Materialise a private CA's trust bundle as a file for REQUESTS_CA_BUNDLE.
+
+        The content is validated as PEM certificates before it is written, so a
+        value that is not a certificate (a stray config fragment, a key) fails
+        here with a clear message instead of making certbot reject the bundle
+        later. The file is written 0600 inside the certificate tree, not the
+        world-shared /tmp."""
         if ca_provider != 'private_ca' or not account_config:
             return None
-        
+
         ca_cert_content = account_config.get('ca_cert', '')
         if not ca_cert_content:
             logger.warning("No CA certificate provided for private CA")
             return None
-        
-        # Create temporary file for CA certificate
+
+        from cryptography import x509
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as f:
-                f.write(ca_cert_content)
-                f.flush()
-                return f.name
+            certs = x509.load_pem_x509_certificates(ca_cert_content.encode()
+                                                    if isinstance(ca_cert_content, str) else ca_cert_content)
+            if not certs:
+                raise ValueError('no certificate found')
+        except (ValueError, TypeError) as e:
+            logger.error(f"ca_cert is not a PEM certificate bundle, refusing to write it: {e}")
+            return None
+
+        try:
+            fd, name = tempfile.mkstemp(suffix='.pem', dir=str(self._trust_bundle_dir()))
+            with os.fdopen(fd, 'w') as f:
+                f.write(ca_cert_content if isinstance(ca_cert_content, str)
+                        else ca_cert_content.decode())
+            return name
         except Exception as e:
             logger.error(f"Failed to create CA trust bundle: {e}")
             return None
