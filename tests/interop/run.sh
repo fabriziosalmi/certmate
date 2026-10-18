@@ -7,7 +7,7 @@
 # API, as an operator would. Then each client, in a container of its own on
 # the same Docker network under its own name, registers with the EAB key,
 # answers http-01 with its standalone server, gets a certificate, is asked
-# to renew at once (to read its renewal rule against the 30-day default),
+# to renew at once (to read its renewal rule against the default validity),
 # and revokes it. The checks run with CertMate's own Python: the leaf chains
 # to /acme/root, and /acme/crl lists what was revoked.
 #

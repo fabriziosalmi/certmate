@@ -97,6 +97,33 @@ def test_a_share_safe_backup_restored_elsewhere_brings_back_keys_that_enrol_no_o
     assert "EAB key 'team-a' holds no usable HMAC key" in caplog.text
 
 
+def test_a_share_safe_backup_restored_elsewhere_keeps_the_enrolled_accounts(admin, monkeypatch):
+    """An account needs its EAB key only to enrol (docs/acme-server.md, Backups)."""
+    app, client = admin
+    client.patch('/api/acme/server', json={'enabled': True})
+    entry = _create(client, kid='team-a').get_json()
+    enrolled = AcmeTestClient(app)
+    assert enrolled.new_account(entry).status_code == 201
+    target = _restored_onto_another_instance(app, False, monkeypatch)
+    moved = AcmeTestClient(target, key=enrolled.key)
+    moved.account_url = enrolled.account_url
+    answer = moved.post(enrolled.account_url, None)
+    assert answer.status_code == 200 and answer.get_json()['status'] == 'valid'
+
+
+def test_a_share_safe_backup_restored_here_keeps_the_keys_enrolling(admin, monkeypatch):
+    """The same instance still holds the HMAC keys the archive masked."""
+    monkeypatch.delenv('CERTMATE_BACKUP_PASSPHRASE', raising=False)
+    app, client = admin
+    client.patch('/api/acme/server', json={'enabled': True})
+    entry = _create(client, kid='team-a').get_json()
+    managers = app.extensions['certmate_container'].managers
+    managers['file_ops'].create_unified_backup(managers['settings'].load_settings(), 'manual', include_secrets=False)
+    archive = sorted((managers['file_ops'].backup_dir / 'unified').glob('*.zip'))[-1]
+    assert managers['file_ops'].restore_unified_backup(str(archive))
+    assert AcmeTestClient(app).new_account(entry).status_code == 201
+
+
 def test_a_full_backup_restored_elsewhere_keeps_its_keys_enrolling(admin, monkeypatch):
     app, client = admin
     client.patch('/api/acme/server', json={'enabled': True})
