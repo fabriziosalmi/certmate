@@ -18,7 +18,8 @@ is.
 
 WHICH JOBS. This opens a public issue, so it is for checks whose failure is
 fine to say in public: whether a CA's directory is reachable, whether the wiki
-has drifted from the repository. `advisories` is deliberately NOT here: a
+has drifted from the repository, whether lego and acme.sh still get
+certificates from the ACME server. `advisories` is deliberately NOT here: a
 failure there means a dependency advisory is open and not yet written down, and
 an issue titled so would say it to everyone before it is fixed. It stays a red
 run until it has a private channel. REPORTED and NOT_REPORTED below are the
@@ -33,7 +34,7 @@ import subprocess
 import sys
 
 # Scheduled-only jobs whose failure may be said in public.
-REPORTED = ('ca-endpoints', 'wiki', 'wiki-endpoints')
+REPORTED = ('ca-endpoints', 'wiki', 'wiki-endpoints', 'acme-interop')
 # Scheduled-only jobs that are not, and why.
 NOT_REPORTED = {
     'advisories': 'a failure means an advisory is open and not yet written down: not for a public issue',
