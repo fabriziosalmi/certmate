@@ -96,7 +96,9 @@ def test_a_revoked_certificate_is_to_be_renewed_now(client, responder):
     assert revoked.status_code == 200
     start, end, _ = _window(client, cert)
     now = datetime.datetime.now(datetime.UTC)
-    assert start <= now and end <= now + datetime.timedelta(minutes=2)
+    # Wholly in the past: a client picks a moment inside it, and every one has passed.
+    assert start < end <= now
+    assert now - end < datetime.timedelta(minutes=1)
 
 
 @pytest.mark.parametrize('cert_id,status', [
@@ -142,6 +144,21 @@ def test_certbots_client_picks_a_moment_inside_the_window(app, eab, responder, s
     assert cert.not_valid_before_utc + lifetime * 2 / 3 - datetime.timedelta(seconds=1) <= when
     assert when <= cert.not_valid_before_utc + lifetime * 5 / 6 + datetime.timedelta(seconds=1)
     assert ask_again - datetime.datetime.now() > datetime.timedelta(hours=5)
+
+
+def test_certbots_client_renews_a_revoked_certificate_at_once(app, eab, responder, served):
+    """It picks a moment inside the window; inside a window that is still open,
+    that moment was most often a few seconds ahead, and a run by cron skipped."""
+    acme = AcmeTestClient(app, base=served.rsplit('/acme/', 1)[0])
+    assert acme.new_account(eab).status_code == 201
+    _, _, pem, _ = _issue(acme, responder, ('web.lab.internal',))
+    cert = _leaf(pem)
+    assert acme.post('revoke-cert', {'certificate': b64s(cert.public_bytes(serialization.Encoding.DER))}).status_code == 200
+    net = acme_client.ClientNetwork(acme.key, alg=josepy.ES256, user_agent='certmate-tests')
+    certbot = acme_client.ClientV2(acme_client.ClientV2.get_directory(served, net), net)
+    for _ in range(5):  # a random moment each time
+        when, _ask_again = certbot.renewal_time(pem.data)
+        assert when <= datetime.datetime.now(datetime.UTC)
 
 
 # --- replaces (RFC 9773 section 5) --------------------------------------------------------

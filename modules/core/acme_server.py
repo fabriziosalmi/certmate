@@ -77,7 +77,15 @@ CRL_CACHE_SECONDS = 3600
 # ACME Renewal Information (RFC 9773, decision I3 on #476): renew between two
 # thirds and five sixths of the lifetime, which for the 45-day default is days
 # 30 to 37.5, with a week or more still left; a revoked certificate, now.
+#
+# "Now" is a window that ended when the certificate was revoked. A client picks
+# a random moment inside the window and renews when that moment has passed, so
+# a window still open picks a moment in the future: acme.sh 3.1.5, run by cron
+# a second after a revocation, picked one 23 seconds ahead and skipped until
+# its next run, and lego 5.5.2 skipped too. A window wholly in the past leaves
+# no moment to wait for.
 ARI_WINDOW = (2 / 3, 5 / 6)
+ARI_REVOKED_WINDOW = timedelta(minutes=1)
 ARI_RETRY_AFTER_SECONDS = 6 * 3600
 
 ORDER_LIFETIME = timedelta(days=7)
@@ -436,8 +444,8 @@ class AcmeServer:
         if record is None:
             return None
         if record['revoked_at']:
-            start = datetime.fromisoformat(record['revoked_at'])
-            end = start + timedelta(minutes=1)
+            end = datetime.fromisoformat(record['revoked_at'])
+            start = end - ARI_REVOKED_WINDOW
         else:
             leaf = x509.load_pem_x509_certificate(record['pem'].encode())
             born = leaf.not_valid_before_utc.replace(tzinfo=None)
