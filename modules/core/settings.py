@@ -115,6 +115,10 @@ SETTINGS_REJECT_KEYS = frozenset({
     # via the dedicated /api/auth/oidc/settings endpoint with its own
     # validation + audit. Bulk POST would skip both.
     'oidc',
+    # The ACME server (#476): its EAB keys are the right to enrol, so they
+    # are granted through the ACME admin endpoint, with its audit, and never
+    # as a side effect of saving the settings page.
+    'acme_server',
 })
 
 

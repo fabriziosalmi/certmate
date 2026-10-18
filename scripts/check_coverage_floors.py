@@ -77,6 +77,8 @@ FLOORS = {
     'modules/api/resources_storage.py': 70,
     'modules/api/tls_probe.py': 50,
     'modules/web/__init__.py': 100,
+    # The ACME server's routes (#476): 99% when they arrived.
+    'modules/web/acme_routes.py': 95,
     'modules/web/auth_routes.py': 60,
     'modules/web/backup_cache_routes.py': 100,
     'modules/web/cert_routes.py': 55,
@@ -112,6 +114,14 @@ FLOORS = {
     # climb; never lower one to make a red build pass.
     'modules/core/__init__.py': 95,
     # 98% measured (#395): pure functions and one file rewrite.
+    # The ACME server (#476), measured when it arrived: jws 89%, nonces 100%,
+    # problems 94%, server 95%, store 95%. What is left is the handling of
+    # inputs josepy refuses before these checks see them.
+    'modules/core/acme_jws.py': 85,
+    'modules/core/acme_nonces.py': 95,
+    'modules/core/acme_problems.py': 90,
+    'modules/core/acme_server.py': 95,
+    'modules/core/acme_store.py': 95,
     'modules/core/acme_profiles.py': 95,
     # 94.2% measured; the module is small, pure apart from one HTTP
     # method, and its transport is injected — so there is no reason
