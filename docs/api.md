@@ -1827,7 +1827,7 @@ trust stores, and `/acme/crl` its revocation list. It is off by default.
   "allow_http": false,
   "eab_required": true,
   "allowed_identifiers": ["*.guest.lab.internal"],
-  "validity_days": 30,
+  "validity_days": 45,
   "directory_url": "https://certmate.example.com/acme/directory",
   "eab_keys": [
     {
@@ -1859,8 +1859,13 @@ nothing.
   created without an EAB key may order, in the form the EAB keys use. Empty,
   the default, such an account orders nothing.
 - `validity_days`, since API contract **2.53**: how long a certificate from
-  the ACME CA is valid, 1 to 365, 30 by default. It applies to certificates
-  issued from then on.
+  the ACME CA is valid, 1 to 365, 45 by default. It applies to certificates
+  issued from then on. The default suits the clients' own renewal rules:
+  certbot and lego renew with a third of the lifetime left, and acme.sh 29
+  days after issuance unless given `--days` (a negative value counts back
+  from expiry, so `--days -15` renews with 15 days left). At 29 days or
+  less, give acme.sh `--days`, or it renews when the certificate expires or
+  after.
 
 `directory_url` is built from the address this request reached; give clients
 the one they will reach.
