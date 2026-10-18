@@ -425,11 +425,14 @@ def _disable_rate_limiting(base_url=BASE_URL):
     calls from one IP, so the shared bucket trips a 429 mid-suite — a pure test
     volume artifact, unrelated to what the functional tests verify (test_ui.py
     already filters 429 out of its JS-error checks). Content-rendering tests
-    need the API to actually respond, so disable the limiter once, here, while
-    the bucket is still empty (a later POST could itself be throttled). The
-    fresh container is in setup-mode auth bypass, so this settings write is
-    accepted. Best-effort: a failure just restores the old flaky-under-load
-    behaviour, never blocks the run.
+    need the API to actually respond, so disable the limiter once, while the
+    bucket is still empty (a later POST could itself be throttled). This path
+    works when the container has an operator token (the non-browser e2e runs):
+    it is then not in setup mode and the authenticated write is accepted. A
+    browser-only run starts in setup mode, where setup mode no longer accepts
+    arbitrary settings writes, so this is refused and the authenticated disable
+    in ui_session_cookie (after the first admin exists) does it instead.
+    Best-effort: a failure never blocks the run.
     """
     try:
         resp = requests.post(
@@ -802,6 +805,19 @@ def ui_session_cookie(docker_container):
             f"UI suite could not dismiss the first-run wizard (HTTP {dismissed.status_code}: "
             f"{dismissed.text[:200]}). It covers every page and takes the clicks."
         )
+
+    # Disable API rate limiting for the suite, now that an admin exists. A
+    # browser-only run starts the container in setup mode (no token), and the
+    # best-effort attempt in docker_container is refused there: setup mode no
+    # longer accepts arbitrary settings writes, only the first-admin bootstrap.
+    # Here setup is closed and this is an authenticated admin, so it is
+    # accepted; without it the whole suite shares the 100-req/60s default bucket
+    # from one IP and trips 429s mid-run.
+    off = s.post(f"{BASE_URL}/api/web/settings", json={"rate_limits": {"enabled": False}},
+                 headers={"Origin": BASE_URL})
+    if off.status_code != 200:
+        print(f"[tests] Could not disable rate limiting as admin (HTTP {off.status_code}); "
+              "browser suite may see transient 429s under load.")
     return session_cookie
 
 
