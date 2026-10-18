@@ -40,12 +40,13 @@ class CSRHandler:
             # Load CSR
             csr = x509.load_pem_x509_csr(csr_pem, default_backend())
 
-            # Validate signature
-            try:
-                csr.public_key()  # This validates the signature implicitly
-            except Exception as e:
-                logger.error(f"Invalid CSR signature: {str(e)}")
-                return False, "Invalid CSR signature", None
+            # The signature is the requester's proof that it holds the private
+            # key of the public key the certificate will carry. Loading the
+            # CSR does not check it, and neither does csr.public_key(), which
+            # this used to rely on: a CSR with a broken signature was signed.
+            if not csr.is_signature_valid:
+                logger.warning("Refused a CSR whose signature does not verify")
+                return False, "Invalid CSR signature: it does not verify with the CSR's own key", None
 
             # Check subject is present
             if not csr.subject:

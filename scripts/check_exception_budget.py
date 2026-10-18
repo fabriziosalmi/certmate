@@ -186,7 +186,7 @@ GENERAL_LIMIT = 10
 # (#666). Neither call can raise: _save_metadata returns a bool and logs.
 # 420 -> 419: the dead _atomic_binary_copy (no callers; its docstring still
 # claimed the renew path used it) went, and its broad handler with it.
-TOTAL_LIMIT = 418
+TOTAL_LIMIT = 417
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
