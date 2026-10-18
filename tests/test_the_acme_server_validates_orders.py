@@ -381,6 +381,7 @@ def tls_responder(tmp_path):
     server = ChallengeServer()
     server.sni = []
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(tmp_path / 'c.pem', tmp_path / 'k.pem')
     context.sni_callback = lambda sock, server_name, ctx: server.sni.append(server_name)
     server.httpd.socket = context.wrap_socket(server.httpd.socket, server_side=True)
@@ -406,3 +407,4 @@ def test_an_https_redirect_to_another_port_is_not_followed(responder, tls_respon
         acme_validation.http01('web.lab.internal', 'tok', 'x', port=responder.port, resolve=_test_resolver)
     assert failed.value.kind == 'connection' and 'only 80 for http and 443 for https' in failed.value.detail
     assert tls_responder.hosts == []
+

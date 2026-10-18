@@ -107,6 +107,7 @@ def _get(url, resolve, deadline, clock):
             # very hosts whose certificate this order is meant to replace.
             # Connected to the pinned address, with the name as SNI.
             context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
             conn = http.client.HTTPSConnection(host, port, timeout=remaining, context=context)
