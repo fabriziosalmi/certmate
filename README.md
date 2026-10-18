@@ -70,6 +70,9 @@ outage waiting for a date. CertMate is built for it:
   ([monitoring](docs/monitoring.md)).
 - **Issues client certificates** from its own CA, for mTLS and VPNs, with OCSP
   and a CRL ([client certificates](docs/guide.md)).
+- **Serves ACME** for internal names: certbot, lego, acme.sh and cert-manager
+  get certificates from a root of its own, with EAB keys that say which names
+  each client may order ([ACME server](docs/acme-server.md)).
 
 **CertMate runs as a single instance.** Its renewal scheduler runs inside the
 web process, so a second replica would be a second scheduler issuing against the
@@ -172,6 +175,7 @@ actions as an agent's. See [the MCP guide](docs/mcp.md).
 | [Custom DNS script](docs/custom-dns-script.md) | Any provider with no plugin |
 | [Client certificates](docs/guide.md) | mTLS and VPN client certificates, renewal timing |
 | [CSR-only certificates](docs/csr-only-certificates.md) | Issuing when the key stays on the device |
+| [ACME server](docs/acme-server.md) | Certificates for internal names to certbot, lego, acme.sh and cert-manager |
 | [Discovery and inventory](docs/discovery-inventory.md) | Probes, CT logs, adopting, crypto readiness |
 | [Deploy hooks](docs/deploy-hooks.md) | Commands after issuance and renewal |
 | [Webhooks](docs/webhooks.md) | Payload templates, authentication, signatures |

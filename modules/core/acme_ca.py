@@ -26,12 +26,15 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from .private_ca import PrivateCAGenerator
 
 CLOCK_SKEW = timedelta(minutes=5)
-# 45 days (decision D3 on #476), measured against the clients' renewal rules
-# with tests/interop/run.sh: certbot 5.8.0 and lego 5.5.2 renew with a third
-# of the lifetime left, 15 days; acme.sh 3.1.5 renews 29 days after issuance
-# unless given --days (measured: issued 2026-10-18, next renewal 2026-11-16),
-# which left a 30-day certificate one day to spare and leaves a 45-day one
-# sixteen. And it stays inside the 47 days public certificates are heading for.
+# 45 days (decision D3 on #476), against the clients' renewal rules. Measured
+# with tests/interop/run.sh: lego 5.5.2 renews with a third of the lifetime
+# left, 15 days, and acme.sh 3.1.5 29 days after issuance unless given --days
+# (issued 2026-10-18, next renewal 2026-11-16), which left a 30-day
+# certificate one day to spare and leaves a 45-day one sixteen. With
+# tests/interop/cert-manager.sh: cert-manager v1.21.2, 15 days before expiry.
+# certbot 5.8.0 renews with a third left too, read in its code
+# (certbot/_internal/renewal.py). And it stays inside the 47 days public
+# certificates are heading for.
 DEFAULT_VALIDITY_DAYS = 45
 MIN_VALIDITY_DAYS = 1
 MAX_VALIDITY_DAYS = 365

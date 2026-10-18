@@ -1,6 +1,6 @@
 # Documentazione CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 48c69a8b6ef39a73 -->
+<!-- CERTMATE-TRANSLATED-FROM c4121c45f828dc17 -->
 
 Benvenuto nella documentazione di CertMate. Questa cartella contiene guide complete per tutte le funzionalità.
 
@@ -28,6 +28,7 @@ Benvenuto nella documentazione di CertMate. Questa cartella contiene guide compl
 - **[Discovery e inventario dei certificati](../discovery-inventory.md)** — discovery via probe/CT-log, inventario, adopt, crypto readiness *(in inglese)*
 - **[Deploy hook](./deploy-hooks.md)** — hook post-emissione: configurazione, test, redazione dell'output, finestre di manutenzione
 - **[Certificati solo CSR](../csr-only-certificates.md)** — emissione e rinnovo quando la chiave privata resta sul dispositivo *(in inglese)*
+- **[Server ACME](../acme-server.md)**: certificati per nomi interni a certbot, lego, acme.sh e cert-manager, da una root propria di CertMate *(in inglese)*
 - **[Webhook](../webhooks.md)** — webhook generici: template del payload, autenticazione, verifica della firma *(in inglese)*
 - **[Conformità](./compliance.md)** — catena di audit, attribuzione delle azioni, postura NIS2/eIDAS
 - **[Backup e ripristino](../backup.md)** — i due tipi di archivio, copie fuori dall'host, ripristino, password di amministratore persa *(in inglese)*
