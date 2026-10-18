@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.50",
+ "contract_version": "2.51",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -67,6 +67,45 @@
   ]
  },
  "routes": {
+  "DELETE /api/acme/eab-keys/<X>": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "accounts": [
+     "int"
+    ],
+    "allowed_identifiers": [
+     "list"
+    ],
+    "allowed_identifiers[]": [
+     "str"
+    ],
+    "created_at": [
+     "str"
+    ],
+    "disabled": [
+     "bool"
+    ],
+    "kid": [
+     "str"
+    ],
+    "note": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
   "DELETE /api/backups/delete/<X>/<X>": {
    "200": {
     ".": [
@@ -222,6 +261,86 @@
     ],
     "error": [
      "str"
+    ]
+   }
+  },
+  "GET /api/acme/eab-keys": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "eab_keys": [
+     "list"
+    ],
+    "eab_keys[]": [
+     "dict"
+    ],
+    "eab_keys[].accounts": [
+     "int"
+    ],
+    "eab_keys[].allowed_identifiers": [
+     "list"
+    ],
+    "eab_keys[].allowed_identifiers[]": [
+     "str"
+    ],
+    "eab_keys[].created_at": [
+     "str"
+    ],
+    "eab_keys[].disabled": [
+     "bool"
+    ],
+    "eab_keys[].kid": [
+     "str"
+    ],
+    "eab_keys[].note": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/acme/server": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "allow_http": [
+     "bool"
+    ],
+    "directory_url": [
+     "str"
+    ],
+    "eab_keys": [
+     "list"
+    ],
+    "eab_keys[]": [
+     "dict"
+    ],
+    "eab_keys[].accounts": [
+     "int"
+    ],
+    "eab_keys[].allowed_identifiers": [
+     "list"
+    ],
+    "eab_keys[].allowed_identifiers[]": [
+     "str"
+    ],
+    "eab_keys[].created_at": [
+     "str"
+    ],
+    "eab_keys[].disabled": [
+     "bool"
+    ],
+    "eab_keys[].kid": [
+     "str"
+    ],
+    "eab_keys[].note": [
+     "str"
+    ],
+    "eab_required": [
+     "bool"
+    ],
+    "enabled": [
+     "bool"
     ]
    }
   },
@@ -3483,6 +3602,66 @@
     ]
    }
   },
+  "PATCH /api/acme/server": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "allow_http": [
+     "bool"
+    ],
+    "directory_url": [
+     "str"
+    ],
+    "eab_keys": [
+     "list"
+    ],
+    "eab_keys[]": [
+     "dict"
+    ],
+    "eab_keys[].accounts": [
+     "int"
+    ],
+    "eab_keys[].allowed_identifiers": [
+     "list"
+    ],
+    "eab_keys[].allowed_identifiers[]": [
+     "str"
+    ],
+    "eab_keys[].created_at": [
+     "str"
+    ],
+    "eab_keys[].disabled": [
+     "bool"
+    ],
+    "eab_keys[].kid": [
+     "str"
+    ],
+    "eab_keys[].note": [
+     "str"
+    ],
+    "eab_required": [
+     "bool"
+    ],
+    "enabled": [
+     "bool"
+    ]
+   },
+   "400": {
+    ".": [
+     "dict"
+    ],
+    "errors": [
+     "dict"
+    ],
+    "errors.enabled": [
+     "str"
+    ],
+    "message": [
+     "str"
+    ]
+   }
+  },
   "PATCH /api/certificates/<X>": {
    "200": {
     ".": [
@@ -3566,6 +3745,48 @@
     ]
    },
    "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/acme/eab-keys": {
+   "201": {
+    ".": [
+     "dict"
+    ],
+    "accounts": [
+     "int"
+    ],
+    "allowed_identifiers": [
+     "list"
+    ],
+    "allowed_identifiers[]": [
+     "str"
+    ],
+    "created_at": [
+     "str"
+    ],
+    "disabled": [
+     "bool"
+    ],
+    "hmac_key": [
+     "str"
+    ],
+    "kid": [
+     "str"
+    ],
+    "note": [
+     "str"
+    ]
+   },
+   "409": {
     ".": [
      "dict"
     ],

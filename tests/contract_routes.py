@@ -370,6 +370,19 @@ def _walk(app, token, trace, certbot, container, seeded, report):
     # --- which DNS providers this instance can issue with (asks certbot once)
     call('get', '/api/dns/providers')
 
+    # --- the ACME server's administration (#476): on, a key, a refusal, off
+    call('get', '/api/acme/server')
+    call('patch', '/api/acme/server', body={'enabled': True, 'allow_http': True})
+    call('patch', '/api/acme/server', body={'enabled': 'yes'})
+    call('post', '/api/acme/eab-keys', body={'kid': 'walk', 'allowed_identifiers': ['*.walk.internal'],
+                                             'note': 'route walk'})
+    call('post', '/api/acme/eab-keys', body={'kid': 'walk', 'allowed_identifiers': ['*.walk.internal']})
+    call('get', '/api/acme/eab-keys')
+    call('get', '/api/acme/server')
+    call('delete', '/api/acme/eab-keys/<kid>', path='/api/acme/eab-keys/walk')
+    call('delete', '/api/acme/eab-keys/<kid>', path='/api/acme/eab-keys/nobody')
+    call('patch', '/api/acme/server', body={'enabled': False})
+
     # --- deprecated DNS accounts
     call('post', '/api/dns-providers/accounts',
                    body={'name': 'acct1', 'provider': 'cloudflare', 'config': {'api_token': 'x' * 24}})

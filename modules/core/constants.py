@@ -689,6 +689,10 @@ METADATA_SCHEMA_VERSION = 1
 #                                   which DNS providers this instance can issue
 #                                   with: their certbot plugin is installed, or
 #                                   they need none.
+#                                   2.51, MINOR: /api/acme/server and
+#                                   /api/acme/eab-keys administer the ACME
+#                                   server (#476): turn it on, issue and disable
+#                                   External Account Binding keys.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -714,7 +718,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.50'
+API_CONTRACT_VERSION = '2.51'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
