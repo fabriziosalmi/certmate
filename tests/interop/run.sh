@@ -45,11 +45,25 @@ docker network create "$NET" >/dev/null
 log "building CertMate from $REPO"
 docker build -q -t certmate:interop "$REPO" >/dev/null
 
-py() { docker run --rm -i -v "$WORK:/w" --entrypoint /opt/venv/bin/python certmate:interop - "$@"; }
+# As root: on Linux the image's own user cannot write $WORK, which belongs to
+# whoever runs this, and lego and acme.sh write their files as root, in
+# directories the host user may not read. Every file the containers wrote is
+# found and read through this, not by the host shell.
+py() { docker run --rm -i --user 0:0 -v "$WORK:/w" --entrypoint /opt/venv/bin/python certmate:interop - "$@"; }
+
+found() {  # $1 directory inside $WORK, $2 file name: its path inside $WORK
+    py "$1" "$2" <<'PY'
+import pathlib, sys
+matches = sorted(pathlib.Path('/w', sys.argv[1]).rglob(sys.argv[2]))
+assert matches, f'no {sys.argv[2]} under {sys.argv[1]}'
+print(matches[0].relative_to('/w'))
+PY
+}
 
 log "a throwaway TLS certificate for the front"
 py <<'PY'
 import datetime
+import os
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -67,8 +81,8 @@ open('/w/certs/front.pem', 'wb').write(cert.public_bytes(serialization.Encoding.
 open('/w/certs/front.key', 'wb').write(key.private_bytes(serialization.Encoding.PEM,
                                                          serialization.PrivateFormat.PKCS8,
                                                          serialization.NoEncryption()))
+os.chmod('/w/certs/front.key', 0o644)
 PY
-chmod 644 "$WORK/certs/front.key"
 
 TOKEN=$(py <<'PY'
 import secrets
@@ -168,7 +182,7 @@ run_lego() {
         lego run "${common[@]}" --eab --eab.kid "$KID" --eab.hmac "$HMAC" \
         --email ops@lab.internal --accept-tos --domains lego.lab.internal --http --no-random-sleep
     local leaf
-    leaf=$(cd "$WORK" && find lego -name 'lego.lab.internal.crt' | head -1)
+    leaf=$(found lego lego.lab.internal.crt)
     result "$(check_leaf lego "/$leaf")"
     log "lego: asked to renew at once, with its default rule"
     counted "lego renewal check" "$WORK/lego-renew.log" \
@@ -197,9 +211,12 @@ run_acmesh() {
         acmesh --issue --standalone -d acmesh.lab.internal --server "$DIRECTORY" \
         --ca-bundle /certs/front.pem ${ACMESH_DAYS:+--days "$ACMESH_DAYS"}
     local leaf
-    leaf=$(cd "$WORK" && find acmesh -name 'acmesh.lab.internal.cer' | head -1)
+    leaf=$(found acmesh acmesh.lab.internal.cer)
     # acme.sh moves a revoked certificate's files aside: keep the leaf to look it up in the CRL.
-    cp "$WORK/$leaf" "$WORK/acmesh-leaf.pem"
+    py "$leaf" <<'PY'
+import shutil, sys
+shutil.copy('/w/' + sys.argv[1], '/w/acmesh-leaf.pem')
+PY
     leaf=acmesh-leaf.pem
     result "$(check_leaf acmesh "/$leaf")"
     acmesh --info -d acmesh.lab.internal > "$WORK/acmesh-info.log" 2>&1 || true
