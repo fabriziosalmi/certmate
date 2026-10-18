@@ -30,6 +30,13 @@ class RateLimitConfig:
         'probe': 30,
         'ocsp_status': 200,  # OCSP should be high
         'crl_download': 60,
+        # Every request to the ACME server (/acme/, #476), per client address.
+        # Measured with tests/interop/run.sh: lego 5.5.2 registered and got a
+        # certificate in 8 requests, acme.sh 3.1.5 in 11, a renewal check took
+        # 2 and a revocation 3. 300 a minute is some 27 certificates a minute
+        # from one address: room for any one host, and a fleet behind one NAT
+        # that starts all at once raises it here.
+        'acme': 300,
         # Per-IP ceiling applied to EVERY /api/ request regardless of the
         # bearer token presented (#420). Deliberately far above the
         # per-endpoint limits: it is not the working limit, it is the backstop

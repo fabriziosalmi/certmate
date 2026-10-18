@@ -166,6 +166,16 @@ What an admin changes (options, keys, revocations, deactivations) is in the
 [audit log](compliance.md). What the clients do is in the ACME server's own
 database, which those lists read.
 
+## Rate limit
+
+Each client address may make 300 requests a minute to `/acme/`. lego
+registered and got a certificate in 8 requests and acme.sh in 11, so that is
+some 27 certificates a minute from one address. Over it, the client gets the
+ACME problem `rateLimited` with `429` and `Retry-After: 60`. A fleet behind
+one address that starts all at once, cert-manager in a cluster for instance,
+can raise it under **Settings → API Keys → API Rate Limits** (`acme`), where
+the switch that turns the API's rate limits off turns this one off too.
+
 ## Client commands
 
 The settings page fills these in when it creates a key. With placeholders:

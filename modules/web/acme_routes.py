@@ -102,6 +102,14 @@ def register_acme_routes(app, managers):
         g.acme_enabled = bool(config.get('enabled'))
         if not g.acme_enabled:
             abort(404)
+        # The /api/ limiter's switch and table, in a bucket of its own per
+        # address: section 6.6's rateLimited, with Retry-After.
+        limiter = managers.get('rate_limiter')
+        if limiter is not None and limiter.config.is_enabled() and not limiter.is_allowed(
+                'ip:' + (request.remote_addr or 'unknown'), 'acme'):
+            g.acme_rate_limited = True
+            raise AcmeProblem('rateLimited', f'More than {limiter.config.get_limit("acme")} requests a minute '
+                              'from this address', headers={'Retry-After': str(limiter.WINDOW_SECONDS)})
         if not request.is_secure and not config.get('allow_http'):
             raise AcmeProblem('malformed', 'This ACME server answers over HTTPS only (RFC 8555 section 6.1). '
                               'If TLS ends at a proxy, set BEHIND_PROXY so the request keeps its scheme.')
@@ -110,8 +118,11 @@ def register_acme_routes(app, managers):
     def _protocol_headers(response):
         if g.get('acme_enabled'):
             # Section 6.5: a fresh nonce on every answer, refusals included,
-            # so a client that got badNonce can retry at once.
-            response.headers['Replay-Nonce'] = server.nonces.issue()
+            # so a client that got badNonce can retry at once. Not on a
+            # rate-limit refusal: a caller over the limit would still be
+            # filling the nonce store, which is what the limit stops.
+            if not g.get('acme_rate_limited'):
+                response.headers['Replay-Nonce'] = server.nonces.issue()
             response.headers.add('Link', f'<{urls().directory()}>;rel="index"')
             response.headers['Cache-Control'] = 'no-store'
         return response
