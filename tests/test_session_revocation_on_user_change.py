@@ -73,3 +73,21 @@ def test_unrelated_update_keeps_session(auth):
     assert auth.update_user("dave", email="dave@example.com")[0]
     # An email-only change is not a privilege change — session must survive.
     assert auth.validate_session(sid) is not None
+
+
+def test_a_new_password_revokes_the_sessions_opened_with_the_old_one(auth):
+    """What an admin sets when an account may be compromised: a session opened
+    with the old password must not last its full lifetime."""
+    sid = _session_for(auth, "erin")
+    other = auth.create_session("erin")
+    assert auth.update_user("erin", password="New-password-123!")[0]
+    assert auth.validate_session(sid) is None
+    assert auth.validate_session(other) is None
+
+
+def test_a_user_changing_their_own_password_keeps_the_session_they_did_it_from(auth):
+    current = _session_for(auth, "fay")
+    elsewhere = auth.create_session("fay")
+    assert auth.update_user("fay", password="New-password-123!", keep_session=current)[0]
+    assert auth.validate_session(current) is not None
+    assert auth.validate_session(elsewhere) is None

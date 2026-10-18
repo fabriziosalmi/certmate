@@ -944,7 +944,8 @@ class AuthManager:
             logger.error(f"Error creating user: {e}")
             return False, "An internal error occurred"
     
-    def update_user(self, username, password=None, role=None, email=None, enabled=None):
+    def update_user(self, username, password=None, role=None, email=None, enabled=None,
+                    keep_session=None):
         """Update an existing user"""
         try:
             users = self._get_users()
@@ -990,9 +991,15 @@ class AuthManager:
                 # disabling the account or changing its role revokes any
                 # in-memory sessions so the change takes effect immediately —
                 # the user re-authenticates under the new role, or is blocked.
+                # A new password ends them too: it is what an admin sets when
+                # an account may be compromised, and a session opened with the
+                # old one would otherwise last its full lifetime. The session
+                # the change was made from, if it is the user's own, stays.
                 role_changed = role is not None and self._normalize_role(role) != original_role
                 if enabled is False or role_changed:
                     self._invalidate_sessions_for_user(username)
+                elif password:
+                    self._invalidate_sessions_for_user(username, keep=keep_session)
                 return True, "User updated successfully"
             return False, "Failed to save user"
         except (OSError, ValueError, KeyError) as e:
@@ -1241,7 +1248,7 @@ class AuthManager:
         """
         return self._invalidate_sessions_for_user(username)
 
-    def _invalidate_sessions_for_user(self, username):
+    def _invalidate_sessions_for_user(self, username, keep=None):
         """Drop every in-memory session belonging to ``username``.
 
         Called when a user is disabled, demoted, or deleted so a live session
@@ -1253,7 +1260,7 @@ class AuthManager:
         """
         with self._session_lock:
             stale = [sid for sid, data in self._sessions.items()
-                     if data.get('user') == username]
+                     if data.get('user') == username and sid != keep]
             for sid in stale:
                 del self._sessions[sid]
         if stale:
