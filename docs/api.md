@@ -1811,8 +1811,9 @@ it, admin only, since API contract **2.51**. A key restricted with
 `allowed_domains` is refused.
 
 It is being built in steps (#476). Today it answers the directory, nonces,
-accounts, and orders with their http-01 challenges; issuance follows. It is
-off by default.
+accounts, orders with their http-01 challenges, finalize, certificates and
+revocation, from a root of its own: `/acme/root` serves it to install in
+trust stores, and `/acme/crl` its revocation list. It is off by default.
 
 #### Options
 
@@ -1826,6 +1827,7 @@ off by default.
   "allow_http": false,
   "eab_required": true,
   "allowed_identifiers": ["*.guest.lab.internal"],
+  "validity_days": 30,
   "directory_url": "https://certmate.example.com/acme/directory",
   "eab_keys": [
     {
@@ -1841,8 +1843,9 @@ off by default.
 ```
 
 `PATCH` takes any of `enabled`, `allow_http` and `eab_required`, each `true` or
-`false`, and `allowed_identifiers`, and answers with the same shape. Another
-field, or a value of the wrong type, is a `400` that changes nothing.
+`false`, `allowed_identifiers` and `validity_days`, and answers with the same
+shape. Another field, or a value of the wrong type, is a `400` that changes
+nothing.
 
 - `enabled`: while `false`, every `/acme/` route answers `404`.
 - `allow_http`: RFC 8555 requires HTTPS, so the ACME routes refuse plain HTTP
@@ -1855,6 +1858,9 @@ field, or a value of the wrong type, is a `400` that changes nothing.
 - `allowed_identifiers`, since API contract **2.52**: the names an account
   created without an EAB key may order, in the form the EAB keys use. Empty,
   the default, such an account orders nothing.
+- `validity_days`, since API contract **2.53**: how long a certificate from
+  the ACME CA is valid, 1 to 365, 30 by default. It applies to certificates
+  issued from then on.
 
 `directory_url` is built from the address this request reached; give clients
 the one they will reach.

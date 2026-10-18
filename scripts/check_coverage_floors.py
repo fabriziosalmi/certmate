@@ -119,6 +119,8 @@ FLOORS = {
     # The ACME server (#476), measured when it arrived: jws 89%, nonces 100%,
     # problems 94%, server 95%, store 95%. What is left is the handling of
     # inputs josepy refuses before these checks see them.
+    # The ACME root and its leaves: 91.1% when it arrived.
+    'modules/core/acme_ca.py': 90,
     'modules/core/acme_jws.py': 85,
     'modules/core/acme_nonces.py': 95,
     'modules/core/acme_problems.py': 90,

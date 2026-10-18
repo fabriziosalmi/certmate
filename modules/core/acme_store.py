@@ -56,6 +56,18 @@ CREATE TABLE IF NOT EXISTS challenges (
     error      TEXT
 );
 CREATE INDEX IF NOT EXISTS challenges_by_authz ON challenges (authz_id);
+CREATE TABLE IF NOT EXISTS certificates (
+    id          TEXT PRIMARY KEY,
+    order_id    TEXT NOT NULL UNIQUE,
+    account_id  TEXT NOT NULL,
+    serial      TEXT NOT NULL UNIQUE,
+    names       TEXT NOT NULL,
+    not_after   TEXT NOT NULL,
+    pem         TEXT NOT NULL,
+    revoked_at  TEXT,
+    reason      INTEGER,
+    created_at  TEXT NOT NULL
+);
 """
 
 
@@ -216,6 +228,60 @@ class AcmeStore:
             status = 'pending'
         con.execute("UPDATE orders SET status = ? WHERE id = ? AND status IN ('pending', 'ready')",
                     (status, order_id))
+
+    # -- finalize (section 7.4) and the certificates it makes -------------
+
+    def begin_finalize(self, order_id):
+        """Move a ready order to processing; False when it was not ready.
+
+        One UPDATE, so of two finalize requests for the same order only one
+        goes on to issue."""
+        with closing(self._connect()) as con, con:
+            moved = con.execute("UPDATE orders SET status = 'processing' WHERE id = ? AND status = 'ready'",
+                                (order_id,)).rowcount
+        return moved == 1
+
+    def abort_finalize(self, order_id):
+        with closing(self._connect()) as con, con:
+            con.execute("UPDATE orders SET status = 'ready' WHERE id = ? AND status = 'processing'", (order_id,))
+
+    def finish_finalize(self, order_id, account_id, serial, names, not_after, pem):
+        certificate_id = _new_id()
+        with closing(self._connect()) as con, con:
+            con.execute('INSERT INTO certificates (id, order_id, account_id, serial, names, not_after, pem, created_at) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                        (certificate_id, order_id, account_id, serial, json.dumps(names), not_after, pem,
+                         utc_now().isoformat()))
+            con.execute("UPDATE orders SET status = 'valid' WHERE id = ?", (order_id,))
+        return self.certificate(certificate_id)
+
+    def certificate(self, certificate_id):
+        with closing(self._connect()) as con:
+            return _decoded(con.execute('SELECT * FROM certificates WHERE id = ?', (certificate_id,)).fetchone(),
+                            'names')
+
+    def certificate_of_order(self, order_id):
+        with closing(self._connect()) as con:
+            return _decoded(con.execute('SELECT * FROM certificates WHERE order_id = ?', (order_id,)).fetchone(),
+                            'names')
+
+    def certificate_by_serial(self, serial):
+        with closing(self._connect()) as con:
+            return _decoded(con.execute('SELECT * FROM certificates WHERE serial = ?', (serial,)).fetchone(),
+                            'names')
+
+    def revoke(self, certificate_id, reason):
+        """Record a revocation once; False when it was revoked already."""
+        with closing(self._connect()) as con, con:
+            changed = con.execute('UPDATE certificates SET revoked_at = ?, reason = ? '
+                                  'WHERE id = ? AND revoked_at IS NULL',
+                                  (utc_now().isoformat(), reason, certificate_id)).rowcount
+        return changed == 1
+
+    def revoked(self):
+        with closing(self._connect()) as con:
+            return [dict(row) for row in con.execute(
+                'SELECT serial, revoked_at, reason FROM certificates WHERE revoked_at IS NOT NULL')]
 
     def update_contact(self, account_id, contact):
         with closing(self._connect()) as con, con:

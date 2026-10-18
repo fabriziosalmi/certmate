@@ -697,6 +697,9 @@ METADATA_SCHEMA_VERSION = 1
 #                                   shows allowed_identifiers, the names an
 #                                   account enrolled without an EAB key may
 #                                   order (#476).
+#                                   2.53, MINOR: /api/acme/server takes and
+#                                   shows validity_days, how long a certificate
+#                                   from the ACME CA is valid (#476).
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -722,7 +725,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.52'
+API_CONTRACT_VERSION = '2.53'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

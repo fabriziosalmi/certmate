@@ -11,6 +11,9 @@ ACME_ERROR_PREFIX = 'urn:ietf:params:acme:error:'
 # The types this server sends, from the registry in RFC 8555 section 6.7.
 KINDS = frozenset({
     'accountDoesNotExist',
+    'alreadyRevoked',
+    'badCSR',
+    'badRevocationReason',
     'badNonce',
     'badPublicKey',
     'badSignatureAlgorithm',
@@ -20,6 +23,7 @@ KINDS = frozenset({
     'incorrectResponse',
     'invalidContact',
     'malformed',
+    'orderNotReady',
     'rejectedIdentifier',
     'unauthorized',
     'unsupportedContact',
@@ -29,7 +33,7 @@ KINDS = frozenset({
 
 # 403 for a request the server understood and will not authorize, which is
 # what 403 means in HTTP; 400 for every other refusal.
-_STATUS = {'unauthorized': 403}
+_STATUS = {'unauthorized': 403, 'orderNotReady': 403}
 
 
 class AcmeProblem(Exception):

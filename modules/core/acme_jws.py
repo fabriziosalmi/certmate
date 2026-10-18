@@ -137,8 +137,9 @@ def verify_request(raw_body, content_type, request_url, nonces, *, key_from,
                    account_url_prefix=None, find_account: Callable[[str], dict | None] | None = None):
     """Check a POST and return what it carries.
 
-    key_from is 'jwk' for the requests that introduce a key (new-account) and
-    'kid' for every request made as an existing account.
+    key_from is 'jwk' for the requests that introduce a key (new-account),
+    'kid' for every request made as an existing account, and 'either' for
+    revoke-cert, which an account or the certificate's own key may sign.
     """
     if (content_type or '').split(';')[0].strip().lower() != JOSE_CONTENT_TYPE:
         raise AcmeProblem('malformed', f'The Content-Type must be {JOSE_CONTENT_TYPE}', status=415)
@@ -158,7 +159,7 @@ def verify_request(raw_body, content_type, request_url, nonces, *, key_from,
         raise AcmeProblem('malformed', 'The protected header must carry exactly one of jwk and kid')
 
     account = None
-    if key_from == 'jwk':
+    if key_from == 'jwk' or (key_from == 'either' and header.jwk is not None):
         if header.jwk is None:
             raise AcmeProblem('malformed', 'This request introduces a key: sign it with jwk, not kid')
         key = header.jwk

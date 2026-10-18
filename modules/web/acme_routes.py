@@ -12,7 +12,7 @@ that never turned ACME on shows no trace of it. Over plain HTTP it refuses
 unless `allow_http` is set: section 6.1 requires HTTPS, and behind a proxy
 that ends TLS, BEHIND_PROXY makes the request look as it did to the client.
 """
-from flask import Blueprint, abort, g, jsonify, make_response, request
+from flask import Blueprint, Response, abort, g, jsonify, make_response, request
 
 from ..core.acme_jws import verify_request
 from ..core.acme_problems import AcmeProblem
@@ -59,6 +59,12 @@ class AcmeUrls:
 
     def challenge(self, challenge_id):
         return self.base + 'chall/' + challenge_id
+
+    def certificate(self, certificate_id):
+        return self.base + 'cert/' + certificate_id
+
+    def revoke_cert(self):
+        return self.base + 'revoke-cert'
 
 
 def register_acme_routes(app, managers):
@@ -118,11 +124,11 @@ def register_acme_routes(app, managers):
     @bp.route('/directory', methods=['GET'])
     def directory():
         u = urls()
-        # Only the resources that answer. revokeCert joins with issuance (#476).
         return jsonify({
             'newNonce': u.new_nonce(),
             'newAccount': u.new_account(),
             'newOrder': u.new_order(),
+            'revokeCert': u.revoke_cert(),
             'keyChange': u.key_change(),
             'meta': {'externalAccountRequired': bool(server.config().get('eab_required', True))},
         })
@@ -169,6 +175,42 @@ def register_acme_routes(app, managers):
             raise AcmeProblem('malformed', 'An order is read with POST-as-GET')
         found = server.owned(server.store.order(order_id), req.account, 'order')
         return jsonify(server.order_json(found, urls()))
+
+    @bp.route('/order/<order_id>/finalize', methods=['POST'])
+    def finalize(order_id):
+        req = verified('kid')
+        found = server.owned(server.store.order(order_id), req.account, 'order')
+        response = jsonify(server.order_json(server.finalize(req, found, urls()), urls()))
+        response.headers['Location'] = urls().order(order_id)
+        return response
+
+    @bp.route('/cert/<certificate_id>', methods=['POST'])
+    def certificate(certificate_id):
+        req = verified('kid')
+        if not req.is_post_as_get:
+            raise AcmeProblem('malformed', 'A certificate is read with POST-as-GET')
+        found = server.owned(server.store.certificate(certificate_id), req.account, 'certificate')
+        # Decision G3 on #476: the leaf alone; the root is installed from /acme/root.
+        return Response(found['pem'], mimetype='application/pem-certificate-chain')
+
+    @bp.route('/revoke-cert', methods=['POST'])
+    def revoke_cert():
+        server.revoke(verified('either'))
+        return make_response('', 200)
+
+    @bp.route('/root', methods=['GET'])
+    def root():
+        pem = server.ca.root_pem()
+        if pem is None:
+            abort(503)
+        return Response(pem, mimetype='application/pem-certificate-chain')
+
+    @bp.route('/crl', methods=['GET'])
+    def crl():
+        der = server.crl_der()
+        if der is None:
+            abort(503)
+        return Response(der, mimetype='application/pkix-crl')
 
     @bp.route('/authz/<authz_id>', methods=['POST'])
     def authz(authz_id):

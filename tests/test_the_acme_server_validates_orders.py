@@ -13,58 +13,23 @@ guard would refuse; the tests point their names at it through the server's
 resolver, as Pebble lets its tests do, and the guard itself is tested with
 the real resolver.
 """
-import http.server
-import threading
 import time
 
 import pytest
 
-from modules.core import acme_validation, pinned_https
-from tests import contract_support
-from tests.acme_support import AcmeTestClient, enable, problem
+from modules.core import acme_validation
+from tests.acme_support import (
+    AcmeTestClient,
+    ChallengeServer,
+    eab_for,
+    enable,
+    problem,
+    registered_client,
+    resolve_for_tests,
+    served_app,
+)
 
 pytestmark = [pytest.mark.unit]
-
-PATTERNS = ['*.lab.internal', 'nas.office.internal']
-
-
-class ChallengeServer:
-    """An http-01 responder whose answer each test sets per token."""
-
-    def __init__(self):
-        self.answers = {}
-        self.hosts = []
-        owner = self
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                owner.hosts.append(self.headers.get('Host'))
-                token = self.path.rsplit('/', 1)[-1]
-                kind, value = owner.answers.get(token, ('status', 404))
-                if kind == 'sleep':
-                    time.sleep(value)
-                    kind, value = 'status', 200
-                if kind == 'redirect':
-                    self.send_response(302)
-                    self.send_header('Location', value)
-                    self.end_headers()
-                    return
-                body = value if kind == 'body' else b''
-                self.send_response(200 if kind == 'body' else value)
-                self.send_header('Content-Length', str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-            def log_message(self, *args):
-                pass
-
-        self.httpd = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-        self.port = self.httpd.server_port
-        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
-
-    def close(self):
-        self.httpd.shutdown()
-
 
 @pytest.fixture
 def responder():
@@ -73,37 +38,19 @@ def responder():
     server.close()
 
 
-def _test_resolver(host, port, allow_internal):
-    """Test names point at the local challenge server; anything else meets the real guard."""
-    if host.endswith('.lab.internal') or host == 'nas.office.internal':
-        return '127.0.0.1'
-    if host.startswith('nx.'):
-        raise pinned_https.UnsafeDestination(f'{host} does not resolve: no such name')
-    return pinned_https.resolve(host, port, allow_internal)
-
-
 @pytest.fixture
 def app(responder):
-    application, _token = contract_support.build_app()
-    server = application.extensions['certmate_container'].managers['acme_server']
-    server.http01_port = responder.port
-    server.resolve = _test_resolver
-    return application
+    return served_app(responder)
 
 
 @pytest.fixture
 def eab(app):
-    entry = enable(app)
-    entry['allowed_identifiers'] = PATTERNS
-    enable(app, eab_keys=[entry])
-    return entry
+    return eab_for(app)
 
 
 @pytest.fixture
 def client(app, eab):
-    c = AcmeTestClient(app)
-    assert c.new_account(eab).status_code == 201
-    return c
+    return registered_client(app, eab)
 
 
 def _order(client, *names, **extra):
@@ -320,7 +267,7 @@ def test_the_check_gives_up_at_its_budget(responder):
     started = time.monotonic()
     with pytest.raises(acme_validation.ValidationFailed) as failed:
         acme_validation.http01('web.lab.internal', 'slow', 'x', port=responder.port,
-                               resolve=_test_resolver, budget=1)
+                               resolve=resolve_for_tests, budget=1)
     assert failed.value.kind == 'connection'
     assert time.monotonic() - started < 2.5
 
@@ -328,7 +275,7 @@ def test_the_check_gives_up_at_its_budget(responder):
 def test_a_body_is_read_no_further_than_8_kib(responder):
     responder.answers['big'] = ('body', b'x' * 20000)
     with pytest.raises(acme_validation.ValidationFailed) as failed:
-        acme_validation.http01('web.lab.internal', 'big', 'x' * 20000, port=responder.port, resolve=_test_resolver)
+        acme_validation.http01('web.lab.internal', 'big', 'x' * 20000, port=responder.port, resolve=resolve_for_tests)
     assert failed.value.kind == 'incorrectResponse'
 
 
@@ -396,7 +343,7 @@ def test_an_https_redirect_is_followed_to_the_pinned_address_with_the_name_as_sn
     responder.answers['tok'] = ('redirect', f'https://web.lab.internal:{tls_responder.port}'
                                             '/.well-known/acme-challenge/tok')
     acme_validation.http01('web.lab.internal', 'tok', 'tok.key-authorization', port=responder.port,
-                           https_port=tls_responder.port, resolve=_test_resolver)
+                           https_port=tls_responder.port, resolve=resolve_for_tests)
     assert tls_responder.sni == ['web.lab.internal']
     assert tls_responder.hosts == [f'web.lab.internal:{tls_responder.port}']
 
@@ -404,7 +351,7 @@ def test_an_https_redirect_is_followed_to_the_pinned_address_with_the_name_as_sn
 def test_an_https_redirect_to_another_port_is_not_followed(responder, tls_responder):
     responder.answers['tok'] = ('redirect', f'https://web.lab.internal:{tls_responder.port}/x/tok')
     with pytest.raises(acme_validation.ValidationFailed) as failed:
-        acme_validation.http01('web.lab.internal', 'tok', 'x', port=responder.port, resolve=_test_resolver)
+        acme_validation.http01('web.lab.internal', 'tok', 'x', port=responder.port, resolve=resolve_for_tests)
     assert failed.value.kind == 'connection' and 'only 80 for http and 443 for https' in failed.value.detail
     assert tls_responder.hosts == []
 

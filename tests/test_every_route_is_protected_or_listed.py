@@ -83,6 +83,21 @@ PUBLIC_ROUTES = {
     '/acme/chall/<challenge_id>':
         'An ACME challenge, answered with a JWS by the account that owns it; '
         'the http-01 check that follows goes through the address guard.',
+    '/acme/order/<order_id>/finalize':
+        'ACME finalize: a JWS by the account that owns the order, carrying a '
+        'CSR checked against the order before anything is signed.',
+    '/acme/cert/<certificate_id>':
+        'An issued ACME certificate, read with a POST-as-GET JWS by the '
+        'account that ordered it.',
+    '/acme/revoke-cert':
+        'ACME revocation: a JWS by the ordering account or by the key of the '
+        'certificate itself. RFC 8555 section 7.6.',
+    '/acme/root':
+        'The ACME root, public material a relying party installs to trust '
+        'what this server issues. Same reason as the client CA certificate.',
+    '/acme/crl':
+        'The ACME CA\'s revocation list, fetched by relying parties that have '
+        'no account here. Same reason as the client CA\'s CRL.',
     '/api/client-certs/ca':
         'The CA certificate a relying party must trust to verify the client '
         'certificates this instance issues. Same reason as the CRL next to '
