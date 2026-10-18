@@ -22,8 +22,19 @@ def ec_key(curve=None):
     return josepy.JWKEC(key=ec.generate_private_key(curve or ec.SECP256R1()))
 
 
-def rsa_key(bits=2048):
-    return josepy.JWKRSA(key=rsa.generate_private_key(public_exponent=65537, key_size=bits))
+def rsa_key():
+    return josepy.JWKRSA(key=rsa.generate_private_key(public_exponent=65537, key_size=2048))
+
+
+# The public half of a 1024-bit RSA key, generated once outside the
+# repository: the server refuses it by its size, before it would check a
+# signature, so the test needs only the public key and never makes a weak one.
+WEAK_RSA_PUBLIC_JWK = {
+    'kty': 'RSA',
+    'e': 'AQAB',
+    'n': ('va6B3ar_ekmTdwBJYcePq38eHDWix4cmouNAHQXOb46w8BRrtyksGJtFcXfRrCaSebRwR88c1QOTcC7qjELS'
+          'VkXP4U8IC8bYk4GwpUgyH6vghZ-I1YJ4PlaRFRwA0A31YnscgO0ni1szVwZXIVn3ysv2sTJB1opNsPzrPwIJy30'),
+}
 
 
 def b64s(data):

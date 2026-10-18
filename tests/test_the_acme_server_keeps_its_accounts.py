@@ -18,7 +18,16 @@ import zipfile
 import pytest
 
 from tests import contract_support
-from tests.acme_support import AcmeTestClient, b64s, ec_key, enable, problem, raw_jws, rsa_key
+from tests.acme_support import (
+    WEAK_RSA_PUBLIC_JWK,
+    AcmeTestClient,
+    b64s,
+    ec_key,
+    enable,
+    problem,
+    raw_jws,
+    rsa_key,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -172,18 +181,16 @@ def test_a_broken_signature_is_refused(client):
     assert problem(client.post('new-account', None, body=body), 'does not verify') == 'malformed'
 
 
-@pytest.mark.parametrize('make_key,accepted', [
-    (lambda: rsa_key(1024), False),
-    (lambda: rsa_key(2048), True),
-    (lambda: ec_key(), True),
-], ids=['rsa-1024', 'rsa-2048', 'ec-p256'])
-def test_an_account_key_must_be_strong_enough(app, eab, make_key, accepted):
-    client = AcmeTestClient(app, key=make_key())
-    response = client.new_account(eab)
-    if accepted:
-        assert response.status_code == 201
-    else:
-        assert problem(response) == 'badPublicKey'
+@pytest.mark.parametrize('make_key', [rsa_key, ec_key], ids=['rsa-2048', 'ec-p256'])
+def test_a_strong_enough_account_key_is_accepted(app, eab, make_key):
+    assert AcmeTestClient(app, key=make_key()).new_account(eab).status_code == 201
+
+
+def test_an_rsa_account_key_under_2048_bits_is_refused(client):
+    header = client.protected(client.url('new-account'), kid=None)
+    header['jwk'] = WEAK_RSA_PUBLIC_JWK
+    response = client.post('new-account', {}, protected=header)
+    assert problem(response, 'has 1024') == 'badPublicKey'
 
 
 def test_a_kid_that_is_no_account_here_is_refused(registered):
