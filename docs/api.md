@@ -1811,7 +1811,8 @@ it, admin only, since API contract **2.51**. A key restricted with
 `allowed_domains` is refused.
 
 It is being built in steps (#476). Today it answers the directory, nonces,
-accounts, orders with their http-01 challenges, finalize, certificates and
+accounts, orders with their http-01 and dns-01 challenges (a wildcard with
+dns-01 alone), finalize, certificates and
 revocation, from a root of its own: `/acme/root` serves it to install in
 trust stores, and `/acme/crl` its revocation list. It is off by default.
 
@@ -1882,7 +1883,11 @@ name only), or `*.` and a DNS name (`*.lab.internal`: every name below it, at
 any depth, and not the name itself). Every name of an order must match one
 of the patterns of the key that enrolled the account, or the order is
 refused with `rejectedIdentifier` before anything is fetched. A disabled
-key's accounts keep ordering within its names.
+key's accounts keep ordering within its names. A wildcard `*.B` is allowed by
+a `*.` pattern at or above `B` (`*.lab.internal` allows `*.team.lab.internal`
+and `*.lab.internal` itself), never by an exact name, and is proved with
+dns-01, which the server checks through the resolver CertMate is configured
+with (`dns_resolver` in settings, else the system's).
 
 <!-- request: POST /api/acme/eab-keys -->
 ```json

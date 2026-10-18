@@ -146,8 +146,13 @@ class AcmeStore:
     # -- orders (section 7.4), their authorizations and challenges ---------
 
     def create_order(self, account_id, identifiers, expires):
-        """An order with one pending authorization per identifier, each with
-        one http-01 challenge, written in one transaction."""
+        """An order with one pending authorization per identifier, written in one transaction.
+
+        A name gets an http-01 and a dns-01 challenge, each with a token of its
+        own, and the client answers the one it can. A wildcard is authorized
+        on its base name with dns-01 alone (RFC 8555 section 7.1.3), and the
+        authorization's identifier carries `wildcard` so that it can say so.
+        """
         order_id = _new_id()
         now = utc_now().isoformat()
         with closing(self._connect()) as con, con:
@@ -156,11 +161,15 @@ class AcmeStore:
                         (order_id, account_id, 'pending', expires, json.dumps(identifiers), now))
             for identifier in identifiers:
                 authz_id = _new_id()
+                wildcard = identifier['value'].startswith('*.')
+                authorized = ({'type': 'dns', 'value': identifier['value'][2:], 'wildcard': True}
+                              if wildcard else identifier)
                 con.execute('INSERT INTO authorizations (id, order_id, account_id, identifier, status, expires) '
                             'VALUES (?, ?, ?, ?, ?, ?)',
-                            (authz_id, order_id, account_id, json.dumps(identifier), 'pending', expires))
-                con.execute('INSERT INTO challenges (id, authz_id, type, token, status) VALUES (?, ?, ?, ?, ?)',
-                            (_new_id(), authz_id, 'http-01', secrets.token_urlsafe(32), 'pending'))
+                            (authz_id, order_id, account_id, json.dumps(authorized), 'pending', expires))
+                for kind in (('dns-01',) if wildcard else ('http-01', 'dns-01')):
+                    con.execute('INSERT INTO challenges (id, authz_id, type, token, status) VALUES (?, ?, ?, ?, ?)',
+                                (_new_id(), authz_id, kind, secrets.token_urlsafe(32), 'pending'))
         return self.order(order_id)
 
     def order(self, order_id):
