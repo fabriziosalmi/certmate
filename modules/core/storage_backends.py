@@ -399,6 +399,21 @@ class CertificateStorageBackend(ABC):
         """Get the name of this storage backend"""
 
 
+# The directory the web app serves to anyone, signed in or not: Flask's static
+# folder (modules/factory.py), which the image leaves writable by the app. A
+# certificate directory inside it would publish every private key at /static/.
+SERVED_STATIC_DIR = (Path(__file__).resolve().parents[2] / 'static').resolve()
+
+
+def publicly_served(path) -> bool:
+    """Is *path*, resolved, the served static directory or inside it?"""
+    try:
+        resolved = Path(path).resolve()
+    except (OSError, RuntimeError):
+        return False
+    return resolved == SERVED_STATIC_DIR or SERVED_STATIC_DIR in resolved.parents
+
+
 class LocalFileSystemBackend(CertificateStorageBackend):
     """Local filesystem storage backend (default/legacy behavior)"""
     
@@ -2222,6 +2237,12 @@ class StorageManager:
         """
         chosen = (storage_config.get('cert_dir') or '').strip()
         if chosen and chosen != self.DEFAULT_LOCAL_CERT_DIRNAME:
+            if publicly_served(chosen):
+                # The API refuses this; a settings file can still carry it
+                # (edited by hand, or restored). Never write keys there.
+                logger.error(f"cert_dir {chosen!r} is inside the directory served at /static/; "
+                             f"using {self._default_cert_dir} instead")
+                return self._default_cert_dir
             return Path(chosen)
         return self._default_cert_dir
 

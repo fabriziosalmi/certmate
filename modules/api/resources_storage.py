@@ -5,6 +5,7 @@ unchanged; what used to be captured from the enclosing scope now arrives as an
 explicit `ApiContext`, which is what makes them importable — and therefore
 testable — without constructing the whole manager graph.
 """
+from functools import wraps
 from pathlib import Path
 
 from flask import request
@@ -30,6 +31,34 @@ def _local_dir(ctx, config):
     if manager is not None:
         return manager.local_cert_dir(config or {})
     return Path((config or {}).get('cert_dir') or 'certificates')
+
+def _cert_dirs(node):
+    """Every cert_dir a request body names, at any depth: the settings form,
+    a connection test and a migration each nest it differently."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == 'cert_dir' and isinstance(value, str):
+                yield value.strip()
+            else:
+                yield from _cert_dirs(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _cert_dirs(item)
+
+
+def refuses_published_cert_dir(view):
+    """400 for a request that names a local cert_dir inside the directory
+    served at /static/, before the view writes, tests or migrates anything."""
+    @wraps(view)
+    def guarded(*args, **kwargs):
+        from ..core.storage_backends import publicly_served
+        for chosen in _cert_dirs(request.get_json(silent=True)):
+            if chosen and publicly_served(chosen):
+                return {'error': f'cert_dir {chosen!r} is inside the directory this server publishes '
+                                 'at /static/ to anyone: the private keys would be downloadable there',
+                        'code': 'CERT_DIR_PUBLISHED'}, 400
+        return view(*args, **kwargs)
+    return guarded
 
 def _local_storage_update(data):
     """The local_filesystem part of a storage settings save.
@@ -92,6 +121,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
         @api.expect(models['storage_config_model'])
+        @refuses_published_cert_dir
         def post(self):
             """Update storage backend configuration"""
             try:
@@ -193,6 +223,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
         # configuration and the server connects with it.
         @ctx.auth.require_role('admin')
         @api.expect(models['storage_test_config_model'])
+        @refuses_published_cert_dir
         def post(self):
             """Test storage backend connection"""
             try:
@@ -273,6 +304,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
         @api.expect(models['storage_migration_config_model'])
+        @refuses_published_cert_dir
         def post(self):
             """Migrate certificates between storage backends.
 
