@@ -275,6 +275,59 @@ class AcmeServer:
             'accounts': counts.get(entry.get('kid'), 0),
         }
 
+    # -- the control plane: what was issued, to whom, and the admin's actions --
+
+    def certificates_view(self):
+        if not self.db_path.exists():
+            return []
+        now = utc_now()
+        listed = []
+        for c in self.store.certificates_listed():
+            if c['revoked_at']:
+                status = 'revoked'
+            elif datetime.fromisoformat(c['not_after']) <= now:
+                status = 'expired'
+            else:
+                status = 'valid'
+            listed.append({
+                'id': c['id'], 'names': c['names'], 'serial': c['serial'], 'status': status,
+                'not_after': c['not_after'], 'created_at': c['created_at'],
+                'revoked_at': c['revoked_at'],
+                'revocation_reason': REVOCATION_REASONS.get(c['reason']) if c['revoked_at'] else None,
+                'account_id': c['account_id'], 'eab_kid': c['eab_kid'],
+            })
+        return listed
+
+    def accounts_view(self):
+        if not self.db_path.exists():
+            return []
+        return [{'id': a['id'], 'status': a['status'], 'contact': a['contact'], 'eab_kid': a['eab_kid'],
+                 'created_at': a['created_at'], 'orders': a['orders'], 'certificates': a['certificates']}
+                for a in self.store.accounts_listed()]
+
+    def admin_revoke(self, certificate_id, reason=0):
+        """An admin revokes a certificate from the control plane, as section 7.6 lets its owner."""
+        if isinstance(reason, bool) or reason not in REVOCATION_REASONS:
+            raise AcmeAdminError(f'reason must be one of {sorted(REVOCATION_REASONS)}')
+        record = self.store.certificate(certificate_id) if self.db_path.exists() else None
+        if record is None:
+            raise AcmeAdminError(f'No ACME certificate with id {certificate_id!r}', 404, 'ACME_CERTIFICATE_NOT_FOUND')
+        if not self.store.revoke(record['id'], reason):
+            raise AcmeAdminError('The certificate is revoked already', 409, 'ACME_CERTIFICATE_ALREADY_REVOKED')
+        with self._crl_lock:
+            self._crl['der'] = None
+        return next(c for c in self.certificates_view() if c['id'] == certificate_id)
+
+    def admin_deactivate(self, account_id):
+        """Stop an account for good: it orders nothing again, which disabling its EAB key does not do."""
+        account = self.store.account(account_id) if self.db_path.exists() else None
+        if account is None:
+            raise AcmeAdminError(f'No ACME account with id {account_id!r}', 404, 'ACME_ACCOUNT_NOT_FOUND')
+        if account['status'] != 'valid':
+            raise AcmeAdminError(f'The account is {account["status"]} already', 409, 'ACME_ACCOUNT_NOT_VALID')
+        self.store.deactivate(account_id)
+        return next(a for a in self.accounts_view() if a['id'] == account_id)
+
     # -- orders (section 7.4), authorizations and challenges --------------
 
     def validity_days(self):

@@ -104,8 +104,59 @@ def create_acme_resources(api, models, ctx: ApiContext) -> dict:
             _audit(ctx, 'disable_eab_key', kid, {'accounts': disabled['accounts']})
             return disabled
 
+    class AcmeCertificates(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('viewer')
+        @instance_wide(ctx, 'acme_server', 'the ACME certificates')
+        @api.marshal_with(models['acme_certificates_model'])
+        def get(self):
+            """The certificates issued over ACME, newest first, with the account and EAB key behind each."""
+            return {'certificates': server.certificates_view()}
+
+    class AcmeCertificateRevoke(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('admin')
+        @instance_wide(ctx, 'acme_server', 'the ACME certificates')
+        @api.expect(models['acme_revoke_model'])
+        def post(self, certificate_id):
+            """Revoke a certificate issued over ACME; the CRL at /acme/crl lists it from then on."""
+            reason = (request.get_json(silent=True) or {}).get('reason', 0)
+            try:
+                revoked = server.admin_revoke(certificate_id, reason)
+            except AcmeAdminError as error:
+                return _refusal(error)
+            _audit(ctx, 'revoke_certificate', certificate_id,
+                   {'names': revoked['names'], 'reason': revoked['revocation_reason']})
+            return revoked
+
+    class AcmeAccounts(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('admin')
+        @instance_wide(ctx, 'acme_server', 'the ACME accounts')
+        @api.marshal_with(models['acme_accounts_model'])
+        def get(self):
+            """The ACME accounts, with the EAB key that enrolled each and what it ordered."""
+            return {'accounts': server.accounts_view()}
+
+    class AcmeAccountDeactivate(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('admin')
+        @instance_wide(ctx, 'acme_server', 'the ACME accounts')
+        def post(self, account_id):
+            """Deactivate an account for good: it orders nothing again. Its certificates stay valid."""
+            try:
+                deactivated = server.admin_deactivate(account_id)
+            except AcmeAdminError as error:
+                return _refusal(error)
+            _audit(ctx, 'deactivate_account', account_id, {'eab_kid': deactivated['eab_kid']})
+            return deactivated
+
     return {
         'AcmeServerConfig': AcmeServerConfig,
         'AcmeEabKeys': AcmeEabKeys,
         'AcmeEabKey': AcmeEabKey,
+        'AcmeCertificates': AcmeCertificates,
+        'AcmeCertificateRevoke': AcmeCertificateRevoke,
+        'AcmeAccounts': AcmeAccounts,
+        'AcmeAccountDeactivate': AcmeAccountDeactivate,
     }

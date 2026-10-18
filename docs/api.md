@@ -1916,6 +1916,75 @@ enrolled, and never with its `hmac_key`. `DELETE` disables a key: it enrols no
 one again, and the accounts it enrolled keep working. It answers with the key
 as `GET` lists it; an unknown `kid` is a `404`.
 
+#### What it issued, and to whom
+
+**Endpoint**: `GET /api/acme/certificates` — viewer
+**Endpoint**: `POST /api/acme/certificates/<certificate_id>/revoke` — admin
+**Endpoint**: `GET /api/acme/accounts` — admin
+**Endpoint**: `POST /api/acme/accounts/<account_id>/deactivate` — admin
+
+Since API contract **2.54**. Every certificate the ACME server issued, newest
+first, with the account that ordered it and the EAB key that enrolled that
+account. `status` is `valid`, `expired` or `revoked`.
+
+<!-- response: GET /api/acme/certificates 200 -->
+```json
+{
+  "certificates": [
+    {
+      "id": "Xq3lP0b2Tz8WmKc1",
+      "names": ["web.lab.internal"],
+      "serial": "5dee5dbd570cfc6fb589f5d70c4902f53715c074",
+      "status": "valid",
+      "not_after": "2026-12-02T10:59:10Z",
+      "created_at": "2026-10-18T10:59:10Z",
+      "revoked_at": null,
+      "revocation_reason": null,
+      "account_id": "3gfmoctqWBAjd9X_",
+      "eab_kid": "team-a"
+    }
+  ]
+}
+```
+
+An admin revokes one with an optional `reason`, an RFC 5280 code: 0
+(unspecified, the default), 1 (keyCompromise), 3 (affiliationChanged), 4
+(superseded) or 5 (cessationOfOperation). The answer is the certificate as
+listed, now `revoked`, and `/acme/crl` lists it from then on. A certificate
+revoked already is a `409`, an unknown id a `404`, another reason a `400`.
+
+<!-- request: POST /api/acme/certificates/<certificate_id>/revoke -->
+```json
+{"reason": 1}
+```
+
+The accounts, each with its EAB key and how many orders and certificates it
+has:
+
+<!-- response: GET /api/acme/accounts 200 -->
+```json
+{
+  "accounts": [
+    {
+      "id": "3gfmoctqWBAjd9X_",
+      "status": "valid",
+      "contact": ["mailto:ops@lab.internal"],
+      "eab_kid": "team-a",
+      "created_at": "2026-10-18T10:55:03Z",
+      "orders": 2,
+      "certificates": 2
+    }
+  ]
+}
+```
+
+Deactivating an account stops it for good: it orders nothing again, and a
+client using it is refused. That is what disabling its EAB key does not do,
+since the accounts a key enrolled keep working. The certificates it already
+has stay valid; revoke them one by one if they must not. The answer is the
+account as listed, now `deactivated`; an account deactivated already is a
+`409`, an unknown id a `404`.
+
 ---
 
 ### Log stream (admin, debugging)

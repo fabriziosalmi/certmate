@@ -292,9 +292,12 @@ def test_the_ca_group_builds_from_a_minimal_context(api):
 
 def test_the_acme_group_builds_from_a_minimal_context(api):
     models = {name: MagicMock() for name in ('acme_server_model', 'acme_server_update_model',
-                                             'acme_eab_keys_model', 'acme_eab_key_create_model')}
+                                             'acme_eab_keys_model', 'acme_eab_key_create_model',
+                                             'acme_certificates_model', 'acme_accounts_model',
+                                             'acme_revoke_model')}
     resources = create_acme_resources(api, models, _minimal_context(managers={'acme_server': MagicMock()}))
-    assert set(resources) == {'AcmeServerConfig', 'AcmeEabKeys', 'AcmeEabKey'}
+    assert set(resources) == {'AcmeServerConfig', 'AcmeEabKeys', 'AcmeEabKey', 'AcmeCertificates',
+                              'AcmeCertificateRevoke', 'AcmeAccounts', 'AcmeAccountDeactivate'}
     assert all(issubclass(cls, Resource) for cls in resources.values())
 
 

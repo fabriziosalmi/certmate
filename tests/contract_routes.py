@@ -383,6 +383,25 @@ def _walk(app, token, trace, certbot, container, seeded, report):
     call('get', '/api/acme/server')
     call('delete', '/api/acme/eab-keys/<kid>', path='/api/acme/eab-keys/walk')
     call('delete', '/api/acme/eab-keys/<kid>', path='/api/acme/eab-keys/nobody')
+    # What the server issued: an account and a certificate written as the
+    # protocol writes them, then listed, revoked and deactivated (#476).
+    acme = container.managers['acme_server']
+    walked = acme.store.create_account('{"kty": "EC"}', 'walk-thumbprint', ['mailto:walk@walk.internal'], 'walk')
+    walk_order = acme.store.create_order(walked['id'], [{'type': 'dns', 'value': 'w.walk.internal'}],
+                                         '2099-01-01T00:00:00')
+    walk_cert = acme.store.finish_finalize(walk_order['id'], walked['id'], 'a1b2c3', ['w.walk.internal'],
+                                           '2099-01-01T00:00:00', 'not a certificate')
+    call('get', '/api/acme/certificates')
+    call('post', '/api/acme/certificates/<certificate_id>/revoke',
+         path=f"/api/acme/certificates/{walk_cert['id']}/revoke", body={'reason': 4})
+    call('post', '/api/acme/certificates/<certificate_id>/revoke',
+         path=f"/api/acme/certificates/{walk_cert['id']}/revoke", body={})
+    call('post', '/api/acme/certificates/<certificate_id>/revoke', path='/api/acme/certificates/nobody/revoke',
+         body={})
+    call('get', '/api/acme/certificates')
+    call('get', '/api/acme/accounts')
+    call('post', '/api/acme/accounts/<account_id>/deactivate', path=f"/api/acme/accounts/{walked['id']}/deactivate")
+    call('post', '/api/acme/accounts/<account_id>/deactivate', path='/api/acme/accounts/nobody/deactivate')
     call('patch', '/api/acme/server', body={'enabled': False})
 
     # --- deprecated DNS accounts
