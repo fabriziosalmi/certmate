@@ -14,12 +14,13 @@ reach none of them, and a key restricted to domains is refused
 (test_a_restricted_key_meets_nothing_outside_its_domains.py).
 """
 import json
+import os
 import zipfile
 
 import pytest
 
 from tests import contract_support
-from tests.acme_support import AcmeTestClient, problem
+from tests.acme_support import AcmeTestClient, b64s, problem
 
 pytestmark = [pytest.mark.unit]
 
@@ -63,6 +64,67 @@ def test_a_share_safe_backup_does_not_carry_the_hmac_key(admin, monkeypatch):
     archive = sorted((managers['file_ops'].backup_dir / 'unified').glob('*.zip'))[-1]
     with zipfile.ZipFile(archive) as zf:
         assert secret not in zf.read('settings.json').decode()
+
+
+
+# --- a key restored without its secret -----------------------------------------------
+
+def _restored_onto_another_instance(source, include_secrets, monkeypatch):
+    monkeypatch.delenv('CERTMATE_BACKUP_PASSPHRASE', raising=False)
+    managers = source.extensions['certmate_container'].managers
+    managers['file_ops'].create_unified_backup(managers['settings'].load_settings(), 'manual',
+                                              include_secrets=include_secrets)
+    archive = sorted((managers['file_ops'].backup_dir / 'unified').glob('*.zip'))[-1]
+    target, _token = contract_support.build_app()
+    assert target.extensions['certmate_container'].managers['file_ops'].restore_unified_backup(str(archive))
+    return target
+
+
+def test_a_share_safe_backup_restored_elsewhere_brings_back_keys_that_enrol_no_one(admin, monkeypatch, caplog):
+    """Nothing on the new instance holds the real HMAC key, so the restore keeps
+    the mask. A binding made with the mask (it decoded to an empty key) used to
+    verify, for anyone who knew the kid. The log tells the admin why."""
+    app, client = admin
+    client.patch('/api/acme/server', json={'enabled': True})
+    entry = _create(client, kid='team-a').get_json()
+    target = _restored_onto_another_instance(app, False, monkeypatch)
+    stored = target.extensions['certmate_container'].managers['settings'].load_settings()[
+        'acme_server']['eab_keys'][0]['hmac_key']
+    assert stored != entry['hmac_key']
+    for hmac_key in (stored, '', entry['hmac_key']):
+        refused = AcmeTestClient(target).new_account(dict(entry, hmac_key=hmac_key))
+        assert problem(refused, 'does not verify') == 'unauthorized', hmac_key
+    assert "EAB key 'team-a' holds no usable HMAC key" in caplog.text
+
+
+def test_a_full_backup_restored_elsewhere_keeps_its_keys_enrolling(admin, monkeypatch):
+    app, client = admin
+    client.patch('/api/acme/server', json={'enabled': True})
+    entry = _create(client, kid='team-a').get_json()
+    target = _restored_onto_another_instance(app, True, monkeypatch)
+    assert AcmeTestClient(target).new_account(entry).status_code == 201
+
+
+_SHORT, _LONG_ENOUGH = b64s(os.urandom(15)), b64s(os.urandom(16))
+
+
+@pytest.mark.parametrize('stored,signed_with,status', [
+    ('********', '', 403),         # the mask
+    ('', '', 403),
+    ('A', '', 403),                # not base64url at all
+    (_SHORT, _SHORT, 403),         # 120 bits
+    (_LONG_ENOUGH, _LONG_ENOUGH, 201),
+], ids=['mask', 'empty', 'not-base64url', '15-bytes', '16-bytes'])
+def test_a_stored_key_under_16_bytes_verifies_no_binding(admin, stored, signed_with, status):
+    app, client = admin
+    client.patch('/api/acme/server', json={'enabled': True})
+    _create(client, kid='team-a')
+    app.extensions['certmate_container'].managers['settings'].update(
+        lambda s: s['acme_server']['eab_keys'][0].__setitem__('hmac_key', stored))
+    response = AcmeTestClient(app).new_account({'kid': 'team-a', 'hmac_key': signed_with})
+    assert response.status_code == status, response.get_data(as_text=True)
+    if status == 403:
+        assert problem(response, 'does not verify') == 'unauthorized'
 
 
 def test_patterns_are_normalised_and_kept_in_order(admin):

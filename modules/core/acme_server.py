@@ -26,6 +26,7 @@ masks each `hmac_key`.
 """
 import hmac as _hmac
 import json
+import logging
 import os
 import re
 import threading
@@ -50,6 +51,8 @@ from .acme_nonces import NonceStore
 from .acme_problems import AcmeProblem
 from .acme_store import AcmeStore, KeyInUse
 from .utils import utc_now
+
+logger = logging.getLogger(__name__)
 
 DEFAULTS = {
     'enabled': False,
@@ -95,6 +98,14 @@ KID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 _LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
 MAX_PATTERNS = 50
 MAX_NOTE_LENGTH = 200
+
+# create_eab_key makes 32 random bytes. A stored value holding fewer than 16
+# is no key: josepy decodes base64url leniently, dropping what is not in the
+# alphabet, so the mask a share-safe backup writes ("********") decoded to an
+# empty key. Restored onto another instance, where no real value was there to
+# put back, every EAB key then took a binding made with that empty key, from
+# anyone who knew its kid.
+MIN_EAB_KEY_BYTES = 16
 
 
 class AcmeAdminError(Exception):
@@ -632,11 +643,16 @@ class AcmeServer:
             raise AcmeProblem('malformed', 'The externalAccountBinding payload is not a JWK') from None
         if not _hmac.compare_digest(thumbprint(bound), thumbprint(account_jwk)):
             raise AcmeProblem('unauthorized', 'The externalAccountBinding binds another account key')
-        try:
-            mac_key = josepy.JWKOct(key=b64.b64decode(entry['hmac_key']))
-            valid = parsed.signature.verify(parsed.payload, mac_key)
-        except (ValueError, TypeError, KeyError, josepy.errors.Error):
+        mac_key = _eab_mac_key(entry.get('hmac_key'))
+        if mac_key is None:
+            logger.warning('EAB key %r holds no usable HMAC key, as a share-safe backup restored onto '
+                           'another instance leaves it; it enrols no one, so create a new key', header.kid)
             valid = False
+        else:
+            try:
+                valid = parsed.signature.verify(parsed.payload, josepy.JWKOct(key=mac_key))
+            except (ValueError, TypeError, josepy.errors.Error):
+                valid = False
         if not valid:
             raise AcmeProblem('unauthorized', 'The externalAccountBinding MAC does not verify')
         return header.kid
@@ -775,3 +791,12 @@ def _contacts(value):
         if address.count('@') != 1 or ',' in address or '?' in address or not address.split('@')[1]:
             raise AcmeProblem('invalidContact', f'{item!r} is not one email address')
     return value
+
+
+def _eab_mac_key(value):
+    """The HMAC key an EAB entry holds, or None when it holds none worth the name."""
+    try:
+        key = b64.b64decode(value) if isinstance(value, str) else b''
+    except ValueError:
+        return None
+    return key if len(key) >= MIN_EAB_KEY_BYTES else None
