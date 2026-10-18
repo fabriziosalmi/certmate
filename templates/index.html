@@ -737,6 +737,11 @@
         {% include 'partials/_client_certs.html' %}
     </div>
 
+    <!-- ACME CERTIFICATES (#476) -->
+    <div x-show="$store.certs.view === 'acme'" x-cloak>
+        {% include 'partials/_acme_certs.html' %}
+    </div>
+
     </div><!-- /max-w-7xl Alpine scope -->
 
     <!-- Certificate Detail Modal — centered on every viewport; the body
@@ -841,5 +846,6 @@
     </div>
 
     <script src="/static/js/client-certs.js"></script>
+    <script src="/static/js/acme-certs.js"></script>
     <script src="/static/js/dashboard.js"></script>
 {% endblock %}

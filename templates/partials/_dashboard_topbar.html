@@ -41,7 +41,9 @@
 // the row around it.
 document.addEventListener('alpine:init', function () {
     function fromHash() {
-        return location.hash === '#client' ? 'client' : 'server';
+        // #acme: what the ACME server issued (#476).
+        if (location.hash === '#client') return 'client';
+        return location.hash === '#acme' ? 'acme' : 'server';
     }
     Alpine.store('certs', {
         view: fromHash(),
@@ -58,7 +60,7 @@ document.addEventListener('alpine:init', function () {
         },
         select: function (view) {
             this.view = view;
-            history.replaceState(null, '', view === 'client' ? '#client' : '#');
+            history.replaceState(null, '', view === 'server' ? '#' : '#' + view);
             if (view === 'client' && typeof initClientCerts === 'function') {
                 initClientCerts();
             }
@@ -96,8 +98,16 @@ document.addEventListener('alpine:init', function () {
                 class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
             <i class="fas fa-id-card" aria-hidden="true"></i>Client
         </button>
-        <span class="mx-1 h-6 w-px bg-border" aria-hidden="true"></span>
-        <button type="button" @click="$store.certs.openDrawer()"
+        <button type="button" id="certViewAcmeBtn" @click="$store.certs.select('acme')"
+                :aria-pressed="$store.certs.view === 'acme' ? 'true' : 'false'"
+                :class="$store.certs.view === 'acme' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
+                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all"
+                title="Certificates the ACME server issued">
+            <i class="fas fa-certificate" aria-hidden="true"></i>ACME
+        </button>
+        <!-- No "New" on the ACME view: those certificates are ordered by the clients. -->
+        <span class="mx-1 h-6 w-px bg-border" aria-hidden="true" x-show="$store.certs.view !== 'acme'"></span>
+        <button type="button" @click="$store.certs.openDrawer()" x-show="$store.certs.view !== 'acme'"
                 class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
                 title="New certificate">
             <i class="fas fa-plus" aria-hidden="true"></i>New

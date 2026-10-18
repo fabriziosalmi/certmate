@@ -1,0 +1,211 @@
+<!-- TAB: ACME server (#476) -->
+        <div x-show="tab === 'acme'" x-cloak
+             id="settings-panel-acme" role="tabpanel" aria-labelledby="settings-tab-acme" tabindex="0"
+             x-data="acmeManager()" x-init="load()"
+             class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
+
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-semibold text-foreground flex items-center">
+                    <i class="fas fa-certificate mr-2 text-primary"></i>
+                    ACME server
+                </h3>
+                <span class="text-xs px-2 py-1 rounded-full"
+                      :class="server.enabled ? 'bg-success-surface text-success-strong' : 'bg-surface-2 text-muted'"
+                      x-text="server.enabled ? 'On' : 'Off'"></span>
+            </div>
+            <p class="text-muted text-sm mb-6">
+                CertMate answers ACME (RFC 8555) itself, from a root of its own, so certbot, lego, acme.sh
+                and cert-manager can get certificates for your internal names. Who may enrol, and for which
+                names, is set by the EAB keys below.
+            </p>
+
+            <template x-if="loading">
+                <div class="text-center py-4 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading...</div>
+            </template>
+
+            <!-- Options -->
+            <div class="mb-6 p-4 bg-surface-2 rounded-lg" x-show="!loading">
+                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-sliders-h mr-1"></i> Options</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
+                        <input type="checkbox" x-model="server.enabled" id="acmeEnabled" class="mt-1 rounded border-border">
+                        <span><span class="font-medium">Serve ACME</span><br>
+                            <span class="text-xs text-muted">Off, every /acme/ address answers 404.</span></span>
+                    </label>
+                    <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
+                        <input type="checkbox" x-model="server.eab_required" class="mt-1 rounded border-border">
+                        <span><span class="font-medium">Require an EAB key</span><br>
+                            <span class="text-xs text-muted">Off, anyone who reaches /acme/ can create an account.</span></span>
+                    </label>
+                    <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
+                        <input type="checkbox" x-model="server.allow_http" class="mt-1 rounded border-border">
+                        <span><span class="font-medium">Also over plain HTTP</span><br>
+                            <span class="text-xs text-muted">For a lab only. Behind a proxy that ends TLS, set BEHIND_PROXY instead.</span></span>
+                    </label>
+                    <div>
+                        <label for="acmeValidity" class="block text-xs text-muted mb-1">Certificate validity, days (1 to 365)</label>
+                        <input type="number" min="1" max="365" id="acmeValidity" x-model="server.validity_days"
+                               class="w-32 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
+                        <p class="text-xs text-muted mt-1">45 leaves every client 15 days or more when it renews.</p>
+                    </div>
+                </div>
+                <div class="mt-4" x-show="!server.eab_required">
+                    <label for="acmeOpenNames" class="block text-xs text-muted mb-1">Names an account without an EAB key may order</label>
+                    <input type="text" id="acmeOpenNames" x-model="openNames" placeholder="*.lab.internal, nas.office.internal   (empty = none)"
+                           class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground font-mono">
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button type="button" @click="save()" :disabled="saving" class="btn btn-primary" id="acmeSave">
+                        <i class="fas fa-save mr-1"></i> Save
+                    </button>
+                </div>
+            </div>
+
+            <!-- Where clients point -->
+            <div class="mb-6 p-4 bg-info-surface border border-info-line rounded-lg" x-show="!loading && server.enabled">
+                <h4 class="text-sm font-semibold text-info-fg mb-2"><i class="fas fa-link mr-1"></i> Give clients this directory URL</h4>
+                <div class="flex items-center gap-2">
+                    <code class="flex-1 px-3 py-2 bg-surface text-foreground border border-info-line rounded text-sm font-mono break-all"
+                          id="acmeDirectoryUrl" x-text="server.directory_url"></code>
+                    <button type="button" @click="copyDirectory()" title="Copy the directory URL" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
+                </div>
+                <p class="text-xs text-info-fg mt-2">
+                    Clients must trust this server's TLS certificate, and the hosts that use the certificates must
+                    trust the ACME root: <a :href="rootUrl" class="underline">download it</a> and install it in their trust stores.
+                </p>
+            </div>
+
+            <!-- Create an EAB key -->
+            <div class="mb-6 p-4 bg-surface-2 rounded-lg" x-show="!loading">
+                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-plus-circle mr-1"></i> New EAB key</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-2">
+                        <label for="acmeKeyNames" class="block text-xs text-muted mb-1">Names it may order (required)</label>
+                        <input type="text" id="acmeKeyNames" x-model="newKey.names" placeholder="*.lab.internal, nas.office.internal"
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground font-mono">
+                    </div>
+                    <div>
+                        <label for="acmeKeyKid" class="block text-xs text-muted mb-1">Key identifier (optional)</label>
+                        <input type="text" id="acmeKeyKid" x-model="newKey.kid" placeholder="team-a" maxlength="64"
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
+                    </div>
+                </div>
+                <div class="mt-3 flex items-center gap-2">
+                    <input type="text" x-model="newKey.note" placeholder="What it is for (optional)" maxlength="200" title="Note"
+                           class="flex-1 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
+                    <button type="button" @click="createKey()" class="btn btn-primary whitespace-nowrap" id="acmeCreateKey">
+                        <i class="fas fa-plus mr-1"></i> Create
+                    </button>
+                </div>
+                <p class="mt-1 text-xs text-muted">
+                    A name, or <code class="font-mono">*.</code> and a name for every name below it. A key is disabled, never deleted,
+                    so the accounts it enrolled stay attributable to it.
+                </p>
+            </div>
+
+            <!-- The new key, shown once, with the commands to use it -->
+            <div x-show="created" x-cloak class="mb-6 p-4 bg-success-surface border border-success-line rounded-lg" id="acmeCreated">
+                <div class="flex items-start justify-between">
+                    <h4 class="text-sm font-medium text-success-strong"><i class="fas fa-key mr-1"></i> EAB key created</h4>
+                    <button type="button" @click="forget()" class="text-xs text-success-fg underline">I have copied it</button>
+                </div>
+                <p class="text-xs text-success-fg mt-1 mb-2">Copy the HMAC key now. It is not shown again.</p>
+                <template x-if="created">
+                    <div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                            <div><span class="text-xs text-muted block">Key identifier</span>
+                                <code class="font-mono text-foreground" id="acmeCreatedKid" x-text="created.kid"></code></div>
+                            <div class="md:col-span-2"><span class="text-xs text-muted block">HMAC key</span>
+                                <div class="flex items-center gap-2">
+                                    <code class="flex-1 px-2 py-1 bg-surface text-foreground border border-success-line rounded font-mono break-all"
+                                          id="acmeCreatedHmac" x-text="created.hmac_key"></code>
+                                    <button type="button" @click="copyHmac()" title="Copy the HMAC key" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
+                                </div></div>
+                        </div>
+                        <div class="mt-4">
+                            <div class="flex flex-wrap gap-1 mb-2" role="tablist" aria-label="Client">
+                                <template x-for="c in clients" :key="c.id">
+                                    <button type="button" role="tab" @click="pickClient(c.id)"
+                                            :aria-selected="isClient(c.id) ? 'true' : 'false'"
+                                            :class="isClient(c.id) ? 'bg-surface text-foreground border-success-line' : 'text-success-fg border-transparent'"
+                                            class="px-3 py-1 text-xs font-medium rounded-md border" x-text="c.label"></button>
+                                </template>
+                            </div>
+                            <div class="flex items-start gap-2">
+                                <pre class="flex-1 p-3 bg-surface text-foreground border border-success-line rounded text-xs font-mono overflow-x-auto"
+                                     id="acmeSnippet" x-text="snippet"></pre>
+                                <button type="button" @click="copySnippet()" title="Copy the command" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
+                            </div>
+                            <p class="text-xs text-success-fg mt-2">
+                                If the client host does not trust this server's TLS certificate, point it at the CA that issued it:
+                                REQUESTS_CA_BUNDLE for certbot, LEGO_CA_CERTIFICATES for lego, --ca-bundle for acme.sh, caBundle in the
+                                cert-manager issuer.
+                            </p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- EAB keys -->
+            <div class="mb-6" x-show="!loading">
+                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-list mr-1"></i> EAB keys</h4>
+                <template x-if="server.eab_keys.length === 0">
+                    <div class="text-center py-4 text-muted text-sm">No EAB keys yet.</div>
+                </template>
+                <div class="space-y-2" id="acmeKeys">
+                    <template x-for="key in server.eab_keys" :key="key.kid">
+                        <div class="flex items-center justify-between p-3 bg-surface-2 rounded-lg" :class="key.disabled ? 'opacity-50' : ''">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium font-mono text-foreground" x-text="key.kid"></span>
+                                    <template x-if="key.disabled">
+                                        <span class="text-xs px-2 py-0.5 rounded-full bg-danger-surface text-danger-strong">disabled</span>
+                                    </template>
+                                    <span class="text-xs text-muted" x-text="key.accounts + (key.accounts === 1 ? ' account' : ' accounts')"></span>
+                                </div>
+                                <div class="text-xs text-muted">
+                                    <span class="font-mono" x-text="joined(key.allowed_identifiers)"></span>
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="'Created ' + formatDate(key.created_at)"></span>
+                                    <template x-if="key.note">
+                                        <span><span class="mx-1">&middot;</span><span x-text="key.note"></span></span>
+                                    </template>
+                                </div>
+                            </div>
+                            <template x-if="!key.disabled">
+                                <button type="button" @click="disableKey(key.kid)" title="Disable this key"
+                                        class="p-2 text-danger-fg hover:text-danger-strong"><i class="fas fa-ban"></i></button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Accounts -->
+            <div x-show="!loading">
+                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-users mr-1"></i> Accounts</h4>
+                <template x-if="accounts.length === 0">
+                    <div class="text-center py-4 text-muted text-sm">No client has enrolled yet.</div>
+                </template>
+                <div class="space-y-2" id="acmeAccounts">
+                    <template x-for="account in accounts" :key="account.id">
+                        <div class="flex items-center justify-between p-3 bg-surface-2 rounded-lg" :class="account.status !== 'valid' ? 'opacity-50' : ''">
+                            <div class="text-sm">
+                                <span class="font-mono text-foreground" x-text="shortId(account.id)"></span>
+                                <span class="text-xs text-muted ml-2" x-text="'EAB ' + (account.eab_kid || 'none')"></span>
+                                <span class="text-xs text-muted ml-2" x-text="joined(account.contact)"></span>
+                                <div class="text-xs text-muted">
+                                    <span x-text="account.orders + ' orders, ' + account.certificates + ' certificates'"></span>
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="account.status"></span>
+                                </div>
+                            </div>
+                            <template x-if="account.status === 'valid'">
+                                <button type="button" @click="deactivateAccount(account)" title="Deactivate this account"
+                                        class="p-2 text-danger-fg hover:text-danger-strong"><i class="fas fa-user-slash"></i></button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
