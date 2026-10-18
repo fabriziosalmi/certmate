@@ -159,6 +159,8 @@ def create_api_models(api):
         'enabled': fields.Boolean(description='Every /acme/ route answers 404 while false'),
         'allow_http': fields.Boolean(description='Serve ACME over plain HTTP too; for labs and tests'),
         'eab_required': fields.Boolean(description='An account needs an External Account Binding'),
+        'allowed_identifiers': fields.List(fields.String, description='The names an account enrolled '
+                                           'without an EAB key may order; empty, it orders nothing'),
         'directory_url': fields.String(description='The URL to give ACME clients, as this request reached the server'),
         'eab_keys': fields.List(fields.Nested(acme_eab_key_model)),
     })
@@ -166,6 +168,7 @@ def create_api_models(api):
         'enabled': fields.Boolean(),
         'allow_http': fields.Boolean(),
         'eab_required': fields.Boolean(),
+        'allowed_identifiers': fields.List(fields.String),
     })
 
     dns_provider_availability_item = api.model('DNSProviderAvailabilityItem', {

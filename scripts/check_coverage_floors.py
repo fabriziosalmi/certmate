@@ -124,6 +124,7 @@ FLOORS = {
     'modules/core/acme_problems.py': 90,
     'modules/core/acme_server.py': 95,
     'modules/core/acme_store.py': 95,
+    'modules/core/acme_validation.py': 90,
     'modules/core/acme_profiles.py': 95,
     # 94.2% measured; the module is small, pure apart from one HTTP
     # method, and its transport is injected — so there is no reason

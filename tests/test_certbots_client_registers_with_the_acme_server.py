@@ -93,3 +93,46 @@ def test_certbots_client_is_told_without_an_eab(served):
         client.new_account(messages.NewRegistration.from_data(
             email='ops@lab.internal', terms_of_service_agreed=True))
     assert refused.value.code == 'externalAccountRequired'
+
+
+def test_certbots_client_orders_and_proves_its_names_with_http01(served):
+    """The order half, as certbot runs it: an order from a CSR, one http-01
+    answer per authorization, then polling until every one is valid."""
+    import datetime
+
+    from acme import challenges, crypto_util
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    from tests.test_the_acme_server_validates_orders import ChallengeServer, _test_resolver
+
+    app, entry, directory_url = served
+    responder = ChallengeServer()
+    try:
+        server = app.extensions['certmate_container'].managers['acme_server']
+        server.http01_port = responder.port
+        server.resolve = _test_resolver
+        key = ec_key()
+        client, directory = _client(directory_url, key)
+        eab = messages.ExternalAccountBinding.from_data(key.public_key(), entry['kid'], entry['hmac_key'], directory)
+        client.new_account(messages.NewRegistration.from_data(
+            email='ops@lab.internal', terms_of_service_agreed=True, external_account_binding=eab))
+
+        names = ['web.lab.internal', 'api.lab.internal']
+        cert_key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+        orderr = client.new_order(crypto_util.make_csr(cert_key, names))
+        assert sorted(a.body.identifier.value for a in orderr.authorizations) == sorted(names)
+
+        for authzr in orderr.authorizations:
+            challb = next(c for c in authzr.body.challenges if isinstance(c.chall, challenges.HTTP01))
+            response, validation = challb.chall.response_and_validation(key)
+            responder.answers[challb.chall.encode('token')] = ('body', validation.encode())
+            client.answer_challenge(challb, response)
+
+        deadline = datetime.datetime.now() + datetime.timedelta(seconds=30)
+        orderr = client.poll_authorizations(orderr, deadline)
+        assert [a.body.status for a in orderr.authorizations] == [messages.STATUS_VALID] * 2
+        assert sorted(responder.hosts) == sorted(f'{n}:{responder.port}' for n in names)
+    finally:
+        responder.close()

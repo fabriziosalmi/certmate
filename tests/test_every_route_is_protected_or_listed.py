@@ -72,6 +72,17 @@ PUBLIC_ROUTES = {
     '/acme/key-change':
         'ACME key rollover: a JWS by the old account key around one by the '
         'new key, both verified. RFC 8555 section 7.3.5.',
+    '/acme/new-order':
+        'ACME order creation, a JWS signed by the account key; the names are '
+        'held to that account\'s EAB key before anything else happens.',
+    '/acme/order/<order_id>':
+        'An ACME order, read with a POST-as-GET JWS by the account that owns it.',
+    '/acme/authz/<authz_id>':
+        'An ACME authorization, read or deactivated with a JWS by the account '
+        'that owns it.',
+    '/acme/chall/<challenge_id>':
+        'An ACME challenge, answered with a JWS by the account that owns it; '
+        'the http-01 check that follows goes through the address guard.',
     '/api/client-certs/ca':
         'The CA certificate a relying party must trust to verify the client '
         'certificates this instance issues. Same reason as the CRL next to '
