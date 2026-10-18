@@ -6,10 +6,13 @@ It still let anyone who could reach a fresh instance run a command on the host
 through a deploy hook's test, plant a hook that stayed after setup, and carry
 away private keys through downloads and backups. Measured on v2.40.0.
 
-Now, while in setup mode, deploy-hook writes, tests and runs, certificate and
-key downloads, and backup creation and download answer 409
-SETUP_BOOTSTRAP_ONLY. Restoring and uploading a backup stay allowed: that is
-how an instance is recovered onto a fresh host.
+Now, while in setup mode, the only change the instance accepts is the first
+admin (and enabling local sign-in); every other write, and every read that
+carries key material, answers 409 SETUP_BOOTSTRAP_ONLY. That includes
+restoring and uploading a backup: a restore in the setup window planted a
+deploy hook and an admin API key that outlived it, so recovery onto a fresh
+host is done after the first admin exists, or with API_BEARER_TOKEN set
+(docs/backup.md).
 
 And the first admin closes setup in the same request. It used to take two
 (create the admin, then enable local auth); an instance whose second request
@@ -86,9 +89,21 @@ def test_a_hook_cannot_be_planted_or_run_in_setup(tmp_path, monkeypatch):
     ('POST', '/api/backups/restore/unified'),
     ('POST', '/api/backups/upload'),
 ])
-def test_recovery_onto_a_fresh_host_stays_allowed(tmp_path, monkeypatch, method, path):
+def test_a_backup_is_not_restored_in_the_setup_window(tmp_path, monkeypatch, method, path):
+    """A restore here planted a hook and an admin key that outlived setup. The
+    fresh-host recovery is done after the first admin, or with a bearer token."""
     app, _ = _app(tmp_path, monkeypatch)
     r = app.test_client().open(path, method=method, json={}, headers=ORIGIN)
+    assert r.status_code == 409 and r.get_json()['code'] == 'SETUP_BOOTSTRAP_ONLY'
+
+
+def test_a_bearer_token_lets_an_operator_restore(tmp_path, monkeypatch):
+    """With API_BEARER_TOKEN set the instance is not in setup mode, so the
+    documented recovery (upload, then restore) works, authenticated."""
+    token = secrets.token_urlsafe(32)
+    app, _ = _app(tmp_path, monkeypatch, token=token)
+    r = app.test_client().post('/api/backups/upload', headers={**ORIGIN, 'Authorization': f'Bearer {token}'},
+                               json={})
     assert r.status_code != 409, r.get_data(as_text=True)[:200]
 
 

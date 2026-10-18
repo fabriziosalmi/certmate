@@ -685,8 +685,12 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         old_users = auth_manager.list_users() or {}
         old_role = (old_users.get(username) or {}).get('role')
 
+        actor = getattr(request, 'current_user', {}) or {}
+        own_session = (request.cookies.get('certmate_session')
+                       if actor.get('username') == username else None)
         success, msg = auth_manager.update_user(
             username, role=role, password=password, email=email, enabled=enabled,
+            keep_session=own_session,
         )
         if success:
             if audit_logger and role is not None and old_role != role:

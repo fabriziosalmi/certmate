@@ -216,6 +216,13 @@ class OIDCManager:
                 raise OIDCConfigError('issuer_url must be a valid http(s) URL')
             if parsed.scheme == 'http' and parsed.hostname not in ('localhost', '127.0.0.1'):
                 raise OIDCConfigError('issuer_url must use https (except localhost)')
+            # Never a link-local or cloud-metadata address (loopback stays
+            # allowed for the localhost dev path above).
+            from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
+            try:
+                refuse_metadata_endpoint(issuer)
+            except UnsafeDestination as exc:
+                raise OIDCConfigError(str(exc)) from exc
             if not client_id:
                 raise OIDCConfigError('client_id is required when OIDC is enabled')
 

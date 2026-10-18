@@ -86,6 +86,14 @@ def _json_request(method, url, headers, data=None):
     # discipline alone.
     if not url.startswith(('https://', 'http://')):
         raise DNSAliasError(f'DNS provider API URL must use http or https: {url[:64]}')
+    # The api_url is admin-set, but never a cloud-metadata or link-local
+    # address: refuse those so a mistyped or hostile provider URL cannot turn
+    # this request into a pull from the instance's metadata service.
+    from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
+    try:
+        refuse_metadata_endpoint(url)
+    except UnsafeDestination as exc:
+        raise DNSAliasError(str(exc)) from exc
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=30) as response:  # nosec B310 - scheme validated above

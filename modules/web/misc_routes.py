@@ -1015,8 +1015,10 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             # send() returns either {success: True, ...} or {skipped: '...'} or {error: ...}
             return jsonify(result)
         except Exception as e:
-            logger.error(f"Digest send failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+            # The exception's text can carry a path or a server's answer: it
+            # goes to the log, the caller gets what failed.
+            logger.error(f"Digest send failed: {e}", exc_info=True)
+            return jsonify({'success': False, 'error': 'Failed to send the digest'}), 500
 
     @app.route('/api/webhooks/deliveries', methods=['GET'])
     @auth_manager.require_role('admin')

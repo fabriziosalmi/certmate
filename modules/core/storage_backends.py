@@ -23,6 +23,18 @@ from urllib.parse import urlparse
 from .constants import CERTIFICATE_FILES
 from .domain_paths import STORAGE_DOMAIN_RE, certificate_dir, reject_unsafe_domain
 from .redirect_guard import GuardedSession
+from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
+
+
+def _refuse_metadata_url(url, field):
+    """A configured backend URL is never a cloud-metadata or link-local
+    address. Defence in depth: the config is admin-only and refused in setup
+    mode, and the Vault/Infisical sessions already block cross-origin
+    redirects, but an internal address is otherwise allowed on purpose."""
+    try:
+        refuse_metadata_endpoint(url)
+    except UnsafeDestination as exc:
+        raise ValueError(f'{field}: {exc}') from exc
 
 logger = logging.getLogger(__name__)
 
@@ -397,6 +409,21 @@ class CertificateStorageBackend(ABC):
     @abstractmethod
     def get_backend_name(self) -> str:
         """Get the name of this storage backend"""
+
+
+# The directory the web app serves to anyone, signed in or not: Flask's static
+# folder (modules/factory.py), which the image leaves writable by the app. A
+# certificate directory inside it would publish every private key at /static/.
+SERVED_STATIC_DIR = (Path(__file__).resolve().parents[2] / 'static').resolve()
+
+
+def publicly_served(path) -> bool:
+    """Is *path*, resolved, the served static directory or inside it?"""
+    try:
+        resolved = Path(path).resolve()
+    except (OSError, RuntimeError):
+        return False
+    return resolved == SERVED_STATIC_DIR or SERVED_STATIC_DIR in resolved.parents
 
 
 class LocalFileSystemBackend(CertificateStorageBackend):
@@ -1532,6 +1559,7 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
         self.vault_token = (self.vault_token or '').strip()
         if not all([self.vault_url, self.vault_token]):
             raise ValueError("HashiCorp Vault backend requires vault_url and vault_token")
+        _refuse_metadata_url(self.vault_url, 'vault_url')
         
         self._client = None
         self._token_renewed_at = 0
@@ -1774,6 +1802,7 @@ class InfisicalBackend(CertificateStorageBackend):
         if not all([self.client_id, self.client_secret, self.project_id]):
             raise ValueError("Infisical backend requires client_id, client_secret, and project_id")
         self._require_https(self.site_url)
+        _refuse_metadata_url(self.site_url, 'site_url')
 
         self._client = None
         logger.info(f"InfisicalBackend initialized for project: {self.project_id}")
@@ -2222,6 +2251,12 @@ class StorageManager:
         """
         chosen = (storage_config.get('cert_dir') or '').strip()
         if chosen and chosen != self.DEFAULT_LOCAL_CERT_DIRNAME:
+            if publicly_served(chosen):
+                # The API refuses this; a settings file can still carry it
+                # (edited by hand, or restored). Never write keys there.
+                logger.error(f"cert_dir {chosen!r} is inside the directory served at /static/; "
+                             f"using {self._default_cert_dir} instead")
+                return self._default_cert_dir
             return Path(chosen)
         return self._default_cert_dir
 

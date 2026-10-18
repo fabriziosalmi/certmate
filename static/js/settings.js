@@ -1814,7 +1814,7 @@
                     backupList.innerHTML =
                         '<div class="p-4 text-center text-red-500 dark:text-red-400">' +
                         '<i class="fas fa-exclamation-triangle mr-2"></i>' +
-                        'Error loading backups: ' + error.message +
+                        'Error loading backups: ' + CertMate.escapeHtml(error.message) +
                         '</div>';
                 }
             });

@@ -35,6 +35,7 @@ from modules.core.domain_registration import (
     registrable_domain,
 )
 from modules.core.inventory_view import build_registrations_view
+from tests.conftest import operator_bearer_token, with_operator_token
 
 pytestmark = [pytest.mark.unit]
 
@@ -418,6 +419,7 @@ def test_prune_forgets_untracked_domains(tmp_path):
 
 def test_v2_database_gains_the_registrations_table(tmp_path):
     import sqlite3
+
     from modules.core import cert_inventory
     inv_dir = tmp_path / 'data' / 'inventory'
     inv_dir.mkdir(parents=True)
@@ -585,7 +587,9 @@ def real_app(tmp_path, monkeypatch):
     monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
+    _optok = operator_bearer_token(monkeypatch)
     application, container = create_app()
+    with_operator_token(application, _optok)
     return application, container
 
 
@@ -608,6 +612,7 @@ def test_domains_endpoint_filters_by_scope(tmp_path, monkeypatch):
     would never be exercised, and the test would pass for the wrong reason.
     """
     import secrets as _secrets
+
     from modules.factory import create_app
     admin_token = _secrets.token_urlsafe(32)
     root = tmp_path / 'certmate' / 'modules' / 'core'

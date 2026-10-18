@@ -33,7 +33,7 @@ import ipaddress
 import socket
 import ssl
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 # Never a destination, whatever the operator allows: nothing CertMate is asked to
 # deliver a certificate to lives on its own loopback or on a link-local address,
@@ -45,6 +45,51 @@ _ALWAYS_REFUSED = tuple(ipaddress.ip_network(n) for n in (
     '192.0.0.192/32',              # Oracle Cloud metadata
     'fd00:ec2::254/128',           # AWS metadata over IPv6
 ))
+
+# The destinations that are never a legitimate configured endpoint, even an
+# internal one: the cloud metadata services and the link-local range they sit
+# in, multicast, the reserved range, and the unspecified address. Loopback and
+# the private ranges are NOT here: an internal IdP, Vault or DNS API lives on a
+# private address, and some run on loopback. This is the metadata-SSRF floor
+# for the admin-configured HTTP clients (OIDC, Vault, Infisical, the DNS alias
+# hook), which the deploy/webhook/probe paths already enforce more strictly.
+_METADATA_AND_LINK_LOCAL = tuple(ipaddress.ip_network(n) for n in (
+    '169.254.0.0/16', '224.0.0.0/4', '240.0.0.0/4', '0.0.0.0/8',
+    '::/128', 'fe80::/10', 'ff00::/8',
+    '100.100.100.200/32', '192.0.0.192/32', 'fd00:ec2::254/128',
+))
+
+
+def refuse_metadata_endpoint(url):
+    """Raise UnsafeDestination when *url*'s host resolves to an address that is
+    never a legitimate configured endpoint: a cloud metadata service, the
+    link-local range, multicast, reserved or unspecified. Loopback and private
+    addresses pass, because an internal service lives on one. Defence in depth
+    for the admin-set URLs; the write that sets them is already admin-only and
+    refused in setup mode."""
+    host = urlsplit(url).hostname
+    if not host:
+        raise UnsafeDestination(f'no host to check in {url[:64]!r}')
+    try:
+        addresses = [str(ipaddress.ip_address(host))]
+    except ValueError:
+        try:
+            addresses = [info[4][0] for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)]
+        except (OSError, UnicodeError):
+            # A host that does not resolve cannot reach the metadata service,
+            # and a transient DNS failure must not reject a legitimate config.
+            # Fail open on resolution; only an address that IS metadata/link-
+            # local is refused.
+            return
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if ip.version == 6 and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        if any(ip in network for network in _METADATA_AND_LINK_LOCAL):
+            raise UnsafeDestination(
+                f'{host} resolves to {address}, a link-local or cloud-metadata '
+                f'address that is never a valid endpoint')
+
 
 # How much of an answer is read and thrown away, so the sender can finish and
 # close cleanly without being made to wait for an endless body.

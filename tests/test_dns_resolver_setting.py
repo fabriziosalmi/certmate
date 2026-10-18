@@ -28,6 +28,7 @@ import pytest
 from modules.core import caa
 from modules.core import dns_resolver as dr
 from modules.core import domain_health as dh
+from tests.conftest import operator_bearer_token, with_operator_token
 
 pytestmark = [pytest.mark.unit]
 
@@ -213,7 +214,10 @@ def real_app(tmp_path, monkeypatch):
     monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
     monkeypatch.setenv('FLASK_ENV', 'testing')
     monkeypatch.setenv('TESTING', 'true')
-    return create_app()
+    _optok = operator_bearer_token(monkeypatch)
+    _app, _container = create_app()
+    with_operator_token(_app, _optok)
+    return _app, _container
 
 
 def test_the_config_endpoint_reports_the_system_resolver_as_empty(real_app):
