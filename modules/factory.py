@@ -1816,8 +1816,10 @@ def setup_rate_limiting(app, container: AppContainer):
         path = flask_request.path
         if not path.startswith('/api/'):
             return None
-        # Only skip rate limiting for auth endpoints (login needs its own limiter)
-        if path.startswith('/api/auth/'):
+        # Login has a limiter of its own, per address and per account. The rest
+        # of /api/auth/ has none (the OIDC callback calls out to the IdP), so
+        # it stays under this one.
+        if path == '/api/auth/login':
             return None
         # Admin can turn API rate limiting off entirely from settings (#319),
         # e.g. when a trusted automation fleet behind one IP would otherwise

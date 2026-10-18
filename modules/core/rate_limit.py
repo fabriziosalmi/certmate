@@ -4,6 +4,7 @@ Simple rate limiting configuration for API endpoints
 """
 
 import logging
+import threading
 from typing import Dict, Optional
 from functools import wraps
 from flask import request
@@ -154,6 +155,11 @@ class SimpleRateLimiter:
         self.config = config
         self.requests = defaultdict(list)  # Track request times per IP
         self._last_cleanup = time()
+        # The app serves 8 threads in one process (Dockerfile, certmate.service):
+        # without this, two requests could evict the same key at once and one
+        # answered 500 with a KeyError, and counts could be lost. Re-entrant
+        # because a decision may run the cleanup.
+        self._lock = threading.RLock()
 
     def is_allowed(self, identifier: str, endpoint: str) -> bool:
         """
@@ -166,39 +172,40 @@ class SimpleRateLimiter:
         Returns:
             True if request is allowed, False if rate limited
         """
-        limit = self.config.get_limit(endpoint)
-        current_time = time()
-        window_start = current_time - self.WINDOW_SECONDS
+        with self._lock:
+            limit = self.config.get_limit(endpoint)
+            current_time = time()
+            window_start = current_time - self.WINDOW_SECONDS
 
-        # Periodic cleanup (every 5 minutes)
-        if current_time - self._last_cleanup > 300:
-            self.cleanup_old_entries()
-            self._last_cleanup = current_time
+            # Periodic cleanup (every 5 minutes)
+            if current_time - self._last_cleanup > 300:
+                self.cleanup_old_entries()
+                self._last_cleanup = current_time
 
-        # Evict oldest entries if at capacity
-        if len(self.requests) >= self.MAX_KEYS:
-            self.cleanup_old_entries()
-            # If still at capacity after cleanup, evict random entries
+            # Evict oldest entries if at capacity
             if len(self.requests) >= self.MAX_KEYS:
-                excess = len(self.requests) - self.MAX_KEYS + 100  # Free 100 slots
-                for evict_key in list(self.requests.keys())[:excess]:
-                    del self.requests[evict_key]
+                self.cleanup_old_entries()
+                # If still at capacity after cleanup, evict random entries
+                if len(self.requests) >= self.MAX_KEYS:
+                    excess = len(self.requests) - self.MAX_KEYS + 100  # Free 100 slots
+                    for evict_key in list(self.requests.keys())[:excess]:
+                        del self.requests[evict_key]
 
-        # Get requests for this identifier
-        key = f"{identifier}:{endpoint}"
-        self.requests[key] = [
-            req_time for req_time in self.requests[key]
-            if req_time > window_start
-        ]
+            # Get requests for this identifier
+            key = f"{identifier}:{endpoint}"
+            self.requests[key] = [
+                req_time for req_time in self.requests[key]
+                if req_time > window_start
+            ]
 
-        # Check if under limit
-        if len(self.requests[key]) >= limit:
-            logger.warning(f"Rate limit exceeded for {identifier} on {endpoint}")
-            return False
+            # Check if under limit
+            if len(self.requests[key]) >= limit:
+                logger.warning(f"Rate limit exceeded for {identifier} on {endpoint}")
+                return False
 
-        # Record this request
-        self.requests[key].append(current_time)
-        return True
+            # Record this request
+            self.requests[key].append(current_time)
+            return True
 
     def cleanup_old_entries(self) -> None:
         """Clean up old request records (call periodically)."""
@@ -206,16 +213,20 @@ class SimpleRateLimiter:
             current_time = time()
             window_start = current_time - self.RETENTION_SECONDS
 
-            for key in list(self.requests.keys()):
-                self.requests[key] = [
-                    req_time for req_time in self.requests[key]
-                    if req_time > window_start
-                ]
-                if not self.requests[key]:
-                    del self.requests[key]
-
+            with self._lock:
+                self._drop_stale(window_start)
         except Exception as e:
             logger.error(f"Error cleaning up rate limit entries: {e}")
+
+    def _drop_stale(self, window_start):
+        """Forget the timestamps before *window_start* (caller holds the lock)."""
+        for key in list(self.requests.keys()):
+            self.requests[key] = [
+                req_time for req_time in self.requests[key]
+                if req_time > window_start
+            ]
+            if not self.requests[key]:
+                del self.requests[key]
 
 
 def rate_limit_decorator(limiter: SimpleRateLimiter, endpoint: str):

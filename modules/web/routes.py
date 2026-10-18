@@ -5,6 +5,7 @@ Handles web interface routes and form-based endpoints
 
 import logging
 import os
+import threading
 from functools import wraps
 from collections import defaultdict
 from time import time
@@ -50,6 +51,10 @@ _LOGIN_RATE_WINDOW_USER = 300  # seconds (5 minutes)
 # dict to the keys active within the window rather than forever.
 _MAX_TRACKED_IPS = 10000
 _MAX_TRACKED_USERS = 10000
+
+# The app serves 8 threads in one process: the check and the record below read
+# and rewrite the same lists, and the sweep deletes keys from them.
+_login_lock = threading.Lock()
 
 
 def _reclaim_stale_buckets(bucket, cap, window):
@@ -112,41 +117,43 @@ def _check_login_rate_limit(ip_address, username=None):
     that don't pass it skip the per-username bucket (used by tests
     and existing callers during the migration window).
     """
-    # Cheap O(1) check; the actual sweep only runs when the dict crossed
-    # its soft cap. Keeps the dicts bounded under botnet IP rotation.
-    _sweep_empty_buckets()
+    with _login_lock:
+        # Cheap O(1) check; the actual sweep only runs when the dict crossed
+        # its soft cap. Keeps the dicts bounded under botnet IP rotation.
+        _sweep_empty_buckets()
 
-    now = time()
-    retry_after = None
+        now = time()
+        retry_after = None
 
-    # --- per-IP ---
-    _trim_attempts(_login_attempts_by_ip, ip_address, _LOGIN_RATE_WINDOW_IP)
-    if len(_login_attempts_by_ip[ip_address]) >= _LOGIN_RATE_LIMIT_IP:
-        oldest = min(_login_attempts_by_ip[ip_address])
-        retry_after = int(oldest + _LOGIN_RATE_WINDOW_IP - now) + 1
-        return False, retry_after
+        # --- per-IP ---
+        _trim_attempts(_login_attempts_by_ip, ip_address, _LOGIN_RATE_WINDOW_IP)
+        if len(_login_attempts_by_ip[ip_address]) >= _LOGIN_RATE_LIMIT_IP:
+            oldest = min(_login_attempts_by_ip[ip_address])
+            retry_after = int(oldest + _LOGIN_RATE_WINDOW_IP - now) + 1
+            return False, retry_after
 
-    # --- per-username ---
-    if username:
-        ukey = username.strip().lower()
-        if ukey:
-            _trim_attempts(_login_attempts_by_user, ukey, _LOGIN_RATE_WINDOW_USER)
-            if len(_login_attempts_by_user[ukey]) >= _LOGIN_RATE_LIMIT_USER:
-                oldest = min(_login_attempts_by_user[ukey])
-                retry_after = int(oldest + _LOGIN_RATE_WINDOW_USER - now) + 1
-                return False, retry_after
+        # --- per-username ---
+        if username:
+            ukey = username.strip().lower()
+            if ukey:
+                _trim_attempts(_login_attempts_by_user, ukey, _LOGIN_RATE_WINDOW_USER)
+                if len(_login_attempts_by_user[ukey]) >= _LOGIN_RATE_LIMIT_USER:
+                    oldest = min(_login_attempts_by_user[ukey])
+                    retry_after = int(oldest + _LOGIN_RATE_WINDOW_USER - now) + 1
+                    return False, retry_after
 
-    return True, None
+        return True, None
 
 
 def _record_login_attempt(ip_address, username=None):
     """Record a failed login attempt against both buckets."""
-    now = time()
-    _login_attempts_by_ip[ip_address].append(now)
-    if username:
-        ukey = username.strip().lower()
-        if ukey:
-            _login_attempts_by_user[ukey].append(now)
+    with _login_lock:
+        now = time()
+        _login_attempts_by_ip[ip_address].append(now)
+        if username:
+            ukey = username.strip().lower()
+            if ukey:
+                _login_attempts_by_user[ukey].append(now)
 
 
 def _sanitize_domain(domain, cert_base_dir):
