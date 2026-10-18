@@ -1,6 +1,7 @@
 {
-  "contract_version": "2.50",
+  "contract_version": "2.51",
   "surface": [
+    "DELETE /api/acme/eab-keys/<X>",
     "DELETE /api/backups/delete/<X>/<X>",
     "DELETE /api/certificates/<X>",
     "DELETE /api/dns-providers/accounts/<X>",
@@ -8,6 +9,8 @@
     "DELETE /api/inventory/<X>",
     "DELETE /api/keys/<X>",
     "DELETE /api/users/<X>",
+    "GET /api/acme/eab-keys",
+    "GET /api/acme/server",
     "GET /api/activity",
     "GET /api/audit/export",
     "GET /api/audit/public-key",
@@ -62,8 +65,10 @@
     "GET /api/swagger.json",
     "GET /api/users",
     "GET /api/webhooks/deliveries",
+    "PATCH /api/acme/server",
     "PATCH /api/certificates/<X>",
     "PATCH /api/keys/<X>",
+    "POST /api/acme/eab-keys",
     "POST /api/auth/config",
     "POST /api/auth/login",
     "POST /api/auth/logout",

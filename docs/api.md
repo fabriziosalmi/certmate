@@ -1801,6 +1801,104 @@ progress or `EXTERNAL_CERTIFICATE`, 422 renewal failed (`RENEWAL_FAILED`, or `RE
 
 ---
 
+### ACME server
+
+CertMate can answer ACME (RFC 8555) itself, in front of a CA of its own. The
+protocol is served under `/acme/`, outside this API: an ACME client is given
+the directory URL, `https://<host>/acme/directory`, and signs every request
+with its account key. The endpoints below are CertMate's administration of
+it, admin only, since API contract **2.51**. A key restricted with
+`allowed_domains` is refused.
+
+It is being built in steps (#476). Today it answers the directory, nonces and
+accounts; orders and issuance follow. It is off by default.
+
+#### Options
+
+**Endpoint**: `GET /api/acme/server` — admin
+**Endpoint**: `PATCH /api/acme/server` — admin
+
+<!-- response: GET /api/acme/server 200 -->
+```json
+{
+  "enabled": true,
+  "allow_http": false,
+  "eab_required": true,
+  "directory_url": "https://certmate.example.com/acme/directory",
+  "eab_keys": [
+    {
+      "kid": "team-a",
+      "allowed_identifiers": ["*.lab.internal"],
+      "note": "lab cluster",
+      "created_at": "2026-10-18T09:03:16Z",
+      "disabled": false,
+      "accounts": 2
+    }
+  ]
+}
+```
+
+`PATCH` takes any of `enabled`, `allow_http` and `eab_required`, each `true` or
+`false`, and answers with the same shape. Another field, or a value that is
+not a boolean, is a `400` that changes nothing.
+
+- `enabled`: while `false`, every `/acme/` route answers `404`.
+- `allow_http`: RFC 8555 requires HTTPS, so the ACME routes refuse plain HTTP
+  unless this is `true`, which is meant for a lab. When TLS ends at a proxy in
+  front of CertMate, set `BEHIND_PROXY` instead: the request then keeps the
+  scheme the client used.
+- `eab_required`: an ACME account needs an External Account Binding, an HMAC
+  made with one of the keys below. `false` lets anyone who reaches `/acme/`
+  create an account.
+
+`directory_url` is built from the address this request reached; give clients
+the one they will reach.
+
+#### EAB keys
+
+**Endpoint**: `GET /api/acme/eab-keys` — admin
+**Endpoint**: `POST /api/acme/eab-keys` — admin
+**Endpoint**: `DELETE /api/acme/eab-keys/<kid>` — admin
+
+An EAB key is the right to create ACME accounts. Each carries the names its
+accounts may order certificates for: a DNS name (`nas.lab.internal`: that
+name only), or `*.` and a DNS name (`*.lab.internal`: every name below it, at
+any depth, and not the name itself). Orders will be checked against them.
+
+<!-- request: POST /api/acme/eab-keys -->
+```json
+{"kid": "team-a", "allowed_identifiers": ["*.lab.internal"], "note": "lab cluster"}
+```
+
+`kid` is optional and generated when left out: 1 to 64 letters, digits, `-`
+or `_`. `allowed_identifiers` is required. A `kid` that exists, disabled or
+not, is a `409`: keys are never reused, so the accounts each one enrolled stay
+attributable to it.
+
+<!-- response: POST /api/acme/eab-keys 201 -->
+```json
+{
+  "kid": "team-a",
+  "hmac_key": "3fJm0oPq2v8xK1r9WbY5sQ7uTzN4aLcE6dHgVkXiR0M",
+  "allowed_identifiers": ["*.lab.internal"],
+  "note": "lab cluster",
+  "created_at": "2026-10-18T09:03:16Z",
+  "disabled": false,
+  "accounts": 0
+}
+```
+
+The `hmac_key` is in this answer and nowhere else: CertMate keeps it to check
+bindings and never returns it again. The client needs both values; certbot
+takes them as `--eab-kid` and `--eab-hmac-key`.
+
+`GET` lists the keys, each with `accounts`, how many ACME accounts it
+enrolled, and never with its `hmac_key`. `DELETE` disables a key: it enrols no
+one again, and the accounts it enrolled keep working. It answers with the key
+as `GET` lists it; an unknown `kid` is a `404`.
+
+---
+
 ### Log stream (admin, debugging)
 
 <!-- illustration: the request line; the answer is a server-sent event stream, not JSON -->

@@ -117,9 +117,10 @@ def comparison():
     return found
 
 
-def test_the_instrument_found_the_eight_operations_that_have_a_schema(comparison):
+def test_the_instrument_found_the_ten_operations_that_have_a_schema(comparison):
     """CONTROL. A comparison that found nothing to compare would pass every test below."""
     assert sorted(comparison) == [
+        'GET /api/acme/eab-keys', 'GET /api/acme/server',
         'GET /api/backups', 'GET /api/cache/stats', 'GET /api/certificates',
         'GET /api/certificates/<X>/deployment-status', 'GET /api/dns/providers', 'GET /api/settings',
         'GET /api/settings/dns-providers', 'POST /api/cache/clear'], sorted(comparison)

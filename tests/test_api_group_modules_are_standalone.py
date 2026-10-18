@@ -16,6 +16,7 @@ from flask import Flask
 from flask_restx import Api, Resource
 
 from modules.api.resource_context import ApiContext
+from modules.api.resources_acme import create_acme_resources
 from modules.api.resources_backup import create_backup_resources
 from modules.api.resources_cache import create_cache_resources
 from modules.api.resources_ca import create_ca_resources
@@ -287,6 +288,14 @@ def test_the_ca_group_builds_from_a_minimal_context(api):
                                     _minimal_context(managers={}))
     assert set(resources) == {'CAProviderTest'}
     assert issubclass(resources['CAProviderTest'], Resource)
+
+
+def test_the_acme_group_builds_from_a_minimal_context(api):
+    models = {name: MagicMock() for name in ('acme_server_model', 'acme_server_update_model',
+                                             'acme_eab_keys_model', 'acme_eab_key_create_model')}
+    resources = create_acme_resources(api, models, _minimal_context(managers={'acme_server': MagicMock()}))
+    assert set(resources) == {'AcmeServerConfig', 'AcmeEabKeys', 'AcmeEabKey'}
+    assert all(issubclass(cls, Resource) for cls in resources.values())
 
 
 def test_the_settings_group_builds_from_a_minimal_context(api):

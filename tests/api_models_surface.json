@@ -1,5 +1,5 @@
 {
- "contract_version": "2.50",
+ "contract_version": "2.51",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -38,6 +38,99 @@
     },
     "secret_access_key": {
      "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AcmeEabKey": {
+   "properties": {
+    "accounts": {
+     "type": "integer"
+    },
+    "allowed_identifiers": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "created_at": {
+     "type": "string"
+    },
+    "disabled": {
+     "type": "boolean"
+    },
+    "kid": {
+     "type": "string"
+    },
+    "note": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AcmeEabKeyCreate": {
+   "properties": {
+    "allowed_identifiers": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "kid": {
+     "type": "string"
+    },
+    "note": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "allowed_identifiers"
+   ]
+  },
+  "AcmeEabKeys": {
+   "properties": {
+    "eab_keys": {
+     "items": {
+      "$ref": "#/definitions/AcmeEabKey"
+     },
+     "type": "array"
+    }
+   },
+   "required": []
+  },
+  "AcmeServer": {
+   "properties": {
+    "allow_http": {
+     "type": "boolean"
+    },
+    "directory_url": {
+     "type": "string"
+    },
+    "eab_keys": {
+     "items": {
+      "$ref": "#/definitions/AcmeEabKey"
+     },
+     "type": "array"
+    },
+    "eab_required": {
+     "type": "boolean"
+    },
+    "enabled": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "AcmeServerUpdate": {
+   "properties": {
+    "allow_http": {
+     "type": "boolean"
+    },
+    "eab_required": {
+     "type": "boolean"
+    },
+    "enabled": {
+     "type": "boolean"
     }
    },
    "required": []
@@ -1267,6 +1360,19 @@
   }
  },
  "operations": {
+  "DELETE /acme/eab-keys/{X}": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
   "DELETE /backups/delete/{X}/{X}": {
    "parameters": {
     "path:{X}": {
@@ -1317,6 +1423,38 @@
    },
    "responses": {
     "200": null
+   }
+  },
+  "GET /acme/eab-keys": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/AcmeEabKeys"
+    }
+   }
+  },
+  "GET /acme/server": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/AcmeServer"
+    }
    }
   },
   "GET /backups": {
@@ -1715,12 +1853,38 @@
     "200": null
    }
   },
+  "PATCH /acme/server": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/AcmeServerUpdate"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
   "PATCH /certificates/{X}": {
    "parameters": {
     "path:{X}": {
      "required": true,
      "shape": {
       "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /acme/eab-keys": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/AcmeEabKeyCreate"
      }
     }
    },

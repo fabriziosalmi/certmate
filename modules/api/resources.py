@@ -18,6 +18,7 @@ from .resources_downloads import create_download_resources
 from .resources_ca import create_ca_resources
 from .resources_settings import create_settings_resources
 from .resources_storage import create_storage_resources
+from .resources_acme import create_acme_resources
 # Re-exported: it moved to resources_backup with the endpoints that use it,
 # and tests import it from here.
 from .resources_backup import _validate_backup_filename  # noqa: F401
@@ -229,6 +230,14 @@ def create_api_resources(api, models, managers):
     dns_ns.add_resource(settings_resources['DNSAccounts'], '/accounts', endpoint='dns_accounts_global')
     dns_ns.add_resource(settings_resources['DNSAccountDetail'], '/<string:provider>/accounts/<string:account_id>')
     dns_ns.add_resource(settings_resources['DNSProviderAvailability'], '/providers')
+
+    # Administration of the ACME server (#476). The protocol itself is
+    # served under /acme/, outside this API (modules/web/acme_routes.py).
+    acme_resources = create_acme_resources(api, models, ctx)
+    acme_ns = api.namespace('acme', description='ACME server administration')
+    acme_ns.add_resource(acme_resources['AcmeServerConfig'], '/server')
+    acme_ns.add_resource(acme_resources['AcmeEabKeys'], '/eab-keys')
+    acme_ns.add_resource(acme_resources['AcmeEabKey'], '/eab-keys/<string:kid>')
 
     # Return all resource classes (CA provider test will be registered in app.py)
     return {

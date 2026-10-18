@@ -134,6 +134,40 @@ def create_api_models(api):
 
     # multi_provider_model removed as it is now flexible
 
+    acme_eab_key_model = api.model('AcmeEabKey', {
+        'kid': fields.String(description='The EAB key identifier a client sends'),
+        'allowed_identifiers': fields.List(fields.String, description='The names this key may order '
+                                           'certificates for: a DNS name, or *. and a DNS name for every name below it'),
+        'note': fields.String(description='What the key is for'),
+        'created_at': fields.String(description='When it was created'),
+        'disabled': fields.Boolean(description='A disabled key enrols no one; the accounts it enrolled keep working'),
+        'accounts': fields.Integer(description='How many ACME accounts it enrolled'),
+    })
+    acme_eab_key_created_model = api.inherit('AcmeEabKeyCreated', acme_eab_key_model, {
+        'hmac_key': fields.String(description='The HMAC key, base64url. Shown in this answer only'),
+    })
+    acme_eab_keys_model = api.model('AcmeEabKeys', {
+        'eab_keys': fields.List(fields.Nested(acme_eab_key_model)),
+    })
+    acme_eab_key_create_model = api.model('AcmeEabKeyCreate', {
+        'kid': fields.String(description='The identifier; generated when left out'),
+        'allowed_identifiers': fields.List(fields.String, required=True,
+                                           description='The names this key may order certificates for'),
+        'note': fields.String(description='What the key is for'),
+    })
+    acme_server_model = api.model('AcmeServer', {
+        'enabled': fields.Boolean(description='Every /acme/ route answers 404 while false'),
+        'allow_http': fields.Boolean(description='Serve ACME over plain HTTP too; for labs and tests'),
+        'eab_required': fields.Boolean(description='An account needs an External Account Binding'),
+        'directory_url': fields.String(description='The URL to give ACME clients, as this request reached the server'),
+        'eab_keys': fields.List(fields.Nested(acme_eab_key_model)),
+    })
+    acme_server_update_model = api.model('AcmeServerUpdate', {
+        'enabled': fields.Boolean(),
+        'allow_http': fields.Boolean(),
+        'eab_required': fields.Boolean(),
+    })
+
     dns_provider_availability_item = api.model('DNSProviderAvailabilityItem', {
         'provider': fields.String(description='Provider name, as dns_provider takes it'),
         'plugin': fields.String(description='The certbot plugin it needs; null when it needs none '
@@ -793,6 +827,12 @@ def create_api_models(api):
         'settings_model': settings_model,
         'dns_providers_model': dns_providers_model,
         'dns_provider_availability_model': dns_provider_availability_model,
+        'acme_server_model': acme_server_model,
+        'acme_server_update_model': acme_server_update_model,
+        'acme_eab_key_model': acme_eab_key_model,
+        'acme_eab_key_created_model': acme_eab_key_created_model,
+        'acme_eab_keys_model': acme_eab_keys_model,
+        'acme_eab_key_create_model': acme_eab_key_create_model,
         'cache_stats_model': cache_stats_model,
         'cache_clear_response_model': cache_clear_response_model,
         'browser_deployment_model': browser_deployment_model,

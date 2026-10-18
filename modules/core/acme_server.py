@@ -7,9 +7,10 @@ once it answers.
 
 Configuration lives in settings under `acme_server`, which a bulk settings
 POST cannot write (settings.SETTINGS_REJECT_KEYS): an EAB key is the right to
-enrol, so it is granted through its own admin endpoint, not as a side effect
-of saving the settings page. The `hmac_key` of each EAB key is masked by the
-settings machinery wherever settings are shown or exported share-safe.
+enrol, so it is granted through its own admin endpoint (/api/acme, in
+modules/api/resources_acme.py), not as a side effect of saving the settings
+page. GET /api/settings does not show `acme_server`, and a share-safe backup
+masks each `hmac_key`.
 
     acme_server:
       enabled: false          # every /acme/ route answers 404 while false
@@ -19,10 +20,14 @@ settings machinery wherever settings are shown or exported share-safe.
         - kid: team-a         # what the client sends as the EAB key identifier
           hmac_key: <base64url>
           allowed_identifiers: ['*.lab.internal']   # enforced on orders
-          disabled: false
+          note: lab cluster
+          created_at: <ISO 8601>
+          disabled: false     # disabled, never deleted: its accounts stay attributable
 """
 import hmac as _hmac
 import json
+import os
+import re
 from pathlib import Path
 
 import josepy
@@ -38,6 +43,7 @@ from .acme_jws import (
 from .acme_nonces import NonceStore
 from .acme_problems import AcmeProblem
 from .acme_store import AcmeStore, KeyInUse
+from .utils import utc_now
 
 DEFAULTS = {
     'enabled': False,
@@ -48,6 +54,44 @@ DEFAULTS = {
 
 MAX_CONTACTS = 10
 MAX_CONTACT_LENGTH = 320
+
+# What an admin may set through PATCH /api/acme/server. The EAB keys have
+# endpoints of their own: a key is created with a secret shown once, and is
+# disabled, never edited or deleted, so the accounts it enrolled stay
+# attributable to it.
+OPTIONS = ('enabled', 'allow_http', 'eab_required')
+
+KID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+_LABEL_RE = re.compile(r'^(?!-)[a-z0-9-]{1,63}(?<!-)$')
+MAX_PATTERNS = 50
+MAX_NOTE_LENGTH = 200
+
+
+class AcmeAdminError(Exception):
+    """A refusal of the admin API, with the HTTP status it answers with."""
+
+    def __init__(self, message, status=400, code='ACME_ADMIN_INVALID'):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+        self.code = code
+
+
+def name_pattern(value):
+    """The normalised form of an allowed-identifier pattern, or AcmeAdminError.
+
+    A pattern is a DNS name (`nas.lab.internal`: that name only) or a DNS
+    name under `*.` (`*.lab.internal`: every name below it, at any depth, and
+    not the name itself). Orders are checked against them (#476, the next
+    change); a pattern that matches anything at all is not one of them.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise AcmeAdminError('An allowed identifier must be a non-empty string')
+    pattern = value.strip().lower().rstrip('.')
+    name = pattern[2:] if pattern.startswith('*.') else pattern
+    if not name or len(name) > 253 or not all(_LABEL_RE.match(label) for label in name.split('.')):
+        raise AcmeAdminError(f'{value!r} is not a DNS name, or a DNS name under "*."')
+    return pattern
 
 
 class AcmeServer:
@@ -80,6 +124,110 @@ class AcmeServer:
             if isinstance(entry, dict) and entry.get('kid') == kid and not entry.get('disabled'):
                 return entry
         return None
+
+    # -- administration (the /api/acme endpoints) -------------------------
+
+    def admin_view(self):
+        config = self.config()
+        counts = self._accounts_per_eab_key()
+        return {
+            'enabled': bool(config.get('enabled')),
+            'allow_http': bool(config.get('allow_http')),
+            'eab_required': bool(config.get('eab_required', True)),
+            'eab_keys': [self._public_eab(entry, counts) for entry in config.get('eab_keys') or []
+                         if isinstance(entry, dict)],
+        }
+
+    def set_options(self, changes):
+        """Change the options named in *changes*; each must be a boolean."""
+        unknown = sorted(set(changes) - set(OPTIONS))
+        if unknown:
+            raise AcmeAdminError(f'Unknown options: {unknown}. The options are {list(OPTIONS)}')
+        for name, value in changes.items():
+            if not isinstance(value, bool):
+                raise AcmeAdminError(f'{name} must be true or false')
+        self._write(lambda config: config.update(changes))
+        return self.admin_view()
+
+    def create_eab_key(self, kid=None, allowed_identifiers=None, note=''):
+        """A new EAB key. The returned entry carries hmac_key, which is never shown again."""
+        kid = kid or f'eab-{b64.b64encode(os.urandom(9)).decode()}'
+        if not isinstance(kid, str) or not KID_RE.match(kid):
+            raise AcmeAdminError('kid must be 1 to 64 letters, digits, "-" or "_"')
+        if not isinstance(allowed_identifiers, list) or not allowed_identifiers:
+            raise AcmeAdminError('allowed_identifiers must list the names this key may order '
+                                 'certificates for, such as "*.lab.internal"')
+        if len(allowed_identifiers) > MAX_PATTERNS:
+            raise AcmeAdminError(f'At most {MAX_PATTERNS} allowed identifiers per key')
+        patterns = list(dict.fromkeys(name_pattern(value) for value in allowed_identifiers))
+        if not isinstance(note, str) or len(note) > MAX_NOTE_LENGTH:
+            raise AcmeAdminError(f'note must be text of at most {MAX_NOTE_LENGTH} characters')
+        entry = {
+            'kid': kid,
+            'hmac_key': b64.b64encode(os.urandom(32)).decode('ascii'),
+            'allowed_identifiers': patterns,
+            'note': note,
+            'created_at': utc_now().isoformat(),
+            'disabled': False,
+        }
+
+        def add(config):
+            if any(isinstance(e, dict) and e.get('kid') == kid for e in config['eab_keys']):
+                raise AcmeAdminError(f'An EAB key called {kid!r} exists already; keys are never reused, '
+                                     'so the accounts each one enrolled stay attributable', 409, 'ACME_EAB_KEY_EXISTS')
+            config['eab_keys'].append(entry)
+        self._write(add)
+        return dict(self._public_eab(entry, {}), hmac_key=entry['hmac_key'])
+
+    def disable_eab_key(self, kid):
+        """Stop a key from enrolling; the accounts it enrolled keep working."""
+        def disable(config):
+            for entry in config['eab_keys']:
+                if isinstance(entry, dict) and entry.get('kid') == kid:
+                    entry['disabled'] = True
+                    return
+            raise AcmeAdminError(f'No EAB key called {kid!r}', 404, 'ACME_EAB_KEY_NOT_FOUND')
+        self._write(disable)
+        return next(e for e in self.admin_view()['eab_keys'] if e['kid'] == kid)
+
+    def _write(self, mutate):
+        refusal = []
+
+        def mutator(settings):
+            config = dict(DEFAULTS)
+            if isinstance(settings.get('acme_server'), dict):
+                config.update(settings['acme_server'])
+            config['eab_keys'] = [dict(e) for e in config.get('eab_keys') or [] if isinstance(e, dict)]
+            try:
+                mutate(config)
+            except AcmeAdminError as error:
+                refusal.append(error)
+                return
+            settings['acme_server'] = config
+
+        saved = self._settings.update(mutator, reason='acme_server')
+        if refusal:
+            raise refusal[0]
+        if not saved:
+            raise AcmeAdminError('The settings could not be written', 500, 'SETTINGS_WRITE_FAILED')
+
+    def _accounts_per_eab_key(self):
+        # Read only when the database exists: looking at the admin page must
+        # not create an ACME database on an instance that never enabled ACME.
+        if not self.db_path.exists():
+            return {}
+        return self.store.accounts_per_eab_key()
+
+    @staticmethod
+    def _public_eab(entry, counts):
+        return {
+            'kid': entry.get('kid'),
+            'allowed_identifiers': list(entry.get('allowed_identifiers') or []),
+            'note': entry.get('note', ''),
+            'created_at': entry.get('created_at'),
+            'disabled': bool(entry.get('disabled')),
+            'accounts': counts.get(entry.get('kid'), 0),
+        }
 
     # -- accounts --------------------------------------------------------
 

@@ -81,6 +81,13 @@ class AcmeStore:
             raise KeyInUse(existing['id'] if existing else None) from None
         return self.account(account_id)
 
+    def accounts_per_eab_key(self):
+        """{eab_kid: number of accounts it enrolled}."""
+        with closing(self._connect()) as con:
+            rows = con.execute('SELECT eab_kid, count(*) FROM accounts WHERE eab_kid IS NOT NULL '
+                               'GROUP BY eab_kid').fetchall()
+        return dict(rows)
+
     def update_contact(self, account_id, contact):
         with closing(self._connect()) as con, con:
             con.execute('UPDATE accounts SET contact = ? WHERE id = ?', (json.dumps(contact), account_id))
