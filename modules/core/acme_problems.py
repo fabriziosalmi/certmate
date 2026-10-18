@@ -11,6 +11,7 @@ ACME_ERROR_PREFIX = 'urn:ietf:params:acme:error:'
 # The types this server sends, from the registry in RFC 8555 section 6.7.
 KINDS = frozenset({
     'accountDoesNotExist',
+    'alreadyReplaced',
     'alreadyRevoked',
     'badCSR',
     'badRevocationReason',

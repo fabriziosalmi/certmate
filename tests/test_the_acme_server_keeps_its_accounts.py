@@ -85,6 +85,7 @@ def test_the_directory_names_what_answers(client):
         'newAccount': 'https://localhost/acme/new-account',
         'newOrder': 'https://localhost/acme/new-order',
         'revokeCert': 'https://localhost/acme/revoke-cert',
+        'renewalInfo': 'https://localhost/acme/renewal-info',
         'keyChange': 'https://localhost/acme/key-change',
         'meta': {'externalAccountRequired': True},
     }

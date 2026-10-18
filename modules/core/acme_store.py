@@ -71,6 +71,13 @@ CREATE TABLE IF NOT EXISTS certificates (
 """
 
 
+# Columns added after a table first shipped, added to a database that lacks
+# them: CREATE TABLE IF NOT EXISTS leaves an existing table as it was.
+_ADDED_COLUMNS = (
+    ('orders', 'replaces', "ALTER TABLE orders ADD COLUMN replaces TEXT"),
+)
+
+
 class KeyInUse(Exception):
     """Another account already has this key."""
 
@@ -107,6 +114,9 @@ class AcmeStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as con, con:
             con.executescript(SCHEMA)
+            for table, column, statement in _ADDED_COLUMNS:
+                if column not in {row[1] for row in con.execute(f'PRAGMA table_info({table})')}:
+                    con.execute(statement)
 
     def _connect(self):
         con = sqlite3.connect(self.path, timeout=10)
@@ -145,7 +155,7 @@ class AcmeStore:
 
     # -- orders (section 7.4), their authorizations and challenges ---------
 
-    def create_order(self, account_id, identifiers, expires):
+    def create_order(self, account_id, identifiers, expires, replaces=None):
         """An order with one pending authorization per identifier, written in one transaction.
 
         A name gets an http-01 and a dns-01 challenge, each with a token of its
@@ -156,9 +166,9 @@ class AcmeStore:
         order_id = _new_id()
         now = utc_now().isoformat()
         with closing(self._connect()) as con, con:
-            con.execute('INSERT INTO orders (id, account_id, status, expires, identifiers, created_at) '
-                        'VALUES (?, ?, ?, ?, ?, ?)',
-                        (order_id, account_id, 'pending', expires, json.dumps(identifiers), now))
+            con.execute('INSERT INTO orders (id, account_id, status, expires, identifiers, created_at, replaces) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        (order_id, account_id, 'pending', expires, json.dumps(identifiers), now, replaces))
             for identifier in identifiers:
                 authz_id = _new_id()
                 wildcard = identifier['value'].startswith('*.')
@@ -310,6 +320,13 @@ class AcmeStore:
                 '(SELECT count(*) FROM orders o WHERE o.account_id = a.id) AS orders, '
                 '(SELECT count(*) FROM certificates c WHERE c.account_id = a.id) AS certificates '
                 'FROM accounts a ORDER BY a.created_at')]
+
+    def order_replacing(self, certificate_id):
+        """The order that replaces this certificate and has not failed, or None (RFC 9773 section 5)."""
+        with closing(self._connect()) as con:
+            return _decoded(con.execute(
+                "SELECT * FROM orders WHERE replaces = ? AND status != 'invalid'", (certificate_id,)).fetchone(),
+                'identifiers', 'error')
 
     def update_contact(self, account_id, contact):
         with closing(self._connect()) as con, con:

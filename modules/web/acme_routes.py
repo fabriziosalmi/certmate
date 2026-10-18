@@ -14,6 +14,7 @@ that ends TLS, BEHIND_PROXY makes the request look as it did to the client.
 """
 from flask import Blueprint, Response, abort, g, jsonify, make_response, request
 
+from ..core import acme_server
 from ..core.acme_jws import verify_request
 from ..core.acme_problems import AcmeProblem
 
@@ -65,6 +66,9 @@ class AcmeUrls:
 
     def revoke_cert(self):
         return self.base + 'revoke-cert'
+
+    def renewal_info(self):
+        return self.base + 'renewal-info'
 
 
 def register_acme_routes(app, managers):
@@ -130,6 +134,7 @@ def register_acme_routes(app, managers):
             'newOrder': u.new_order(),
             'revokeCert': u.revoke_cert(),
             'keyChange': u.key_change(),
+            'renewalInfo': u.renewal_info(),
             'meta': {'externalAccountRequired': bool(server.config().get('eab_required', True))},
         })
 
@@ -197,6 +202,17 @@ def register_acme_routes(app, managers):
     def revoke_cert():
         server.revoke(verified('either'))
         return make_response('', 200)
+
+    @bp.route('/renewal-info/<cert_id>', methods=['GET'])
+    def renewal_info(cert_id):
+        # RFC 9773 section 4.1: a plain GET, no JWS; the answer says when to
+        # renew, and Retry-After when to ask again.
+        info = server.renewal_info(cert_id)
+        if info is None:
+            raise AcmeProblem('malformed', 'No certificate of this server has that identifier', status=404)
+        response = jsonify(info)
+        response.headers['Retry-After'] = str(acme_server.ARI_RETRY_AFTER_SECONDS)
+        return response
 
     @bp.route('/root', methods=['GET'])
     def root():
