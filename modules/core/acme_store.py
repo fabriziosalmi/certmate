@@ -283,6 +283,25 @@ class AcmeStore:
             return [dict(row) for row in con.execute(
                 'SELECT serial, revoked_at, reason FROM certificates WHERE revoked_at IS NOT NULL')]
 
+    # -- what the admin API lists ------------------------------------------
+
+    def certificates_listed(self):
+        """Every certificate, newest first, with the account and EAB key behind it."""
+        with closing(self._connect()) as con:
+            return [_decoded(row, 'names') for row in con.execute(
+                'SELECT c.id, c.order_id, c.account_id, c.serial, c.names, c.not_after, c.revoked_at, '
+                'c.reason, c.created_at, a.eab_kid FROM certificates c '
+                'LEFT JOIN accounts a ON a.id = c.account_id ORDER BY c.created_at DESC')]
+
+    def accounts_listed(self):
+        """Every account, oldest first, with how many orders and certificates it has."""
+        with closing(self._connect()) as con:
+            return [_account(row) for row in con.execute(
+                'SELECT a.id, a.status, a.contact, a.eab_kid, a.created_at, '
+                '(SELECT count(*) FROM orders o WHERE o.account_id = a.id) AS orders, '
+                '(SELECT count(*) FROM certificates c WHERE c.account_id = a.id) AS certificates '
+                'FROM accounts a ORDER BY a.created_at')]
+
     def update_contact(self, account_id, contact):
         with closing(self._connect()) as con, con:
             con.execute('UPDATE accounts SET contact = ? WHERE id = ?', (json.dumps(contact), account_id))

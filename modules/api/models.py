@@ -165,6 +165,36 @@ def create_api_models(api):
         'directory_url': fields.String(description='The URL to give ACME clients, as this request reached the server'),
         'eab_keys': fields.List(fields.Nested(acme_eab_key_model)),
     })
+    acme_certificate_model = api.model('AcmeCertificate', {
+        'id': fields.String(description='The certificate id, as /acme/cert/<id> names it'),
+        'names': fields.List(fields.String, description='The DNS names it certifies'),
+        'serial': fields.String(description='The serial number, hexadecimal'),
+        'status': fields.String(description='valid, expired or revoked'),
+        'not_after': fields.String(description='When it expires'),
+        'created_at': fields.String(description='When it was issued'),
+        'revoked_at': fields.String(description='When it was revoked; null when it was not'),
+        'revocation_reason': fields.String(description='The RFC 5280 reason given; null when not revoked'),
+        'account_id': fields.String(description='The ACME account that ordered it'),
+        'eab_kid': fields.String(description='The EAB key that enrolled that account; null without one'),
+    })
+    acme_certificates_model = api.model('AcmeCertificates', {
+        'certificates': fields.List(fields.Nested(acme_certificate_model)),
+    })
+    acme_account_model = api.model('AcmeAccount', {
+        'id': fields.String(description='The account id, the last part of its ACME URL'),
+        'status': fields.String(description='valid or deactivated'),
+        'contact': fields.List(fields.String),
+        'eab_kid': fields.String(description='The EAB key that enrolled it; null without one'),
+        'created_at': fields.String(),
+        'orders': fields.Integer(),
+        'certificates': fields.Integer(),
+    })
+    acme_accounts_model = api.model('AcmeAccounts', {
+        'accounts': fields.List(fields.Nested(acme_account_model)),
+    })
+    acme_revoke_model = api.model('AcmeRevoke', {
+        'reason': fields.Integer(description='RFC 5280 reason: 0, 1, 3, 4 or 5; 0 when left out'),
+    })
     acme_server_update_model = api.model('AcmeServerUpdate', {
         'enabled': fields.Boolean(),
         'allow_http': fields.Boolean(),
@@ -838,6 +868,9 @@ def create_api_models(api):
         'acme_eab_key_created_model': acme_eab_key_created_model,
         'acme_eab_keys_model': acme_eab_keys_model,
         'acme_eab_key_create_model': acme_eab_key_create_model,
+        'acme_certificates_model': acme_certificates_model,
+        'acme_accounts_model': acme_accounts_model,
+        'acme_revoke_model': acme_revoke_model,
         'cache_stats_model': cache_stats_model,
         'cache_clear_response_model': cache_clear_response_model,
         'browser_deployment_model': browser_deployment_model,

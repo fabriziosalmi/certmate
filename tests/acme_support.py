@@ -190,7 +190,8 @@ PATTERNS = ['*.lab.internal', 'nas.office.internal']
 def served_app(responder):
     """An app whose ACME server checks http-01 against *responder*."""
     from tests import contract_support
-    application, _token = contract_support.build_app()
+    application, token = contract_support.build_app()
+    application.extensions['certmate_test_token'] = token
     server = application.extensions['certmate_container'].managers['acme_server']
     server.http01_port = responder.port
     server.resolve = resolve_for_tests

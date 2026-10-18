@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.53",
+ "contract_version": "2.54",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -260,6 +260,89 @@
      "dict"
     ],
     "error": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/acme/accounts": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "accounts": [
+     "list"
+    ],
+    "accounts[]": [
+     "dict"
+    ],
+    "accounts[].certificates": [
+     "int"
+    ],
+    "accounts[].contact": [
+     "list"
+    ],
+    "accounts[].contact[]": [
+     "str"
+    ],
+    "accounts[].created_at": [
+     "str"
+    ],
+    "accounts[].eab_kid": [
+     "str"
+    ],
+    "accounts[].id": [
+     "str"
+    ],
+    "accounts[].orders": [
+     "int"
+    ],
+    "accounts[].status": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/acme/certificates": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certificates": [
+     "list"
+    ],
+    "certificates[]": [
+     "dict"
+    ],
+    "certificates[].account_id": [
+     "str"
+    ],
+    "certificates[].created_at": [
+     "str"
+    ],
+    "certificates[].eab_kid": [
+     "str"
+    ],
+    "certificates[].id": [
+     "str"
+    ],
+    "certificates[].names": [
+     "list"
+    ],
+    "certificates[].names[]": [
+     "str"
+    ],
+    "certificates[].not_after": [
+     "str"
+    ],
+    "certificates[].revocation_reason": [
+     "str"
+    ],
+    "certificates[].revoked_at": [
+     "str"
+    ],
+    "certificates[].serial": [
+     "str"
+    ],
+    "certificates[].status": [
      "str"
     ]
    }
@@ -3763,6 +3846,110 @@
     ]
    },
    "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/acme/accounts/<X>/deactivate": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "certificates": [
+     "int"
+    ],
+    "contact": [
+     "list"
+    ],
+    "contact[]": [
+     "str"
+    ],
+    "created_at": [
+     "str"
+    ],
+    "eab_kid": [
+     "str"
+    ],
+    "id": [
+     "str"
+    ],
+    "orders": [
+     "int"
+    ],
+    "status": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/acme/certificates/<X>/revoke": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "account_id": [
+     "str"
+    ],
+    "created_at": [
+     "str"
+    ],
+    "eab_kid": [
+     "str"
+    ],
+    "id": [
+     "str"
+    ],
+    "names": [
+     "list"
+    ],
+    "names[]": [
+     "str"
+    ],
+    "not_after": [
+     "str"
+    ],
+    "revocation_reason": [
+     "str"
+    ],
+    "revoked_at": [
+     "str"
+    ],
+    "serial": [
+     "str"
+    ],
+    "status": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
+   },
+   "409": {
     ".": [
      "dict"
     ],

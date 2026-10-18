@@ -1,5 +1,5 @@
 {
- "contract_version": "2.53",
+ "contract_version": "2.54",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -38,6 +38,95 @@
     },
     "secret_access_key": {
      "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AcmeAccount": {
+   "properties": {
+    "certificates": {
+     "type": "integer"
+    },
+    "contact": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "created_at": {
+     "type": "string"
+    },
+    "eab_kid": {
+     "type": "string"
+    },
+    "id": {
+     "type": "string"
+    },
+    "orders": {
+     "type": "integer"
+    },
+    "status": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AcmeAccounts": {
+   "properties": {
+    "accounts": {
+     "items": {
+      "$ref": "#/definitions/AcmeAccount"
+     },
+     "type": "array"
+    }
+   },
+   "required": []
+  },
+  "AcmeCertificate": {
+   "properties": {
+    "account_id": {
+     "type": "string"
+    },
+    "created_at": {
+     "type": "string"
+    },
+    "eab_kid": {
+     "type": "string"
+    },
+    "id": {
+     "type": "string"
+    },
+    "names": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "not_after": {
+     "type": "string"
+    },
+    "revocation_reason": {
+     "type": "string"
+    },
+    "revoked_at": {
+     "type": "string"
+    },
+    "serial": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "AcmeCertificates": {
+   "properties": {
+    "certificates": {
+     "items": {
+      "$ref": "#/definitions/AcmeCertificate"
+     },
+     "type": "array"
     }
    },
    "required": []
@@ -94,6 +183,14 @@
       "$ref": "#/definitions/AcmeEabKey"
      },
      "type": "array"
+    }
+   },
+   "required": []
+  },
+  "AcmeRevoke": {
+   "properties": {
+    "reason": {
+     "type": "integer"
     }
    },
    "required": []
@@ -1443,6 +1540,38 @@
     "200": null
    }
   },
+  "GET /acme/accounts": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/AcmeAccounts"
+    }
+   }
+  },
+  "GET /acme/certificates": {
+   "parameters": {
+    "header:X-Fields": {
+     "required": false,
+     "shape": {
+      "format": "mask",
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": {
+     "$ref": "#/definitions/AcmeCertificates"
+    }
+   }
+  },
   "GET /acme/eab-keys": {
    "parameters": {
     "header:X-Fields": {
@@ -1886,6 +2015,38 @@
   },
   "PATCH /certificates/{X}": {
    "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /acme/accounts/{X}/deactivate": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /acme/certificates/{X}/revoke": {
+   "parameters": {
+    "body:payload": {
+     "required": true,
+     "shape": {
+      "$ref": "#/definitions/AcmeRevoke"
+     }
+    },
     "path:{X}": {
      "required": true,
      "shape": {

@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.53",
+  "contract_version": "2.54",
   "surface": [
     "DELETE /api/acme/eab-keys/<X>",
     "DELETE /api/backups/delete/<X>/<X>",
@@ -9,6 +9,8 @@
     "DELETE /api/inventory/<X>",
     "DELETE /api/keys/<X>",
     "DELETE /api/users/<X>",
+    "GET /api/acme/accounts",
+    "GET /api/acme/certificates",
     "GET /api/acme/eab-keys",
     "GET /api/acme/server",
     "GET /api/activity",
@@ -68,6 +70,8 @@
     "PATCH /api/acme/server",
     "PATCH /api/certificates/<X>",
     "PATCH /api/keys/<X>",
+    "POST /api/acme/accounts/<X>/deactivate",
+    "POST /api/acme/certificates/<X>/revoke",
     "POST /api/acme/eab-keys",
     "POST /api/auth/config",
     "POST /api/auth/login",

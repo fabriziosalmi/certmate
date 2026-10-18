@@ -238,6 +238,10 @@ def create_api_resources(api, models, managers):
     acme_ns.add_resource(acme_resources['AcmeServerConfig'], '/server')
     acme_ns.add_resource(acme_resources['AcmeEabKeys'], '/eab-keys')
     acme_ns.add_resource(acme_resources['AcmeEabKey'], '/eab-keys/<string:kid>')
+    acme_ns.add_resource(acme_resources['AcmeCertificates'], '/certificates')
+    acme_ns.add_resource(acme_resources['AcmeCertificateRevoke'], '/certificates/<string:certificate_id>/revoke')
+    acme_ns.add_resource(acme_resources['AcmeAccounts'], '/accounts')
+    acme_ns.add_resource(acme_resources['AcmeAccountDeactivate'], '/accounts/<string:account_id>/deactivate')
 
     # Return all resource classes (CA provider test will be registered in app.py)
     return {
