@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.51.1 (a security release: an unconfigured instance, and a read-only key, are held to what they should see)
+
+[Read the notes](docs/releases/v2.51.1.md)
+
 ## v2.51.0 (a setup wizard that says what credential to create and which DNS providers this instance can use, and a Cloudflare wait of 20 seconds instead of 60)
 
 [Read the notes](docs/releases/v2.51.0.md)
