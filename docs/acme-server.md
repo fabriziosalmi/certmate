@@ -107,30 +107,33 @@ Not supported: tls-alpn-01, and IP address identifiers.
 
 ### Why 45 days
 
-The clients decide when they renew. Measured with the harnesses in
-`tests/interop/`, or read in the client's code where noted:
+It is inside the 47 days public certificates are heading for, and every client
+measured renews with a week or more left. The server's
+[renewal information](#renewal-information) suggests days 30 to 37.5:
 
-| Client | Renews | At 45 days |
-| --- | --- | --- |
-| certbot 5.8.0 (read in its code) | with a third of the lifetime left | 15 days left |
-| lego 5.5.2 | with a third of the lifetime left | 15 days left |
-| acme.sh 3.1.5 | 29 days after issuance, unless given `--days` | 16 days left |
-| cert-manager v1.21.2 | with a third of the duration left | 15 days left |
+| Client | Renews | At 45 days | Found with |
+| --- | --- | --- | --- |
+| certbot 5.8.0 | inside the server's window; without one, with a third of the lifetime left | 7.5 to 15 days left | its ACME library in the test suite; the fallback read in its code |
+| lego 5.5.2 | on day 30 | 15 days left | `tests/interop/run.sh` |
+| acme.sh 3.1.5 | at a random moment inside the server's window | 9.5 days left in one run | `tests/interop/run.sh` |
+| cert-manager v1.21.2 | with a third of the duration left | 15 days left | `tests/interop/cert-manager.sh` |
 
-At 29 days or less, acme.sh renews when the certificate expires or after.
-Give it a negative `--days`, which counts back from expiry: `--days -15`
-renews with 15 days left. The command the settings page shows carries one when
-the validity is under 45 days.
+Give acme.sh no `--days`. With it, acme.sh takes its renewal time from that
+number and not from the server's window: at 20 days of validity and
+`--days -6`, it scheduled the renewal 6 days before expiry and ignored the
+window it was given. The command the settings page shows carries none.
 
 ## Renewal information
 
 The server answers ACME Renewal Information (RFC 9773). For each certificate it
 suggests renewing between two thirds and five sixths of its lifetime (days 30
-to 37.5 at the default 45), and at once when it has been revoked. A client
-that reads it replaces a revoked certificate on its next run, with nobody
-touching it.
-certbot's ACME library picks its moment inside that window, measured in the
-test suite.
+to 37.5 at the default 45). A client picks a moment inside that window, as
+certbot's ACME library and acme.sh do.
+
+For a revoked certificate the window closed when it was revoked, so a client
+that reads it renews on its next run, with nobody touching it. Measured: after
+an admin revoked their certificates from CertMate, lego's next run and
+acme.sh's next cron run each got a new one.
 
 A new order may name the certificate it `replaces`. It must be one the
 account was issued, and not replaced already by another order that has not

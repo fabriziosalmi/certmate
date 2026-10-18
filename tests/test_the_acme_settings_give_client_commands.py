@@ -2,8 +2,8 @@
 
 static/js/acme-snippets.js fills, for certbot, lego, acme.sh and cert-manager,
 the directory URL, the EAB key identifier and its HMAC key, a name the key may
-order, and for acme.sh a --days that renews before expiry when the validity
-is short. Run under node, as the other frontend unit tests are.
+order. acme.sh is given no --days, which would replace the server's renewal
+window. Run under node, as the other frontend unit tests are.
 """
 import json
 import subprocess
@@ -48,11 +48,8 @@ def test_an_exact_name_is_used_as_it_is(node):
     assert '-d nas.office.internal' in _snippets(node, patterns=['nas.office.internal'])['certbot']
 
 
-@pytest.mark.parametrize('validity,days', [(45, None), (90, None), (44, '--days -14'), (30, '--days -10'),
-                                           (7, '--days -2'), (1, '--days -1')])
-def test_acme_sh_is_told_to_renew_before_expiry_when_the_validity_is_short(node, validity, days):
-    command = _snippets(node, validityDays=validity)['acmesh']
-    if days is None:
-        assert '--days' not in command
-    else:
-        assert command.endswith(days)
+@pytest.mark.parametrize('validity', [1, 7, 30, 44, 45, 90])
+def test_acme_sh_is_left_to_the_servers_renewal_window(node, validity):
+    """Given --days, acme.sh 3.1.5 renews by it and not by the window, which is
+    also how a revoked certificate is renewed on the next run."""
+    assert '--days' not in _snippets(node, validityDays=validity)['acmesh']

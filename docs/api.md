@@ -1868,12 +1868,11 @@ nothing.
   the default, such an account orders nothing.
 - `validity_days`, since API contract **2.53**: how long a certificate from
   the ACME CA is valid, 1 to 365, 45 by default. It applies to certificates
-  issued from then on. The default suits the clients' own renewal rules:
-  certbot and lego renew with a third of the lifetime left, and acme.sh 29
-  days after issuance unless given `--days` (a negative value counts back
-  from expiry, so `--days -15` renews with 15 days left). At 29 days or
-  less, give acme.sh `--days`, or it renews when the certificate expires or
-  after.
+  issued from then on. certbot, lego and acme.sh renew at the moment the
+  server's renewal information suggests, between two thirds and five sixths
+  of the lifetime, and cert-manager with a third of it left. Give acme.sh no
+  `--days`: it then renews by that number and not by the server's window.
+  See [the ACME server's page](acme-server.md#why-45-days).
 
 `directory_url` is built from the address this request reached; give clients
 the one they will reach.

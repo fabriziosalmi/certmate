@@ -46,7 +46,7 @@
                         <label for="acmeValidity" class="block text-xs text-muted mb-1">Certificate validity, days (1 to 365)</label>
                         <input type="number" min="1" max="365" id="acmeValidity" x-model="server.validity_days"
                                class="w-32 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
-                        <p class="text-xs text-muted mt-1">45 leaves every client 15 days or more when it renews.</p>
+                        <p class="text-xs text-muted mt-1">At 45, the clients measured renew between days 30 and 37.5, a week or more before expiry.</p>
                     </div>
                 </div>
                 <div class="mt-4" x-show="!server.eab_required">
