@@ -630,6 +630,35 @@ jobs:
     - name: Every endpoint the wiki states is one the application serves
       run: python scripts/check_wiki_endpoints.py /tmp/wiki
 
+  # lego and acme.sh against CertMate's ACME server (#476), each in a container
+  # of its own: register with an EAB key, issue over http-01, ask to renew,
+  # revoke, and the signed CRL lists what was revoked (tests/interop/run.sh,
+  # which fails on any of those). It also writes how many /acme/ requests each
+  # step made. Weekly and not a merge gate: the clients change on their own
+  # schedule, so a failure here is news about a client release as often as
+  # about a pull request. cert-manager needs a cluster and stays a manual run
+  # (tests/interop/cert-manager.sh).
+  acme-interop:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: lego and acme.sh get, renew and revoke certificates
+      env:
+        INTEROP_WORK: ${{ runner.temp }}/interop
+      run: tests/interop/run.sh
+
+    - name: Keep the results
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+      with:
+        name: acme-interop
+        path: ${{ runner.temp }}/interop/results.txt
+        retention-days: 30
+
   # A red scheduled run is read by nobody: it notifies whoever last edited the
   # cron line, and the weekly run went red on four of its last six runs without
   # anyone being told. This turns the result of each scheduled check into an
@@ -642,7 +671,7 @@ jobs:
   # script's in step, and fails when a scheduled-only job is in neither.
   report-scheduled:
     if: always() && github.event_name == 'schedule'
-    needs: [ca-endpoints, wiki, wiki-endpoints]
+    needs: [ca-endpoints, wiki, wiki-endpoints, acme-interop]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -660,6 +689,7 @@ jobs:
         python3 scripts/report_scheduled_result.py ca-endpoints "${{ needs.ca-endpoints.result }}" --run-url "$RUN_URL"
         python3 scripts/report_scheduled_result.py wiki "${{ needs.wiki.result }}" --run-url "$RUN_URL"
         python3 scripts/report_scheduled_result.py wiki-endpoints "${{ needs.wiki-endpoints.result }}" --run-url "$RUN_URL"
+        python3 scripts/report_scheduled_result.py acme-interop "${{ needs.acme-interop.result }}" --run-url "$RUN_URL"
 
   # Storage backends against real servers rather than a faithful fake.
   #
