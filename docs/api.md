@@ -939,6 +939,7 @@ neither field.
     "expires_at": "2027-10-03T09:14:02.481222Z",
     "days_valid": 365,
     "serial_number": "106344602611902843865865504921679461731856720169",
+    "subject_alt_names": [],
     "renewal_enabled": true,
     "renewal_threshold_days": 30,
     "csr_required": false,
@@ -954,7 +955,10 @@ neither field.
 
 `metadata` is the certificate's record, the same object `GET /api/client-certs/<identifier>`
 answers with. Since API contract **2.49** it carries `country` and `state`, the C and ST
-of the certificate's subject. The `identifier` is the common name made safe for a path, and eight hex
+of the certificate's subject. Since **2.56** it carries `subject_alt_names`, each SAN of the
+certificate as `Type:value`, and a certificate issued from a CSR (`generate_key` false)
+records the CSR's subject as `common_name`, `email`, `organization` and
+`organizational_unit`, since that is what the CA signs, not the fields sent beside it. The `identifier` is the common name made safe for a path, and eight hex
 characters. Its dates (`created_at`, `expires_at`, and later `revoked_at` and
 `superseded_at`) are UTC with a `Z`, like every date-time ([Date-times](#date-times)).
 
@@ -1017,6 +1021,7 @@ List all client certificates with optional filtering.
       "expires_at": "2028-09-03T02:00:11.904134Z",
       "days_valid": 365,
       "serial_number": "38880296300846741349714468885652733141547560996",
+      "subject_alt_names": [],
       "renewal_enabled": true,
       "renewal_threshold_days": 30,
       "csr_required": false,
@@ -1048,6 +1053,7 @@ List all client certificates with optional filtering.
       "expires_at": "2027-10-03T09:14:02.481222Z",
       "days_valid": 365,
       "serial_number": "106344602611902843865865504921679461731856720169",
+      "subject_alt_names": [],
       "renewal_enabled": false,
       "renewal_threshold_days": 30,
       "csr_required": false,
@@ -1079,6 +1085,7 @@ List all client certificates with optional filtering.
       "expires_at": "2027-08-12T15:41:27.118350Z",
       "days_valid": 365,
       "serial_number": "571206345791062948120556172980012647738192614",
+      "subject_alt_names": [],
       "renewal_enabled": true,
       "renewal_threshold_days": 30,
       "csr_required": false,
@@ -1154,6 +1161,7 @@ stop reading it.
   "expires_at": "2027-10-03T09:14:02.481222Z",
   "days_valid": 365,
   "serial_number": "106344602611902843865865504921679461731856720169",
+  "subject_alt_names": [],
   "renewal_enabled": false,
   "renewal_threshold_days": 30,
   "csr_required": false,
@@ -1291,6 +1299,7 @@ certificate that does not exist is a `404` (a `400` before API contract **2.37**
     "expires_at": "2028-09-03T02:00:11.904134Z",
     "days_valid": 365,
     "serial_number": "38880296300846741349714468885652733141547560996",
+    "subject_alt_names": [],
     "renewal_enabled": true,
     "renewal_threshold_days": 30,
     "csr_required": false,

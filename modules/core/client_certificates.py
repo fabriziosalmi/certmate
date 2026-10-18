@@ -302,10 +302,9 @@ class ClientCertificateManager:
 
                 with open(csr_path, 'wb') as f:
                     f.write(csr_pem)
-                with open(key_path, 'wb') as f:
-                    f.write(key_pem)
-
-                os.chmod(key_path, 0o600)
+                # 0600 from the first byte, and whole or absent: a key written
+                # with open() and chmod-ed after existed under the umask first.
+                PrivateCAGenerator._atomic_write_bytes(key_path, key_pem, 0o600)
                 logger.debug(f"Generated and saved CSR/key for {identifier}")
 
             else:
@@ -347,6 +346,13 @@ class ClientCertificateManager:
             with open(cert_path, 'wb') as f:
                 f.write(signed_cert.public_bytes(serialization.Encoding.PEM))
             issued_country, issued_state = self._subject_country_and_state(signed_cert)
+            if not generate_key:
+                # The CA signs the CSR's subject, not the fields sent beside
+                # it, so the record says what the certificate says: a CSR for
+                # CN=admin sent with common_name "test-user" used to be listed,
+                # and audited, as test-user.
+                common_name, organization, organizational_unit, email = (
+                    self._subject_identity(signed_cert, email))
 
             # Create metadata
             metadata = {
@@ -376,6 +382,7 @@ class ClientCertificateManager:
                 # existed fall back to deriving it from created_at/expires_at.
                 "days_valid": days_valid,
                 "serial_number": str(signed_cert.serial_number),
+                "subject_alt_names": self._subject_alt_names(signed_cert),
                 "renewal_enabled": True,
                 "renewal_threshold_days": 30,
                 "csr_required": not generate_key,
@@ -624,6 +631,28 @@ class ClientCertificateManager:
         if headroom < 1:
             return None
         return max(1, min(configured, headroom))
+
+    @staticmethod
+    def _subject_identity(cert, email=None):
+        """CN, O, OU and email as the certificate's subject carries them.
+
+        The email is the subject's emailAddress when it has one, else what the
+        caller gave, which the subject cannot contradict.
+        """
+        def first(oid):
+            found = cert.subject.get_attributes_for_oid(oid)
+            return str(found[0].value) if found else None
+        return (first(NameOID.COMMON_NAME), first(NameOID.ORGANIZATION_NAME),
+                first(NameOID.ORGANIZATIONAL_UNIT_NAME), first(NameOID.EMAIL_ADDRESS) or email)
+
+    @staticmethod
+    def _subject_alt_names(cert) -> list[str]:
+        """Every SAN the certificate carries, as text, so the record shows them."""
+        try:
+            names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        except x509.ExtensionNotFound:
+            return []
+        return [f'{type(name).__name__}:{name.value}' for name in names]
 
     @staticmethod
     def _subject_country_and_state(cert) -> tuple[str | None, str | None]:

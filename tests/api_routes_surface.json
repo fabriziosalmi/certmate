@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.55",
+ "contract_version": "2.56",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -1595,6 +1595,9 @@
     "certificates[].state": [
      "str"
     ],
+    "certificates[].subject_alt_names": [
+     "list"
+    ],
     "certificates[].superseded_at": [
      "str"
     ],
@@ -1688,6 +1691,9 @@
     ],
     "state": [
      "str"
+    ],
+    "subject_alt_names": [
+     "list"
     ],
     "superseded_at": [
      "str"
@@ -4903,6 +4909,9 @@
     "metadata.state": [
      "str"
     ],
+    "metadata.subject_alt_names": [
+     "list"
+    ],
     "metadata.type": [
      "str"
     ],
@@ -5142,6 +5151,9 @@
     ],
     "metadata.state": [
      "str"
+    ],
+    "metadata.subject_alt_names": [
+     "list"
     ],
     "metadata.type": [
      "str"
@@ -6266,6 +6278,12 @@
   "GET /api/certificates/<X>/dns-alias-check": [
    "checks[].found_targets"
   ],
+  "GET /api/client-certs": [
+   "certificates[].subject_alt_names"
+  ],
+  "GET /api/client-certs/<X>": [
+   "subject_alt_names"
+  ],
   "GET /api/deploy/pending": [
    "."
   ],
@@ -6307,6 +6325,12 @@
   ],
   "POST /api/certificates/reissue-keyless": [
    "refused"
+  ],
+  "POST /api/client-certs/<X>/renew": [
+   "metadata.subject_alt_names"
+  ],
+  "POST /api/client-certs/create": [
+   "metadata.subject_alt_names"
   ],
   "POST /api/inventory/scan": [
    "domain_health.results",

@@ -294,13 +294,9 @@ class CSRHandler:
                 f.write(csr_pem)
             logger.debug(f"Saved CSR to {csr_path}")
 
-            # Save private key
-            with open(key_path, 'wb') as f:
-                f.write(private_key_pem)
-
-            # Restrict key permissions
-            import os
-            os.chmod(key_path, 0o600)
+            # Save private key: 0600 from the first byte, and whole or absent.
+            from .private_ca import PrivateCAGenerator
+            PrivateCAGenerator._atomic_write_bytes(Path(key_path), private_key_pem, 0o600)
             logger.debug(f"Saved private key to {key_path}")
 
             return True, str(csr_path), str(key_path)
