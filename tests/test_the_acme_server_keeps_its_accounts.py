@@ -465,3 +465,36 @@ def test_a_backup_keeps_writes_that_are_still_in_the_write_ahead_log(app, regist
     with sqlite3.connect(copy) as con:
         ids = {row[0] for row in con.execute('SELECT id FROM accounts')}
     assert 'in-the-log' in ids and len(ids) == 2
+
+
+def test_two_requests_with_the_same_new_key_make_one_account(app, client, eab):
+    """Both found no account for the key, both tried to create one: the
+    second insert hits the unique key, and its request is answered with the
+    first one's account, as a lookup by key would have been."""
+    server = app.extensions['certmate_container'].managers['acme_server']
+    first = client.new_account(eab)
+    assert first.status_code == 201
+    real_lookup = server.store.account_by_thumbprint
+    lookups = []
+
+    def lost_the_race(thumbprint):
+        lookups.append(thumbprint)
+        return None if len(lookups) == 1 else real_lookup(thumbprint)
+
+    server.store.account_by_thumbprint = lost_the_race
+    try:
+        second = client.new_account(eab)
+    finally:
+        server.store.account_by_thumbprint = real_lookup
+    assert second.status_code == 200 and second.headers['Location'] == first.headers['Location']
+    assert len(lookups) == 2
+
+
+def test_the_store_names_the_account_that_has_the_key(app, registered):
+    from modules.core.acme_store import KeyInUse
+    store = app.extensions['certmate_container'].managers['acme_server'].store
+    account_id = registered.account_url.rsplit('/', 1)[-1]
+    existing = store.account(account_id)
+    with pytest.raises(KeyInUse) as clash:
+        store.create_account(existing['jwk'], existing['thumbprint'], [], None)
+    assert clash.value.account_id == account_id
