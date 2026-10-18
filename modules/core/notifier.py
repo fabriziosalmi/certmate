@@ -688,6 +688,8 @@ class Notifier:
                 return {'error': 'SMTP not fully configured'}
 
             msg = MIMEMultipart('alternative')
+            # A line break in the subject would start a header of its own.
+            subject = ' '.join(str(subject).splitlines())
             msg['Subject'] = f'[CertMate] {subject}'
             msg['From'] = from_addr
             msg['To'] = ', '.join(to_addrs)
@@ -704,11 +706,12 @@ class Notifier:
             # HTML body
             html_body = f'''<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
 <h2 style="color:#2563eb">CertMate</h2>
-<p>{body}</p>'''
+<p>{escape(str(body))}</p>'''
             if details:
                 html_body += '<table style="margin-top:12px;border-collapse:collapse">'
                 for k, v in details.items():
-                    html_body += f'<tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px">{k}</td><td style="padding:4px 0;font-size:14px">{v}</td></tr>'
+                    html_body += (f'<tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px">{escape(str(k))}</td>'
+                                  f'<td style="padding:4px 0;font-size:14px">{escape(str(v))}</td></tr>')
                 html_body += '</table>'
             html_body += '</div>'
             msg.attach(MIMEText(html_body, 'html'))
