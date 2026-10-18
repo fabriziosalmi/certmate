@@ -8,6 +8,7 @@ import io
 import os
 import re
 import json
+import sqlite3
 import tempfile
 import zipfile
 from datetime import UTC, datetime, timedelta, timezone
@@ -58,7 +59,32 @@ _PRIVATE_KEY_FILE_RE = re.compile(
 # entry, which passes the deploy-hook revalidation gate. Honouring a
 # "data/settings.json" member would let a tampered archive write settings
 # straight to disk around that gate.
-_BACKUP_DATA_SUBTREES = ('certs', 'audit', 'inventory')
+# 'acme' carries the ACME server's accounts and orders (#476).
+_BACKUP_DATA_SUBTREES = ('certs', 'audit', 'inventory', 'acme')
+
+# A SQLite file copied byte for byte while another thread writes it can be
+# a database that does not open, and its -journal, -wal or -shm companion
+# only means something next to the exact file it was written beside. So a
+# backup takes each database through SQLite's online backup, which reads a
+# consistent state, and leaves the companions out.
+_SQLITE_SUFFIX = '.db'
+_SQLITE_COMPANIONS = ('.db-journal', '.db-wal', '.db-shm')
+
+
+def _sqlite_snapshot(path):
+    """A consistent copy of the SQLite database at *path*, as bytes."""
+    with tempfile.TemporaryDirectory() as scratch:
+        target = Path(scratch) / 'snapshot.db'
+        source = sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)
+        try:
+            copy = sqlite3.connect(target)
+            try:
+                source.backup(copy)
+            finally:
+                copy.close()
+        finally:
+            source.close()
+        return target.read_bytes()
 
 # Key material: what a share-safe (include_secrets=False) backup must NOT carry.
 # The settings tree was masked since the May 2026 audit, but the archive still
@@ -497,7 +523,8 @@ class FileOperations:
                 subtree_dir = self.data_dir / subtree
                 if not subtree_dir.is_dir():
                     continue
-                data_files.extend(f for f in subtree_dir.rglob("*") if f.is_file())
+                data_files.extend(f for f in subtree_dir.rglob("*")
+                                  if f.is_file() and not f.name.endswith(_SQLITE_COMPANIONS))
 
             settings_to_write = settings_data if include_secrets else self._mask_settings_secrets(settings_data)
 
@@ -569,7 +596,11 @@ class FileOperations:
                     if exclude_keys and _is_key_material(data_file):
                         key_files_excluded += 1
                         continue
-                    zipf.write(data_file, f"data/{data_file.relative_to(self.data_dir)}")
+                    arc_path = f"data/{data_file.relative_to(self.data_dir)}"
+                    if data_file.suffix == _SQLITE_SUFFIX:
+                        zipf.writestr(arc_path, _sqlite_snapshot(data_file))
+                    else:
+                        zipf.write(data_file, arc_path)
 
                 # Manifest, in both places it lives, with the final count.
                 metadata["key_files_excluded"] = key_files_excluded

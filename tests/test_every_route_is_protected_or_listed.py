@@ -50,6 +50,28 @@ PUBLIC_ROUTES = {
     '/api/ocsp/status/<int:serial_number>':
         'OCSP status is queried by TLS clients validating a certificate this '
         'instance issued. Same reason as the CRL.',
+    # The ACME server (#476): RFC 8555 authenticates every POST with a JWS
+    # signed by the account key, so a CertMate role would be a second, foreign
+    # credential no ACME client can present. All of them answer 404 until
+    # acme_server.enabled is set.
+    '/acme/directory':
+        'ACME directory: the one URL an ACME client is configured with, read '
+        'before it has any key or account. RFC 8555 section 7.1.1.',
+    '/acme/new-nonce':
+        'Issues the replay nonce a client must have before its first signed '
+        'request, so it cannot require one. RFC 8555 section 7.2.',
+    '/acme/new-account':
+        'Account creation is authenticated by the JWS over the new key and by '
+        'the External Account Binding an admin issued, not by a session.',
+    '/acme/account/<account_id>':
+        'An ACME account resource; every request to it is a JWS the server '
+        'verifies against that account key (acme_jws.verify_request).',
+    '/acme/account/<account_id>/orders':
+        'The orders list of an ACME account, read with a POST-as-GET JWS '
+        'signed by that account key.',
+    '/acme/key-change':
+        'ACME key rollover: a JWS by the old account key around one by the '
+        'new key, both verified. RFC 8555 section 7.3.5.',
     '/api/client-certs/ca':
         'The CA certificate a relying party must trust to verify the client '
         'certificates this instance issues. Same reason as the CRL next to '

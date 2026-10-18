@@ -28,6 +28,7 @@ from modules.core.shell import ShellExecutor
 from modules.core.notifier import Notifier
 from modules.core.events import EventBus
 from modules.core.digest import WeeklyDigest
+from modules.core.acme_server import AcmeServer
 from modules.core.deployer import DeployManager
 from modules.core.ca_manager import CAManager
 from modules.core.private_ca import resolve_client_ca_subject
@@ -35,6 +36,7 @@ from modules.core.client_certificates import check_client_certificate_defaults
 from modules.api import create_api_models, create_api_resources
 from modules.api.client_certificates import create_client_certificate_resources
 from modules.web import register_web_routes
+from modules.web.acme_routes import register_acme_routes
 
 logger = get_certmate_logger('factory')
 request_logger = get_certmate_logger('request-watchdog')
@@ -861,6 +863,9 @@ def initialize_managers(container: AppContainer, app):
         'domain_registration': domain_registration,
         'domain_health': domain_health,
         'expiry_watch': expiry_watch,
+        # The ACME server (#476). Off until acme_server.enabled; its routes
+        # answer 404 until then, and its database is created on first use.
+        'acme_server': AcmeServer(settings_manager, container.data_dir),
     }
 
 
@@ -1980,6 +1985,7 @@ def create_app(test_config=None):
     app.config['RESTX_VALIDATE'] = True
     setup_api(container, app)
     register_web_routes(app, container.managers)
+    register_acme_routes(app, container.managers)
     setup_csrf_protection(app)
     setup_error_handlers(app)
     setup_security_headers(app)
