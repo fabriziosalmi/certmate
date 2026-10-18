@@ -38,13 +38,18 @@ def test_the_login_buckets_are_read_and_written_one_request_at_a_time():
     assert _blocked_while_held(routes._login_lock, lambda: routes._record_login_attempt('10.0.0.2', 'alice'))
 
 
-def test_auth_paths_other_than_login_count_against_the_request_limit():
+def test_auth_paths_other_than_login_and_me_count_against_the_request_limit():
+    """The OIDC callback and the config/session endpoints are under the limiter
+    now; /api/auth/login (own limiter) and /api/auth/me (the dashboard's hot
+    identity poll) stay exempt."""
     app, token = contract_support.build_app()
     app.extensions['certmate_container'].managers['settings'].update(
         lambda s: s.__setitem__('rate_limits', {'enabled': True, 'limits': {'default': 2}}), 'test')
-    client = app.test_client()
     headers = {'Authorization': f'Bearer {token}'}
-    statuses = [client.get('/api/auth/me', headers=headers).status_code for _ in range(3)]
-    # /api/auth/me answers a bearer token 401 (it describes a session); what
-    # matters is that the third request meets the limit and the first two do not.
-    assert 429 not in statuses[:2] and statuses[2] == 429, statuses
+
+    limited = [app.test_client().get('/api/auth/config', headers=headers).status_code for _ in range(3)]
+    assert 429 not in limited[:2] and limited[2] == 429, limited
+
+    # /api/auth/me never meets the limit, however many times it is polled.
+    me = [app.test_client().get('/api/auth/me', headers=headers).status_code for _ in range(8)]
+    assert 429 not in me, me

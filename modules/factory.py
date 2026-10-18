@@ -1816,10 +1816,15 @@ def setup_rate_limiting(app, container: AppContainer):
         path = flask_request.path
         if not path.startswith('/api/'):
             return None
-        # Login has a limiter of its own, per address and per account. The rest
-        # of /api/auth/ has none (the OIDC callback calls out to the IdP), so
-        # it stays under this one.
-        if path == '/api/auth/login':
+        # Two auth endpoints stay exempt from this limiter; the rest of
+        # /api/auth/ (the OIDC callback that calls out to the IdP, the config
+        # and session writes) is brought under it, which it was not before.
+        #   - /api/auth/login has its own per-address, per-account limiter.
+        #   - /api/auth/me is the cheap, read-only identity probe the dashboard
+        #     polls on every page; the generic per-endpoint limit is wrong for
+        #     a hot path, and an unauthenticated caller gets a 401 from it
+        #     without touching anything expensive.
+        if path in ('/api/auth/login', '/api/auth/me'):
             return None
         # Admin can turn API rate limiting off entirely from settings (#319),
         # e.g. when a trusted automation fleet behind one IP would otherwise
