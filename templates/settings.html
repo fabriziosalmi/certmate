@@ -37,7 +37,7 @@
                     </div>
                 </div>
                 <nav class="flex space-x-1 min-w-max" role="tablist" @keydown="onSettingsTabKeydown($event)">
-                    <template x-for="t in [{id:'general',icon:'fa-cogs',label:'General'},{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'probe',icon:'fa-network-wired',label:'Probe'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'oidc',icon:'fa-id-badge',label:'SSO'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                    <template x-for="t in [{id:'general',icon:'fa-cogs',label:'General'},{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'probe',icon:'fa-network-wired',label:'Probe'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'oidc',icon:'fa-id-badge',label:'SSO'},{id:'acme',icon:'fa-certificate',label:'ACME'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
                         <button type="button" @click="tab = t.id" role="tab"
                                 :id="'settings-tab-' + t.id"
                                 :aria-controls="'settings-panel-' + t.id"
@@ -71,6 +71,7 @@
                     {% include 'partials/settings_users.html' %}
                     {% include 'partials/settings_apikeys.html' %}
                     {% include 'partials/settings_oidc.html' %}
+                    {% include 'partials/settings_acme.html' %}
 
                     <!-- TAB: Backup & Restore Section -->
                     <div x-show="tab === 'backup'" x-cloak id="settings-panel-backup" role="tabpanel" aria-labelledby="settings-tab-backup" tabindex="0" class="bg-surface rounded-xl shadow-card p-6 mt-6">
@@ -293,4 +294,6 @@
     <script src="/static/js/settings-probe.js"></script>
     <script src="/static/js/settings-apikeys.js"></script>
     <script src="/static/js/settings-oidc.js"></script>
+    <script src="/static/js/acme-snippets.js"></script>
+    <script src="/static/js/settings-acme.js"></script>
 {% endblock %}

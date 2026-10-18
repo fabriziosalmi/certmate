@@ -1,0 +1,60 @@
+<!-- The certificates the ACME server issued (#476). -->
+<div x-data="acmeCertificates()" class="bg-surface rounded-xl shadow-card border border-border">
+    <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-border">
+        <div>
+            <h2 class="text-lg font-semibold text-foreground"><i class="fas fa-certificate mr-2 text-primary"></i>ACME certificates</h2>
+            <p class="text-xs text-muted">Ordered by ACME clients from this instance's own root. Newest first.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <input type="search" x-model="filter" placeholder="Filter by name or EAB key" aria-label="Filter ACME certificates"
+                   class="px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
+            <button type="button" @click="load()" title="Refresh" class="btn btn-secondary"><i class="fas fa-sync-alt"></i></button>
+        </div>
+    </div>
+
+    <template x-if="loading && !loaded">
+        <div class="text-center py-10 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading...</div>
+    </template>
+    <template x-if="empty">
+        <div class="text-center py-10 px-6 text-muted text-sm" id="acmeEmpty">
+            <i class="fas fa-certificate text-2xl mb-2 block"></i>
+            No certificate has been issued over ACME yet. An admin turns the ACME server on and creates
+            EAB keys in <a href="/settings#acme" class="underline">Settings, ACME</a>; clients do the rest.
+        </div>
+    </template>
+
+    <div class="overflow-x-auto" x-show="loaded && !empty">
+        <table class="min-w-full text-sm" id="acmeCertTable">
+            <thead class="text-xs text-muted uppercase">
+                <tr class="border-b border-border">
+                    <th class="text-left px-6 py-3">Names</th>
+                    <th class="text-left px-3 py-3">Status</th>
+                    <th class="text-left px-3 py-3">Expires</th>
+                    <th class="text-left px-3 py-3">EAB key</th>
+                    <th class="text-left px-3 py-3">Account</th>
+                    <th class="text-left px-3 py-3">Issued</th>
+                    <th class="px-6 py-3"></th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="certificate in shown" :key="certificate.id">
+                    <tr class="border-b border-border last:border-0">
+                        <td class="px-6 py-3 font-mono text-foreground" x-text="joined(certificate.names)"></td>
+                        <td class="px-3 py-3"><span class="text-xs px-2 py-0.5 rounded-full" :class="badge(certificate.status)"
+                                                    x-text="certificate.status"></span></td>
+                        <td class="px-3 py-3 text-muted" x-text="formatDate(certificate.not_after)"></td>
+                        <td class="px-3 py-3 font-mono text-muted" x-text="certificate.eab_kid || 'none'"></td>
+                        <td class="px-3 py-3 font-mono text-muted" :title="certificate.account_id" x-text="shortId(certificate.account_id)"></td>
+                        <td class="px-3 py-3 text-muted" x-text="formatDate(certificate.created_at)"></td>
+                        <td class="px-6 py-3 text-right">
+                            <template x-if="isAdmin && certificate.status === 'valid'">
+                                <button type="button" @click="revoke(certificate)" title="Revoke"
+                                        class="p-2 text-danger-fg hover:text-danger-strong"><i class="fas fa-ban"></i></button>
+                            </template>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+</div>
