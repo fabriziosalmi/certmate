@@ -45,6 +45,21 @@ class AcmeUrls:
     def orders(self, account_id):
         return self.account(account_id) + '/orders'
 
+    def new_order(self):
+        return self.base + 'new-order'
+
+    def order(self, order_id):
+        return self.base + 'order/' + order_id
+
+    def finalize(self, order_id):
+        return self.order(order_id) + '/finalize'
+
+    def authz(self, authz_id):
+        return self.base + 'authz/' + authz_id
+
+    def challenge(self, challenge_id):
+        return self.base + 'chall/' + challenge_id
+
 
 def register_acme_routes(app, managers):
     server = managers.get('acme_server')
@@ -87,7 +102,7 @@ def register_acme_routes(app, managers):
             # Section 6.5: a fresh nonce on every answer, refusals included,
             # so a client that got badNonce can retry at once.
             response.headers['Replay-Nonce'] = server.nonces.issue()
-            response.headers['Link'] = f'<{urls().directory()}>;rel="index"'
+            response.headers.add('Link', f'<{urls().directory()}>;rel="index"')
             response.headers['Cache-Control'] = 'no-store'
         return response
 
@@ -103,11 +118,11 @@ def register_acme_routes(app, managers):
     @bp.route('/directory', methods=['GET'])
     def directory():
         u = urls()
-        # Only the resources that answer. newOrder and revokeCert join with
-        # orders and issuance (#476).
+        # Only the resources that answer. revokeCert joins with issuance (#476).
         return jsonify({
             'newNonce': u.new_nonce(),
             'newAccount': u.new_account(),
+            'newOrder': u.new_order(),
             'keyChange': u.key_change(),
             'meta': {'externalAccountRequired': bool(server.config().get('eab_required', True))},
         })
@@ -135,7 +150,43 @@ def register_acme_routes(app, managers):
         as_the_named_account(req, account_id)
         if not req.is_post_as_get:
             raise AcmeProblem('malformed', 'The orders list is read with POST-as-GET')
-        return jsonify({'orders': []})
+        u = urls()
+        return jsonify({'orders': [u.order(i) for i in server.store.order_ids_of(account_id)]})
+
+    @bp.route('/new-order', methods=['POST'])
+    def new_order():
+        req = verified('kid')
+        created = server.new_order(req)
+        response = jsonify(server.order_json(created, urls()))
+        response.status_code = 201
+        response.headers['Location'] = urls().order(created['id'])
+        return response
+
+    @bp.route('/order/<order_id>', methods=['POST'])
+    def order(order_id):
+        req = verified('kid')
+        if not req.is_post_as_get:
+            raise AcmeProblem('malformed', 'An order is read with POST-as-GET')
+        found = server.owned(server.store.order(order_id), req.account, 'order')
+        return jsonify(server.order_json(found, urls()))
+
+    @bp.route('/authz/<authz_id>', methods=['POST'])
+    def authz(authz_id):
+        req = verified('kid')
+        found = server.owned(server.store.authorization(authz_id), req.account, 'authorization')
+        return jsonify(server.authz_json(server.update_authz(req, found), urls()))
+
+    @bp.route('/chall/<challenge_id>', methods=['POST'])
+    def challenge(challenge_id):
+        req = verified('kid')
+        found = server.store.challenge(challenge_id)
+        owner = server.store.authorization(found['authz_id']) if found else None
+        server.owned(owner, req.account, 'challenge')
+        answered = server.respond_to_challenge(req, found, owner)
+        response = jsonify(server.challenge_json(answered, urls()))
+        # Section 7.5.1: a challenge points up to its authorization.
+        response.headers.add('Link', f'<{urls().authz(owner["id"])}>;rel="up"')
+        return response
 
     @bp.route('/key-change', methods=['POST'])
     def key_change():

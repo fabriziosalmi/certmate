@@ -53,10 +53,10 @@ def create_acme_resources(api, models, ctx: ApiContext) -> dict:
         @instance_wide(ctx, 'acme_server', 'the ACME server')
         @api.expect(models['acme_server_update_model'])
         def patch(self):
-            """Change enabled, allow_http or eab_required."""
+            """Change enabled, allow_http, eab_required, or allowed_identifiers for accounts without an EAB key."""
             changes = request.get_json(silent=True)
             if not isinstance(changes, dict) or not changes:
-                return {'error': 'Send a JSON object with enabled, allow_http or eab_required',
+                return {'error': 'Send a JSON object with enabled, allow_http, eab_required or allowed_identifiers',
                         'code': 'ACME_ADMIN_INVALID'}, 400
             try:
                 server.set_options(changes)

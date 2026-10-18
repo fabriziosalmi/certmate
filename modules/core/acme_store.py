@@ -1,7 +1,7 @@
 """Where the ACME server keeps its state: SQLite under the data directory.
 
-Accounts now; orders, authorizations and challenges join them as the server
-grows (#476). SQLite rather than JSON files because an order moves through
+Accounts, orders, authorizations and challenges (#476). SQLite rather than
+JSON files because an order moves through
 states that several requests touch, and a transaction is the cheap way to make
 each move all or nothing. One connection per operation, as the inventory does
 (cert_inventory.py), so no connection is shared between threads.
@@ -27,6 +27,35 @@ CREATE TABLE IF NOT EXISTS accounts (
     eab_kid     TEXT,
     created_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS orders (
+    id           TEXT PRIMARY KEY,
+    account_id   TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    expires      TEXT NOT NULL,
+    identifiers  TEXT NOT NULL,
+    error        TEXT,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS orders_by_account ON orders (account_id);
+CREATE TABLE IF NOT EXISTS authorizations (
+    id          TEXT PRIMARY KEY,
+    order_id    TEXT NOT NULL,
+    account_id  TEXT NOT NULL,
+    identifier  TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    expires     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS authorizations_by_order ON authorizations (order_id);
+CREATE TABLE IF NOT EXISTS challenges (
+    id         TEXT PRIMARY KEY,
+    authz_id   TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    token      TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    validated  TEXT,
+    error      TEXT
+);
+CREATE INDEX IF NOT EXISTS challenges_by_authz ON challenges (authz_id);
 """
 
 
@@ -44,6 +73,20 @@ def _account(row):
     account = dict(row)
     account['contact'] = json.loads(account['contact'])
     return account
+
+
+def _decoded(row, *json_fields):
+    if row is None:
+        return None
+    item = dict(row)
+    for name in json_fields:
+        if item.get(name) is not None:
+            item[name] = json.loads(item[name])
+    return item
+
+
+def _new_id():
+    return secrets.token_urlsafe(12)
 
 
 class AcmeStore:
@@ -87,6 +130,92 @@ class AcmeStore:
             rows = con.execute('SELECT eab_kid, count(*) FROM accounts WHERE eab_kid IS NOT NULL '
                                'GROUP BY eab_kid').fetchall()
         return dict(rows)
+
+    # -- orders (section 7.4), their authorizations and challenges ---------
+
+    def create_order(self, account_id, identifiers, expires):
+        """An order with one pending authorization per identifier, each with
+        one http-01 challenge, written in one transaction."""
+        order_id = _new_id()
+        now = utc_now().isoformat()
+        with closing(self._connect()) as con, con:
+            con.execute('INSERT INTO orders (id, account_id, status, expires, identifiers, created_at) '
+                        'VALUES (?, ?, ?, ?, ?, ?)',
+                        (order_id, account_id, 'pending', expires, json.dumps(identifiers), now))
+            for identifier in identifiers:
+                authz_id = _new_id()
+                con.execute('INSERT INTO authorizations (id, order_id, account_id, identifier, status, expires) '
+                            'VALUES (?, ?, ?, ?, ?, ?)',
+                            (authz_id, order_id, account_id, json.dumps(identifier), 'pending', expires))
+                con.execute('INSERT INTO challenges (id, authz_id, type, token, status) VALUES (?, ?, ?, ?, ?)',
+                            (_new_id(), authz_id, 'http-01', secrets.token_urlsafe(32), 'pending'))
+        return self.order(order_id)
+
+    def order(self, order_id):
+        with closing(self._connect()) as con:
+            return _decoded(con.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone(),
+                            'identifiers', 'error')
+
+    def order_ids_of(self, account_id):
+        with closing(self._connect()) as con:
+            return [row[0] for row in con.execute(
+                'SELECT id FROM orders WHERE account_id = ? ORDER BY created_at', (account_id,))]
+
+    def authorizations_of(self, order_id):
+        with closing(self._connect()) as con:
+            return [_decoded(row, 'identifier') for row in con.execute(
+                'SELECT * FROM authorizations WHERE order_id = ? ORDER BY rowid', (order_id,))]
+
+    def authorization(self, authz_id):
+        with closing(self._connect()) as con:
+            return _decoded(con.execute('SELECT * FROM authorizations WHERE id = ?', (authz_id,)).fetchone(),
+                            'identifier')
+
+    def challenges_of(self, authz_id):
+        with closing(self._connect()) as con:
+            return [_decoded(row, 'error') for row in con.execute(
+                'SELECT * FROM challenges WHERE authz_id = ? ORDER BY rowid', (authz_id,))]
+
+    def challenge(self, challenge_id):
+        with closing(self._connect()) as con:
+            return _decoded(con.execute('SELECT * FROM challenges WHERE id = ?', (challenge_id,)).fetchone(),
+                            'error')
+
+    def record_challenge(self, challenge_id, valid, error=None):
+        """The outcome of a check, carried to the challenge, its authorization
+        and its order in one transaction (section 7.1.6)."""
+        status = 'valid' if valid else 'invalid'
+        with closing(self._connect()) as con, con:
+            row = con.execute('SELECT authz_id FROM challenges WHERE id = ?', (challenge_id,)).fetchone()
+            authz_id = row[0]
+            con.execute('UPDATE challenges SET status = ?, validated = ?, error = ? WHERE id = ?',
+                        (status, utc_now().isoformat() if valid else None,
+                         json.dumps(error) if error else None, challenge_id))
+            con.execute('UPDATE authorizations SET status = ? WHERE id = ?', (status, authz_id))
+            order_id = con.execute('SELECT order_id FROM authorizations WHERE id = ?', (authz_id,)).fetchone()[0]
+            self._settle_order(con, order_id)
+
+    def deactivate_authorization(self, authz_id):
+        with closing(self._connect()) as con, con:
+            con.execute("UPDATE authorizations SET status = 'deactivated' WHERE id = ?", (authz_id,))
+            order_id = con.execute('SELECT order_id FROM authorizations WHERE id = ?', (authz_id,)).fetchone()[0]
+            self._settle_order(con, order_id)
+        return self.authorization(authz_id)
+
+    @staticmethod
+    def _settle_order(con, order_id):
+        """pending until every authorization is valid, then ready; invalid
+        as soon as one is not going to be."""
+        statuses = [row[0] for row in con.execute(
+            'SELECT status FROM authorizations WHERE order_id = ?', (order_id,))]
+        if any(s in ('invalid', 'deactivated', 'revoked') for s in statuses):
+            status = 'invalid'
+        elif statuses and all(s == 'valid' for s in statuses):
+            status = 'ready'
+        else:
+            status = 'pending'
+        con.execute("UPDATE orders SET status = ? WHERE id = ? AND status IN ('pending', 'ready')",
+                    (status, order_id))
 
     def update_contact(self, account_id, contact):
         with closing(self._connect()) as con, con:

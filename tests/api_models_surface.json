@@ -1,5 +1,5 @@
 {
- "contract_version": "2.51",
+ "contract_version": "2.52",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -103,6 +103,12 @@
     "allow_http": {
      "type": "boolean"
     },
+    "allowed_identifiers": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
     "directory_url": {
      "type": "string"
     },
@@ -125,6 +131,12 @@
    "properties": {
     "allow_http": {
      "type": "boolean"
+    },
+    "allowed_identifiers": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
     },
     "eab_required": {
      "type": "boolean"

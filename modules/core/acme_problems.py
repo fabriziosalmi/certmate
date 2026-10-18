@@ -14,11 +14,16 @@ KINDS = frozenset({
     'badNonce',
     'badPublicKey',
     'badSignatureAlgorithm',
+    'connection',
+    'dns',
     'externalAccountRequired',
+    'incorrectResponse',
     'invalidContact',
     'malformed',
+    'rejectedIdentifier',
     'unauthorized',
     'unsupportedContact',
+    'unsupportedIdentifier',
 })
 
 

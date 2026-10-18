@@ -372,7 +372,8 @@ def _walk(app, token, trace, certbot, container, seeded, report):
 
     # --- the ACME server's administration (#476): on, a key, a refusal, off
     call('get', '/api/acme/server')
-    call('patch', '/api/acme/server', body={'enabled': True, 'allow_http': True})
+    call('patch', '/api/acme/server', body={'enabled': True, 'allow_http': True,
+                                            'allowed_identifiers': ['*.open.walk.internal']})
     call('patch', '/api/acme/server', body={'enabled': 'yes'})
     call('post', '/api/acme/eab-keys', body={'kid': 'walk', 'allowed_identifiers': ['*.walk.internal'],
                                              'note': 'route walk'})

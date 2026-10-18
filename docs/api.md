@@ -1810,8 +1810,9 @@ with its account key. The endpoints below are CertMate's administration of
 it, admin only, since API contract **2.51**. A key restricted with
 `allowed_domains` is refused.
 
-It is being built in steps (#476). Today it answers the directory, nonces and
-accounts; orders and issuance follow. It is off by default.
+It is being built in steps (#476). Today it answers the directory, nonces,
+accounts, and orders with their http-01 challenges; issuance follows. It is
+off by default.
 
 #### Options
 
@@ -1824,6 +1825,7 @@ accounts; orders and issuance follow. It is off by default.
   "enabled": true,
   "allow_http": false,
   "eab_required": true,
+  "allowed_identifiers": ["*.guest.lab.internal"],
   "directory_url": "https://certmate.example.com/acme/directory",
   "eab_keys": [
     {
@@ -1839,8 +1841,8 @@ accounts; orders and issuance follow. It is off by default.
 ```
 
 `PATCH` takes any of `enabled`, `allow_http` and `eab_required`, each `true` or
-`false`, and answers with the same shape. Another field, or a value that is
-not a boolean, is a `400` that changes nothing.
+`false`, and `allowed_identifiers`, and answers with the same shape. Another
+field, or a value of the wrong type, is a `400` that changes nothing.
 
 - `enabled`: while `false`, every `/acme/` route answers `404`.
 - `allow_http`: RFC 8555 requires HTTPS, so the ACME routes refuse plain HTTP
@@ -1850,6 +1852,9 @@ not a boolean, is a `400` that changes nothing.
 - `eab_required`: an ACME account needs an External Account Binding, an HMAC
   made with one of the keys below. `false` lets anyone who reaches `/acme/`
   create an account.
+- `allowed_identifiers`, since API contract **2.52**: the names an account
+  created without an EAB key may order, in the form the EAB keys use. Empty,
+  the default, such an account orders nothing.
 
 `directory_url` is built from the address this request reached; give clients
 the one they will reach.
@@ -1863,7 +1868,10 @@ the one they will reach.
 An EAB key is the right to create ACME accounts. Each carries the names its
 accounts may order certificates for: a DNS name (`nas.lab.internal`: that
 name only), or `*.` and a DNS name (`*.lab.internal`: every name below it, at
-any depth, and not the name itself). Orders will be checked against them.
+any depth, and not the name itself). Every name of an order must match one
+of the patterns of the key that enrolled the account, or the order is
+refused with `rejectedIdentifier` before anything is fetched. A disabled
+key's accounts keep ordering within its names.
 
 <!-- request: POST /api/acme/eab-keys -->
 ```json
