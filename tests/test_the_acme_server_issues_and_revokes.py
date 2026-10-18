@@ -112,7 +112,7 @@ def test_a_ready_order_becomes_a_certificate_built_from_the_order(client, respon
     assert ku.digital_signature and not ku.key_encipherment  # an EC key
     assert cert.public_key().public_numbers() == key.public_key().public_numbers()
     lifetime = cert.not_valid_after_utc - cert.not_valid_before_utc
-    assert datetime.timedelta(days=30) <= lifetime <= datetime.timedelta(days=30, minutes=6)
+    assert datetime.timedelta(days=45) <= lifetime <= datetime.timedelta(days=45, minutes=6)
 
 
 def test_an_rsa_key_also_gets_key_encipherment(client, responder):

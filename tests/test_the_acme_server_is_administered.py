@@ -174,7 +174,7 @@ def test_the_validity_is_a_number_of_days_from_1_to_365(admin, value, because):
     _app, client = admin
     response = client.patch('/api/acme/server', json={'validity_days': value})
     assert response.status_code == 400 and because in response.get_data(as_text=True)
-    assert client.get('/api/acme/server').get_json()['validity_days'] == 30
+    assert client.get('/api/acme/server').get_json()['validity_days'] == 45
 
 
 def test_the_validity_is_set(admin):
