@@ -17,6 +17,7 @@ from flask_restx import Resource
 import logging
 
 from ..core import dns_availability
+from ..core.settings import mask_secrets_in_settings
 from .resource_context import ApiContext, instance_wide
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,9 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
         def get(self):
             """Get current settings. A key restricted with `allowed_domains` is refused."""
             try:
-                return ctx.settings.load_settings() or {}
+                # Masked before the model shapes it: a viewer reads this, and
+                # the model alone let a raw field (`multi`) through in clear.
+                return mask_secrets_in_settings(ctx.settings.load_settings() or {})
             except ValueError as e:
                 logger.error(f"Invalid settings format: {e}")
                 return {'error': 'Invalid settings data'}, 500
@@ -180,7 +183,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
         def get(self):
             """Get DNS provider configurations. A key restricted with `allowed_domains` is refused."""
             try:
-                settings = ctx.settings.load_settings()
+                settings = mask_secrets_in_settings(ctx.settings.load_settings() or {})
                 return settings.get('dns_providers', {})
             except Exception as e:
                 logger.error(f"Error getting DNS providers: {e}")
