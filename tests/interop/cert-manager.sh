@@ -36,7 +36,10 @@ INGRESS_SHA256=502fddca66b09c20dd48b6d0a792a9671cd663a3a0d2a8bda5ae990d13b6c5b2
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 result() { printf 'RESULT %s\n' "$*" | tee -a "$WORK/results.txt"; }
 k() { kubectl --context "$CONTEXT" "$@"; }
-py() { docker run --rm -i -v "$WORK:/w" --entrypoint /opt/venv/bin/python "$CERTMATE_IMAGE" - "$@"; }
+# As root: on Linux the image's own user cannot write $WORK, which belongs to
+# whoever runs this (run.sh met it on GitHub's runner; OrbStack's mounts on
+# macOS hide it).
+py() { docker run --rm -i --user 0:0 -v "$WORK:/w" --entrypoint /opt/venv/bin/python "$CERTMATE_IMAGE" - "$@"; }
 mkdir -p "$WORK"
 : > "$WORK/results.txt"
 
@@ -233,7 +236,9 @@ k -n "$NS" wait --for=condition=Ready certificate/web --timeout=300s >/dev/null
 result "cert-manager: Certificate Ready in $(( $(date +%s) - started )) s"
 result "cert-manager: $(k -n "$NS" get certificate web -o jsonpath='notBefore={.status.notBefore} notAfter={.status.notAfter} renewalTime={.status.renewalTime}')"
 k -n "$NS" get secret web-tls -o jsonpath='{.data.tls\.crt}' | base64 -d > "$WORK/web.crt"
-result "$(py <<'PY'
+# Assigned first: inside another command's arguments, a failed check would not
+# stop the run (bash ignores the status of that command substitution).
+chained=$(py <<'PY'
 from cryptography import x509
 root = x509.load_pem_x509_certificate(open('/w/root.pem', 'rb').read())
 chain = x509.load_pem_x509_certificates(open('/w/web.crt', 'rb').read())
@@ -241,5 +246,6 @@ chain[0].verify_directly_issued_by(root)
 names = chain[0].extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
 print(f'cert-manager: the secret holds {len(chain)} certificate, chained to the ACME root, names={names}')
 PY
-)"
+)
+result "$chained"
 log "results in $WORK/results.txt"

@@ -149,6 +149,15 @@ advisory:
       It exists because acme-dns had never worked in any release (v2.24.1), so
       a red run here is worth stopping for even though it does not block.
 
+  - context: acme-interop
+    workflow: ci.yml
+    job: acme-interop
+    why: >-
+      lego and acme.sh against the ACME server, run on a pull request only when
+      it touches what the run checks (scripts/acme_paths_changed.py). It pulls
+      three images from Docker Hub at run time, so an outage there is not the
+      pull request's; a red run is worth stopping for all the same.
+
   - context: ui
     workflow: ui-tests.yml
     job: ui

@@ -29,10 +29,12 @@ CLOCK_SKEW = timedelta(minutes=5)
 # 45 days (decision D3 on #476): inside the 47 days public certificates are
 # heading for, and a week or more left when each client renews. The server's
 # renewal information suggests days 30 to 37.5. Measured with
-# tests/interop/run.sh: lego 5.5.2 renews on day 30, and acme.sh 3.1.5 at a
-# random moment inside the window (day 35.5 in one run); before the server
-# answered renewal information, acme.sh renewed 29 days after issuance, which
-# is why 30 days was not the default. With tests/interop/cert-manager.sh:
+# tests/interop/run.sh: lego 5.5.2 renews on day 30, a third of the lifetime
+# left, by its own rule (with the window moved to open on day 22.5 it still
+# said day 30), and acme.sh 3.1.5 at a random moment inside the window (day
+# 35.5 in one run); before the server answered renewal information, acme.sh
+# renewed 29 days after issuance, which is why 30 days was not the default.
+# With tests/interop/cert-manager.sh:
 # cert-manager v1.21.2, 15 days before expiry. certbot 5.8.0 follows the
 # window, its ACME library in the test suite, and without one renews with a
 # third left (certbot/_internal/renewal.py).

@@ -114,8 +114,8 @@ measured renews with a week or more left. The server's
 | Client | Renews | At 45 days | Found with |
 | --- | --- | --- | --- |
 | certbot 5.8.0 | inside the server's window; without one, with a third of the lifetime left | 7.5 to 15 days left | its ACME library in the test suite; the fallback read in its code |
-| lego 5.5.2 | on day 30 | 15 days left | `tests/interop/run.sh` |
-| acme.sh 3.1.5 | at a random moment inside the server's window | 9.5 days left in one run | `tests/interop/run.sh` |
+| lego 5.5.2 | with a third of the lifetime left, its own rule whatever window the server suggests; at once when the window has passed, as after a revocation | 15 days left | `tests/interop/run.sh`, which checks it on every run |
+| acme.sh 3.1.5 | at a random moment inside the server's window | 9.5 days left in one run | `tests/interop/run.sh`, which checks it on every run |
 | cert-manager v1.21.2 | with a third of the duration left | 15 days left | `tests/interop/cert-manager.sh` |
 
 Give acme.sh no `--days`. With it, acme.sh takes its renewal time from that

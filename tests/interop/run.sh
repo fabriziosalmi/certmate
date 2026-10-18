@@ -6,12 +6,24 @@
 # keeps the scheme), turns ACME on and issues an EAB key through the admin
 # API, as an operator would. Then each client, in a container of its own on
 # the same Docker network under its own name, registers with the EAB key,
-# answers http-01 with its standalone server, gets a certificate, is asked
-# to renew at once (to read its renewal rule against the default validity),
-# and revokes it. The checks run with CertMate's own Python: the leaf chains
-# to /acme/root, and /acme/crl lists what was revoked; either failing fails
-# the run. Each step also reports how many /acme/ requests it made, read from
-# the front's access log: what a rate limit on /acme/ has to leave room for.
+# answers http-01 with its standalone server and gets a certificate. What
+# docs/acme-server.md says of each client is checked here, and any check
+# failing fails the run:
+#
+# - the leaf chains to /acme/root;
+# - asked to renew at once, the client waits: lego until a third of the
+#   lifetime is left, its own rule; acme.sh for a moment inside the renewal
+#   window the server gave it, which is two thirds to five sixths of the
+#   lifetime;
+# - once CertMate's admin revokes the certificate, the client's next run
+#   replaces it, and the CRL lists the revoked one;
+# - the client revokes the new one itself, and the CRL lists it.
+#
+# The clients are pinned by digest, so a run measures this server against
+# the same lego and acme.sh each time: moving a digest is how a new client
+# release is measured. Each step also reports how many /acme/ requests it
+# made, read from the front's access log: what the rate limit on /acme/ has
+# to leave room for.
 #
 # Needs Docker, the images pinned below, and nothing on the host but bash.
 # Usage: tests/interop/run.sh [lego|acmesh ...]   (default: every client)
@@ -127,13 +139,28 @@ PY
 )
 public /acme/root > "$WORK/root.pem"
 
-check_leaf() {  # $1 client, $2 leaf path inside $WORK
+# Every check goes through this. A check written as `result "$(check ...)"`
+# could not fail the run: bash ignores the status of a command substitution
+# inside another command's arguments, so a leaf that did not chain to the root
+# or a revocation missing from the CRL printed an empty line and the run went
+# on. The assignment is what carries the failure.
+check() {  # the command prints one line for the results; its failure stops the run
+    local line
+    line=$("$@")
+    result "$line"
+}
+
+tolerated() {  # a step whose own exit status says nothing; the checks after it do
+    "$@" || true
+}
+
+check_leaf() {  # $1 client, $2 leaf inside $WORK
     py "$1" "$2" <<'PY'
 import sys
 from cryptography import x509
-client, leaf_path = sys.argv[1], sys.argv[2]
+client, leaf_path = sys.argv[1], sys.argv[2].lstrip('/')
 root = x509.load_pem_x509_certificate(open('/w/root.pem', 'rb').read())
-leaf = x509.load_pem_x509_certificates(open('/w' + leaf_path, 'rb').read())[0]
+leaf = x509.load_pem_x509_certificates(open('/w/' + leaf_path, 'rb').read())[0]
 leaf.verify_directly_issued_by(root)
 days = (leaf.not_valid_after_utc - leaf.not_valid_before_utc).total_seconds() / 86400
 names = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
@@ -141,19 +168,116 @@ print(f'{client} issued: chains to the ACME root, names={names}, lifetime={days:
 PY
 }
 
-in_crl() {  # $1 client, $2 leaf path inside $WORK
+in_crl() {  # $1 client, $2 leaf inside $WORK
     public /acme/crl > "$WORK/crl.der"
     py "$1" "$2" <<'PY'
 import sys
 from cryptography import x509
-client, leaf_path = sys.argv[1], sys.argv[2]
+client, leaf_path = sys.argv[1], sys.argv[2].lstrip('/')
 root = x509.load_pem_x509_certificate(open('/w/root.pem', 'rb').read())
 crl = x509.load_der_x509_crl(open('/w/crl.der', 'rb').read())
-leaf = x509.load_pem_x509_certificates(open('/w' + leaf_path, 'rb').read())[0]
-assert crl.is_signature_valid(root.public_key())
+leaf = x509.load_pem_x509_certificates(open('/w/' + leaf_path, 'rb').read())[0]
+assert crl.is_signature_valid(root.public_key()), 'the CRL is not signed by the ACME root'
 entry = crl.get_revoked_certificate_by_serial_number(leaf.serial_number)
-assert entry is not None, f'{client}: the revoked certificate is not in the signed CRL'
-print(f'{client} revoked: in the signed CRL')
+assert entry is not None, f'{client}: {leaf.serial_number:x} is revoked and not in the signed CRL'
+print(f'{client} revoked: {leaf.serial_number:x} in the signed CRL')
+PY
+}
+
+keep() {  # $1 a file inside $WORK, $2 a name to keep a copy under: the clients overwrite or move theirs
+    py "$1" "$2" <<'PY'
+import shutil, sys
+shutil.copy('/w/' + sys.argv[1].lstrip('/'), '/w/' + sys.argv[2])
+PY
+}
+
+admin_revokes() {  # $1 a leaf inside $WORK: revoked through CertMate's API, as from the ACME view
+    api GET /api/acme/certificates > "$WORK/certificates.json"
+    local id
+    id=$(py "$1" <<'PY'
+import json, sys
+from cryptography import x509
+serial = format(x509.load_pem_x509_certificates(open('/w/' + sys.argv[1].lstrip('/'), 'rb').read())[0].serial_number, 'x')
+print(next(c['id'] for c in json.load(open('/w/certificates.json'))['certificates'] if c['serial'] == serial))
+PY
+)
+    api POST "/api/acme/certificates/$id/revoke" '{"reason": 4}' >/dev/null
+}
+
+renewal() {  # $1 client, $2 renewed|kept, $3 the leaf it had, $4 the leaf it has now
+    py "$@" <<'PY'
+import sys
+from cryptography import x509
+client, expected, before, after = sys.argv[1:]
+load = lambda p: x509.load_pem_x509_certificates(open('/w/' + p.lstrip('/'), 'rb').read())[0].serial_number
+old, new = load(before), load(after)
+if expected == 'renewed':
+    assert new != old, f'{client} kept {old:x}, which it was expected to replace'
+    print(f'{client} replaced it: {old:x} -> {new:x}')
+else:
+    assert new == old, f'{client} replaced {old:x} with {new:x}, where it was expected to wait'
+    print(f'{client} kept it: {old:x}')
+PY
+}
+
+when_check() {  # $1 client, $2 the moment it chose (RFC 3339), $3 its leaf, [$4 the window it was given]
+    # Without a window: the client's own rule, a third of the lifetime left.
+    # With one: that window is the one documented (two thirds to five sixths
+    # of the lifetime), and the moment is inside it.
+    py "$@" <<'PY'
+import sys
+from datetime import datetime, timedelta
+from cryptography import x509
+client, chosen, leaf_path = sys.argv[1:4]
+parse = lambda s: datetime.fromisoformat(s.replace('Z', '+00:00'))
+leaf = x509.load_pem_x509_certificates(open('/w/' + leaf_path.lstrip('/'), 'rb').read())[0]
+born = leaf.not_valid_before_utc
+life = leaf.not_valid_after_utc - born
+day = lambda moment: (moment - born).total_seconds() / 86400
+at = parse(chosen)
+if len(sys.argv) == 4:
+    rule = born + life * 2 / 3
+    assert abs(at - rule) < timedelta(minutes=2), f'{client} renews on day {day(at):.2f}, not with a third of the lifetime left'
+    print(f'{client} renews on day {day(at):.1f} of {day(leaf.not_valid_after_utc):.1f}: a third of the lifetime left')
+else:
+    start, end = (parse(s) for s in sys.argv[4].split())
+    for got, share in ((start, 2 / 3), (end, 5 / 6)):
+        assert abs(got - (born + life * share)) < timedelta(minutes=1), f'the window given to {client} is days {day(start):.2f} to {day(end):.2f}'
+    assert start <= at <= end, f'{client} renews on day {day(at):.2f}, outside the window it was given'
+    print(f'{client} renews on day {day(at):.1f} of {day(leaf.not_valid_after_utc):.1f}, '
+          f'inside the window it was given, days {day(start):.1f} to {day(end):.1f}')
+PY
+}
+
+acmesh_window() {  # acme.sh's own log: the window the server gave it, "<start> <end>"
+    py "$1" <<'PY'
+import re, sys
+m = re.search(r'ARI suggestedWindow: (\S+) to (\S+)', open('/w/' + sys.argv[1]).read())
+assert m, 'acme.sh did not read a renewal window'
+print(m.group(1), m.group(2))
+PY
+}
+
+lego_chose() {  # lego's own log: the moment its skip message says it will renew
+    py "$1" <<'PY'
+import re, sys
+from datetime import datetime, timedelta
+log = open('/w/' + sys.argv[1]).read()
+m = re.search(r'time=(\S+) .*Skip renewal: .*can be performed in ([0-9a-zµ.]+?)\.', log)
+assert m, 'lego did not say it skipped the renewal: ' + log[-300:]
+units = {'d': 86400, 'h': 3600, 'm': 60, 's': 1, 'ms': 1e-3, 'µs': 1e-6, 'us': 1e-6, 'ns': 1e-9}
+wait = sum(float(n) * units[u] for n, u in re.findall(r'([0-9.]+)(ms|µs|us|ns|d|h|m|s)', m.group(2)))
+at = datetime.fromisoformat(m.group(1).replace('Z', '+00:00')) + timedelta(seconds=wait)
+print(at.strftime('%Y-%m-%dT%H:%M:%SZ'))
+PY
+}
+
+acmesh_chose() {  # acme.sh --info: the renewal time it scheduled
+    py "$1" <<'PY'
+import re, sys
+m = re.search(r'Le_NextRenewTimeStr=(\S+)', open('/w/' + sys.argv[1]).read())
+assert m, 'acme.sh --info shows no Le_NextRenewTimeStr'
+print(m.group(1))
 PY
 }
 
@@ -177,23 +301,30 @@ run_lego() {
             "$LEGO_IMAGE" "$@"
     }
     local common=(--server "$DIRECTORY" --path /data --log.format text)
+    local order=(--eab --eab.kid "$KID" --eab.hmac "$HMAC" --email ops@lab.internal --accept-tos
+                 --domains lego.lab.internal --http --no-random-sleep)
     log "lego: register with EAB and issue for lego.lab.internal over http-01"
-    counted "lego register and issue" "$WORK/lego-issue.log" \
-        lego run "${common[@]}" --eab --eab.kid "$KID" --eab.hmac "$HMAC" \
-        --email ops@lab.internal --accept-tos --domains lego.lab.internal --http --no-random-sleep
-    local leaf
+    counted "lego register and issue" "$WORK/lego-issue.log" lego run "${common[@]}" "${order[@]}"
+    local leaf at
     leaf=$(found lego lego.lab.internal.crt)
-    result "$(check_leaf lego "/$leaf")"
-    log "lego: asked to renew at once, with its default rule"
-    counted "lego renewal check" "$WORK/lego-renew.log" \
-        lego run "${common[@]}" --eab --eab.kid "$KID" --eab.hmac "$HMAC" \
-        --email ops@lab.internal --accept-tos --domains lego.lab.internal --http --no-random-sleep
-    result "lego renewal: $(grep -iE 'renew|days|ARI|skip' "$WORK/lego-renew.log" | tr '\n' ' ' | cut -c1-400)"
+    check check_leaf lego "$leaf"
+    keep "$leaf" lego-first.pem
+    log "lego: asked to renew at once"
+    counted "lego renewal check" "$WORK/lego-renew.log" lego run "${common[@]}" "${order[@]}"
+    check renewal lego kept lego-first.pem "$leaf"
+    at=$(lego_chose lego-renew.log)
+    check when_check lego "$at" lego-first.pem
+    log "lego: CertMate's admin revokes it, then lego's next run"
+    admin_revokes lego-first.pem
+    counted "lego run after an admin revoked it" "$WORK/lego-after-revocation.log" \
+        lego run "${common[@]}" "${order[@]}"
+    check renewal lego renewed lego-first.pem "$leaf"
+    check check_leaf lego "$leaf"
+    check in_crl lego lego-first.pem
     log "lego: revoke"
     counted "lego revoke" "$WORK/lego-revoke.log" \
-        lego certificates revoke "${common[@]}" --email ops@lab.internal \
-        --cert.name lego.lab.internal --keep
-    result "$(in_crl lego "/$leaf")"
+        lego certificates revoke "${common[@]}" --email ops@lab.internal --cert.name lego.lab.internal --keep
+    check in_crl lego "$leaf"
 }
 
 run_acmesh() {
@@ -206,29 +337,39 @@ run_acmesh() {
         acmesh --register-account --server "$DIRECTORY" --ca-bundle /certs/front.pem \
         --eab-kid "$KID" --eab-hmac-key "$HMAC" -m ops@lab.internal
     log "acme.sh: issue for acmesh.lab.internal over http-01, standalone"
-    # ACMESH_DAYS: acme.sh's --days, to measure a renewal rule other than its default.
+    # ACMESH_DAYS: acme.sh's --days, to measure a rule other than the server's window. It
+    # replaces the window, so the run stops after reporting the schedule it gives.
     counted "acme.sh issue" "$WORK/acmesh-issue.log" \
         acmesh --issue --standalone -d acmesh.lab.internal --server "$DIRECTORY" \
         --ca-bundle /certs/front.pem ${ACMESH_DAYS:+--days "$ACMESH_DAYS"}
-    local leaf
+    local leaf at window
     leaf=$(found acmesh acmesh.lab.internal.cer)
-    # acme.sh moves a revoked certificate's files aside: keep the leaf to look it up in the CRL.
-    py "$leaf" <<'PY'
-import shutil, sys
-shutil.copy('/w/' + sys.argv[1], '/w/acmesh-leaf.pem')
-PY
-    leaf=acmesh-leaf.pem
-    result "$(check_leaf acmesh "/$leaf")"
+    check check_leaf acmesh "$leaf"
+    # acme.sh moves a revoked certificate's files aside: keep each leaf to look it up later.
+    keep "$leaf" acmesh-first.pem
     acmesh --info -d acmesh.lab.internal > "$WORK/acmesh-info.log" 2>&1 || true
-    result "acme.sh schedule: $(grep -E 'Le_NextRenewTimeStr|Le_RenewalDays|Le_CertCreateTimeStr' "$WORK/acmesh-info.log" | tr '\n' ' ')"
+    at=$(acmesh_chose acmesh-info.log)
+    if [ -n "${ACMESH_DAYS:-}" ]; then
+        result "acme.sh, given --days $ACMESH_DAYS, renews at $at"
+        return
+    fi
+    window=$(acmesh_window acmesh-issue.log)
+    check when_check acme.sh "$at" acmesh-first.pem "$window"
     log "acme.sh: the cron run, at once"
-    acmesh --cron > "$WORK/acmesh-cron.log" 2>&1 || true
-    result "acme.sh cron: $(grep -iE 'skip|renew|next' "$WORK/acmesh-cron.log" | tr '\n' ' ' | cut -c1-400)"
+    counted "acme.sh cron, at once" "$WORK/acmesh-cron.log" tolerated acmesh --cron
+    check renewal acme.sh kept acmesh-first.pem "$leaf"
+    log "acme.sh: CertMate's admin revokes it, then acme.sh's next cron run"
+    admin_revokes acmesh-first.pem
+    counted "acme.sh cron after an admin revoked it" "$WORK/acmesh-cron-after-revocation.log" \
+        tolerated acmesh --cron
+    check renewal acme.sh renewed acmesh-first.pem "$leaf"
+    check check_leaf acmesh "$leaf"
+    check in_crl acmesh acmesh-first.pem
+    keep "$leaf" acmesh-renewed.pem
     log "acme.sh: revoke"
     counted "acme.sh revoke" "$WORK/acmesh-revoke.log" \
-        acmesh --revoke -d acmesh.lab.internal --server "$DIRECTORY" \
-        --ca-bundle /certs/front.pem
-    result "$(in_crl acmesh "/$leaf")"
+        acmesh --revoke -d acmesh.lab.internal --server "$DIRECTORY" --ca-bundle /certs/front.pem
+    check in_crl acmesh acmesh-renewed.pem
 }
 
 for client in $CLIENTS; do

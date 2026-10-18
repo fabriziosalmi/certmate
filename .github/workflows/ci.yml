@@ -631,28 +631,49 @@ jobs:
       run: python scripts/check_wiki_endpoints.py /tmp/wiki
 
   # lego and acme.sh against CertMate's ACME server (#476), each in a container
-  # of its own: register with an EAB key, issue over http-01, ask to renew,
-  # revoke, and the signed CRL lists what was revoked (tests/interop/run.sh,
-  # which fails on any of those). It also writes how many /acme/ requests each
-  # step made. Weekly and not a merge gate: the clients change on their own
-  # schedule, so a failure here is news about a client release as often as
-  # about a pull request. cert-manager needs a cluster and stays a manual run
-  # (tests/interop/cert-manager.sh).
+  # of its own: tests/interop/run.sh, which fails when any of what
+  # docs/acme-server.md says of them stops being true (the leaf chains to the
+  # root, each waits as described before renewing, each replaces a certificate
+  # an admin revoked on its next run, the CRL lists every revocation). It also
+  # writes how many /acme/ requests each step made.
+  #
+  # The clients are pinned by digest, so this measures the server against the
+  # same lego and acme.sh every time; moving a digest is how a new release of
+  # a client is measured. It runs weekly on main and on a pull request that
+  # touches what it checks (scripts/acme_paths_changed.py says which), and is
+  # not a merge gate: it pulls three images from Docker Hub, whose outage is
+  # not the pull request's. cert-manager needs a cluster and stays a manual
+  # run (tests/interop/cert-manager.sh).
   acme-interop:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
     - name: Checkout code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        fetch-depth: 0
+
+    - name: Decide whether this run has anything to check
+      id: scope
+      env:
+        EVENT: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [ "$EVENT" != "pull_request" ]; then
+          echo "acme=true" >> "$GITHUB_OUTPUT"
+        else
+          python3 scripts/acme_paths_changed.py "$BASE_SHA" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: lego and acme.sh get, renew and revoke certificates
+      if: steps.scope.outputs.acme == 'true'
       env:
         INTEROP_WORK: ${{ runner.temp }}/interop
       run: tests/interop/run.sh
 
     - name: Keep the results
-      if: always()
+      if: always() && steps.scope.outputs.acme == 'true'
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
       with:
         name: acme-interop
