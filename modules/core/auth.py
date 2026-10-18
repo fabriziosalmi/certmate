@@ -62,28 +62,38 @@ def _warn_once_about_last_used(error):
 # was there during the setup window, which is why it is recorded and reviewed.
 SETUP_USERNAME = 'setup_user'
 
-# What setup mode refuses outright, even to its anonymous admin (#999 follow-
-# up). Setup mode exists so a fresh instance can be bootstrapped, and it
-# serves every caller as admin until a credential exists. These are the
-# requests that turn "anyone who can reach the instance" into lasting damage:
-# running a command on the host, carrying away private keys, or planting a
-# command that outlives setup. Restoring and uploading a backup stay allowed:
-# restoring onto a fresh host is the documented recovery path, and it happens
-# in setup mode. (method, path pattern)
-_SETUP_REFUSED = tuple((method, re.compile(pattern)) for method, pattern in (
-    ('POST', r'^/api/deploy/(config|test/[^/]+)$'),
-    ('POST', r'^/api/certificates/[^/]+/deploy$'),
-    ('GET', r'^/api/certificates/[^/]+/download(/[^/]+)?$'),
-    ('POST', r'^/api/web/certificates/download/batch$'),
-    ('GET', r'^/api/client-certs/[^/]+/download/(key|pfx)$'),
-    ('POST', r'^/api/(web/)?backups/create$'),
-    ('GET', r'^/api/backups/download/'),
+# What setup mode lets its anonymous admin do. Setup mode exists so a fresh
+# instance can be bootstrapped, and it serves every caller as admin until a
+# credential exists. The first caller can always take the instance by creating
+# the first admin, and the operator finds out, because setup is then over. The
+# danger is what does not end setup: a change that stays behind, unseen, once
+# the operator has made the first admin. A list of refused writes (#999 follow-
+# up) kept missing some: restoring an archive planted deploy hooks and an admin
+# API key that outlived setup; a storage migration copied every private key to
+# a directory or a backend the caller chose; OIDC and DNS settings could name a
+# file or a variable for a secret, to be sent to a server the caller chose.
+#
+# So every write is refused except the two the first-run screen makes
+# (templates/setup.html): creating the first admin, and enabling local sign-in.
+# Restoring onto a new instance is done after that, signed in (docs/backup.md).
+# Reads stay open, except those that carry key material. (method, path pattern)
+_SETUP_WRITES_ALLOWED = tuple((method, re.compile(pattern)) for method, pattern in (
+    ('POST', r'^/api/(web/settings/)?users$'),
+    ('POST', r'^/api/auth/config$'),
 ))
+_SETUP_READS_REFUSED = tuple(re.compile(pattern) for pattern in (
+    r'^/api/certificates/[^/]+/download(/[^/]+)?$',
+    r'^/api/client-certs/[^/]+/download/(key|pfx)$',
+    r'^/api/backups/download/',
+))
+_READ_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
 
 
 def _refused_in_setup(method, path):
     """Is this request one setup mode refuses even to its anonymous admin?"""
-    return any(method == m and pattern.match(path) for m, pattern in _SETUP_REFUSED)
+    if method in _READ_METHODS:
+        return any(pattern.match(path) for pattern in _SETUP_READS_REFUSED)
+    return not any(method == m and pattern.match(path) for m, pattern in _SETUP_WRITES_ALLOWED)
 
 # Distinct from None/False so the operator-bearer-token detection can be
 # memoised (env/file are fixed for the process lifetime) without a False
@@ -1648,13 +1658,27 @@ class AuthManager:
             # configured bearer token is always enforced here.
             if self.is_setup_mode():
                 if _refused_in_setup(request.method, request.path):
+                    # Audited: an attempt to change a fresh instance, or to
+                    # pull key material from it, before it has an owner is
+                    # worth a record. One entry per refusal, naming the route.
+                    if self._audit_logger:
+                        # Ungated like the sibling refusal in settings_routes
+                        # (_refuse_during_setup): the audit logger is built not
+                        # to raise, and keeping no broad handler here holds the
+                        # exception budget (#671).
+                        self._audit_logger.log_authz_denied(
+                            operation='setup_write_refused',
+                            resource_type='setup', resource_id=request.path[:128],
+                            reason='setup mode accepts only the first-admin bootstrap',
+                            user=SETUP_USERNAME, ip_address=request.remote_addr)
                     return None, ({
                         'error': ('Setup is not complete: every request is still '
                                   'served as admin to anyone who can reach this '
-                                  'instance, so deploy hooks, backups and '
-                                  'private-key downloads are refused until it is. '
-                                  'Create the first admin (or set '
-                                  'API_BEARER_TOKEN), sign in, then retry.'),
+                                  'instance, so until it is, the only change it '
+                                  'accepts is the first admin, and private keys '
+                                  'and backups are not served. Create the first '
+                                  'admin (or set API_BEARER_TOKEN), sign in, then '
+                                  'retry.'),
                         'code': 'SETUP_BOOTSTRAP_ONLY'}, 409)
                 return {'username': SETUP_USERNAME, 'role': 'admin'}, None
 

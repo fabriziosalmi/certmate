@@ -131,14 +131,22 @@ def client():
         if source.is_dir():
             (root / shared).symlink_to(source)
 
+    from modules.core.utils import generate_secure_token
+    token = generate_secure_token()
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv('TESTING', 'true')
         patch.setenv('FLASK_ENV', 'testing')
+        patch.setenv('API_BEARER_TOKEN', token)  # out of setup mode, so writes reach validation
         patch.setattr('modules.factory.__file__', str(anchor))
         os.environ.setdefault('FLASK_ENV', 'testing')
         from modules.factory import create_app
-        app, _ = create_app()
-    return app.test_client()
+        app, container = create_app()
+        # Read the operator-token signal now, so it is remembered after the
+        # context restores the environment; settings keep the token itself.
+        container.managers['auth'].has_operator_bearer_token()
+    client = app.test_client()
+    client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {token}'
+    return client
 
 
 def test_a_missing_required_field_is_refused_and_named(client):

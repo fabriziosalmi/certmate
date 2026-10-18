@@ -17,9 +17,9 @@ The endpoint is now lenient:
   produced by collectStorageBackendSettings().
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 pytestmark = [pytest.mark.unit]
 
@@ -34,7 +34,13 @@ def app_client(tmp_path, monkeypatch):
     monkeypatch.setenv('CERTMATE_BACKUP_DIR', str(tmp_path / 'backups'))
     monkeypatch.setenv('CERTMATE_LOGS_DIR', str(tmp_path / 'logs'))
 
+    from modules.core.utils import generate_secure_token
     from modules.factory import create_app
+    # A real operator bearer token in the env takes the app out of setup mode,
+    # where every caller is admin; the endpoint then authenticates like it does
+    # in production. The same token seeds settings below and is what _post sends.
+    token = generate_secure_token()
+    monkeypatch.setenv('API_BEARER_TOKEN', token)
     app, container = create_app()
     app.config['TESTING'] = True
 
@@ -44,8 +50,6 @@ def app_client(tmp_path, monkeypatch):
     # unique chars, no repeats) or save_settings strips it and the endpoint
     # answers 401 instead of exercising the migrate logic. Use the project's
     # own generator so the seed token is always valid.
-    from modules.core.utils import generate_secure_token
-    token = generate_secure_token()
     settings['api_bearer_token'] = token
     settings['certificate_storage'] = {
         'backend': 'local_filesystem',

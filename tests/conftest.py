@@ -14,10 +14,11 @@ Environment variables:
 """
 
 import os
-import sys
 import secrets
-import time
 import subprocess
+import sys
+import time
+
 import pytest
 import requests
 
@@ -246,6 +247,37 @@ class _NoRealCertbot:
                 'the test suite refused to run the real certbot '
                 f'({" ".join(map(str, cmd[:2]))}): use a stand-in, or mark the test e2e')
         return self._real.run(cmd, *args, **kwargs)
+
+
+def operator_bearer_token(monkeypatch):
+    """Take an app built with create_app() out of setup mode, the way a real
+    deployment is: a valid operator bearer token in the environment, returned
+    so a client can send it.
+
+    Setup mode serves every caller as admin, and several fixtures leaned on
+    that to reach admin-only writes without authenticating. Setup mode now
+    accepts only the first-admin bootstrap, so a fixture that exercises any
+    other write has to carry a credential like an operator does.
+    """
+    from modules.core.utils import generate_secure_token
+    token = generate_secure_token()
+    monkeypatch.setenv('API_BEARER_TOKEN', token)
+    return token
+
+
+def with_operator_token(app, token):
+    """Every client ``app.test_client()`` makes will carry *token*, so a fixture
+    that moved its app out of setup mode does not have to touch each request."""
+    app.config['OPERATOR_BEARER_TOKEN'] = token
+    original = app.test_client
+    app.test_client = lambda *a, **k: send_bearer(original(*a, **k), token)
+    return app
+
+
+def send_bearer(client, token):
+    """Make *client* send *token* on every request (saves touching each call)."""
+    client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {token}'
+    return client
 
 
 def pytest_sessionstart(session):
@@ -806,6 +838,7 @@ def browser_page(docker_container, ui_session_cookie):
 def infisical_sdk(monkeypatch):
     """`infisical_client` replaced by a stub with the SDK's real shape (see tests/infisical_sdk_stub.py)."""
     import sys
+
     from tests.infisical_sdk_stub import make_sdk_stub
     stub = make_sdk_stub()
     monkeypatch.setitem(sys.modules, 'infisical_client', stub)

@@ -172,12 +172,19 @@ restored settings; nothing restarts.
 If nothing reports `can_restore: true`, this instance has no restore point. Set
 `CERTMATE_BACKUP_PASSPHRASE`, take a backup at once, and copy it off the host.
 
-**Onto a new instance:** upload the archive with **Restore From Elsewhere** in
-Settings > Backup, or `POST /api/backups/upload` (admin, `multipart/form-data`,
-field `file`, at most 40 MB). Uploading only stores it, under a name CertMate
-generates; restoring it is a separate step, so an upload never changes anything
-on its own. An encrypted archive needs the same `CERTMATE_BACKUP_PASSPHRASE` on
-the new instance.
+**Onto a new instance:** the new instance must have an owner first. Uploading
+and restoring are admin actions, and while an instance is still in setup mode
+(no first admin, no `API_BEARER_TOKEN`) it refuses them, along with every other
+change but the first admin: a restore in that window would let anyone who
+reached the instance plant settings that outlived setup. So either start the
+new instance with `API_BEARER_TOKEN` set, as the installers do, or open it,
+create the first admin, sign in, and then upload and restore.
+
+Upload the archive with **Restore From Elsewhere** in Settings > Backup, or
+`POST /api/backups/upload` (admin, `multipart/form-data`, field `file`, at most
+40 MB). Uploading only stores it, under a name CertMate generates; restoring it
+is a separate step, so an upload never changes anything on its own. An encrypted
+archive needs the same `CERTMATE_BACKUP_PASSPHRASE` on the new instance.
 
 ## After a downgrade
 

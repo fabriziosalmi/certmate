@@ -33,6 +33,7 @@ from pathlib import Path
 import pytest
 
 from modules.factory import create_app
+from tests.conftest import operator_bearer_token, with_operator_token
 
 pytestmark = [pytest.mark.unit]
 
@@ -59,7 +60,9 @@ def app_container(tmp_path, monkeypatch):
     monkeypatch.setattr("modules.factory.__file__", str(module_dir / "factory.py"))
     monkeypatch.setenv("FLASK_ENV", "testing")
     monkeypatch.setenv("TESTING", "true")
+    _optok = operator_bearer_token(monkeypatch)
     application, container = create_app()
+    with_operator_token(application, _optok)
     assert Path(container.cert_dir).resolve().is_relative_to(tmp_path)
     return application, container
 
@@ -290,8 +293,8 @@ def test_the_event_name_is_one_every_subscriber_honours():
     import inspect
     import re
 
-    from modules.api import resources_inventory
     from modules import factory
+    from modules.api import resources_inventory
     from modules.core.cache import CacheManager
     from modules.core.cert_service import CertificateService
     from modules.core.deployer import DeployManager

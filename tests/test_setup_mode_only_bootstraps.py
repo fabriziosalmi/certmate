@@ -144,7 +144,10 @@ def test_refusals_are_audited(tmp_path, monkeypatch):
     monkeypatch.setattr(audit, 'log_authz_denied',
                         lambda **kw: (denied.append(kw), original(**kw)))
     application.test_client().post('/api/keys', json={'name': 'k', 'role': 'admin'})
-    assert [d['operation'] for d in denied] == ['create_api_key']
+    # The setup-mode guard refuses the write centrally now, before the route,
+    # and records one denial naming the path it refused.
+    assert [d['operation'] for d in denied] == ['setup_write_refused']
+    assert denied[0]['resource_id'] == '/api/keys'
     assert 'setup mode' in denied[0]['reason']
 
 
