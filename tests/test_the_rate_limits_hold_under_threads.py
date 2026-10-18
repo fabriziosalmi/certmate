@@ -38,18 +38,23 @@ def test_the_login_buckets_are_read_and_written_one_request_at_a_time():
     assert _blocked_while_held(routes._login_lock, lambda: routes._record_login_attempt('10.0.0.2', 'alice'))
 
 
-def test_auth_paths_other_than_login_and_me_count_against_the_request_limit():
-    """The OIDC callback and the config/session endpoints are under the limiter
-    now; /api/auth/login (own limiter) and /api/auth/me (the dashboard's hot
-    identity poll) stay exempt."""
+def test_the_expensive_oidc_endpoints_are_under_the_limiter_and_the_polled_ones_are_not():
+    """Only the two auth endpoints that do real work (the OIDC callback that
+    calls the IdP, the OIDC settings write) are under the request limiter. The
+    endpoints the dashboard polls on every page (me, config, oidc/config) stay
+    exempt, so a busy session is not throttled."""
     app, token = contract_support.build_app()
     app.extensions['certmate_container'].managers['settings'].update(
         lambda s: s.__setitem__('rate_limits', {'enabled': True, 'limits': {'default': 2}}), 'test')
     headers = {'Authorization': f'Bearer {token}'}
 
-    limited = [app.test_client().get('/api/auth/config', headers=headers).status_code for _ in range(3)]
-    assert 429 not in limited[:2] and limited[2] == 429, limited
+    # The OIDC callback (no valid params, so it errors) still passes through the
+    # limiter: three in a row and the third meets it.
+    limited = [app.test_client().get('/api/auth/oidc/callback', headers=headers).status_code for _ in range(3)]
+    assert limited[2] == 429, limited
 
-    # /api/auth/me never meets the limit, however many times it is polled.
-    me = [app.test_client().get('/api/auth/me', headers=headers).status_code for _ in range(8)]
-    assert 429 not in me, me
+    # Everything the dashboard polls on a page load stays exempt, oidc/settings
+    # and oidc/config among them (the Settings page reads them to render SSO).
+    for path in ('/api/auth/me', '/api/auth/config', '/api/auth/oidc/config', '/api/auth/oidc/settings'):
+        seen = [app.test_client().get(path, headers=headers).status_code for _ in range(8)]
+        assert 429 not in seen, (path, seen)
