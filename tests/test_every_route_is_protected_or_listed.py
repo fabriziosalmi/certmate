@@ -92,6 +92,9 @@ PUBLIC_ROUTES = {
     '/acme/revoke-cert':
         'ACME revocation: a JWS by the ordering account or by the key of the '
         'certificate itself. RFC 8555 section 7.6.',
+    '/acme/renewal-info/<cert_id>':
+        'ACME Renewal Information: a plain GET by certificate identifier, as '
+        'RFC 9773 section 4.1 defines it; it says only when to renew.',
     '/acme/root':
         'The ACME root, public material a relying party installs to trust '
         'what this server issues. Same reason as the client CA certificate.',

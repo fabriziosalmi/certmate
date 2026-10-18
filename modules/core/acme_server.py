@@ -71,6 +71,12 @@ REVOCATION_REASONS = {0: 'unspecified', 1: 'keyCompromise', 3: 'affiliationChang
                       4: 'superseded', 5: 'cessationOfOperation'}
 CRL_CACHE_SECONDS = 3600
 
+# ACME Renewal Information (RFC 9773, decision I3 on #476): renew between two
+# thirds and five sixths of the lifetime, which for the 45-day default is days
+# 30 to 37.5, with a week or more still left; a revoked certificate, now.
+ARI_WINDOW = (2 / 3, 5 / 6)
+ARI_RETRY_AFTER_SECONDS = 6 * 3600
+
 ORDER_LIFETIME = timedelta(days=7)
 MAX_IDENTIFIERS = 100
 
@@ -359,6 +365,7 @@ class AcmeServer:
 
     def new_order(self, req):
         payload = req.json()
+        replaced = self._replaced_by(payload.get('replaces'), req.account) if 'replaces' in payload else None
         if 'notBefore' in payload or 'notAfter' in payload:
             raise AcmeProblem('malformed', 'This server sets the validity of its certificates; '
                               'send neither notBefore nor notAfter')
@@ -376,7 +383,56 @@ class AcmeServer:
                                             'detail': f'{name} is outside the names of this account',
                                             'identifier': {'type': 'dns', 'value': name}} for name in refused])
         expires = (utc_now() + ORDER_LIFETIME).isoformat()
-        return self.store.create_order(req.account['id'], [{'type': 'dns', 'value': n} for n in names], expires)
+        return self.store.create_order(req.account['id'], [{'type': 'dns', 'value': n} for n in names], expires,
+                                       replaces=replaced['id'] if replaced else None)
+
+    def _replaced_by(self, cert_id, account):
+        """RFC 9773 section 5: the certificate a new order replaces, the account's own and not replaced yet."""
+        record = self.certificate_for_ari(cert_id)
+        if record is None:
+            raise AcmeProblem('malformed', 'replaces names no certificate this server issued')
+        if record['account_id'] != account['id']:
+            raise AcmeProblem('unauthorized', 'replaces names a certificate of another account')
+        if self.store.order_replacing(record['id']) is not None:
+            raise AcmeProblem('alreadyReplaced', 'An order replaces that certificate already')
+        return record
+
+    # -- ACME Renewal Information (RFC 9773) ------------------------------
+
+    def certificate_for_ari(self, cert_id):
+        """The certificate a renewalInfo identifier names: base64url(AKI) "." base64url(serial).
+
+        None when the identifier is well formed and names nothing of this
+        server's; malformed when it is not an identifier at all.
+        """
+        try:
+            akid_part, serial_part = cert_id.split('.')
+            key_identifier = b64.b64decode(akid_part)
+            serial = int.from_bytes(b64.b64decode(serial_part), 'big', signed=True)
+        except (ValueError, TypeError, AttributeError):
+            raise AcmeProblem('malformed', 'A certificate identifier is base64url(AKI) "." base64url(serial)') from None
+        # The serial first, the root second: a lookup must not create the ACME
+        # root on a server that never issued, and one that issued has it.
+        record = self.store.certificate_by_serial(format(serial, 'x')) if self.db_path.exists() else None
+        if record is None:
+            return None
+        ours = x509.AuthorityKeyIdentifier.from_issuer_public_key(self.ca.root().public_key()).key_identifier
+        return record if _hmac.compare_digest(key_identifier, ours) else None
+
+    def renewal_info(self, cert_id):
+        """The suggested window (RFC 9773 section 4.2), or None for an identifier that names nothing here."""
+        record = self.certificate_for_ari(cert_id)
+        if record is None:
+            return None
+        if record['revoked_at']:
+            start = datetime.fromisoformat(record['revoked_at'])
+            end = start + timedelta(minutes=1)
+        else:
+            leaf = x509.load_pem_x509_certificate(record['pem'].encode())
+            born = leaf.not_valid_before_utc.replace(tzinfo=None)
+            lifetime = leaf.not_valid_after_utc.replace(tzinfo=None) - born
+            start, end = (born + lifetime * share for share in ARI_WINDOW)
+        return {'suggestedWindow': {'start': _rfc3339(start.isoformat()), 'end': _rfc3339(end.isoformat())}}
 
     def owned(self, item, account, what):
         if item is None or item['account_id'] != account['id']:
@@ -397,6 +453,10 @@ class AcmeServer:
         }
         if order.get('error'):
             body['error'] = order['error']
+        if order.get('replaces'):
+            replaced = self.store.certificate(order['replaces'])
+            if replaced:
+                body['replaces'] = _ari_id(replaced, self.ca.root())
         if status == 'valid':
             certificate = self.store.certificate_of_order(order['id'])
             if certificate:
@@ -680,6 +740,14 @@ def _csr_for(value, names):
         raise AcmeProblem('badCSR', f'The CSR names {sorted(asked)}, and the order {sorted(names)}: '
                           'they must be the same')
     return csr
+
+
+def _ari_id(record, root):
+    """The RFC 9773 identifier of a stored certificate, as a client computes it."""
+    key_identifier = x509.AuthorityKeyIdentifier.from_issuer_public_key(root.public_key()).key_identifier
+    serial = int(record['serial'], 16)
+    serial_bytes = serial.to_bytes((serial.bit_length() + 8) // 8, 'big', signed=True)
+    return f'{b64.b64encode(key_identifier).decode()}.{b64.b64encode(serial_bytes).decode()}'
 
 
 def _spki(public_key):
