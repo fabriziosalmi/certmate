@@ -43,6 +43,12 @@ jobs:
     # a branch's own superseded runs.
     runs-on: ubuntu-latest
     strategy:
+      # The 3.14 leg "reports rather than gates" (it is not in
+      # .github/required-checks.yml), but with the default fail-fast a failure
+      # on 3.14 cancels the gating 3.12 leg, which IS required, so a 3.14-only
+      # red blocked merges and confounded the "green on every run" that #1080
+      # waits on. Let each leg run to its own conclusion.
+      fail-fast: false
       matrix:
         # 3.12 matches the production Dockerfile and is the gating leg. 3.14 is
         # back (#103): what kept it out was josepy 1.13.0 (certbot 2.10.0 → acme
