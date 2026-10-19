@@ -335,21 +335,42 @@
             }
         }
 
+        // Mirror the server dashboard's create flow: lock the submit button so
+        // a double-click can't fire two issuances, close the shared creation
+        // drawer on success, and surface the real reason from the API's
+        // { error, message } envelope instead of a fixed "Error creating"
+        // string that hid what went wrong.
+        var form = e.target;
+        var submitBtn = e.submitter || form.querySelector('button[type="submit"]');
+        var submitBtnHtml = submitBtn ? submitBtn.innerHTML : null;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+        }
+
         fetch('/api/client-certs/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         }).then(function(response) {
-            if (response.ok) {
-                CertMate.toast('Client certificate created!', 'success');
-                document.getElementById('createClientCertForm').reset();
-                ccLoadCertificates();
-                ccLoadStatistics();
-            } else {
-                CertMate.toast('Error creating certificate', 'error');
-            }
+            return response.json().catch(function() { return {}; }).then(function(body) {
+                if (response.ok) {
+                    CertMate.toast('Client certificate created!', 'success');
+                    form.reset();
+                    if (typeof window.closeCertDrawer === 'function') window.closeCertDrawer();
+                    ccLoadCertificates();
+                    ccLoadStatistics();
+                } else {
+                    CertMate.toast(body.error || body.message || 'Error creating certificate', 'error');
+                }
+            });
         }).catch(function() {
             CertMate.toast('Error creating certificate', 'error');
+        }).finally(function() {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                if (submitBtnHtml !== null) submitBtn.innerHTML = submitBtnHtml;
+            }
         });
     }
 
@@ -570,13 +591,15 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ reason: 'User requested' })
             }).then(function(response) {
-                if (response.ok) {
-                    CertMate.toast('Certificate revoked', 'success');
-                    ccLoadCertificates();
-                    ccLoadStatistics();
-                } else {
-                    CertMate.toast('Error revoking certificate', 'error');
-                }
+                return response.json().catch(function() { return {}; }).then(function(body) {
+                    if (response.ok) {
+                        CertMate.toast('Certificate revoked', 'success');
+                        ccLoadCertificates();
+                        ccLoadStatistics();
+                    } else {
+                        CertMate.toast(body.error || body.message || 'Error revoking certificate', 'error');
+                    }
+                });
             }).catch(function() {
                 CertMate.toast('Error revoking certificate', 'error');
             });
@@ -588,13 +611,15 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         }).then(function(response) {
-            if (response.ok) {
-                CertMate.toast('Certificate renewed!', 'success');
-                ccLoadCertificates();
-                ccLoadStatistics();
-            } else {
-                CertMate.toast('Error renewing certificate', 'error');
-            }
+            return response.json().catch(function() { return {}; }).then(function(body) {
+                if (response.ok) {
+                    CertMate.toast('Certificate renewed!', 'success');
+                    ccLoadCertificates();
+                    ccLoadStatistics();
+                } else {
+                    CertMate.toast(body.error || body.message || 'Error renewing certificate', 'error');
+                }
+            });
         }).catch(function() {
             CertMate.toast('Error renewing certificate', 'error');
         });
