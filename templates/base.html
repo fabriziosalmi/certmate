@@ -153,9 +153,9 @@
                 <i class="fas fa-history text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
-            <a href="/redoc" target="_blank" rel="noopener" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 text-muted">
-                <i class="fas fa-code text-lg"></i>
-                <span class="text-xs mt-0.5 font-medium">API</span>
+            <a href="/inventory" {% if request.path == '/inventory' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/inventory' %}text-primary{% else %}text-muted{% endif %}">
+                <i class="fas fa-boxes-stacked text-lg"></i>
+                <span class="text-xs mt-0.5 font-medium">Inventory</span>
             </a>
         </div>
     </nav>

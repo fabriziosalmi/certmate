@@ -431,3 +431,38 @@ def test_check_all_deployments_receives_the_button_not_the_document():
         "checkAllDeploymentStatuses reads evt.currentTarget again — under the "
         "document-level dispatcher that is `document`, so the feedback no-ops"
     )
+
+
+def test_inventory_is_reachable_on_mobile_and_from_the_palette():
+    """Below 768px the topbar nav is hidden and only the bottom tab bar links
+    anywhere; it listed Certs/Settings/Help/Activity/API but not Inventory, so
+    /inventory had no DOM path on mobile, and the command palette had no entry
+    for it or the crypto report either."""
+    base = _read("templates/base.html")
+    tabbar = re.search(r'id="bottomTabBar".*?</nav>', base, re.S)
+    assert tabbar, "bottom tab bar not found"
+    assert 'href="/inventory"' in tabbar.group(0), (
+        "the mobile bottom tab bar has no /inventory link — the page is "
+        "unreachable below 768px"
+    )
+    palette = _read("static/js/cmd-palette.js")
+    assert "url: '/inventory'" in palette, "command palette has no Inventory entry"
+    assert "url: '/inventory/crypto-report'" in palette, (
+        "command palette has no Crypto Audit Report entry"
+    )
+
+
+def test_the_palette_flashes_the_client_cert_row_it_jumped_to():
+    """jumpToClientCert ignored its argument and only switched tabs; it now
+    flashes the row like jumpToServerCert. The palette passes the common name,
+    and the client table keys rows on the identifier, so the flash helper maps
+    one to the other."""
+    palette = _js_function_body(_read("static/js/cmd-palette.js"), "jumpToClientCert")
+    assert "flashClientCertRow" in palette and "cn" in palette, (
+        "jumpToClientCert no longer flashes the row for the common name it was "
+        "given"
+    )
+    client = _read("static/js/client-certs.js")
+    assert "window.flashClientCertRow" in client, (
+        "flashClientCertRow is gone — the palette jump cannot locate the row"
+    )

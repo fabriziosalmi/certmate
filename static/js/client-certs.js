@@ -443,6 +443,37 @@
     window.ccSetUsageFilter = ccSetUsageFilter;
     window.ccRefresh = ccRefresh;
 
+    // Command-palette jump-and-flash: locate a client cert by common name,
+    // clear any filter that would hide it, page to it, and pulse the row. The
+    // client-side mirror of dashboard.js flashCertRow. The palette passes the
+    // common name, but rows key on the identifier, so map one to the other.
+    // Returns false when no such cert is loaded, so the caller can fall back.
+    window.flashClientCertRow = function (cn) {
+        if (!cn) return false;
+        var cert = certificatesData.find(function (c) { return c.common_name === cn; });
+        if (!cert) return false;
+        // Show everything so the target can't be filtered out, and keep the chips in sync.
+        ccCurrentStatus = '';
+        ccCurrentUsage = '';
+        ccPressChips();
+        var ordered = ccApplySort(certificatesData.slice());
+        var index = ordered.findIndex(function (c) { return c.identifier === cert.identifier; });
+        if (index !== -1) ccPage = Math.floor(index / ccPageSize) + 1;
+        ccRenderCertificates();
+        var row = null;
+        var rows = document.querySelectorAll('#certTableBody tr[data-cc-id]');
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('data-cc-id') === cert.identifier) { row = rows[i]; break; }
+        }
+        if (!row || row.offsetParent === null) return false;
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.remove('cmd-flash');
+        void row.offsetWidth;            // reflow so the pulse restarts on repeat jumps
+        row.classList.add('cmd-flash');
+        setTimeout(function () { row.classList.remove('cmd-flash'); }, 1900);
+        return true;
+    };
+
     function ccShowCertDetails(id) {
         var cert = certificatesData.find(function(c) { return c.identifier === id; });
         if (!cert) return;
