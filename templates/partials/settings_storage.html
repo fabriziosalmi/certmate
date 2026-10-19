@@ -338,7 +338,11 @@
                     </div><!-- /tab: storage -->
 
                     <!-- Form controls (visible on all form tabs) -->
-                    <div id="formControls" x-show="['dns','ca','general','storage'].includes(tab)">
+                    <!-- CA is not here: its accounts and default save through
+                         their own APIs from the modal, so the page-wide "Save
+                         Settings" bar had nothing to save on that tab and only
+                         re-posted the other tabs' legacy payload. -->
+                    <div id="formControls" x-show="['dns','general','storage'].includes(tab)">
                         <!-- DNS Provider Test Connection -->
                         <div id="testConnectionResult" class="mt-4 hidden">
                             <div class="p-4 rounded-md text-sm" id="testConnectionMessage">

@@ -55,8 +55,9 @@
                                         <input type="number" x-model="editPort" placeholder="Port" min="1" max="65535"
                                                class="w-20 text-sm border border-border rounded px-2 py-1 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex-shrink-0"
                                                title="TCP port (empty for default)">
-                                        <div class="relative flex-shrink-0" style="min-width:150px" @click.away="editProtoOpen = false">
+                                        <div class="relative flex-shrink-0" style="min-width:150px" @click.away="editProtoOpen = false" @keydown.escape="editProtoOpen = false">
                                             <button type="button" @click="editProtoOpen = !editProtoOpen"
+                                                    aria-haspopup="true" :aria-expanded="editProtoOpen ? 'true' : 'false'" aria-label="Protocol"
                                                     class="w-full text-sm border border-border rounded px-2 py-1 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex items-center justify-between gap-1">
                                                 <span x-text="protocolLabel(editProtocol) || 'HTTPS/TLS'"></span>
                                                 <i class="fas fa-chevron-down text-[10px] transition-transform duration-150" :class="{'rotate-180': editProtoOpen}"></i>
@@ -124,7 +125,7 @@
                     </span>
                 </div>
                 <div class="p-4">
-                    <div class="flex flex-nowrap items-end gap-2">
+                    <div class="flex flex-wrap items-end gap-2">
                         <div class="flex-1 min-w-0">
                             <label class="block text-xs text-muted mb-1">Domain</label>
                             <input list="probe-domain-suggestions" type="text" x-model="addDomain" placeholder="example.com"
@@ -157,8 +158,9 @@
                         </div>
                         <div class="flex-shrink-0">
                             <label class="block text-xs text-muted mb-1">Protocol</label>
-                            <div class="relative" style="min-width:150px" @click.away="addProtoOpen = false">
+                            <div class="relative" style="min-width:150px" @click.away="addProtoOpen = false" @keydown.escape="addProtoOpen = false">
                                 <button type="button" @click="addProtoOpen = !addProtoOpen"
+                                        aria-haspopup="true" :aria-expanded="addProtoOpen ? 'true' : 'false'" aria-label="Protocol"
                                         class="w-full text-sm border border-border rounded px-3 py-2 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex items-center justify-between gap-1">
                                     <span x-text="protocolLabel(addProtocol) || 'HTTPS/TLS'"></span>
                                     <i class="fas fa-chevron-down text-[10px] transition-transform duration-150" :class="{'rotate-180': addProtoOpen}"></i>

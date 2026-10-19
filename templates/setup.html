@@ -1,175 +1,267 @@
-{% extends "base.html" %}
-{% block title %}CertMate - Welcome & Setup{% endblock %}
-{% block content %}
-<div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-    <div
-        class="bg-surface shadow-elevated rounded-2xl overflow-hidden">
-        <div
-            class="px-6 py-8 sm:p-10 bg-gradient-to-br from-brand-50 to-brand-100 dark:from-surface-card dark:to-surface-elevated border-b border-gray-100 dark:border-white/5">
-            <div class="flex items-center justify-center mb-6">
-                <div class="p-3 bg-surface rounded-2xl shadow-lg">
-                    <i class="fas fa-shield-alt text-4xl text-primary"></i>
-                </div>
-            </div>
-            <div class="text-center">
-                <h2 class="text-3xl font-extrabold text-foreground sm:text-4xl">
-                    Welcome to CertMate
-                </h2>
-                <p class="mt-4 text-lg text-muted">
-                    Your automated SSL certificate management system is ready. Let's get started by creating your
-                    administrator account.
-                </p>
-            </div>
-        </div>
-
-        <div class="px-6 py-8 sm:p-10">
-            <form id="setupForm" method="post" action="#" class="space-y-6">
-                <div>
-                    <label for="username" class="block text-sm font-semibold text-label">
-                        Admin Username
-                    </label>
-                    <div class="mt-1 relative rounded-md shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-user text-gray-400"></i>
-                        </div>
-                        <input type="text" name="username" id="username" required
-                            class="block w-full border border-border bg-input text-foreground rounded-lg pl-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-colors duration-200"
-                            placeholder="admin">
-                    </div>
-                </div>
-
-                <div>
-                    <label for="password" class="block text-sm font-semibold text-label">
-                        Admin Password
-                    </label>
-                    <div class="mt-1 relative rounded-md shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-lock text-gray-400"></i>
-                        </div>
-                        <input type="password" name="password" id="password" required
-                            class="block w-full border border-border bg-input text-foreground rounded-lg pl-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-colors duration-200"
-                            placeholder="••••••••">
-                    </div>
-                    <p class="mt-2 text-xs text-muted">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Min 12 characters, at least 1 digit and 1 symbol.
-                    </p>
-                </div>
-
-                {% if bootstrap_requires_token %}
-                <div>
-                    <label for="operatorToken" class="block text-sm font-semibold text-label">
-                        API Bearer Token
-                    </label>
-                    <div class="mt-1 relative rounded-md shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-key text-gray-400"></i>
-                        </div>
-                        <input type="password" name="operatorToken" id="operatorToken" required autocomplete="off"
-                            class="block w-full border border-border bg-input text-foreground rounded-lg pl-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-colors duration-200"
-                            placeholder="Paste your API_BEARER_TOKEN">
-                    </div>
-                    <p class="mt-2 text-xs text-muted">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Paste the <code>API_BEARER_TOKEN</code> you configured, to authorize creating the first admin.
-                    </p>
-                </div>
-                {% endif %}
-
-                <div class="pt-4">
-                    <button type="submit"
-                        class="w-full flex justify-center py-4 px-4 border border-transparent rounded-xl shadow-lg text-lg font-bold text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 btn-press transition-all duration-200">
-                        Complete Initial Setup
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="px-6 py-4 bg-background border-t border-gray-100 dark:border-white/5">
-            <div class="flex items-center justify-between text-xs text-muted">
-                <span><i class="fas fa-code-branch mr-1"></i>CertMate</span>
-                <span><i class="fas fa-lock mr-1"></i>Secure Installation</span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script nonce="{{ csp_nonce }}">
-    document.getElementById('setupForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-
-        // On a bearer-only box the create-admin POSTs are gated by
-        // @require_role('admin'); the operator authorizes them by proving
-        // possession of the API bearer token they configured. In genuine
-        // setup mode no token is needed and the setup-mode bypass authorizes
-        // both calls exactly as before. #397
-        const requiresToken = {{ 'true' if bootstrap_requires_token else 'false' }};
-        const token = requiresToken ? document.getElementById('operatorToken').value.trim() : null;
-        if (requiresToken && !token) { alert('API bearer token is required'); return; }
-        const authHeaders = token ? { 'Authorization': 'Bearer ' + token } : {};
-
-        try {
-            const response = await fetch('/api/web/settings/users', {
-                method: 'POST',
-                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
-                body: JSON.stringify({ username, password, role: 'admin' })
-            });
-
-            // Divergent-token lockout: the box enforces the STORED bearer token,
-            // which can differ from the env token if it was added/rotated after
-            // the first start. Point the operator at the recovery script rather
-            // than the generic "invalid token" message. #397
-            if (requiresToken && (response.status === 401 || response.status === 403)) {
-                alert('The pasted API bearer token was not accepted. If you added or '
-                    + 'rotated API_BEARER_TOKEN after the first start, the token this '
-                    + 'instance stored differs — reset with scripts/reset_admin_password.py.');
-                return;
-            }
-
-            const created = response.ok;              // 201 Created
-            const alreadyExists = response.status === 409;
-            if (!created && !alreadyExists) {
-                let msg = 'Setup failed';
-                try { msg = (await response.json()).error || msg; } catch (_) { /* non-JSON */ }
-                alert(msg);
-                return;
-            }
-
-            // The server enables local login together with the first admin
-            // and says so; only an admin left over from an earlier,
-            // half-finished run (409) still needs the separate step.
-            let enabled = false;
-            if (created) {
-                try { enabled = (await response.clone().json()).local_auth_enabled === true; } catch (_) { /* non-JSON */ }
-            }
-            if (enabled) { window.location.href = '/login'; return; }
-
-            // Enable local auth so the admin can actually log in.
-            const cfg = await fetch('/api/auth/config', {
-                method: 'POST',
-                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
-                body: JSON.stringify({ local_auth_enabled: true })
-            });
-            if (!cfg.ok) {
-                let msg = 'Admin created, but enabling local login failed';
-                try { msg = (await cfg.json()).error || msg; } catch (_) { /* non-JSON */ }
-                alert(msg + ' — enable local auth from Settings, then sign in.');
-                return;
-            }
-
-            // 409: an admin already existed (half-finished prior run). Local
-            // login is now on; the just-typed password did NOT overwrite the
-            // existing admin, so tell the operator which credentials to use.
-            if (alreadyExists) {
-                alert('An admin already exists; local login is enabled. Sign in with the '
-                    + 'existing admin credentials, or reset with scripts/reset_admin_password.py.');
-            }
-            window.location.href = '/login';
-        } catch (err) {
-            alert('Network error during setup');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CertMate - Welcome &amp; Setup</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+    <link href="/static/css/tailwind.min.css" rel="stylesheet">
+    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
+    <script nonce="{{ csp_nonce }}">
+    // Apply dark mode before paint to prevent flash. Mirrors base.html and
+    // login.html so setup honours the same localStorage.theme value and the
+    // same OS-preference fallback.
+    (function() {
+        var theme = localStorage.getItem('theme');
+        if (theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
         }
-    });
-</script>
-{% endblock %}
+    })();
+    </script>
+</head>
+<body class="login-ambient min-h-screen flex items-center justify-center transition-colors duration-200 font-sans py-12 px-4">
+    <!-- Setup stands alone, like login.html: before the first admin exists the
+         instance serves every caller as admin (setup mode), so this page must
+         not pull in the app chrome (navbar, bottom tab bar) or open the
+         dashboard's SSE stream that base.html wires up. -->
+    <main class="max-w-2xl w-full">
+        <div class="bg-surface shadow-elevated rounded-2xl overflow-hidden">
+            <div class="px-6 py-8 sm:p-10 bg-gradient-to-br from-brand-50 to-brand-100 dark:from-surface-card dark:to-surface-elevated border-b border-gray-100 dark:border-white/5">
+                <div class="flex items-center justify-center mb-6">
+                    <div class="p-3 bg-surface rounded-2xl shadow-lg">
+                        <i class="fas fa-shield-alt text-4xl text-primary"></i>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <h2 class="text-3xl font-extrabold text-foreground sm:text-4xl">
+                        Welcome to CertMate
+                    </h2>
+                    <p class="mt-4 text-lg text-muted">
+                        Your automated SSL certificate management system is ready. Let's get started by creating your
+                        administrator account.
+                    </p>
+                </div>
+            </div>
+
+            <div class="px-6 py-8 sm:p-10">
+                <!-- Inline status banner replaces the old alert() popups. -->
+                <div id="setupMessage" role="alert" class="hidden mb-6 p-3 rounded-md text-sm border"></div>
+
+                <form id="setupForm" class="space-y-6">
+                    <div>
+                        <label for="username" class="block text-sm font-semibold text-label">
+                            Admin Username
+                        </label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-user text-gray-400"></i>
+                            </div>
+                            <input type="text" name="username" id="username" required autocomplete="username"
+                                class="block w-full border border-border bg-input text-foreground rounded-lg pl-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-colors duration-200"
+                                placeholder="admin">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password" class="block text-sm font-semibold text-label">
+                            Admin Password
+                        </label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-lock text-gray-400"></i>
+                            </div>
+                            <input type="password" name="password" id="password" required autocomplete="new-password"
+                                class="block w-full border border-border bg-input text-foreground rounded-lg pl-10 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-colors duration-200"
+                                placeholder="••••••••">
+                            <button type="button" data-password-toggle="password"
+                                    aria-label="Show password" aria-pressed="false" aria-controls="password"
+                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <p class="mt-2 text-xs text-muted">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Min 12 characters, at least 1 digit and 1 symbol.
+                        </p>
+                    </div>
+
+                    {% if bootstrap_requires_token %}
+                    <div>
+                        <label for="operatorToken" class="block text-sm font-semibold text-label">
+                            API Bearer Token
+                        </label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-key text-gray-400"></i>
+                            </div>
+                            <input type="password" name="operatorToken" id="operatorToken" required autocomplete="off"
+                                class="block w-full border border-border bg-input text-foreground rounded-lg pl-10 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-colors duration-200"
+                                placeholder="Paste your API_BEARER_TOKEN">
+                            <button type="button" data-password-toggle="operatorToken"
+                                    aria-label="Show token" aria-pressed="false" aria-controls="operatorToken"
+                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <p class="mt-2 text-xs text-muted">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Paste the <code>API_BEARER_TOKEN</code> you configured, to authorize creating the first admin.
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    <div class="pt-4">
+                        <button type="submit" id="setupBtn"
+                            class="w-full flex justify-center py-4 px-4 border border-transparent rounded-xl shadow-lg text-lg font-bold text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 btn-press transition-all duration-200">
+                            Complete Initial Setup
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="px-6 py-4 bg-background border-t border-gray-100 dark:border-white/5">
+                <div class="flex items-center justify-between text-xs text-muted">
+                    <span><i class="fas fa-code-branch mr-1"></i>CertMate</span>
+                    <span><i class="fas fa-lock mr-1"></i>Secure Installation</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script nonce="{{ csp_nonce }}">
+        // This page stands alone, without the shared app bundle and its actions.
+
+        // Show/hide for every password field, driven by data-password-toggle
+        // (the id of the field it controls). Mirrors login.html's toggle but
+        // generalised so the admin password and the bearer token each get one.
+        document.querySelectorAll('[data-password-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var field = document.getElementById(btn.getAttribute('data-password-toggle'));
+                if (!field) return;
+                var icon = btn.querySelector('i');
+                var willShow = field.type === 'password';
+                field.type = willShow ? 'text' : 'password';
+                if (icon) {
+                    icon.classList.toggle('fa-eye', !willShow);
+                    icon.classList.toggle('fa-eye-slash', willShow);
+                }
+                btn.setAttribute('aria-pressed', willShow ? 'true' : 'false');
+                var showLabel = btn.getAttribute('aria-controls') === 'operatorToken' ? 'token' : 'password';
+                btn.setAttribute('aria-label', (willShow ? 'Hide ' : 'Show ') + showLabel);
+            });
+        });
+
+        function showMessage(message, kind) {
+            var el = document.getElementById('setupMessage');
+            el.textContent = message;
+            el.className = 'mb-6 p-3 rounded-md text-sm border ' + (kind === 'info'
+                ? 'bg-surface-2 border-border text-foreground'
+                : 'bg-danger-surface border-danger-line text-danger-fg');
+        }
+        function hideMessage() {
+            document.getElementById('setupMessage').classList.add('hidden');
+        }
+
+        document.getElementById('setupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessage();
+
+            const setupBtn = document.getElementById('setupBtn');
+            const setupBtnHtml = setupBtn.innerHTML;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // On a bearer-only box the create-admin POSTs are gated by
+            // @require_role('admin'); the operator authorizes them by proving
+            // possession of the API bearer token they configured. In genuine
+            // setup mode no token is needed and the setup-mode bypass authorizes
+            // both calls exactly as before. #397
+            const requiresToken = {{ 'true' if bootstrap_requires_token else 'false' }};
+            const token = requiresToken ? document.getElementById('operatorToken').value.trim() : null;
+            if (requiresToken && !token) { showMessage('API bearer token is required'); return; }
+            const authHeaders = token ? { 'Authorization': 'Bearer ' + token } : {};
+
+            setupBtn.disabled = true;
+            setupBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Setting up...';
+            // Once we commit to a redirect, keep the button locked so the
+            // delayed-redirect path can't be re-submitted during its wait.
+            let navigating = false;
+
+            try {
+                const response = await fetch('/api/web/settings/users', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
+                    body: JSON.stringify({ username, password, role: 'admin' })
+                });
+
+                // Divergent-token lockout: the box enforces the STORED bearer token,
+                // which can differ from the env token if it was added/rotated after
+                // the first start. Point the operator at the recovery script rather
+                // than the generic "invalid token" message. #397
+                if (requiresToken && (response.status === 401 || response.status === 403)) {
+                    showMessage('The pasted API bearer token was not accepted. If you added or '
+                        + 'rotated API_BEARER_TOKEN after the first start, the token this '
+                        + 'instance stored differs — reset with scripts/reset_admin_password.py.');
+                    return;
+                }
+
+                const created = response.ok;              // 201 Created
+                const alreadyExists = response.status === 409;
+                if (!created && !alreadyExists) {
+                    let msg = 'Setup failed';
+                    try { msg = (await response.json()).error || msg; } catch (_) { /* non-JSON */ }
+                    showMessage(msg);
+                    return;
+                }
+
+                // The server enables local login together with the first admin
+                // and says so; only an admin left over from an earlier,
+                // half-finished run (409) still needs the separate step.
+                let enabled = false;
+                if (created) {
+                    try { enabled = (await response.clone().json()).local_auth_enabled === true; } catch (_) { /* non-JSON */ }
+                }
+                if (enabled) { navigating = true; window.location.href = '/login'; return; }
+
+                // Enable local auth so the admin can actually log in.
+                const cfg = await fetch('/api/auth/config', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
+                    body: JSON.stringify({ local_auth_enabled: true })
+                });
+                if (!cfg.ok) {
+                    let msg = 'Admin created, but enabling local login failed';
+                    try { msg = (await cfg.json()).error || msg; } catch (_) { /* non-JSON */ }
+                    showMessage(msg + ' — enable local auth from Settings, then sign in.');
+                    return;
+                }
+
+                // 409: an admin already existed (half-finished prior run). Local
+                // login is now on; the just-typed password did NOT overwrite the
+                // existing admin, so tell the operator which credentials to use,
+                // then send them to the login page to read it.
+                if (alreadyExists) {
+                    showMessage('An admin already exists; local login is enabled. Sign in with the '
+                        + 'existing admin credentials, or reset with scripts/reset_admin_password.py.', 'info');
+                    navigating = true;
+                    setTimeout(function () { window.location.href = '/login'; }, 4000);
+                    return;
+                }
+                navigating = true;
+                window.location.href = '/login';
+            } catch (err) {
+                showMessage('Network error during setup');
+            } finally {
+                if (!navigating) {
+                    setupBtn.disabled = false;
+                    setupBtn.innerHTML = setupBtnHtml;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

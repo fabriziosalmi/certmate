@@ -62,7 +62,7 @@
                         <li>Open <a href="/settings" class="text-primary hover:underline">Settings → DNS</a> and add credentials for your DNS provider.</li>
                         <li>From the <a href="/" class="text-primary hover:underline">Certificates</a> page, enter a domain and click <span class="font-medium">Create New Certificate</span>.</li>
                         <li>Enable Local Authentication under <a href="/settings#users" class="text-primary hover:underline">Settings → Users</a> before exposing CertMate to the internet — it ships with auth off so the first run is friction-free.</li>
-                        <li>API token lives at <a href="/settings#apikeys" class="text-primary hover:underline">Settings → API Keys</a>. Auto-generated on first start; click <span class="font-medium">Reveal</span> to copy.</li>
+                        <li>API bearer token lives at <a href="/settings#general" class="text-primary hover:underline">Settings → General</a>. Auto-generated during initial setup; use the eye toggle to reveal it, or <span class="font-medium">Generate</span> to roll a new one.</li>
                     </ol>
                     <p class="text-xs text-muted mt-3">
                         Renewal runs daily and refreshes anything within 30 days of expiry. No cron setup needed.
@@ -131,7 +131,7 @@
                         </li>
                     </ul>
                     <p class="text-xs text-muted mt-3">
-                        Use the <span class="font-medium">Test CA Connection</span> button in Settings to verify reachability and EAB before issuing a real cert — it counts against rate limits otherwise.
+                        Use the <span class="font-medium">Check configuration</span> button in the CA account dialog to verify reachability and EAB before issuing a real cert — it counts against rate limits otherwise.
                     </p>
                 </div>
             </section>
@@ -234,7 +234,7 @@ curl -H "Authorization: Bearer $TOKEN" \
                         </div>
                         <div>
                             <dt class="font-medium text-foreground">Deployment status keeps showing "unknown"</dt>
-                            <dd class="text-muted mt-0.5">CertMate probes the cert at the deployment endpoint(s) you configured. If none are set, status stays unknown — that's expected. Configure deployment targets in <a href="/settings#deploy" class="text-primary hover:underline">Settings → Deploy</a> or click <span class="font-medium">Check All</span> from the dashboard.</dd>
+                            <dd class="text-muted mt-0.5">CertMate probes the cert at the endpoint(s) you configured. If none are set, status stays unknown — that's expected. Configure probe targets in <a href="/settings#probe" class="text-primary hover:underline">Settings → Probe</a>, or use the <span class="font-medium">Check all deployments</span> action (the broadcast icon) on the dashboard.</dd>
                         </div>
                         <div>
                             <dt class="font-medium text-foreground">UI looks broken / Alpine.js failed to load</dt>

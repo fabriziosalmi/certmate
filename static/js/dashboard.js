@@ -906,7 +906,7 @@
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
                     '<span class="text-label"><a href="/settings" class="text-info-fg font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
-                    '<span class="text-label">Add a domain above and create your first SSL certificate</span></li>' +
+                    '<span class="text-label">Create your first certificate with the <strong>Create Certificate</strong> button below</span></li>' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
                     '<span class="text-label">Enable <a href="/settings#users" class="text-info-fg font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
                     '</ol>' +
@@ -1537,9 +1537,14 @@
         if (_lastDetailFocus && _lastDetailFocus.focus) _lastDetailFocus.focus();
     }
 
-    // Close detail modal on Escape key
+    // Close detail modal on Escape key — but only when nothing is layered on
+    // top of it. A confirm/prompt opened from inside the panel owns the Escape
+    // that dismisses it; without this guard the same keypress also tore down
+    // the panel underneath, losing the cert the user was looking at.
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeCertDetail();
+        if (e.key !== 'Escape') return;
+        if (CertMate.anyDialogOpen && CertMate.anyDialogOpen()) return;
+        closeCertDetail();
     });
 
     // Debug console functions
@@ -1549,7 +1554,7 @@
     }
 
     function clearDebugConsole() {
-        document.getElementById('debugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. Click "Check All" to see deployment check logs...</div>';
+        document.getElementById('debugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. Run the "Check all deployments" action to see deployment check logs...</div>';
     }
 
     function addDebugLog(message, type) {
@@ -1741,21 +1746,30 @@
     }
 
     // Check deployment status for all certificates (manual "Check all" button)
-    function checkAllDeploymentStatuses(evt) {
-        // Resolve the trigger from the passed event (currentTarget = the button
-        // the inline onclick is bound to). Avoid implicit window.event, which is
-        // unreliable in Firefox/Safari under the strict-mode module.
-        var button = (evt && evt.currentTarget) ? evt.currentTarget : null;
+    function checkAllDeploymentStatuses(button) {
+        // The button is passed by the delegated dispatcher (data-pass="el").
+        // It used to resolve the trigger from the event, but the single
+        // listener lives on `document`, so it resolved to the document and
+        // every button.* write was a silent no-op: no spinner, no disable,
+        // and the user re-clicked.
         var originalText = button ? button.innerHTML : '';
+        var originalLabel = button ? button.getAttribute('aria-label') : null;
+        var originalTitle = button ? button.getAttribute('title') : null;
         if (button) {
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+            // The control is a fixed 40x40 icon button, so progress goes to its
+            // title/aria-label, not as text inside it.
+            button.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
             button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
         }
 
         var restoreButton = function () {
             if (button) {
                 button.innerHTML = originalText;
                 button.disabled = false;
+                button.removeAttribute('aria-busy');
+                if (originalLabel !== null) button.setAttribute('aria-label', originalLabel);
+                if (originalTitle !== null) button.setAttribute('title', originalTitle);
             }
         };
 
@@ -1776,7 +1790,10 @@
             onProgress: function (completed, totalCount) {
                 if (!button) return;
                 var percentage = Math.round((completed / totalCount) * 100);
-                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking... ' + completed + '/' + totalCount + ' (' + percentage + '%)';
+                // Progress on the 40x40 icon button: keep the spinner, put the
+                // count where it fits (title + aria-label), not inside the button.
+                button.setAttribute('aria-label', 'Checking deployments ' + completed + '/' + totalCount + ' (' + percentage + '%)');
+                button.title = 'Checking... ' + completed + '/' + totalCount + ' (' + percentage + '%)';
             }
         }).then(function () {
             showMessage('Deployment status updated for ' + certificatesToCheck.length + ' certificates', 'success');
@@ -3637,6 +3654,10 @@
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-info-fg ring-1 ring-inset ring-blue-500/20"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Issuing</span></td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
+            // CA and Deployment columns: the table has seven, and a pending row
+            // must fill both lg cells or the "Just now"/actions cell slides left
+            // out of the Actions column.
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap text-right"><span class="text-xs text-muted">Just now</span></td>' +
             '</tr>';
@@ -3663,6 +3684,8 @@
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
+            // CA and Deployment columns (seven-column table): see issuingRowHtml.
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap text-right"><div class="flex items-center justify-end gap-1">' +
             retryButton +
