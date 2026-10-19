@@ -1,6 +1,8 @@
 import os
 from flask import request, render_template, redirect, url_for, send_from_directory
 
+from ..core.client_certificates import default_client_organization
+
 
 def register_ui_routes(app, managers, require_web_auth, auth_manager):
     """Register UI-related routes"""
@@ -28,7 +30,12 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         # template can render the logout button server-side.
         request.current_user = user_info
 
-        return render_template('index.html')
+        # The client-certificate form starts from the deployment's organisation.
+        # It was the literal "CertMate" in the markup, and the form always sends
+        # the field, so CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION could never
+        # reach a certificate created from the UI.
+        return render_template(
+            'index.html', client_cert_default_organization=default_client_organization())
 
     @app.route('/certificates')
     def certificates_page():
