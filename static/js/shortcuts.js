@@ -160,12 +160,16 @@
 
             case 'n':
                 e.preventDefault();
-                var domainInput = document.getElementById('domain');
-                if (domainInput) {
-                    domainInput.focus();
-                    domainInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Open the creation drawer, the same way the command palette does.
+                // Gating on #domain was wrong: it lives inside the drawer, which
+                // is `inert` while closed, so focusing it without opening the
+                // drawer is a silent no-op. On the dashboard openCertDrawer is in
+                // scope; elsewhere stash the intent and navigate home, where
+                // index.html reads cm_open_drawer on load.
+                if (typeof window.openCertDrawer === 'function') {
+                    window.openCertDrawer('server');
                 } else {
-                    // Navigate to dashboard first
+                    try { sessionStorage.setItem('cm_open_drawer', 'server'); } catch (err) { /* storage off */ }
                     window.location.href = '/';
                 }
                 break;

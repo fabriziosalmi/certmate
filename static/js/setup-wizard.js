@@ -578,14 +578,13 @@
 
         document.getElementById('wizFinish').addEventListener('click', function() {
             closeWizard();
-            // Focus the domain input on the main page
-            setTimeout(function() {
-                var domainInput = document.getElementById('domain');
-                if (domainInput) {
-                    domainInput.focus();
-                    domainInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 300);
+            // Open the creation drawer. Focusing #domain did nothing: it lives
+            // inside the drawer, which is `inert` while closed, so the focus was
+            // a silent no-op and nothing opened. openCertDrawer focuses #domain
+            // itself once the drawer is shown.
+            if (typeof window.openCertDrawer === 'function') {
+                window.openCertDrawer('server');
+            }
         });
     }
 
