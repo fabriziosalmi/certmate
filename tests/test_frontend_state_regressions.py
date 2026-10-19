@@ -466,3 +466,49 @@ def test_the_palette_flashes_the_client_cert_row_it_jumped_to():
     assert "window.flashClientCertRow" in client, (
         "flashClientCertRow is gone — the palette jump cannot locate the row"
     )
+
+
+def test_legacy_dns_fields_repopulate_for_every_provider_not_only_nine():
+    """On reload, a saved single-account DNS config has to flow back into the
+    legacy form fields. Two spots used to cap that at a handful of providers:
+    populateLegacyProviderFields carried a hand-written nine-provider map, and
+    populateForm gated the call on four hard-coded config keys
+    (api_token/access_key_id/api_key/client_token). A provider configured
+    through the flat form (scaleway, he-ddns, ovh, ...) came back blank.
+
+    Both now derive from getLegacyFieldsForProvider, and the config key is the
+    field id with the provider prefix stripped by the SAME String.replace the
+    save path uses, so every provider round-trips."""
+    js = _read("static/js/settings.js")
+
+    populate = _js_function_body(js, "populateLegacyProviderFields")
+    assert "getLegacyFieldsForProvider(provider)" in populate, (
+        "populateLegacyProviderFields no longer drives from "
+        "getLegacyFieldsForProvider — the per-provider cap is back"
+    )
+    assert "fieldMappings" not in populate, (
+        "the hand-written per-provider map is back in "
+        "populateLegacyProviderFields"
+    )
+    assert "fieldName.replace(provider + '_', '')" in populate, (
+        "populate must strip the prefix the same way the save path does, or "
+        "providers whose field id and provider id differ (he-ddns) break"
+    )
+
+    # The save path it must mirror.
+    save = _js_function_body(js, "saveSettings")
+    assert "fieldName.replace(provider + '_', '')" in save, (
+        "the save path's key derivation changed; populate now mirrors a "
+        "transform that no longer exists"
+    )
+
+    # The reload guard must no longer be the four-key allow-list.
+    assert "config.api_token || config.access_key_id" not in js, (
+        "the narrow four-key reload guard is back; most providers never reach "
+        "populateLegacyProviderFields"
+    )
+    populate_form = _js_function_body(js, "populateForm")
+    assert "getLegacyFieldsForProvider(provider)" in populate_form, (
+        "populateForm's legacy-config guard no longer asks "
+        "getLegacyFieldsForProvider whether this provider has flat values"
+    )

@@ -899,9 +899,17 @@
                     // Check if this is old single-account format
                     var route53Default = provider === 'route53' && config.accounts &&
                         Object.keys(config.accounts).length === 1 && config.accounts.default;
-                    if (route53Default || config.api_token || config.access_key_id ||
-                            config.api_key || config.client_token ||
-                            (provider === 'route53' && config.auth_mode === 'iam_role')) {
+                    // A single-account (legacy) config holds the provider's own
+                    // flat string values; a multi-account config holds account
+                    // objects (each with a .name). Detect the legacy shape for
+                    // ANY provider by looking for a non-object value under one of
+                    // its legacy keys, instead of the old hard-coded list of four
+                    // key names that missed every provider past the first nine.
+                    var hasLegacyValues = getLegacyFieldsForProvider(provider).some(function (fieldName) {
+                        var key = fieldName.replace(provider + '_', '');
+                        return config[key] != null && config[key] !== '' && typeof config[key] !== 'object';
+                    });
+                    if (route53Default || hasLegacyValues) {
                         populateLegacyProviderFields(provider, route53Default || config);
                     }
                 }
@@ -929,60 +937,25 @@
     function populateLegacyProviderFields(provider, config) {
         try {
             addDebugLog('Populating legacy fields for ' + provider, 'info');
+            config = config || {};
 
-            var fieldMappings = {
-                'cloudflare': [
-                    { field: 'cloudflare_api_token', config: 'api_token' }
-                ],
-                'route53': [
-                    { field: 'route53_access_key_id', config: 'access_key_id' },
-                    { field: 'route53_secret_access_key', config: 'secret_access_key' },
-                    { field: 'route53_region', config: 'region' },
-                    { field: 'route53_auth_mode', config: 'auth_mode' },
-                    { field: 'route53_assume_role_arn', config: 'assume_role_arn' }
-                ],
-                'digitalocean': [
-                    { field: 'digitalocean_api_token', config: 'api_token' }
-                ],
-                'azure': [
-                    { field: 'azure_subscription_id', config: 'subscription_id' },
-                    { field: 'azure_resource_group', config: 'resource_group' },
-                    { field: 'azure_tenant_id', config: 'tenant_id' },
-                    { field: 'azure_client_id', config: 'client_id' },
-                    { field: 'azure_client_secret', config: 'client_secret' }
-                ],
-                'google': [
-                    { field: 'google_project_id', config: 'project_id' },
-                    { field: 'google_service_account_key', config: 'service_account_key' }
-                ],
-                'powerdns': [
-                    { field: 'powerdns_api_url', config: 'api_url' },
-                    { field: 'powerdns_api_key', config: 'api_key' }
-                ],
-                'edgedns': [
-                    { field: 'edgedns_client_token', config: 'client_token' },
-                    { field: 'edgedns_client_secret', config: 'client_secret' },
-                    { field: 'edgedns_access_token', config: 'access_token' },
-                    { field: 'edgedns_host', config: 'host' }
-                ],
-                'nsone': [
-                    { field: 'nsone_api_key', config: 'api_key' }
-                ],
-                'dnsmadeeasy': [
-                    { field: 'dnsmadeeasy_api_key', config: 'api_key' },
-                    { field: 'dnsmadeeasy_secret_key', config: 'secret_key' }
-                ]
-            };
-
-            var mappings = fieldMappings[provider] || [];
-            mappings.forEach(function (mapping) {
-                var field = document.getElementById(mapping.field);
-                if (field && provider === 'route53' && mapping.config === 'assume_role_arn') {
+            // Mirror the save path exactly (see the getLegacyFieldsForProvider
+            // loop in saveSettings): the config key is the field id with the
+            // provider prefix stripped by the same String.replace, so every
+            // provider round-trips - not only the nine that used to be listed
+            // here by hand. (The prefix strip is a no-op where the field id and
+            // provider id disagree on hyphen vs underscore, e.g. he-ddns; the
+            // save path stored the key the same way, so both sides agree.)
+            getLegacyFieldsForProvider(provider).forEach(function (fieldName) {
+                var field = document.getElementById(fieldName);
+                if (!field) return;
+                var configKey = fieldName.replace(provider + '_', '');
+                if (provider === 'route53' && configKey === 'assume_role_arn') {
                     // An empty saved ARN must clear the previous value in the form.
                     field.value = config.assume_role_arn || '';
-                } else if (field && config[mapping.config]) {
-                    field.value = config[mapping.config];
-                    addDebugLog('Field ' + mapping.field + ' populated', 'info');
+                } else if (config[configKey]) {
+                    field.value = config[configKey];
+                    addDebugLog('Field ' + fieldName + ' populated', 'info');
                 }
             });
             if (provider === 'route53') toggleRoute53LegacyAuthMode();
