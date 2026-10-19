@@ -391,3 +391,43 @@ def test_the_dashboard_reattaches_to_in_flight_jobs_on_load():
         "retryCreateJob no longer refuses a payload-less job; calling it "
         "directly would POST an empty create"
     )
+
+
+def test_a_pending_row_has_every_column_the_table_header_has():
+    """The certificates table grew a CA column to seven; the optimistic
+    "Issuing" and "Failed" rows stayed at six <td>, so on lg+ the "Just now"
+    timestamp and the Retry/Dismiss buttons slid left out of the Actions
+    column and the last column rendered empty."""
+    index = _read("templates/index.html")
+    thead = re.search(r"<thead.*?</thead>", index, re.S)
+    assert thead, "certificates table head not found"
+    header_cols = len(re.findall(r'<th\s+[^>]*scope="col"', thead.group(0)))
+    assert header_cols == 7, f"expected 7 header columns, found {header_cols}"
+
+    js = _read("static/js/dashboard.js")
+    for fn in ("issuingRowHtml", "failedRowHtml"):
+        body = _js_function_body(js, fn)
+        tds = len(re.findall(r"<td[ >]", body))
+        assert tds == header_cols, (
+            f"{fn} renders {tds} <td> but the table has {header_cols} columns; "
+            f"a pending row must fill every column or the last cells slide left"
+        )
+
+
+def test_check_all_deployments_receives_the_button_not_the_document():
+    """The check-all control is a delegated button. The single listener lives
+    on `document`, so reading evt.currentTarget gave `document` and every
+    button.disabled / spinner write was a silent no-op — the user saw no
+    feedback and re-clicked. The button is passed by element instead."""
+    index = _read("templates/index.html")
+    btn = re.search(r'<button[^>]*data-click="checkAllDeploymentStatuses"[^>]*>', index)
+    assert btn, "check-all button not found"
+    assert 'data-pass="el"' in btn.group(0), (
+        "the check-all button no longer passes the element; a delegated "
+        "handler that reads evt.currentTarget gets `document`, not the button"
+    )
+    body = _js_function_body(_read("static/js/dashboard.js"), "checkAllDeploymentStatuses")
+    assert "currentTarget" not in body, (
+        "checkAllDeploymentStatuses reads evt.currentTarget again — under the "
+        "document-level dispatcher that is `document`, so the feedback no-ops"
+    )
