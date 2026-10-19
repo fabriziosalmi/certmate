@@ -1033,9 +1033,11 @@
         // Store current provider
         modal.dataset.provider = provider;
 
-        // Show modal
+        // Show modal via the shared, ref-counted scroll lock (see
+        // showEditAccountModal) rather than document.body.style.overflow.
+        var wasHidden = modal.classList.contains('hidden');
         modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+        if (wasHidden) CertMate.lockScroll();
 
         // Auto-focus the first input field
         setTimeout(function () {
@@ -1053,8 +1055,9 @@
     function closeAddAccountModal() {
         var modal = document.getElementById('addAccountModal');
         if (modal) {
+            var wasOpen = !modal.classList.contains('hidden');
             modal.classList.add('hidden');
-            document.body.style.overflow = '';
+            if (wasOpen) CertMate.unlockScroll();
 
             // Remove Escape key listener
             if (modal._escHandler) {
@@ -1123,9 +1126,13 @@
         editProviderFields.innerHTML = fields;
         if (provider === 'route53') toggleRoute53ModalAuthMode(editProviderFields);
 
-        // Show modal
+        // Show modal. Use the shared, ref-counted scroll lock (it locks the
+        // real <html> scroller and survives stacked modals) instead of poking
+        // document.body.style.overflow, which fought the shared counter and
+        // left the page either stuck locked or unlocked too early.
+        var wasHidden = modal.classList.contains('hidden');
         modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+        if (wasHidden) CertMate.lockScroll();
 
         // Auto-focus the first input field
         setTimeout(function () {
@@ -1143,8 +1150,9 @@
     function closeEditAccountModal() {
         var modal = document.getElementById('editAccountModal');
         if (modal) {
+            var wasOpen = !modal.classList.contains('hidden');
             modal.classList.add('hidden');
-            document.body.style.overflow = '';
+            if (wasOpen) CertMate.unlockScroll();
 
             // Remove Escape key listener
             if (modal._escHandler) {
