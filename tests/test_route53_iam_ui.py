@@ -14,7 +14,8 @@ def test_route53_account_modal_switches_authentication_fields(node):
     script = r"""
 const fs = require('fs');
 global.window = global;
-global.CertMate = {globalActions() {}, actions() {}, escapeHtml: s => String(s), formatTime: () => '12:00'};
+global.CertMate = {globalActions() {}, actions() {}, escapeHtml: s => String(s),
+    formatTime: () => '12:00', lockScroll() {}, unlockScroll() {}};
 global.setTimeout = () => 0;
 const mode = {value: 'access_keys', addEventListener(event, callback) { this.onchange = callback; }};
 const field = () => ({required: true, parentElement: {classList: {
@@ -25,7 +26,13 @@ const fields = {innerHTML: '', querySelector(selector) {
     return {'[name="auth_mode"]': mode, '[name="access_key_id"]': key,
             '[name="secret_access_key"]': secret}[selector] || null;
 }};
-const modal = {dataset: {}, classList: {remove() {}}, querySelector() { return null; }};
+// A fresh modal starts hidden; showAddAccountModal checks that to lock scroll
+// once. classList tracks the 'hidden' class so contains/add/remove agree.
+const modal = {dataset: {}, classList: {_hidden: true,
+    add(n) { if (n === 'hidden') this._hidden = true; },
+    remove(n) { if (n === 'hidden') this._hidden = false; },
+    contains(n) { return n === 'hidden' ? this._hidden : false; }},
+    querySelector() { return null; }};
 const elements = {addAccountModal: modal, 'addAccountModal-title': {textContent: ''},
     'modal-provider-fields': fields, 'account-name': {value: ''},
     'account-description': {value: ''}, 'set-as-default': {checked: false},

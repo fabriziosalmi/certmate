@@ -22,6 +22,8 @@
         { type: 'nav', icon: 'fa-cog', label: 'Settings', desc: 'Configure DNS, CA, storage', url: '/settings' },
         { type: 'nav', icon: 'fa-question-circle', label: 'Help & Documentation', desc: 'Getting started, guides', url: '/help' },
         { type: 'nav', icon: 'fa-history', label: 'Activity Log', desc: 'Recent operations and events', url: '/activity' },
+        { type: 'nav', icon: 'fa-boxes-stacked', label: 'Certificate Inventory', desc: 'Discovered certificates, probes, adoption', url: '/inventory' },
+        { type: 'nav', icon: 'fa-shield-halved', label: 'Crypto Audit Report', desc: 'Key types, algorithms, readiness', url: '/inventory/crypto-report' },
         { type: 'nav', icon: 'fa-book', label: 'API Documentation', desc: 'ReDoc API reference', url: '/redoc' },
         { type: 'settings', icon: 'fa-server', label: 'DNS Provider Settings', desc: 'Configure DNS providers', url: '/settings#dns' },
         { type: 'settings', icon: 'fa-shield-alt', label: 'CA Settings', desc: 'Certificate authority configuration', url: '/settings#ca' },
@@ -349,13 +351,20 @@
         }
     }
 
-    // Client certs live in the client view; switch to it. (Row-level flash for
-    // client certs lands with the real client table in a later phase.)
+    // Client certs live in the client view; switch to it and pulse the row,
+    // the mirror of jumpToServerCert. flashClientCertRow finds the row by
+    // common name (client rows key on the identifier, not the CN), clears any
+    // filter hiding it, and pages to it; if it is not loaded, fall back to the
+    // top of the view.
     function jumpToClientCert(cn) {
         var cBtn = document.getElementById('certViewClientBtn');
         if (cBtn) {
             cBtn.click();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(function() {
+                if (!(typeof window.flashClientCertRow === 'function' && window.flashClientCertRow(cn))) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }, 60);
         } else {
             navigateTo('/#client');
         }

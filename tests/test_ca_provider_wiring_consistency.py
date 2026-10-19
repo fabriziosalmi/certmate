@@ -66,21 +66,33 @@ def test_models_enum_matches_ca_manager():
     )
 
 
+# The CA account modal (the type select and the per-provider config panels)
+# lives in its own partial, settings_ca_modal.html, rendered outside the
+# settings <form>; settings_ca.html keeps only the CA tab. Read both so these
+# wiring guards find the markup wherever the split put it.
+_CA_PARTIALS = ('templates/partials/settings_ca.html',
+                'templates/partials/settings_ca_modal.html')
+
+
+def _ca_markup():
+    return ''.join(_read(p) for p in _CA_PARTIALS)
+
+
 def test_settings_select_offers_every_provider():
-    html = _read('templates/partials/settings_ca.html')
+    html = _ca_markup()
     match = re.search(r'<select id="add-ca-type".*?</select>', html, re.S)
-    assert match, 'Add CA type select not found in settings_ca.html'
+    assert match, 'Add CA type select not found in the CA settings partials'
     offered = set(re.findall(r'<option value="([\w-]+)"', match.group(0)))
     providers = _ca_providers()
     missing = providers - offered
     assert not missing, (
         f"CA providers missing from the Add CA type select in "
-        f"templates/partials/settings_ca.html: {sorted(missing)}"
+        f"the CA settings partials: {sorted(missing)}"
     )
     # Reverse direction: no phantom CA options.
     phantom = offered - providers
     assert not phantom, (
-        f"settings_ca.html offers CA options with no CAManager entry: "
+        f"the CA settings partials offer CA options with no CAManager entry: "
         f"{sorted(phantom)}"
     )
 
@@ -98,7 +110,7 @@ def test_dashboard_cert_form_offers_every_provider():
 
 def test_settings_js_panel_wiring_complete():
     js = _read('static/js/settings.js')
-    html = _read('templates/partials/settings_ca.html')
+    html = _ca_markup()
     providers = _ca_providers()
 
     # caProviderToConfigId must map every provider...
@@ -120,7 +132,7 @@ def test_settings_js_panel_wiring_complete():
         panel_id = mapping[provider]
         assert f'id="{panel_id}"' in html, (
             f"Config panel #{panel_id} mapped for '{provider}' does not "
-            f"exist in settings_ca.html"
+            f"exist in the CA settings partials"
         )
         assert panel_id in hide_list, (
             f"Config panel #{panel_id} for '{provider}' is missing from "

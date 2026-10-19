@@ -226,6 +226,9 @@
     function createOverlay() {
         var overlay = document.createElement('div');
         overlay.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4';
+        // Marker so other components (e.g. the dashboard's cert-detail Escape
+        // handler) can tell a CM dialog is on top and yield the Escape to it.
+        overlay.setAttribute('data-cm-overlay', '');
         overlay.innerHTML = '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>';
         return overlay;
     }
@@ -339,16 +342,22 @@
     };
 
     // ── Styled Prompt Dialog ─────────────────────────────────────
-    CM.prompt = function(message, title, defaultValue) {
+    // options (4th arg, optional): { inputType: 'text'|'password' }. The type
+    // is allow-listed so callers can never inject arbitrary input attributes.
+    CM.prompt = function(message, title, defaultValue, options) {
         title = title || 'Input';
         defaultValue = defaultValue || '';
+        options = options || {};
+        var inputType = options.inputType === 'password' ? 'password' : 'text';
+        var autocomplete = inputType === 'password' ? 'new-password' : 'off';
 
         return new Promise(function(resolve) {
             var overlay = createOverlay();
             var inputId = 'cm-prompt-' + Date.now();
             var bodyHtml =
                 '<label for="' + inputId + '" class="block text-muted text-sm mb-3">' + CM.escapeHtml(message) + '</label>' +
-                '<input id="' + inputId + '" type="text" value="' + CM.escapeHtml(defaultValue) + '" ' +
+                '<input id="' + inputId + '" type="' + inputType + '" value="' + CM.escapeHtml(defaultValue) + '" ' +
+                    'autocomplete="' + autocomplete + '" ' +
                     'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">' +
                 '<div class="flex justify-end gap-3 mt-6">' +
                     '<button data-action="cancel" class="' + BTN_CANCEL + '">Cancel</button>' +
@@ -481,6 +490,15 @@
         }
         return null;
     }
+
+    // True when any CM dialog (confirm/prompt/modal overlay) or a visible
+    // macro [data-modal-root] modal is on screen. Lets another component yield
+    // the Escape key to the dialog on top instead of both reacting to it. The
+    // overlay marker outlives the close animation (animateOut removes the node
+    // 200ms later), so this still reads true during the keydown that closed it.
+    CM.anyDialogOpen = function() {
+        return !!document.querySelector('[data-cm-overlay]') || !!visibleModal();
+    };
 
     function focusableIn(root) { return root.querySelectorAll(FOCUSABLE_SELECTOR); }
 

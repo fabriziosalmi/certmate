@@ -44,7 +44,13 @@ from modules.core.ca_manager import CAManager
 pytestmark = [pytest.mark.unit]
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-CA_FORM = REPO / 'templates' / 'partials' / 'settings_ca.html'
+# The per-provider CA account fields (including each `<id>-acme-url` input)
+# render in settings_ca_modal.html, the modal partial rendered outside the
+# settings <form>; settings_ca.html keeps only the CA tab. Scan both.
+CA_FORM_PARTS = (
+    REPO / 'templates' / 'partials' / 'settings_ca.html',
+    REPO / 'templates' / 'partials' / 'settings_ca_modal.html',
+)
 REGIONAL = 'https://eu.one.digicert.com/mpki/api/v1/acme/v2/directory'
 
 
@@ -59,7 +65,7 @@ def _providers_whose_form_asks_for_a_directory():
     Read from the template because that is the promise an operator sees: a
     field they are asked to fill in, next to a Test button that checks it.
     """
-    html = CA_FORM.read_text(encoding='utf-8')
+    html = ''.join(p.read_text(encoding='utf-8') for p in CA_FORM_PARTS)
     found = set(re.findall(r'id="([a-z0-9_-]+)-acme-url"', html))
     # The form spells provider ids with hyphens; the registry uses
     # underscores.

@@ -391,3 +391,124 @@ def test_the_dashboard_reattaches_to_in_flight_jobs_on_load():
         "retryCreateJob no longer refuses a payload-less job; calling it "
         "directly would POST an empty create"
     )
+
+
+def test_a_pending_row_has_every_column_the_table_header_has():
+    """The certificates table grew a CA column to seven; the optimistic
+    "Issuing" and "Failed" rows stayed at six <td>, so on lg+ the "Just now"
+    timestamp and the Retry/Dismiss buttons slid left out of the Actions
+    column and the last column rendered empty."""
+    index = _read("templates/index.html")
+    thead = re.search(r"<thead.*?</thead>", index, re.S)
+    assert thead, "certificates table head not found"
+    header_cols = len(re.findall(r'<th\s+[^>]*scope="col"', thead.group(0)))
+    assert header_cols == 7, f"expected 7 header columns, found {header_cols}"
+
+    js = _read("static/js/dashboard.js")
+    for fn in ("issuingRowHtml", "failedRowHtml"):
+        body = _js_function_body(js, fn)
+        tds = len(re.findall(r"<td[ >]", body))
+        assert tds == header_cols, (
+            f"{fn} renders {tds} <td> but the table has {header_cols} columns; "
+            f"a pending row must fill every column or the last cells slide left"
+        )
+
+
+def test_check_all_deployments_receives_the_button_not_the_document():
+    """The check-all control is a delegated button. The single listener lives
+    on `document`, so reading evt.currentTarget gave `document` and every
+    button.disabled / spinner write was a silent no-op — the user saw no
+    feedback and re-clicked. The button is passed by element instead."""
+    index = _read("templates/index.html")
+    btn = re.search(r'<button[^>]*data-click="checkAllDeploymentStatuses"[^>]*>', index)
+    assert btn, "check-all button not found"
+    assert 'data-pass="el"' in btn.group(0), (
+        "the check-all button no longer passes the element; a delegated "
+        "handler that reads evt.currentTarget gets `document`, not the button"
+    )
+    body = _js_function_body(_read("static/js/dashboard.js"), "checkAllDeploymentStatuses")
+    assert "currentTarget" not in body, (
+        "checkAllDeploymentStatuses reads evt.currentTarget again — under the "
+        "document-level dispatcher that is `document`, so the feedback no-ops"
+    )
+
+
+def test_inventory_is_reachable_on_mobile_and_from_the_palette():
+    """Below 768px the topbar nav is hidden and only the bottom tab bar links
+    anywhere; it listed Certs/Settings/Help/Activity/API but not Inventory, so
+    /inventory had no DOM path on mobile, and the command palette had no entry
+    for it or the crypto report either."""
+    base = _read("templates/base.html")
+    tabbar = re.search(r'id="bottomTabBar".*?</nav>', base, re.S)
+    assert tabbar, "bottom tab bar not found"
+    assert 'href="/inventory"' in tabbar.group(0), (
+        "the mobile bottom tab bar has no /inventory link — the page is "
+        "unreachable below 768px"
+    )
+    palette = _read("static/js/cmd-palette.js")
+    assert "url: '/inventory'" in palette, "command palette has no Inventory entry"
+    assert "url: '/inventory/crypto-report'" in palette, (
+        "command palette has no Crypto Audit Report entry"
+    )
+
+
+def test_the_palette_flashes_the_client_cert_row_it_jumped_to():
+    """jumpToClientCert ignored its argument and only switched tabs; it now
+    flashes the row like jumpToServerCert. The palette passes the common name,
+    and the client table keys rows on the identifier, so the flash helper maps
+    one to the other."""
+    palette = _js_function_body(_read("static/js/cmd-palette.js"), "jumpToClientCert")
+    assert "flashClientCertRow" in palette and "cn" in palette, (
+        "jumpToClientCert no longer flashes the row for the common name it was "
+        "given"
+    )
+    client = _read("static/js/client-certs.js")
+    assert "window.flashClientCertRow" in client, (
+        "flashClientCertRow is gone — the palette jump cannot locate the row"
+    )
+
+
+def test_legacy_dns_fields_repopulate_for_every_provider_not_only_nine():
+    """On reload, a saved single-account DNS config has to flow back into the
+    legacy form fields. Two spots used to cap that at a handful of providers:
+    populateLegacyProviderFields carried a hand-written nine-provider map, and
+    populateForm gated the call on four hard-coded config keys
+    (api_token/access_key_id/api_key/client_token). A provider configured
+    through the flat form (scaleway, he-ddns, ovh, ...) came back blank.
+
+    Both now derive from getLegacyFieldsForProvider, and the config key is the
+    field id with the provider prefix stripped by the SAME String.replace the
+    save path uses, so every provider round-trips."""
+    js = _read("static/js/settings.js")
+
+    populate = _js_function_body(js, "populateLegacyProviderFields")
+    assert "getLegacyFieldsForProvider(provider)" in populate, (
+        "populateLegacyProviderFields no longer drives from "
+        "getLegacyFieldsForProvider — the per-provider cap is back"
+    )
+    assert "fieldMappings" not in populate, (
+        "the hand-written per-provider map is back in "
+        "populateLegacyProviderFields"
+    )
+    assert "fieldName.replace(provider + '_', '')" in populate, (
+        "populate must strip the prefix the same way the save path does, or "
+        "providers whose field id and provider id differ (he-ddns) break"
+    )
+
+    # The save path it must mirror.
+    save = _js_function_body(js, "saveSettings")
+    assert "fieldName.replace(provider + '_', '')" in save, (
+        "the save path's key derivation changed; populate now mirrors a "
+        "transform that no longer exists"
+    )
+
+    # The reload guard must no longer be the four-key allow-list.
+    assert "config.api_token || config.access_key_id" not in js, (
+        "the narrow four-key reload guard is back; most providers never reach "
+        "populateLegacyProviderFields"
+    )
+    populate_form = _js_function_body(js, "populateForm")
+    assert "getLegacyFieldsForProvider(provider)" in populate_form, (
+        "populateForm's legacy-config guard no longer asks "
+        "getLegacyFieldsForProvider whether this provider has flat values"
+    )

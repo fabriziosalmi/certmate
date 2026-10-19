@@ -1,0 +1,387 @@
+{% from "partials/_modal.html" import modal %}
+<!-- The CA Account modal lives OUTSIDE #settingsForm (settings.html) on
+     purpose: nested in the form, its required inputs and the Enter key
+     fought the page's own submit. It is opened from the CA tab by
+     openCAAccountModal and saves through its own API. -->
+                    {% call modal(id="caAccountModal", title="CA Account", icon="fa-certificate", size="lg") %}
+                        <div class="space-y-4">
+                            <div>
+                                <label for="add-ca-type" class="block text-xs font-medium text-muted mb-1">Certificate Authority</label>
+                                <select id="add-ca-type" data-change="selectCAAccountType" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm">
+                                    <option value="">Choose a type</option>
+                                    <option value="letsencrypt">Let's Encrypt</option>
+                                    <option value="letsencrypt_staging">Let's Encrypt (Staging)</option>
+                                    <option value="zerossl">ZeroSSL</option>
+                                    <option value="google">Google Trust Services</option>
+                                    <option value="actalis">Actalis</option>
+                                    <option value="digicert">DigiCert ACME</option>
+                                    <option value="sectigo">Sectigo</option>
+                                    <option value="sslcom">SSL.com</option>
+                                    <option value="private_ca">Private CA</option>
+                                </select>
+                                <label for="ca-account-name" class="block text-xs font-medium text-muted mt-3 mb-1">Account name</label>
+                                <input type="text" id="ca-account-name" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-describedby="ca-account-name-help" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" placeholder="e.g. production or staging">
+                                <p id="ca-account-name-help" class="mt-1 text-xs text-muted">Letters, digits, dots, dashes and underscores.</p>
+                                <label for="ca-account-acme-profile" class="block text-xs font-medium text-muted mt-3 mb-1">Default ACME profile</label>
+                                <select id="ca-account-acme-profile" aria-describedby="ca-account-acme-profile-help" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm">
+                                    <option value="">The CA's default</option>
+                                    <option value="classic">classic: 90 days</option>
+                                    <option value="tlsserver">tlsserver: 45 days, no Common Name</option>
+                                    <option value="shortlived">shortlived: 160 hours</option>
+                                </select>
+                                <p id="ca-account-acme-profile-help" class="mt-1 text-xs text-muted">What a new certificate on this account asks for when its form leaves the profile at Default (Let's Encrypt's profiles).</p>
+                            </div>
+
+                            <!-- CA Provider Configurations -->
+                            
+                            <!-- Let's Encrypt Configuration -->
+                            <div id="letsencrypt-config" class="border border-success-line rounded-lg p-4 bg-success-surface">
+                                <h4 class="text-sm font-semibold text-success-strong mb-2 flex items-center">
+                                    <i class="fas fa-leaf mr-2 text-green-600"></i>
+                                    Let's Encrypt Configuration
+                                    <span class="ml-2 text-xs bg-success-surface text-success-strong px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-success-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="letsencrypt-email"
+                                               class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-success-fg mt-2">
+                                    Let's Encrypt provides free SSL certificates with automated renewal.
+                                    For testing, select "Let's Encrypt (Staging)" as the Certificate Authority instead.
+                                </p>
+                            </div>
+
+                            <!-- Let's Encrypt (Staging) Configuration -->
+                            <div id="letsencrypt-staging-config" class="border border-warning-line rounded-lg p-4 bg-warning-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-warning-strong mb-2 flex items-center">
+                                    <i class="fas fa-flask mr-2 text-yellow-600"></i>
+                                    Let's Encrypt (Staging) Configuration
+                                    <span class="ml-2 text-xs bg-warning-surface text-warning-strong px-2 py-0.5 rounded-full">Testing</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-warning-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="letsencrypt-staging-email"
+                                               class="w-full px-2 py-1 text-sm border border-warning-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-warning-fg mt-2">
+                                    The staging environment issues certificates that are NOT trusted by browsers.
+                                    Use it to validate DNS and deployment setup without consuming production rate limits.
+                                    If the email is left empty, the Let's Encrypt account email is used.
+                                </p>
+                            </div>
+
+                            <!-- ZeroSSL Configuration -->
+                            <div id="zerossl-config" class="border border-warning-line rounded-lg p-4 bg-warning-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-warning-strong mb-2 flex items-center">
+                                    <i class="fas fa-certificate mr-2 text-yellow-600"></i>
+                                    ZeroSSL Configuration
+                                    <span class="ml-2 text-xs bg-warning-surface text-warning-strong px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-warning-strong mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="zerossl-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-warning-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB Key ID from ZeroSSL">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-warning-strong mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="zerossl-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-warning-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB HMAC Key from ZeroSSL"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-warning-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="zerossl-email" 
+                                               class="w-full px-2 py-1 text-sm border border-warning-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-warning-fg mt-2">
+                                    ZeroSSL requires EAB credentials, which you can generate from your ZeroSSL Developer Dashboard.
+                                </p>
+                            </div>
+
+                            <!-- Google Trust Services Configuration -->
+                            <div id="google-ca-config" class="border border-info-line rounded-lg p-4 bg-blue-50/50 dark:bg-blue-900/10" style="display: none;">
+                                <h4 class="text-sm font-semibold text-info-fg mb-2 flex items-center">
+                                    <i class="fab fa-google mr-2 text-blue-500"></i>
+                                    Google Trust Services Configuration
+                                    <span class="ml-2 text-xs bg-info-surface text-info-strong px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="google-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB Key ID from Google Cloud">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="google-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB HMAC Key from Google Cloud"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="google-email" 
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-info-fg mt-2">
+                                    Google Trust Services requires EAB credentials, which you can request in Google Cloud Console under Certificate Authority Service.
+                                </p>
+                            </div>
+
+                            <!-- Actalis Configuration -->
+                            <div id="actalis-config" class="border border-info-line rounded-lg p-4 bg-info-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-info-strong mb-2 flex items-center">
+                                    <i class="fas fa-certificate mr-2 text-blue-600"></i>
+                                    Actalis Configuration
+                                    <span class="ml-2 text-xs bg-info-surface text-info-strong px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="actalis-eab-kid"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB Key ID from Actalis">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="actalis-eab-hmac"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB HMAC Key from Actalis"
+                                               autocomplete="new-password"
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="actalis-email"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-info-fg mt-2">
+                                    Actalis is a European (Italian) CA offering free 90-day DV certificates via ACME.
+                                    Generate EAB credentials in your Actalis customer area under Manage with ACME, then ACME Credentials.
+                                    The free plan covers single-domain certificates only (no wildcard, no SAN).
+                                </p>
+                            </div>
+
+                            <!-- DigiCert Configuration -->
+                            <div id="digicert-config" class="border border-info-line rounded-lg p-4 bg-info-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-info-strong mb-2 flex items-center">
+                                    <i class="fas fa-shield-alt mr-2 text-blue-600"></i>
+                                    DigiCert ACME Configuration
+                                    <span class="ml-2 text-xs bg-info-surface text-info-strong px-2 py-0.5 rounded-full">Enterprise</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">ACME Directory URL</label>
+                                        <input type="url" id="digicert-acme-url" 
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="https://one.digicert.com/mpki/api/v1/acme/v2/directory"
+                                               value="https://one.digicert.com/mpki/api/v1/acme/v2/directory">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="digicert-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB Key ID from DigiCert">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="digicert-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB HMAC Key from DigiCert"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="digicert-email" 
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-info-fg mt-2">
+                                    DigiCert provides enterprise-grade SSL certificates via ACME. Requires EAB credentials from DigiCert.
+                                </p>
+                            </div>
+
+                            <!-- Sectigo Configuration -->
+                            <div id="sectigo-config" class="border border-info-line rounded-lg p-4 bg-info-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-info-strong mb-2">Sectigo ACME Configuration</h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label for="sectigo-acme-url" class="block text-xs text-info-strong mb-1">ACME Directory URL (from SCM)</label>
+                                        <input type="url" id="sectigo-acme-url" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" placeholder="Copy the URL from your SCM ACME account" required>
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-eab-kid" class="block text-xs text-info-strong mb-1">EAB Key ID / KID</label>
+                                        <input type="text" id="sectigo-eab-kid" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" required>
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-eab-hmac" class="block text-xs text-info-strong mb-1">EAB HMAC Key</label>
+                                        <input type="password" id="sectigo-eab-hmac" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" autocomplete="new-password" spellcheck="false" data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label for="sectigo-email" class="block text-xs text-info-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="sectigo-email" class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground" placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-info-fg mt-2">Use the directory URL and EAB credentials from your Sectigo SCM ACME account. Wildcards depend on your account/profile.</p>
+                            </div>
+
+                            <!-- SSL.com Configuration -->
+                            <div id="sslcom-config" class="border border-indigo-300 dark:border-indigo-600 rounded-lg p-4 bg-indigo-50 dark:bg-indigo-900/20" style="display: none;">
+                                <h4 class="text-sm font-semibold text-indigo-800 dark:text-indigo-200 mb-2 flex items-center">
+                                    <i class="fas fa-shield-alt mr-2 text-indigo-600"></i>
+                                    SSL.com Configuration
+                                    <span class="ml-2 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 px-2 py-0.5 rounded-full">Enterprise</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-indigo-800 dark:text-indigo-200 mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="sslcom-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-indigo-300 dark:border-indigo-600 rounded bg-surface text-foreground"
+                                               placeholder="Your EAB Key ID from SSL.com">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-indigo-800 dark:text-indigo-200 mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="sslcom-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-indigo-300 dark:border-indigo-600 rounded bg-surface text-foreground"
+                                               placeholder="Your EAB HMAC Key from SSL.com"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-indigo-800 dark:text-indigo-200 mb-1">Email (for notifications)</label>
+                                        <input type="email" id="sslcom-email" 
+                                               class="w-full px-2 py-1 text-sm border border-indigo-300 dark:border-indigo-600 rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-indigo-700 dark:text-indigo-300 mt-2">
+                                    SSL.com provides enterprise-grade SSL certificates via ACME. Requires EAB credentials.
+                                </p>
+                            </div>
+
+                            <!-- Private CA Configuration -->
+                            <div id="private-ca-config" class="border border-purple-300 dark:border-purple-600 rounded-lg p-4 bg-purple-50 dark:bg-purple-900/20" style="display: none;">
+                                <h4 class="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-2 flex items-center">
+                                    <i class="fas fa-building mr-2 text-purple-600"></i>
+                                    Private CA Configuration
+                                    <span class="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-0.5 rounded-full">Custom</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1" for="private-ca-preset">
+                                            Known ACME CA (preset) - Optional
+                                            <i class="fas fa-info-circle ml-1 cursor-help" title="Pre-fills the directory URL for public ACME CAs that work through the Private CA entry"></i>
+                                        </label>
+                                        <select id="private-ca-preset" data-change="applyPrivateCaPreset"
+                                                class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground">
+                                            <option value="">Custom / self-hosted (default)</option>
+                                            <option value="actalis">Actalis (EU public CA, EAB required)</option>
+                                        </select>
+                                        <p id="private-ca-preset-hint" class="text-xs text-purple-600 dark:text-purple-400 mt-1"></p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
+                                            ACME Directory URL
+                                            <span class="text-red-500">*</span>
+                                            <i class="fas fa-info-circle ml-1 cursor-help" title="URL to your private CA's ACME directory endpoint (e.g., step-ca, Smallstep, or custom ACME server)"></i>
+                                        </label>
+                                        <input type="url" id="private-ca-acme-url" 
+                                               class="w-full px-2 py-1 text-sm border-2 border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                                               placeholder="https://step-ca.example.com:9000/acme/directory"
+                                               required>
+                                        <p class="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            <strong>Common examples:</strong><br>
+                                            • step-ca: https://step-ca.internal.com:9000/acme/directory<br>
+                                            • Smallstep: https://ca.example.com/acme/directory<br>
+                                            • Boulder: https://boulder.local:4001/acme/directory<br>
+                                            • Actalis (public CA): use the preset above
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">CA Certificate (PEM format) - Optional</label>
+                                        <textarea id="private-ca-cert" rows="3"
+                                                  class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground"
+                                                  placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                                        <p class="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            Upload your private CA root certificate if using self-signed or internal CA
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">External Account Binding (EAB) Key ID - Optional</label>
+                                        <input type="text" id="private-ca-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground"
+                                               placeholder="EAB Key ID (if required by your CA)">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">External Account Binding (EAB) HMAC Key - Optional</label>
+                                        <input type="password" id="private-ca-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground"
+                                               placeholder="EAB HMAC Key (if required by your CA)"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
+                                            Email (for notifications)
+                                            <span class="text-red-500">*</span>
+                                        </label>
+                                        <input type="email" id="private-ca-email" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com"
+                                               required>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-purple-700 dark:text-purple-300 mt-2">
+                                    Configure your private or corporate CA. Supports ACME-compatible CAs like step-ca, Smallstep, Boulder, and others.
+                                    <br><strong><i class="fas fa-rocket mr-1" aria-hidden="true"></i>Quick Start:</strong>
+                                    <br>1. Enter your CA's ACME directory URL above
+                                    <br>2. Enter your email address
+                                    <br>3. Click "Check configuration" to verify
+                                    <br>4. Click "Save Account" once the check succeeds
+                                </p>
+                            </div>
+
+                            <!-- CA Provider Actions -->
+                            <div class="flex flex-wrap gap-3 pt-2 border-t border-border">
+                                <button type="button" data-click="testCAProvider" 
+                                        class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm font-medium">
+                                    <i class="fas fa-plug mr-1"></i> Check configuration
+                                </button>
+                                <div class="text-xs text-muted flex items-center">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <span id="ca-test-hint">Select a CA provider and fill in required fields, then test the connection</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-end gap-2 pt-2">
+                                <button type="button" data-modal-close class="px-3 py-2 border border-border rounded">Cancel</button>
+                                <button type="button" data-click="saveCAAccount" class="px-3 py-2 bg-primary text-white rounded">Save Account</button>
+                            </div>
+                        </div>
+                    {% endcall %}
