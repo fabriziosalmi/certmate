@@ -1,6 +1,9 @@
 import logging
 from flask import abort as flask_abort, request, send_file, Response
-from ..core.client_certificates import default_client_country, default_client_state
+from ..core.client_certificates import (
+    default_client_country, default_client_organization,
+    default_client_organizational_unit, default_client_state,
+)
 from ..core.domain_paths import IDENTIFIER_RE, is_path_safe_segment
 from werkzeug.exceptions import HTTPException
 from flask_restx import Resource, fields
@@ -115,8 +118,12 @@ def create_client_certificate_models(api):
     client_cert_request_model = api.model('ClientCertificateRequest', {
         'common_name': fields.String(required=True, description='Common name'),
         'email': fields.String(description='Email address'),
-        'organization': fields.String(description='Organization'),
-        'organizational_unit': fields.String(description='Organizational unit'),
+        'organization': fields.String(
+            description=('Organization. Default: '
+                         'CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION, or CertMate')),
+        'organizational_unit': fields.String(
+            description=('Organizational unit. Default: '
+                         'CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATIONAL_UNIT, or Users')),
         'cert_usage': fields.String(description='Usage type'),
         'days_valid': fields.Integer(description='Days until expiration'),
         'generate_key': fields.Boolean(description='Generate private key'),
@@ -144,6 +151,19 @@ def create_client_certificate_models(api):
     }
 
 
+def _blank_is_unset(value):
+    """None for a CSV cell that is missing or blank, so the manager applies
+    the deployment's default; the value itself otherwise.
+
+    A function rather than an `or` at the call site: that call site is inside
+    create_client_certificate_resources, whose complexity is pinned by
+    scripts/check_complexity_budget.py, and a boolean operator there counts.
+    """
+    if value is None or not str(value).strip():
+        return None
+    return value
+
+
 def _client_cert_create_params(data):
     """Validate a client-certificate create payload into manager kwargs.
 
@@ -158,10 +178,13 @@ def _client_cert_create_params(data):
     email = data.get('email', '')
     if len(email) > 254:
         abort(400, "email must be 254 characters or less")
-    organization = data.get('organization', 'CertMate')
+    # Left out or left blank, as the form sends a field it emptied: the
+    # deployment's default, the way country and state already were.
+    organization = data.get('organization') or default_client_organization()
     if len(organization) > 64:
         abort(400, "organization must be 64 characters or less")
-    organizational_unit = data.get('organizational_unit', 'Users')
+    organizational_unit = (data.get('organizational_unit')
+                           or default_client_organizational_unit())
     if len(organizational_unit) > 64:
         abort(400, "organizational_unit must be 64 characters or less")
     try:
@@ -680,13 +703,13 @@ def create_client_certificate_resources(api, managers):
                         success, error, cert_info = client_cert_manager.create_client_certificate(
                             common_name=cert_data.get('common_name', ''),
                             email=cert_data.get('email', ''),
-                            organization=cert_data.get('organization', 'CertMate'),
+                            organization=_blank_is_unset(cert_data.get('organization')),
                             # Parsed out of the CSV column and then dropped:
                             # every row's OU fell back to "Users" while every
                             # other column came through, silently, for the
                             # whole batch.
-                            organizational_unit=cert_data.get(
-                                'organizational_unit', 'Users'),
+                            organizational_unit=_blank_is_unset(
+                                cert_data.get('organizational_unit')),
                             cert_usage=cert_data.get('cert_usage', 'api-mtls'),
                             days_valid=batch_days,
                             generate_key=True,

@@ -34,6 +34,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_COUNTRY = "CH"
 DEFAULT_STATE = "Switzerland"
 
+# The organisation and unit a client certificate carries when the caller names
+# neither. Literal defaults in the API, the CSV batch and the manager's
+# signature until they were named here, for the same reason as the two above:
+# kept as they were, so an instance that declares nothing issues exactly what
+# it always issued.
+DEFAULT_ORGANIZATION = "CertMate"
+DEFAULT_ORGANIZATIONAL_UNIT = "Users"
+
 
 # The same two defaults, as this deployment declares them. Read on every call
 # rather than once at import, so the value in force is the one in the process
@@ -58,6 +66,18 @@ def default_client_state() -> str:
     return declared or DEFAULT_STATE
 
 
+def default_client_organization() -> str:
+    """CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION, or DEFAULT_ORGANIZATION."""
+    declared = (os.environ.get('CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION') or '').strip()
+    return declared or DEFAULT_ORGANIZATION
+
+
+def default_client_organizational_unit() -> str:
+    """CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATIONAL_UNIT, or DEFAULT_ORGANIZATIONAL_UNIT."""
+    declared = (os.environ.get('CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATIONAL_UNIT') or '').strip()
+    return declared or DEFAULT_ORGANIZATIONAL_UNIT
+
+
 def check_client_certificate_defaults() -> None:
     """Refuse a declared default that no certificate could carry.
 
@@ -75,6 +95,14 @@ def check_client_certificate_defaults() -> None:
     if len(default_client_state()) > 128:
         raise ValueError(
             "CERTMATE_CLIENT_CERT_DEFAULT_STATE must be 128 characters or less")
+    # 64 is what the create endpoint accepts for each, and the X.509 upper
+    # bound for O and OU (RFC 5280, ub-organization-name / ub-organizational-unit-name).
+    if len(default_client_organization()) > 64:
+        raise ValueError(
+            "CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION must be 64 characters or less")
+    if len(default_client_organizational_unit()) > 64:
+        raise ValueError(
+            "CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATIONAL_UNIT must be 64 characters or less")
 
 
 # Characters allowed verbatim in the on-disk identifier slug. Anything else
@@ -214,8 +242,8 @@ class ClientCertificateManager:
         self,
         common_name: str,
         email: str = "",
-        organization: str = "CertMate",
-        organizational_unit: str = "Users",
+        organization: str | None = None,
+        organizational_unit: str | None = None,
         cert_usage: str = "api-mtls",
         days_valid: int = 365,
         generate_key: bool = True,
@@ -241,6 +269,15 @@ class ClientCertificateManager:
         Returns:
             Tuple of (success, error_message, certificate_data)
         """
+        # None is "the caller did not say", resolved to the deployment's
+        # default now rather than in the signature, which is evaluated once at
+        # import. An explicit value, empty included, is kept: a renewal passes
+        # the one recorded at issuance, and must not swap it for today's default.
+        if organization is None:
+            organization = default_client_organization()
+        if organizational_unit is None:
+            organizational_unit = default_client_organizational_unit()
+
         try:
             # Validate common_name
             if not common_name or not common_name.strip():
