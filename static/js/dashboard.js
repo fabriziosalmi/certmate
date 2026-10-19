@@ -906,7 +906,7 @@
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
                     '<span class="text-label"><a href="/settings" class="text-info-fg font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
-                    '<span class="text-label">Add a domain above and create your first SSL certificate</span></li>' +
+                    '<span class="text-label">Create your first certificate with the <strong>Create Certificate</strong> button below</span></li>' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
                     '<span class="text-label">Enable <a href="/settings#users" class="text-info-fg font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
                     '</ol>' +
@@ -1554,7 +1554,7 @@
     }
 
     function clearDebugConsole() {
-        document.getElementById('debugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. Click "Check All" to see deployment check logs...</div>';
+        document.getElementById('debugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. Run the "Check all deployments" action to see deployment check logs...</div>';
     }
 
     function addDebugLog(message, type) {
