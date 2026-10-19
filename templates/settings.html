@@ -60,6 +60,11 @@
                     {% include 'partials/settings_storage.html' %}
                     </form>
 
+                    <!-- The CA Account modal is rendered outside #settingsForm:
+                         inside it, its required inputs and Enter key collided
+                         with the page's own save. -->
+                    {% include 'partials/settings_ca_modal.html' %}
+
                     <!-- Tabs whose state is managed via dedicated endpoints
                          (notifications channels, deploy hooks, users, API keys)
                          sit alongside the form, not inside it. Each partial

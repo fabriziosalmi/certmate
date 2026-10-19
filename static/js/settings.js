@@ -3597,12 +3597,9 @@
         if (addModalEl) addModalEl.addEventListener('modal:close', closeAddAccountModal);
         var editModalEl = document.getElementById('editAccountModal');
         if (editModalEl) editModalEl.addEventListener('modal:close', closeEditAccountModal);
-        document.getElementById('caAccountModal').addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
-                e.preventDefault();
-                saveCAAccount();
-            }
-        });
+        // The Enter-to-not-submit workaround is gone: the CA modal now lives
+        // outside #settingsForm (settings.html), so Enter in it no longer
+        // submits the page form.
 
         addDebugLog('DOM loaded, initializing settings page', 'info');
 
