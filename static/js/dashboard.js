@@ -1537,9 +1537,14 @@
         if (_lastDetailFocus && _lastDetailFocus.focus) _lastDetailFocus.focus();
     }
 
-    // Close detail modal on Escape key
+    // Close detail modal on Escape key — but only when nothing is layered on
+    // top of it. A confirm/prompt opened from inside the panel owns the Escape
+    // that dismisses it; without this guard the same keypress also tore down
+    // the panel underneath, losing the cert the user was looking at.
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeCertDetail();
+        if (e.key !== 'Escape') return;
+        if (CertMate.anyDialogOpen && CertMate.anyDialogOpen()) return;
+        closeCertDetail();
     });
 
     // Debug console functions

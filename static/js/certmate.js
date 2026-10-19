@@ -226,6 +226,9 @@
     function createOverlay() {
         var overlay = document.createElement('div');
         overlay.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4';
+        // Marker so other components (e.g. the dashboard's cert-detail Escape
+        // handler) can tell a CM dialog is on top and yield the Escape to it.
+        overlay.setAttribute('data-cm-overlay', '');
         overlay.innerHTML = '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>';
         return overlay;
     }
@@ -487,6 +490,15 @@
         }
         return null;
     }
+
+    // True when any CM dialog (confirm/prompt/modal overlay) or a visible
+    // macro [data-modal-root] modal is on screen. Lets another component yield
+    // the Escape key to the dialog on top instead of both reacting to it. The
+    // overlay marker outlives the close animation (animateOut removes the node
+    // 200ms later), so this still reads true during the keydown that closed it.
+    CM.anyDialogOpen = function() {
+        return !!document.querySelector('[data-cm-overlay]') || !!visibleModal();
+    };
 
     function focusableIn(root) { return root.querySelectorAll(FOCUSABLE_SELECTOR); }
 
