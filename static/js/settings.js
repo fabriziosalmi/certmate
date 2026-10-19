@@ -2001,7 +2001,7 @@
             return;
         }
 
-        CertMate.confirm('Are you sure you want to restore from "' + escapeHtml(filename) + '"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.', 'Restore Backup').then(function (confirmed) {
+        CertMate.confirm('Are you sure you want to restore from "' + filename + '"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.', 'Restore Backup').then(function (confirmed) {
             if (!confirmed) return;
 
             addDebugLog('Restoring from backup: ' + filename, 'info');
@@ -2086,7 +2086,7 @@
             return;
         }
 
-        CertMate.confirm('Are you sure you want to delete the backup "' + escapeHtml(filename) + '"? This action cannot be undone.', 'Delete Backup').then(function (confirmed) {
+        CertMate.confirm('Are you sure you want to delete the backup "' + filename + '"? This action cannot be undone.', 'Delete Backup').then(function (confirmed) {
             if (!confirmed) return;
 
             addDebugLog('Deleting backup: ' + filename, 'info');
@@ -3470,7 +3470,7 @@
         if (newRole === currentRole) return;
 
         CertMate.confirm(
-            'Change role of \'' + escapeHtml(username) + '\' from ' + escapeHtml(currentRole) + ' to ' + escapeHtml(newRole) + '?',
+            'Change role of \'' + username + '\' from ' + currentRole + ' to ' + newRole + '?',
             'Change Role',
             { danger: false, confirmText: 'Change Role' }
         ).then(function (confirmed) {
@@ -3528,7 +3528,7 @@
     }
 
     function resetUserPassword(username) {
-        CertMate.prompt('Enter new password for \'' + escapeHtml(username) + '\':', 'Reset Password').then(function (newPassword) {
+        CertMate.prompt('Enter new password for \'' + username + '\':', 'Reset Password', '', { inputType: 'password' }).then(function (newPassword) {
             if (!newPassword) return;
 
             fetch('/api/users/' + username, {
@@ -3555,7 +3555,7 @@
     }
 
     function deleteUser(username) {
-        CertMate.confirm('Are you sure you want to delete user \'' + escapeHtml(username) + '\'? This action cannot be undone.', 'Delete User').then(function (confirmed) {
+        CertMate.confirm('Are you sure you want to delete user \'' + username + '\'? This action cannot be undone.', 'Delete User').then(function (confirmed) {
             if (!confirmed) return;
 
             fetch('/api/users/' + username, {

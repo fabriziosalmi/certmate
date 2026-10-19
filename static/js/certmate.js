@@ -339,16 +339,22 @@
     };
 
     // ── Styled Prompt Dialog ─────────────────────────────────────
-    CM.prompt = function(message, title, defaultValue) {
+    // options (4th arg, optional): { inputType: 'text'|'password' }. The type
+    // is allow-listed so callers can never inject arbitrary input attributes.
+    CM.prompt = function(message, title, defaultValue, options) {
         title = title || 'Input';
         defaultValue = defaultValue || '';
+        options = options || {};
+        var inputType = options.inputType === 'password' ? 'password' : 'text';
+        var autocomplete = inputType === 'password' ? 'new-password' : 'off';
 
         return new Promise(function(resolve) {
             var overlay = createOverlay();
             var inputId = 'cm-prompt-' + Date.now();
             var bodyHtml =
                 '<label for="' + inputId + '" class="block text-muted text-sm mb-3">' + CM.escapeHtml(message) + '</label>' +
-                '<input id="' + inputId + '" type="text" value="' + CM.escapeHtml(defaultValue) + '" ' +
+                '<input id="' + inputId + '" type="' + inputType + '" value="' + CM.escapeHtml(defaultValue) + '" ' +
+                    'autocomplete="' + autocomplete + '" ' +
                     'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">' +
                 '<div class="flex justify-end gap-3 mt-6">' +
                     '<button data-action="cancel" class="' + BTN_CANCEL + '">Cancel</button>' +
