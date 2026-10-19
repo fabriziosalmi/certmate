@@ -55,16 +55,21 @@
                                         <input type="number" x-model="editPort" placeholder="Port" min="1" max="65535"
                                                class="w-20 text-sm border border-border rounded px-2 py-1 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex-shrink-0"
                                                title="TCP port (empty for default)">
-                                        <div class="relative flex-shrink-0" style="min-width:150px" @click.away="editProtoOpen = false">
+                                        <div class="relative flex-shrink-0" style="min-width:150px" @click.away="editProtoOpen = false" @keydown.escape="editProtoOpen = false; $el.querySelector('button')?.focus()">
                                             <button type="button" @click="editProtoOpen = !editProtoOpen"
+                                                    aria-haspopup="listbox" :aria-expanded="editProtoOpen ? 'true' : 'false'" aria-label="Protocol"
+                                                    @keydown.arrow-down.prevent="editProtoOpen = true; $nextTick(() => $el.parentElement.querySelector('[role=option]')?.focus())"
                                                     class="w-full text-sm border border-border rounded px-2 py-1 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex items-center justify-between gap-1">
                                                 <span x-text="protocolLabel(editProtocol) || 'HTTPS/TLS'"></span>
                                                 <i class="fas fa-chevron-down text-[10px] transition-transform duration-150" :class="{'rotate-180': editProtoOpen}"></i>
                                             </button>
-                                            <div x-show="editProtoOpen" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                                            <div x-show="editProtoOpen" role="listbox" aria-label="Protocol" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
                                                  class="absolute z-50 mt-1 w-full border border-border rounded-lg bg-input shadow-lg overflow-hidden">
                                                 <template x-for="opt in ['https-tls', 'tls', 'smtp-starttls']" :key="opt">
-                                                    <button type="button" @click="chooseEditProtocol(opt)"
+                                                    <button type="button" role="option" :aria-selected="editProtocol === opt ? 'true' : 'false'"
+                                                            @click="chooseEditProtocol(opt); $el.closest('.relative')?.querySelector('button')?.focus()"
+                                                            @keydown.arrow-down.prevent="$el.nextElementSibling?.focus()"
+                                                            @keydown.arrow-up.prevent="($el.previousElementSibling || $el.parentElement.previousElementSibling)?.focus()"
                                                             class="w-full text-left px-3 py-2 text-sm transition-colors duration-100"
                                                             :class="editProtocol === opt ? 'bg-hover text-foreground font-medium' : 'text-muted hover:bg-hover hover:text-foreground'">
                                                         <span x-text="protocolLabel(opt)"></span>
@@ -124,7 +129,7 @@
                     </span>
                 </div>
                 <div class="p-4">
-                    <div class="flex flex-nowrap items-end gap-2">
+                    <div class="flex flex-wrap items-end gap-2">
                         <div class="flex-1 min-w-0">
                             <label class="block text-xs text-muted mb-1">Domain</label>
                             <input list="probe-domain-suggestions" type="text" x-model="addDomain" placeholder="example.com"
@@ -157,16 +162,21 @@
                         </div>
                         <div class="flex-shrink-0">
                             <label class="block text-xs text-muted mb-1">Protocol</label>
-                            <div class="relative" style="min-width:150px" @click.away="addProtoOpen = false">
+                            <div class="relative" style="min-width:150px" @click.away="addProtoOpen = false" @keydown.escape="addProtoOpen = false; $el.querySelector('button')?.focus()">
                                 <button type="button" @click="addProtoOpen = !addProtoOpen"
+                                        aria-haspopup="listbox" :aria-expanded="addProtoOpen ? 'true' : 'false'" aria-label="Protocol"
+                                        @keydown.arrow-down.prevent="addProtoOpen = true; $nextTick(() => $el.parentElement.querySelector('[role=option]')?.focus())"
                                         class="w-full text-sm border border-border rounded px-3 py-2 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex items-center justify-between gap-1">
                                     <span x-text="protocolLabel(addProtocol) || 'HTTPS/TLS'"></span>
                                     <i class="fas fa-chevron-down text-[10px] transition-transform duration-150" :class="{'rotate-180': addProtoOpen}"></i>
                                 </button>
-                                <div x-show="addProtoOpen" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                                <div x-show="addProtoOpen" role="listbox" aria-label="Protocol" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
                                      class="absolute z-50 mt-1 w-full border border-border rounded-lg bg-input shadow-lg overflow-hidden">
                                     <template x-for="opt in ['https-tls', 'tls', 'smtp-starttls']" :key="opt">
-                                        <button type="button" @click="chooseAddProtocol(opt)"
+                                        <button type="button" role="option" :aria-selected="addProtocol === opt ? 'true' : 'false'"
+                                                @click="chooseAddProtocol(opt); $el.closest('.relative')?.querySelector('button')?.focus()"
+                                                @keydown.arrow-down.prevent="$el.nextElementSibling?.focus()"
+                                                @keydown.arrow-up.prevent="($el.previousElementSibling || $el.parentElement.previousElementSibling)?.focus()"
                                                 class="w-full text-left px-3 py-2 text-sm transition-colors duration-100"
                                                 :class="addProtocol === opt ? 'bg-hover text-foreground font-medium' : 'text-muted hover:bg-hover hover:text-foreground'">
                                             <span x-text="protocolLabel(opt)"></span>
