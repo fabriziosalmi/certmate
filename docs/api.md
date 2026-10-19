@@ -893,8 +893,10 @@ Create a new client certificate.
 **Parameters**:
 - `common_name` (required) - Certificate subject
 - `email` (optional) - Email address
-- `organization` (optional) - Organization name
-- `organizational_unit` (optional) - Department name
+- `organization` (optional) - Organization name (default:
+  `CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION`, or `CertMate`)
+- `organizational_unit` (optional) - Department name (default:
+  `CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATIONAL_UNIT`, or `Users`)
 - `cert_usage` (optional) - Usage type: `api-mtls`, `vpn`, or custom
 - `days_valid` (optional) - Validity in days (default: 365)
 - `generate_key` (optional) - Generate private key (default: true)
@@ -904,8 +906,10 @@ Create a new client certificate.
   `CERTMATE_CLIENT_CERT_DEFAULT_STATE`, or `Switzerland`)
 - `notes` (optional) - Additional notes
 
-The two defaults also apply to CSV batch rows and to renewals, which carry
-neither field.
+Left out or left blank, each of these four takes its default, and so does a
+CSV batch row that leaves its column out or empty. A renewal does not: it
+re-issues with the subject the certificate was issued with, so a default
+changed since then does not reach it.
 
 **Response** (201 Created):
 <!-- response: POST /api/client-certs/create 201 -->
