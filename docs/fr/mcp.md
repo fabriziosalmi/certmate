@@ -1,6 +1,6 @@
 # Serveur MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 8ff9ffe2c5fe3b5b -->
+<!-- CERTMATE-TRANSLATED-FROM 0033df7b20dfdeb4 -->
 
 CertMate inclut un serveur MCP (Model Context Protocol) intégré écrit en Node.js. Cela permet aux assistants IA agentiques (tels que Claude ou Gemini) d'inspecter les statuts des certificats, de déclencher des renouvellements, de demander des diagnostics et d'interagir directement avec l'API CertMate.
 
@@ -55,11 +55,12 @@ plutôt l'`account_id` dans le prompt, ou donnez-lui délibérément un token ad
 ## Configuration
 
 ### Prérequis
-- Node.js (>= 20 — `mcp/package.json` déclare `engines.node: ">=20.0.0"`)
-- npm
+- Node.js 20 ou plus récent (`mcp/package.json` déclare `engines.node: ">=20.0.0"`)
 
 ### Installation
-Naviguez vers le répertoire `mcp/` dans le dépôt CertMate et installez les dépendances :
+Le serveur est publié sur npm sous le nom [`certmate-mcp-server`](https://www.npmjs.com/package/certmate-mcp-server). Un client MCP le lance avec `npx`, il n'y a donc rien à installer au préalable : les exemples de configuration ci-dessous le démarrent avec `npx -y certmate-mcp-server`.
+
+Pour le lancer plutôt depuis un checkout (pour le développement), installez ses dépendances et pointez le client vers `node /absolute/path/to/certmate/mcp/index.js` :
 ```bash
 cd mcp
 npm install
@@ -75,14 +76,14 @@ Optionnel :
 - `CERTMATE_AGENT_ID` — Un libellé pour ce déploiement d'agent (`X-CertMate-Agent-Id`, défaut `certmate-mcp-server`).
 
 ### Exemple d'intégration (configuration de Claude Desktop)
-Pour ajouter le serveur MCP CertMate à Claude Desktop, ajoutez ceci à votre fichier de configuration (généralement situé dans `~/Library/Application Support/Claude/claude_desktop_config.json` sur macOS ou `%APPDATA%\Claude\claude_desktop_config.json` sur Windows) :
+Pour ajouter le serveur MCP CertMate à Claude Desktop, ajoutez ceci à votre fichier de configuration (généralement situé dans `~/Library/Application Support/Claude/claude_desktop_config.json` sur macOS ou `%APPDATA%\Claude\claude_desktop_config.json` sur Windows). Cursor lit le même bloc depuis `~/.cursor/mcp.json`.
 
 ```json
 {
   "mcpServers": {
     "certmate": {
-      "command": "node",
-      "args": ["/absolute/path/to/certmate/mcp/index.js"],
+      "command": "npx",
+      "args": ["-y", "certmate-mcp-server"],
       "env": {
         "CERTMATE_URL": "http://localhost:8000",
         "CERTMATE_TOKEN": "your_secure_bearer_token"
@@ -92,10 +93,19 @@ Pour ajouter le serveur MCP CertMate à Claude Desktop, ajoutez ceci à votre fi
 }
 ```
 
+### Claude Code
+
+```bash
+claude mcp add certmate --scope user \
+  -e CERTMATE_URL=http://localhost:8000 \
+  -e CERTMATE_TOKEN=your_secure_bearer_token \
+  -- npx -y certmate-mcp-server
+```
+
 ### Autres clients MCP (Gemini, etc.)
 
 Le serveur parle MCP standard sur stdio, donc tout client qui supporte MCP fonctionne
-de la même manière : pointez-le vers `node /absolute/path/to/certmate/mcp/index.js` et définissez les
+de la même manière : faites-lui exécuter `npx -y certmate-mcp-server` et définissez les
 deux variables d'environnement. Rien dans le serveur n'est spécifique à Claude.
 
 ## Utiliser CertMate avec un agent IA (tâches planifiées)
