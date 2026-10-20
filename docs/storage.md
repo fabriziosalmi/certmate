@@ -72,6 +72,29 @@ then save. Saving does not move existing certificates; see
 The examples below show the same settings as they are stored in
 `settings.json`.
 
+### Keeping a credential out of settings.json
+
+Any credential field in a backend's config can be supplied by reference
+instead of as a literal, so the secret never sits in `settings.json`: name a
+file with `<field>_file` or an environment variable with `<field>_env`. For
+example, instead of `"vault_token": "hvs.xxxx"`:
+
+```json
+"hashicorp_vault": {
+  "vault_url": "https://vault.example:8200",
+  "vault_token_file": "/run/secrets/vault-token"
+}
+```
+
+The same works for `client_secret_file` / `client_secret_env` on Azure, the AWS
+keys, and so on. Precedence is `_file`, then `_env`, then the literal; a
+reference that cannot be resolved makes the backend fall back to local disk and
+report degraded on `/health` rather than run with an empty credential; a
+trailing newline (as `kubectl create secret --from-file` writes) is stripped.
+This is the same mechanism the DNS provider tokens and the OIDC client secret
+use. The reference is read when the backend initializes (on a config change or
+a restart), not on every store, because the backend client is long-lived.
+
 ### Local filesystem
 
 The default, with nothing to configure. Each domain has a directory under the
