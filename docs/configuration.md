@@ -61,8 +61,16 @@ with the new values and send `POST /api/client-certs/ca/reset` without a
 | `CERTMATE_CLIENT_CA_ORGANIZATION`        |          | `CertMate`              | Organisation (`O`) of the client CA |
 | `CERTMATE_CLIENT_CA_ORGANIZATIONAL_UNIT` |          | `Certificate Authority` | Organisational unit (`OU`) of the client CA |
 | `CERTMATE_CLIENT_CA_COMMON_NAME`         |          | `CertMate CA`           | Common name (`CN`) of the client CA: the issuer name every client certificate shows |
-| `CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY`   |          | `CH`                    | Country of a client certificate issued without one: a create request that leaves it out, every CSV batch row, and every renewal. A value in the request wins. Not a two-letter code: the instance refuses to start, naming the variable |
+| `CERTMATE_CLIENT_CERT_DEFAULT_COUNTRY`   |          | `CH`                    | Country of a client certificate issued without one: a create request that leaves it out or blank, and a CSV batch row without it. A value in the request wins, and a renewal keeps the country the certificate was issued with. Not a two-letter code: the instance refuses to start, naming the variable |
 | `CERTMATE_CLIENT_CERT_DEFAULT_STATE`     |          | `Switzerland`           | State or province of a client certificate issued without one, in the same cases |
+| `CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION` |       | `CertMate`              | Organisation (`O`) of a client certificate issued without one, in the same cases. It is also what the Organization field of the create form starts with. More than 64 characters: the instance refuses to start |
+| `CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATIONAL_UNIT` |  | `Users`              | Organisational unit (`OU`) of a client certificate issued without one, in the same cases. The create form has no unit field, so this is the unit every certificate created from the UI carries. More than 64 characters: the instance refuses to start |
+
+The `CERTMATE_CLIENT_CA_*` variables name the **CA**; the
+`CERTMATE_CLIENT_CERT_DEFAULT_*` ones fill in the **certificates it signs**.
+They are separate on purpose: an organisation usually signs its staff's
+certificates as itself (`O`) and per department (`OU`), while the CA is named
+once, often `OU=Certificate Authority`.
 
 ## Timing and diagnostics
 
