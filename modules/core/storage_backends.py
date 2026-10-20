@@ -24,6 +24,7 @@ from .constants import CERTIFICATE_FILES
 from .domain_paths import STORAGE_DOMAIN_RE, certificate_dir, reject_unsafe_domain
 from .redirect_guard import GuardedSession
 from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
+from .secret_refs import resolve as resolve_secret_refs
 
 
 def _refuse_metadata_url(url, field):
@@ -2354,23 +2355,31 @@ class StorageManager:
                 self._backend = LocalFileSystemBackend(cert_dir)
                 
             elif backend_type == 'azure_keyvault':
-                config = storage_config.get('azure_keyvault', {})
+                # Resolve any <field>_file / <field>_env secret reference so a
+                # backend credential (the Vault token, the Azure client secret,
+                # ...) can live in a mounted file or an environment variable
+                # instead of as cleartext in settings.json, the same mechanism
+                # the DNS provider tokens and the OIDC client secret use. An
+                # unresolvable reference raises and is caught below as any other
+                # init failure: a loud fall back to local disk, surfaced on
+                # /health, never a silent empty credential.
+                config = resolve_secret_refs(storage_config.get('azure_keyvault', {}))
                 self._backend = AzureKeyVaultBackend(config)
                 
             elif backend_type == 'aws_secrets_manager':
-                config = storage_config.get('aws_secrets_manager', {})
+                config = resolve_secret_refs(storage_config.get('aws_secrets_manager', {}))
                 self._backend = AWSSecretsManagerBackend(config)
                 
             elif backend_type == 'hashicorp_vault':
-                config = storage_config.get('hashicorp_vault', {})
+                config = resolve_secret_refs(storage_config.get('hashicorp_vault', {}))
                 self._backend = HashiCorpVaultBackend(config)
                 
             elif backend_type == 'infisical':
-                config = storage_config.get('infisical', {})
+                config = resolve_secret_refs(storage_config.get('infisical', {}))
                 self._backend = InfisicalBackend(config)
 
             elif backend_type == 's3_compatible':
-                config = storage_config.get('s3_compatible', {})
+                config = resolve_secret_refs(storage_config.get('s3_compatible', {}))
                 self._backend = S3CompatibleBackend(config)
 
             else:
