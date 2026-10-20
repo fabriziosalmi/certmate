@@ -265,7 +265,7 @@ def is_ip_identifier(value: str) -> bool:
         return False
 
 
-def validate_ip_identifier(value: str) -> Tuple[bool, str]:
+def validate_ip_identifier(value: str) -> tuple[bool, str]:
     """Validate an IP-address certificate identifier (#1130).
 
     Returns ``(True, canonical)`` for a globally-routable IPv4 literal, else

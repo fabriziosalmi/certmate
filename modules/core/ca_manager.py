@@ -418,10 +418,19 @@ class CAManager:
                             key_type: Optional[str] = None,
                             key_size: Optional[int] = None,
                             elliptic_curve: Optional[str] = None,
-                            acme_profile: str | None = None) -> tuple:
+                            acme_profile: str | None = None,
+                            ip_address: str | None = None) -> tuple:
         """Build certbot command with CA-specific parameters.
 
         Args:
+            ip_address: An IP-address identifier (#1130). When set, certbot is
+                given ``--ip-address <ip>`` in place of ``-d <domain>``: ``-d``
+                is for DNS names, and the IP is the certificate's identifier.
+                ``domain`` is then the derived lineage name
+                (``utils.cert_name_for_ip``), which stays as ``--cert-name`` and
+                the per-domain config dir. The caller forces the short-lived
+                profile (passed as ``acme_profile``) and HTTP-01, the only ones
+                Let's Encrypt issues an IP certificate with.
             key_type: Optional 'rsa' or 'ecdsa'. When omitted, no
                 ``--key-type`` flag is emitted and certbot picks its own
                 default (currently RSA-2048) — this preserves the
@@ -453,8 +462,15 @@ class CAManager:
             '--email', email,
             '--cert-name', domain,
             '--server', acme_url,
-            '-d', domain
         ]
+
+        # The identifier: an IP goes in --ip-address (#1130), a DNS name in -d.
+        # `domain` is always the lineage name, so --cert-name above is correct
+        # for both; only the identifier flag differs.
+        if ip_address:
+            certbot_cmd.extend(['--ip-address', ip_address])
+        else:
+            certbot_cmd.extend(['-d', domain])
 
         # Add SAN domains
         if san_domains:
