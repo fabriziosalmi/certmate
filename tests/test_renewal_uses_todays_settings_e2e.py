@@ -20,7 +20,7 @@ import uuid
 
 import pytest
 
-from tests.e2e_support import TEST_EMAIL, assert_staging_issuer
+from tests.e2e_support import TEST_EMAIL, assert_staging_issuer, issue_or_skip
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -93,7 +93,8 @@ def _replayed_wait(manager):
 
 def test_01_issue_with_the_issue_day_wait(instance):
     manager = instance['certificates']
-    result = manager.create_certificate(
+    result = issue_or_skip(
+        manager.create_certificate,
         TEST_DOMAIN, TEST_EMAIL, 'cloudflare', account_id=ACCOUNT_ID,
         ca_provider='letsencrypt_staging')
     assert result, result
@@ -110,7 +111,7 @@ def test_02_a_renewal_waits_what_settings_say_today(instance):
     assert settings_manager.save_settings(settings, 'wait-e2e') is not False
 
     manager = instance['certificates']
-    manager.renew_certificate(TEST_DOMAIN, force=True)
+    issue_or_skip(manager.renew_certificate, TEST_DOMAIN, force=True)
 
     assert _run_wait(manager) == TODAYS_WAIT, (
         f'the renewal ran with {_run_wait(manager)} s, the value baked in on '

@@ -87,6 +87,12 @@ _CA_TRANSIENTS = (
     "timeout during connect",
     "the server experienced an internal error",
     "server experienced an internal error",
+    # The CA accepted the order and the challenges, then at finalize reported it
+    # could not find the authorizations it had just granted: staging pruned or
+    # lost them under load. A CertMate authorization defect fails earlier, at
+    # challenge validation, with a different message; this exact finalize phrase
+    # is the CA losing its own state, not us.
+    "authorizations for these identifiers not found",
 )
 
 
@@ -107,3 +113,20 @@ def skip_if_the_ca_was_unavailable(job):
                 f"Let's Encrypt staging declined the order ({phrase}); this is "
                 f"the CA refusing to serve, not a CertMate defect"
             )
+
+
+def issue_or_skip(fn, *args, **kwargs):
+    """Run a raising issuance or renewal; a CA-side refusal becomes a skip.
+
+    create_certificate and renew_certificate RAISE on failure rather than
+    return a job dict, so skip_if_the_ca_was_unavailable never sees the error
+    when a test asserts their result directly. This runs the call and routes a
+    failure through the same narrow classifier: a CA transient skips with the
+    reason, anything else re-raises and stays a failure, so a CertMate defect is
+    never swallowed. Returns whatever the call returns on success.
+    """
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        skip_if_the_ca_was_unavailable({"status": "failed", "error": str(exc)})
+        raise
