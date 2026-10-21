@@ -1,14 +1,22 @@
-pytest
-pytest-cov
-pytest-mock
-pytest-asyncio
-pytest-flask
-pytest-xdist
-pytest-playwright
-coverage
-requests-mock
-freezegun
-playwright
+# The test toolchain, pinned. These floated unpinned, so every CI run resolved
+# whatever was newest that day and two runs a few hours apart did not install
+# the same tools — which is how a flaky native crash in the coverage core could
+# appear out of nowhere against an otherwise identical dependency set. Pinned to
+# the set the suite was last green on so a red is the code's fault, not the day's
+# releases; Dependabot proposes the bumps, and a bump that breaks the suite is
+# then a reviewable PR rather than a silent regression. (These are not hash-locked
+# like requirements*.lock because of the editable installs below.)
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-mock==3.17.0
+pytest-asyncio==1.4.0
+pytest-flask==1.3.0
+pytest-xdist==3.8.0
+pytest-playwright==0.10.0
+coverage==7.16.2
+requests-mock==1.12.1
+freezegun==1.5.5
+playwright==1.64.0
 # In-repo terminal clients (SDK + CLI), installed editable so the e2e gate can
 # exercise them against the test container and keep them in lockstep with the
 # server they wrap. Order matters: the SDK first (the CLI depends on it).
