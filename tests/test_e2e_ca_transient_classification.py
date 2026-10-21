@@ -30,6 +30,7 @@ def _failed(error):
     'urn:ietf:params:acme:error:rateLimited: rate limit exceeded',
     'Timeout during connect (likely firewall problem)',
     'The server experienced an internal error',
+    'Error finalizing order :: authorizations for these identifiers not found: wait-e2e-7ae9ba65.certmate.org',
 ])
 def test_a_refusal_by_the_certificate_authority_is_a_skip(error):
     with pytest.raises(pytest.skip.Exception):
@@ -47,6 +48,11 @@ def test_a_refusal_by_the_certificate_authority_is_a_skip(error):
     # exact failure mode the narrow classification exists to prevent.
     'An internal error occurred while writing metadata',
     'Internal error: the storage backend returned no bundle',
+    # The finalize-authz transient must not swallow a challenge that genuinely
+    # failed to validate: a wrong or missing TXT record is CertMate's (or its
+    # DNS provider's) problem and stays a failure, even though it too is an
+    # authorization error.
+    'urn:ietf:params:acme:error:unauthorized :: Incorrect TXT record found for _acme-challenge.example.com',
     '',
     None,
 ])
