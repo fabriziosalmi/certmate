@@ -177,6 +177,20 @@ jobs:
         # instead, where a failure is news rather than a blocked merge.
         pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-report=json:coverage.json --cov-fail-under=75 -m "not ui and not network"
 
+    # DIAGNOSTIC (temporary, diag/flaky-oom-measure): the test step dies part-way
+    # with no traceback. Read the runner's own numbers to settle whether it is the
+    # OOM killer and how much headroom there was. always() so it runs after a
+    # failed test step; it never fails the job.
+    - name: '[diag] memory and OOM evidence'
+      if: ${{ always() }}
+      continue-on-error: true
+      run: |
+        echo "=== free -m ==="; free -m || true
+        echo "=== cgroup memory.peak (bytes) ==="; cat /sys/fs/cgroup/memory.peak 2>/dev/null || cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes 2>/dev/null || echo "n/a"
+        echo "=== cgroup memory.events (oom / oom_kill) ==="; cat /sys/fs/cgroup/memory.events 2>/dev/null || echo "n/a"
+        echo "=== /proc/meminfo (totals) ==="; grep -iE 'MemTotal|MemAvailable|SwapTotal' /proc/meminfo || true
+        echo "=== dmesg OOM killer lines ==="; sudo dmesg 2>/dev/null | grep -iE 'out of memory|killed process|oom-kill|oom_reaper' | tail -20 || echo "(none / dmesg unavailable)"
+
     - name: Coverage floors for the HTTP layer
       if: matrix.python-version == '3.12'
       run: |
