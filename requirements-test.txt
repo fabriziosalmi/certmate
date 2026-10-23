@@ -1,11 +1,8 @@
-# The test toolchain, pinned. These floated unpinned, so every CI run resolved
-# whatever was newest that day and two runs a few hours apart did not install
-# the same tools — which is how a flaky native crash in the coverage core could
-# appear out of nowhere against an otherwise identical dependency set. Pinned to
-# the set the suite was last green on so a red is the code's fault, not the day's
-# releases; Dependabot proposes the bumps, and a bump that breaks the suite is
-# then a reviewable PR rather than a silent regression. (These are not hash-locked
-# like requirements*.lock because of the editable installs below.)
+# The test toolchain, pinned to exact versions so every CI run installs the
+# same tools and a red points at the change under review rather than at a new
+# release of pytest or one of its plugins. Dependabot proposes each bump as its
+# own PR. Not hash-locked like requirements*.lock: pip's --require-hashes mode
+# refuses the editable installs below.
 pytest==9.1.1
 pytest-cov==7.1.0
 pytest-mock==3.17.0
