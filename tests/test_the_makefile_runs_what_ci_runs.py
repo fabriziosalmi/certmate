@@ -107,10 +107,14 @@ def test_flake8_is_pinned_where_the_tests_install_it_to_the_version_ci_pins():
 
 
 def test_test_ci_is_the_pytest_command_ci_runs():
-    ci = next(c for c in _commands() if c.startswith('pytest ') and '--cov-fail-under' in c)
-    arguments = ci[len('pytest '):]
-    assert f'$(PYTEST) {arguments}' in MAKEFILE, (
-        f'`make test-ci` is not `pytest {arguments}`, which is what ci.yml runs')
+    # Every pytest the job runs, not only the one carrying the floor: the suite runs in two
+    # invocations (on four workers, then the e2e tests serially), and either can drift.
+    runs = [c for c in _commands() if c.startswith('pytest ')]
+    assert any('--cov-fail-under' in c for c in runs), runs
+    for ci in runs:
+        arguments = ci[len('pytest '):]
+        assert f'$(PYTEST) {arguments}' in MAKEFILE, (
+            f'`make test-ci` does not run `pytest {arguments}`, which is what ci.yml runs')
     assert 'pytest -m "not ui and not network" --cov=modules --cov-fail-under=75' in CONTRIBUTING
 
 
