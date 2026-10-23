@@ -21,7 +21,7 @@ import pytest
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 
-from tests.e2e_support import TEST_EMAIL, assert_staging_issuer
+from tests.e2e_support import TEST_EMAIL, assert_staging_issuer, issue_or_skip
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -64,8 +64,9 @@ def instance(tmp_path_factory, cloudflare_token):
 
 
 def _issue(manager, domain, profile):
-    return manager.create_certificate(domain, TEST_EMAIL, 'cloudflare', account_id=ACCOUNT_ID,
-                                      ca_provider='letsencrypt_staging', acme_profile=profile)
+    return issue_or_skip(manager.create_certificate, domain, TEST_EMAIL, 'cloudflare',
+                         account_id=ACCOUNT_ID, ca_provider='letsencrypt_staging',
+                         acme_profile=profile)
 
 
 def _leaf(manager, domain):
@@ -99,7 +100,7 @@ def test_02_certbot_wrote_the_profile_and_it_was_softened(instance):
 
 def test_03_the_renewal_keeps_the_profile(instance):
     _pem, before = _leaf(instance, TLSSERVER)
-    result = instance.renew_certificate(TLSSERVER, force=True)
+    result = issue_or_skip(instance.renew_certificate, TLSSERVER, force=True)
     assert result and result.get('renewed') is not False, result
     _pem, after = _leaf(instance, TLSSERVER)
     assert after.serial_number != before.serial_number

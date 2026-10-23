@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.52.0 (the trust store fix, and credentials that stay out of settings.json)
+
+[Read the notes](docs/releases/v2.52.0.md)
+
 ## v2.51.2 (a pass over the web interface)
 
 [Read the notes](docs/releases/v2.51.2.md)
