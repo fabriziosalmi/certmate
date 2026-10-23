@@ -165,7 +165,16 @@ jobs:
         # another name) — but as a required check they would turn every PR red
         # on someone else's outage. They run on the weekly schedule below
         # instead, where a failure is news rather than a blocked merge.
-        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-report=json:coverage.json --cov-fail-under=75 -m "not ui and not network"
+        #
+        # Two runs, one coverage measurement. Everything but the e2e tests
+        # runs on four workers (pytest-xdist; the runner has four vCPUs). The
+        # e2e tests run after it, serially: they share one container with a
+        # fixed name and port (tests/conftest.py), so a second worker would
+        # restart it under the first with another API token, and the first
+        # would get 401s. --cov-append adds the second run's data to the
+        # first's, so the floor and the reports below are for the whole suite.
+        pytest -n 4 --tb=short --cov=modules --cov-report= -m "not ui and not network and not e2e"
+        pytest -v --tb=short --cov=modules --cov-append --cov-report=xml --cov-report=html --cov-report=json:coverage.json --cov-fail-under=75 -m "e2e and not ui and not network"
 
     - name: Coverage floors for the HTTP layer
       if: matrix.python-version == '3.12'
