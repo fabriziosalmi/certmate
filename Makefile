@@ -24,6 +24,10 @@
 # Python 3.12 — must match Dockerfile base image
 PYTHON_BIN ?= $(shell command -v python3.12 2>/dev/null || echo python3)
 VENV := .venv
+# The venv's bin first on every recipe's PATH, as an activated venv or CI's
+# runner has it: tests that start certbot or the certmate CLI find them there,
+# and skipped (5 of them under `make test-ci`) when make ran without it.
+export PATH := $(CURDIR)/$(VENV)/bin:$(PATH)
 PIP := $(VENV)/bin/pip
 PYTEST := $(VENV)/bin/python -m pytest
 PYTHON := $(VENV)/bin/python
