@@ -295,6 +295,7 @@ rather than written by hand:
   },
   "acme_profile": null,
   "acme_profile_withdrawn_at": null,
+  "ip_address": null,
   "auto_renew": true
 }
 ```
@@ -1656,7 +1657,9 @@ required; the rest falls back to the settings (default DNS provider and
 account, default CA, default key type). Every field is in the
 `CreateCertificate` model in `/api/swagger.json`:
 
-- `domain`, and `san_domains` for more names (`["*.example.com"]`);
+- `domain`, and `san_domains` for more names (`["*.example.com"]`). Since
+  **2.57** `domain` can be an IPv4 address (see
+  [IP-address certificates](#ip-address-certificates));
 - `dns_provider` and `account_id`; `domain_alias` and `alias_dns_provider` for
   DNS-01 through an alias zone;
 - `ca_provider` and `ca_account_id`; `challenge_type` (`dns-01`, `http-01` or
@@ -1684,11 +1687,16 @@ account, default CA, default key type). Every field is in the
 {
   "message": "Certificate created successfully for app.example.com",
   "domain": "app.example.com",
+  "ip_address": null,
   "dns_provider": "cloudflare",
   "ca_provider": "letsencrypt",
   "duration": 41.2
 }
 ```
+
+`domain` is the certificate's name, which every later request takes: the domain
+as CertMate normalised it, or `ip-<address with dashes>` for an IP address,
+with the address in `ip_address` (`null` for a domain). Since **2.57**.
 
 With `async`, **202 Accepted** at once, and the job to poll with
 `GET /api/certificates/jobs/<job_id>`:
@@ -1781,7 +1789,7 @@ staging:
 | :--- | :--- | :--- |
 | `classic` | 90 days | the default |
 | `tlsserver` | 45 days | no Common Name |
-| `shortlived` | 160 hours | the only one that can name IP addresses (not yet supported by CertMate, [#1130](https://github.com/fabriziosalmi/certmate/issues/1130)) |
+| `shortlived` | 160 hours | the only one that can name IP addresses (see [IP-address certificates](#ip-address-certificates)) |
 
 `POST /api/certificates/create` and `POST /api/certificates/<domain>/reissue`
 take `acme_profile`. Omitted, a new certificate uses the default its CA account
@@ -1802,6 +1810,43 @@ The certificate's answer carries `acme_profile` and `acme_profile_withdrawn_at`.
 How long before expiry a 45-day or a 160-hour certificate renews is the rule in
 [When will it renew?](#when-will-it-renew): with the default threshold, 15 days
 and about 3 days. Since API contract **2.41**.
+
+#### IP-address certificates
+
+Since API contract **2.57**, `domain` in `POST /api/certificates/create` can be
+a globally routable IPv4 address ([#1130](https://github.com/fabriziosalmi/certmate/issues/1130)).
+Let's Encrypt issues a certificate for an address only in its `shortlived`
+profile and only over HTTP-01, so that is how CertMate asks for one:
+
+- the CA is Let's Encrypt (`letsencrypt` or `letsencrypt_staging`);
+- the challenge is HTTP-01: port 80 of that address must reach CertMate's
+  `/.well-known/acme-challenge/`;
+- the profile is `shortlived` (160 hours).
+
+`ca_provider`, `challenge_type` and `acme_profile` can be left out. A request
+that names another CA, challenge or profile, or adds `san_domains` or a
+`domain_alias`, is refused with `400` before anything is issued, with `async`
+too. So is an address Let's Encrypt cannot reach (private, loopback,
+link-local, CGNAT, multicast, documentation or reserved), and an IPv6 address
+for now ([#854](https://github.com/fabriziosalmi/certmate/issues/854)).
+
+An address is not a name a directory or a certbot lineage can take, so the
+certificate is named `ip-` followed by the address with its dots as dashes:
+`a.b.c.d` becomes `ip-a-b-c-d`. That is the `domain` the create answer and an
+asynchronous job carry, and the name every route about the certificate takes:
+`GET /api/certificates/ip-a-b-c-d`, `.../download`, `.../renew`,
+`.../reissue`, `DELETE`. No domain can have that name, since a domain has a
+dot. Every certificate answer carries `ip_address`: the address for an IP
+certificate, `null` for a domain.
+
+The certificate is registered like any other, and the renewal sweep renews it
+like any other: with the default threshold, about 3 days before it expires
+([When will it renew?](#when-will-it-renew)). A reissue keeps the address,
+HTTP-01 and `shortlived`, and refuses `san_domains`.
+
+An API key restricted with `allowed_domains` cannot create or act on an IP
+certificate: its scope lists domains, and an address is not one. The batch
+endpoint takes domains only.
 
 #### Renew a certificate
 

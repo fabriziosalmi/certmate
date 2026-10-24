@@ -267,8 +267,10 @@ def seeded():
 
 def test_the_seed_holds_the_certificates_it_says(seeded):
     _, listing, _, _ = seeded
-    assert set(listing) == {world.ALIAS, world.DOMAIN, world.KEYLESS, world.KEYLESS_TOO}
+    assert set(listing) == {world.ALIAS, world.DOMAIN, world.KEYLESS, world.KEYLESS_TOO, world.IP_NAME}
     assert listing[world.DOMAIN]['private_key_state'] == 'present'
+    # Without it `ip_address` is only ever null in the walk, and compared with nothing (#1130).
+    assert listing[world.IP_NAME]['ip_address'] == world.IP_ADDRESS
     for keyless in (world.KEYLESS, world.KEYLESS_TOO):
         assert listing[keyless]['private_key_state'] == 'missing', (
             f'{keyless} has a key, so a reissue limited to one leaves nothing remaining')

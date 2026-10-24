@@ -141,7 +141,8 @@
                     return {
                         type: 'cert',
                         icon: 'fa-lock',
-                        label: c.domain,
+                        // An IP certificate by its address (#1130).
+                        label: c.ip_address || c.domain,
                         // `null > 0` is false, so an unparseable expiry used to
                         // read as 'Expired' here — the same defect the dashboard
                         // was fixed for in v2.2.4, in a file written after it.
@@ -150,7 +151,8 @@
                             ? ' · ' + c.tags.map(function (t) { return '#' + t; }).join(' ') : ''),
                         // Searched but not shown (#1043): what an operator wrote
                         // about a certificate finds it the same way its name does.
-                        keywords: ((c.tags || []).join(' ') + ' ' + (c.notes || '')).trim(),
+                        keywords: ((c.tags || []).join(' ') + ' ' + (c.notes || '') +
+                                   (c.ip_address ? ' ' + c.domain : '')).trim(),
                         // Every other name it covers finds it too (#1247); see onSearch.
                         sans: Array.isArray(c.san_domains) ? c.san_domains.filter(function (n) {
                             return typeof n === 'string';

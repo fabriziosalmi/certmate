@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.56",
+ "contract_version": "2.57",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -976,6 +976,9 @@
     "[].imported_at": [
      "str"
     ],
+    "[].ip_address": [
+     "str"
+    ],
     "[].latest_issuance": [
      "null"
     ],
@@ -1135,6 +1138,9 @@
     ],
     "imported_at": [
      "str"
+    ],
+    "ip_address": [
+     "null"
     ],
     "needs_renewal": [
      "bool"
@@ -1480,6 +1486,9 @@
     ],
     "result.duration": [
      "number"
+    ],
+    "result.ip_address": [
+     "null"
     ],
     "result.staging": [
      "bool"
@@ -4577,6 +4586,9 @@
     ],
     "duration": [
      "number"
+    ],
+    "ip_address": [
+     "null"
     ],
     "message": [
      "str"

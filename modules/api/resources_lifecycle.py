@@ -226,7 +226,10 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                         ip_address=request.remote_addr,
                         audit_ctx=audit_ctx,
                     )
-                    return _submit(ctx, 'create', domain,
+                    # The job carries the certificate's name: an IP address
+                    # becomes ip-<dashed> (#1130), and a domain its normalised
+                    # form, which is what polling and the list key on.
+                    return _submit(ctx, 'create', prepared['domain'],
                                    lambda: ctx.cert_service.issue_create(prepared))
 
                 result = ctx.cert_service.create(
@@ -256,7 +259,10 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
 
                 return {
                     'message': f'Certificate created successfully for {domain}',
-                    'domain': domain,
+                    # The name every later request takes: for an IP address the
+                    # derived ip-<dashed> (#1130), with the address beside it.
+                    'domain': result.get('domain') or domain,
+                    'ip_address': result.get('ip_address'),
                     'dns_provider': result.get('dns_provider'),
                     'ca_provider': result.get('ca_provider'),
                     'duration': result.get('duration')

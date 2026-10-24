@@ -331,6 +331,13 @@ def create_api_models(api):
                 'and the CA issued its default profile instead, UTC; null '
                 'otherwise. Added in API contract 2.41.'
             )),
+        'ip_address': fields.String(
+            description=(
+                'The IPv4 address an IP-address certificate is for (#1130), '
+                'whose domain is then the derived name ip-<address with '
+                'dashes>; null for a domain certificate. Added in API '
+                'contract 2.57.'
+            )),
         'renews_at': fields.String(
             description=(
                 'The instant the renewal sweep renews this certificate at, UTC '
@@ -527,7 +534,11 @@ def create_api_models(api):
     })
 
     create_cert_model = api.model('CreateCertificate', {
-        'domain': fields.String(required=True, description='Primary domain name to create certificate for'),
+        'domain': fields.String(required=True, description=(
+            'Primary domain name to create certificate for, or a globally routable '
+            "IPv4 address: Let's Encrypt issues for it over HTTP-01 in the 'shortlived' "
+            'profile, and the certificate is named ip-<address with dashes> (#1130). '
+            'An address added in API contract 2.57.')),
         'san_domains': fields.List(fields.String,
                                    description='Additional SANs (e.g., ["*.example.com"])'),
         'dns_provider': fields.String(

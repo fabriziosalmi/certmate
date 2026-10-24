@@ -1,6 +1,6 @@
 # Fournisseurs d'autorité de certification (CA)
 
-<!-- CERTMATE-TRANSLATED-FROM b5fbaa66b65585c0 -->
+<!-- CERTMATE-TRANSLATED-FROM 088016d2b3fb43f6 -->
 
 CertMate supporte plusieurs fournisseurs d'autorité de certification, vous permettant de choisir la CA la plus adaptée à vos besoins.
 
@@ -26,6 +26,11 @@ créés avec lui ; voir [Profils ACME](../api.md#acme-profiles). Dans le tableau
 Profile** dans les options avancées du formulaire de création (Edit & Reissue s'ouvre sur le
 profil propre au certificat), et **Default ACME profile** dans le formulaire du compte CA. Le
 panneau du certificat affiche son profil et la date de son renouvellement.
+
+**Adresses IP :** Let's Encrypt est l'autorité auprès de laquelle CertMate obtient un
+certificat pour une adresse IP, dans le profil `shortlived` via HTTP-01 : saisissez une
+adresse IPv4 publique dans le champ domaine du formulaire de création, et le formulaire
+verrouille le challenge et le profil. Voir [Certificats pour adresses IP](../api.md#ip-address-certificates).
 
 ### Let's Encrypt (Staging)
 

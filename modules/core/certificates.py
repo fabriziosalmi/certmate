@@ -58,7 +58,7 @@ from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,
     repair_certbot_renewal_paths,
-    is_ip_identifier, validate_ip_identifier, cert_name_for_ip,
+    is_ip_identifier, validate_ip_identifier, cert_name_for_ip, ip_for_cert_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -387,6 +387,36 @@ def _resolve_all_domains(domain, san_domains, challenge_type):
             if d.startswith('*.'):
                 raise ValueError("HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.")
     return all_domains
+
+
+def ip_certificate_refusal(*, ca_provider, challenge_type, san_domains,
+                           domain_alias, alias_dns_provider, acme_profile):
+    """Why a request for an IP-address certificate cannot be issued, or None (#1130).
+
+    Let's Encrypt issues for an IP only in its short-lived profile, only over
+    HTTP-01, and not with SAN entries or a DNS alias. The caller forces the two
+    it dictates (HTTP-01, 'shortlived') when this returns None; a request that
+    explicitly asked for something else is refused rather than silently
+    overridden. One rule for the two places that ask: the service, so an
+    asynchronous create is refused before it answers 202, and issuance, which
+    every path crosses.
+    """
+    if ca_provider not in ('letsencrypt', 'letsencrypt_staging'):
+        return ("An IP-address certificate is issued by Let's Encrypt only, in "
+                f"its 'shortlived' profile, not by {ca_provider!r}.")
+    if challenge_type not in (None, 'http-01'):
+        return ("An IP-address certificate is validated over HTTP-01 only, "
+                f"not {challenge_type!r}.")
+    if san_domains:
+        return ("An IP-address certificate takes a single address; SAN "
+                "entries are not supported yet (#854).")
+    if domain_alias or alias_dns_provider:
+        return ("An IP-address certificate uses HTTP-01, so a DNS alias "
+                "does not apply.")
+    if acme_profile not in (None, '', 'shortlived'):
+        return ("An IP-address certificate is issued in the 'shortlived' "
+                f"profile only, not {acme_profile!r}.")
+    return None
 
 
 # What the dashboard sends for a browser report's `method` and `source`:
@@ -2731,6 +2761,9 @@ class CertificateManager:
                 # CA no longer offers it (the CA's default was issued instead).
                 'acme_profile': metadata.get('acme_profile'),
                 'acme_profile_withdrawn_at': metadata.get('acme_profile_withdrawn_at'),
+                # The address an IP certificate is for (#1130), read off its
+                # name; null for a domain certificate.
+                'ip_address': ip_for_cert_name(domain),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -2778,6 +2811,7 @@ class CertificateManager:
             'renews_at': None,
             'acme_profile': metadata.get('acme_profile'),
             'acme_profile_withdrawn_at': metadata.get('acme_profile_withdrawn_at'),
+            'ip_address': ip_for_cert_name(domain),
         }
 
     def _create_empty_cert_info(self, domain):
@@ -2798,7 +2832,9 @@ class CertificateManager:
             'seconds_left': None,
             'expired': None,
             'needs_renewal': False,
-            'dns_provider': dns_provider
+            'dns_provider': dns_provider,
+            # An IP certificate being issued is listed by its address too.
+            'ip_address': ip_for_cert_name(domain),
         }
 
     def _quarantine_broken_lineage(self, cert_output_dir, domain):
@@ -3024,33 +3060,21 @@ class CertificateManager:
         if not domain or not email:
             raise ValueError("Domain and email are required")
 
-        if ip_identifier:
-            # An IP identifier (#1130) dictates the shape of the request: Let's
-            # Encrypt issues for an IP only over HTTP-01, only in the
-            # short-lived profile, and not with SAN entries or a DNS alias.
-            # Force the two it dictates and refuse a caller that explicitly
-            # asked for something else, rather than silently overriding it.
-            if challenge_type not in (None, 'http-01'):
-                raise ValueError(
-                    "An IP-address certificate is validated over HTTP-01 only, "
-                    f"not {challenge_type!r}.")
-            challenge_type = 'http-01'
-            if san_domains:
-                raise ValueError(
-                    "An IP-address certificate takes a single address; SAN "
-                    "entries are not supported yet (#854).")
-            if domain_alias or alias_dns_provider:
-                raise ValueError(
-                    "An IP-address certificate uses HTTP-01, so a DNS alias "
-                    "does not apply.")
-            if acme_profile not in (None, '', 'shortlived'):
-                raise ValueError(
-                    "An IP-address certificate is issued in the 'shortlived' "
-                    f"profile only, not {acme_profile!r}.")
-            acme_profile = 'shortlived'
-
         ca_provider, staging, ca_account_config, used_ca_account_id = \
             self._resolve_ca(settings, ca_provider, ca_account_id, staging)
+
+        if ip_identifier:
+            # An IP identifier (#1130) dictates the shape of the request; see
+            # ip_certificate_refusal. Asked once the CA is resolved, since only
+            # Let's Encrypt issues for one.
+            refusal = ip_certificate_refusal(
+                ca_provider=ca_provider, challenge_type=challenge_type,
+                san_domains=san_domains, domain_alias=domain_alias,
+                alias_dns_provider=alias_dns_provider, acme_profile=acme_profile)
+            if refusal:
+                raise ValueError(refusal)
+            challenge_type = 'http-01'
+            acme_profile = 'shortlived'
 
         challenge_type, dns_provider, dns_config, strategy = \
             self._resolve_challenge_and_dns(
@@ -3425,12 +3449,15 @@ class CertificateManager:
         # becomes the derived `ip-<dashed>` segment (utils.cert_name_for_ip) and
         # keys the lock, the directory, --cert-name and the metadata like any
         # other name; the address itself is carried separately to the command
-        # builder as the certbot --ip-address identifier. Only a first issuance
-        # reaches here with the raw address — a reissue or renewal already holds
-        # the derived name, so is_ip_identifier is False and nothing re-triggers.
+        # builder as the certbot --ip-address identifier. A reissue, and the
+        # sweep's reissue from metadata, arrive with the derived name instead,
+        # which stands for the same address (utils.ip_for_cert_name): without
+        # that, a reissue asked the CA for `-d ip-<dashed>`, a DNS name that
+        # does not exist.
         ip_identifier = None
-        if is_ip_identifier(domain):
-            ok, result = validate_ip_identifier(domain)
+        address = domain if is_ip_identifier(domain) else ip_for_cert_name(domain)
+        if address:
+            ok, result = validate_ip_identifier(address)
             if not ok:
                 raise ValueError(result)
             ip_identifier = result
@@ -3748,7 +3775,8 @@ class CertificateManager:
                 'dns_provider': dns_provider,
                 'duration': duration,
                 'staging': staging,
-                'ca_provider': ca_provider
+                'ca_provider': ca_provider,
+                'ip_address': ip_identifier,
             }
             if storage_warning:
                 result['storage_warning'] = storage_warning
@@ -5329,6 +5357,13 @@ class CertificateManager:
         try:
             if not self.settings_manager.update(_add, reason='sweep_reregistered'):
                 raise RuntimeError('Renewal registration was not saved')
+            # A save can succeed and still not keep the entry: the save drops
+            # one whose name it does not accept, and answers True. Counting
+            # that as re-registered is a false success, repeated after every
+            # renewal; so the entry is looked for where it was written.
+            stored = self.settings_manager.load_settings().get('domains') or []
+            if not any(entry_domain(entry) == domain for entry in stored):
+                raise RuntimeError('The saved settings do not keep the entry')
         except Exception as e:
             logger.error(
                 "Renewed %r but could not re-register it in settings (%s); it "
