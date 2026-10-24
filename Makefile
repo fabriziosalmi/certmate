@@ -24,6 +24,10 @@
 # Python 3.12 — must match Dockerfile base image
 PYTHON_BIN ?= $(shell command -v python3.12 2>/dev/null || echo python3)
 VENV := .venv
+# The venv's bin first on every recipe's PATH, as an activated venv or CI's
+# runner has it: tests that start certbot or the certmate CLI find them there,
+# and skipped (5 of them under `make test-ci`) when make ran without it.
+export PATH := $(CURDIR)/$(VENV)/bin:$(PATH)
 PIP := $(VENV)/bin/pip
 PYTEST := $(VENV)/bin/python -m pytest
 PYTHON := $(VENV)/bin/python
@@ -130,11 +134,15 @@ test-integration: $(VENV)/bin/activate
 test-coverage: $(VENV)/bin/activate
 	$(PYTEST) -v --tb=short --cov=modules --cov-report=html --cov-report=term-missing --cov-report=xml -m "not ui and not e2e"
 
-# Character for character what ci.yml's "Run tests with coverage" runs. Node is
-# required, as there, so the frontend tests cannot skip without being noticed.
+# Character for character what ci.yml's "Run tests with coverage" runs: the
+# suite on four workers, then the e2e tests serially, appending to the same
+# coverage data (ci.yml says why). Node is required, as there, so the frontend
+# tests cannot skip without being noticed.
 test-ci: $(VENV)/bin/activate
 	FLASK_ENV=testing TESTING=true CERTMATE_REQUIRE_NODE=1 \
-	$(PYTEST) -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-report=json:coverage.json --cov-fail-under=75 -m "not ui and not network"
+	$(PYTEST) -n 4 --tb=short --cov=modules --cov-report= -m "not ui and not network and not e2e"
+	FLASK_ENV=testing TESTING=true CERTMATE_REQUIRE_NODE=1 \
+	$(PYTEST) -v --tb=short --cov=modules --cov-append --cov-report=xml --cov-report=html --cov-report=json:coverage.json --cov-fail-under=75 -m "e2e and not ui and not network"
 	$(MAKE) coverage-floors
 
 coverage-floors: $(VENV)/bin/activate

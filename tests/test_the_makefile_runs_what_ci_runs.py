@@ -12,8 +12,11 @@ This reads what the `test` job of ci.yml runs and fails when the Makefile or the
 in CONTRIBUTING.md differs from it. It reads the real files, not a copy of their contents,
 so adding a check to CI without adding it here is a red test, not a surprise on someone's PR.
 """
+import os
 import pathlib
 import re
+import shutil
+import subprocess
 
 import pytest
 import yaml
@@ -107,11 +110,35 @@ def test_flake8_is_pinned_where_the_tests_install_it_to_the_version_ci_pins():
 
 
 def test_test_ci_is_the_pytest_command_ci_runs():
-    ci = next(c for c in _commands() if c.startswith('pytest ') and '--cov-fail-under' in c)
-    arguments = ci[len('pytest '):]
-    assert f'$(PYTEST) {arguments}' in MAKEFILE, (
-        f'`make test-ci` is not `pytest {arguments}`, which is what ci.yml runs')
+    # Every pytest the job runs, not only the one carrying the floor: the suite runs in two
+    # invocations (on four workers, then the e2e tests serially), and either can drift.
+    runs = [c for c in _commands() if c.startswith('pytest ')]
+    assert any('--cov-fail-under' in c for c in runs), runs
+    for ci in runs:
+        arguments = ci[len('pytest '):]
+        assert f'$(PYTEST) {arguments}' in MAKEFILE, (
+            f'`make test-ci` does not run `pytest {arguments}`, which is what ci.yml runs')
     assert 'pytest -m "not ui and not network" --cov=modules --cov-fail-under=75' in CONTRIBUTING
+
+
+@pytest.mark.skipif(shutil.which('make') is None, reason='make is not installed here')
+def test_make_runs_its_recipes_with_the_venv_on_path(tmp_path):
+    """The tests that start certbot or the certmate CLI look for them on PATH. make ran its
+    recipes with the caller's PATH, so without an activated venv those tests skipped under
+    `make test-ci` (5 of them) while CI, whose runner has the tools on PATH, ran them. This
+    runs make, from a shell that has no venv, and reads the PATH a recipe gets."""
+    probe = tmp_path / 'probe.mk'
+    probe.write_text('__path_probe:\n\t@echo "$$PATH"\n', encoding='utf-8')
+    env = {k: v for k, v in os.environ.items() if k != 'VIRTUAL_ENV'}
+    env['PATH'] = os.pathsep.join(p for p in env.get('PATH', '').split(os.pathsep)
+                                  if not p.startswith(str(REPO)))
+    done = subprocess.run(['make', '-s', '-f', 'Makefile', '-f', str(probe), '__path_probe'],
+                          cwd=REPO, env=env, capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    first = done.stdout.strip().split(os.pathsep)[0]
+    assert first == str(REPO / '.venv' / 'bin'), (
+        f'a make recipe runs with {first!r} first on PATH, not the venv: tests that start '
+        f'certbot or the certmate CLI skip under make while CI runs them')
 
 
 def test_the_real_certificate_files_are_the_ones_release_sh_runs():

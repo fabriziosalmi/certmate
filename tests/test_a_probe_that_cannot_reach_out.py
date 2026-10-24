@@ -646,9 +646,14 @@ class _SMTPBackend:
                 stream.write(b'250 smtp.example.test\r\n')
                 stream.flush()
                 stream.readline()                   # STARTTLS
+                # Recorded BEFORE the answer goes out: the client acts on the
+                # 454 and the test reads `sessions` straight after, so a record
+                # made after the write raced it and lost on a busy runner
+                # (two of four xdist workers, #1340's CI). A write that then
+                # fails still records its error below.
+                self.sessions.append('refused')
                 stream.write(b'454 TLS not available\r\n')
                 stream.flush()
-                self.sessions.append('refused')
                 return
             stream.write(b'250-smtp.example.test\r\n250 STARTTLS\r\n')
             stream.flush()

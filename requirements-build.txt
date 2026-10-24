@@ -2,5 +2,5 @@
 # the published image already carried, and locked with hashes in
 # requirements-build.lock by scripts/regenerate_lockfiles.sh.
 pip==26.2.1
-setuptools==84.0.0
+setuptools==84.2.1
 wheel==0.48.0
