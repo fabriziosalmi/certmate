@@ -288,13 +288,19 @@ def test_the_check_ends_with_the_handshake(alpn):
 def test_a_certificate_that_cannot_be_read_is_refused_not_an_error(client, alpn):
     """Measured before the fix: subjectAltName twice raised DuplicateExtension,
     which is not a ValueError, out of the check, and the challenge answered
-    HTTP 500 instead of an invalid challenge."""
+    HTTP 500 instead of an invalid challenge.
+
+    Which refusal it is depends on the TLS library serving the responder,
+    measured: OpenSSL 3.5.9 (macOS) presents the certificate and the check says
+    it could not be read; OpenSSL 3.5.7 (Linux, CI) closes the connection first
+    and the handshake fails. Either way the challenge is invalid, never a 500;
+    the reading itself is pinned below, apart from any TLS library."""
     challenge, key_authorization = _challenge(client, NAME)
     alpn.certificate = _with_two_subject_alt_names(key_authorization)
     answered = _answer(client, challenge)
     assert answered['status'] == 'invalid'
-    assert answered['error']['type'] == 'urn:ietf:params:acme:error:incorrectResponse'
-    assert 'could not be read' in answered['error']['detail']
+    assert answered['error']['type'] in ('urn:ietf:params:acme:error:incorrectResponse',
+                                         'urn:ietf:params:acme:error:tls')
 
 
 def _with_an_x400_address():
@@ -311,9 +317,17 @@ def _with_an_x400_address():
             .sign(key, hashes.SHA256()).public_bytes(serialization.Encoding.DER))
 
 
-@pytest.mark.parametrize('der', [b'', b'not a certificate', _with_an_x400_address()],
-                         ids=['nothing', 'not-der', 'a-name-of-an-unparsed-kind'])
+@pytest.mark.parametrize('der', [
+    pytest.param(b'', id='nothing'),
+    pytest.param(b'not a certificate', id='not-der'),
+    pytest.param('x400', id='a-name-of-an-unparsed-kind'),
+    pytest.param('duplicate', id='subject-alt-name-twice'),
+])
 def test_bytes_that_are_no_readable_certificate_are_refused(der):
+    if der == 'x400':
+        der = _with_an_x400_address()
+    elif der == 'duplicate':
+        der = _with_two_subject_alt_names('k.a')[0].public_bytes(serialization.Encoding.DER)
     refusal = acme_validation._validation_certificate_refusal(der, {'type': 'dns', 'value': NAME}, 'k.a')
     assert refusal.startswith('the certificate could not be read')
 
