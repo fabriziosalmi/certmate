@@ -33,6 +33,7 @@ below re-runs it rather than trusting this docstring.
 import json
 import os
 from datetime import datetime, timedelta
+from unittest import mock
 
 import pytest
 from cryptography import x509
@@ -601,10 +602,18 @@ def test_a_record_that_cannot_be_written_does_not_fail_the_sweep(swept):
 # --- and read back, without asking the CA ----------------------------------
 
 def _parsed(manager, domain, settings=None):
+    """The read path's answer at NOW, the instant every test in this file takes as now.
+
+    The read path reads the wall clock (`utc_now`) for `days_left` and `needs_renewal`,
+    and the certificate here is fixed around NOW. On the wall clock it became due at
+    2026-10-24 12:00 UTC, with a third of its 90 days left, and from then
+    test_a_broken_record_never_becomes_a_renewal failed on every run.
+    """
     raw = (manager.cert_dir / domain / 'cert.pem').read_bytes()
-    return manager._parse_certificate_info(
-        domain, raw, {'dns_provider': 'cloudflare'},
-        settings=settings if settings is not None else {})
+    with mock.patch('modules.core.certificates.utc_now', return_value=NOW):
+        return manager._parse_certificate_info(
+            domain, raw, {'dns_provider': 'cloudflare'},
+            settings=settings if settings is not None else {})
 
 
 def _forbidden_transport(url, timeout):
