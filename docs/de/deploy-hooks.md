@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM 0d31dc7a82589489 -->
+<!-- CERTMATE-TRANSLATED-FROM 95007682cfb3af23 -->
 
 Schließt [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -541,6 +541,14 @@ und kein weiterer Platzhalter des Benachrichtigungs-Webhooks.
 }
 ```
 
+Das ist das Ziel, wie `settings.json` es speichert, nicht die Anfrage. Der Body
+der Anfrage ist `payload_template` mit ausgefüllten Platzhaltern. Für dieses Ziel,
+wie **Preview what would be sent** es mit dem Beispielzertifikat und -schlüssel darstellt:
+
+```json
+{"name": "shop.example.com", "cert": "-----BEGIN CERTIFICATE-----\nEXAMPLE-CERTIFICATE\n-----END CERTIFICATE-----\n", "key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE-NOT-A-REAL-KEY\n-----END PRIVATE KEY-----\n"}
+```
+
 **In der UI.** Settings → Deploy → **Deploy Targets** listet jedes Ziel auf und
 bearbeitet die Webhook-Ziele: Name, Domains (Pflicht), Ereignisse, URL, Methode,
 Authentifizierung, Signier-Secret, wie der Server verifiziert wird, einen Schalter für private Netze,
@@ -642,7 +650,7 @@ unten; die drei Schritte sind das, was getan werden musste, nicht das, was allge
 
 ```json
 {"domain": "{{domain}}", "event": "{{event}}",
- "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "rsa_key": "{{privkey_traditional}}",
+ "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "traditional_key": "{{privkey_traditional}}",
                   "fullchain": "{{fullchain}}", "intermediate": "{{chain}}"}}
 ```
 

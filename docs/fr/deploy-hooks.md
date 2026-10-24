@@ -1,6 +1,6 @@
 # Hooks de déploiement
 
-<!-- CERTMATE-TRANSLATED-FROM 0d31dc7a82589489 -->
+<!-- CERTMATE-TRANSLATED-FROM 95007682cfb3af23 -->
 
 Clôture [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -482,6 +482,14 @@ Un **webhook de notification** (Settings → Notifications) *annonce* un renouve
 }
 ```
 
+Ceci est la cible telle que `settings.json` la conserve, pas la requête. Le corps
+de la requête est `payload_template` avec ses espaces réservés remplis. Pour cette cible,
+tel que **Preview what would be sent** le rend avec le certificat et la clé d'exemple :
+
+```json
+{"name": "shop.example.com", "cert": "-----BEGIN CERTIFICATE-----\nEXAMPLE-CERTIFICATE\n-----END CERTIFICATE-----\n", "key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE-NOT-A-REAL-KEY\n-----END PRIVATE KEY-----\n"}
+```
+
 **Dans l'UI.** Settings → Deploy → **Deploy Targets** liste toutes les cibles et permet de modifier les cibles webhook : nom, domaines (obligatoires), événements, URL, méthode, authentification, secret de signature, manière de vérifier le serveur, un interrupteur de réseau privé, délai d'expiration et nombre de tentatives, et la charge utile avec les variables sous forme de boutons. Les variables de clé sont en rouge, et c'est l'ajout de l'une d'elles qui déclenche la confirmation décrite plus bas. **Preview what would be sent** appelle l'endpoint de prévisualisation décrit plus bas et affiche la destination avec son port, la manière dont le serveur est vérifié, les fichiers qu'une livraison lit, les en-têtes (identifiants masqués) et le corps rendu avec un certificat et une clé d'exemple. Une prévisualisation disparaît dès que le formulaire change, de sorte que ce qui est à l'écran est toujours ce qui serait enregistré.
 
 Si la charge utile nomme une variable de clé privée, le formulaire affiche un encadré rouge avec l'hôte de destination et laisse **Save target** désactivé jusqu'à ce que vous ayez saisi cet hôte. Une cible déjà confirmée pour son hôte n'est pas redemandée quand vous la renommez ou changez ses domaines ; un hôte différent redemande la confirmation et indique pour quel hôte elle avait été donnée. L'enregistrement n'écrit que `targets`, à partir de la liste que le serveur détient à ce moment-là avec cette seule cible modifiée, de sorte qu'il ne peut pas écraser une modification faite entre-temps via l'API, et il laisse les autres types de cibles (secrets Kubernetes) exactement tels qu'ils sont. Ceux-ci y sont listés et se modifient via l'API. La page n'envoie jamais de consentement : c'est le serveur qui l'écrit.
@@ -527,7 +535,7 @@ Vérifié avec n8n 2.41.4, un vrai certificat, un nœud Webhook et la charge uti
 
 ```json
 {"domain": "{{domain}}", "event": "{{event}}",
- "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "rsa_key": "{{privkey_traditional}}",
+ "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "traditional_key": "{{privkey_traditional}}",
                   "fullchain": "{{fullchain}}", "intermediate": "{{chain}}"}}
 ```
 
