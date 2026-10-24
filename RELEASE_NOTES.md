@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.53.0 (certificates for IP addresses)
+
+[Read the notes](docs/releases/v2.53.0.md)
+
 ## v2.52.1 (the ACME server, announced, and a round of dependency updates)
 
 [Read the notes](docs/releases/v2.52.1.md)
