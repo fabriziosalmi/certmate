@@ -737,6 +737,14 @@ def _order_name(item):
         name = name_pattern(value)
     except AcmeAdminError:
         raise AcmeProblem('rejectedIdentifier', f'{item["value"]!r} is not a DNS name') from None
+    # No top-level domain is all digits (RFC 3696 section 2), so a name that
+    # ends in one is not a DNS name, and an address in particular is an "ip"
+    # identifier (RFC 8738 section 3). Taken as a DNS name, "10.0.0.5" passed
+    # every check here, was validated over http-01 at that address, and was
+    # issued as a dNSName no client accepts as one.
+    if name.rsplit('.', 1)[-1].isdigit():
+        raise AcmeProblem('rejectedIdentifier', f'{item["value"]!r} is not a DNS name: no top-level domain '
+                          'is all digits, and an address is ordered as an "ip" identifier (RFC 8738)')
     return name
 
 
