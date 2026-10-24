@@ -261,3 +261,16 @@ def test_the_admin_api_takes_addresses_and_networks(app):
     with pytest.raises(AcmeAdminError, match='host bits set'):
         server.set_options({'allowed_identifiers': ['10.30.0.1/24']})
 
+
+
+@pytest.mark.parametrize('written', ['', '   ', None, 5, ['10.20.0.0/16']])
+def test_a_pattern_that_is_no_text_is_refused(written):
+    with pytest.raises(AcmeAdminError, match='non-empty string'):
+        identifier_pattern(written)
+
+
+@pytest.mark.parametrize('value', ['10.20.0.0/16', [f'10.20.{i}.0/24' for i in range(51)]])
+def test_the_server_wide_patterns_are_a_list_of_at_most_fifty(app, value):
+    server = app.extensions['certmate_container'].managers['acme_server']
+    with pytest.raises(AcmeAdminError, match='at most 50 names or addresses'):
+        server.set_options({'allowed_identifiers': value})
