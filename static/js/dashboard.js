@@ -949,10 +949,16 @@
             if (caLabel && cert.imported_at && !external) caLabel = 'Renewal: ' + caLabel;
             var caCell = caLabel ? '<span>' + caLabel + '</span>' : CA_NOT_RECORDED;
             var domainAlias = cert.domain_alias || '';
+            // An IP certificate is read by its address (#1130); the name the
+            // API and the files go by, ip-<dashed>, sits under it.
+            var title = cert.ip_address || cert.domain;
+            var ipHint = cert.ip_address
+                ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-muted min-w-0"><span class="inline-flex items-center px-2 py-0.5 mr-1.5 rounded-full text-xs font-medium bg-blue-500/10 text-info-fg ring-1 ring-inset ring-blue-500/20 shrink-0">IP</span><span class="truncate cm-mono" title="${cert.domain}">${cert.domain}</span></div>`)
+                : false;
 
             if (!cert.exists) {
-                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" data-click="openCertRow" data-pass="el">
-                    <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${cert.domain}</div></td>
+                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${title}" data-click="openCertRow" data-pass="el">
+                    <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${title}</div>${ipHint}</td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
@@ -1049,12 +1055,13 @@
             // A certificate with no key gets a key glyph, not a padlock: it
             // secures nothing until it is reissued.
             var lockIcon = keylessRow ? 'fa-key' : isExpired ? 'fa-lock-open' : 'fa-lock';
-            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(Math.min(i, 10) * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" data-click="openCertRow" data-pass="el">
+            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(Math.min(i, 10) * 30))}ms" tabindex="0" role="button" aria-label="View details for ${title}" data-click="openCertRow" data-pass="el">
                 <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${cert.domain}</div>
+                            <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${title}</div>
+                            ${ipHint}
                             ${aliasHint}
                             ${tagHint}
                             ${mobileMeta}
@@ -1436,6 +1443,7 @@
                 '</div>' +
                 // Details
                 '<dl class="divide-y divide-border">' +
+                (cert.ip_address ? detailRow('IP address', '<span class="font-mono break-all">' + escapeHtml(cert.ip_address) + '</span>') : '') +
                 (providerLabel ? detailRow('DNS Provider', providerCell) : '') +
                 // Always rendered, unlike the row above it. The panel is where
                 // an operator goes to ask "what is this certificate", and
@@ -2390,6 +2398,56 @@
         return v;
     }
 
+    // An IP-address certificate (#1130): the domain field takes a public IPv4
+    // address, and the certificate is then named ip-<address with dashes>.
+    // This reads the address out of either form, or returns null; which
+    // addresses can be issued for is the server's answer.
+    var IPV4_LITERAL = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+    var IP_CERT_NAME = /^ip-(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})$/;
+
+    function ipAddressOf(value) {
+        var v = normalizeHostname(value);
+        if (IPV4_LITERAL.test(v)) return v;
+        var match = IP_CERT_NAME.exec(v);
+        var address = match ? match.slice(1).join('.') : '';
+        return IPV4_LITERAL.test(address) ? address : null;
+    }
+
+    function ipAddressModeOn() {
+        var importing = (document.getElementById('importExistingCertificate') || {}).checked;
+        return !importing && !!ipAddressOf((document.getElementById('domain') || {}).value);
+    }
+
+    // While the domain field holds an address the request has one shape:
+    // HTTP-01, the shortlived profile, no other name. The form shows that
+    // rather than letting the server refuse the request: the two selects are
+    // locked to those values and given back as they were once the field no
+    // longer holds an address, and the sections that would add a name or a
+    // DNS challenge are hidden, and left out of the request on submit.
+    function applyIpAddressMode() {
+        var on = ipAddressModeOn();
+        document.querySelectorAll('#createCertForm [data-ip-hidden]').forEach(function (section) {
+            section.style.display = on ? 'none' : '';
+        });
+        [['challenge_type_select', 'http-01'], ['cert_acme_profile', 'shortlived']].forEach(function (pair) {
+            var select = document.getElementById(pair[0]);
+            if (!select) return;
+            if (on && select.dataset.ipLocked === undefined) {
+                select.dataset.ipLocked = JSON.stringify({ value: select.value, disabled: select.disabled });
+                select.value = pair[1];
+                select.disabled = true;
+            } else if (!on && select.dataset.ipLocked !== undefined) {
+                var saved = JSON.parse(select.dataset.ipLocked);
+                delete select.dataset.ipLocked;
+                select.value = saved.value;
+                select.disabled = saved.disabled;
+            }
+        });
+        var note = document.getElementById('ip_address_note');
+        if (note) note.classList.toggle('hidden', !on);
+        toggleDnsProviderVisibility();
+    }
+
     function parseSanDomainsInput(value) {
         // Accept comma, semicolon, or any whitespace as separators — users
         // routinely paste from spreadsheets, CLI output, or notepads where
@@ -2748,7 +2806,8 @@
         var target = document.getElementById('caa_warning');
         if (!target) return;
         var requestedDomains = currentRequestedDomains();
-        if (!requestedDomains.length) { hideCaaWarning(); return; }
+        // CAA is a DNS record: an address has none to check (RFC 8738).
+        if (!requestedDomains.length || ipAddressModeOn()) { hideCaaWarning(); return; }
         var caSelect = document.getElementById('ca_provider_select');
         var challengeSelect = document.getElementById('challenge_type_select');
         // A response to an older request must not overwrite a newer one:
@@ -2907,6 +2966,7 @@
             toggleAdvancedOptions();
         }
 
+        applyIpAddressMode();
         setReissueFormMode(true, domain);
     }
 
@@ -2967,6 +3027,9 @@
         var domainField = document.getElementById('domain');
         domainField.readOnly = false;
         domainField.value = '';
+        // Before the fields are reset: leaving the address mode gives the
+        // selects back the values they had, which the reset then clears.
+        applyIpAddressMode();
         setSanDomains([]);
         document.getElementById('wildcard-cert').checked = false;
         document.getElementById('challenge_type_select').value = '';
@@ -3229,6 +3292,8 @@
     }
 
     function toggleCertificateImport() {
+        // Off while importing, back on after: an import names no address.
+        applyIpAddressMode();
         var importing = document.getElementById('importExistingCertificate').checked;
         if (!importing) {
             document.getElementById('importAutoRenew').checked = true;
@@ -3273,6 +3338,7 @@
             }
         });
         document.getElementById('createCertFormContainer').setAttribute('aria-label', importing ? 'Import certificate' : 'New certificate');
+        applyIpAddressMode();
     }
 
     function resetCertificateImport() {
@@ -3371,6 +3437,16 @@
         var caProvider = document.getElementById('ca_provider_select').value;
         var dnsAliasDomain = (document.getElementById('dns_alias_domain') || {}).value;
         dnsAliasDomain = dnsAliasDomain ? normalizeDnsAliasName(dnsAliasDomain) : '';
+        // An address takes no other name, alias, CSR or DNS provider (#1130):
+        // whatever the hidden sections still hold is not sent.
+        var ipMode = ipAddressModeOn();
+        if (ipMode) {
+            sanDomainsInput = '';
+            wildcardEnabled = false;
+            dnsAliasDomain = '';
+            dnsProvider = '';
+            accountId = '';
+        }
 
         if (!configuredCAs.length) {
             showMessage('Configure a certificate authority in Settings before issuing', 'error');
@@ -3489,7 +3565,7 @@
         // sent. The server refuses a request that specifies both; not sending
         // them is what keeps that refusal from being something the operator
         // has to discover.
-        var csrPem = ((document.getElementById('cert_csr') || {}).value || '').trim();
+        var csrPem = ipMode ? '' : ((document.getElementById('cert_csr') || {}).value || '').trim();
         if (csrPem && !editingDomain) {
             requestBody.csr = csrPem;
             delete requestBody.san_domains;
@@ -3609,6 +3685,7 @@
     // (shared by the sync-success and async-accepted paths).
     function clearCreateFormAfterSubmit() {
         document.getElementById('domain').value = '';
+        applyIpAddressMode();
         setSanDomains([]);
         document.getElementById('wildcard-cert').checked = false;
         document.getElementById('challenge_type_select').value = '';
@@ -3640,8 +3717,13 @@
         return parts.join('');
     }
 
+    // A job is named for its certificate, ip-<dashed> for an address (#1130).
+    function pendingRowTitle(job) {
+        return escapeHtml(ipAddressOf(job.domain || '') || job.domain || '');
+    }
+
     function issuingRowHtml(jobId, job) {
-        var domain = escapeHtml(job.domain || '');
+        var domain = pendingRowTitle(job);
         var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
         var sub = job.sanCount > 0
             ? ('+' + job.sanCount + ' SAN' + (job.sanCount > 1 ? 's' : ''))
@@ -3664,7 +3746,7 @@
     }
 
     function failedRowHtml(jobId, job) {
-        var domain = escapeHtml(job.domain || '');
+        var domain = pendingRowTitle(job);
         var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
         var rawErr = String(job.error || 'Certificate issuance failed');
         var errText = escapeHtml(rawErr.length > 140 ? rawErr.slice(0, 137) + '…' : rawErr);
@@ -4312,6 +4394,7 @@
         // Status filtering is driven by the chips (onclick -> setStatusFilter);
         // free-text search moved to the ⌘K palette. No select listener needed.
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('domain').addEventListener('input', applyIpAddressMode);
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
         initSanEditor();
         initCsrPanel();

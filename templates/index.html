@@ -141,20 +141,27 @@
                             <div data-issuance-only>
                                 <label for="domain" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-globe mr-2 text-blue-500"></i>
-                                    Primary Domain Name
+                                    Domain or IP Address
                                 </label>
                                 <input type="text" id="domain" name="domain"
-                                       autocomplete="off"
+                                       autocomplete="off" aria-describedby="domain_help ip_address_note"
                                        class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200 placeholder-gray-400"
-                                       placeholder="example.com or *.example.com" required>
-                                <p class="mt-1 text-xs text-muted">
+                                       placeholder="example.com, *.example.com or a public IPv4 address" required>
+                                <p id="domain_help" class="mt-1 text-xs text-muted">
                                     <i class="fas fa-info-circle mr-1"></i>
-                                    Supports wildcard domains (*.example.com) and single domains
+                                    Supports wildcard domains (*.example.com), single domains and public IPv4 addresses
+                                </p>
+                                <!-- An IPv4 address (#1130): Let's Encrypt issues for one only
+                                     over HTTP-01 in its shortlived profile, with no other name.
+                                     Shown, with those two fields locked, while the field holds one. -->
+                                <p id="ip_address_note" class="mt-2 p-2 text-xs rounded-md bg-info-surface border border-info-line text-info-fg hidden" role="status" aria-live="polite">
+                                    <i class="fas fa-network-wired mr-1"></i>
+                                    An IP address: Let's Encrypt validates it over HTTP-01, so port 80 of this address must reach CertMate, and issues it in the shortlived profile (160 hours). It takes no other names, and CertMate renews it automatically.
                                 </p>
                             </div>
                             
                             <!-- SAN Domains (optional) -->
-                            <div data-issuance-only>
+                            <div data-issuance-only data-ip-hidden>
                                 <label for="san_entry" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-plus-circle mr-2 text-indigo-500"></i>
                                     Additional Domains (SAN)
@@ -188,7 +195,7 @@
                                  shape — rather than letting the request be
                                  refused by the server for asking two things at
                                  once. -->
-                            <div data-issuance-only class="border border-border rounded-lg overflow-hidden">
+                            <div data-issuance-only data-ip-hidden class="border border-border rounded-lg overflow-hidden">
                                 <button type="button" id="csr_toggle"
                                         aria-expanded="false" aria-controls="csr_panel"
                                         class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
@@ -341,7 +348,7 @@
                         
                         <div id="advanced-options" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div data-issuance-only>
+                                <div data-issuance-only data-ip-hidden>
                                     <label class="flex items-center text-sm text-label">
                                         <input type="checkbox" id="wildcard-cert" class="rounded border-border text-primary focus:ring-primary dark:bg-gray-700">
                                         <span class="ml-2">
@@ -357,7 +364,7 @@
                             </div>
 
                             <!-- DNS-01 Alias Mode -->
-                            <div class="mt-4" data-renewal-source>
+                            <div class="mt-4" data-renewal-source data-ip-hidden>
                                 <label for="dns_alias_domain" class="block text-sm font-medium text-label mb-1">
                                     <i class="fas fa-random mr-1 text-blue-500"></i>
                                     DNS-01 Alias Domain <span class="text-xs font-normal text-muted">(optional)</span>
