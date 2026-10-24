@@ -9,10 +9,14 @@ kept elsewhere, and this one would sit on the same host.
 
 The leaf is built here, not copied from the CSR. The CSR proves the key and
 names the identifiers (the server has checked both against the order); the
-certificate carries the order's names, a subject of the first of them, and
-the key usage its key type calls for. Its chain is the leaf alone (G3): the
+certificate carries the order's identifiers, DNS names as dNSName and
+addresses as iPAddress (RFC 8738, #1338), a subject of the first DNS name,
+and the key usage its key type calls for. An order of addresses alone has no
+name for a subject: the subject is empty and the SAN extension critical, as
+RFC 5280 section 4.2.1.6 requires then, and as Let's Encrypt issues them. Its chain is the leaf alone (G3): the
 root goes into trust stores from /acme/root, and a TLS server need not send it.
 """
+import ipaddress
 import os
 import threading
 from datetime import UTC, datetime, timedelta
@@ -68,17 +72,21 @@ class AcmeCA:
     def root(self):
         return self.generator.get_ca_certificate() if self.ready() else None
 
-    def issue(self, csr, names, days):
-        """A server certificate for *names* on the CSR's key, valid *days*."""
+    def issue(self, csr, identifiers, days):
+        """A server certificate for the order's *identifiers* on the CSR's key, valid *days*."""
         if not self.ready():
             raise RuntimeError('The ACME CA could not be created or loaded')
         ca_cert = self.generator.get_ca_certificate()
         ca_key = self.generator.get_ca_private_key()
         public_key = csr.public_key()
         now = datetime.now(UTC)
+        names = [i['value'] for i in identifiers if i['type'] == 'dns']
+        san = [x509.IPAddress(ipaddress.ip_address(i['value'])) if i['type'] == 'ip' else x509.DNSName(i['value'])
+               for i in identifiers]
+        subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, names[0])] if names else [])
         builder = (
             x509.CertificateBuilder()
-            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, names[0])]))
+            .subject_name(subject)
             .issuer_name(ca_cert.subject)
             .public_key(public_key)
             .serial_number(x509.random_serial_number())
@@ -87,7 +95,7 @@ class AcmeCA:
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
             .add_extension(_key_usage(public_key), critical=True)
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .add_extension(x509.SubjectAlternativeName([x509.DNSName(n) for n in names]), critical=False)
+            .add_extension(x509.SubjectAlternativeName(san), critical=not names)
             .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
             .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
                            critical=False)

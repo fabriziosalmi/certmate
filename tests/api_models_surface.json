@@ -1,5 +1,5 @@
 {
- "contract_version": "2.56",
+ "contract_version": "2.58",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -566,6 +566,9 @@
      "type": "boolean"
     },
     "imported_at": {
+     "type": "string"
+    },
+    "ip_address": {
      "type": "string"
     },
     "latest_issuance": {

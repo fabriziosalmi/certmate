@@ -711,6 +711,17 @@ METADATA_SCHEMA_VERSION = 1
 #                                   carries subject_alt_names; one issued from
 #                                   a CSR records the subject it was issued
 #                                   with, not the request's fields.
+#                                   2.57, MINOR: POST /api/certificates/create
+#                                   takes a globally routable IPv4 address in
+#                                   `domain` (#1130); the certificate is named
+#                                   ip-<dashed>, every per-certificate route
+#                                   takes that name, and every certificate
+#                                   answer, the create answer and a create
+#                                   job's result carry ip_address.
+#                                   2.58, MINOR: an ACME EAB key's and the ACME
+#                                   server's allowed_identifiers take an IPv4
+#                                   address or network, for the ip identifiers
+#                                   the ACME server now certifies (#1338).
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -736,7 +747,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.56'
+API_CONTRACT_VERSION = '2.58'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

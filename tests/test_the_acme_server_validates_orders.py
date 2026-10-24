@@ -104,10 +104,15 @@ def test_a_name_outside_the_keys_patterns_is_refused_before_any_check(client, re
 
 @pytest.mark.parametrize('identifier,kind,because', [
     ({'type': 'dns', 'value': '*.*.lab.internal'}, 'rejectedIdentifier', 'not a DNS name'),
-    ({'type': 'ip', 'value': '10.0.0.1'}, 'unsupportedIdentifier', 'Only dns'),
+    ({'type': 'email', 'value': 'ops@lab.internal'}, 'unsupportedIdentifier', 'Only dns and ip'),
     ({'type': 'dns', 'value': 'not_a.lab.internal'}, 'rejectedIdentifier', 'not a DNS name'),
     ({'value': 'web.lab.internal'}, 'unsupportedIdentifier', 'Only dns'),
     ('web.lab.internal', 'malformed', 'an object with a type and a value'),
+    # An address is not a DNS name, nor is any name with an all-digit last
+    # label: before, "10.0.0.5" as a dns identifier was issued as a dNSName.
+    ({'type': 'dns', 'value': '10.0.0.5'}, 'rejectedIdentifier', 'ordered as an "ip" identifier'),
+    ({'type': 'dns', 'value': '*.1.168.192'}, 'rejectedIdentifier', 'no top-level domain is all digits'),
+    ({'type': 'dns', 'value': 'web.lab.123'}, 'rejectedIdentifier', 'no top-level domain is all digits'),
 ])
 def test_an_identifier_this_server_cannot_certify_is_refused(client, identifier, kind, because):
     response = client.post('new-order', {'identifiers': [identifier]})

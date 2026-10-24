@@ -136,8 +136,10 @@ def create_api_models(api):
 
     acme_eab_key_model = api.model('AcmeEabKey', {
         'kid': fields.String(description='The EAB key identifier a client sends'),
-        'allowed_identifiers': fields.List(fields.String, description='The names this key may order '
-                                           'certificates for: a DNS name, or *. and a DNS name for every name below it'),
+        'allowed_identifiers': fields.List(fields.String, description='The names and addresses this key may order '
+                                           'certificates for: a DNS name, or *. and a DNS name for every name below it; '
+                                           'an IPv4 address, or an IPv4 network in CIDR form for every address in it '
+                                           '(API contract 2.58)'),
         'note': fields.String(description='What the key is for'),
         'created_at': fields.String(description='When it was created'),
         'disabled': fields.Boolean(description='A disabled key enrols no one; the accounts it enrolled keep working'),
@@ -152,14 +154,14 @@ def create_api_models(api):
     acme_eab_key_create_model = api.model('AcmeEabKeyCreate', {
         'kid': fields.String(description='The identifier; generated when left out'),
         'allowed_identifiers': fields.List(fields.String, required=True,
-                                           description='The names this key may order certificates for'),
+                                           description='The names and addresses this key may order certificates for'),
         'note': fields.String(description='What the key is for'),
     })
     acme_server_model = api.model('AcmeServer', {
         'enabled': fields.Boolean(description='Every /acme/ route answers 404 while false'),
         'allow_http': fields.Boolean(description='Serve ACME over plain HTTP too; for labs and tests'),
         'eab_required': fields.Boolean(description='An account needs an External Account Binding'),
-        'allowed_identifiers': fields.List(fields.String, description='The names an account enrolled '
+        'allowed_identifiers': fields.List(fields.String, description='The names and addresses an account enrolled '
                                            'without an EAB key may order; empty, it orders nothing'),
         'validity_days': fields.Integer(description='How many days a certificate from the ACME CA is valid'),
         'directory_url': fields.String(description='The URL to give ACME clients, as this request reached the server'),
@@ -330,6 +332,13 @@ def create_api_models(api):
                 'When a renewal found that the CA no longer offers acme_profile '
                 'and the CA issued its default profile instead, UTC; null '
                 'otherwise. Added in API contract 2.41.'
+            )),
+        'ip_address': fields.String(
+            description=(
+                'The IPv4 address an IP-address certificate is for (#1130), '
+                'whose domain is then the derived name ip-<address with '
+                'dashes>; null for a domain certificate. Added in API '
+                'contract 2.57.'
             )),
         'renews_at': fields.String(
             description=(
@@ -527,7 +536,11 @@ def create_api_models(api):
     })
 
     create_cert_model = api.model('CreateCertificate', {
-        'domain': fields.String(required=True, description='Primary domain name to create certificate for'),
+        'domain': fields.String(required=True, description=(
+            'Primary domain name to create certificate for, or a globally routable '
+            "IPv4 address: Let's Encrypt issues for it over HTTP-01 in the 'shortlived' "
+            'profile, and the certificate is named ip-<address with dashes> (#1130). '
+            'An address added in API contract 2.57.')),
         'san_domains': fields.List(fields.String,
                                    description='Additional SANs (e.g., ["*.example.com"])'),
         'dns_provider': fields.String(

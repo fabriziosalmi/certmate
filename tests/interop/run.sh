@@ -19,6 +19,11 @@
 #   replaces it, and the CRL lists the revoked one;
 # - the client revokes the new one itself, and the CRL lists it.
 #
+# And each client orders a certificate for its own IPv4 address (RFC 8738,
+# #1338), from a container at a fixed address on the network: the leaf names
+# that address as an iPAddress and nothing else, has an empty subject and a
+# critical SAN, chains to /acme/root, and the client revokes it into the CRL.
+#
 # The clients are pinned by digest, so a run measures this server against
 # the same lego and acme.sh each time: moving a digest is how a new client
 # release is measured. Each step also reports how many /acme/ requests it
@@ -26,15 +31,19 @@
 # to leave room for.
 #
 # Needs Docker, the images pinned below, and nothing on the host but bash.
-# Usage: tests/interop/run.sh [lego|acmesh ...]   (default: every client)
+# Usage: tests/interop/run.sh [lego|acmesh|lego_ip|acmesh_ip ...]   (default: all of them)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 WORK=${INTEROP_WORK:-$(mktemp -d "${TMPDIR:-/tmp}/certmate-interop.XXXXXX")}
 NET=certmate-interop
+# A fixed subnet, so a client can order a certificate for an address it is known to have.
+SUBNET=10.213.81.0/24
+LEGO_IP=10.213.81.20
+ACMESH_IP=10.213.81.21
 DIRECTORY=https://acme.lab.internal/acme/directory
-CLIENTS=${*:-lego acmesh}
+CLIENTS=${*:-lego acmesh lego_ip acmesh_ip}
 
 # Pinned by digest: lego 5.5.2 and acme.sh 3.1.5, the releases this was measured with.
 LEGO_IMAGE=goacme/lego@sha256:1944e8c36055beec47c7de6f15202b41128be75eea0ffa257f0c14d93c5155fd
@@ -50,9 +59,9 @@ stop() {
 }
 trap stop EXIT
 stop
-mkdir -p "$WORK/certs" "$WORK/lego" "$WORK/acmesh"
+mkdir -p "$WORK/certs" "$WORK/lego" "$WORK/acmesh" "$WORK/lego-ip" "$WORK/acmesh-ip"
 : > "$WORK/results.txt"
-docker network create "$NET" >/dev/null
+docker network create --subnet "$SUBNET" "$NET" >/dev/null
 
 log "building CertMate from $REPO"
 docker build -q -t certmate:interop "$REPO" >/dev/null
@@ -125,7 +134,7 @@ public() {  # an /acme/ resource as the front would hand it over: https, by name
 log "turning ACME on and issuing an EAB key through the admin API"
 # ACME_VALIDITY_DAYS: the certificates' validity, to measure the clients' renewal against another one.
 api PATCH /api/acme/server "{\"enabled\": true${ACME_VALIDITY_DAYS:+, \"validity_days\": $ACME_VALIDITY_DAYS}}" >/dev/null
-api POST /api/acme/eab-keys '{"kid": "interop", "allowed_identifiers": ["*.lab.internal"], "note": "interop run"}' \
+api POST /api/acme/eab-keys "{\"kid\": \"interop\", \"allowed_identifiers\": [\"*.lab.internal\", \"$SUBNET\"], \"note\": \"interop run\"}" \
     > "$WORK/eab.json"
 KID=$(py <<'PY'
 import json
@@ -165,6 +174,24 @@ leaf.verify_directly_issued_by(root)
 days = (leaf.not_valid_after_utc - leaf.not_valid_before_utc).total_seconds() / 86400
 names = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
 print(f'{client} issued: chains to the ACME root, names={names}, lifetime={days:.3f} days, serial={leaf.serial_number:x}')
+PY
+}
+
+check_ip_leaf() {  # $1 client, $2 leaf inside $WORK, $3 the address it was ordered for
+    py "$1" "$2" "$3" <<'PY'
+import ipaddress, sys
+from cryptography import x509
+client, leaf_path, address = sys.argv[1], sys.argv[2].lstrip('/'), sys.argv[3]
+root = x509.load_pem_x509_certificate(open('/w/root.pem', 'rb').read())
+leaf = x509.load_pem_x509_certificates(open('/w/' + leaf_path, 'rb').read())[0]
+leaf.verify_directly_issued_by(root)
+san = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+addresses = san.value.get_values_for_type(x509.IPAddress)
+assert addresses == [ipaddress.ip_address(address)], f'{client}: the leaf names {addresses}, not {address}'
+assert san.value.get_values_for_type(x509.DNSName) == [], f'{client}: the leaf names DNS names too'
+assert list(leaf.subject) == [] and san.critical, f'{client}: subject {leaf.subject}, SAN critical={san.critical}'
+print(f'{client} issued for {address}: chains to the ACME root, iPAddress only, empty subject, '
+      f'critical SAN, serial={leaf.serial_number:x}')
 PY
 }
 
@@ -370,6 +397,49 @@ run_acmesh() {
     counted "acme.sh revoke" "$WORK/acmesh-revoke.log" \
         acmesh --revoke -d acmesh.lab.internal --server "$DIRECTORY" --ca-bundle /certs/front.pem
     check in_crl acmesh acmesh-renewed.pem
+}
+
+run_lego_ip() {
+    lego_ip() {
+        docker run --rm --network "$NET" --ip "$LEGO_IP" \
+            -e LEGO_CA_CERTIFICATES=/certs/front.pem -v "$WORK/certs:/certs:ro" -v "$WORK/lego-ip:/data" \
+            "$LEGO_IMAGE" "$@"
+    }
+    local common=(--server "$DIRECTORY" --path /data --log.format text)
+    log "lego: register with EAB and issue for its address $LEGO_IP over http-01"
+    counted "lego register and issue for an address" "$WORK/lego-ip-issue.log" lego_ip run "${common[@]}" \
+        --eab --eab.kid "$KID" --eab.hmac "$HMAC" --email ops@lab.internal --accept-tos \
+        --domains "$LEGO_IP" --http --no-random-sleep
+    local leaf
+    leaf=$(found lego-ip "$LEGO_IP.crt")
+    check check_ip_leaf lego "$leaf" "$LEGO_IP"
+    keep "$leaf" lego-ip.pem
+    log "lego: revoke the address's certificate"
+    counted "lego revoke an address's certificate" "$WORK/lego-ip-revoke.log" \
+        lego_ip certificates revoke "${common[@]}" --email ops@lab.internal --cert.name "$LEGO_IP" --keep
+    check in_crl lego lego-ip.pem
+}
+
+run_acmesh_ip() {
+    acmesh_ip() {
+        docker run --rm --network "$NET" --ip "$ACMESH_IP" \
+            -v "$WORK/certs:/certs:ro" -v "$WORK/acmesh-ip:/acme.sh" "$ACMESH_IMAGE" "$@"
+    }
+    log "acme.sh: register with EAB"
+    counted "acme.sh register (address)" "$WORK/acmesh-ip-register.log" \
+        acmesh_ip --register-account --server "$DIRECTORY" --ca-bundle /certs/front.pem \
+        --eab-kid "$KID" --eab-hmac-key "$HMAC" -m ops@lab.internal
+    log "acme.sh: issue for its address $ACMESH_IP over http-01, standalone"
+    counted "acme.sh issue for an address" "$WORK/acmesh-ip-issue.log" \
+        acmesh_ip --issue --standalone -d "$ACMESH_IP" --server "$DIRECTORY" --ca-bundle /certs/front.pem
+    local leaf
+    leaf=$(found acmesh-ip "$ACMESH_IP.cer")
+    check check_ip_leaf acme.sh "$leaf" "$ACMESH_IP"
+    keep "$leaf" acmesh-ip.pem
+    log "acme.sh: revoke the address's certificate"
+    counted "acme.sh revoke an address's certificate" "$WORK/acmesh-ip-revoke.log" \
+        acmesh_ip --revoke -d "$ACMESH_IP" --server "$DIRECTORY" --ca-bundle /certs/front.pem
+    check in_crl acme.sh acmesh-ip.pem
 }
 
 for client in $CLIENTS; do

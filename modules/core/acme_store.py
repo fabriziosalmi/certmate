@@ -162,6 +162,8 @@ class AcmeStore:
         own, and the client answers the one it can. A wildcard is authorized
         on its base name with dns-01 alone (RFC 8555 section 7.1.3), and the
         authorization's identifier carries `wildcard` so that it can say so.
+        An address gets http-01 alone: dns-01 MUST NOT validate one (RFC 8738
+        section 7).
         """
         order_id = _new_id()
         now = utc_now().isoformat()
@@ -177,7 +179,9 @@ class AcmeStore:
                 con.execute('INSERT INTO authorizations (id, order_id, account_id, identifier, status, expires) '
                             'VALUES (?, ?, ?, ?, ?, ?)',
                             (authz_id, order_id, account_id, json.dumps(authorized), 'pending', expires))
-                for kind in (('dns-01',) if wildcard else ('http-01', 'dns-01')):
+                kinds = (('dns-01',) if wildcard else ('http-01',) if identifier['type'] == 'ip'
+                         else ('http-01', 'dns-01'))
+                for kind in kinds:
                     con.execute('INSERT INTO challenges (id, authz_id, type, token, status) VALUES (?, ?, ?, ?, ?)',
                                 (_new_id(), authz_id, kind, secrets.token_urlsafe(32), 'pending'))
         return self.order(order_id)

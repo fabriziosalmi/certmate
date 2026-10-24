@@ -143,8 +143,12 @@ def test_the_acme_root_is_not_the_client_certificate_ca(app, client, responder):
     (lambda: _csr(['web.lab.internal']), 'must be the same'),
     (lambda: _csr(['web.lab.internal', 'api.lab.internal', 'db.lab.internal']), 'must be the same'),
     (lambda: _csr(['web.lab.internal', 'api.lab.internal'], common_name='other.lab.internal'), 'must be the same'),
+    # An address the order does not name is a mismatch like a name (#1338)...
     (lambda: _csr(['web.lab.internal', 'api.lab.internal'],
-                  extra_san=[x509.IPAddress(ipaddress.ip_address('10.0.0.1'))]), 'DNS names only'),
+                  extra_san=[x509.IPAddress(ipaddress.ip_address('10.0.0.1'))]), 'must be the same'),
+    # ...and a kind of name no identifier can be is refused for what it is.
+    (lambda: _csr(['web.lab.internal', 'api.lab.internal'],
+                  extra_san=[x509.RFC822Name('ops@lab.internal')]), 'DNS names and IP addresses only'),
     (lambda: _csr(['web.lab.internal', 'api.lab.internal'], key=ec.generate_private_key(ec.SECP521R1())),
      'P-256 or P-384'),
 ])

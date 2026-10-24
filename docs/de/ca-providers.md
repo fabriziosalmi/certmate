@@ -1,6 +1,6 @@
 # Zertifizierungsstellen (CA) Anbieter
 
-<!-- CERTMATE-TRANSLATED-FROM b5fbaa66b65585c0 -->
+<!-- CERTMATE-TRANSLATED-FROM 088016d2b3fb43f6 -->
 
 CertMate unterstützt mehrere Zertifizierungsstellen-Anbieter, sodass Sie die für Ihre Anforderungen am besten geeignete CA auswählen können.
 
@@ -27,6 +27,11 @@ Im Dashboard: **ACME Profile** in den erweiterten Optionen des
 Erstellungsformulars (Edit & Reissue öffnet sich mit dem eigenen Profil des
 Zertifikats) und **Default ACME profile** im Formular des CA-Kontos. Das Panel
 des Zertifikats zeigt sein Profil und wann es erneuert wird.
+
+**IP-Adressen:** Let's Encrypt ist die CA, bei der CertMate ein Zertifikat für
+eine IP-Adresse ausstellen lässt, im Profil `shortlived` über HTTP-01: eine
+öffentliche IPv4-Adresse in das Domainfeld des Erstellungsformulars eingeben,
+und das Formular sperrt Challenge und Profil. Siehe [IP-Adress-Zertifikate](../api.md#ip-address-certificates).
 
 ### Let's Encrypt (Staging)
 
