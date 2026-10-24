@@ -1,11 +1,11 @@
 """The ACME server certifies an IPv4 address (RFC 8738, #1338).
 
 An order may name {"type": "ip", "value": "<address>"} in the address's textual
-form. It is authorized over http-01 alone (dns-01 MUST NOT validate an
-address, section 7), fetched from the address itself with no DNS step (section
-4) and the address as the Host header (section 5), under the guards the fetch
-has: private networks allowed, never loopback, link-local, multicast, reserved
-or metadata, which an order is refused for at once. An EAB key allows an
+form. It is authorized over http-01 or tls-alpn-01, never dns-01 (section 7),
+fetched over http-01 from the address itself with no DNS step (section 4) and
+the address as the Host header (section 5), under the guards the fetch has:
+private networks allowed, never loopback, link-local, multicast, reserved or
+metadata, which an order is refused for at once. An EAB key allows an
 address by an address or CIDR pattern, never by a name pattern, and a name
 never by an address pattern. The certificate carries the address as an
 iPAddress SAN; an order of addresses alone has an empty subject and a critical
@@ -114,13 +114,14 @@ def _leaf(client, location, csr):
 
 # --- the order ------------------------------------------------------------------
 
-def test_an_address_is_ordered_and_authorized_over_http01_alone(client):
+def test_an_address_is_ordered_and_authorized_over_http01_and_tls_alpn01(client):
     order = _order(client, ADDRESS)
     assert order.status_code == 201, order.get_json()
     assert order.get_json()['identifiers'] == [{'type': 'ip', 'value': ADDRESS}]
     [authz] = _authorizations(client, order)
     assert authz['identifier'] == {'type': 'ip', 'value': ADDRESS}
-    assert [c['type'] for c in authz['challenges']] == ['http-01']
+    # dns-01 MUST NOT validate an address (RFC 8738 section 7).
+    assert [c['type'] for c in authz['challenges']] == ['http-01', 'tls-alpn-01']
 
 
 def test_http01_is_fetched_from_the_address_with_it_as_the_host(client, responder, asked):
@@ -134,7 +135,7 @@ def test_a_name_and_an_address_are_ordered_together(client):
     order = _order(client, 'web.lab.internal', ADDRESS)
     assert order.status_code == 201
     kinds = {a['identifier']['value']: [c['type'] for c in a['challenges']] for a in _authorizations(client, order)}
-    assert kinds == {'web.lab.internal': ['http-01', 'dns-01'], ADDRESS: ['http-01']}
+    assert kinds == {'web.lab.internal': ['http-01', 'dns-01', 'tls-alpn-01'], ADDRESS: ['http-01', 'tls-alpn-01']}
 
 
 # --- refused at the order, before any fetch ---------------------------------------

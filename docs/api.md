@@ -1874,8 +1874,9 @@ it, admin only, since API contract **2.51**. A key restricted with
 `allowed_domains` is refused.
 
 It is being built in steps (#476). Today it answers the directory, nonces,
-accounts, orders with their http-01 and dns-01 challenges (a wildcard with
-dns-01 alone), finalize, certificates, revocation and renewal information
+accounts, orders for names and IPv4 addresses with their http-01, dns-01 and
+tls-alpn-01 challenges (a wildcard with dns-01 alone, an address without
+dns-01), finalize, certificates, revocation and renewal information
 (RFC 9773: renew between two thirds and five sixths of the lifetime, at once
 after a revocation; a new order may name the certificate it `replaces`),
 from a root of its own: `/acme/root` serves it to install in trust stores,

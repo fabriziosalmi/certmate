@@ -27,6 +27,7 @@ KINDS = frozenset({
     'orderNotReady',
     'rateLimited',
     'rejectedIdentifier',
+    'tls',                  # a TLS error during tls-alpn-01 validation (#1339)
     'unauthorized',
     'unsupportedContact',
     'unsupportedIdentifier',
