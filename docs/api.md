@@ -1965,6 +1965,14 @@ or `_`. `allowed_identifiers` is required. A `kid` that exists, disabled or
 not, is a `409`: keys are never reused, so the accounts each one enrolled stay
 attributable to it.
 
+Since API contract **2.58**, an allowed identifier can be an IPv4 address
+(`192.168.1.20`) or an IPv4 network in CIDR form written by its first address
+(`10.20.0.0/16`), for the IP-address orders the ACME server takes (RFC 8738).
+An address pattern allows addresses only, and a name pattern names only. A
+network with host bits set, one that allows every address, an IPv6 address,
+and a name whose last label is all digits are a `400`. See
+[ACME server](acme-server.md#the-names-each-client-may-order).
+
 <!-- response: POST /api/acme/eab-keys 201 -->
 ```json
 {
