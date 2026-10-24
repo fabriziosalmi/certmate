@@ -539,6 +539,14 @@ and not another placeholder of the notification webhook.
 }
 ```
 
+This is the target as `settings.json` keeps it, not the request. The request's
+body is `payload_template` with its placeholders filled in. For this target, as
+**Preview what would be sent** renders it with the example certificate and key:
+
+```json
+{"name": "shop.example.com", "cert": "-----BEGIN CERTIFICATE-----\nEXAMPLE-CERTIFICATE\n-----END CERTIFICATE-----\n", "key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE-NOT-A-REAL-KEY\n-----END PRIVATE KEY-----\n"}
+```
+
 **In the UI.** Settings → Deploy → **Deploy Targets** lists every target and
 edits the webhook ones: name, domains (required), events, URL, method,
 authentication, signing secret, how the server is verified, a private-network
@@ -640,7 +648,7 @@ below; the three steps are what had to be done, not what is generally true of n8
 
 ```json
 {"domain": "{{domain}}", "event": "{{event}}",
- "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "rsa_key": "{{privkey_traditional}}",
+ "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "traditional_key": "{{privkey_traditional}}",
                   "fullchain": "{{fullchain}}", "intermediate": "{{chain}}"}}
 ```
 

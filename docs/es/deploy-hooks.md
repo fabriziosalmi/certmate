@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM 0d31dc7a82589489 -->
+<!-- CERTMATE-TRANSLATED-FROM 95007682cfb3af23 -->
 
 Cierra [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -482,6 +482,14 @@ Un **webhook de notificación** (Ajustes → Notificaciones) *anuncia* una renov
 }
 ```
 
+Esto es el destino tal como lo guarda `settings.json`, no la petición. El cuerpo
+de la petición es `payload_template` con sus marcadores rellenados. Para este destino,
+tal como **Preview what would be sent** lo muestra con el certificado y la clave de ejemplo:
+
+```json
+{"name": "shop.example.com", "cert": "-----BEGIN CERTIFICATE-----\nEXAMPLE-CERTIFICATE\n-----END CERTIFICATE-----\n", "key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE-NOT-A-REAL-KEY\n-----END PRIVATE KEY-----\n"}
+```
+
 **En la UI.** Ajustes → Deploy → **Deploy Targets** lista todos los destinos y edita los de tipo webhook: nombre, dominios (obligatorio), eventos, URL, método, autenticación, secreto de firma, cómo se verifica el servidor, un interruptor de red privada, timeout e intentos, y el payload con las variables como botones. Las variables de clave están en rojo, y añadir una es lo que activa la confirmación descrita más abajo. **Preview what would be sent** llama al endpoint de vista previa descrito más abajo y muestra la dirección de destino con su puerto, cómo se verifica el servidor, los archivos que lee una entrega, las cabeceras (con las credenciales enmascaradas) y el cuerpo renderizado con un certificado y una clave de ejemplo. Una vista previa desaparece en cuanto cambia el formulario, así que lo que hay en pantalla es siempre lo que se guardaría.
 
 Si el payload nombra una variable de clave privada, el formulario muestra un recuadro rojo con el host de destino y mantiene **Save target** desactivado hasta que hayas escrito ese host. A un destino ya confirmado para su host no se le vuelve a preguntar cuando lo renombras o cambias sus dominios; un host distinto vuelve a preguntar e indica para qué host se había confirmado. Guardar escribe solo `targets`, a partir de la lista que tiene el servidor en ese momento con solo este destino cambiado, de modo que no puede sobrescribir una edición hecha mediante la API entre medias, y deja los demás tipos de destino (secrets de Kubernetes) exactamente como están. Allí aparecen en la lista, y se editan mediante la API. La página nunca envía un consentimiento: lo escribe el servidor.
@@ -527,7 +535,7 @@ Comprobado con n8n 2.41.4 con un certificado real, un nodo Webhook y el payload 
 
 ```json
 {"domain": "{{domain}}", "event": "{{event}}",
- "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "rsa_key": "{{privkey_traditional}}",
+ "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "traditional_key": "{{privkey_traditional}}",
                   "fullchain": "{{fullchain}}", "intermediate": "{{chain}}"}}
 ```
 

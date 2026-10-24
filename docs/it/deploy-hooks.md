@@ -1,6 +1,6 @@
 # Deploy Hook
 
-<!-- CERTMATE-TRANSLATED-FROM 0d31dc7a82589489 -->
+<!-- CERTMATE-TRANSLATED-FROM 95007682cfb3af23 -->
 
 Chiude [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -482,6 +482,14 @@ Un **webhook di notifica** (Impostazioni → Notifiche) *annuncia* un rinnovo, e
 }
 ```
 
+Questo è il target come lo conserva `settings.json`, non la richiesta. Il body
+della richiesta è `payload_template` con i segnaposto compilati. Per questo target,
+come lo mostra **Preview what would be sent** con il certificato e la chiave di esempio:
+
+```json
+{"name": "shop.example.com", "cert": "-----BEGIN CERTIFICATE-----\nEXAMPLE-CERTIFICATE\n-----END CERTIFICATE-----\n", "key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE-NOT-A-REAL-KEY\n-----END PRIVATE KEY-----\n"}
+```
+
 **Nell'UI.** Impostazioni → Deploy → **Deploy Targets** elenca ogni target e permette di modificare quelli webhook: nome, domini (obbligatori), eventi, URL, metodo, autenticazione, signing secret, come viene verificato il server, un interruttore per la rete privata, timeout e tentativi, e il payload con le variabili come pulsanti. Le variabili della chiave sono rosse, e aggiungerne una è ciò che fa scattare la conferma descritta più sotto. **Preview what would be sent** chiama l'endpoint di anteprima descritto più sotto e mostra la destinazione con la sua porta, come viene verificato il server, i file che una consegna legge, gli header (con le credenziali mascherate) e il body renderizzato con un certificato e una chiave di esempio. Un'anteprima scompare non appena il modulo cambia, quindi ciò che è sullo schermo è sempre ciò che verrebbe salvato.
 
 Se il payload nomina una variabile della chiave privata, il modulo mostra un riquadro rosso con l'host di destinazione e tiene **Save target** disabilitato finché non hai digitato quell'host. Per un target già confermato per il suo host la conferma non viene richiesta di nuovo quando lo rinomini o ne cambi i domini; un host diverso la richiede di nuovo e indica per quale host era stata data. Il salvataggio scrive solo `targets`, a partire dalla lista che il server ha in quel momento con questo solo target modificato, quindi non può sovrascrivere una modifica fatta nel frattempo tramite l'API, e lascia gli altri tipi di target (secret Kubernetes) esattamente come sono. Quelli sono elencati lì e si modificano tramite l'API. La pagina non invia mai un consenso: lo scrive il server.
@@ -527,7 +535,7 @@ Verificato con n8n 2.41.4 usando un certificato reale, un nodo Webhook e il payl
 
 ```json
 {"domain": "{{domain}}", "event": "{{event}}",
- "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "rsa_key": "{{privkey_traditional}}",
+ "certificates": {"cert": "{{cert}}", "key": "{{privkey_pkcs8}}", "traditional_key": "{{privkey_traditional}}",
                   "fullchain": "{{fullchain}}", "intermediate": "{{chain}}"}}
 ```
 
