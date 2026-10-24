@@ -46,7 +46,7 @@ class AlpnResponder:
     def __init__(self):
         self.certificate = None          # (cert, key)
         self.alpn = [acme_validation.ACME_TLS_PROTOCOL]
-        self.maximum_version = None
+        self.speaks_tls = True           # False: it answers in plain HTTP, as a misrouted port would
         self.server_names = []
         self._dir = Path(tempfile.mkdtemp())
         self._listener = socket.create_server(('127.0.0.1', 0))
@@ -60,6 +60,10 @@ class AlpnResponder:
             except OSError:
                 return
             try:
+                if not self.speaks_tls:
+                    conn.recv(1024)
+                    conn.sendall(b'HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n')
+                    continue
                 context = self._context()
                 with context.wrap_socket(conn, server_side=True):
                     pass
@@ -74,12 +78,10 @@ class AlpnResponder:
         (self._dir / 'key.pem').write_bytes(key.private_bytes(
             serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(self._dir / 'cert.pem', self._dir / 'key.pem')
         if self.alpn:
             context.set_alpn_protocols(self.alpn)
-        if self.maximum_version:
-            context.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
-            context.maximum_version = self.maximum_version
         context.sni_callback = lambda _sock, name, _ctx: self.server_names.append(name)
         return context
 
@@ -204,18 +206,21 @@ def test_a_server_that_does_not_negotiate_acme_tls_1_is_refused(client, alpn, pr
 
 
 def test_the_check_asks_for_tls_1_2_at_least_and_trusts_nothing():
-    """The floor is the check's own, not only OpenSSL's: with it lowered the
-    handshake below still fails, because OpenSSL 3's default security level
-    refuses TLS 1.1 too, so the setting is pinned here."""
+    """The floor is the check's own, not only OpenSSL's. OpenSSL 3's default
+    security level refuses TLS 1.1 already (measured: with the floor lowered, a
+    TLS 1.1 responder still failed the handshake), so the setting is pinned
+    here rather than through a responder that would pass either way, and the
+    tests run no TLS below 1.2 at all."""
     context = acme_validation.tls_alpn_context()
     assert context.minimum_version == ssl.TLSVersion.TLSv1_2
     assert context.verify_mode == ssl.CERT_NONE and context.check_hostname is False
 
 
-def test_tls_below_1_2_is_refused(client, alpn):
-    challenge, key_authorization = _challenge(client, NAME)
-    alpn.certificate = validation_certificate(key_authorization, [x509.DNSName(NAME)])
-    alpn.maximum_version = ssl.TLSVersion.TLSv1_1
+def test_a_handshake_that_fails_is_a_tls_problem(client, alpn):
+    """A port that does not speak TLS. Before the "tls" problem type was
+    registered, this answered 500 instead of an invalid challenge."""
+    challenge, _key_authorization = _challenge(client, NAME)
+    alpn.speaks_tls = False
     answered = _answer(client, challenge)
     assert answered['status'] == 'invalid'
     assert answered['error']['type'] == 'urn:ietf:params:acme:error:tls'
