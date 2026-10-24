@@ -86,6 +86,12 @@ class AlpnResponder:
         return context
 
     def close(self):
+        # Shut down first: on Linux a listening socket closed while a thread
+        # waits in accept() goes on accepting connections, on macOS it does not.
+        try:
+            self._listener.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         self._listener.close()
 
 
@@ -226,9 +232,19 @@ def test_a_handshake_that_fails_is_a_tls_problem(client, alpn):
     assert answered['error']['type'] == 'urn:ietf:params:acme:error:tls'
 
 
-def test_nothing_listening_is_a_connection_error(app, client, alpn):
+def _a_port_nothing_listens_on():
+    """Bound and closed without listen(): refused on Linux and macOS alike, where
+    a listener closed during accept() is not (it goes on accepting on Linux)."""
+    probe = socket.socket()
+    probe.bind(('127.0.0.1', 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    return port
+
+
+def test_nothing_listening_is_a_connection_error(app, client):
     challenge, _key_authorization = _challenge(client, NAME)
-    alpn.close()
+    app.extensions['certmate_container'].managers['acme_server'].tls_alpn_port = _a_port_nothing_listens_on()
     answered = _answer(client, challenge)
     assert answered['status'] == 'invalid'
     assert answered['error']['type'] == 'urn:ietf:params:acme:error:connection'
