@@ -46,10 +46,14 @@ An EAB key carries the patterns its accounts' orders are held to:
 | --- | --- |
 | `nas.lab.internal` | that name only |
 | `*.lab.internal` | every name below `lab.internal`, at any depth, and not `lab.internal` itself |
+| `192.168.1.20` | that IPv4 address only |
+| `10.20.0.0/16` | every IPv4 address in that network |
 
-Every name of an order must match a pattern of the key that enrolled the
-account, or the order is refused with `rejectedIdentifier` before anything is
-fetched. A wildcard certificate name `*.B` is allowed by a `*.` pattern at or
+Every name and address of an order must match a pattern of the key that
+enrolled the account, or the order is refused with `rejectedIdentifier` before
+anything is fetched. A name pattern never allows an address, and an address
+pattern never allows a name. A network is written by its first address
+(`10.20.0.0/16`, not `10.20.0.1/16`), and no pattern may allow every address. A wildcard certificate name `*.B` is allowed by a `*.` pattern at or
 above `B`: `*.lab.internal` allows `*.team.lab.internal` and `*.lab.internal`
 itself. An exact name never allows a wildcard.
 
@@ -92,15 +96,29 @@ With none set, it is the system's.
 
 **Wildcards** are proved with dns-01 only, on the base name.
 
-Not supported: tls-alpn-01, and IP address identifiers.
+**Addresses** (RFC 8738). An order may name an IPv4 address, as
+`{"type": "ip", "value": "10.20.0.5"}`, in its plain dotted form. It is proved
+with http-01 only, since dns-01 never proves an address (RFC 8738, section 7):
+CertMate fetches the token from the address itself, with no DNS lookup and the
+address as the Host header, under the guards above. An address the fetch could
+never reach (loopback, link-local, unspecified, multicast, reserved, or a
+metadata address) is refused with `rejectedIdentifier` when the order is made.
+A `dns` identifier whose last label is all digits is not a DNS name, so it is
+refused too: an address is ordered as an `ip` identifier.
+
+Not supported: tls-alpn-01 ([#1339](https://github.com/fabriziosalmi/certmate/issues/1339)),
+and IPv6 addresses.
 
 ## The certificates
 
 - **Signed by the root directly.** The chain a client downloads is the leaf
   alone. The root is in the trust stores, and a TLS server need not send it.
 - **Built from the order, not copied from the CSR.** They carry the order's
-  names, a subject of the first of them, server authentication as their only
-  extended key usage, and the key usage the key type calls for. The CSR's key
+  names as DNS names and its addresses as IP addresses, a subject of the first
+  name, server authentication as their only extended key usage, and the key
+  usage the key type calls for. A certificate for addresses alone has an empty
+  subject and a critical subject alternative name extension, as RFC 5280
+  requires then, and as Let's Encrypt issues them. The CSR's key
   must be RSA of 2048 to 8192 bits, or EC on P-256 or P-384.
 - **Valid 45 days by default**, from 1 to 365 under **Certificate validity**.
   A change applies to the certificates issued from then on.

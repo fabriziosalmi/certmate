@@ -50,8 +50,8 @@
                     </div>
                 </div>
                 <div class="mt-4" x-show="!server.eab_required">
-                    <label for="acmeOpenNames" class="block text-xs text-muted mb-1">Names an account without an EAB key may order</label>
-                    <input type="text" id="acmeOpenNames" x-model="openNames" placeholder="*.lab.internal, nas.office.internal   (empty = none)"
+                    <label for="acmeOpenNames" class="block text-xs text-muted mb-1">Names and addresses an account without an EAB key may order</label>
+                    <input type="text" id="acmeOpenNames" x-model="openNames" placeholder="*.lab.internal, nas.office.internal, 10.20.0.0/16   (empty = none)"
                            class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground font-mono">
                 </div>
                 <div class="mt-4 flex justify-end">
@@ -80,8 +80,8 @@
                 <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-plus-circle mr-1"></i> New EAB key</h4>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="md:col-span-2">
-                        <label for="acmeKeyNames" class="block text-xs text-muted mb-1">Names it may order (required)</label>
-                        <input type="text" id="acmeKeyNames" x-model="newKey.names" placeholder="*.lab.internal, nas.office.internal"
+                        <label for="acmeKeyNames" class="block text-xs text-muted mb-1">Names and addresses it may order (required)</label>
+                        <input type="text" id="acmeKeyNames" x-model="newKey.names" placeholder="*.lab.internal, nas.office.internal, 10.20.0.0/16"
                                class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground font-mono">
                     </div>
                     <div>
@@ -98,7 +98,8 @@
                     </button>
                 </div>
                 <p class="mt-1 text-xs text-muted">
-                    A name, or <code class="font-mono">*.</code> and a name for every name below it. A key is disabled, never deleted,
+                    A name, or <code class="font-mono">*.</code> and a name for every name below it; an IPv4 address, or a network
+                    such as <code class="font-mono">10.20.0.0/16</code> for every address in it. A key is disabled, never deleted,
                     so the accounts it enrolled stay attributable to it.
                 </p>
             </div>

@@ -19,12 +19,13 @@ masks each `hmac_key`.
       eab_keys:
         - kid: team-a         # what the client sends as the EAB key identifier
           hmac_key: <base64url>
-          allowed_identifiers: ['*.lab.internal']   # enforced on orders
+          allowed_identifiers: ['*.lab.internal', '10.20.0.0/16']   # enforced on orders
           note: lab cluster
           created_at: <ISO 8601>
           disabled: false     # disabled, never deleted: its accounts stay attributable
 """
 import hmac as _hmac
+import ipaddress
 import json
 import logging
 import os
@@ -143,6 +144,57 @@ def name_pattern(value):
     return pattern
 
 
+def identifier_pattern(value):
+    """The normalised form of an allowed-identifier pattern: a name, an address or a network.
+
+    A DNS name pattern is name_pattern's. An address pattern (#1338) is an IPv4
+    address (`192.168.1.20`: that address only) or an IPv4 network in CIDR
+    form (`10.20.0.0/16`: every address in it), and allows "ip" identifiers
+    only, as a name pattern allows "dns" identifiers only. A name whose last
+    label is all digits is neither: no top-level domain is (RFC 3696), and
+    such a pattern could only ever have matched an address taken for a name.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise AcmeAdminError('An allowed identifier must be a non-empty string')
+    text = value.strip()
+    network = _written_network(text, refuse=True)
+    if network is not None:
+        return str(network.network_address) if network.prefixlen == network.max_prefixlen else str(network)
+    pattern = name_pattern(text)
+    if pattern.rsplit('.', 1)[-1].isdigit():
+        raise AcmeAdminError(f'{value!r} is not a DNS name (no top-level domain is all digits), '
+                             'nor an IPv4 address or an IPv4 network such as "10.20.0.0/16"')
+    return pattern
+
+
+def _written_network(text, refuse=False):
+    """The network an address pattern allows, or None when *text* is not written as one.
+
+    With *refuse*, a pattern written as an address that cannot be one is an
+    AcmeAdminError; without, as when reading what is stored, it is None.
+    """
+    try:
+        if '/' in text:
+            network = ipaddress.ip_network(text, strict=True)
+        else:
+            network = ipaddress.ip_network(ipaddress.ip_address(text))
+    except ValueError as error:
+        if refuse and '/' in text:
+            raise AcmeAdminError(f'{text!r} is not an IPv4 network in CIDR form, such as '
+                                 f'"10.20.0.0/16": {error}') from None
+        return None
+    if not refuse:
+        # Read from settings, which can be edited by hand: an IPv6 pattern, or
+        # one that allows every address, allows nothing.
+        return network if network.version == 4 and network.prefixlen else None
+    if network.version != 4:
+        raise AcmeAdminError(f'{text!r} is an IPv6 address or network; this server certifies '
+                             'IPv4 addresses only, for now')
+    if network.prefixlen == 0:
+        raise AcmeAdminError(f'{text!r} allows every address, which no pattern may do')
+    return network
+
+
 class AcmeServer:
     def __init__(self, settings_manager, data_dir, nonces=None, http01_port=80, https_port=443, resolve=None):
         self._settings = settings_manager
@@ -213,8 +265,8 @@ class AcmeServer:
                     raise AcmeAdminError(f'{name} must be a whole number from {low} to {high}')
             elif name in LIST_OPTIONS:
                 if not isinstance(value, list) or len(value) > MAX_PATTERNS:
-                    raise AcmeAdminError(f'{name} must be a list of at most {MAX_PATTERNS} names')
-                changes[name] = list(dict.fromkeys(name_pattern(item) for item in value))
+                    raise AcmeAdminError(f'{name} must be a list of at most {MAX_PATTERNS} names or addresses')
+                changes[name] = list(dict.fromkeys(identifier_pattern(item) for item in value))
             elif not isinstance(value, bool):
                 raise AcmeAdminError(f'{name} must be true or false')
         self._write(lambda config: config.update(changes))
@@ -226,11 +278,11 @@ class AcmeServer:
         if not isinstance(kid, str) or not KID_RE.match(kid):
             raise AcmeAdminError('kid must be 1 to 64 letters, digits, "-" or "_"')
         if not isinstance(allowed_identifiers, list) or not allowed_identifiers:
-            raise AcmeAdminError('allowed_identifiers must list the names this key may order '
-                                 'certificates for, such as "*.lab.internal"')
+            raise AcmeAdminError('allowed_identifiers must list the names and addresses this key may order '
+                                 'certificates for, such as "*.lab.internal" or "10.20.0.0/16"')
         if len(allowed_identifiers) > MAX_PATTERNS:
             raise AcmeAdminError(f'At most {MAX_PATTERNS} allowed identifiers per key')
-        patterns = list(dict.fromkeys(name_pattern(value) for value in allowed_identifiers))
+        patterns = list(dict.fromkeys(identifier_pattern(value) for value in allowed_identifiers))
         if not isinstance(note, str) or len(note) > MAX_NOTE_LENGTH:
             raise AcmeAdminError(f'note must be text of at most {MAX_NOTE_LENGTH} characters')
         entry = {
@@ -393,16 +445,17 @@ class AcmeServer:
             raise AcmeProblem('malformed', 'identifiers must be a non-empty list')
         if len(identifiers) > MAX_IDENTIFIERS:
             raise AcmeProblem('rejectedIdentifier', f'At most {MAX_IDENTIFIERS} identifiers per order')
-        names = list(dict.fromkeys(_order_name(item) for item in identifiers))
+        wanted = list({(i['type'], i['value']): i for i in map(_order_identifier, identifiers)}.values())
         patterns = self.names_for(req.account)
-        refused = [name for name in names if not name_allowed(name, patterns)]
+        refused = [i for i in wanted if not identifier_allowed(i, patterns)]
         if refused:
-            raise AcmeProblem('rejectedIdentifier', f'This account may not order {", ".join(refused)}',
+            raise AcmeProblem('rejectedIdentifier',
+                              f'This account may not order {", ".join(i["value"] for i in refused)}',
                               subproblems=[{'type': 'urn:ietf:params:acme:error:rejectedIdentifier',
-                                            'detail': f'{name} is outside the names of this account',
-                                            'identifier': {'type': 'dns', 'value': name}} for name in refused])
+                                            'detail': f'{i["value"]} is outside the names of this account',
+                                            'identifier': i} for i in refused])
         expires = (utc_now() + ORDER_LIFETIME).isoformat()
-        return self.store.create_order(req.account['id'], [{'type': 'dns', 'value': n} for n in names], expires,
+        return self.store.create_order(req.account['id'], wanted, expires,
                                        replaces=replaced['id'] if replaced else None)
 
     def _replaced_by(self, cert_id, account):
@@ -488,13 +541,13 @@ class AcmeServer:
         status = self.order_json(order, urls)['status']
         if status != 'ready':
             raise AcmeProblem('orderNotReady', f'The order is {status}, not ready')
-        csr = _csr_for(req.json().get('csr'), [i['value'] for i in order['identifiers']])
+        csr = _csr_for(req.json().get('csr'), order['identifiers'])
         if not self.store.begin_finalize(order['id']):
             raise AcmeProblem('orderNotReady', 'The order is being finalized already')
         issued = None
         try:
             names = [i['value'] for i in order['identifiers']]
-            certificate = self.ca.issue(csr, names, self.validity_days())
+            certificate = self.ca.issue(csr, order['identifiers'], self.validity_days())
             issued = self.store.finish_finalize(
                 order['id'], order['account_id'], format(certificate.serial_number, 'x'), names,
                 certificate.not_valid_after_utc.replace(tzinfo=None).isoformat(),
@@ -724,12 +777,57 @@ def name_allowed(name, patterns):
     return False
 
 
-def _order_name(item):
-    """The DNS name an order identifier asks for, normalised, or a refusal."""
+def identifier_allowed(identifier, patterns):
+    """Is *identifier* one of *patterns*? An address by the address patterns, a name by the name ones.
+
+    A stored pattern is read as an address pattern when it is written as one,
+    whenever it was stored: before #1338 an address was kept as a name. A name
+    can never equal an address pattern, since _order_name refuses an all-digit
+    last label, so name_allowed needs no filter.
+    """
+    if identifier['type'] == 'ip':
+        address = ipaddress.ip_address(identifier['value'])
+        return any(network is not None and address in network
+                   for network in (_written_network(p) for p in patterns))
+    return name_allowed(identifier['value'], patterns)
+
+
+def _order_identifier(item):
+    """The identifier an order asks for, normalised, or a refusal: a DNS name, or an IPv4 address."""
     if not isinstance(item, dict) or not isinstance(item.get('value'), str):
         raise AcmeProblem('malformed', 'Each identifier is an object with a type and a value')
+    if item.get('type') == 'ip':
+        return {'type': 'ip', 'value': _order_address(item['value'])}
     if item.get('type') != 'dns':
-        raise AcmeProblem('unsupportedIdentifier', f'Only dns identifiers are supported, not {item.get("type")!r}')
+        raise AcmeProblem('unsupportedIdentifier',
+                          f'Only dns and ip identifiers are supported, not {item.get("type")!r}')
+    return {'type': 'dns', 'value': _order_name(item)}
+
+
+def _order_address(value):
+    """The address an "ip" identifier asks for (RFC 8738), or a refusal.
+
+    Its textual form only (section 3): "10.0.0.5", not "010.0.0.5" or with
+    spaces, which ipaddress refuses for IPv4. An address http-01 never reaches
+    is refused here, by the rule the check itself applies
+    (pinned_https.classify): loopback, link-local, multicast, reserved and the
+    metadata addresses. Private networks pass, which is what an internal CA is for.
+    """
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        raise AcmeProblem('rejectedIdentifier', f'{value!r} is not an IP address in its textual form') from None
+    if address.version == 6:
+        raise AcmeProblem('unsupportedIdentifier', f'{value} is an IPv6 address; this server certifies '
+                          'IPv4 addresses only, for now')
+    if pinned_https.classify(value) == 'refused':
+        raise AcmeProblem('rejectedIdentifier', f'{value} is a loopback, link-local, multicast, reserved or '
+                          'metadata address, which http-01 can never reach')
+    return value
+
+
+def _order_name(item):
+    """The DNS name a dns identifier asks for, normalised, or a refusal."""
     value = item['value'].strip().lower().rstrip('.')
     # A wildcard is "*." and a DNS name, the form name_pattern reads; it is
     # authorized on its base with dns-01 (section 7.1.3, acme_store.create_order).
@@ -748,8 +846,8 @@ def _order_name(item):
     return name
 
 
-def _csr_for(value, names):
-    """The CSR of a finalize, checked against the order's names (section 7.4), or badCSR."""
+def _csr_for(value, identifiers):
+    """The CSR of a finalize, checked against the order's identifiers (section 7.4), or badCSR."""
     try:
         csr = x509.load_der_x509_csr(b64.b64decode(value or ''))
     except (ValueError, TypeError):
@@ -763,14 +861,20 @@ def _csr_for(value, names):
         san = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     except x509.ExtensionNotFound:
         san = x509.SubjectAlternativeName([])
-    if any(not isinstance(general, x509.DNSName) for general in san):
-        raise AcmeProblem('badCSR', 'The CSR may name DNS names only')
-    asked = {name.lower().rstrip('.') for name in san.get_values_for_type(x509.DNSName)}
-    common = [a.value for a in csr.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)]
-    asked.update(str(c).lower().rstrip('.') for c in common)
-    if asked != set(names):
-        raise AcmeProblem('badCSR', f'The CSR names {sorted(asked)}, and the order {sorted(names)}: '
-                          'they must be the same')
+    if any(not isinstance(general, (x509.DNSName, x509.IPAddress)) for general in san):
+        raise AcmeProblem('badCSR', 'The CSR may name DNS names and IP addresses only')
+    asked = {('dns', name.lower().rstrip('.')) for name in san.get_values_for_type(x509.DNSName)}
+    asked.update(('ip', str(address)) for address in san.get_values_for_type(x509.IPAddress))
+    for common in csr.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME):
+        # A client may repeat an address in the Common Name, as text.
+        try:
+            asked.add(('ip', str(ipaddress.ip_address(str(common.value)))))
+        except ValueError:
+            asked.add(('dns', str(common.value).lower().rstrip('.')))
+    wanted = {(i['type'], i['value']) for i in identifiers}
+    if asked != wanted:
+        raise AcmeProblem('badCSR', f'The CSR names {sorted(v for _, v in asked)}, and the order '
+                          f'{sorted(v for _, v in wanted)}: they must be the same')
     return csr
 
 
