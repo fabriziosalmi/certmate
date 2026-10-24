@@ -58,6 +58,7 @@ from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,
     repair_certbot_renewal_paths,
+    is_ip_identifier, validate_ip_identifier, cert_name_for_ip,
 )
 
 logger = logging.getLogger(__name__)
@@ -509,6 +510,11 @@ class _PreparedIssuance:
     key_size: int | None
     elliptic_curve: str | None
     acme_profile: str | None = None
+    # The raw IP-address identifier (#1130) when this is an IP certificate,
+    # else None. `all_domains`/`cert_output_dir`/--cert-name all carry the
+    # derived lineage name (utils.cert_name_for_ip); this carries the address
+    # itself, which the command builder emits as certbot --ip-address.
+    ip_identifier: str | None = None
 
 
 def _private_key_present(key_state):
@@ -2972,7 +2978,7 @@ class CertificateManager:
                           account_id, staging, ca_provider, ca_account_id,
                           domain_alias, alias_dns_provider, san_domains,
                           challenge_type, key_type, key_size, elliptic_curve,
-                          replace, acme_profile=None):
+                          replace, acme_profile=None, ip_identifier=None):
         """Validate and resolve everything an issuance needs, before any
         command is built (#666).
 
@@ -3017,7 +3023,32 @@ class CertificateManager:
         # Validate inputs
         if not domain or not email:
             raise ValueError("Domain and email are required")
-        
+
+        if ip_identifier:
+            # An IP identifier (#1130) dictates the shape of the request: Let's
+            # Encrypt issues for an IP only over HTTP-01, only in the
+            # short-lived profile, and not with SAN entries or a DNS alias.
+            # Force the two it dictates and refuse a caller that explicitly
+            # asked for something else, rather than silently overriding it.
+            if challenge_type not in (None, 'http-01'):
+                raise ValueError(
+                    "An IP-address certificate is validated over HTTP-01 only, "
+                    f"not {challenge_type!r}.")
+            challenge_type = 'http-01'
+            if san_domains:
+                raise ValueError(
+                    "An IP-address certificate takes a single address; SAN "
+                    "entries are not supported yet (#854).")
+            if domain_alias or alias_dns_provider:
+                raise ValueError(
+                    "An IP-address certificate uses HTTP-01, so a DNS alias "
+                    "does not apply.")
+            if acme_profile not in (None, '', 'shortlived'):
+                raise ValueError(
+                    "An IP-address certificate is issued in the 'shortlived' "
+                    f"profile only, not {acme_profile!r}.")
+            acme_profile = 'shortlived'
+
         ca_provider, staging, ca_account_config, used_ca_account_id = \
             self._resolve_ca(settings, ca_provider, ca_account_id, staging)
 
@@ -3054,6 +3085,7 @@ class CertificateManager:
             key_size=key_size,
             elliptic_curve=elliptic_curve,
             acme_profile=acme_profile,
+            ip_identifier=ip_identifier,
         )
 
     def _resolve_acme_profile(self, domain, replace, requested, ca_account_config):
@@ -3219,6 +3251,7 @@ class CertificateManager:
             ca_account_config or {}, staging, cert_dir, san_domains=san_list,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             acme_profile=prepared.acme_profile,
+            ip_address=prepared.ip_identifier,
         )
 
         if replace:
@@ -3386,6 +3419,23 @@ class CertificateManager:
                 omitting the flags makes certbot keep the existing key
                 type.
         """
+        # An IP-address identifier (#1130) is not a domain and cannot be the
+        # certificate's name on disk, so translate it once here, before the
+        # per-domain lock and everything built from `domain`. The lineage name
+        # becomes the derived `ip-<dashed>` segment (utils.cert_name_for_ip) and
+        # keys the lock, the directory, --cert-name and the metadata like any
+        # other name; the address itself is carried separately to the command
+        # builder as the certbot --ip-address identifier. Only a first issuance
+        # reaches here with the raw address — a reissue or renewal already holds
+        # the derived name, so is_ip_identifier is False and nothing re-triggers.
+        ip_identifier = None
+        if is_ip_identifier(domain):
+            ok, result = validate_ip_identifier(domain)
+            if not ok:
+                raise ValueError(result)
+            ip_identifier = result
+            domain = cert_name_for_ip(result)
+
         # Path-safety gate at the sink. `domain` becomes cert_dir/<domain>/…,
         # the certbot --config-dir/--cert-name, and the target of
         # _seed_acme_account — and it keys the per-domain lock just below. Every
@@ -3467,7 +3517,7 @@ class CertificateManager:
                 san_domains=san_domains, challenge_type=challenge_type,
                 key_type=key_type, key_size=key_size,
                 elliptic_curve=elliptic_curve, replace=replace,
-                acme_profile=acme_profile,
+                acme_profile=acme_profile, ip_identifier=ip_identifier,
             )
             email = (prepared.ca_account_config or {}).get('email') or email
             ca_provider = prepared.ca_provider

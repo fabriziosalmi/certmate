@@ -6,6 +6,7 @@ and the creation of configuration files for certbot DNS plugins. They do not
 depend on the Flask application context or global configuration variables.
 """
 import dataclasses
+import ipaddress
 import json
 import logging
 import os
@@ -245,6 +246,72 @@ def validate_domain(domain: str) -> Tuple[bool, str]:
              return False, f"Invalid format for domain label: '{label}'."
 
     return True, domain
+
+
+def is_ip_identifier(value: str) -> bool:
+    """True when *value* is an IP-address literal rather than a domain name.
+
+    A certificate identifier is a domain name everywhere today. Let's Encrypt
+    also issues for an IP address, but only in the short-lived profile and only
+    over HTTP-01 (#1130). This is the one place that classifies which kind a
+    request carries, so the issuance path can branch on it without re-parsing.
+    Accepts IPv6 too (so the issuance path can recognise and then refuse it with
+    a reason); validate_ip_identifier is what decides issuability.
+    """
+    try:
+        ipaddress.ip_address(str(value).strip())
+        return True
+    except ValueError:
+        return False
+
+
+def validate_ip_identifier(value: str) -> tuple[bool, str]:
+    """Validate an IP-address certificate identifier (#1130).
+
+    Returns ``(True, canonical)`` for a globally-routable IPv4 literal, else
+    ``(False, reason)``.
+
+    IPv6 is refused for now: an IPv6 literal's colons cannot be one path
+    segment, and the certificate-name-separate-from-the-domain split that would
+    fix that is #854, so IPv6 IP certificates wait on it.
+
+    Only globally-routable addresses are accepted. Let's Encrypt validates an IP
+    over HTTP-01 by connecting to it, so a private, loopback, link-local, CGNAT,
+    multicast, unspecified or otherwise reserved address (the RFC 5737
+    documentation ranges included) could never be validated; refusing it here
+    names the reason instead of failing deep in issuance.
+    """
+    if not value or not isinstance(value, str):
+        return False, "IP address is required and must be a string."
+    text = value.strip()
+    try:
+        ip = ipaddress.ip_address(text)
+    except ValueError:
+        return False, f"Not a valid IP address: {text!r}."
+    if ip.version == 6:
+        return False, (
+            "IPv6 certificate identifiers are not supported yet: an IPv6 "
+            "literal cannot be a certificate name on disk, which waits on #854.")
+    # is_global already excludes private, loopback, link-local, CGNAT,
+    # unspecified and the reserved/documentation ranges, but it is True for
+    # multicast (224.0.0.0/4), which is not a host that could answer HTTP-01.
+    if ip.is_multicast or not ip.is_global:
+        return False, (
+            f"{ip} is not a globally-routable unicast address, so Let's Encrypt "
+            "could not validate it over HTTP-01.")
+    return True, str(ip)
+
+
+def cert_name_for_ip(value: str) -> str:
+    """The on-disk lineage name for an IP identifier: ``192.0.2.1`` -> ``ip-192-0-2-1``.
+
+    A certificate is keyed on its name, which for a DNS certificate is the
+    domain. An IP has no domain, so it gets a derived name that is a single safe
+    path segment (``domain_paths.is_path_safe_segment``): the dots become dashes
+    so the whole address reads as one segment. IPv4 only, as validate_ip_identifier
+    accepts only IPv4 for now.
+    """
+    return "ip-" + str(value).strip().replace(".", "-")
 
 
 def find_covering_zone(fqdn: str, zones: List[str]) -> Optional[str]:
