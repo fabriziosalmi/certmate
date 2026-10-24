@@ -24,6 +24,12 @@
 # that address as an iPAddress and nothing else, has an empty subject and a
 # critical SAN, chains to /acme/root, and the client revokes it into the CRL.
 #
+# And each client proves a name, and its own address, with tls-alpn-01 (RFC
+# 8737, #1339): lego with --tls, acme.sh with --alpn, each listening on port 443
+# alone, so http-01 could not have passed; the server's own record must show
+# tls-alpn-01 as the challenge that validated the identifier, and the leaf must
+# name the identifier alone.
+#
 # The clients are pinned by digest, so a run measures this server against
 # the same lego and acme.sh each time: moving a digest is how a new client
 # release is measured. Each step also reports how many /acme/ requests it
@@ -31,7 +37,8 @@
 # to leave room for.
 #
 # Needs Docker, the images pinned below, and nothing on the host but bash.
-# Usage: tests/interop/run.sh [lego|acmesh|lego_ip|acmesh_ip ...]   (default: all of them)
+# Usage: tests/interop/run.sh [lego|acmesh|lego_ip|acmesh_ip|lego_tls|lego_tls_ip|acmesh_tls|acmesh_tls_ip ...]
+#        (default: all of them)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -42,8 +49,10 @@ NET=certmate-interop
 SUBNET=10.213.81.0/24
 LEGO_IP=10.213.81.20
 ACMESH_IP=10.213.81.21
+LEGO_TLS_IP=10.213.81.22
+ACMESH_TLS_IP=10.213.81.23
 DIRECTORY=https://acme.lab.internal/acme/directory
-CLIENTS=${*:-lego acmesh lego_ip acmesh_ip}
+CLIENTS=${*:-lego acmesh lego_ip acmesh_ip lego_tls lego_tls_ip acmesh_tls acmesh_tls_ip}
 
 # Pinned by digest: lego 5.5.2 and acme.sh 3.1.5, the releases this was measured with.
 LEGO_IMAGE=goacme/lego@sha256:1944e8c36055beec47c7de6f15202b41128be75eea0ffa257f0c14d93c5155fd
@@ -59,7 +68,8 @@ stop() {
 }
 trap stop EXIT
 stop
-mkdir -p "$WORK/certs" "$WORK/lego" "$WORK/acmesh" "$WORK/lego-ip" "$WORK/acmesh-ip"
+mkdir -p "$WORK/certs" "$WORK/lego" "$WORK/acmesh" "$WORK/lego-ip" "$WORK/acmesh-ip" \
+    "$WORK/lego-tls" "$WORK/lego-tls-ip" "$WORK/acmesh-tls" "$WORK/acmesh-tls-ip"
 : > "$WORK/results.txt"
 docker network create --subnet "$SUBNET" "$NET" >/dev/null
 
@@ -192,6 +202,33 @@ assert san.value.get_values_for_type(x509.DNSName) == [], f'{client}: the leaf n
 assert list(leaf.subject) == [] and san.critical, f'{client}: subject {leaf.subject}, SAN critical={san.critical}'
 print(f'{client} issued for {address}: chains to the ACME root, iPAddress only, empty subject, '
       f'critical SAN, serial={leaf.serial_number:x}')
+PY
+}
+
+check_name_leaf() {  # $1 client, $2 leaf inside $WORK, $3 the name it was ordered for
+    py "$1" "$2" "$3" <<'PY'
+import sys
+from cryptography import x509
+client, leaf_path, name = sys.argv[1], sys.argv[2].lstrip('/'), sys.argv[3]
+root = x509.load_pem_x509_certificate(open('/w/root.pem', 'rb').read())
+leaf = x509.load_pem_x509_certificates(open('/w/' + leaf_path, 'rb').read())[0]
+leaf.verify_directly_issued_by(root)
+names = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
+assert names == [name], f'{client}: the leaf names {names}, not {name}'
+print(f'{client} issued for {name}: chains to the ACME root, serial={leaf.serial_number:x}')
+PY
+}
+
+validated_by() {  # $1 client, $2 identifier, $3 challenge type: the one CertMate's ACME store shows valid for it
+    docker exec -i certmate-interop /opt/venv/bin/python - "$@" <<'PY'
+import json, sqlite3, sys
+client, identifier, expected = sys.argv[1:]
+con = sqlite3.connect('/app/data/acme/acme.db')
+rows = con.execute('SELECT a.identifier, c.type FROM challenges c JOIN authorizations a ON c.authz_id = a.id '
+                   "WHERE c.status = 'valid'").fetchall()
+kinds = sorted({kind for ident, kind in rows if json.loads(ident)['value'] == identifier})
+assert kinds == [expected], f'{client}: {identifier} was validated by {kinds}, not {expected}'
+print(f'{client}: {identifier} validated by {expected}, by the ACME store')
 PY
 }
 
@@ -440,6 +477,52 @@ run_acmesh_ip() {
     counted "acme.sh revoke an address's certificate" "$WORK/acmesh-ip-revoke.log" \
         acmesh_ip --revoke -d "$ACMESH_IP" --server "$DIRECTORY" --ca-bundle /certs/front.pem
     check in_crl acme.sh acmesh-ip.pem
+}
+
+lego_tls_leg() {  # $1 identifier, $2 its directory under $WORK, $3 label; then docker run options
+    local identifier=$1 dir=$2 label=$3
+    shift 3
+    log "lego: register with EAB and prove $identifier with tls-alpn-01 only (--tls, port 443)"
+    counted "lego tls-alpn-01 for $label" "$WORK/$dir.log" \
+        docker run --rm --network "$NET" "$@" \
+            -e LEGO_CA_CERTIFICATES=/certs/front.pem -v "$WORK/certs:/certs:ro" -v "$WORK/$dir:/data" \
+            "$LEGO_IMAGE" run --server "$DIRECTORY" --path /data --log.format text \
+            --eab --eab.kid "$KID" --eab.hmac "$HMAC" --email ops@lab.internal --accept-tos \
+            --domains "$identifier" --tls
+    check validated_by lego "$identifier" tls-alpn-01
+}
+
+run_lego_tls() {
+    lego_tls_leg lego-tls.lab.internal lego-tls "a name" --network-alias lego-tls.lab.internal
+    check check_name_leaf lego "$(found lego-tls lego-tls.lab.internal.crt)" lego-tls.lab.internal
+}
+
+run_lego_tls_ip() {
+    lego_tls_leg "$LEGO_TLS_IP" lego-tls-ip "an address" --ip "$LEGO_TLS_IP"
+    check check_ip_leaf lego "$(found lego-tls-ip "$LEGO_TLS_IP.crt")" "$LEGO_TLS_IP"
+}
+
+acmesh_tls_leg() {  # $1 identifier, $2 its directory under $WORK, $3 label; then docker run options
+    local identifier=$1 dir=$2 label=$3
+    shift 3
+    log "acme.sh: register with EAB and prove $identifier with tls-alpn-01 only (--alpn, port 443)"
+    docker run --rm --network "$NET" "$@" -v "$WORK/certs:/certs:ro" -v "$WORK/$dir:/acme.sh" "$ACMESH_IMAGE" \
+        --register-account --server "$DIRECTORY" --ca-bundle /certs/front.pem \
+        --eab-kid "$KID" --eab-hmac-key "$HMAC" -m ops@lab.internal > "$WORK/$dir-register.log" 2>&1
+    counted "acme.sh tls-alpn-01 for $label" "$WORK/$dir.log" \
+        docker run --rm --network "$NET" "$@" -v "$WORK/certs:/certs:ro" -v "$WORK/$dir:/acme.sh" "$ACMESH_IMAGE" \
+            --issue --alpn -d "$identifier" --server "$DIRECTORY" --ca-bundle /certs/front.pem
+    check validated_by acme.sh "$identifier" tls-alpn-01
+}
+
+run_acmesh_tls() {
+    acmesh_tls_leg acmesh-tls.lab.internal acmesh-tls "a name" --network-alias acmesh-tls.lab.internal
+    check check_name_leaf acme.sh "$(found acmesh-tls acmesh-tls.lab.internal.cer)" acmesh-tls.lab.internal
+}
+
+run_acmesh_tls_ip() {
+    acmesh_tls_leg "$ACMESH_TLS_IP" acmesh-tls-ip "an address" --ip "$ACMESH_TLS_IP"
+    check check_ip_leaf acme.sh "$(found acmesh-tls-ip "$ACMESH_TLS_IP.cer")" "$ACMESH_TLS_IP"
 }
 
 for client in $CLIENTS; do

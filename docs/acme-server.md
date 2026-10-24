@@ -273,6 +273,12 @@ as an `ip` identifier: `--domains 10.20.0.5` and `-d 10.20.0.5`. The
 interoperability run orders one this way with each, lego 5.5.2 and acme.sh
 3.1.5, from the address the client listens on, and revokes it.
 
+For tls-alpn-01, lego takes `--tls` in place of `--http`, and acme.sh `--alpn`
+in place of `--standalone`; each then listens on port 443 alone. The
+interoperability run proves a name and an address this way with each, and
+checks in the server's own record that tls-alpn-01 is the challenge that
+validated them.
+
 When CertMate's own certificate is not one the client trusts already, give the
 client the certificate of CertMate's front: `LEGO_CA_CERTIFICATES` for lego,
 `--ca-bundle` for acme.sh, and `caBundle` under `spec.acme` for cert-manager.
