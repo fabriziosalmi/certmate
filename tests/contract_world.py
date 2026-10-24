@@ -330,6 +330,10 @@ def environment():
 ALIAS = 'alias.example.test'
 KEYLESS = 'keyless.example.test'
 KEYLESS_TOO = 'keyless-too.example.test'
+# An IP-address certificate (#1130), under the name it is kept by. A documentation
+# address: the name is read back as an address whether or not one could be issued for.
+IP_ADDRESS = '192.0.2.10'
+IP_NAME = 'ip-192-0-2-10'
 
 
 def _metadata(domain, sans=(), **more):
@@ -384,6 +388,18 @@ def seed(container, port):
         archive.mkdir(parents=True)
         (archive / 'cert1.pem').write_bytes((cert_dir / name / 'cert.pem').read_bytes())
         (cert_dir / name / 'metadata.json').write_text(_metadata(name), encoding='utf-8')
+    # What Let's Encrypt issues for an address: its only SAN is that IP, over HTTP-01, shortlived.
+    ip_dir = cert_dir / IP_NAME
+    ip_dir.mkdir()
+    ca_cert, ca_key = make_cert('Walk Test CA', is_ca=True)
+    leaf, leaf_key = make_cert(IP_ADDRESS, san_ip=[IP_ADDRESS], issuer=ca_cert, issuer_key=ca_key)
+    for filename, content in {'cert.pem': pem(leaf), 'chain.pem': pem(ca_cert),
+                              'fullchain.pem': pem(leaf) + pem(ca_cert),
+                              'privkey.pem': key_pem(leaf_key)}.items():
+        (ip_dir / filename).write_bytes(content)
+    (ip_dir / 'metadata.json').write_text(
+        _metadata(IP_NAME, dns_provider=None, account_id=None, challenge_type='http-01',
+                  acme_profile='shortlived'), encoding='utf-8')
     write_certificate(cert_dir / ALIAS, ALIAS)
     (cert_dir / ALIAS / 'metadata.json').write_text(
         # A profile its CA has since withdrawn: what a renewal records (#395).
@@ -397,7 +413,8 @@ def seed(container, port):
     current['domains'] = [{'domain': DOMAIN, 'dns_provider': 'cloudflare'},
                           {'domain': ALIAS, 'dns_provider': 'cloudflare'},
                           {'domain': KEYLESS, 'dns_provider': 'cloudflare'},
-                          {'domain': KEYLESS_TOO, 'dns_provider': 'cloudflare'}]
+                          {'domain': KEYLESS_TOO, 'dns_provider': 'cloudflare'},
+                          {'domain': IP_NAME, 'dns_provider': None}]
     settings.save_settings(current)
 
     # Credentials for the DNS provider the seeded certificates name, so that adopting a

@@ -977,7 +977,7 @@
      "str"
     ],
     "[].ip_address": [
-     "null"
+     "str"
     ],
     "[].latest_issuance": [
      "null"
