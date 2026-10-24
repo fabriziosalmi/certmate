@@ -283,3 +283,55 @@ def test_the_check_ends_with_the_handshake(alpn):
     acme_validation.tls_alpn01({'type': 'dns', 'value': NAME}, key_authorization, port=alpn.port,
                                resolve=lambda h, p, a: '127.0.0.1')
     assert time.monotonic() - started < 2
+
+
+def test_a_certificate_that_cannot_be_read_is_refused_not_an_error(client, alpn):
+    """Measured before the fix: subjectAltName twice raised DuplicateExtension,
+    which is not a ValueError, out of the check, and the challenge answered
+    HTTP 500 instead of an invalid challenge."""
+    challenge, key_authorization = _challenge(client, NAME)
+    alpn.certificate = _with_two_subject_alt_names(key_authorization)
+    answered = _answer(client, challenge)
+    assert answered['status'] == 'invalid'
+    assert answered['error']['type'] == 'urn:ietf:params:acme:error:incorrectResponse'
+    assert 'could not be read' in answered['error']['detail']
+
+
+def _with_an_x400_address():
+    """A subjectAltName holding an x400Address ([3]), a kind of name cryptography
+    does not parse: reading the extensions raises UnsupportedGeneralNameType."""
+    from cryptography.x509.oid import ExtensionOID
+    key = ec.generate_private_key(ec.SECP256R1())
+    now = datetime.datetime.now(datetime.UTC)
+    return (x509.CertificateBuilder().subject_name(x509.Name([])).issuer_name(x509.Name([]))
+            .public_key(key.public_key()).serial_number(1)
+            .not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.UnrecognizedExtension(ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+                                                      bytes.fromhex('3002a300')), critical=True)
+            .sign(key, hashes.SHA256()).public_bytes(serialization.Encoding.DER))
+
+
+@pytest.mark.parametrize('der', [b'', b'not a certificate', _with_an_x400_address()],
+                         ids=['nothing', 'not-der', 'a-name-of-an-unparsed-kind'])
+def test_bytes_that_are_no_readable_certificate_are_refused(der):
+    refusal = acme_validation._validation_certificate_refusal(der, {'type': 'dns', 'value': NAME}, 'k.a')
+    assert refusal.startswith('the certificate could not be read')
+
+
+def _with_two_subject_alt_names(key_authorization):
+    """A certificate no parser accepts: subjectAltName twice. cryptography's
+    builder refuses that, so an extension under a placeholder OID of the same
+    DER length is renamed in the encoding (the signature then no longer
+    verifies, which the check does not ask about)."""
+    from cryptography.x509.oid import ObjectIdentifier
+    cert, key = validation_certificate(key_authorization, [x509.DNSName(NAME)])
+    placeholder = (x509.CertificateBuilder().subject_name(cert.subject).issuer_name(cert.issuer)
+                   .public_key(key.public_key()).serial_number(cert.serial_number)
+                   .not_valid_before(cert.not_valid_before_utc).not_valid_after(cert.not_valid_after_utc))
+    for extension in cert.extensions:
+        placeholder = placeholder.add_extension(extension.value, extension.critical)
+    placeholder = placeholder.add_extension(x509.UnrecognizedExtension(
+        ObjectIdentifier('2.5.29.99'), x509.SubjectAlternativeName([x509.DNSName(NAME)]).public_bytes()), False)
+    der = placeholder.sign(key, hashes.SHA256()).public_bytes(serialization.Encoding.DER)
+    assert der.count(bytes.fromhex('0603551d63')) == 1
+    return x509.load_der_x509_certificate(der.replace(bytes.fromhex('0603551d63'), bytes.fromhex('0603551d11'))), key
