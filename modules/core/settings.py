@@ -17,7 +17,7 @@ from .constants import SETTINGS_SCHEMA_VERSION, iter_cert_domain_dirs
 from .domain_entries import normalize_domains, normalize_entry
 from .file_operations import FileOperations, _backup_passphrase
 from .utils import (
-    generate_secure_token, validate_email, validate_api_token, validate_domain,
+    generate_secure_token, validate_email, validate_api_token, validate_certificate_name,
     validate_key_options,
 )
 
@@ -1758,7 +1758,7 @@ class SettingsManager:
                             logger.warning(
                                 "Skipped a domain entry that named no domain")
                             continue
-                        is_valid, domain_or_error = validate_domain(entry['domain'])
+                        is_valid, domain_or_error = validate_certificate_name(entry['domain'])
                         if not is_valid:
                             logger.warning(f"Invalid domain skipped: {domain_or_error}")
                             continue

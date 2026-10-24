@@ -314,6 +314,47 @@ def cert_name_for_ip(value: str) -> str:
     return "ip-" + str(value).strip().replace(".", "-")
 
 
+_IP_CERT_NAME_RE = re.compile(r'^ip-(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\Z')
+
+
+def ip_for_cert_name(name: str) -> str | None:
+    """The address an IP certificate's name stands for: ``ip-192-0-2-1`` -> ``192.0.2.1``.
+
+    The inverse of cert_name_for_ip, and the one test of whether a certificate
+    name is an IP certificate's. None for anything else. A DNS name can never
+    match, since a domain has a dot and this name has none; and only the
+    canonical spelling does, since IPv4Address refuses a leading zero
+    (``ip-010-0-0-1``), so no second name can stand for the same address.
+
+    It answers what the name is, not whether the address could be issued for
+    today: that is validate_ip_identifier's question, asked at issuance.
+    """
+    if not isinstance(name, str):
+        return None
+    match = _IP_CERT_NAME_RE.match(name)
+    if not match:
+        return None
+    try:
+        return str(ipaddress.IPv4Address('.'.join(match.groups())))
+    except ValueError:
+        return None
+
+
+def validate_certificate_name(name: str) -> tuple[bool, str]:
+    """Validate the name of a certificate that exists, or is registered.
+
+    A certificate is named for its domain, or for its address when it is an IP
+    certificate (#1130), whose name is the derived ``ip-<dashed>``. Returns
+    ``(True, name)`` with the domain normalised as validate_domain does, else
+    ``(False, reason)``. For the checks that ask about a name CertMate gave a
+    certificate: a settings entry, a lineage to repair, a reissue. A new
+    certificate's name is still a domain or an address, never this form.
+    """
+    if ip_for_cert_name(name):
+        return True, name
+    return validate_domain(name)
+
+
 def find_covering_zone(fqdn: str, zones: List[str]) -> Optional[str]:
     """Return the longest zone in *zones* that covers *fqdn*, or None.
 
@@ -1194,7 +1235,7 @@ def repair_certbot_renewal_paths(domain_dir: Union[str, Path], domain: str) -> b
     # at module level (see the note under its imports), and domain_paths is
     # the one home of the certificate layout (#1146).
     from .domain_paths import renewal_conf
-    shape_ok, _ = validate_domain(domain)
+    shape_ok, _ = validate_certificate_name(domain)
     if not shape_ok:
         return False
     domain_dir = Path(domain_dir)
@@ -1263,8 +1304,9 @@ def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -
     # two-element tuple is always truthy, so `if not validate_domain(domain)`
     # could not fire for any input — the shape check described above has
     # never run. The containment check below (`_inside`) is the one that has
-    # been doing the work; this restores the first of the two.
-    shape_ok, _ = validate_domain(domain)
+    # been doing the work; this restores the first of the two. An IP
+    # certificate's lineage is named ip-<dashed> (#1130) and is repaired too.
+    shape_ok, _ = validate_certificate_name(domain)
     if not shape_ok:
         return False
 

@@ -30,11 +30,13 @@ from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
 from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError, validate_external_identity,
                           validate_import_bundle, validate_import_renewability)
-from .utils import utc_now_iso, validate_domain, validate_key_options
+from .utils import (cert_name_for_ip, ip_for_cert_name, is_ip_identifier, utc_now_iso,
+                    validate_certificate_name, validate_domain, validate_ip_identifier,
+                    validate_key_options)
 from .domain_paths import certificate_dir
 from .domain_entries import entry_domain, entry_external, normalize_entry
 from .certificates import (DNS_ALIAS_SUPPORTED_PROVIDERS, CertificateNamesUnknown, ExternalCertificate,
-                           ReplacementRefused)
+                           ReplacementRefused, ip_certificate_refusal)
 from .inventory_sources import collect_domain_sources
 
 logger = logging.getLogger(__name__)
@@ -301,10 +303,24 @@ class CertificateService:
         # cert_dir. Rebinding to the normalised name means everything
         # downstream — the cert dir, the certbot --cert-name, _seed_acme_account
         # — sees a bare hostname that can never contain '/' or '..'.
-        ok, normalized = validate_domain(domain)
-        if not ok:
-            raise ValueError(f'Invalid domain: {normalized}')
-        domain = normalized
+        #
+        # An IP address (#1130) is named once here for what it becomes: the
+        # derived ip-<dashed> name, which is what the scope check, the settings
+        # entry, the audit record, the event and an asynchronous job carry, and
+        # what every later request names the certificate by. Issuance reads the
+        # address back off that name.
+        ip_identifier = None
+        if is_ip_identifier(domain):
+            ok, result = validate_ip_identifier(domain)
+            if not ok:
+                raise ValueError(f'Invalid IP address: {result}')
+            ip_identifier = result
+            domain = cert_name_for_ip(result)
+        else:
+            ok, normalized = validate_domain(domain)
+            if not ok:
+                raise ValueError(f'Invalid domain: {normalized}')
+            domain = normalized
         if domain_alias:
             ok, normalized_alias = validate_domain(domain_alias)
             if not ok:
@@ -372,6 +388,13 @@ class CertificateService:
         settings = self._settings.load_settings()
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
+        if ip_identifier:
+            # Refused here as well as at issuance, so an asynchronous create
+            # answers 400 rather than 202 and a job that fails.
+            challenge_type, acme_profile = _ip_request_shape(
+                ca_provider=ca_provider, challenge_type=challenge_type,
+                san_domains=san_domains, domain_alias=domain_alias,
+                alias_dns_provider=alias_dns_provider, acme_profile=acme_profile)
         email = self.resolve_ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
@@ -1168,8 +1191,9 @@ class CertificateService:
         # Same rebind-to-normalised as prepare_create: use the bare hostname
         # validate_domain returns, not the raw string, so a URL form cannot
         # drive `cert_dir / domain` here either. The reissue path builds the
-        # same paths as create and must hold the same invariant.
-        ok, normalized = validate_domain(domain)
+        # same paths as create and must hold the same invariant. The name of an
+        # IP certificate (ip-<dashed>, #1130) is a name too.
+        ok, normalized = validate_certificate_name(domain)
         if not ok:
             raise ValueError(f'Invalid domain: {normalized}')
         domain = normalized
@@ -1263,6 +1287,11 @@ class CertificateService:
         settings = self._settings.load_settings()
         if not ca_provider:
             ca_provider = settings.get('default_ca', 'letsencrypt')
+        if ip_for_cert_name(domain):
+            challenge_type, acme_profile = _ip_request_shape(
+                ca_provider=ca_provider, challenge_type=challenge_type,
+                san_domains=san_domains, domain_alias=domain_alias,
+                alias_dns_provider=alias_dns_provider, acme_profile=acme_profile)
         ca_account_id = metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None
         email = self.resolve_ca_email(settings, ca_provider, ca_account_id)
         if not challenge_type:
@@ -1449,6 +1478,18 @@ class CertificateService:
             metadata = {}
         self._certs._record_renewal_metrics(
             domain, metadata, success, time.monotonic() - started, error=error)
+
+
+def _ip_request_shape(**request):
+    """The challenge and profile an IP-address certificate is issued with.
+
+    Raises ``ValueError`` with the reason when the request cannot be issued
+    (``ip_certificate_refusal``, the rule issuance applies as well, #1130).
+    """
+    refusal = ip_certificate_refusal(**request)
+    if refusal:
+        raise ValueError(refusal)
+    return 'http-01', 'shortlived'
 
 
 def _primary_name(names, requested):

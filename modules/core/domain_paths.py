@@ -29,6 +29,8 @@ import os
 import re
 from pathlib import Path
 
+from .utils import ip_for_cert_name
+
 # Characters that make a domain unusable as a single path segment. Kept as a
 # tuple rather than inlined so the rule has one definition and the callers
 # that raise, the callers that return an error pair, and the callers that only
@@ -103,7 +105,9 @@ def validate_domain_path(domain, cert_base_dir):
     """
     if not is_path_safe_segment(domain):
         return None, 'Invalid domain name'
-    if not DOMAIN_RE.match(domain):
+    # An IP certificate is named ip-<dashed> (#1130), which has no TLD. The
+    # name is a single safe segment by construction, and no domain can take it.
+    if not DOMAIN_RE.match(domain) and ip_for_cert_name(domain) is None:
         return None, 'Invalid domain format'
     cert_dir = certificate_dir(cert_base_dir, domain)
     try:
