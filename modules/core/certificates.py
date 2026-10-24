@@ -5329,6 +5329,13 @@ class CertificateManager:
         try:
             if not self.settings_manager.update(_add, reason='sweep_reregistered'):
                 raise RuntimeError('Renewal registration was not saved')
+            # A save can succeed and still not keep the entry: the save drops
+            # one whose name it does not accept, and answers True. Counting
+            # that as re-registered is a false success, repeated after every
+            # renewal; so the entry is looked for where it was written.
+            stored = self.settings_manager.load_settings().get('domains') or []
+            if not any(entry_domain(entry) == domain for entry in stored):
+                raise RuntimeError('The saved settings do not keep the entry')
         except Exception as e:
             logger.error(
                 "Renewed %r but could not re-register it in settings (%s); it "
