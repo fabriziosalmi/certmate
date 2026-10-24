@@ -196,7 +196,8 @@ def _written_network(text, refuse=False):
 
 
 class AcmeServer:
-    def __init__(self, settings_manager, data_dir, nonces=None, http01_port=80, https_port=443, resolve=None):
+    def __init__(self, settings_manager, data_dir, nonces=None, http01_port=80, https_port=443, resolve=None,
+                 tls_alpn_port=443):
         self._settings = settings_manager
         self.db_path = Path(data_dir) / 'acme' / 'acme.db'
         self.nonces = nonces or NonceStore()
@@ -206,6 +207,8 @@ class AcmeServer:
         # on ports of their own and point their names at them, as Pebble lets them.
         self.http01_port = http01_port
         self.https_port = https_port
+        # tls-alpn-01 MUST use port 443 (RFC 8737 section 3); the tests serve on one of their own.
+        self.tls_alpn_port = tls_alpn_port
         self.resolve = resolve or pinned_https.resolve
         # Created on first use: an instance that never issues has no ACME root.
         self.ca = acme_ca.AcmeCA(Path(data_dir) / 'acme' / 'ca')
@@ -642,6 +645,9 @@ class AcmeServer:
         try:
             if challenge['type'] == 'dns-01':
                 acme_validation.dns01(name, key_authorization, resolver=self.dns_resolver())
+            elif challenge['type'] == 'tls-alpn-01':
+                acme_validation.tls_alpn01(authz['identifier'], key_authorization,
+                                           port=self.tls_alpn_port, resolve=self.resolve)
             else:
                 acme_validation.http01(name, challenge['token'], key_authorization,
                                        port=self.http01_port, https_port=self.https_port, resolve=self.resolve)

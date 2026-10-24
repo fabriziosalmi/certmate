@@ -94,20 +94,31 @@ the inventory configuration (`dns_resolver.nameservers`, or
 `CERTMATE_DNS_RESOLVERS`; see [discovery and inventory](discovery-inventory.md)).
 With none set, it is the system's.
 
+**tls-alpn-01** (RFC 8737), for a client that can answer only on port 443.
+The client serves, on port 443 and for the ALPN protocol `acme-tls/1`, a
+self-signed certificate whose only subject alternative name is the name, and
+which carries a critical `acmeIdentifier` extension holding the SHA-256 digest
+of the challenge's key authorization. CertMate connects to the address it
+checked, under the same guards and time limit as http-01, offers `acme-tls/1`
+alone with the name as SNI, requires TLS 1.2 or later, and reads the
+certificate it is shown. It sends nothing after the handshake, and does not
+check the certificate's own signature, which proves nothing here (RFC 8737,
+section 4).
+
 **Wildcards** are proved with dns-01 only, on the base name.
 
 **Addresses** (RFC 8738). An order may name an IPv4 address, as
 `{"type": "ip", "value": "10.20.0.5"}`, in its plain dotted form. It is proved
-with http-01 only, since dns-01 never proves an address (RFC 8738, section 7):
-CertMate fetches the token from the address itself, with no DNS lookup and the
-address as the Host header, under the guards above. An address the fetch could
+with http-01 or tls-alpn-01, never dns-01 (RFC 8738, section 7), at the address
+itself, with no DNS lookup: http-01 with the address as the Host header, and
+tls-alpn-01 with the address's reverse name (`5.0.20.10.in-addr.arpa`) as SNI
+and the address as the certificate's only IP address, under the guards above. An address the fetch could
 never reach (loopback, link-local, unspecified, multicast, reserved, or a
 metadata address) is refused with `rejectedIdentifier` when the order is made.
 A `dns` identifier whose last label is all digits is not a DNS name, so it is
 refused too: an address is ordered as an `ip` identifier.
 
-Not supported: tls-alpn-01 ([#1339](https://github.com/fabriziosalmi/certmate/issues/1339)),
-and IPv6 addresses.
+Not supported: IPv6 addresses.
 
 ## The certificates
 
@@ -261,6 +272,12 @@ For an address, lego and acme.sh take it where they take a name, and order it
 as an `ip` identifier: `--domains 10.20.0.5` and `-d 10.20.0.5`. The
 interoperability run orders one this way with each, lego 5.5.2 and acme.sh
 3.1.5, from the address the client listens on, and revokes it.
+
+For tls-alpn-01, lego takes `--tls` in place of `--http`, and acme.sh `--alpn`
+in place of `--standalone`; each then listens on port 443 alone. The
+interoperability run proves a name and an address this way with each, and
+checks in the server's own record that tls-alpn-01 is the challenge that
+validated them.
 
 When CertMate's own certificate is not one the client trusts already, give the
 client the certificate of CertMate's front: `LEGO_CA_CERTIFICATES` for lego,

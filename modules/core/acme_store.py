@@ -158,12 +158,12 @@ class AcmeStore:
     def create_order(self, account_id, identifiers, expires, replaces=None):
         """An order with one pending authorization per identifier, written in one transaction.
 
-        A name gets an http-01 and a dns-01 challenge, each with a token of its
-        own, and the client answers the one it can. A wildcard is authorized
-        on its base name with dns-01 alone (RFC 8555 section 7.1.3), and the
-        authorization's identifier carries `wildcard` so that it can say so.
-        An address gets http-01 alone: dns-01 MUST NOT validate one (RFC 8738
-        section 7).
+        A name gets an http-01, a dns-01 and a tls-alpn-01 challenge (RFC
+        8737, #1339), each with a token of its own, and the client answers the
+        one it can. A wildcard is authorized on its base name with dns-01 alone
+        (RFC 8555 section 7.1.3), and the authorization's identifier carries
+        `wildcard` so that it can say so. An address gets http-01 and
+        tls-alpn-01: dns-01 MUST NOT validate one (RFC 8738 section 7).
         """
         order_id = _new_id()
         now = utc_now().isoformat()
@@ -179,8 +179,8 @@ class AcmeStore:
                 con.execute('INSERT INTO authorizations (id, order_id, account_id, identifier, status, expires) '
                             'VALUES (?, ?, ?, ?, ?, ?)',
                             (authz_id, order_id, account_id, json.dumps(authorized), 'pending', expires))
-                kinds = (('dns-01',) if wildcard else ('http-01',) if identifier['type'] == 'ip'
-                         else ('http-01', 'dns-01'))
+                kinds = (('dns-01',) if wildcard else ('http-01', 'tls-alpn-01') if identifier['type'] == 'ip'
+                         else ('http-01', 'dns-01', 'tls-alpn-01'))
                 for kind in kinds:
                     con.execute('INSERT INTO challenges (id, authz_id, type, token, status) VALUES (?, ?, ?, ?, ?)',
                                 (_new_id(), authz_id, kind, secrets.token_urlsafe(32), 'pending'))

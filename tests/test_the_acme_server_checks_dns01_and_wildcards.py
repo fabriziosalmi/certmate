@@ -73,10 +73,10 @@ def _publish(client, dns, name, challenge, at=None):
     dns.txt[at or f'_acme-challenge.{name}'] = [dns01_digest(key_authorization)]
 
 
-def test_a_name_is_offered_http01_and_dns01_with_tokens_of_their_own(client):
+def test_a_name_is_offered_http01_dns01_and_tls_alpn01_with_tokens_of_their_own(client):
     authz = _authz(client, _order(client, 'web.lab.internal'))
-    assert [c['type'] for c in authz['challenges']] == ['http-01', 'dns-01']
-    assert len({c['token'] for c in authz['challenges']}) == 2
+    assert [c['type'] for c in authz['challenges']] == ['http-01', 'dns-01', 'tls-alpn-01']
+    assert len({c['token'] for c in authz['challenges']}) == 3
     assert 'wildcard' not in authz
 
 
