@@ -210,15 +210,24 @@ def tls_alpn_context():
     return context
 
 
+# What cryptography raises for a certificate it cannot read: a malformed
+# encoding, and, not ValueErrors, an extension twice or a name of a kind it
+# does not parse. A client chooses what it shows, so each is a refusal of its
+# challenge, never an error of the server's.
+_UNREADABLE = (ValueError, x509.DuplicateExtension, x509.UnsupportedGeneralNameType)
+
+
 def _validation_certificate_refusal(der, identifier, key_authorization):
     """Why the certificate a tls-alpn-01 handshake showed does not prove *identifier*, or None."""
     try:
         certificate = x509.load_der_x509_certificate(der or b'')
-        names = list(certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value)
+        extensions = certificate.extensions          # parsed here, every one of them
+    except _UNREADABLE as error:
+        return f'the certificate could not be read: {error}'
+    try:
+        names = list(extensions.get_extension_for_class(x509.SubjectAlternativeName).value)
     except x509.ExtensionNotFound:
         return 'the certificate has no subjectAltName'
-    except ValueError as error:
-        return f'the certificate could not be read: {error}'
     if identifier['type'] == 'ip':
         wanted = x509.IPAddress(ipaddress.ip_address(identifier['value']))
         matches = names == [wanted]
@@ -228,11 +237,9 @@ def _validation_certificate_refusal(der, identifier, key_authorization):
     if not matches:
         return f'the certificate names {[str(n.value) for n in names]}, not {identifier["value"]} alone'
     try:
-        extension = certificate.extensions.get_extension_for_oid(ACME_IDENTIFIER_OID)
+        extension = extensions.get_extension_for_oid(ACME_IDENTIFIER_OID)
     except x509.ExtensionNotFound:
         return 'the certificate has no acmeIdentifier extension'
-    except ValueError as error:
-        return f'the certificate could not be read: {error}'
     if not extension.critical:
         return 'the acmeIdentifier extension is not critical'
     expected = b'\x04\x20' + hashlib.sha256(key_authorization.encode('ascii')).digest()
