@@ -257,6 +257,11 @@ runs used against this server, cert-manager there as an Issuer, which takes the
 same spec. certbot's ACME library runs in the test suite. Its command line uses
 the flags certbot documents and was not run end to end.
 
+For an address, lego and acme.sh take it where they take a name, and order it
+as an `ip` identifier: `--domains 10.20.0.5` and `-d 10.20.0.5`. The
+interoperability run orders one this way with each, lego 5.5.2 and acme.sh
+3.1.5, from the address the client listens on, and revokes it.
+
 When CertMate's own certificate is not one the client trusts already, give the
 client the certificate of CertMate's front: `LEGO_CA_CERTIFICATES` for lego,
 `--ca-bundle` for acme.sh, and `caBundle` under `spec.acme` for cert-manager.
