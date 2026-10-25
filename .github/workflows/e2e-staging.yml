@@ -26,7 +26,7 @@ name: E2E (staging)
 #     tests/test_health_ready_e2e.py tests/test_cert_lifecycle.py \
 #     tests/test_async_issuance_e2e.py tests/test_ari_staging_e2e.py \
 #     tests/test_renewal_uses_todays_settings_e2e.py tests/test_ca_account_email_e2e.py \
-#     tests/test_acme_profiles_e2e.py
+#     tests/test_acme_profiles_e2e.py tests/test_a_certificate_named_apart_e2e.py
 #
 # To run it here on demand, dispatch this workflow with these repository secrets:
 #   CLOUDFLARE_API_TOKEN  - token with Zone:DNS:Edit on the test zone (required)
@@ -106,4 +106,5 @@ jobs:
           tests/test_ari_staging_e2e.py \
           tests/test_renewal_uses_todays_settings_e2e.py \
           tests/test_ca_account_email_e2e.py \
-          tests/test_acme_profiles_e2e.py
+          tests/test_acme_profiles_e2e.py \
+          tests/test_a_certificate_named_apart_e2e.py

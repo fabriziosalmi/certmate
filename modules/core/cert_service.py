@@ -129,6 +129,32 @@ class DomainOutOfScope(PermissionError):
         super().__init__(f'API key not authorized for domain {domain}')
 
 
+def _name_apart(name, domain, ip_identifier):
+    """The name a create request gives its certificate apart from its domain
+    (#1149), normalised, or None when it gives none or gives the domain itself.
+
+    A name has the shape of a DNS name, the shape every route, the settings
+    and a backup already take, so it is never an IP certificate's
+    ``ip-<dashed>``, which has no dot. It is never a wildcard, and an IP
+    certificate takes none: it is named by its address. Raises ValueError.
+    """
+    if name is None or (isinstance(name, str) and not name.strip()):
+        return None
+    if not isinstance(name, str):
+        raise ValueError('Invalid name: a name is a string')
+    ok, normalized = validate_domain(name.strip())
+    if not ok:
+        raise ValueError(f'Invalid name: {normalized}')
+    if normalized == domain:
+        return None
+    if ip_identifier:
+        raise ValueError('An IP certificate is named by its address and takes no name')
+    if normalized.startswith('*.'):
+        raise ValueError(f'Invalid name: {normalized} names a wildcard; only the wildcard '
+                         f'certificate it is for may take it')
+    return normalized
+
+
 class CertificateService:
     """Owns create/renew orchestration on top of ``CertificateManager``."""
 
@@ -239,7 +265,8 @@ class CertificateService:
                account_id=None, ca_provider=None, ca_account_id=None, challenge_type=None,
                domain_alias=None, alias_dns_provider=None, key_type=None,
                key_size=None, elliptic_curve=None, user=None, ip_address=None,
-               audit_ctx=None, csr_pem=None, acme_profile=None, event_details=None):
+               audit_ctx=None, csr_pem=None, acme_profile=None, event_details=None,
+               name=None):
         """Validate, scope-check, resolve defaults, issue, and persist a new
         certificate; returns the ``CertificateManager.create_certificate``
         result dict. Raises ``ValueError`` (bad input / missing config),
@@ -269,7 +296,7 @@ class CertificateService:
             alias_dns_provider=alias_dns_provider,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             user=user, ip_address=ip_address, audit_ctx=audit_ctx,
-            csr_pem=csr_pem, acme_profile=acme_profile,
+            csr_pem=csr_pem, acme_profile=acme_profile, name=name,
         )
         if event_details:
             prepared['_event_details'] = dict(event_details)
@@ -280,11 +307,16 @@ class CertificateService:
                         domain_alias=None, alias_dns_provider=None,
                         key_type=None, key_size=None,
                         elliptic_curve=None, user=None, ip_address=None,
-                        audit_ctx=None, csr_pem=None, acme_profile=None):
+                        audit_ctx=None, csr_pem=None, acme_profile=None, name=None):
         """Validate, authorize and resolve a create request WITHOUT side
         effects, returning the resolved kwargs for :meth:`issue_create`. Raises
         ``ValueError`` / :class:`DomainOutOfScope`. Cheap (no certbot, no disk
         write) so it is safe to run inline before deferring issuance.
+
+        *name*, when given and not the domain, is what the certificate is named
+        apart from its domain (#1149): every later request takes it, and the
+        domain is recorded as the certificate's host. Scope is judged on the
+        domain, the SANs and the name.
         """
         domain = (domain or '').strip()
         san_domains = san_domains or []
@@ -321,6 +353,7 @@ class CertificateService:
             if not ok:
                 raise ValueError(f'Invalid domain: {normalized}')
             domain = normalized
+        named = _name_apart(name, domain, ip_identifier)
         if domain_alias:
             ok, normalized_alias = validate_domain(domain_alias)
             if not ok:
@@ -366,6 +399,11 @@ class CertificateService:
         # allowed_domains — a partial create would leak one tenant's domain
         # into another tenant's certificate.
         self._enforce_scope(domain, 'create', user, ip_address)
+        # And the name (#1149): every later request on the certificate is
+        # addressed by it and judged on it, and deploy hooks set for a domain
+        # answer to it, so a key may not take a name outside its scope.
+        if named:
+            self._enforce_scope(named, 'create', user, ip_address)
         for san in san_domains:
             san_clean = san.strip() if isinstance(san, str) else ''
             if san_clean:
@@ -373,7 +411,7 @@ class CertificateService:
         # A create over an external certificate is refused as that, here so an
         # async request does not answer 202 first. The manager refuses it again
         # under the lock.
-        self._certs.refuse_external(domain)
+        self._certs.refuse_external(named or domain)
         self._refuse_external_names(csr_names or [domain, *san_domains])
 
         # Key-option validation runs after the scope checks so its
@@ -409,7 +447,11 @@ class CertificateService:
                 raise ValueError('No DNS provider specified')
 
         return {
-            'domain': domain,
+            # The certificate's name, which every later request takes: its
+            # domain, unless it is named apart from it, and then the domain is
+            # its host (#1149).
+            'domain': named or domain,
+            'host': domain if named else None,
             'email': email,
             'dns_provider': dns_provider,
             'account_id': account_id,
@@ -468,6 +510,7 @@ class CertificateService:
                 elliptic_curve=prepared['elliptic_curve'],
                 csr_pem=prepared.get('csr_pem'),
                 acme_profile=prepared.get('acme_profile'),
+                host=prepared.get('host'),
             )
 
             # Append the new domain under the settings manager's lock so two

@@ -193,6 +193,13 @@ supported, and can leave the configuration broken or accounts missing. CertMate
 logs `DOWNGRADE DETECTED` at startup when it finds this. Run the newer version
 again, or restore an archive that can restore, as above.
 
+An archive that holds a certificate named apart from its domain (API contract
+2.61, [`name` on create](api.md#create-a-certificate)) must not be restored
+into a version older than the one that wrote it. The archive keeps the
+certificate under its name and records the domain as its `host`; an older
+version ignores `host`, so it would ask the CA for the name on the next
+reissue, and probe and check the name instead of the domain.
+
 ## Lost admin password
 
 `scripts/reset_admin_password.py` sets a new password for the `admin` user,

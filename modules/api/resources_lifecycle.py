@@ -222,6 +222,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                         elliptic_curve=data.get('elliptic_curve'),
                         acme_profile=data.get('acme_profile'),
                         csr_pem=data.get('csr'),
+                        name=data.get('name'),
                         user=user,
                         ip_address=request.remote_addr,
                         audit_ctx=audit_ctx,
@@ -252,6 +253,9 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     # key_management=external so nothing later reads the absent
                     # key as a lost one.
                     csr_pem=data.get('csr'),
+                    # A name apart from the domain (#1149): the certificate is
+                    # for `domain` and every later request takes the name.
+                    name=data.get('name'),
                     user=user,
                     ip_address=request.remote_addr,
                     audit_ctx=audit_ctx,

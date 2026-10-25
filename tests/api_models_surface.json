@@ -1,5 +1,5 @@
 {
- "contract_version": "2.60",
+ "contract_version": "2.61",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -748,6 +748,9 @@
       "ecdsa",
       "rsa"
      ],
+     "type": "string"
+    },
+    "name": {
      "type": "string"
     },
     "san_domains": {

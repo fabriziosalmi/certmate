@@ -1,16 +1,17 @@
-"""A certificate is issued for its host, and scoped by it, never by its name (#854).
+"""A certificate is issued for its host, and scoped by it (#854).
 
 A certificate's name identifies it (its directory, certbot's lineage, the
 routes about it); its host is what it certifies. A certificate named apart from
 its domain records the host in its metadata as ``host`` (#1360). Asking the CA
 for the name instead would request a certificate for ``internal.example.net``
 when ``example.com`` is the host it serves, and an API key's scope checked
-against the name would judge a name no request ever serves.
+against the name alone would judge a name no request ever serves.
 
 So the CA is asked for the host (``-d``, ``--ip-address`` for an address)
 while ``--cert-name`` stays the name, the challenge records held around the
 run are the host's, a CSR has to cover the host, and the names a scope check
-reads start with the host.
+reads start with the host. The name is judged as well (#1149): every route
+addresses the certificate by it.
 """
 
 import datetime
@@ -196,9 +197,10 @@ def test_the_names_a_scope_reads_start_with_the_host(tmp_path):
     assert manager.names_covered(NAME) == [HOST, 'api.example.com']
 
 
-def test_a_key_scoped_to_the_host_covers_the_certificate_and_one_scoped_to_the_name_does_not(tmp_path):
+def test_a_key_covers_a_certificate_named_apart_only_with_its_host_and_its_name(tmp_path):
     manager = _held_certificate(tmp_path, {'host': HOST})
-    assert manager.every_name_matches(NAME, lambda name: name == HOST)
+    assert manager.every_name_matches(NAME, lambda name: name in (HOST, NAME))
+    assert not manager.every_name_matches(NAME, lambda name: name == HOST)
     assert not manager.every_name_matches(NAME, lambda name: name == NAME)
 
 

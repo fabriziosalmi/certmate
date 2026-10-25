@@ -548,6 +548,14 @@ def create_api_models(api):
             "IPv4 address: Let's Encrypt issues for it over HTTP-01 in the 'shortlived' "
             'profile, and the certificate is named ip-<address with dashes> (#1130). '
             'An address added in API contract 2.57.')),
+        'name': fields.String(description=(
+            'Optional. A name for the certificate apart from its domain, for a '
+            'second certificate for the same domain (#854): it has the shape of '
+            'a DNS name, is never a wildcard, and is not taken by an IP-address '
+            'certificate. Every later request takes the name; `domain` is '
+            'answered as `host`. Leave it out, or equal to `domain`, for a '
+            'certificate named by its domain. Added in API contract 2.61.'
+        )),
         'san_domains': fields.List(fields.String,
                                    description='Additional SANs (e.g., ["*.example.com"])'),
         'dns_provider': fields.String(

@@ -142,9 +142,9 @@ An API key can carry `allowed_domains`, a list of exact names and
 `*.example.com` patterns. What such a key is answered, since API contract
 **2.43**:
 
-- **A certificate** is the key's when its scope covers every name the
-  certificate covers: its host, the `san_domains` recorded with it, and the DNS
-  names in the certificate. The host is the certificate's name unless its
+- **A certificate** is the key's when its scope covers its name and every name
+  the certificate covers: its host, the `san_domains` recorded with it, and the
+  DNS names in the certificate. The host is the certificate's name unless its
   metadata names another (#854), and the address of an IP certificate, which no
   scope can list. Otherwise every certificate route answers
   `403 DOMAIN_OUT_OF_SCOPE` and the list leaves it out. The same when the names
@@ -1663,6 +1663,16 @@ account, default CA, default key type). Every field is in the
 - `domain`, and `san_domains` for more names (`["*.example.com"]`). Since
   **2.57** `domain` can be an IPv4 address (see
   [IP-address certificates](#ip-address-certificates));
+- `name`, since **2.61**, to name the certificate apart from its domain: a
+  second certificate for `example.com`, from another CA, named
+  `internal.example.com`. The certificate is for `domain`, which every answer
+  gives as its `host`, and every later request takes the name. A name has the
+  shape of a DNS name, is not a wildcard, is not given to an IP-address
+  certificate, and is refused with `409` when a certificate already has it.
+  Left out, or equal to `domain`, the certificate is named by its domain. A
+  key restricted to domains must have the name in its scope as well as
+  `domain` and `san_domains`, since every later request on the certificate is
+  judged on its name too;
 - `dns_provider` and `account_id`; `domain_alias` and `alias_dns_provider` for
   DNS-01 through an alias zone;
 - `ca_provider` and `ca_account_id`; `challenge_type` (`dns-01`, `http-01` or
