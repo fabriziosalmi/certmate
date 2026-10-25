@@ -44,11 +44,20 @@ polling CT logs until you enable it.
 Each certificate is stored **once**, keyed by its SHA-256 fingerprint. One
 certificate served on many hosts is a single record with many endpoints.
 
-Issuing a certificate does not by itself write to the inventory. A certificate
-CertMate issued is recorded (`source=issued`, `managed`) when a discovery sweep
-probes the host of its managed domain and finds it served there, which needs
-discovery enabled and `include_managed` on; wildcard domains have no host to
-probe. **Adopt** marks the discovered record it started from as managed.
+Issuing a certificate does not by itself write to the inventory. A discovery
+sweep records where each certificate it finds came from by its fingerprint, not
+by the host it was found at: `source=issued` for a certificate CertMate holds
+and obtained (the one it serves, or an earlier generation of its certbot
+lineage), `imported` for one it holds and was given (an external certificate,
+or an import not renewed yet), and `probed` for any other, at a managed host
+too. A certificate found at the host of a managed domain is `managed` and linked
+to that domain whoever issued it, which needs discovery enabled and
+`include_managed` on; wildcard domains have no host to probe. **Adopt** marks
+the discovered record it started from as managed.
+
+A record keeps the source it was first written with. Before this rule, a sweep
+recorded whatever it found at a managed host as `issued`, so a record from an
+earlier release can say `issued` of a certificate CertMate did not issue.
 
 ---
 
@@ -133,7 +142,7 @@ A record carries:
 | `key` | `{type, size, curve}` |
 | `signature_algorithm` | |
 | `san_dns` | DNS SANs |
-| `source` | `issued` \| `probed` \| `ct-log`. The schema also accepts `imported`, but nothing writes it today |
+| `source` | `issued` \| `imported` \| `probed` \| `ct-log`, decided by the fingerprint (see [How it fits together](#how-it-fits-together)) |
 | `managed` | whether CertMate manages it, with `managed_domain` linking it |
 | `first_seen` / `last_seen` | |
 | `endpoints[]` | every `host:port` it was observed at, each with its own first/last-seen |

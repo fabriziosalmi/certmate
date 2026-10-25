@@ -2,7 +2,8 @@
 
 * endpoint spec parsing (host / host:port / IPv6, bracketed and bare),
 * the sweep upserts probe results into the inventory,
-* managed endpoints are recorded as issued+managed and linked,
+* managed endpoints are recorded as managed and linked, and as issued only
+  when CertMate holds the certificate served there,
 * one cert on many endpoints collapses to one inventory record,
 * failure isolation: a bad spec / unreachable host / crashing probe never
   aborts the sweep and is reported as a per-endpoint status.
@@ -118,11 +119,12 @@ def test_sweep_passes_port_and_allow_private(inv):
     assert probe.calls == [('h', 8443, True)]
 
 
-def test_managed_endpoint_recorded_as_issued(inv):
+def test_managed_endpoint_recorded_as_managed_and_issued_when_held(inv):
     probe = _FakeProbe({'m.example.com': _ok('m.example.com', 443, 'fpM')})
     discover_endpoints(
         ['m.example.com'], inv, probe=probe,
         managed_domains={'m.example.com': 'example.com'},
+        held_sources={'fpM': 'issued'},
     )
     rec = inv.get('fpM')
     assert rec['source'] == 'issued'

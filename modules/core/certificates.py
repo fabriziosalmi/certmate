@@ -29,6 +29,7 @@ import urllib.request
 from pathlib import Path
 from typing import ClassVar
 from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from .ca_manager import CAManager, resolve_ca_account
 from .cert_labels import tags_from_metadata
 from .shell import ShellExecutor
@@ -452,6 +453,18 @@ def _parse_certificate(content):
         return x509.load_pem_x509_certificate(content)
     except ValueError:
         return None
+
+
+def _held_fingerprint(path):
+    """The SHA-256 fingerprint of the certificate in *path*, as the inventory
+    keys it, or None when the file cannot be read or is not a certificate."""
+    try:
+        certificate = _parse_certificate(path.read_bytes())
+    except OSError:
+        return None
+    if certificate is None:
+        return None
+    return certificate.fingerprint(hashes.SHA256()).hex()
 
 
 def _reject_path_escaping_domain(domain):
@@ -1305,6 +1318,45 @@ class CertificateManager:
             return x509.load_pem_x509_certificate((directory / 'cert.pem').read_bytes())
         except (OSError, ValueError):
             return None
+
+    def held_certificate_sources(self):
+        """Every certificate CertMate holds, by SHA-256 fingerprint: 'issued' or 'imported'.
+
+        What a discovery sweep needs to say where a served certificate came
+        from (the inventory's ``source``): one CertMate obtained is 'issued',
+        one it was given is 'imported', and one it does not hold is neither.
+        Read from each certificate directory: the served copy, and every
+        generation in certbot's lineage archive, which certbot obtained. The
+        served copy is 'imported' while it is the upload: an external
+        certificate (either record, as in `is_external`), or an import not
+        renewed yet, whose metadata still carries ``imported_at``, which a
+        renewal drops.
+
+        A file that is not a readable certificate is left out, so what cannot
+        be read is never called issued.
+        """
+        settings = self.settings_manager.load_settings()
+        held = {}
+        for directory in iter_cert_domain_dirs(self.cert_dir):
+            name = directory.name
+            archive = lineage_archive_dir(directory, name)
+            for generation in sorted(archive.glob('cert*.pem')) if archive.is_dir() else []:
+                fingerprint = _held_fingerprint(generation)
+                if fingerprint:
+                    held[fingerprint] = 'issued'
+            fingerprint = _held_fingerprint(directory / 'cert.pem')
+            if not fingerprint:
+                continue
+            try:
+                metadata = self._load_metadata(name)
+            except OSError:
+                metadata = {}  # the settings entry can still say it is external
+            uploaded = isinstance(metadata, dict) and bool(metadata.get('imported_at'))
+            if uploaded or self.is_external(name, metadata=metadata, settings=settings):
+                held[fingerprint] = 'imported'
+            else:
+                held[fingerprint] = 'issued'
+        return held
 
     def replace_external_certificate(self, domain, cert_files, owned_metadata):
         """Publish an uploaded bundle in place of the external certificate
