@@ -555,9 +555,9 @@ class _PreparedIssuance:
     elliptic_curve: str | None
     acme_profile: str | None = None
     # The raw IP-address identifier (#1130) when this is an IP certificate,
-    # else None. `all_domains`/`cert_output_dir`/--cert-name all carry the
-    # derived lineage name (utils.cert_name_for_ip); this carries the address
-    # itself, which the command builder emits as certbot --ip-address.
+    # else None, kept for what only an address decides (the request shape).
+    # `cert_output_dir` and --cert-name carry the name; `all_domains` starts
+    # with what the CA is asked for: the address, or the host (#854).
     ip_identifier: str | None = None
 
 
@@ -981,7 +981,7 @@ class CertificateManager:
                 finally:
                     handle.close()
 
-    def _store_csr(self, domain, cert_output_dir, csr_pem):
+    def _store_csr(self, domain, cert_output_dir, csr_pem, host=None):
         """Validate the CSR, refuse the cases that would silently mislead, and
         write it where renewal can find it again (#599).
 
@@ -989,7 +989,8 @@ class CertificateManager:
         from the request: a CSR is signed over its own subject and SANs, so the
         CA issues for those names whatever the caller asked for. Deriving them
         anywhere else would let the stored metadata disagree with the
-        certificate on disk.
+        certificate on disk. The CSR must cover *host*, where the certificate
+        is served (#854), which is *domain*, its name, unless said otherwise.
         """
         # Screened here, not trusted from the caller. `create_certificate`
         # already checks it, and that was true of every other unit that builds
@@ -1014,18 +1015,19 @@ class CertificateManager:
         except CSRError as e:
             raise RuntimeError(f'{CREATION_FAILED}: {e}')
 
+        host = host or domain
         all_domains = csr_domains(csr)
-        if domain not in all_domains:
+        if host not in all_domains:
             # The directory is named for `domain`, and every later lookup —
-            # renewal, the health check, deploy hooks — goes through that name.
-            # A CSR for other names would produce a certificate filed under a
-            # domain it does not cover.
+            # renewal, the health check, deploy hooks — goes through that name,
+            # and looks for the certificate at its host. A CSR for other names
+            # would produce a certificate filed under a host it does not cover.
             raise RuntimeError(
                 f'{CREATION_FAILED}: the CSR does not cover '
-                f'{domain}. It requests {", ".join(all_domains)}.')
+                f'{host}. It requests {", ".join(all_domains)}.')
         # Primary first, so metadata's san_domains means the same thing here as
         # everywhere else.
-        all_domains = [domain] + [d for d in all_domains if d != domain]
+        all_domains = [host] + [d for d in all_domains if d != host]
 
         # Converting a key-managed certificate into a CSR-only one would leave
         # the old privkey.pem beside a certificate it cannot serve — the exact
@@ -2250,7 +2252,12 @@ class CertificateManager:
         return self._certificate_info_from_disk(domain, settings)
 
     def names_covered(self, domain):
-        """Every name the certificate stored as *domain* is valid for, *domain* first.
+        """Every name the certificate stored as *domain* is valid for, its host first.
+
+        The host is where it is served (`utils.certificate_host`): *domain*
+        itself unless its metadata names another host (#854), or the address of
+        an IP certificate. The name is not among the names: it identifies the
+        certificate, and no request serves it, so a scope check never judges it.
 
         A certificate is one object however many names it carries: its key
         serves all of them, so a scope check on a certificate is a check on
@@ -2299,6 +2306,7 @@ class CertificateManager:
                 exists = True
                 certificate = _parse_certificate((cert_files or {}).get('cert.pem'))
                 metadata = metadata or stored_metadata or {}
+        names = [certificate_host(domain, metadata)]
         recorded = metadata.get('san_domains') if isinstance(metadata, dict) else None
         if certificate is None and not isinstance(recorded, list) and exists:
             raise CertificateNamesUnknown(domain)
@@ -3078,7 +3086,7 @@ class CertificateManager:
                           account_id, staging, ca_provider, ca_account_id,
                           domain_alias, alias_dns_provider, san_domains,
                           challenge_type, key_type, key_size, elliptic_curve,
-                          replace, acme_profile=None, ip_identifier=None):
+                          replace, acme_profile=None, ip_identifier=None, host=None):
         """Validate and resolve everything an issuance needs, before any
         command is built (#666).
 
@@ -3145,7 +3153,9 @@ class CertificateManager:
                 settings, domain, challenge_type, dns_provider, dns_config,
                 account_id, domain_alias, alias_dns_provider, ca_provider=ca_provider)
 
-        all_domains = _resolve_all_domains(domain, san_domains, challenge_type)
+        # What the CA is asked for: the host, which is the name unless the
+        # certificate is served elsewhere (#854). Paths keep the name.
+        all_domains = _resolve_all_domains(host or domain, san_domains, challenge_type)
 
         # Create output directory
         cert_dir = self.cert_dir
@@ -3339,7 +3349,7 @@ class CertificateManager:
             ca_account_config or {}, staging, cert_dir, san_domains=san_list,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             acme_profile=prepared.acme_profile,
-            ip_address=prepared.ip_identifier,
+            identifier=all_domains[0],
         )
 
         if replace:
@@ -3599,6 +3609,10 @@ class CertificateManager:
                     'ca_provider', 'ca_account_id', 'domain_alias', 'alias_dns_provider',
                     'san_domains', 'challenge_type', 'key_type', 'key_size',
                     'elliptic_curve', 'acme_profile'))
+            # A reissue or a renewal asks the CA for where the certificate is
+            # served (#854): its address, or the host its metadata names. A new
+            # certificate has no metadata yet, and is asked for as requested.
+            host = ip_identifier or (self.certificate_host(domain) if replace else domain)
             prepared = self._prepare_issuance(
                 domain=domain, email=email, dns_provider=dns_provider,
                 dns_config=dns_config, account_id=account_id, staging=staging,
@@ -3608,7 +3622,7 @@ class CertificateManager:
                 san_domains=san_domains, challenge_type=challenge_type,
                 key_type=key_type, key_size=key_size,
                 elliptic_curve=elliptic_curve, replace=replace,
-                acme_profile=acme_profile, ip_identifier=ip_identifier,
+                acme_profile=acme_profile, ip_identifier=ip_identifier, host=host,
             )
             email = (prepared.ca_account_config or {}).get('email') or email
             ca_provider = prepared.ca_provider
@@ -3647,7 +3661,7 @@ class CertificateManager:
             csr_output_dir = None
             if csr_pem is not None:
                 csr_path, all_domains = self._store_csr(
-                    domain, cert_output_dir, csr_pem)
+                    domain, cert_output_dir, csr_pem, host=host)
                 csr_output_dir = cert_output_dir / CSR_OUTPUT_DIRNAME
                 csr_output_dir.mkdir(parents=True, exist_ok=True)
                 # certbot REFUSES to overwrite the files it is told to write in

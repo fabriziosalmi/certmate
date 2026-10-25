@@ -38,7 +38,7 @@ def test_an_ip_goes_in_ip_address_not_dash_d(tmp_path):
     cmd, _env = mgr.build_certbot_command(
         'ip-1-1-1-1', 't@example.com', 'letsencrypt', 'http-01', {}, {},
         staging=False, cert_dir=tmp_path, acme_profile='shortlived',
-        ip_address='1.1.1.1')
+        identifier='1.1.1.1')
     assert '--ip-address' in cmd
     assert cmd[cmd.index('--ip-address') + 1] == '1.1.1.1'
     # -d is for DNS names: an IP certificate must not carry one.

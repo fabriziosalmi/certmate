@@ -9,6 +9,7 @@ import tempfile
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 from .domain_paths import certificate_dir
+from .utils import is_ip_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -419,18 +420,19 @@ class CAManager:
                             key_size: Optional[int] = None,
                             elliptic_curve: Optional[str] = None,
                             acme_profile: str | None = None,
-                            ip_address: str | None = None) -> tuple:
+                            identifier: str | None = None) -> tuple:
         """Build certbot command with CA-specific parameters.
 
         Args:
-            ip_address: An IP-address identifier (#1130). When set, certbot is
-                given ``--ip-address <ip>`` in place of ``-d <domain>``: ``-d``
-                is for DNS names, and the IP is the certificate's identifier.
-                ``domain`` is then the derived lineage name
-                (``utils.cert_name_for_ip``), which stays as ``--cert-name`` and
-                the per-domain config dir. The caller forces the short-lived
-                profile (passed as ``acme_profile``) and HTTP-01, the only ones
-                Let's Encrypt issues an IP certificate with.
+            identifier: What the certificate is for, when it is not ``domain``
+                (#854): the host a certificate named apart from its domain is
+                served at, or the address of an IP certificate (#1130). An
+                address goes in ``--ip-address`` (``-d`` is for DNS names), a
+                host in ``-d``. ``domain`` is the certificate's name either
+                way, and stays ``--cert-name`` and the per-domain config dir.
+                For an address the caller forces the short-lived profile
+                (passed as ``acme_profile``) and HTTP-01, the only ones Let's
+                Encrypt issues an IP certificate with.
             key_type: Optional 'rsa' or 'ecdsa'. When omitted, no
                 ``--key-type`` flag is emitted and certbot picks its own
                 default (currently RSA-2048) — this preserves the
@@ -466,11 +468,12 @@ class CAManager:
 
         # The identifier: an IP goes in --ip-address (#1130), a DNS name in -d.
         # `domain` is always the lineage name, so --cert-name above is correct
-        # for both; only the identifier flag differs.
-        if ip_address:
-            certbot_cmd.extend(['--ip-address', ip_address])
+        # for both; only what the CA is asked for differs from it.
+        identifier = identifier or domain
+        if is_ip_identifier(identifier):
+            certbot_cmd.extend(['--ip-address', identifier])
         else:
-            certbot_cmd.extend(['-d', domain])
+            certbot_cmd.extend(['-d', identifier])
 
         # Add SAN domains
         if san_domains:
