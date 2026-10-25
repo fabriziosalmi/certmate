@@ -8,7 +8,7 @@ The CertMate MCP server exposes the following tools to AI assistants:
 
 **Inventory & status**
 1. **`certmate_list_certificates`** — Lists all certificates managed by the active CertMate instance (with expiry, status, domains).
-2. **`certmate_get_certificate`** — Full detail for one domain: status, days until expiry, SANs, DNS/CA provider, auto-renew flag. Use it to decide whether a cert needs renewing.
+2. **`certmate_get_certificate`** — Full detail for one domain: status, days until expiry, SANs, DNS/CA provider, auto-renew flag, and `host`, where the certificate is served (its address for an IP certificate). Use it to decide whether a cert needs renewing.
 3. **`certmate_get_activity`** — Recent activity/audit log, to diagnose what changed or failed.
 4. **`certmate_diagnostics`** — Comprehensive, sanitized diagnostic snapshot.
 5. **`certmate_get_settings`** — Global settings and configuration, with secret values masked.

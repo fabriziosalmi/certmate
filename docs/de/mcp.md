@@ -1,6 +1,6 @@
 # CertMate Model Context Protocol (MCP) Server
 
-<!-- CERTMATE-TRANSLATED-FROM 0033df7b20dfdeb4 -->
+<!-- CERTMATE-TRANSLATED-FROM 9484a85d34da32fe -->
 
 CertMate enthält einen integrierten Model Context Protocol (MCP) Server, der in Node.js geschrieben ist. Dadurch können agentische KI-Assistenten (wie Claude oder Gemini) Zertifikatsstatus prüfen, Erneuerungen auslösen, Diagnosen anfordern und direkt mit der CertMate API interagieren.
 
@@ -10,7 +10,7 @@ Der CertMate MCP Server stellt KI-Assistenten folgende Tools zur Verfügung:
 
 **Inventar und Status**
 1. **`certmate_list_certificates`** — Listet alle von der aktiven CertMate-Instanz verwalteten Zertifikate auf (mit Ablaufdatum, Status, Domains).
-2. **`certmate_get_certificate`** — Vollständige Details für eine Domain: Status, verbleibende Tage bis zum Ablauf, SANs, DNS/CA-Anbieter, Auto-Renew-Flag. Verwenden Sie es, um zu entscheiden, ob ein Zertifikat erneuert werden muss.
+2. **`certmate_get_certificate`** — Vollständige Details für eine Domain: Status, verbleibende Tage bis zum Ablauf, SANs, DNS/CA-Anbieter, Auto-Renew-Flag und `host`, wo das Zertifikat bereitgestellt wird (die Adresse bei einem IP-Zertifikat). Verwenden Sie es, um zu entscheiden, ob ein Zertifikat erneuert werden muss.
 3. **`certmate_get_activity`** — Aktuelle Aktivitäten/Auditprotokoll, um nachzuvollziehen, was sich geändert hat oder fehlgeschlagen ist.
 4. **`certmate_diagnostics`** — Umfassender, bereinigter Diagnose-Snapshot.
 5. **`certmate_get_settings`** — Globale Einstellungen und Konfiguration, mit maskierten geheimen Werten.

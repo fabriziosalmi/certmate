@@ -15,6 +15,14 @@ with Client("https://certmate.example.com", token="...") as c:
 `base_url`/`token` fall back to `CERTMATE_URL` / `CERTMATE_TOKEN`. The only
 runtime dependency is `httpx` — no server code, no certbot.
 
+## Where a certificate is served
+
+`cert.domain` is the certificate's name, which every call about it takes.
+`cert.host` is where it is served: the address of an IP certificate (also in
+`cert.ip_address`), the host a certificate named apart from its domain is for,
+and its name otherwise. Both are `None` against a server before API contract
+2.59.
+
 ## Asking whether a certificate has expired
 
 Use `cert.has_expired()`, not `cert.days_until_expiry <= 0`.

@@ -207,6 +207,10 @@ def cert_info(ctx: typer.Context, domain: str):
     """Show a certificate's details."""
     c = _run(lambda: _client(ctx).get_certificate(domain))
     out.print(f"[bold]{c.domain}[/]")
+    if c.host and c.host != c.domain:
+        # Where it is served, when that is not its name: an IP certificate's
+        # address, or the host a certificate named apart from it is for.
+        out.print(f"  host:        {c.host}")
     if c.has_expired() is True:
         remaining = "[red]expired[/]"
     elif c.days_until_expiry is None:

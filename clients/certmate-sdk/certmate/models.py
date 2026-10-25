@@ -28,6 +28,13 @@ class Certificate:
     dns_provider: Optional[str] = None
     auto_renew: Optional[bool] = None
     san_domains: List[str] = field(default_factory=list)
+    # API contract 2.59. `domain` is the certificate's name, which every
+    # request about it takes; `host` is where it is served: the address of an
+    # IP certificate (`ip_address`, contract 2.57), the host its metadata
+    # names for a certificate named apart from its domain, the name
+    # otherwise. Both are None against an older server.
+    host: str | None = None
+    ip_address: str | None = None
     raw: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -48,6 +55,8 @@ class Certificate:
             dns_provider=d.get("dns_provider"),
             auto_renew=d.get("auto_renew"),
             san_domains=list(d.get("san_domains") or []),
+            host=d.get("host"),
+            ip_address=d.get("ip_address"),
             raw=d,
         )
 
