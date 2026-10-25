@@ -1,6 +1,6 @@
 # Sondes de Déploiement (Probes)
 
-<!-- CERTMATE-TRANSLATED-FROM 2e4c6efa25e73341 -->
+<!-- CERTMATE-TRANSLATED-FROM a2a255458b3ae83f -->
 
 Les sondes vérifient que vos certificats sont accessibles sur le réseau en effectuant une poignée de main TLS en direct avec le serveur déployé.
 
@@ -45,6 +45,8 @@ supprimer ni recréer la sonde.
 ### Sonde navigateur (fallback)
 
 Quand la sonde backend indique que le serveur est injoignable **et** que le protocole est `HTTPS/TLS`, une sonde de secours côté navigateur est déclenchée via `fetch(..., { mode: 'no-cors' })`. Cela permet de vérifier l'accessibilité même lorsque le backend ne peut pas se connecter (ex. segmentation réseau).
+
+Elle interroge l'hôte que le backend a sondé (`probe_host`) : le `deployment_host` s'il est défini, l'adresse d'un certificat IP, et sinon le nom du certificat. Si le backend ne répond pas du tout, elle interroge l'endroit où le certificat est servi : son adresse pour un certificat IP, son nom sinon.
 
 Pour les protocoles `TLS` et `SMTP STARTTLS`, la sonde navigateur est **ignorée** car les navigateurs ne peuvent pas effectuer de connexions TLS brutes ou SMTP. Le statut navigateur affiche « Non vérifié ».
 

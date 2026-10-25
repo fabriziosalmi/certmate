@@ -1844,6 +1844,13 @@ like any other: with the default threshold, about 3 days before it expires
 ([When will it renew?](#when-will-it-renew)). A reissue keeps the address,
 HTTP-01 and `shortlived`, and refuses `san_domains`.
 
+It is looked for at its address, never at its name: the deployment check
+(`GET /api/certificates/ip-a-b-c-d/deployment-status`, whose `probe_host` is
+`a.b.c.d` unless a `deployment_host` is set), the dashboard's browser check
+and discovery connect to `a.b.c.d`. CT-log monitoring and the domain health
+checks leave it out: crt.sh answers a query for an address with certificates
+for every name that contains its digits, and those checks are about names.
+
 An API key restricted with `allowed_domains` cannot create or act on an IP
 certificate: its scope lists domains, and an address is not one. The batch
 endpoint takes domains only.

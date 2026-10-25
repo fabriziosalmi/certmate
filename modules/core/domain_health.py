@@ -53,7 +53,7 @@ from pathlib import Path
 
 from .domain_paths import certificate_dir
 from .request_fields import json_list
-from .utils import exclusive_run
+from .utils import exclusive_run, ip_for_cert_name
 
 logger = logging.getLogger(__name__)
 
@@ -877,6 +877,11 @@ class DomainHealthManager:
         config = config or self.get_config()
         hosts = set()
         for domain in collect_domain_sources(settings, self.cert_dir):
+            if ip_for_cert_name(domain):
+                # An IP certificate (ip-<dashed>) is for an address, and no
+                # check here is about one: HSTS is ignored for an IP literal
+                # (RFC 6797 section 8.1), and the rest are about names.
+                continue
             hosts.add(domain)
             hosts.update(self._metadata_sans(domain))
         if config.get('include_inventory', True):

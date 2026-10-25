@@ -340,6 +340,18 @@ def ip_for_cert_name(name: str) -> str | None:
         return None
 
 
+def certificate_host(name: str) -> str:
+    """Where the certificate named *name* is served: what to connect to, probe
+    or look up for it.
+
+    A certificate's name is its domain for every certificate but one kind: an
+    IP certificate is named ``ip-<dashed>`` and is served at the address. Every
+    place that goes looking for a certificate asks this rather than using the
+    name as a host, which found a host called ``ip-203-0-113-5`` (#854).
+    """
+    return ip_for_cert_name(name) or name
+
+
 def validate_certificate_name(name: str) -> tuple[bool, str]:
     """Validate the name of a certificate that exists, or is registered.
 

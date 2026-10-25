@@ -1,6 +1,6 @@
 # Sondas de Despliegue (Probes)
 
-<!-- CERTMATE-TRANSLATED-FROM 2e4c6efa25e73341 -->
+<!-- CERTMATE-TRANSLATED-FROM a2a255458b3ae83f -->
 
 Las sondas verifican que sus certificados son accesibles en la red realizando un handshake TLS en vivo contra el servidor desplegado.
 
@@ -45,6 +45,8 @@ sin borrar y recrear la sonda.
 ### Sonda de navegador (fallback)
 
 Cuando la sonda backend indica que el servidor es inaccesible **y** el protocolo es `HTTPS/TLS`, se activa una sonda de respaldo en el lado del navegador mediante `fetch(..., { mode: 'no-cors' })`. Esto permite verificar la accesibilidad incluso cuando el backend no puede conectarse (p. ej., segmentación de red).
+
+Consulta el host que sondeó el backend (`probe_host`): el `deployment_host` si hay uno, la dirección de un certificado IP y, en otro caso, el nombre del certificado. Si el backend no responde, consulta dónde se sirve el certificado: su dirección para un certificado IP, su nombre en otro caso.
 
 Para los protocolos `TLS` y `SMTP STARTTLS`, la sonda de navegador se **omite** porque los navegadores no pueden realizar conexiones TLS sin HTTP ni SMTP. El estado del navegador muestra "No verificado".
 

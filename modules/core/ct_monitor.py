@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 
 from .cert_probe import parse_certificate
 from .request_fields import json_list, json_number
-from .utils import exclusive_run
+from .utils import exclusive_run, ip_for_cert_name
 
 logger = logging.getLogger(__name__)
 
@@ -146,11 +146,17 @@ def _is_currently_valid(entry, now):
 
 
 def _managed_domains(settings):
-    """Non-wildcard managed domain names from settings['domains']."""
+    """Non-wildcard managed domain names from settings['domains'].
+
+    An IP certificate is left out. Its name (``ip-<dashed>``) is no name crt.sh
+    knows, and crt.sh answers a query for the address with every certificate
+    whose names contain its digits (``*.1.1.1.1.nip.io`` for ``1.1.1.1``),
+    which would fill the inventory with certificates for other names.
+    """
     out = []
     for entry in settings.get('domains', []) or []:
         name = entry_domain(entry)
-        if name and not name.startswith('*.'):
+        if name and not name.startswith('*.') and not ip_for_cert_name(name):
             out.append(name)
     return out
 

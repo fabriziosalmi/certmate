@@ -1,6 +1,6 @@
 # Deployment Probes
 
-<!-- CERTMATE-TRANSLATED-FROM 2e4c6efa25e73341 -->
+<!-- CERTMATE-TRANSLATED-FROM a2a255458b3ae83f -->
 
 Probes prüfen, ob Ihre Zertifikate im Netzwerk erreichbar sind, indem sie einen Live-TLS-Handshake mit dem deployten Server durchführen.
 
@@ -46,6 +46,8 @@ Host lässt sich so korrigieren, ohne die Probe zu löschen und neu anzulegen.
 ### Browser-Fallback
 
 Wenn die Backend-Probe den Server als nicht erreichbar meldet **und** das Protokoll `HTTPS/TLS` ist, wird ein browserseitiger Fallback über `fetch(..., { mode: 'no-cors' })` ausgelöst. Dadurch kann die Erreichbarkeit auch dann geprüft werden, wenn das Backend keine Verbindung herstellen kann (z. B. bei Netzwerksegmentierung).
+
+Er ruft den Host ab, den das Backend geprüft hat (`probe_host`): den `deployment_host`, wenn einer gesetzt ist, die Adresse eines IP-Zertifikats und sonst den Namen des Zertifikats. Antwortet das Backend gar nicht, ruft er ab, wo das Zertifikat bereitgestellt wird: die Adresse bei einem IP-Zertifikat, sonst seinen Namen.
 
 Für die Protokolle `TLS` und `SMTP STARTTLS` wird der Browser-Fallback **übersprungen**, da Browser keine reinen TLS- oder SMTP-Verbindungen aufbauen können. Der Browser-Status zeigt „Nicht geprüft".
 
