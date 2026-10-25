@@ -87,7 +87,12 @@ def test_a_wildcard_host_is_not_probed_at_its_apex(tmp_path, monkeypatch):
                                      metadata={'host': '*.example.com'})
     assert calls == []
     assert body['probe_status'] == 'unverifiable'
-    assert 'example.com' in body['mismatch_reason'].split()
+    assert body['mismatch_reason'] == (
+        'Wildcard certificate *.example.com cannot be verified automatically: a wildcard '
+        'does not cover its apex (example.com), so probing example.com would compare against '
+        'the wrong host. Set the probe host to a name this wildcard covers (for example '
+        'www.example.com) to enable the check: Settings → Probe in the UI, or deployment_host '
+        'via PATCH /api/certificates/wild.example.net.')
 
 
 def test_a_deployment_host_still_wins(tmp_path, monkeypatch):
