@@ -263,6 +263,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     # derived ip-<dashed> (#1130), with the address beside it.
                     'domain': result.get('domain') or domain,
                     'ip_address': result.get('ip_address'),
+                    'host': result.get('host'),
                     'dns_provider': result.get('dns_provider'),
                     'ca_provider': result.get('ca_provider'),
                     'duration': result.get('duration')

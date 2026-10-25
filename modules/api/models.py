@@ -340,6 +340,13 @@ def create_api_models(api):
                 'dashes>; null for a domain certificate. Added in API '
                 'contract 2.57.'
             )),
+        'host': fields.String(
+            description=(
+                'Where the certificate is served: the address of an IP '
+                'certificate, the host its metadata names for a certificate '
+                'named apart from its domain (#854), and its domain otherwise. '
+                'Always present. Added in API contract 2.59.'
+            )),
         'renews_at': fields.String(
             description=(
                 'The instant the renewal sweep renews this certificate at, UTC '
