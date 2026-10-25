@@ -1,6 +1,6 @@
 # Documentation CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM f10e0194dd02d263 -->
+<!-- CERTMATE-TRANSLATED-FROM 3344ccc7039f3fd5 -->
 
 Bienvenue dans la documentation de CertMate. Ce dossier contient des guides complets pour toutes les fonctionnalités.
 
@@ -28,7 +28,7 @@ Bienvenue dans la documentation de CertMate. Ce dossier contient des guides comp
 - **[Découverte et inventaire des certificats](../discovery-inventory.md)** — découverte par sonde/CT-log, inventaire, adoption, maturité cryptographique *(en anglais)*
 - **[Deploy hooks](./deploy-hooks.md)** — hooks post-émission : configuration, test, expurgation de la sortie, fenêtres de maintenance
 - **[Certificats CSR-only](../csr-only-certificates.md)** — émettre et renouveler quand la clé privée reste sur l'appareil *(en anglais)*
-- **[Serveur ACME](../acme-server.md)** : certificats pour des noms internes à certbot, lego, acme.sh et cert-manager, depuis une racine propre à CertMate *(en anglais)*
+- **[Serveur ACME](../acme-server.md)** : certificats pour des noms internes et des adresses IPv4 à certbot, lego, acme.sh et cert-manager, depuis une racine propre à CertMate *(en anglais)*
 - **[Webhooks](../webhooks.md)** — webhooks génériques : modèles de payload, authentification, vérification de signature *(en anglais)*
 - **[Conformité](./compliance.md)** — chaîne d'audit, attribution des acteurs, posture NIS2/eIDAS
 - **[Sauvegardes et restauration](../backup.md)** — les deux types d'archive, copies hors de l'hôte, restauration, mot de passe administrateur perdu *(en anglais)*

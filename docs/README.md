@@ -26,7 +26,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Certificate Discovery & Inventory](./discovery-inventory.md)** — probe/CT-log discovery, inventory, adopt, crypto readiness
 - **[Deploy Hooks](./deploy-hooks.md)** — post-issuance hooks: configuration, testing, output redaction, maintenance windows
 - **[CSR-only certificates](./csr-only-certificates.md)** — issuing and renewing when the private key stays on the device
-- **[ACME server](./acme-server.md)**: certificates for internal names to certbot, lego, acme.sh and cert-manager, from a root of CertMate's own
+- **[ACME server](./acme-server.md)**: certificates for internal names and IPv4 addresses to certbot, lego, acme.sh and cert-manager, from a root of CertMate's own
 - **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
 - **[Backups and recovery](./backup.md)** — the two kinds of archive, off-site copies, restoring, lost admin password
@@ -164,7 +164,7 @@ Test coverage includes:
 docs/
   README.md               this file — documentation index  <- you are here
   THEME_MIGRATION.md      one-off theme migration record
-  acme-server.md          ACME server for internal names
+  acme-server.md          ACME server for internal names and addresses
   api.md                  complete REST API reference
   architecture.md         system architecture
   backup.md               backups and recovery

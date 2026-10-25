@@ -1,11 +1,11 @@
 # ACME server
 
-CertMate can be the ACME certificate authority for your internal names. certbot,
-lego, acme.sh and cert-manager get certificates from it the way they get them
-from Let's Encrypt, signed by a root of CertMate's own that you install in the
-trust stores of the machines that connect to those names. Each client is
-enrolled with an External Account Binding (EAB) key, and the key says which
-names it may order.
+CertMate can be the ACME certificate authority for your internal names and IPv4
+addresses. certbot, lego, acme.sh and cert-manager get certificates from it the
+way they get them from Let's Encrypt, signed by a root of CertMate's own that
+you install in the trust stores of the machines that connect to those names.
+Each client is enrolled with an External Account Binding (EAB) key, and the key
+says which names and addresses it may order.
 
 It is off by default. It is not a public CA: nothing outside your trust stores
 trusts its root.
@@ -14,6 +14,25 @@ This is a different root from the one that signs [client certificates](guide.md)
 A machine that trusts one for server TLS does not trust the other for mTLS.
 
 The API that administers it is in the [API reference](api.md#acme-server).
+
+## When it fits
+
+It fits when the internal names belong next to the public certificates CertMate
+keeps: the same administrators and roles, the same single sign-on, the same
+audit log for what an admin changes, and the same backups. What it issued is
+listed in the dashboard's **ACME** view. Each client keeps its own certificate
+and key, and renews and installs them itself, so deploy hooks do not apply to
+them.
+
+A CA of its own, run apart from CertMate, fits better when you need:
+
+- **More than one instance.** CertMate runs as a single instance.
+- **IPv6 addresses.** They are not supported.
+- **A root kept off the host.** The root signs leaves directly, with no
+  intermediate, and its key is a file in `data/acme/ca/` on CertMate's host.
+- **OCSP.** The certificates carry neither an OCSP address nor a CRL
+  distribution point. A relying party that checks revocation fetches
+  `/acme/crl` itself (see [Revocation](#revocation)).
 
 ## Turning it on
 
