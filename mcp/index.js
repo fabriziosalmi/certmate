@@ -94,7 +94,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_get_certificate",
-        description: "Get full detail for one certificate by domain: status, days until expiry, SANs, DNS/CA provider, auto-renew flag. Use this to decide whether a cert needs renewing (e.g. renew when days_left < 14).",
+        description: "Get full detail for one certificate by domain (its name): status, days until expiry, SANs, DNS/CA provider, auto-renew flag, and host (where the certificate is served: its address for an IP certificate, the host it is for when it is named apart from it, its name otherwise). Use this to decide whether a cert needs renewing (e.g. renew when days_left < 14).",
         inputSchema: {
           type: "object",
           properties: {

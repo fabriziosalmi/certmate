@@ -1,6 +1,6 @@
 # Server MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 0033df7b20dfdeb4 -->
+<!-- CERTMATE-TRANSLATED-FROM 9484a85d34da32fe -->
 
 CertMate include un server MCP (Model Context Protocol) integrato scritto in Node.js. Questo consente agli assistenti IA agentici (come Claude o Gemini) di ispezionare lo stato dei certificati, attivare rinnovi, richiedere diagnostiche e interagire direttamente con l'API CertMate.
 
@@ -10,7 +10,7 @@ Il server MCP CertMate espone i seguenti strumenti agli assistenti IA:
 
 **Inventario e stato**
 1. **`certmate_list_certificates`** — Elenca tutti i certificati gestiti dall'istanza CertMate attiva (con scadenza, stato, domini).
-2. **`certmate_get_certificate`** — Dettaglio completo per un dominio: stato, giorni alla scadenza, SAN, provider DNS/CA, flag di rinnovo automatico. Usalo per decidere se un certificato deve essere rinnovato.
+2. **`certmate_get_certificate`** — Dettaglio completo per un dominio: stato, giorni alla scadenza, SAN, provider DNS/CA, flag di rinnovo automatico e `host`, dove il certificato è servito (il suo indirizzo per un certificato IP). Usalo per decidere se un certificato deve essere rinnovato.
 3. **`certmate_get_activity`** — Attività recente/registro di audit, per diagnosticare cosa è cambiato o ha fallito.
 4. **`certmate_diagnostics`** — Istantanea diagnostica completa e sanificata.
 5. **`certmate_get_settings`** — Impostazioni globali e configurazione, con i valori segreti mascherati.
