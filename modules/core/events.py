@@ -51,6 +51,34 @@ DEFAULT_MAX_STREAMS = 4
 DEFAULT_STREAM_SECONDS = 900.0
 
 
+# The events about a server certificate, whose payload names it in `domain`.
+# `certificate_revoked` is not among them: CertMate revokes client
+# certificates only, and that payload's `domain` is a client identifier.
+SERVER_CERTIFICATE_EVENTS = frozenset({
+    'certificate_created', 'certificate_renewed', 'certificate_failed',
+    'certificate_expiring', 'certificate_deployed', 'certificate_deploy_incomplete',
+    'certificate_deleted', 'deploy_hook_failed',
+})
+
+
+def with_certificate_host(host_of):
+    """An enricher (`EventBus.set_enricher`) that adds where a server
+    certificate is served, ``host``, to the events about one (#854).
+
+    *host_of* answers it for a certificate's name
+    (`CertificateManager.certificate_host`, which does not raise). A payload
+    that already names a host keeps it, and any other event is left as it is.
+    """
+    def enrich(event, data):
+        if event not in SERVER_CERTIFICATE_EVENTS or not isinstance(data, dict) or 'host' in data:
+            return data
+        name = data.get('domain')
+        if not isinstance(name, str):
+            return data
+        return {**data, 'host': host_of(name)}
+    return enrich
+
+
 class TooManyStreams(RuntimeError):
     """Raised by :meth:`EventBus.subscribe` when the cap is reached."""
 
@@ -118,6 +146,14 @@ class EventBus:
         # process is going away, and accepting work nobody will run would put
         # it in the undelivered report of a bus that had already reported.
         self._stopping = False
+        # What every payload is given before anyone sees it (set_enricher).
+        self._enrich = None
+
+    def set_enricher(self, enrich) -> None:
+        """Give every payload to *enrich(event, data)* before it is delivered,
+        and deliver what it returns. One place, so the event stream, the
+        notifications and the listeners all see the same payload."""
+        self._enrich = enrich
 
     @staticmethod
     def _resolve_bounded(env_name, default, low, high, cast=int):
@@ -287,9 +323,12 @@ class EventBus:
             event: Event type (e.g. certificate_created, certificate_renewed)
             data: Event payload
         """
+        data = data or {}
+        if self._enrich is not None:
+            data = self._enrich(event, data)
         message = {
             'event': event,
-            'data': data or {},
+            'data': data,
             'timestamp': time.time()
         }
 

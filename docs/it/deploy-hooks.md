@@ -1,6 +1,6 @@
 # Deploy Hook
 
-<!-- CERTMATE-TRANSLATED-FROM 95007682cfb3af23 -->
+<!-- CERTMATE-TRANSLATED-FROM d89c7cfe2cc501b9 -->
 
 Chiude [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -112,6 +112,7 @@ Ogni invocazione imposta queste variabili nell'ambiente del processo dell'hook:
 | Variabile | Valore di esempio |
 |---|---|
 | `CERTMATE_DOMAIN` | `api.example.com` |
+| `CERTMATE_HOST` | `api.example.com`, dove il certificato è servito: il suo indirizzo per un certificato IP, l'host indicato nei metadati per un certificato con un nome proprio, altrimenti il suo nome (`CERTMATE_DOMAIN` resta il nome; dalla versione 2.60 del contratto API) |
 | `CERTMATE_CERT_PATH` | `/app/certificates/api.example.com/cert.pem` |
 | `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` — **non impostata** per un [certificato solo CSR](../csr-only-certificates.md), la cui chiave resta sul dispositivo |
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
@@ -502,6 +503,7 @@ Se il payload nomina una variabile della chiave privata, il modulo mostra un riq
 | `{{privkey_pkcs8}}` | la chiave privata come PKCS#8 (`BEGIN PRIVATE KEY`) |
 | `{{privkey_traditional}}` | la chiave privata come PKCS#1 per RSA (`BEGIN RSA PRIVATE KEY`) o SEC1 per EC (`BEGIN EC PRIVATE KEY`). Un tipo di chiave che non ha una forma del genere, come Ed25519, viene rifiutato con un messaggio, non sostituito in silenzio |
 | `{{event}}`, `{{domain}}`, `{{timestamp}}`, `{{certificate_sha256}}` | l'evento, il nome del certificato, l'ora e lo SHA-256 del certificato foglia |
+| `{{host}}` | dove il certificato è servito, come `CERTMATE_HOST` (dalla versione 2.60 del contratto API); i suoi metadati sono letti solo se il modello lo nomina |
 
 Non esiste un `privkey` semplice: le due grafie rendono visibile la scelta, e un errore di battitura in un nome viene rifiutato al salvataggio invece di non inviare nulla in silenzio. Un nome che non è in questa tabella viene rifiutato.
 

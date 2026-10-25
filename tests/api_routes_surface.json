@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.59",
+ "contract_version": "2.60",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [

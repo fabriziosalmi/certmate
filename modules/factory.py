@@ -26,7 +26,7 @@ from modules.core.http_errors import error_code_for_status
 from modules.core.metrics import metrics_collector
 from modules.core.shell import ShellExecutor
 from modules.core.notifier import Notifier
-from modules.core.events import EventBus
+from modules.core.events import EventBus, with_certificate_host
 from modules.core.digest import WeeklyDigest
 from modules.core.acme_server import AcmeServer
 from modules.core.deployer import DeployManager
@@ -806,6 +806,9 @@ def initialize_managers(container: AppContainer, app):
     from .core.domain_registration import DomainRegistrationManager
     from .core.expiry_watch import ExpiryWatch
     cert_inventory = CertInventory(container.data_dir)
+    # Every event about a server certificate says where it is served (#854),
+    # in the one payload the stream, the notifications and the listeners share.
+    event_bus.set_enricher(with_certificate_host(certificate_manager.certificate_host))
     cert_discovery = CertDiscoveryManager(
         settings_manager, cert_inventory,
         held_sources=certificate_manager.held_certificate_sources,
