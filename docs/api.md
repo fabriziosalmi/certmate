@@ -143,8 +143,10 @@ An API key can carry `allowed_domains`, a list of exact names and
 **2.43**:
 
 - **A certificate** is the key's when its scope covers every name the
-  certificate covers: its own, the `san_domains` recorded with it, and the DNS
-  names in the certificate. Otherwise every certificate route answers
+  certificate covers: its host, the `san_domains` recorded with it, and the DNS
+  names in the certificate. The host is the certificate's name unless its
+  metadata names another (#854), and the address of an IP certificate, which no
+  scope can list. Otherwise every certificate route answers
   `403 DOMAIN_OUT_OF_SCOPE` and the list leaves it out. The same when the names
   cannot be read. Reissue answers `403` for a name outside the scope whether or
   not a certificate exists for it.
