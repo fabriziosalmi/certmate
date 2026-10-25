@@ -198,7 +198,7 @@ def test_the_names_a_scope_reads_start_with_the_host(tmp_path):
 
 def test_a_key_scoped_to_the_host_covers_the_certificate_and_one_scoped_to_the_name_does_not(tmp_path):
     manager = _held_certificate(tmp_path, {'host': HOST})
-    assert manager.every_name_matches(NAME, lambda name: name.endswith('example.com'))
+    assert manager.every_name_matches(NAME, lambda name: name == HOST)
     assert not manager.every_name_matches(NAME, lambda name: name == NAME)
 
 
