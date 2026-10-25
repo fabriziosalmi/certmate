@@ -12,6 +12,12 @@ PagerDuty, an ITSM endpoint, your own service.
 `certificate_revoked`, `certificate_failed`, `certificate_deployed`,
 `domain_expiring`, `deploy_hook_failed`, `certificate_deploy_incomplete`.
 
+Every event about a server certificate carries its name in `domain` and, since
+API contract 2.60, where it is served in `host` (`{{details.host}}` in a
+template): its address for an IP certificate, the host its metadata names for
+a certificate named apart from its domain, and its name otherwise.
+`certificate_revoked` is about a client certificate and carries no `host`.
+
 `certificate_renewed` also announces the [replacement of an external
 certificate](api.md#replace-an-external-certificate) by upload; its details then
 carry `replaced: true` and `external: true`.

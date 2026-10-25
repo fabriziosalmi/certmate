@@ -110,6 +110,7 @@ Every invocation sets these in the hook's process environment:
 | Variable | Example value |
 |---|---|
 | `CERTMATE_DOMAIN` | `api.example.com` |
+| `CERTMATE_HOST` | `api.example.com`, where the certificate is served: its address for an IP certificate, the host its metadata names for a certificate named apart from its domain, and its name otherwise (`CERTMATE_DOMAIN` stays the name; since API contract 2.60) |
 | `CERTMATE_CERT_PATH` | `/app/certificates/api.example.com/cert.pem` |
 | `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` — **not set** for a [CSR-only certificate](csr-only-certificates.md), whose key stays on the device |
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
@@ -577,6 +578,7 @@ string is inserted escaped, so a PEM (which has newlines) cannot break the JSON.
 | `{{privkey_pkcs8}}` | the private key as PKCS#8 (`BEGIN PRIVATE KEY`) |
 | `{{privkey_traditional}}` | the private key as PKCS#1 for RSA (`BEGIN RSA PRIVATE KEY`) or SEC1 for EC (`BEGIN EC PRIVATE KEY`). A key type with no such form, such as Ed25519, is refused with a message, not silently replaced |
 | `{{event}}`, `{{domain}}`, `{{timestamp}}`, `{{certificate_sha256}}` | the event, the certificate's name, the time, and the SHA-256 of the leaf certificate |
+| `{{host}}` | where the certificate is served, as `CERTMATE_HOST` (since API contract 2.60); its metadata is read only when the template names it |
 
 There is no bare `privkey`: the two spellings make the choice visible, and a
 typo in a name is refused when you save instead of silently sending nothing. A

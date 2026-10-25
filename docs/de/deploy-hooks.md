@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM 95007682cfb3af23 -->
+<!-- CERTMATE-TRANSLATED-FROM d89c7cfe2cc501b9 -->
 
 Schließt [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -112,6 +112,7 @@ Jeder Aufruf setzt diese Variablen in der Prozessumgebung des Hooks:
 | Variable | Beispielwert |
 |---|---|
 | `CERTMATE_DOMAIN` | `api.example.com` |
+| `CERTMATE_HOST` | `api.example.com`, wo das Zertifikat bereitgestellt wird: die Adresse bei einem IP-Zertifikat, der Host aus den Metadaten bei einem Zertifikat mit eigenem Namen, sonst sein Name (`CERTMATE_DOMAIN` bleibt der Name; seit API-Vertrag 2.60) |
 | `CERTMATE_CERT_PATH` | `/app/certificates/api.example.com/cert.pem` |
 | `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` — **nicht gesetzt** bei einem [CSR-only-Zertifikat](../csr-only-certificates.md), dessen Schlüssel auf dem Gerät bleibt |
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
@@ -579,6 +580,7 @@ Strings wird escaped eingefügt, sodass ein PEM (das Zeilenumbrüche enthält) d
 | `{{privkey_pkcs8}}` | der private Schlüssel als PKCS#8 (`BEGIN PRIVATE KEY`) |
 | `{{privkey_traditional}}` | der private Schlüssel als PKCS#1 für RSA (`BEGIN RSA PRIVATE KEY`) oder SEC1 für EC (`BEGIN EC PRIVATE KEY`). Ein Schlüsseltyp ohne eine solche Form, etwa Ed25519, wird mit einer Meldung abgelehnt, nicht stillschweigend ersetzt |
 | `{{event}}`, `{{domain}}`, `{{timestamp}}`, `{{certificate_sha256}}` | das Ereignis, der Name des Zertifikats, die Uhrzeit und der SHA-256 des Blattzertifikats |
+| `{{host}}` | wo das Zertifikat bereitgestellt wird, wie `CERTMATE_HOST` (seit API-Vertrag 2.60); seine Metadaten werden nur gelesen, wenn die Vorlage es nennt |
 
 Es gibt kein bloßes `privkey`: Die zwei Schreibweisen machen die Wahl sichtbar, und ein
 Tippfehler in einem Namen wird beim Speichern abgelehnt, statt stillschweigend nichts zu senden. Ein

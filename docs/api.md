@@ -2887,7 +2887,9 @@ waiting for the schedule.
 Server-Sent Events for certificate lifecycle events. This is the one endpoint
 on this page that a bearer token does **not** open: it requires a session
 cookie, because it is built for a browser tab. A machine client should poll the
-certificate endpoints or use a webhook.
+certificate endpoints or use a webhook. Since **2.60** every event about a server
+certificate carries `host` beside `domain`, as the
+[webhooks](webhooks.md#events) do.
 
 ### Cache
 

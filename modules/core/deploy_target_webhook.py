@@ -46,6 +46,7 @@ from cryptography.hazmat.primitives import serialization
 from . import pinned_https
 from .key_formats import KeyFormatError, private_key_pkcs8, private_key_traditional
 from .notifier import Notifier, WEBHOOK_AUTH_TYPES, render_payload_template
+from .utils import certificate_host
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ EVENTS = ('created', 'renewed', 'revoked', 'manual')
 RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 # The variables a template may use, and where each comes from.
-EVENT_VARIABLES = ('event', 'domain', 'timestamp', 'certificate_sha256')
+EVENT_VARIABLES = ('event', 'domain', 'host', 'timestamp', 'certificate_sha256')
 PUBLIC_MATERIAL = {'cert': 'cert.pem', 'fullchain': 'fullchain.pem', 'chain': 'chain.pem'}
 KEY_MATERIAL = {'privkey_pkcs8': private_key_pkcs8, 'privkey_traditional': private_key_traditional}
 ALLOWED_VARIABLES = frozenset(EVENT_VARIABLES) | frozenset(PUBLIC_MATERIAL) | frozenset(KEY_MATERIAL)
@@ -113,8 +114,18 @@ def _url_port(url):
         return 443
 
 
+def _metadata(material):
+    """The certificate's metadata.json, or {} when it cannot be read: where it
+    is served then falls back to its name (`certificate_host`)."""
+    try:
+        data = json.loads(material('metadata.json'))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def _example_variables(event='renewed', domain='example.com'):
-    variables = {'event': event, 'domain': domain, 'certificate_sha256': '0' * 64,
+    variables = {'event': event, 'domain': domain, 'host': domain, 'certificate_sha256': '0' * 64,
                  'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
     variables.update({name: EXAMPLE_CERT for name in PUBLIC_MATERIAL})
     variables.update({name: EXAMPLE_KEY for name in KEY_MATERIAL})
@@ -302,6 +313,9 @@ class WebhookTarget:
             fingerprint = hashlib.sha256(cert_pem).hexdigest()
         variables = {'event': event_type, 'domain': domain, 'certificate_sha256': fingerprint,
                      'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+        if 'host' in self._names():
+            # Read only when the template names it, like every file here.
+            variables['host'] = certificate_host(domain, _metadata(material))
         for name, filename in PUBLIC_MATERIAL.items():
             if name in self._names():
                 variables[name] = material(filename).decode('utf-8', 'replace')

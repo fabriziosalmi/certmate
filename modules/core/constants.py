@@ -727,6 +727,11 @@ METADATA_SCHEMA_VERSION = 1
 #                                   carry host, where the certificate is
 #                                   served: its address, the host its metadata
 #                                   names, or its domain (#854).
+#                                   2.60, MINOR: every event about a server
+#                                   certificate (the event stream, the
+#                                   notifications) carries host; deploy hooks
+#                                   get CERTMATE_HOST and webhook targets
+#                                   {{host}} (#854).
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -752,7 +757,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.59'
+API_CONTRACT_VERSION = '2.60'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

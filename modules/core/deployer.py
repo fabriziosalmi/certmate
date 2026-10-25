@@ -24,6 +24,7 @@ from .deploy_window import (
     next_open, normalize_window,
 )
 from .domain_paths import certificate_dir
+from .inventory_sources import certificate_names
 
 logger = logging.getLogger(__name__)
 
@@ -835,6 +836,10 @@ class DeployManager:
 
         deploy_env = os.environ.copy()
         deploy_env['CERTMATE_DOMAIN'] = domain
+        # Where the certificate is served (#854): its address for an IP
+        # certificate, the host its metadata names, its name otherwise.
+        # CERTMATE_DOMAIN stays the name, so a hook written for it is unchanged.
+        deploy_env['CERTMATE_HOST'] = certificate_names(self.cert_dir, domain)[0]
         deploy_env['CERTMATE_CERT_PATH'] = str(certificate_dir(self.cert_dir, domain) / 'cert.pem')
         # A CSR-only certificate has no private key here — the device that
         # generated it kept it (#599). The variable is left UNSET rather than
