@@ -140,8 +140,7 @@ def test_domain_health_leaves_an_ip_certificate_out(tmp_path):
     tracked = health.tracked_names(config={'include_inventory': False, 'extra_domains': []},
                                    settings={'domains': SETTINGS['domains'][:2]})
 
-    assert NAME not in tracked
-    assert 'shop.example.com' in tracked
+    assert tracked == {'example.com': True, 'shop.example.com': False}
 
 
 # --------------------------------------------------------------------------- #
