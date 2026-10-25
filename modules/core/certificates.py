@@ -2257,7 +2257,8 @@ class CertificateManager:
         The host is where it is served (`utils.certificate_host`): *domain*
         itself unless its metadata names another host (#854), or the address of
         an IP certificate. The name is not among the names: it identifies the
-        certificate, and no request serves it, so a scope check never judges it.
+        certificate, and no request serves it. A scope check judges it apart
+        (`every_name_matches`), and a name conflict never does.
 
         A certificate is one object however many names it carries: its key
         serves all of them, so a scope check on a certificate is a check on
@@ -2323,12 +2324,19 @@ class CertificateManager:
         return ordered
 
     def every_name_matches(self, domain, matches):
-        """True when *matches* accepts every name the certificate covers.
+        """True when *matches* accepts every name the certificate covers, and
+        the name it is filed under.
 
         False when one is refused, and False when the names cannot be read
         (`CertificateNamesUnknown`): a scope that cannot be confirmed is not
         granted. The one form every scope check uses, so they cannot differ
         on that case.
+
+        The name is judged with the names it covers (#1149): every route
+        addresses the certificate by it and judges it, and deploy hooks set for
+        a domain answer to it, so a filter that read only the names covered
+        would give a key a certificate named apart that its routes refuse. For
+        a certificate served at its name, the name is its host.
         """
         try:
             names = self.names_covered(domain)
@@ -2336,7 +2344,7 @@ class CertificateManager:
             logger.warning("The names of the certificate for %s could not be read; "
                            "a scoped request for it is refused", scrub_log_value(domain))
             return False
-        return all(matches(name) for name in names)
+        return matches(domain) and all(matches(name) for name in names)
 
     @staticmethod
     def _holds_certificate_material(domain, directory):
@@ -3461,7 +3469,7 @@ class CertificateManager:
             return ''
         return f"\n\n{sentence}" if sentence else ''
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False, acme_profile=None, imported_renewal_force=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None, *, renewal=False, acme_profile=None, imported_renewal_force=None, host=None):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -3512,6 +3520,10 @@ class CertificateManager:
                 None keeps ordinary issuance behavior, including renewal=True.
                 False resolves import metadata under the lock and checks the due date;
                 True does the same but bypasses the due-date gate.
+            host: Keyword-only; for a new certificate named apart from its
+                domain (#1149), the domain it is for: the CA is asked for it,
+                ``domain`` is the name, and the metadata records it as
+                ``host``. A reissue or renewal reads it from the metadata.
             replace: Reissue over the existing certbot lineage (#267). The
                 same ``--cert-name`` with a different ``-d`` set makes
                 certbot replace the lineage's domain set (expand AND
@@ -3619,7 +3631,7 @@ class CertificateManager:
             # A reissue or a renewal asks the CA for where the certificate is
             # served (#854): its address, or the host its metadata names. A new
             # certificate has no metadata yet, and is asked for as requested.
-            host = ip_identifier or (self.certificate_host(domain) if replace else domain)
+            host = ip_identifier or (self.certificate_host(domain) if replace else (host or domain))
             prepared = self._prepare_issuance(
                 domain=domain, email=email, dns_provider=dns_provider,
                 dns_config=dns_config, account_id=account_id, staging=staging,
@@ -3826,6 +3838,10 @@ class CertificateManager:
             if domain_alias:
                 metadata['domain_alias'] = domain_alias
                 metadata['alias_dns_provider'] = alias_dns_provider or dns_provider
+            if host != certificate_host(domain):
+                # Named apart from its domain (#1149): where it is served, which
+                # every later reader asks of its metadata.
+                metadata['host'] = host
             
             # External storage is the disaster-recovery copy: if the local
             # cert_dir is on ephemeral storage and is lost, the cert is only
