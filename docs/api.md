@@ -298,6 +298,7 @@ rather than written by hand:
   "acme_profile": null,
   "acme_profile_withdrawn_at": null,
   "ip_address": null,
+  "host": "app.example.com",
   "auto_renew": true
 }
 ```
@@ -1690,6 +1691,7 @@ account, default CA, default key type). Every field is in the
   "message": "Certificate created successfully for app.example.com",
   "domain": "app.example.com",
   "ip_address": null,
+  "host": "app.example.com",
   "dns_provider": "cloudflare",
   "ca_provider": "letsencrypt",
   "duration": 41.2
@@ -1698,7 +1700,11 @@ account, default CA, default key type). Every field is in the
 
 `domain` is the certificate's name, which every later request takes: the domain
 as CertMate normalised it, or `ip-<address with dashes>` for an IP address,
-with the address in `ip_address` (`null` for a domain). Since **2.57**.
+with the address in `ip_address` (`null` for a domain). Since **2.57**. `host`
+is where the certificate is served, in this answer and in every certificate
+answer and a create job's result: its address for an IP certificate, the host
+its metadata names for a certificate named apart from its domain (#854), and
+its domain otherwise. Always present, since **2.59**.
 
 With `async`, **202 Accepted** at once, and the job to poll with
 `GET /api/certificates/jobs/<job_id>`:
@@ -1839,7 +1845,8 @@ asynchronous job carry, and the name every route about the certificate takes:
 `GET /api/certificates/ip-a-b-c-d`, `.../download`, `.../renew`,
 `.../reissue`, `DELETE`. No domain can have that name, since a domain has a
 dot. Every certificate answer carries `ip_address`: the address for an IP
-certificate, `null` for a domain.
+certificate, `null` for a domain; and `host`, which for an IP certificate is
+the address too (since **2.59**).
 
 The certificate is registered like any other, and the renewal sweep renews it
 like any other: with the default threshold, about 3 days before it expires

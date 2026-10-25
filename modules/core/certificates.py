@@ -2836,6 +2836,9 @@ class CertificateManager:
                 # The address an IP certificate is for (#1130), read off its
                 # name; null for a domain certificate.
                 'ip_address': ip_for_cert_name(domain),
+                # Where it is served (#854): its address, the host its metadata
+                # names, or its name.
+                'host': certificate_host(domain, metadata),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -2884,6 +2887,7 @@ class CertificateManager:
             'acme_profile': metadata.get('acme_profile'),
             'acme_profile_withdrawn_at': metadata.get('acme_profile_withdrawn_at'),
             'ip_address': ip_for_cert_name(domain),
+            'host': certificate_host(domain, metadata),
         }
 
     def _create_empty_cert_info(self, domain):
@@ -2907,6 +2911,9 @@ class CertificateManager:
             'dns_provider': dns_provider,
             # An IP certificate being issued is listed by its address too.
             'ip_address': ip_for_cert_name(domain),
+            # Read off the name, like the rest of this branch, which touches
+            # no file: there is no certificate, and so no metadata, yet.
+            'host': certificate_host(domain),
         }
 
     def _quarantine_broken_lineage(self, cert_output_dir, domain):
@@ -3855,6 +3862,7 @@ class CertificateManager:
                 'staging': staging,
                 'ca_provider': ca_provider,
                 'ip_address': ip_identifier,
+                'host': host,
             }
             if storage_warning:
                 result['storage_warning'] = storage_warning

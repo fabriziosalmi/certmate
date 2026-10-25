@@ -1444,6 +1444,8 @@
                 // Details
                 '<dl class="divide-y divide-border">' +
                 (cert.ip_address ? detailRow('IP address', '<span class="font-mono break-all">' + escapeHtml(cert.ip_address) + '</span>') : '') +
+                // A certificate named apart from the host it is served at (#854).
+                (cert.host && cert.host !== cert.domain && !cert.ip_address ? detailRow('Host', '<span class="font-mono break-all">' + escapeHtml(cert.host) + '</span>') : '') +
                 (providerLabel ? detailRow('DNS Provider', providerCell) : '') +
                 // Always rendered, unlike the row above it. The panel is where
                 // an operator goes to ask "what is this certificate", and
@@ -1924,11 +1926,12 @@
         });
     }
 
-    // Where the certificate named `domain` is served: the address of an IP
-    // certificate, whose name is ip-<dashed>, and the name of any other.
+    // Where the certificate named `domain` is served: `host` since API
+    // contract 2.59 (#854), the address of an IP certificate before it, and
+    // the name otherwise.
     function servedHost(domain) {
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
-        return (cert && cert.ip_address) || domain;
+        return (cert && (cert.host || cert.ip_address)) || domain;
     }
 
     // Browser-based certificate check fallback, at `host`: where the server
