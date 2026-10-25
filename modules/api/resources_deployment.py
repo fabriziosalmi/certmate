@@ -11,7 +11,7 @@ from flask import current_app, request
 from flask_restx import Resource
 
 from ..core.audit_context import audit_context_from_request
-from ..core.utils import utc_now_iso
+from ..core.utils import certificate_host, utc_now_iso
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import ApiContext, check_certificate_scope
 from .tls_probe import (
@@ -139,9 +139,12 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                 return result, 200
 
             # Probe target: an explicit deployment_host wins for any cert;
-            # otherwise a non-wildcard probes itself. (A wildcard without a
-            # deployment_host is handled above and never reaches here.)
-            effective_host = deploy_host or domain
+            # otherwise a non-wildcard probes where it is served, which is its
+            # address for an IP certificate and its name for every other. (A
+            # wildcard without a deployment_host is handled above and never
+            # reaches here.)
+            served_at = certificate_host(domain)
+            effective_host = deploy_host or served_at
             result['probe_host'] = effective_host
 
             try:
@@ -149,7 +152,7 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                     domain,
                     port=int(deploy_port) if deploy_port else 0,
                     protocol=deploy_protocol,
-                    probe_host=deploy_host or None,
+                    probe_host=deploy_host or (served_at if served_at != domain else None),
                 )
                 result['reachable'] = True
                 result['deployed'] = True

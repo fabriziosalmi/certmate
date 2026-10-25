@@ -29,7 +29,7 @@ from .domain_entries import entry_domain
 
 from .cert_probe import probe_certificate, STATUS_OK
 from .request_fields import json_list
-from .utils import exclusive_run
+from .utils import certificate_host, exclusive_run
 
 logger = logging.getLogger(__name__)
 
@@ -202,9 +202,10 @@ def _managed_domain_map(settings):
     """Map probe-able managed domain host -> domain name from settings.
 
     Skips wildcard domains (``*.example.com`` has no probe-able host of its
-    own) and malformed entries. Both keys and values are the domain name, so a
-    managed domain probed during a sweep is recorded as managed and linked back
-    to its managed entry.
+    own) and malformed entries. The key is where the certificate is served
+    (`certificate_host`: the address of an IP certificate, the name of any
+    other) and the value its name, so a managed domain probed during a sweep
+    is recorded as managed and linked back to its managed entry.
     """
     mapping = {}
     for entry in settings.get('domains', []) or []:
@@ -213,7 +214,7 @@ def _managed_domain_map(settings):
             continue
         if name.startswith('*.'):
             continue
-        mapping[name] = name
+        mapping[certificate_host(name)] = name
     return mapping
 
 

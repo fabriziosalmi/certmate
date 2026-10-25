@@ -43,6 +43,8 @@ without deleting and recreating the probe.
 
 When the backend probe reports the server as unreachable **and** the protocol is `HTTPS/TLS`, a browser-side fallback is triggered via `fetch(..., { mode: 'no-cors' })`. This can verify reachability even when the backend cannot connect (e.g. network segmentation).
 
+It fetches the host the backend probed (`probe_host`): the `deployment_host` when one is set, the address of an IP certificate, and the certificate's name otherwise. When the backend does not answer at all, it fetches where the certificate is served: its address for an IP certificate, its name otherwise.
+
 For `TLS` and `SMTP STARTTLS` protocols, the browser fallback is **skipped** because browsers cannot perform raw TLS or SMTP connections. The browser status shows "Not Checked".
 
 ### Cache

@@ -1867,7 +1867,7 @@
                 return response.json().then(function (result) {
                     if (result && result.reachable === false) {
                         if (!result.protocol || result.protocol === 'https-tls') {
-                            return checkDeploymentViaBrowser(domain, result.port).then(function (browserResult) {
+                            return checkDeploymentViaBrowser(result.probe_host || servedHost(domain), result.port).then(function (browserResult) {
                                 if (browserResult) {
                                     queueBrowserDeploymentReport(domain, browserResult);
                                     result.browser = browserResult;
@@ -1886,7 +1886,7 @@
             throw new Error('API failed');
         }).catch(function (apiError) {
             // Fallback to browser-based certificate check
-            return checkDeploymentViaBrowser(domain, null).then(function (result) {
+            return checkDeploymentViaBrowser(servedHost(domain), null).then(function (result) {
                 if (!result) {
                     result = {
                         deployed: false,
@@ -1924,12 +1924,20 @@
         });
     }
 
-    // Browser-based certificate check fallback
-    function checkDeploymentViaBrowser(domain, port) {
+    // Where the certificate named `domain` is served: the address of an IP
+    // certificate, whose name is ip-<dashed>, and the name of any other.
+    function servedHost(domain) {
+        var cert = allCertificates.find(function (c) { return c.domain === domain; });
+        return (cert && cert.ip_address) || domain;
+    }
+
+    // Browser-based certificate check fallback, at `host`: where the server
+    // probed when it answered, where the certificate is served otherwise.
+    function checkDeploymentViaBrowser(host, port) {
         var controller = new AbortController();
         var timeoutId = setTimeout(function () { controller.abort(); }, 10000);
 
-        var url = port ? 'https://' + domain + ':' + port : 'https://' + domain;
+        var url = port ? 'https://' + host + ':' + port : 'https://' + host;
 
         return fetch(url, {
             method: 'HEAD',
