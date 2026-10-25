@@ -91,7 +91,11 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
             if isinstance(deploy_host, str):
                 deploy_host = deploy_host.strip() or None
 
-            is_wildcard = domain.startswith('*.')
+            # Where the certificate is served: its host, which is its name
+            # unless its metadata says otherwise or it is an IP certificate
+            # (#854). An explicit deployment_host still wins below.
+            served_at = certificate_host(domain, metadata)
+            is_wildcard = served_at.startswith('*.')
 
             result = {
                 'domain': domain,
@@ -120,10 +124,10 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                 # instead of a red mismatch — and tell the operator how to fix
                 # it. certificate_match stays False but the UI keys off
                 # probe_status to render a neutral "not verifiable" chip.
-                apex = domain[2:]
+                apex = served_at[2:]
                 result['probe_status'] = 'unverifiable'
                 result['mismatch_reason'] = (
-                    f"Wildcard certificate {domain} cannot be verified "
+                    f"Wildcard certificate {served_at} cannot be verified "
                     f"automatically: a wildcard does not cover its apex "
                     f"({apex}), so probing {apex} would compare against the "
                     f"wrong host. Set the probe host to a name this wildcard "
@@ -139,11 +143,9 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                 return result, 200
 
             # Probe target: an explicit deployment_host wins for any cert;
-            # otherwise a non-wildcard probes where it is served, which is its
-            # address for an IP certificate and its name for every other. (A
-            # wildcard without a deployment_host is handled above and never
-            # reaches here.)
-            served_at = certificate_host(domain)
+            # otherwise a non-wildcard probes where it is served. (A wildcard
+            # without a deployment_host is handled above and never reaches
+            # here.)
             effective_host = deploy_host or served_at
             result['probe_host'] = effective_host
 

@@ -198,23 +198,26 @@ def discover_endpoints(
     return results
 
 
-def _managed_domain_map(settings):
+def _managed_domain_map(settings, host_of=certificate_host):
     """Map probe-able managed domain host -> domain name from settings.
 
-    Skips wildcard domains (``*.example.com`` has no probe-able host of its
-    own) and malformed entries. The key is where the certificate is served
-    (`certificate_host`: the address of an IP certificate, the name of any
-    other) and the value its name, so a managed domain probed during a sweep
-    is recorded as managed and linked back to its managed entry.
+    Skips a certificate served at a wildcard (``*.example.com`` has no
+    probe-able host of its own) and malformed entries. The key is where the
+    certificate is served, as *host_of* answers for its name
+    (`CertificateManager.certificate_host` in the application, which reads the
+    metadata; `utils.certificate_host` without it), and the value its name, so
+    a managed domain probed during a sweep is recorded as managed and linked
+    back to its managed entry.
     """
     mapping = {}
     for entry in settings.get('domains', []) or []:
         name = entry_domain(entry)
         if not name:
             continue
-        if name.startswith('*.'):
+        host = host_of(name)
+        if host.startswith('*.'):
             continue
-        mapping[certificate_host(name)] = name
+        mapping[host] = name
     return mapping
 
 
@@ -229,7 +232,7 @@ class CertDiscoveryManager:
     """
 
     def __init__(self, settings_manager, inventory, probe=probe_certificate,
-                 held_sources=None):
+                 held_sources=None, host_of=certificate_host):
         self.settings_manager = settings_manager
         self.inventory = inventory
         self._probe = probe
@@ -237,6 +240,8 @@ class CertDiscoveryManager:
         # fingerprint (`CertificateManager.held_certificate_sources`). Asked
         # once per sweep; without it nothing is recorded as issued.
         self._held_sources = held_sources
+        # Where a certificate is served, by name (`_managed_domain_map`).
+        self._host_of = host_of
         # One sweep at a time. The scheduler job holds a cross-PROCESS file
         # lock (factory._renewal_process_lock), which the Scan endpoint does
         # not go through at all: two clicks, or a click during a scheduled
@@ -331,7 +336,7 @@ class CertDiscoveryManager:
         endpoints = list(config.get('endpoints') or [])
         managed_map = {}
         if config.get('include_managed', True):
-            managed_map = _managed_domain_map(settings)
+            managed_map = _managed_domain_map(settings, self._host_of)
             for host in managed_map:
                 if host not in endpoints:
                     endpoints.append(host)

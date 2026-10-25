@@ -808,8 +808,10 @@ def initialize_managers(container: AppContainer, app):
     cert_inventory = CertInventory(container.data_dir)
     cert_discovery = CertDiscoveryManager(
         settings_manager, cert_inventory,
-        held_sources=certificate_manager.held_certificate_sources)
-    ct_monitor = CTMonitorManager(settings_manager, cert_inventory)
+        held_sources=certificate_manager.held_certificate_sources,
+        host_of=certificate_manager.certificate_host)
+    ct_monitor = CTMonitorManager(settings_manager, cert_inventory,
+                                  host_of=certificate_manager.certificate_host)
     # Registration expiry of every tracked domain (RDAP, WHOIS where a TLD has
     # no RDAP). Opt-in, like the rest of discovery.
     domain_registration = DomainRegistrationManager(

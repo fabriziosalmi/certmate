@@ -43,7 +43,6 @@ the parsing is exercised against real answers rather than live DNS.
 """
 
 import ipaddress
-import json
 import logging
 import re
 import threading
@@ -51,9 +50,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .domain_paths import certificate_dir
 from .request_fields import json_list
-from .utils import exclusive_run, ip_for_cert_name
+from .utils import exclusive_run, is_ip_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -871,19 +869,20 @@ class DomainHealthManager:
         every check in one row.
         """
         from .domain_registration import registrable_domain
-        from .inventory_sources import collect_domain_sources
+        from .inventory_sources import certificate_names, collect_domain_sources
 
         settings = settings if settings is not None else (self.settings_manager.load_settings() or {})
         config = config or self.get_config()
         hosts = set()
-        for domain in collect_domain_sources(settings, self.cert_dir):
-            if ip_for_cert_name(domain):
-                # An IP certificate (ip-<dashed>) is for an address, and no
-                # check here is about one: HSTS is ignored for an IP literal
-                # (RFC 6797 section 8.1), and the rest are about names.
+        for name in collect_domain_sources(settings, self.cert_dir):
+            host, others = certificate_names(self.cert_dir, name)
+            if is_ip_identifier(host):
+                # A certificate served at an address (an IP certificate) is
+                # left out: no check here is about one. HSTS is ignored for an
+                # IP literal (RFC 6797 section 8.1), and the rest are about names.
                 continue
-            hosts.add(domain)
-            hosts.update(self._metadata_sans(domain))
+            hosts.add(host)
+            hosts.update(others)
         if config.get('include_inventory', True):
             for record in self.inventory.list_all():
                 if record.get('subject_cn'):
@@ -903,15 +902,6 @@ class DomainHealthManager:
             if registrable:
                 tracked[registrable] = True
         return dict(sorted(tracked.items()))
-
-    def _metadata_sans(self, domain):
-        path = certificate_dir(self.cert_dir, domain) / 'metadata.json'
-        try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            return []
-        sans = data.get('san_domains') if isinstance(data, dict) else None
-        return [s for s in sans if isinstance(s, str)] if isinstance(sans, list) else []
 
     def check_one(self, name, is_registrable, config, rbl_cache=None,
                   tls_capability=None):
