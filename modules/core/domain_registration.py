@@ -47,7 +47,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from .domain_paths import certificate_dir
 from .request_fields import json_list
 from .utils import exclusive_run, utc_now_iso
 
@@ -591,14 +590,15 @@ class DomainRegistrationManager:
 
     def tracked_domains(self, config=None, settings=None):
         """Every registrable domain to follow, sorted."""
-        from .inventory_sources import collect_domain_sources
+        from .inventory_sources import certificate_names, collect_domain_sources
 
         settings = settings if settings is not None else (self.settings_manager.load_settings() or {})
         config = config or self.get_config()
         names = set()
-        for domain in collect_domain_sources(settings, self.cert_dir):
-            names.add(domain)
-            names.update(self._metadata_sans(domain))
+        for name in collect_domain_sources(settings, self.cert_dir):
+            host, others = certificate_names(self.cert_dir, name)
+            names.add(host)
+            names.update(others)
         if config.get('include_inventory', True):
             for record in self.inventory.list_all():
                 if record.get('subject_cn'):
@@ -606,15 +606,6 @@ class DomainRegistrationManager:
                 names.update(record.get('san_dns') or [])
         names.update(config.get('extra_domains') or [])
         return sorted({r for r in (registrable_domain(n) for n in names) if r})
-
-    def _metadata_sans(self, domain):
-        path = certificate_dir(self.cert_dir, domain) / 'metadata.json'
-        try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            return []
-        sans = data.get('san_domains') if isinstance(data, dict) else None
-        return [s for s in sans if isinstance(s, str)] if isinstance(sans, list) else []
 
     def run_check(self, *, force=False, max_lookups=MAX_LOOKUPS_PER_RUN):
         """Look up every tracked domain that is due.

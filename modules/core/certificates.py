@@ -60,6 +60,7 @@ from .utils import (
     repair_certbot_lineage_symlinks,
     repair_certbot_renewal_paths,
     is_ip_identifier, validate_ip_identifier, cert_name_for_ip, ip_for_cert_name,
+    certificate_host,
 )
 
 logger = logging.getLogger(__name__)
@@ -1318,6 +1319,17 @@ class CertificateManager:
             return x509.load_pem_x509_certificate((directory / 'cert.pem').read_bytes())
         except (OSError, ValueError):
             return None
+
+    def certificate_host(self, name):
+        """Where the certificate named *name* is served (`utils.certificate_host`),
+        with its metadata read. Metadata that cannot be read, or a name that
+        cannot name a directory (`_metadata_path` refuses it), leaves the name,
+        or an IP certificate's address."""
+        try:
+            metadata = self._load_metadata(name)
+        except (OSError, ValueError):
+            metadata = {}
+        return certificate_host(name, metadata)
 
     def held_certificate_sources(self):
         """Every certificate CertMate holds, by SHA-256 fingerprint: 'issued' or 'imported'.

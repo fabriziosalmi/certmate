@@ -20,10 +20,13 @@ looking exactly like a domain present in all of them.
 a caller can say "registered but absent from disk" without recomputing, and so
 the reconciliation this issue asks for has something to reconcile.
 """
+import json
 from dataclasses import dataclass
 
 from .constants import iter_cert_domain_dirs
 from .domain_entries import iter_domains
+from .domain_paths import certificate_file
+from .utils import certificate_host
 
 
 @dataclass(frozen=True)
@@ -104,3 +107,22 @@ def auto_renew_for(settings, domain):
         if name == domain:
             return auto_renew
     return True
+
+
+def certificate_names(cert_dir, name):
+    """Where the certificate named *name* is served, and its other names:
+    ``(host, san_domains)``, from its ``metadata.json``.
+
+    The host is `utils.certificate_host`'s answer. Metadata that cannot be
+    read gives the name (or an IP certificate's address) and no other names,
+    so a damaged record narrows what a sweep checks rather than stopping it.
+    """
+    try:
+        data = json.loads(certificate_file(cert_dir, name, 'metadata.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    sans = data.get('san_domains')
+    others = [s for s in sans if isinstance(s, str)] if isinstance(sans, list) else []
+    return certificate_host(name, data), others

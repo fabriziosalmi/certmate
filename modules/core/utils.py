@@ -340,15 +340,28 @@ def ip_for_cert_name(name: str) -> str | None:
         return None
 
 
-def certificate_host(name: str) -> str:
+def certificate_host(name: str, metadata: Any = None) -> str:
     """Where the certificate named *name* is served: what to connect to, probe
     or look up for it.
 
-    A certificate's name is its domain for every certificate but one kind: an
-    IP certificate is named ``ip-<dashed>`` and is served at the address. Every
-    place that goes looking for a certificate asks this rather than using the
-    name as a host, which found a host called ``ip-203-0-113-5`` (#854).
+    A certificate's name identifies it (its directory, its settings entry, the
+    routes about it) and is its host unless something says otherwise (#854).
+    Two things do: its *metadata* (``metadata.json``) carrying ``host``, for a
+    certificate named apart from its domain, and the name of an IP
+    certificate, ``ip-<dashed>``, which is served at the address. Every place
+    that goes looking for a certificate asks this rather than using the name
+    as a host, which found a host called ``ip-203-0-113-5``.
+
+    A ``host`` that is not a host name is not used, and the name stands, as it
+    would with no metadata.
     """
+    host = metadata.get('host') if isinstance(metadata, dict) else None
+    if isinstance(host, str):
+        # Imported here, not at the top: this module has no intra-package
+        # imports at module level (see the note under its imports).
+        from .domain_paths import DOMAIN_RE
+        if DOMAIN_RE.match(host):
+            return host
     return ip_for_cert_name(name) or name
 
 

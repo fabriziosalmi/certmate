@@ -238,12 +238,14 @@ def _poll_with(ingest_result, cap=5, entries=500):
     yet.
     """
     from modules.core.ct_monitor import CTMonitorManager
+    from modules.core.utils import certificate_host
 
     manager = CTMonitorManager.__new__(CTMonitorManager)
     # __new__ skips __init__, so every attribute the poll reads has to be set
     # here — including the lock that stops two polls overlapping. Without it
     # this raises AttributeError before the cap is ever exercised.
     manager._poll_lock = threading.Lock()
+    manager._host_of = certificate_host
     manager.inventory = MagicMock()
     manager.inventory.find_by_serial.return_value = None
     manager.settings_manager = MagicMock()

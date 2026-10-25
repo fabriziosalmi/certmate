@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 
 from .cert_probe import parse_certificate
 from .request_fields import json_list, json_number
-from .utils import exclusive_run, ip_for_cert_name
+from .utils import certificate_host, exclusive_run, is_ip_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -145,29 +145,35 @@ def _is_currently_valid(entry, now):
     return parsed >= now
 
 
-def _managed_domains(settings):
-    """Non-wildcard managed domain names from settings['domains'].
+def _managed_domains(settings, host_of=certificate_host):
+    """The hosts of the managed certificates in settings['domains'], as
+    *host_of* answers for each name, leaving out a wildcard.
 
-    An IP certificate is left out. Its name (``ip-<dashed>``) is no name crt.sh
-    knows, and crt.sh answers a query for the address with every certificate
-    whose names contain its digits (``*.1.1.1.1.nip.io`` for ``1.1.1.1``),
-    which would fill the inventory with certificates for other names.
+    A certificate served at an address (an IP certificate) is left out:
+    crt.sh answers a query for an address with every certificate whose names
+    contain its digits (``*.1.1.1.1.nip.io`` for ``1.1.1.1``), which would
+    fill the inventory with certificates for other names.
     """
     out = []
     for entry in settings.get('domains', []) or []:
         name = entry_domain(entry)
-        if name and not name.startswith('*.') and not ip_for_cert_name(name):
-            out.append(name)
+        if not name:
+            continue
+        host = host_of(name)
+        if not host.startswith('*.') and not is_ip_identifier(host):
+            out.append(host)
     return out
 
 
 class CTMonitorManager:
     """Settings-backed CT-log polling that feeds the inventory."""
 
-    def __init__(self, settings_manager, inventory, client=None):
+    def __init__(self, settings_manager, inventory, client=None, host_of=certificate_host):
         self.settings_manager = settings_manager
         self.inventory = inventory
         self._client = client  # lazily built from config on first poll if None
+        # Where a certificate is served, by name (`_managed_domains`).
+        self._host_of = host_of
         # One poll at a time. crt.sh is a shared, rate-limited service and the
         # client's `min_request_interval` paces ONE caller: two polls running
         # side by side halve the interval it thinks it is honouring. The Scan
@@ -241,7 +247,7 @@ class CTMonitorManager:
 
         domains = list(dict.fromkeys(
             [d.strip().lower() for d in (config.get('domains') or []) if d.strip()]
-            + (_managed_domains(settings) if config.get('include_managed', True) else [])
+            + (_managed_domains(settings, self._host_of) if config.get('include_managed', True) else [])
         ))
         if not domains:
             logger.info("CT-log monitoring: no domains configured; nothing to do.")
