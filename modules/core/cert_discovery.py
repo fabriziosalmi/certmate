@@ -11,6 +11,12 @@ and "what is actually being served" can be compared — catching, for example, a
 renewed certificate that was never deployed (the served fingerprint differs from
 the newest issued one).
 
+Where a served certificate came from (its ``source``) is decided by its
+fingerprint, against the certificates CertMate holds: ``issued`` or
+``imported`` for one of those, ``probed`` for any other. The host decides only
+whether it is ``managed``: served at a managed domain's host, it belongs to a
+domain CertMate manages, whoever issued it.
+
 The sweep is **failure-isolated**: the probe never raises, and each endpoint is
 additionally wrapped so one bad target can never abort the run or block any
 certificate operation. Every endpoint yields a per-endpoint status record.
@@ -108,14 +114,20 @@ def discover_endpoints(
     probe=probe_certificate,
     observed_at=None,
     check_revocation=False,
+    held_sources=None,
 ):
     """Probe each endpoint and upsert results into *inventory*.
 
     *endpoints* is an iterable of specs (``host`` / ``host:port`` / bracketed
     IPv6). *managed_domains* optionally maps a host (case-insensitive) to the
     managed-domain name CertMate issues for; a match records the observation as
-    ``source='issued'``, ``managed=True`` and links the managed domain, so a
-    served-vs-issued comparison is possible. With *check_revocation* each
+    ``managed=True`` and links the managed domain, so a served-vs-issued
+    comparison is possible. *held_sources* maps the fingerprint of each
+    certificate CertMate holds to ``'issued'`` or ``'imported'``
+    (`CertificateManager.held_certificate_sources`), and is what decides the
+    source: a served certificate that is not in it is ``'probed'``, on a
+    managed host too, so a certificate CertMate never issued is never recorded
+    as issued. Without it, everything is ``'probed'``. With *check_revocation* each
     probe also asks OCSP/CRL whether the served certificate is revoked, and the
     answer is stored with the inventory record.
 
@@ -126,6 +138,7 @@ def discover_endpoints(
     error is captured as a status, so a scheduled sweep always completes.
     """
     managed = {h.lower(): d for h, d in (managed_domains or {}).items()}
+    held = held_sources or {}
     results = []
 
     for spec in endpoints:
@@ -163,10 +176,11 @@ def discover_endpoints(
         if probe_result.get('status') == STATUS_OK:
             # The inventory write is inside the isolation boundary: a storage
             # error for one endpoint must not abort the whole sweep.
+            served = (probe_result.get('certificate') or {}).get('fingerprint_sha256')
             try:
                 fingerprint = inventory.record_probe_result(
                     probe_result,
-                    source='issued' if is_managed else 'probed',
+                    source=held.get(served, 'probed'),
                     managed=is_managed,
                     managed_domain=managed_domain,
                     observed_at=observed_at,
@@ -189,8 +203,8 @@ def _managed_domain_map(settings):
 
     Skips wildcard domains (``*.example.com`` has no probe-able host of its
     own) and malformed entries. Both keys and values are the domain name, so a
-    managed domain probed during a sweep is recorded as issued+managed and
-    linked back to its managed entry.
+    managed domain probed during a sweep is recorded as managed and linked back
+    to its managed entry.
     """
     mapping = {}
     for entry in settings.get('domains', []) or []:
@@ -213,10 +227,15 @@ class CertDiscoveryManager:
     run as a background scheduler job: :meth:`run_discovery` never raises.
     """
 
-    def __init__(self, settings_manager, inventory, probe=probe_certificate):
+    def __init__(self, settings_manager, inventory, probe=probe_certificate,
+                 held_sources=None):
         self.settings_manager = settings_manager
         self.inventory = inventory
         self._probe = probe
+        # A callable answering which certificates CertMate holds, by
+        # fingerprint (`CertificateManager.held_certificate_sources`). Asked
+        # once per sweep; without it nothing is recorded as issued.
+        self._held_sources = held_sources
         # One sweep at a time. The scheduler job holds a cross-PROCESS file
         # lock (factory._renewal_process_lock), which the Scan endpoint does
         # not go through at all: two clicks, or a click during a scheduled
@@ -281,6 +300,23 @@ class CertDiscoveryManager:
                              label='Certificate discovery sweep',
                              extra={'results': []})
 
+    def _certificates_held(self):
+        """What CertMate holds, by fingerprint, or nothing when it cannot be read.
+
+        A sweep that cannot read it still runs: it records what it finds as
+        probed, which is true of a certificate it cannot place, rather than
+        calling anything issued.
+        """
+        if self._held_sources is None:
+            return {}
+        try:
+            return dict(self._held_sources())
+        except (OSError, ValueError) as e:
+            logger.warning(
+                "Certificate discovery: could not read the certificates CertMate "
+                "holds (%s); this sweep records every served certificate as probed.", e)
+            return {}
+
     def _sweep(self):
         """One sweep, with the caller holding :attr:`_sweep_lock`."""
         settings = self.settings_manager.load_settings()
@@ -309,6 +345,7 @@ class CertDiscoveryManager:
             managed_domains=managed_map,
             probe=self._probe,
             check_revocation=bool(config.get('check_revocation', True)),
+            held_sources=self._certificates_held(),
         )
         ok = sum(1 for r in results if r['status'] == STATUS_OK)
         logger.info(
