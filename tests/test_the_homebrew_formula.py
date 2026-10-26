@@ -71,3 +71,16 @@ def test_the_release_job_installs_before_it_pushes():
     assert names.index('Install and test it before pushing') < names.index('Push the bump')
     tap = next(s for s in job['steps'] if s.get('name') == 'Check out the tap')
     assert tap['with']['token'] == '${{ secrets.HOMEBREW_TAP_TOKEN }}'
+
+
+def test_the_release_job_taps_homebrew_core_before_it_installs():
+    """Left to `brew install`, which taps homebrew/core on the way, the runner's
+    brew 7.0.9 then called the formula's certifi dependency unavailable, and the
+    0.1.6 bump failed on it twice. Tapped in a command of its own first, the
+    same install passes (measured in ghcr.io/homebrew/ubuntu24.04:7.0.9)."""
+    wf = yaml.safe_load((REPO / '.github' / 'workflows' / 'publish-clients.yml').read_text())
+    step = next(s for s in wf['jobs']['bump-homebrew']['steps']
+                if s.get('name') == 'Install and test it before pushing')
+    lines = [line.strip() for line in step['run'].splitlines()]
+    install = next(i for i, line in enumerate(lines) if line.startswith('brew install'))
+    assert 'brew tap homebrew/core' in lines[:install]
