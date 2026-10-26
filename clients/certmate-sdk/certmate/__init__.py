@@ -6,12 +6,13 @@
 """
 from .client import Client
 from .errors import (APIError, AuthError, CertMateError, ConflictError,
-                     JobFailed, JobTimeout, NotFoundError, TransportError)
+                     JobFailed, JobTimeout, NotFoundError, TransportError,
+                     UnsupportedByServer)
 from .models import Certificate, Job
 
 __version__ = "0.1.5"
 __all__ = [
     "Client", "Certificate", "Job",
     "CertMateError", "APIError", "AuthError", "NotFoundError", "ConflictError",
-    "JobFailed", "JobTimeout", "TransportError",
+    "JobFailed", "JobTimeout", "TransportError", "UnsupportedByServer",
 ]

@@ -33,7 +33,7 @@
   ],
   "scripts": {
     "start": "node index.js",
-    "test": "node test-smoke.js && node test-tools.js"
+    "test": "node test-smoke.js && node test-tools.js && node test-name.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1"

@@ -14,7 +14,7 @@ The CertMate MCP server exposes the following tools to AI assistants:
 5. **`certmate_get_settings`** — Global settings and configuration, with secret values masked.
 
 **Lifecycle operations**
-6. **`certmate_create_certificate`** — Requests a new TLS certificate for a domain (optional DNS provider, account, CA). The server always asks for async issuance, so this returns a `job_id` (HTTP 202) to poll.
+6. **`certmate_create_certificate`** — Requests a new TLS certificate for a domain (optional name, DNS provider, account, CA). A `name` names a second certificate for a domain apart from it; it needs API contract 2.61, which the tool asks the server for first. The server always asks for async issuance, so this returns a `job_id` (HTTP 202) to poll.
 7. **`certmate_renew_certificate`** — Renews an existing certificate if CertMate considers it due under its renewal policy; one that is not yet due is left as it is, and the job reports `renewed: false`. Also async: returns a `job_id`.
 8. **`certmate_get_job`** — Polls an async create/renew/update job by `job_id` until its status is `succeeded` or `failed` (`queued` and `running` are not final).
 9. **`certmate_set_auto_renew`** — Enables or disables automatic renewal for a single domain.

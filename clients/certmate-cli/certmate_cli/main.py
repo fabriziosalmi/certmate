@@ -21,7 +21,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from certmate import Client, CertMateError, Job
+from certmate import CertMateError, Client, Job, UnsupportedByServer
 
 app = typer.Typer(no_args_is_help=True, add_completion=False,
                   help="CertMate — the SSL certificate lifecycle from your terminal.")
@@ -237,6 +237,12 @@ def cert_create(
     dns: Optional[str] = typer.Option(None, "--dns", help="DNS provider (e.g. cloudflare)."),
     ca: Optional[str] = typer.Option(None, "--ca", help="CA provider (e.g. letsencrypt)."),
     san: Optional[str] = typer.Option(None, "--san", help="Comma-separated SAN domains."),
+    # A str with an empty default, not Optional: typer reads the annotation at
+    # runtime, and `str | None` is not one on Python 3.9.
+    name: str = typer.Option(
+        "", "--name",
+        help="Name the certificate apart from its domain, for a second certificate for it "
+             "(server API contract 2.61 or later)."),
     wait: bool = typer.Option(True, "--wait/--no-wait", help="Wait for issuance to finish."),
     dry_run: bool = typer.Option(False, "--dry-run",
                                  help="Validate inputs and preflight the DNS provider WITHOUT issuing."),
@@ -246,6 +252,8 @@ def cert_create(
     # bogus "" SAN entry — mirrors cert_reissue.
     sans: List[str] = [s.strip() for s in san.split(",") if s.strip()] if san else []
     client = _client(ctx)
+    # What it is issued as: the domain, and the name it is given apart from it.
+    issued_as = f"{domain} as {name}" if name else domain
 
     if dry_run:
         problems = []
@@ -254,6 +262,16 @@ def cert_create(
         for s in sans:
             if not _DOMAIN_RE.match(s):
                 problems.append(f"SAN {s!r} does not look valid")
+        if name:
+            # The server's rule (#1149): the shape of a DNS name, never a wildcard.
+            if not _DOMAIN_RE.match(name) or name.startswith("*."):
+                problems.append(f"name {name!r} is not a DNS name")
+            try:
+                client.require_contract("2.61", "name")
+            except UnsupportedByServer as e:
+                problems.append(str(e))
+            except CertMateError as e:
+                _die(str(e))
         if dns:
             res = _run(lambda: client.test_dns_provider(dns))
             ok = bool(res.get("success", res.get("ok", True)))
@@ -265,23 +283,23 @@ def cert_create(
             out.print("[dim]No --dns given; skipping provider preflight.[/]")
         if problems:
             _die("dry-run found issues:\n  - " + "\n  - ".join(problems))
-        out.print(f"[green]dry-run OK[/] — would issue [bold]{domain}[/]"
+        out.print(f"[green]dry-run OK[/] — would issue [bold]{issued_as}[/]"
                   f"{(' (+' + str(len(sans)) + ' SAN)') if sans else ''}"
                   f"{(' via ' + dns) if dns else ''}{(' on ' + ca) if ca else ''}. Nothing issued.")
         return
 
     def _issue():
-        with out.status(f"Issuing [bold]{domain}[/] …") as status:
+        with out.status(f"Issuing [bold]{issued_as}[/] …") as status:
             def _progress(j: Job):
                 if j.status:
-                    status.update(f"Issuing [bold]{domain}[/] … [{j.status}]")
+                    status.update(f"Issuing [bold]{issued_as}[/] … [{j.status}]")
             return client.create_certificate(
                 domain, dns_provider=dns, ca_provider=ca, san_domains=sans or None,
-                wait=wait, on_progress=_progress)
+                name=name or None, wait=wait, on_progress=_progress)
 
     job = _run(_issue)
     if wait:
-        out.print(f"[green]issued[/] [bold]{domain}[/]"
+        out.print(f"[green]issued[/] [bold]{issued_as}[/]"
                   f"{(' (' + job.status + ')') if job.status else ''}.")
     else:
         out.print(f"[yellow]accepted[/] — job [bold]{job.job_id}[/] "

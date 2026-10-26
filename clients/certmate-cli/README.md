@@ -13,8 +13,15 @@ certmate cert ls
 certmate cert info app.example.com
 certmate cert renew app.example.com --force
 certmate cert create app.example.com --dns cloudflare --dry-run
+certmate cert create app.example.com --name internal.example.com --dns cloudflare
 certmate audit verify
 ```
+
+`--name` names a second certificate for a domain apart from it: the certificate
+is issued for `app.example.com`, and every later command takes
+`internal.example.com`. The server must be on API contract 2.61 or later; an
+older one would ignore the name, so the CLI asks first and refuses, and
+`--dry-run` says whether the server takes it.
 
 ## Pulling certificates onto a host
 

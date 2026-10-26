@@ -23,6 +23,16 @@ runtime dependency is `httpx` — no server code, no certbot.
 and its name otherwise. Both are `None` against a server before API contract
 2.59.
 
+## A second certificate for a domain
+
+`c.create_certificate("example.com", name="internal.example.com")` issues a
+certificate for `example.com` named `internal.example.com`, which every later
+call takes. It needs API contract 2.61, and the client asks the server first:
+an older server would ignore the name and issue the certificate under its
+domain, so the call raises `UnsupportedByServer` and sends nothing.
+`c.api_contract_version()` says what the server reports, and
+`c.require_contract("2.61", "name")` makes the same check on its own.
+
 ## Asking whether a certificate has expired
 
 Use `cert.has_expired()`, not `cert.days_until_expiry <= 0`.

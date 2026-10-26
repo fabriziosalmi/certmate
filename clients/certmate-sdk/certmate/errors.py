@@ -44,6 +44,21 @@ class ConflictError(APIError):
     """409 — e.g. the certificate already exists, or an operation is in flight."""
 
 
+class UnsupportedByServer(CertMateError):
+    """The server's API contract is older than the one a request needs.
+
+    Raised before the request is sent. A server does not refuse a field it does
+    not know: it ignores it, and for some fields that does something else than
+    what was asked (``name`` on create, contract 2.61: the certificate would be
+    issued under its domain). ``needed`` is the contract the request needs and
+    ``server`` the one the server reports, or None when it reports none."""
+
+    def __init__(self, message: str, *, needed: str, server: str | None = None):
+        super().__init__(message)
+        self.needed = needed
+        self.server = server
+
+
 class JobFailed(CertMateError):
     """An async issuance/renewal job finished in a failed state."""
 

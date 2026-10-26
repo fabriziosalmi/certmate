@@ -1,6 +1,6 @@
 # CertMate Model Context Protocol (MCP) Server
 
-<!-- CERTMATE-TRANSLATED-FROM 9484a85d34da32fe -->
+<!-- CERTMATE-TRANSLATED-FROM 395373cede92672b -->
 
 CertMate enthält einen integrierten Model Context Protocol (MCP) Server, der in Node.js geschrieben ist. Dadurch können agentische KI-Assistenten (wie Claude oder Gemini) Zertifikatsstatus prüfen, Erneuerungen auslösen, Diagnosen anfordern und direkt mit der CertMate API interagieren.
 
@@ -16,7 +16,7 @@ Der CertMate MCP Server stellt KI-Assistenten folgende Tools zur Verfügung:
 5. **`certmate_get_settings`** — Globale Einstellungen und Konfiguration, mit maskierten geheimen Werten.
 
 **Lebenszyklus-Operationen**
-6. **`certmate_create_certificate`** — Fordert ein neues TLS-Zertifikat für eine Domain an (optionaler DNS-Anbieter, Account, CA). Der Server fordert immer eine asynchrone Ausstellung an, daher gibt dies eine `job_id` (HTTP 202) zurück, die abgefragt werden muss.
+6. **`certmate_create_certificate`** — Fordert ein neues TLS-Zertifikat für eine Domain an (optionaler Name, DNS-Anbieter, Account, CA). Mit `name` erhält ein zweites Zertifikat für eine Domain einen eigenen Namen; das erfordert API-Vertrag 2.61, den das Tool zuerst beim Server abfragt. Der Server fordert immer eine asynchrone Ausstellung an, daher gibt dies eine `job_id` (HTTP 202) zurück, die abgefragt werden muss.
 7. **`certmate_renew_certificate`** — Erneuert ein vorhandenes Zertifikat, wenn CertMate es nach seiner Erneuerungsrichtlinie für fällig hält; ein noch nicht fälliges bleibt unverändert, und der Job meldet `renewed: false`. Ebenfalls asynchron: gibt eine `job_id` zurück.
 8. **`certmate_get_job`** — Fragt einen asynchronen Erstellungs-/Erneuerungs-/Aktualisierungsauftrag per `job_id` ab, bis sein Status `succeeded` oder `failed` ist (`queued` und `running` sind keine Endzustände).
 9. **`certmate_set_auto_renew`** — Aktiviert oder deaktiviert die automatische Erneuerung für eine einzelne Domain.
