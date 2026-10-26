@@ -200,12 +200,20 @@ jobs:
         # Tapped from the local checkout, so what is tested is exactly the
         # commit about to be pushed. A release that adds a dependency makes
         # this fail, and nothing broken reaches the tap.
+        #
+        # homebrew/core is tapped in a command of its own first. Left to
+        # `brew install`, which taps it on the way, the same run then called
+        # the formula's `certifi` dependency unavailable ("No available
+        # formula with the name certifi"): the 0.1.6 bump failed on that
+        # twice on the runner's brew 7.0.9, and in a container with that brew
+        # the install fails the same way and passes with this line.
         if: steps.bump.outputs.changed == 'true'
         run: |
           set -euo pipefail
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_FROM_API=1
           brew tap fabriziosalmi/certmate "$PWD/tap"
+          brew tap homebrew/core
           brew install --build-from-source fabriziosalmi/certmate/certmate-cli
           brew test fabriziosalmi/certmate/certmate-cli
 
