@@ -30,7 +30,7 @@
         <!-- Summary cards -->
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-px bg-gray-100 dark:bg-white/5" id="summaryCards">
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Total</div><div class="text-xl font-semibold text-foreground" id="sumTotal">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Issued</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Managed</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Discovered</div><div class="text-xl font-semibold text-foreground" id="sumDiscovered">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumExpired">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 7 days</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-orange-600 dark:text-orange-400" id="sum7">–</div></div>
@@ -214,7 +214,7 @@
                    class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-64">
             <select id="invGroup" data-change="InventoryPage.render" aria-label="Filter by group" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                 <option value="">All certificates</option>
-                <option value="issued">Issued by CertMate</option>
+                <option value="issued">Managed by CertMate</option>
                 <option value="discovered">Discovered / unmanaged</option>
             </select>
             <select id="invSource" data-change="InventoryPage.render" aria-label="Filter by source" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
