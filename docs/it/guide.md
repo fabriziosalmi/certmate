@@ -1,6 +1,6 @@
 # CertMate Certificati Client - Guida all'utilizzo
 
-<!-- CERTMATE-TRANSLATED-FROM 8b55cd3aefbd2dba -->
+<!-- CERTMATE-TRANSLATED-FROM 03ca5b34a66af98a -->
 
 ## Panoramica
 
@@ -380,10 +380,10 @@ Usage Type: mobile-app
 
 ### Configurazione
 
-- **Orario di verifica**: Ogni giorno. I certificati client fra le 02:00 e le
-  04:00; i certificati server, di cui il resto di questa sezione descrive la
-  regola, fra le 01:00 e le 03:00 (ogni giro parte alla sua ora con fino a
-  un'ora di scarto casuale, prima o dopo)
+- **Orario di verifica**: Ogni giorno, in UTC. I certificati client fra le 03:00
+  e le 04:00; i certificati server, di cui il resto di questa sezione descrive
+  la regola, fra le 02:00 e le 03:00 (ogni giro parte alla sua ora con fino a
+  un'ora di ritardo casuale)
 - **Soglia**: 30 giorni prima della scadenza (`renewal_threshold_days`), quando
   non supera meta della durata del certificato; vedi sotto
 - **Azione**: Rinnovo automatico se abilitato

@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM d89c7cfe2cc501b9 -->
+<!-- CERTMATE-TRANSLATED-FROM 00d67a9dd1de1e78 -->
 
 Schließt [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -133,7 +133,7 @@ Der Hook wird als Prozessbenutzer von CertMate ausgeführt (im Docker-Image: `ce
 
 Schließt [#632](https://github.com/fabriziosalmi/certmate/issues/632).
 
-Ein Zertifikat wird erneuert, wenn es fällig ist, und diesen Zeitpunkt hat niemand gewählt: Der Erneuerungslauf startet um 02:00 mit einer Stunde Jitter, und nur für die Zertifikate, die in dieser Nacht innerhalb des Schwellenwerts liegen. Der Hook lief dann sofort. Für einen Hook, der eine Datenbank neu startet oder einen Load Balancer neu lädt, ist das ein Ausfall zu einer unvorhersehbaren Stunde.
+Ein Zertifikat wird erneuert, wenn es fällig ist, und diesen Zeitpunkt hat niemand gewählt: Der Erneuerungslauf startet um 02:00 UTC mit einer Stunde Jitter, und nur für die Zertifikate, die in dieser Nacht innerhalb des Schwellenwerts liegen. Der Hook lief dann sofort. Für einen Hook, der eine Datenbank neu startet oder einen Load Balancer neu lädt, ist das ein Ausfall zu einer unvorhersehbaren Stunde.
 
 Ein `window` trennt beides. Das Zertifikat wird weiterhin erneuert, sobald es fällig ist — das richtet sich nach dem Ablauf und ist nicht verhandelbar —, aber das **Deployment** wird zurückgehalten, bis sich das Fenster das nächste Mal öffnet.
 

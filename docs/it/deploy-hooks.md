@@ -1,6 +1,6 @@
 # Deploy Hook
 
-<!-- CERTMATE-TRANSLATED-FROM d89c7cfe2cc501b9 -->
+<!-- CERTMATE-TRANSLATED-FROM 00d67a9dd1de1e78 -->
 
 Chiude [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -133,7 +133,7 @@ L'hook viene eseguito come utente del processo CertMate (nell'immagine Docker: `
 
 Chiude [#632](https://github.com/fabriziosalmi/certmate/issues/632).
 
-Un certificato si rinnova quando è in scadenza, cioè in un momento che nessuno ha scelto: il ciclo di rinnovo pianificato gira alle 02:00 con un'ora di jitter, e solo per i certificati che quella notte rientrano nella soglia. L'hook veniva poi eseguito immediatamente. Per un hook che riavvia un database o ricarica un load balancer, questo significa un disservizio a un'ora imprevedibile.
+Un certificato si rinnova quando è in scadenza, cioè in un momento che nessuno ha scelto: il ciclo di rinnovo pianificato gira alle 02:00 UTC con un'ora di jitter, e solo per i certificati che quella notte rientrano nella soglia. L'hook veniva poi eseguito immediatamente. Per un hook che riavvia un database o ricarica un load balancer, questo significa un disservizio a un'ora imprevedibile.
 
 Una `window` separa le due cose. Il certificato si rinnova comunque quando è in scadenza — questo è determinato dalla scadenza e non è negoziabile — ma il **deploy** viene trattenuto fino alla successiva apertura della finestra.
 

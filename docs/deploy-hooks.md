@@ -131,7 +131,7 @@ The hook runs as the CertMate process user (in the Docker image: `certmate`, UID
 
 Closes [#632](https://github.com/fabriziosalmi/certmate/issues/632).
 
-A certificate renews when it is due, which is a time nobody chose: the renewal sweep runs at 02:00 with an hour of jitter, and only for the certificates inside the threshold that night. The hook then ran immediately. For a hook that restarts a database or reloads a load balancer, that is an outage at an unpredictable hour.
+A certificate renews when it is due, which is a time nobody chose: the renewal sweep runs at 02:00 UTC with an hour of jitter, and only for the certificates inside the threshold that night. The hook then ran immediately. For a hook that restarts a database or reloads a load balancer, that is an outage at an unpredictable hour.
 
 A `window` separates the two. The certificate still renews whenever it is due — that is driven by expiry and is not negotiable — but the **deploy** is held until the next time the window is open.
 

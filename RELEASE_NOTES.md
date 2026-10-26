@@ -4,7 +4,7 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
-## v2.55.0 (two certificates for one domain)
+## v2.55.0 (the renewal checks survive the clocks going back, and two certificates for one domain)
 
 [Read the notes](docs/releases/v2.55.0.md)
 

@@ -1,6 +1,6 @@
 # CertMate Certificats Clients - Guide d'utilisation
 
-<!-- CERTMATE-TRANSLATED-FROM 8b55cd3aefbd2dba -->
+<!-- CERTMATE-TRANSLATED-FROM 03ca5b34a66af98a -->
 
 ## Vue d'ensemble
 
@@ -380,10 +380,10 @@ Usage Type: mobile-app
 
 ### Configuration
 
-- **Heure de vérification** : Tous les jours. Les certificats clients entre 02h00 et
-  04h00 ; les certificats serveur, dont le reste de cette section décrit la
-  règle, entre 01h00 et 03h00 (chaque balayage a lieu à son heure, avec jusqu'à une
-  heure de décalage aléatoire dans un sens ou dans l'autre)
+- **Heure de vérification** : Tous les jours, en UTC. Les certificats clients entre
+  03h00 et 04h00 ; les certificats serveur, dont le reste de cette section décrit
+  la règle, entre 02h00 et 03h00 (chaque balayage commence à son heure, avec
+  jusqu'à une heure de retard aléatoire)
 - **Seuil** : 30 jours avant l'expiration (`renewal_threshold_days`), lorsque
   cela ne dépasse pas la moitié de la durée de vie du certificat ; voir plus bas
 - **Action** : Renouvellement automatique si activé

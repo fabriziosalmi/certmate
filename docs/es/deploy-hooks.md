@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM d89c7cfe2cc501b9 -->
+<!-- CERTMATE-TRANSLATED-FROM 00d67a9dd1de1e78 -->
 
 Cierra [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -133,7 +133,7 @@ El hook se ejecuta como el usuario del proceso CertMate (en la imagen Docker: `c
 
 Cierra [#632](https://github.com/fabriziosalmi/certmate/issues/632).
 
-Un certificado se renueva cuando le toca, y ese es un momento que nadie ha elegido: el barrido de renovación se ejecuta a las 02:00 con una hora de jitter, y solo para los certificados que esa noche están dentro del umbral. El hook se ejecutaba entonces inmediatamente. Para un hook que reinicia una base de datos o recarga un load balancer, eso es una interrupción del servicio a una hora impredecible.
+Un certificado se renueva cuando le toca, y ese es un momento que nadie ha elegido: el barrido de renovación se ejecuta a las 02:00 UTC con una hora de jitter, y solo para los certificados que esa noche están dentro del umbral. El hook se ejecutaba entonces inmediatamente. Para un hook que reinicia una base de datos o recarga un load balancer, eso es una interrupción del servicio a una hora impredecible.
 
 Una `window` separa las dos cosas. El certificado se sigue renovando cuando le toca — eso lo determina la caducidad y no es negociable —, pero el **despliegue** se retiene hasta la próxima vez que la ventana esté abierta.
 

@@ -1,6 +1,6 @@
 # Arquitectura de CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 16b7294196819288 -->
+<!-- CERTMATE-TRANSLATED-FROM cdb5c55f49cdf777 -->
 
 Este documento cubre la arquitectura completa de CertMate — tanto el sistema principal de certificados de servidor como el subsistema de certificados de cliente.
 
@@ -812,7 +812,7 @@ Cada certificado tiene un archivo `metadata.json` que contiene:
 
 ### Renovación automática
 
-- **Programada**: a diario, los certificados de servidor entre las 01:00 y las 03:00 (las 02:00 con hasta una hora de desfase aleatorio en cualquier sentido), los certificados de cliente entre las 02:00 y las 04:00
+- **Programada**: a diario, en UTC: los certificados de servidor entre las 02:00 y las 03:00 (las 02:00 con hasta una hora de retraso aleatorio), los certificados de cliente entre las 03:00 y las 04:00
 - **Cuándo**: 30 días antes de la caducidad por defecto (`renewal_threshold_days`), un tercio de la vida útil antes de la caducidad para un certificado que dura menos de 60 días (la mitad si dura menos de 10 días), o donde lo sitúe la ventana de renovación de la CA (ARI); véase [la guía](./guide.md#cuando-se-renueva-un-certificado)
 - **Tolerante a fallos**: continúa en caso de errores y registra para revisión
 
