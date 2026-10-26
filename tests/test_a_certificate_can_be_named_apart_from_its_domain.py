@@ -206,6 +206,24 @@ def test_a_key_restricted_to_domains_names_a_certificate_only_within_them(instan
     assert len(certbot.commands) == before
 
 
+def test_a_name_inside_a_keys_scope_does_not_take_a_host_outside_it(instance):
+    """The case #1149 named: a certificate named inside a key's scope must not
+    cover a domain outside it. The host is judged, whatever the name."""
+    client, container, certbot, certs = instance
+    headers = _key(container, '*.tenant.example.org')
+    name = f'n{secrets.token_hex(3)}.tenant.example.org'
+    before = len(certbot.commands)
+
+    response = client.post('/api/certificates/create', headers=headers, json={
+        'domain': 'victim.example.net', 'name': name,
+        'challenge_type': 'http-01', 'ca_provider': 'letsencrypt'})
+
+    assert response.status_code == 403, response.get_json()
+    assert response.get_json()['code'] == 'DOMAIN_OUT_OF_SCOPE'
+    assert len(certbot.commands) == before
+    assert not (certs / name).exists()
+
+
 def test_a_key_names_a_certificate_within_its_scope_and_then_renews_it(instance):
     client, container, _certbot, _certs = instance
     headers = _key(container, 'tenant.example.org', '*.tenant.example.org')
