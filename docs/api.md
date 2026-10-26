@@ -1672,7 +1672,8 @@ account, default CA, default key type). Every field is in the
   Left out, or equal to `domain`, the certificate is named by its domain. A
   key restricted to domains must have the name in its scope as well as
   `domain` and `san_domains`, since every later request on the certificate is
-  judged on its name too;
+  judged on its name too. In the dashboard: **Name** in the create form's
+  advanced options;
 - `dns_provider` and `account_id`; `domain_alias` and `alias_dns_provider` for
   DNS-01 through an alias zone;
 - `ca_provider` and `ca_account_id`; `challenge_type` (`dns-01`, `http-01` or
