@@ -244,8 +244,9 @@ truncation is logged, and the next run picks up what was left.
 
 ## The Inventory dashboard
 
-`/inventory` shows every certificate in the inventory in two groups —
-**Issued by CertMate** and **Discovered / unmanaged** — with columns for
+`/inventory` shows every certificate in the inventory in two groups:
+**Managed by CertMate**, found at the host of a domain CertMate manages,
+whoever issued it, and **Discovered / unmanaged**. The columns are
 subject/SAN, issuer, expiry (days remaining + status colour), key
 algorithm/size, source, and endpoints. Filter by group, source, expiry, or free
 text. Click a column header to sort by it, and again to reverse: expiry sorts by
