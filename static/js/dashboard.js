@@ -2927,19 +2927,29 @@
         closeCertDetail();
         openCreateCertForm();
 
+        // A certificate named apart from its domain (#1149) shows its host
+        // as the domain and its name as the name; an IP certificate keeps
+        // its ip-<dashed> name, which the address mode reads.
+        var namedApart = !!(cert.host && cert.host !== domain && !ipAddressOf(domain));
+        var host = namedApart ? cert.host : domain;
         var domainField = document.getElementById('domain');
-        domainField.value = domain;
-        // The primary domain is the certificate's identity (certbot
-        // --cert-name, directory, API path): changing it is a
+        domainField.value = host;
+        // The primary domain and the name are the certificate's identity
+        // (certbot --cert-name, directory, API path): changing either is a
         // delete+recreate, not an edit.
         domainField.readOnly = true;
+        var nameField = document.getElementById('cert_name');
+        if (nameField) {
+            nameField.value = namedApart ? domain : '';
+            nameField.readOnly = true;
+        }
 
         // Reverse-map the wildcard checkbox out of the SAN list — the
-        // create submit handler encodes it client-side as '*.'+primary.
-        // Compare case-insensitively: DNS names are, and API-created certs
-        // can carry mixed-case SANs in metadata.
+        // create submit handler encodes it client-side as '*.'+primary,
+        // the host. Compare case-insensitively: DNS names are, and
+        // API-created certs can carry mixed-case SANs in metadata.
         var sans = (cert.san_domains || []).slice();
-        var wildcardName = ('*.' + domain).toLowerCase();
+        var wildcardName = ('*.' + host).toLowerCase();
         var wildcardIndex = -1;
         sans.forEach(function (s, i) {
             if (String(s).toLowerCase() === wildcardName) wildcardIndex = i;
@@ -2973,7 +2983,7 @@
         // there, so what the user sees is what gets submitted.
         var advancedPanel = document.getElementById('advanced-options');
         if (advancedPanel && advancedPanel.classList.contains('hidden') &&
-                (wildcardIndex !== -1 || cert.domain_alias)) {
+                (wildcardIndex !== -1 || cert.domain_alias || namedApart)) {
             toggleAdvancedOptions();
         }
 
@@ -3038,6 +3048,11 @@
         var domainField = document.getElementById('domain');
         domainField.readOnly = false;
         domainField.value = '';
+        var nameField = document.getElementById('cert_name');
+        if (nameField) {
+            nameField.readOnly = false;
+            nameField.value = '';
+        }
         // Before the fields are reset: leaving the address mode gives the
         // selects back the values they had, which the reset then clears.
         applyIpAddressMode();
@@ -3448,6 +3463,13 @@
         var caProvider = document.getElementById('ca_provider_select').value;
         var dnsAliasDomain = (document.getElementById('dns_alias_domain') || {}).value;
         dnsAliasDomain = dnsAliasDomain ? normalizeDnsAliasName(dnsAliasDomain) : '';
+        // A name apart from the domain (#1149). Only trimmed and lowercased:
+        // normalizeHostname would cut a path out of it, and a name the server
+        // refuses must reach it to be refused, not be dropped here and the
+        // certificate named by its domain. The domain itself is no name.
+        var certName = String((document.getElementById('cert_name') || {}).value || '')
+            .trim().toLowerCase().replace(/\.+$/, '');
+        if (certName === domain) certName = '';
         // An address takes no other name, alias, CSR or DNS provider (#1130):
         // whatever the hidden sections still hold is not sent.
         var ipMode = ipAddressModeOn();
@@ -3457,6 +3479,7 @@
             dnsAliasDomain = '';
             dnsProvider = '';
             accountId = '';
+            certName = '';
         }
 
         if (!configuredCAs.length) {
@@ -3490,6 +3513,7 @@
         var domainsDisplay = sanDomains.length > 0
             ? domain + ' (+ ' + sanDomains.length + ' SAN' + (sanDomains.length > 1 ? 's' : '') + ')'
             : domain;
+        if (certName && !reissueEditingDomain) domainsDisplay += ' as ' + certName;
 
         // Edit mode (#267): dropping SANs is destructive for clients using
         // those names — enumerate them in a danger confirm before reissuing.
@@ -3553,6 +3577,9 @@
             }
             if (dnsAliasDomain) {
                 requestBody.domain_alias = dnsAliasDomain;
+            }
+            if (certName) {
+                requestBody.name = certName;
             }
         }
         if (challengeType) {
@@ -3696,6 +3723,8 @@
     // (shared by the sync-success and async-accepted paths).
     function clearCreateFormAfterSubmit() {
         document.getElementById('domain').value = '';
+        var nameField = document.getElementById('cert_name');
+        if (nameField) nameField.value = '';
         applyIpAddressMode();
         setSanDomains([]);
         document.getElementById('wildcard-cert').checked = false;
