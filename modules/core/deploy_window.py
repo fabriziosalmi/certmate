@@ -1,7 +1,7 @@
 """Maintenance windows for deploy hooks (#632).
 
 A certificate renews when it is due, which is a time nobody chose: the renewal
-sweep fires at 02:00 with an hour of jitter, and only for the certificates that
+sweep fires at 02:00 UTC with an hour of jitter, and only for the certificates that
 happen to be inside the threshold that night. The deploy hook then runs
 immediately. For a hook that restarts a database or reloads a load balancer,
 that is an outage at an unpredictable hour.

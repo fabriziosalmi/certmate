@@ -1,6 +1,6 @@
 # CertMate Certificados de Cliente - Guía de uso
 
-<!-- CERTMATE-TRANSLATED-FROM 8b55cd3aefbd2dba -->
+<!-- CERTMATE-TRANSLATED-FROM 03ca5b34a66af98a -->
 
 ## Descripción general
 
@@ -380,10 +380,10 @@ Usage Type: mobile-app
 
 ### Configuración
 
-- **Comprobación**: Diariamente. Los certificados de cliente entre las 02:00 y
-  las 04:00; los certificados de servidor, cuya regla describe el resto de esta
-  sección, entre las 01:00 y las 03:00 (cada ronda a su hora, con hasta una
-  hora de desfase aleatorio en cualquier sentido)
+- **Comprobación**: Diariamente, en UTC. Los certificados de cliente entre las
+  03:00 y las 04:00; los certificados de servidor, cuya regla describe el resto
+  de esta sección, entre las 02:00 y las 03:00 (cada ronda empieza a su hora,
+  con hasta una hora de retraso aleatorio)
 - **Umbral**: 30 días antes de la expiración (`renewal_threshold_days`), cuando
   no supera la mitad de la vida del certificado; vea abajo
 - **Acción**: Renovación automática si está activada

@@ -6,10 +6,12 @@ import threading
 import time
 import traceback
 from contextlib import contextmanager
+from datetime import UTC
 from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.triggers.cron import CronTrigger
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from flask_restx import Api, Namespace
@@ -1152,26 +1154,32 @@ def setup_scheduler(container: AppContainer):
             'max_instances': 1,
         }
         scheduler = BackgroundScheduler(jobstores=jobstores, job_defaults=job_defaults)
-        scheduler.start()
 
         # Spread the renewal sweeps across a window instead of firing every
         # instance at exactly HH:00:00. Without this, every CertMate in the
         # world hits its ACME CA at the same wall-clock second, a synchronised
         # load spike the CA has to absorb; Let's Encrypt asks integrators to
         # renew at randomised times for precisely this reason. APScheduler's
-        # cron `jitter` adds a random +/- offset (seconds) to each fire, so the
-        # 02:00 certificate sweep lands anywhere in 01:00-03:00 and the 03:00
-        # client-certificate sweep in 02:00-04:00 — the same overnight window,
-        # de-synchronised. It composes with the misfire grace above.
-        renewal_jitter = 3600  # +/- 1 hour
+        # cron `jitter` adds a random offset of up to an hour (never a negative
+        # one) to each fire, so the 02:00 certificate sweep lands in
+        # 02:00-03:00 and the 03:00 client-certificate sweep in 03:00-04:00.
+        # It composes with the misfire grace above.
+        #
+        # In UTC (#1372). A jittered cron in a zone that repeats an hour when
+        # the clocks go back never leaves that hour: APScheduler 3.11.3 loses
+        # the fold when it adds the jitter (agronholm/apscheduler#1183). On
+        # 25 October 2026 that stopped an instance in Europe/Zagreb for good.
+        # UTC repeats and skips no hour. The jobs without jitter keep the
+        # instance's own zone.
+        renewal_jitter = 3600
         scheduler.add_job(
             func=_certificate_renewal_job,
-            trigger="cron", hour=2, minute=0, jitter=renewal_jitter,
+            trigger=CronTrigger(hour=2, minute=0, jitter=renewal_jitter, timezone=UTC),
             id='certificate_renewal_check', replace_existing=True
         )
         scheduler.add_job(
             func=_client_certificate_renewal_job,
-            trigger="cron", hour=3, minute=0, jitter=renewal_jitter,
+            trigger=CronTrigger(hour=3, minute=0, jitter=renewal_jitter, timezone=UTC),
             id='client_certificate_renewal_check', replace_existing=True
         )
         scheduler.add_job(
@@ -1228,6 +1236,12 @@ def setup_scheduler(container: AppContainer):
             trigger="cron", minute='*',
             id='deploy_window_drain', replace_existing=True
         )
+        # Started after every job is added (#1372): start() puts these in the
+        # store, replacing the stored ones, before its thread reads it. Started
+        # first, the thread read a job an earlier version had left stuck in a
+        # repeated hour and spun on it, holding the lock add_job waits for, so
+        # the application never came up, however often it was restarted.
+        scheduler.start()
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler
         from .core.utils import utc_now_iso

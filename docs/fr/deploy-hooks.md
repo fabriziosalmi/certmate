@@ -1,6 +1,6 @@
 # Hooks de déploiement
 
-<!-- CERTMATE-TRANSLATED-FROM d89c7cfe2cc501b9 -->
+<!-- CERTMATE-TRANSLATED-FROM 00d67a9dd1de1e78 -->
 
 Clôture [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -133,7 +133,7 @@ Le hook s'exécute en tant qu'utilisateur du processus CertMate (dans l'image Do
 
 Clôture [#632](https://github.com/fabriziosalmi/certmate/issues/632).
 
-Un certificat est renouvelé quand il arrive à échéance, à un moment que personne n'a choisi : le balayage de renouvellement s'exécute à 02:00 avec une heure de décalage aléatoire, et seulement pour les certificats qui passent sous le seuil cette nuit-là. Le hook s'exécutait alors immédiatement. Pour un hook qui redémarre une base de données ou recharge un équilibreur de charge, cela signifie une interruption de service à une heure imprévisible.
+Un certificat est renouvelé quand il arrive à échéance, à un moment que personne n'a choisi : le balayage de renouvellement s'exécute à 02:00 UTC avec une heure de décalage aléatoire, et seulement pour les certificats qui passent sous le seuil cette nuit-là. Le hook s'exécutait alors immédiatement. Pour un hook qui redémarre une base de données ou recharge un équilibreur de charge, cela signifie une interruption de service à une heure imprévisible.
 
 Une `window` sépare les deux. Le certificat est toujours renouvelé dès qu'il arrive à échéance — c'est dicté par l'expiration et ce n'est pas négociable — mais le **déploiement** est retenu jusqu'à la prochaine ouverture de la fenêtre.
 

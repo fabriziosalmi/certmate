@@ -1,6 +1,6 @@
 # CertMate Client-Zertifikate - Benutzerhandbuch
 
-<!-- CERTMATE-TRANSLATED-FROM 8b55cd3aefbd2dba -->
+<!-- CERTMATE-TRANSLATED-FROM 03ca5b34a66af98a -->
 
 ## Übersicht
 
@@ -380,10 +380,10 @@ Usage Type: mobile-app
 
 ### Konfiguration
 
-- **Prüfzeitpunkt**: Täglich. Client-Zertifikate zwischen 02:00 und 04:00 Uhr;
-  Server-Zertifikate, deren Regel der Rest dieses Abschnitts beschreibt,
-  zwischen 01:00 und 03:00 Uhr (jeder Lauf zu seiner Stunde, mit bis zu einer
-  Stunde zufälliger Abweichung in beide Richtungen)
+- **Prüfzeitpunkt**: Täglich, in UTC. Client-Zertifikate zwischen 03:00 und
+  04:00 Uhr; Server-Zertifikate, deren Regel der Rest dieses Abschnitts
+  beschreibt, zwischen 02:00 und 03:00 Uhr (jeder Lauf beginnt zu seiner Stunde,
+  mit bis zu einer Stunde zufälliger Verzögerung)
 - **Schwellenwert**: 30 Tage vor Ablauf (`renewal_threshold_days`), sofern das
   höchstens die halbe Laufzeit des Zertifikats ist; siehe unten
 - **Aktion**: Automatische Erneuerung, sofern aktiviert

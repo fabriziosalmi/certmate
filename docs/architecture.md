@@ -829,7 +829,7 @@ Each certificate has a `metadata.json` file containing:
 
 ### Auto-Renewal
 
-- **Scheduled**: Daily, server certificates between 01:00 and 03:00 (02:00 with an hour of random offset either way), client certificates between 02:00 and 04:00
+- **Scheduled**: Daily, in UTC: server certificates between 02:00 and 03:00 (02:00 with up to an hour of random delay), client certificates between 03:00 and 04:00
 - **When**: 30 days before expiry by default (`renewal_threshold_days`), with a third of its lifetime left for a certificate that lives under 60 days (half under 10 days), or where the CA's renewal window (ARI) puts it; see [the guide](./guide.md#when-a-certificate-renews)
 - **Graceful**: Continues on errors, logs for review
 
