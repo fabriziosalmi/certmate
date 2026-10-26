@@ -60,7 +60,10 @@ outage waiting for a date. CertMate is built for it:
   DigiCert, Sectigo and SSL.com, or from a private CA of its own: wildcard and
   multi-name certificates, DNS-01 through 29 DNS providers, HTTP-01, DNS
   validation through an alias zone, or from a CSR whose key never leaves the
-  device. See [CA providers](docs/ca-providers.md),
+  device. One domain can hold two certificates, a public one and one from a
+  private CA say, each under a name of its own
+  ([create a certificate](docs/api.md#create-a-certificate)). See
+  [CA providers](docs/ca-providers.md),
   [DNS providers](docs/dns-providers.md) and
   [CSR-only certificates](docs/csr-only-certificates.md).
 - **Controls access** with three roles, API keys restricted to domains, single
