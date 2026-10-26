@@ -48,11 +48,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_create_certificate",
-        description: "Create a new TLS certificate for a specified domain. Issuance runs asynchronously: the call returns a job_id (HTTP 202) to poll with certmate_get_job.",
+        description: "Create a new TLS certificate for a specified domain. Give name for a second certificate for a domain that already has one. Issuance runs asynchronously: the call returns a job_id (HTTP 202) to poll with certmate_get_job.",
         inputSchema: {
           type: "object",
           properties: {
             domain: { type: "string", description: "The primary domain name for the certificate (e.g. example.com)" },
+            name: { type: "string", description: "Optional. A name for the certificate apart from its domain (e.g. internal.example.com): it is issued for domain, and every later tool call takes the name. Needs API contract 2.61; an older server is refused before anything is sent, since it would ignore the name." },
             dns_provider: { type: "string", description: "The DNS provider key (optional)" },
             account_id: { type: "string", description: "The account ID for the DNS provider (optional)" },
             ca_provider: { type: "string", description: "The Certificate Authority (CA) to use (optional)" }
@@ -235,6 +236,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return value;
   }
 
+  // Throws unless the server reports API contract `needed` ("2.61") or later.
+  // A server does not refuse a field it does not know; it ignores it.
+  async function requireContract(needed, field) {
+    const health = await makeRequest("GET", "/health");
+    const server = health && typeof health.api_contract_version === "string" ? health.api_contract_version : null;
+    const [major, minor] = String(server).split(".").map(Number);
+    const [wantMajor, wantMinor] = needed.split(".").map(Number);
+    if (!(major > wantMajor || (major === wantMajor && minor >= wantMinor))) {
+      throw new Error(`${field} needs API contract ${needed} or later, and the server reports ${server || "no contract version"}: it would ignore it`);
+    }
+  }
+
   async function makeRequest(method, path, body = null) {
     const url = `${baseUrl.replace(/\/$/, '')}${path}`;
     try {
@@ -273,8 +286,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await makeRequest("GET", "/api/certificates");
         break;
       case "certmate_create_certificate":
+        // A server before API contract 2.61 ignores `name` and would issue the
+        // certificate under its domain, so it is asked first (#1149).
+        if (args.name) await requireContract("2.61", "name");
         result = await makeRequest("POST", "/api/certificates/create", {
           domain: args.domain,
+          name: args.name || undefined,
           dns_provider: args.dns_provider,
           account_id: args.account_id,
           ca_provider: args.ca_provider,

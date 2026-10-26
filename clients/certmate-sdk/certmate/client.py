@@ -12,7 +12,8 @@ from typing import Any, Callable, Dict, List, Optional
 import httpx
 
 from .errors import (APIError, AuthError, CertMateError, ConflictError,
-                     JobFailed, JobTimeout, NotFoundError, TransportError)
+                     JobFailed, JobTimeout, NotFoundError, TransportError,
+                     UnsupportedByServer)
 from .models import Certificate, Job
 
 _DEFAULT_URL = "http://localhost:8000"
@@ -20,6 +21,20 @@ _DEFAULT_URL = "http://localhost:8000"
 # Real DNS-01 renewals block on propagation and can take minutes; the client
 # default (30s) would kill the call while the server keeps renewing.
 _RENEW_TIMEOUT = 600.0
+
+# The API contract that takes `name` on create (#1149). An older server ignores
+# the field and issues the certificate under its domain.
+_NAME_CONTRACT = "2.61"
+
+
+def _contract(version: Any) -> tuple:
+    """A contract version as (major, minor), or () when it is not one."""
+    try:
+        major, minor = str(version).split(".")
+        return (int(major), int(minor))
+    except ValueError:
+        return ()
+
 
 # Fallback text for httpx exceptions whose str() is empty (timeouts often are).
 _TRANSPORT_DETAIL = {
@@ -117,13 +132,24 @@ class Client:
                            ca_provider: Optional[str] = None,
                            san_domains: Optional[List[str]] = None,
                            account_id: Optional[str] = None,
+                           name: str | None = None,
                            wait: bool = False,
                            on_progress: Optional[Callable[[Job], None]] = None,
                            **extra: Any) -> Job:
         """Submit an async issuance. Returns the accepted Job immediately;
         with ``wait=True`` polls until the job reaches a terminal state (and
-        raises :class:`JobFailed` on failure)."""
+        raises :class:`JobFailed` on failure).
+
+        ``name`` names the certificate apart from its domain, for a second
+        certificate for the same domain: it is issued for ``domain``, and every
+        later call takes the name. It needs API contract 2.61, which is asked
+        of the server first: an older one would ignore it and issue the
+        certificate under its domain, so it raises
+        :class:`UnsupportedByServer` and nothing is sent."""
         body: Dict[str, Any] = {"domain": domain, "async": True}
+        if name:
+            self.require_contract(_NAME_CONTRACT, "name")
+            body["name"] = name
         if dns_provider:
             body["dns_provider"] = dns_provider
         if ca_provider:
@@ -140,6 +166,18 @@ class Client:
             job.status = job.status or "succeeded"
             return job
         return self.wait_for_job(job.job_id, on_progress=on_progress) if wait else job
+
+    def require_contract(self, needed: str, field: str) -> None:
+        """Raise :class:`UnsupportedByServer` unless the server's API contract
+        is *needed* (``"2.61"``) or later. Called before a request that sends
+        *field*, which an older server would ignore."""
+        server = self.api_contract_version()
+        have = _contract(server)
+        if not have or have < _contract(needed):
+            raise UnsupportedByServer(
+                f"`{field}` needs API contract {needed} or later, and the server "
+                f"reports {server or 'no contract version'}: it would ignore it",
+                needed=needed, server=server)
 
     @staticmethod
     def _require_bool(name: str, value: Any) -> bool:
@@ -350,6 +388,12 @@ class Client:
 
     def health(self) -> Dict[str, Any]:
         return self._request("GET", "/health") or {}
+
+    def api_contract_version(self) -> str | None:
+        """The server's API contract version, from /health, or None for a
+        server that does not report one."""
+        version = self.health().get("api_contract_version")
+        return version if isinstance(version, str) else None
 
     # -- probing a host ------------------------------------------------------
     def probe(self, host: str, *, port: int = 443,
