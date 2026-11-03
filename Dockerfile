@@ -153,6 +153,12 @@ WORKDIR /app
 # carries >= 5.40.1-6+deb13u1, and the line should be removed then rather
 # than left to accumulate.
 #
+# `libbrotli1` is the same case (CVE-2026-111497, critical, fixed in
+# 1.1.0-2+deb13u1): curl pulls it in, and a build that reuses this layer from
+# the registry cache keeps the 1.1.0-2+b7 it first installed, so the scan failed
+# on a Dockerfile that had not changed. Naming it changes the line, so the layer
+# is rebuilt, and it stays a no-op once the base image carries the fix.
+#
 # Be precise about what this buys, because it is not full reproducibility:
 # `apt-get install` below is still unpinned, so the three packages it names can
 # differ between builds. What changes is that the variance goes from unbounded
@@ -185,7 +191,7 @@ WORKDIR /app
 # derived image: `python -m ensurepip` puts a pip back for that build only.
 RUN apt-get update && \
     apt-get install -y -o Acquire::Retries=3 bash curl tini && \
-    apt-get install -y -o Acquire::Retries=3 --only-upgrade perl-base && \
+    apt-get install -y -o Acquire::Retries=3 --only-upgrade perl-base libbrotli1 && \
     rm -rf /var/lib/apt/lists/* && \
     python -m pip uninstall -y pip && \
     useradd --create-home --shell /bin/bash certmate

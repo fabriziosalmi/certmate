@@ -10,10 +10,10 @@ pytest-asyncio==1.4.0
 pytest-flask==1.3.0
 pytest-xdist==3.8.0
 pytest-playwright==0.10.0
-coverage==7.16.2
+coverage==7.17.0
 requests-mock==1.12.1
 freezegun==1.5.5
-playwright==1.64.0
+playwright==1.64.1
 # In-repo terminal clients (SDK + CLI), installed editable so the e2e gate can
 # exercise them against the test container and keep them in lockstep with the
 # server they wrap. Order matters: the SDK first (the CLI depends on it).
@@ -42,7 +42,7 @@ flake8==7.4.1
 # exactly, and to the version the baseline in that script was measured with: rules change between
 # releases, so a bump (Dependabot proposes one) fails that check until the baseline is re-measured
 # (`python scripts/check_ruff_budget.py --print`) and RUFF_VERSION moves with this pin.
-ruff==0.17.1
+ruff==0.17.2
 # Read by scripts/check_mypy_budget.py, the mypy ratchet (#1094). Pinned exactly, to the version its
 # baseline was measured with: what mypy reports changes between releases, so a bump (Dependabot
 # proposes one) fails that check until the baseline is re-measured (`python scripts/check_mypy_budget.py
