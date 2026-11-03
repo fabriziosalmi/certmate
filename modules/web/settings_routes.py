@@ -3,7 +3,7 @@ import re
 from functools import partial, wraps
 from pathlib import Path
 
-from flask import abort, request, jsonify
+from flask import abort, make_response, request, jsonify
 
 from modules.core.auth import not_for_domain_restricted_keys
 from modules.core.request_fields import json_booleans
@@ -254,6 +254,22 @@ def _delete_ca_account(managers, settings_manager, audit_logger, settings,
         return jsonify({'error': 'Failed to delete CA account'}), 500
     _audit_ca_account(audit_logger, 'delete_ca_account', provider, account_id, 'success')
     return jsonify({'message': 'CA account deleted'})
+
+
+def _email_or_refuse(email):
+    """The address as it will be stored, or the 400 that refuses it.
+
+    None passes through: the address is optional on create and absent on an
+    update that changes something else. A helper rather than inline branches,
+    so the two user routes do not grow the budgeted complexity of
+    register_settings_routes.
+    """
+    if email is None:
+        return None
+    email_ok, email_err = validate_email(email)
+    if not email_ok:
+        abort(make_response(jsonify({'error': email_err}), 400))
+    return email.strip()
 
 
 def _save_ca_account(settings_manager, audit_logger, accounts,
@@ -614,12 +630,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         # The address is optional, but one that is given is kept: OIDC links an
         # existing account by it, so a value dropped here leaves the account
         # unreachable for a login with JIT provisioning off.
-        email = data.get('email') or None
-        if email is not None:
-            email_ok, email_err = validate_email(email)
-            if not email_ok:
-                return jsonify({'error': email_err}), 400
-            email = email.strip()
+        email = _email_or_refuse(data.get('email') or None)
 
         bootstrap_admin = _is_bootstrap_admin(auth_manager, role)
         success, msg = auth_manager.create_user(username, password, role, email=email)
@@ -679,11 +690,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         if enabled is not None and not isinstance(enabled, bool):
             return jsonify({'error': 'enabled must be a boolean'}), 400
 
-        if email is not None:
-            email_ok, email_err = validate_email(email)
-            if not email_ok:
-                return jsonify({'error': email_err}), 400
-            email = email.strip()
+        email = _email_or_refuse(email)
 
         # Mirror the create-user password policy on resets so a weakened
         # credential cannot be slipped in through the edit surface.
