@@ -892,6 +892,57 @@ def _move_retired_propagation_defaults(settings):
     return moved
 
 
+# Settings that load_settings() takes from the environment instead of the file
+# (variable name, path in the settings document). The overlay exists in memory
+# only: save_settings() puts back what the file held (#1397), so a value an
+# operator delivers through the environment or a Kubernetes Secret never lands
+# in settings.json, and unsetting the variable returns the saved value.
+# The third item is the form a value takes once save_settings() has validated
+# it (the address is stripped and lower-cased), so a value that came from the
+# environment is still recognised after that.
+_ENV_OVERLAYS = (
+    ('LETSENCRYPT_EMAIL', ('email',), lambda value: value.strip().lower()),
+    ('CLOUDFLARE_TOKEN', ('dns_providers', 'cloudflare', 'accounts', 'default', 'api_token'), lambda value: value),
+)
+
+_ABSENT = object()
+
+
+def _value_at(document, path):
+    for key in path:
+        if not isinstance(document, dict) or key not in document:
+            return _ABSENT
+        document = document[key]
+    return document
+
+
+def _put_back_environment_overlay(settings, on_disk):
+    """A copy of ``settings`` in which every value that came from the environment is what the file holds.
+
+    A value is put back only while it is still the environment's: one an
+    operator changed to something else is theirs and is kept. A key the file
+    never had is removed again, with the empty dicts its overlay created.
+    """
+    result = copy.deepcopy(settings)
+    for variable, path, normalised in _ENV_OVERLAYS:
+        wanted = os.getenv(variable)
+        if not wanted or _value_at(result, path) not in (wanted, normalised(wanted)):
+            continue
+        saved = _value_at(on_disk, path)
+        parents = [result]
+        for key in path[:-1]:
+            parents.append(parents[-1][key])
+        if saved is _ABSENT:
+            del parents[-1][path[-1]]
+            for depth in range(len(path) - 1, 0, -1):
+                if parents[depth]:
+                    break
+                del parents[depth - 1][path[depth - 1]]
+        else:
+            parents[-1][path[-1]] = copy.deepcopy(saved)
+    return result
+
+
 class SettingsManager:
     """Class to handle settings management and migrations"""
 
@@ -1622,6 +1673,26 @@ class SettingsManager:
         """
         with self._lock:
             try:
+                # What the environment supplies at load is not saved, and not
+                # backed up either (#1397): the document the file holds is read
+                # first, so both the backup and the write put it back.
+                on_disk = {}
+                if self.settings_file.exists() and any(os.getenv(variable) for variable, _, _ in _ENV_OVERLAYS):
+                    try:
+                        read = self.file_ops.safe_file_read(self.settings_file, is_json=True)
+                        size = self.settings_file.stat().st_size
+                    except (OSError, ValueError):
+                        read, size = None, 1
+                    if isinstance(read, dict):
+                        on_disk = read
+                    elif size > 0:
+                        # Content that cannot be read cannot be told from the
+                        # overlay: refuse, and leave the file as it is.
+                        logger.error("Not saving settings: %s exists but could not be read, so the values "
+                                     "the environment supplies cannot be told apart from the saved ones.",
+                                     self.settings_file)
+                        return False
+
                 # Create backup before saving (if settings file exists).
                 # A failed backup is logged as a warning but does not block the save —
                 # the caller's changes should not be lost just because disk is temporarily full.
@@ -1643,7 +1714,8 @@ class SettingsManager:
                         # a deliberate, audit-logged operator choice.
                         can_encrypt = bool(_backup_passphrase())
                         result = self.file_ops.create_unified_backup(
-                            settings, backup_reason, include_secrets=can_encrypt)
+                            _put_back_environment_overlay(settings, on_disk), backup_reason,
+                            include_secrets=can_encrypt)
                         if not result:
                             logger.warning("Pre-save backup failed (disk full or permission error?). "
                                            "Proceeding with save, but no restore point was created.")
@@ -1804,8 +1876,10 @@ class SettingsManager:
                     for k, v in defaults.items():
                         settings['dns_propagation_seconds'].setdefault(k, v)
 
+                to_write = _put_back_environment_overlay(settings, on_disk)
+
                 # Save settings
-                if self.file_ops.safe_file_write(self.settings_file, settings, is_json=True):
+                if self.file_ops.safe_file_write(self.settings_file, to_write, is_json=True):
                     logger.info("Settings saved successfully")
                     # Invalidate the request-scoped cache: a caller in the
                     # same request that loads again must see the new values
