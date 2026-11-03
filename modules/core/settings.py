@@ -14,6 +14,7 @@ from pathlib import Path
 
 from modules import __version__ as _CERTMATE_VERSION
 from .constants import SETTINGS_SCHEMA_VERSION, iter_cert_domain_dirs
+from . import managed_configuration
 from .domain_entries import normalize_domains, normalize_entry
 from .file_operations import FileOperations, _backup_passphrase
 from .utils import (
@@ -187,6 +188,27 @@ class BearerTokenUnusableError(SettingsUnreadableError):
     is the one outcome that must never happen — see the raise sites below.
     """
 
+
+
+def _is_secret_account_field(provider: str, name: str) -> bool:
+    """Whether the settings API masks ``name`` in an account of ``provider``: the generic words, and the provider's own."""
+    return _is_secret_key(name) or name in _PROVIDER_SPECIFIC_SECRET_FIELDS.get(provider, frozenset())
+
+
+def _managed_known_providers() -> dict:
+    """The provider names a configuration file may declare: the ones CertMate can issue with."""
+    from .ca_manager import CAManager
+    from .dns_providers import DNSManager
+    return {'dns_providers': set(DNSManager.SUPPORTED_PROVIDERS),
+            'ca_providers': set(CAManager(None).ca_providers)}
+
+
+class ManagedConfigurationUnusable(SettingsUnreadableError):
+    """CERTMATE_CONFIG_FILE names a file that cannot be used (#1317).
+
+    Subclasses SettingsUnreadableError so the process stops with one line
+    instead of starting with a part of the configuration the operator declared.
+    """
 
 
 def _is_secret_key(name: str) -> bool:
@@ -902,7 +924,8 @@ def _move_retired_propagation_defaults(settings):
 # environment is still recognised after that.
 _ENV_OVERLAYS = (
     ('LETSENCRYPT_EMAIL', ('email',), lambda value: value.strip().lower()),
-    ('CLOUDFLARE_TOKEN', ('dns_providers', 'cloudflare', 'accounts', 'default', 'api_token'), lambda value: value),
+    ('CLOUDFLARE_TOKEN', ('dns_providers', 'cloudflare', 'accounts', 'default', 'api_token'),
+     lambda value: value),
 )
 
 _ABSENT = object()
@@ -916,30 +939,52 @@ def _value_at(document, path):
     return document
 
 
-def _put_back_environment_overlay(settings, on_disk):
-    """A copy of ``settings`` in which every value that came from the environment is what the file holds.
+def _restore_saved(result, path, on_disk):
+    """Make ``result`` at ``path`` what ``on_disk`` holds there.
 
-    A value is put back only while it is still the environment's: one an
-    operator changed to something else is theirs and is kept. A key the file
-    never had is removed again, with the empty dicts its overlay created.
+    If the file holds nothing there, the key goes, with the dicts left empty.
+    """
+    saved = _value_at(on_disk, path)
+    parents = [result]
+    for key in path[:-1]:
+        child = parents[-1].get(key) if isinstance(parents[-1], dict) else None
+        if not isinstance(child, dict):
+            if saved is _ABSENT:
+                return
+            child = parents[-1][key] = {}
+        parents.append(child)
+    if saved is _ABSENT:
+        parents[-1].pop(path[-1], None)
+        for depth in range(len(path) - 1, 0, -1):
+            if parents[depth]:
+                break
+            del parents[depth - 1][path[depth - 1]]
+    else:
+        parents[-1][path[-1]] = copy.deepcopy(saved)
+
+
+def _put_back_environment_overlay(settings, on_disk, managed_paths=()):
+    """A copy of ``settings`` in which nothing that came from outside the file is what gets written.
+
+    Two things are applied when the settings are read and must not be saved:
+
+    * a value from the environment, put back only while it is still the
+      environment's (one an operator changed to something else is theirs and
+      is kept);
+    * an account the configuration file declares (#1317), always, because the
+      file is its only source.
+
+    Each is put back to what the file held there, or removed again, with the
+    empty dicts it created, if the file never had it.
     """
     result = copy.deepcopy(settings)
     for variable, path, normalised in _ENV_OVERLAYS:
         wanted = os.getenv(variable)
         if not wanted or _value_at(result, path) not in (wanted, normalised(wanted)):
             continue
-        saved = _value_at(on_disk, path)
-        parents = [result]
-        for key in path[:-1]:
-            parents.append(parents[-1][key])
-        if saved is _ABSENT:
-            del parents[-1][path[-1]]
-            for depth in range(len(path) - 1, 0, -1):
-                if parents[depth]:
-                    break
-                del parents[depth - 1][path[depth - 1]]
-        else:
-            parents[-1][path[-1]] = copy.deepcopy(saved)
+        _restore_saved(result, path, on_disk)
+    for path in managed_paths:
+        _restore_saved(result, path, on_disk)
     return result
 
 
@@ -955,6 +1000,32 @@ class SettingsManager:
         # Optional callable that hashes a legacy api_bearer_token at save time.
         # Wired by the factory after AuthManager is constructed.
         self._token_hasher = None
+        # Accounts declared in CERTMATE_CONFIG_FILE (#1317), or None. Read once:
+        # a file that cannot be used stops the process here, before any setting
+        # is served.
+        self._managed = self._read_managed_configuration()
+
+    @staticmethod
+    def _read_managed_configuration():
+        path = managed_configuration.configured_path()
+        if not path:
+            return None
+        try:
+            managed = managed_configuration.load(path, is_secret_field=_is_secret_account_field,
+                                                 known_providers=_managed_known_providers())
+        except managed_configuration.ManagedConfigurationError as error:
+            raise ManagedConfigurationUnusable(str(error)) from error
+        logger.info("Configuration file %s declares %d account(s); they are applied on every read and never saved.",
+                    path, len(managed.account_paths))
+        return managed
+
+    def _managed_paths(self):
+        return self._managed.restore_paths if self._managed else ()
+
+    def _apply_managed(self, settings):
+        if self._managed:
+            self._managed.apply(settings)
+        return settings
 
     # ------------------------------------------------------------------
     # Request-scoped settings cache
@@ -1361,7 +1432,7 @@ class SettingsManager:
                 # First time setup - create with full template for web UI
                 logger.info("Creating initial settings file with full provider template for first-time setup")
                 self.save_settings(first_time_template)
-                return first_time_template
+                return self._apply_managed(copy.deepcopy(first_time_template))
 
             try:
                 settings = self.file_ops.safe_file_read(self.settings_file, is_json=True)
@@ -1384,7 +1455,7 @@ class SettingsManager:
                         logger.warning("Settings file is empty and no usable backup exists; "
                                        "recreating it with the first-time template")
                         self.save_settings(first_time_template)
-                        return first_time_template
+                        return self._apply_managed(copy.deepcopy(first_time_template))
                     if settings is None:
                         # Do NOT recreate the file. safe_file_read returns the
                         # default for a JSON typo, a PermissionError and an
@@ -1634,6 +1705,10 @@ class SettingsManager:
                         accounts['default'] = default_account
                     default_account['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
 
+                # Accounts the configuration file declares win over any saved
+                # account with the same id, and are not saved (#1317).
+                self._apply_managed(settings)
+
                 # Cache the canonical version. Return a deepcopy so the
                 # caller's in-place mutations cannot pollute the cache for
                 # subsequent readers in the same request. (See the cache-hit
@@ -1677,7 +1752,8 @@ class SettingsManager:
                 # backed up either (#1397): the document the file holds is read
                 # first, so both the backup and the write put it back.
                 on_disk = {}
-                if self.settings_file.exists() and any(os.getenv(variable) for variable, _, _ in _ENV_OVERLAYS):
+                if self.settings_file.exists() and (
+                        self._managed or any(os.getenv(variable) for variable, _, _ in _ENV_OVERLAYS)):
                     try:
                         read = self.file_ops.safe_file_read(self.settings_file, is_json=True)
                         size = self.settings_file.stat().st_size
@@ -1688,10 +1764,14 @@ class SettingsManager:
                     elif size > 0:
                         # Content that cannot be read cannot be told from the
                         # overlay: refuse, and leave the file as it is.
-                        logger.error("Not saving settings: %s exists but could not be read, so the values "
-                                     "the environment supplies cannot be told apart from the saved ones.",
+                        logger.error("Not saving settings: %s exists but could not be read, so what the "
+                                     "environment or the configuration file supplies cannot be "
+                                     "told apart from the saved values.",
                                      self.settings_file)
                         return False
+
+                if self._managed:
+                    on_disk = self._managed.normalise_baseline(on_disk)
 
                 # Create backup before saving (if settings file exists).
                 # A failed backup is logged as a warning but does not block the save —
@@ -1714,7 +1794,7 @@ class SettingsManager:
                         # a deliberate, audit-logged operator choice.
                         can_encrypt = bool(_backup_passphrase())
                         result = self.file_ops.create_unified_backup(
-                            _put_back_environment_overlay(settings, on_disk), backup_reason,
+                            _put_back_environment_overlay(settings, on_disk, self._managed_paths()), backup_reason,
                             include_secrets=can_encrypt)
                         if not result:
                             logger.warning("Pre-save backup failed (disk full or permission error?). "
@@ -1876,7 +1956,7 @@ class SettingsManager:
                     for k, v in defaults.items():
                         settings['dns_propagation_seconds'].setdefault(k, v)
 
-                to_write = _put_back_environment_overlay(settings, on_disk)
+                to_write = _put_back_environment_overlay(settings, on_disk, self._managed_paths())
 
                 # Save settings
                 if self.file_ops.safe_file_write(self.settings_file, to_write, is_json=True):

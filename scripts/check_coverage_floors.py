@@ -210,6 +210,9 @@ FLOORS = {
     'modules/core/inventory_sources.py': 95,
     'modules/core/inventory_view.py': 95,
     'modules/core/issuance_readiness.py': 95,
+    # 96% measured (#1317); what is left is apply() repairing a settings document whose
+    # providers are not dicts, and the line after a valid nested object.
+    'modules/core/managed_configuration.py': 95,
     'modules/core/metrics.py': 70,
     'modules/core/notifier.py': 90,
     'modules/core/ocsp_crl.py': 85,
