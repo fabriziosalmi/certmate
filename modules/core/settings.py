@@ -190,6 +190,19 @@ class BearerTokenUnusableError(SettingsUnreadableError):
 
 
 
+def _is_secret_account_field(provider: str, name: str) -> bool:
+    """Whether the settings API masks ``name`` in an account of ``provider``: the generic words, and the provider's own."""
+    return _is_secret_key(name) or name in _PROVIDER_SPECIFIC_SECRET_FIELDS.get(provider, frozenset())
+
+
+def _managed_known_providers() -> dict:
+    """The provider names a configuration file may declare: the ones CertMate can issue with."""
+    from .ca_manager import CAManager
+    from .dns_providers import DNSManager
+    return {'dns_providers': set(DNSManager.SUPPORTED_PROVIDERS),
+            'ca_providers': set(CAManager(None).ca_providers)}
+
+
 class ManagedConfigurationUnusable(SettingsUnreadableError):
     """CERTMATE_CONFIG_FILE names a file that cannot be used (#1317).
 
@@ -998,7 +1011,8 @@ class SettingsManager:
         if not path:
             return None
         try:
-            managed = managed_configuration.load(path, is_secret_key=_is_secret_key)
+            managed = managed_configuration.load(path, is_secret_field=_is_secret_account_field,
+                                                 known_providers=_managed_known_providers())
         except managed_configuration.ManagedConfigurationError as error:
             raise ManagedConfigurationUnusable(str(error)) from error
         logger.info("Configuration file %s declares %d account(s); they are applied on every read and never saved.",
@@ -1006,7 +1020,7 @@ class SettingsManager:
         return managed
 
     def _managed_paths(self):
-        return self._managed.account_paths if self._managed else ()
+        return self._managed.restore_paths if self._managed else ()
 
     def _apply_managed(self, settings):
         if self._managed:
@@ -1755,6 +1769,9 @@ class SettingsManager:
                                      "told apart from the saved values.",
                                      self.settings_file)
                         return False
+
+                if self._managed:
+                    on_disk = self._managed.normalise_baseline(on_disk)
 
                 # Create backup before saving (if settings file exists).
                 # A failed backup is logged as a warning but does not block the save —

@@ -10,8 +10,15 @@ import json
 import pytest
 
 from modules.core import managed_configuration
+from modules.core.ca_manager import CAManager
 from modules.core.file_operations import FileOperations
-from modules.core.settings import ManagedConfigurationUnusable, SettingsManager, SettingsUnreadableError, _is_secret_key
+from modules.core.settings import (
+    ManagedConfigurationUnusable,
+    SettingsManager,
+    SettingsUnreadableError,
+    _is_secret_account_field,
+    _managed_known_providers,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -32,7 +39,8 @@ def _write(tmp_path, document, name='config.json'):
 
 def _refusal(tmp_path, document):
     with pytest.raises(managed_configuration.ManagedConfigurationError) as caught:
-        managed_configuration.load(_write(tmp_path, document), is_secret_key=_is_secret_key)
+        managed_configuration.load(_write(tmp_path, document), is_secret_field=_is_secret_account_field,
+                                   known_providers=_managed_known_providers())
     return str(caught.value)
 
 
@@ -56,7 +64,8 @@ def _account(settings, kind, provider, account_id):
 # --- the file -----------------------------------------------------------------
 
 def test_a_valid_file_is_read_with_its_accounts(tmp_path):
-    loaded = managed_configuration.load(_write(tmp_path, VALID), is_secret_key=_is_secret_key)
+    loaded = managed_configuration.load(_write(tmp_path, VALID), is_secret_field=_is_secret_account_field,
+                                        known_providers=_managed_known_providers())
 
     assert loaded.accounts['dns_providers']['gandi']['prod']['api_token_file'] == '/run/secrets/gandi'
     assert ('ca_providers', 'private_ca', 'accounts', 'stepca') in loaded.account_paths
@@ -70,6 +79,11 @@ def test_a_valid_file_is_read_with_its_accounts(tmp_path):
     ({'version': 1, 'surprise': {}}, 'unknown key "surprise"'),
     ({'version': 1, 'storage_backend': {}}, 'storage backend is not supported'),
     ({'version': 1, 'dns_providers': {'Gandi': {'accounts': {}}}}, 'provider name'),
+    ({'version': 1, 'dns_providers': {'gandii': {'accounts': {'prod': {'name': 'x'}}}}}, 'not a supported DNS provider'),
+    ({'version': 1, 'ca_providers': {'cloudflare': {'accounts': {'prod': {'name': 'x'}}}}}, 'not a supported CA provider'),
+    ({'version': 1, 'dns_providers': {'gandi': {'accounts': {'prod': {'api_token_env': {}}}}}}, 'is a reference'),
+    ({'version': 1, 'dns_providers': {'acme-dns': {'accounts': {'prod': {'username': 'inline-user'}}}}},
+     'secret written in the file'),
     ({'version': 1, 'dns_providers': {'gandi': {'accounts': {'bad id': {'name': 'x'}}}}}, 'account id'),
     ({'version': 1, 'dns_providers': {'gandi': {'accounts': {'prod': {}}}}}, 'non-empty object'),
     ({'version': 1, 'dns_providers': {'gandi': {'accounts': {'prod': {'name': 'x'}}, 'extra': 1}}}, 'one key'),
@@ -187,3 +201,63 @@ def test_the_backup_taken_before_a_save_does_not_hold_the_declared_accounts(tmp_
 
     assert _account(seen['settings'], 'dns_providers', 'gandi', 'prod') is None
     assert 'internal.example' not in json.dumps(seen['settings'])
+
+
+# --- how the declared accounts meet what the rest of CertMate already does ---------
+
+def _save_plain(tmp_path, monkeypatch, mutate):
+    plain = _manager(tmp_path, monkeypatch)
+    settings = plain.load_settings(use_cache=False)
+    mutate(settings)
+    assert plain.save_settings(settings, backup_reason=None)
+
+
+def test_a_saved_flat_ca_configuration_stays_reachable_beside_a_declared_account(tmp_path, monkeypatch):
+    _save_plain(tmp_path, monkeypatch, lambda s: s.setdefault('ca_providers', {}).update(
+        {'private_ca': {'name': 'Old', 'acme_url': 'https://old.example/directory'}}))
+    config = _write(tmp_path, {'version': 1, 'ca_providers': {'private_ca': {'accounts': {
+        'prod': {'name': 'Prod', 'acme_url': 'https://ca.internal.example/directory'}}}}})
+    manager = _manager(tmp_path, monkeypatch, config=config)
+
+    loaded = manager.load_settings(use_cache=False)
+    old, used = CAManager(manager).get_ca_config('private_ca', 'default', settings=loaded)
+
+    assert used == 'default' and old['acme_url'] == 'https://old.example/directory'
+
+
+def test_a_declared_dns_account_becomes_the_default_over_the_empty_scaffold(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch, config=_write(tmp_path, VALID))
+
+    loaded = manager.load_settings(use_cache=False)
+
+    assert loaded['default_accounts']['gandi'] == 'prod'
+
+
+def test_removing_the_declaration_recovers_the_saved_flat_account(tmp_path, monkeypatch):
+    _save_plain(tmp_path, monkeypatch, lambda s: s.setdefault('dns_providers', {}).update(
+        {'gandi': {'api_token': 'saved-token'}}))
+    config = _write(tmp_path, {'version': 1, 'dns_providers': {'gandi': {'accounts': {
+        'default': {'name': 'Declared', 'api_token_env': 'GANDI_TOKEN'}}}}})
+    manager = _manager(tmp_path, monkeypatch, config=config)
+    loaded = manager.load_settings(use_cache=False)
+    loaded['scheduler_marker'] = 'saved'
+    assert manager.save_settings(loaded, backup_reason=None)
+
+    assert 'saved-token' in manager.settings_file.read_text()
+
+
+def test_a_declared_ca_account_reads_its_eab_secret_through_the_reference(monkeypatch, tmp_path):
+    monkeypatch.setenv('ZS_HMAC', 'hmac-from-env')
+    secret = tmp_path / 'hmac'
+    secret.write_text('hmac-from-file\n')
+    ca = CAManager(None)
+
+    assert ca.get_eab_credentials('zerossl', {'eab_kid': 'kid', 'eab_hmac_env': 'ZS_HMAC'}) == ('kid', 'hmac-from-env')
+    assert ca.get_eab_credentials('zerossl', {'eab_kid': 'kid', 'eab_hmac_file': str(secret)}) == ('kid', 'hmac-from-file')
+
+
+def test_an_eab_reference_that_yields_nothing_is_an_error_not_an_empty_secret(monkeypatch):
+    monkeypatch.delenv('ZS_UNSET', raising=False)
+
+    with pytest.raises(ValueError, match='eab_hmac'):
+        CAManager(None).get_eab_credentials('zerossl', {'eab_kid': 'kid', 'eab_hmac_env': 'ZS_UNSET'})

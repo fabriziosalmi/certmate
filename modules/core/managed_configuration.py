@@ -55,6 +55,7 @@ _NOT_YET = {'storage_backend': 'the storage backend is not supported in a config
 _NAME = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
 _ACCOUNT_ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')
 _REFERENCE_SUFFIXES = ('_file', '_env')
+_KIND_LABEL = {'dns_providers': 'DNS', 'ca_providers': 'CA'}
 
 
 class ManagedConfigurationError(RuntimeError):
@@ -78,20 +79,75 @@ class ManagedConfiguration:
             for account_id in by_id
         )
 
+    @property
+    def restore_paths(self):
+        """What a save puts back: the accounts, and the default-account pointer apply() may have moved."""
+        pointers = tuple(('default_accounts', provider) for provider in self.accounts['dns_providers'])
+        return self.account_paths + pointers
+
     def apply(self, settings: dict) -> dict:
-        """Put the managed accounts into ``settings`` (in place), over any account with the same id."""
-        for kind, provider, _, account_id in self.account_paths:
-            target = settings.setdefault(kind, {})
-            if not isinstance(target, dict):
-                target = settings[kind] = {}
-            entry = target.setdefault(provider, {})
-            if not isinstance(entry, dict):
-                entry = target[provider] = {}
-            accounts = entry.setdefault('accounts', {})
-            if not isinstance(accounts, dict):
-                accounts = entry['accounts'] = {}
-            accounts[account_id] = copy.deepcopy(self.accounts[kind][provider][account_id])
+        """Put the managed accounts into ``settings`` (in place), over any account with the same id.
+
+        A provider saved in the flat, single-account shape is first moved into
+        ``accounts.default``: CertMate reads only ``accounts`` once the key is
+        there, so the saved account would otherwise stop being found. A DNS
+        provider whose default account is not configured (the empty scaffold
+        the first start writes) takes the first declared account that is.
+        """
+        from .dns_providers import DNSManager
+        for kind in ACCOUNT_KINDS:
+            for provider, by_id in self.accounts[kind].items():
+                target = settings.setdefault(kind, {})
+                if not isinstance(target, dict):
+                    target = settings[kind] = {}
+                entry = target.setdefault(provider, {})
+                if not isinstance(entry, dict):
+                    entry = target[provider] = {}
+                accounts = as_accounts(entry)
+                for account_id, fields in by_id.items():
+                    accounts[account_id] = copy.deepcopy(fields)
+                if kind != 'dns_providers':
+                    continue
+                pointers = settings.setdefault('default_accounts', {})
+                current = pointers.get(provider)
+                if current and DNSManager._account_has_credentials(provider, accounts.get(current)):
+                    continue
+                for account_id, fields in by_id.items():
+                    if DNSManager._account_has_credentials(provider, fields):
+                        pointers[provider] = account_id
+                        break
         return settings
+
+    def normalise_baseline(self, on_disk: dict) -> dict:
+        """What the file holds, with the providers this configuration touches in the ``accounts`` shape.
+
+        apply() moves a flat account into ``accounts.default`` in memory; the
+        document a save restores from has to be read the same way, or the
+        saved account would be restored to nothing and lost.
+        """
+        baseline = copy.deepcopy(on_disk)
+        for kind in ACCOUNT_KINDS:
+            section = baseline.get(kind)
+            if not isinstance(section, dict):
+                continue
+            for provider in self.accounts[kind]:
+                if isinstance(section.get(provider), dict):
+                    as_accounts(section[provider])
+        return baseline
+
+
+def as_accounts(entry: dict) -> dict:
+    """Give a provider entry the ``accounts`` shape, in place, and return its accounts.
+
+    The flat keys of the single-account shape move into the ``default`` account
+    (the same move the settings page makes), so they are not left beside
+    ``accounts`` as a copy nothing reads.
+    """
+    if not isinstance(entry.get('accounts'), dict):
+        legacy = {key: value for key, value in entry.items() if key != 'accounts'}
+        entry.clear()
+        entry['accounts'] = {'default': legacy} if legacy else {}
+    return entry['accounts']
 
 
 def configured_path() -> str | None:
@@ -99,8 +155,14 @@ def configured_path() -> str | None:
     return os.getenv(CONFIG_FILE_ENV) or None
 
 
-def load(path: str, *, is_secret_key: Callable[[str], bool]) -> ManagedConfiguration:
-    """Read and validate ``path``. Raises ManagedConfigurationError; never returns a partial result."""
+def load(path: str, *, is_secret_field: Callable[[str, str], bool],
+         known_providers: dict[str, set[str]]) -> ManagedConfiguration:
+    """Read and validate ``path``. Raises ManagedConfigurationError; never returns a partial result.
+
+    ``is_secret_field(provider, name)`` is the settings module's own answer to "is this a secret", so a
+    field the API masks is a field this refuses inline; ``known_providers[kind]`` are the names CertMate
+    can issue with, so a declaration that could never be used is refused at the start.
+    """
     def refuse(reason: str) -> NoReturn:
         raise ManagedConfigurationError(f'{CONFIG_FILE_ENV}={path}: {reason}. Refusing to start.')
 
@@ -136,6 +198,8 @@ def load(path: str, *, is_secret_key: Callable[[str], bool]) -> ManagedConfigura
             where = f'{kind}.{provider}'
             if not _NAME.match(provider):
                 refuse(f'"{where}": the provider name must be lower-case letters, digits, "_" or "-"')
+            if provider not in known_providers[kind]:
+                refuse(f'"{where}": "{provider}" is not a supported {_KIND_LABEL[kind]} provider')
             if not isinstance(spec, dict) or set(spec) != {'accounts'} or not isinstance(spec['accounts'], dict):
                 refuse(f'"{where}" must be an object with one key, "accounts"')
             accounts[kind][provider] = {}
@@ -146,22 +210,22 @@ def load(path: str, *, is_secret_key: Callable[[str], bool]) -> ManagedConfigura
                            '(letters, digits, "_", "." or "-", at most 64)')
                 if not isinstance(fields, dict) or not fields:
                     refuse(f'"{at}" must be a non-empty object')
-                _check_fields(fields, at, is_secret_key, refuse)
+                _check_fields(fields, at, provider, is_secret_field, refuse)
                 accounts[kind][provider][account_id] = fields
     return ManagedConfiguration(path=path, accounts=accounts)
 
 
-def _check_fields(fields: dict, at: str, is_secret_key: Callable[[str], bool],
+def _check_fields(fields: dict, at: str, provider: str, is_secret_field: Callable[[str, str], bool],
                   refuse: Callable[[str], NoReturn]) -> None:
     """Refuse a secret written inline and a reference that points at nothing."""
     for name, value in fields.items():
         here = f'{at}.{name}'
-        if isinstance(value, dict):
-            _check_fields(value, here, is_secret_key, refuse)
-            continue
         if name.endswith(_REFERENCE_SUFFIXES):
             if not isinstance(value, str) or not value.strip():
                 refuse(f'"{here}" is a reference and must name a file or a variable')
             continue
-        if is_secret_key(name) and value not in (None, '', False):
+        if isinstance(value, dict):
+            _check_fields(value, here, provider, is_secret_field, refuse)
+            continue
+        if is_secret_field(provider, name) and value not in (None, '', False):
             refuse(f'"{here}" is a secret written in the file; use "{name}_file" or "{name}_env" instead')

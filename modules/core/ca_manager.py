@@ -9,6 +9,7 @@ import tempfile
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 from .domain_paths import certificate_dir
+from .secret_refs import SecretReferenceError, resolve_field
 from .utils import is_ip_identifier
 
 logger = logging.getLogger(__name__)
@@ -377,8 +378,20 @@ class CAManager:
             return None, None
 
         account_config = account_config or {}
-        eab_key_id = account_config.get('eab_kid') or account_config.get('eab_key_id', '')
-        eab_hmac_key = account_config.get('eab_hmac') or account_config.get('eab_hmac_key', '')
+        # A field may name where its value lives (`eab_hmac_env`, `eab_hmac_file`), as DNS
+        # accounts do; it is read here, on a copy of nothing, and never put back in settings.
+        def field(*names):
+            for name in names:
+                try:
+                    value = resolve_field(account_config, name)
+                except SecretReferenceError as error:
+                    raise ValueError(f"EAB credential not usable for CA provider '{ca_provider}': {error}") from error
+                if value:
+                    return value
+            return ''
+
+        eab_key_id = field('eab_kid', 'eab_key_id')
+        eab_hmac_key = field('eab_hmac', 'eab_hmac_key')
 
         if not eab_key_id or not eab_hmac_key:
             if self.requires_eab(ca_provider):
