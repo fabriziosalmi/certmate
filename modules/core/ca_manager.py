@@ -314,6 +314,24 @@ class CAManager:
             raise ValueError(f"{ca_info['name']} ACME URL not configured")
         return ca_info['staging_url' if staging else 'production_url']
     
+    def provider_for_directory(self, url: str) -> Optional[str]:
+        """The CA provider whose pinned directory is ``url``, or None.
+
+        Only a directory the registry fixes names its CA with certainty: one
+        an account supplies (``private_ca``, ``requires_acme_url``) or may
+        override (DigiCert's regional directory) says nothing about which
+        provider an old certificate came from, so those are not matched.
+        """
+        wanted = (url or '').strip().rstrip('/')
+        if not wanted:
+            return None
+        for key, info in self.ca_providers.items():
+            if key == 'private_ca' or info.get('requires_acme_url') or info.get('accepts_account_directory'):
+                continue
+            if (info.get('production_url') or '').rstrip('/') == wanted:
+                return key
+        return None
+
     def requires_eab(self, ca_provider: str) -> bool:
         """Check if CA provider requires External Account Binding"""
         if ca_provider not in self.ca_providers:
