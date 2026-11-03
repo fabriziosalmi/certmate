@@ -32,7 +32,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from .ca_manager import CAManager, resolve_ca_account
 from .cert_labels import tags_from_metadata
-from .shell import ShellExecutor
+from .shell import ShellExecutor, redact_command
 from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStrategy, acme_webroot_dir,
                              check_certbot_plugin_installed, clamp_propagation_seconds,
                              manual_hook_arguments, plugin_install_hint)
@@ -3703,18 +3703,7 @@ class CertificateManager:
 
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
             # Redact sensitive arguments before logging
-            _redact = {'--eab-kid', '--eab-hmac-key', '--email'}
-            safe_cmd = []
-            skip_next = False
-            for part in certbot_cmd:
-                if skip_next:
-                    safe_cmd.append('***')
-                    skip_next = False
-                elif str(part) in _redact:
-                    safe_cmd.append(str(part))
-                    skip_next = True
-                else:
-                    safe_cmd.append(str(part))
+            safe_cmd = redact_command(certbot_cmd)
             logger.debug(f"Certbot command: {' '.join(safe_cmd)}")
 
             # build_certbot_command created the per-domain config dir; hand
