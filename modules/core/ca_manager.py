@@ -314,7 +314,7 @@ class CAManager:
             raise ValueError(f"{ca_info['name']} ACME URL not configured")
         return ca_info['staging_url' if staging else 'production_url']
     
-    def provider_for_directory(self, url: str) -> Optional[str]:
+    def provider_for_directory(self, url: str) -> str | None:
         """The CA provider whose pinned directory is ``url``, or None.
 
         Only a directory the registry fixes names its CA with certainty: one
