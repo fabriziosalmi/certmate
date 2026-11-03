@@ -314,6 +314,38 @@ class CAManager:
             raise ValueError(f"{ca_info['name']} ACME URL not configured")
         return ca_info['staging_url' if staging else 'production_url']
     
+    def provider_for_directory(self, url: str) -> str | None:
+        """The CA provider whose pinned directory is ``url``, or None.
+
+        Only a directory the registry fixes names its CA with certainty: one
+        an account supplies (``private_ca``, ``requires_acme_url``) or may
+        override (DigiCert's regional directory) says nothing about which
+        provider an old certificate came from, so those are not matched.
+
+        Every production directory is checked before any staging one, so the
+        dedicated ``letsencrypt_staging`` entry keeps its own directory, and a
+        provider whose staging directory has no entry of its own (Google's)
+        is still named by it.
+        """
+        wanted = (url or '').strip().rstrip('/')
+        if not wanted:
+            return None
+        pinned = [(key, info) for key, info in self.ca_providers.items()
+                  if key != 'private_ca' and not info.get('requires_acme_url')
+                  and not info.get('accepts_account_directory')]
+        for field in ('production_url', 'staging_url'):
+            for key, info in pinned:
+                if (info.get(field) or '').rstrip('/') == wanted:
+                    return key
+        return None
+
+    def directory_is_staging(self, ca_provider: str, url: str) -> bool:
+        """Whether ``url`` is the staging directory of ``ca_provider`` and not its production one."""
+        info = self.ca_providers.get(ca_provider) or {}
+        wanted = (url or '').strip().rstrip('/')
+        return ((info.get('staging_url') or '').rstrip('/') == wanted
+                and (info.get('production_url') or '').rstrip('/') != wanted)
+
     def requires_eab(self, ca_provider: str) -> bool:
         """Check if CA provider requires External Account Binding"""
         if ca_provider not in self.ca_providers:
