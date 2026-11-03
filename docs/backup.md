@@ -186,6 +186,14 @@ Upload the archive with **Restore From Elsewhere** in Settings > Backup, or
 is a separate step, so an upload never changes anything on its own. An encrypted
 archive needs the same `CERTMATE_BACKUP_PASSPHRASE` on the new instance.
 
+A restore writes at most **2 GiB** in all, whatever the archive says about its
+members: an archive compresses to a thousandth of its size when it is mostly
+zeros, so the upload limit alone does not bound the disk. A restore that would
+write more stops at the ceiling and reports that it did not complete, and
+nothing restored before it is rolled back (take the pre-restore backup if you
+need to undo it). `CERTMATE_RESTORE_MAX_BYTES` moves the ceiling for an
+instance whose audit log and certificates need more.
+
 ## After a downgrade
 
 Running a version older than the one that wrote `settings.json` is not

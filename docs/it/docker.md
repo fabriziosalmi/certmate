@@ -1,6 +1,6 @@
 # Build e distribuzione con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM b3c7a928998dc93e -->
+<!-- CERTMATE-TRANSLATED-FROM a2ddb147c72573c7 -->
 
 Questa guida illustra come compilare, distribuire ed eseguire CertMate in Docker — incluso il supporto multi-piattaforma per ARM e AMD64.
 
@@ -155,6 +155,7 @@ docker run -d --name certmate \
 | `API_BEARER_TOKEN_FILE` | No | Percorso di un file contenente il token bearer API (ha precedenza su `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | No | `INFO` (predefinito), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **Impostala se vuoi backup automatici da cui poter ripristinare** | Cifra a riposo i backup unificati (`.zip.enc`, PBKDF2-SHA256 + Fernet), ed è ciò che rende *completi* i backup automatici — con essa possono ripristinare questa istanza, senza di essa mantengono le credenziali mascherate e non possono farlo. La stessa passphrase è richiesta per ripristinarli, e CertMate non la memorizza mai al posto tuo. Conservala in un luogo diverso dalla macchina che contiene i backup |
+| `CERTMATE_RESTORE_MAX_BYTES` | No | Il massimo che un ripristino di backup può scrivere in tutto, in byte (predefinito 2 GiB). Un ripristino che scriverebbe di più si ferma e segnala di non essere completo; vedi [Backup](../backup.md#restoring) |
 | `CLOUDFLARE_TOKEN` | No | Token API dell'account DNS Cloudflare predefinito. Route53 usa normalmente le credenziali configurate in Impostazioni → Provider DNS, ma quando il suo account seleziona esplicitamente `auth_mode: iam_role`, Certbot usa la catena di credenziali AWS del container (inclusi i ruoli IAM). |
 
 Consulta la [Guida all'installazione](./installation.md#variabili-dambiente) per l'elenco completo.
