@@ -56,7 +56,7 @@ def test_a_user_is_created_and_audited(wired):
         'username': 'alice', 'password': GOOD_PASSWORD, 'role': 'operator'})
 
     assert response.status_code == 201
-    auth.create_user.assert_called_once_with('alice', GOOD_PASSWORD, 'operator')
+    auth.create_user.assert_called_once_with('alice', GOOD_PASSWORD, 'operator', email=None)
     assert audit.log_user_created.called, (
         'creating a credential must leave an audit record'
     )
@@ -228,6 +228,53 @@ def test_a_password_change_is_held_to_the_same_policy(wired):
     client, auth, _audit = wired
 
     response = client.put('/api/users/bob', json={'password': 'weak'})
+
+    assert response.status_code == 400
+    assert not auth.update_user.called
+
+
+# ---------------------------------------------------------------------------
+# The email of a local user (#1384): OIDC links an existing account by it
+# ---------------------------------------------------------------------------
+
+def test_the_email_given_at_creation_reaches_the_store(wired):
+    client, auth, _audit = wired
+    auth.create_user.return_value = (True, 'User created successfully')
+
+    response = client.post('/api/users', json={
+        'username': 'alice', 'password': GOOD_PASSWORD, 'role': 'operator',
+        'email': ' alice@example.com '})
+
+    assert response.status_code == 201
+    auth.create_user.assert_called_once_with(
+        'alice', GOOD_PASSWORD, 'operator', email='alice@example.com')
+
+
+def test_an_email_that_is_not_one_is_refused_at_creation(wired):
+    client, auth, _audit = wired
+
+    response = client.post('/api/users', json={
+        'username': 'alice', 'password': GOOD_PASSWORD, 'email': 'not-an-address'})
+
+    assert response.status_code == 400
+    assert not auth.create_user.called
+
+
+def test_the_email_of_an_existing_user_is_updated(wired):
+    client, auth, _audit = wired
+    auth.list_users.return_value = {'bob': {'role': 'operator', 'email': None}}
+    auth.update_user.return_value = (True, 'User updated successfully')
+
+    response = client.put('/api/users/bob', json={'email': 'bob@example.com'})
+
+    assert response.status_code == 200
+    assert auth.update_user.call_args.kwargs['email'] == 'bob@example.com'
+
+
+def test_an_email_that_is_not_one_is_refused_on_update(wired):
+    client, auth, _audit = wired
+
+    response = client.put('/api/users/bob', json={'email': 'bob@@example'})
 
     assert response.status_code == 400
     assert not auth.update_user.called

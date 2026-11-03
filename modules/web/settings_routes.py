@@ -8,6 +8,7 @@ from flask import abort, request, jsonify
 from modules.core.auth import not_for_domain_restricted_keys
 from modules.core.request_fields import json_booleans
 from modules.core.constants import iter_cert_domain_dirs
+from modules.core.utils import validate_email
 from modules.core.domain_entries import entry_domain
 
 logger = logging.getLogger(__name__)
@@ -258,7 +259,6 @@ def _delete_ca_account(managers, settings_manager, audit_logger, settings,
 def _save_ca_account(settings_manager, audit_logger, accounts,
                      ca_manager, provider, account_id):
     from modules.core.settings import _strip_masked_values
-    from modules.core.utils import validate_email
 
     creating = account_id not in accounts
     if request.args.get('create') == '1' and not creating:
@@ -611,8 +611,18 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 'error': 'Password must be at least 12 characters and include a digit and a symbol'
             }), 400
 
+        # The address is optional, but one that is given is kept: OIDC links an
+        # existing account by it, so a value dropped here leaves the account
+        # unreachable for a login with JIT provisioning off.
+        email = data.get('email') or None
+        if email is not None:
+            email_ok, email_err = validate_email(email)
+            if not email_ok:
+                return jsonify({'error': email_err}), 400
+            email = email.strip()
+
         bootstrap_admin = _is_bootstrap_admin(auth_manager, role)
-        success, msg = auth_manager.create_user(username, password, role)
+        success, msg = auth_manager.create_user(username, password, role, email=email)
         if success:
             if audit_logger:
                 actor = getattr(request, 'current_user', {}) or {}
@@ -668,6 +678,12 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
 
         if enabled is not None and not isinstance(enabled, bool):
             return jsonify({'error': 'enabled must be a boolean'}), 400
+
+        if email is not None:
+            email_ok, email_err = validate_email(email)
+            if not email_ok:
+                return jsonify({'error': email_err}), 400
+            email = email.strip()
 
         # Mirror the create-user password policy on resets so a weakened
         # credential cannot be slipped in through the edit surface.
