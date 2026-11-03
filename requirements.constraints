@@ -84,7 +84,7 @@ itsdangerous==2.2.0
 jinja2==3.1.6
 jmespath==1.1.0
 josepy==2.2.0
-joserfc==1.7.5
+joserfc==1.7.7
 jsonpickle==4.1.2
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
@@ -98,7 +98,7 @@ pkb-client==2.3.1
 prometheus-client==0.26.0
 proto-plus==1.29.0
 protobuf==7.36.2
-pyasn1==0.6.4
+pyasn1==0.6.5
 pyasn1-modules==0.4.2
 pycparser==3.0
 pydantic==2.13.5

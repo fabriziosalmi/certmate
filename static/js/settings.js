@@ -3382,6 +3382,15 @@
                         '<i class="fas fa-key"></i>' +
                         '</button>';
 
+                    // Email — what an SSO login links an existing account by.
+                    var emailBtn =
+                        '<button data-action="edit-email" data-username="' + escapeHtml(username) + '"' +
+                        ' data-email="' + escapeHtml(userInfo.email || '') + '"' +
+                        ' class="p-2 text-muted hover:text-gray-700 dark:hover:text-gray-200"' +
+                        ' title="' + (userInfo.email ? 'Change email' : 'Set email') + '">' +
+                        '<i class="fas fa-envelope"></i>' +
+                        '</button>';
+
                     // Delete — hidden for the sole admin.
                     var deleteBtn = isSoleAdmin ? '' :
                         '<button data-action="delete-user" data-username="' + escapeHtml(username) + '"' +
@@ -3409,6 +3418,7 @@
                         '</div>' +
                         '<div class="flex items-center space-x-2">' +
                         toggleBtn +
+                        emailBtn +
                         resetBtn +
                         deleteBtn +
                         '</div>' +
@@ -3424,6 +3434,7 @@
                         switch (btn.dataset.action) {
                             case 'toggle-user': toggleUserStatus(user, btn.dataset.enable === 'true'); break;
                             case 'reset-password': resetUserPassword(user); break;
+                            case 'edit-email': editUserEmail(user, btn.dataset.email); break;
                             case 'delete-user': deleteUser(user); break;
                         }
                     });
@@ -3506,6 +3517,33 @@
                 console.error('Error toggling user status:', error);
                 showMessage('Failed to update user status', 'error');
             });
+    }
+
+    function editUserEmail(username, current) {
+        CertMate.prompt('Email for \'' + username + '\':', 'Edit Email', current || '').then(function (email) {
+            email = (email || '').trim();
+            if (!email || email === current) return;
+
+            fetch('/api/users/' + encodeURIComponent(username), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email })
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (response.ok) {
+                            showMessage('Email saved for \'' + username + '\'', 'success');
+                            refreshUserList();
+                        } else {
+                            showMessage(data.error || 'Failed to save email', 'error');
+                        }
+                    });
+                })
+                .catch(function (error) {
+                    console.error('Error saving email:', error);
+                    showMessage('Failed to save email', 'error');
+                });
+        });
     }
 
     function resetUserPassword(username) {
@@ -3695,6 +3733,7 @@
     window.toggleRoute53LegacyAuthMode = toggleRoute53LegacyAuthMode;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;
+    window.editUserEmail = editUserEmail;
     window.deleteUser = deleteUser;
     window.clearDeploymentCache = clearDeploymentCache;
     window.refreshCacheStats = refreshCacheStats;
