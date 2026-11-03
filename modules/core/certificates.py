@@ -4503,6 +4503,11 @@ class CertificateManager:
         provider = builder.provider_for_directory(match.group(1)) if match else None
         if provider:
             metadata['ca_provider'] = provider
+            # A staging directory with no provider of its own (Google's) is
+            # recorded as the flag it has always been kept as, so a reissue
+            # does not take the lineage for production.
+            if builder.directory_is_staging(provider, match.group(1)):
+                metadata.setdefault('staging', True)
 
     def _publish_renewed_certificate(self, domain, domain_dir, metadata):
         """A renewal happened: publish it, stamp it, store it, report it.

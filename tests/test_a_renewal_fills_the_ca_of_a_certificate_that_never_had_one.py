@@ -20,6 +20,8 @@ pytestmark = [pytest.mark.unit]
 DOMAIN = 'old.example.com'
 LE = 'https://acme-v02.api.letsencrypt.org/directory'
 LE_STAGING = 'https://acme-staging-v02.api.letsencrypt.org/directory'
+GOOGLE = 'https://dv.acme-v02.api.pki.goog/directory'
+GOOGLE_STAGING = 'https://dv.acme-v02.test-api.pki.goog/directory'
 
 
 def _manager(tmp_path):
@@ -60,6 +62,20 @@ def test_the_staging_directory_names_the_staging_provider(tmp_path):
     saved = _renew(_manager(tmp_path), tmp_path, {'domain': DOMAIN}, LE_STAGING)
 
     assert saved['ca_provider'] == 'letsencrypt_staging'
+
+
+def test_a_provider_whose_staging_directory_is_its_own_is_named_and_flagged_staging(tmp_path):
+    saved = _renew(_manager(tmp_path), tmp_path, {'domain': DOMAIN}, GOOGLE_STAGING)
+
+    assert saved['ca_provider'] == 'google'
+    assert saved['staging'] is True
+
+
+def test_a_production_directory_does_not_flag_staging(tmp_path):
+    saved = _renew(_manager(tmp_path), tmp_path, {'domain': DOMAIN}, GOOGLE)
+
+    assert saved['ca_provider'] == 'google'
+    assert 'staging' not in saved
 
 
 def test_a_directory_the_registry_does_not_pin_is_left_unnamed(tmp_path):
