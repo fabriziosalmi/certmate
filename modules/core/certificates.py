@@ -4480,6 +4480,35 @@ class CertificateManager:
         return result
 
 
+    _LINEAGE_SERVER = re.compile(r'^[ \t]*server[ \t]*=[ \t]*(\S+)[ \t]*$', re.M)
+
+    def _record_ca_from_lineage(self, domain, domain_dir, metadata):
+        """Fill ``ca_provider`` on a renewed certificate that never had one (#1383).
+
+        A certificate issued before the field existed renews through
+        ``certbot renew``, which does not pass through create_certificate, so
+        nothing ever wrote it. The CA that just renewed it is the server in
+        its own renewal configuration; it is recorded only when that server is
+        a directory the registry pins. Never the default CA: a certificate may
+        have come from another one, and a wrong CA saved is worse than none.
+        """
+        if metadata.get('ca_provider'):
+            return
+        try:
+            text = renewal_conf(domain_dir, domain).read_text(encoding='utf-8')
+        except OSError:
+            return
+        match = self._LINEAGE_SERVER.search(text)
+        builder = self.ca_manager or CAManager(self.settings_manager)
+        provider = builder.provider_for_directory(match.group(1)) if match else None
+        if provider:
+            metadata['ca_provider'] = provider
+            # A staging directory with no provider of its own (Google's) is
+            # recorded as the flag it has always been kept as, so a reissue
+            # does not take the lineage for production.
+            if builder.directory_is_staging(provider, match.group(1)):
+                metadata.setdefault('staging', True)
+
     def _publish_renewed_certificate(self, domain, domain_dir, metadata):
         """A renewal happened: publish it, stamp it, store it, report it.
 
@@ -4496,6 +4525,7 @@ class CertificateManager:
         # metadata once, with the resulting storage state (#423).
         metadata.pop('imported_at', None)
         metadata['renewed_at'] = utc_now_iso()
+        self._record_ca_from_lineage(domain, domain_dir, metadata)
         # Persist when there is metadata to update OR a warning to record: a
         # domain with no metadata.json would otherwise lose the only signal
         # that its external copy is stale.
