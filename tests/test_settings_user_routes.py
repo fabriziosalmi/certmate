@@ -278,3 +278,15 @@ def test_an_email_that_is_not_one_is_refused_on_update(wired):
 
     assert response.status_code == 400
     assert not auth.update_user.called
+
+
+def test_an_empty_email_still_clears_the_address(wired):
+    """PUT {"email": ""} is how an admin removes a wrong association."""
+    client, auth, _audit = wired
+    auth.list_users.return_value = {'bob': {'role': 'operator', 'email': 'old@example.com'}}
+    auth.update_user.return_value = (True, 'User updated successfully')
+
+    response = client.put('/api/users/bob', json={'email': ''})
+
+    assert response.status_code == 200
+    assert auth.update_user.call_args.kwargs['email'] == ''

@@ -260,12 +260,13 @@ def _email_or_refuse(email):
     """The address as it will be stored, or the 400 that refuses it.
 
     None passes through: the address is optional on create and absent on an
-    update that changes something else. A helper rather than inline branches,
+    update that changes something else. So does the empty string, which is how
+    an update clears an address that was wrong. A helper rather than inline branches,
     so the two user routes do not grow the budgeted complexity of
     register_settings_routes.
     """
-    if email is None:
-        return None
+    if email is None or email == '':
+        return email
     email_ok, email_err = validate_email(email)
     if not email_ok:
         abort(make_response(jsonify({'error': email_err}), 400))
