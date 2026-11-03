@@ -40,7 +40,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 # The mypy and the interpreter these counts were measured with. mypy is pinned in requirements-test.txt.
-MYPY_VERSION = '2.4.0'
+MYPY_VERSION = '2.4.1'
 PYTHON_MINOR = (3, 12)
 
 # file -> errors.

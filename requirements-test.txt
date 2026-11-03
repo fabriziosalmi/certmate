@@ -3,10 +3,10 @@
 # release of pytest or one of its plugins. Dependabot proposes each bump as its
 # own PR. Not hash-locked like requirements*.lock: pip's --require-hashes mode
 # refuses the editable installs below.
-pytest==9.1.1
+pytest==9.2.0
 pytest-cov==7.1.0
 pytest-mock==3.17.0
-pytest-asyncio==1.4.0
+pytest-asyncio==1.4.1
 pytest-flask==1.3.0
 pytest-xdist==3.8.0
 pytest-playwright==0.10.0
@@ -37,14 +37,14 @@ packaging==26.3
 # to measure the tree's worst cyclomatic complexity and compares it with the
 # number CI enforces. Pinned to the version the lint step installs so the test
 # job and the lint job cannot disagree about what "too complex" means.
-flake8==7.4.1
+flake8==7.5.0
 # Read by scripts/check_ruff_budget.py, the ruff ratchet CI and `make lint` run (#1093). Pinned
 # exactly, and to the version the baseline in that script was measured with: rules change between
 # releases, so a bump (Dependabot proposes one) fails that check until the baseline is re-measured
 # (`python scripts/check_ruff_budget.py --print`) and RUFF_VERSION moves with this pin.
-ruff==0.17.2
+ruff==0.17.3
 # Read by scripts/check_mypy_budget.py, the mypy ratchet (#1094). Pinned exactly, to the version its
 # baseline was measured with: what mypy reports changes between releases, so a bump (Dependabot
 # proposes one) fails that check until the baseline is re-measured (`python scripts/check_mypy_budget.py
 # --print`) and MYPY_VERSION moves with this pin.
-mypy==2.4.0
+mypy==2.4.1

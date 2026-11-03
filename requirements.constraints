@@ -19,13 +19,13 @@ attrs==26.1.0
 authlib==1.9.1
 azure-common==1.1.28
 azure-core==1.41.0
-azure-identity==1.26.0
+azure-identity==1.27.0
 azure-mgmt-core==1.6.0
 azure-mgmt-dns==9.0.0
 bcrypt==5.0.0
 beautifulsoup4==4.15.0
 blinker==1.9.0
-boto3==1.43.118
+boto3==1.43.123
 botocore==1.43.123
 certbot==5.8.0
 certbot-dns-arvancloud==0.1.0
@@ -58,7 +58,7 @@ configobj==5.0.9
 cryptography==50.0.2
 distro==1.9.0
 dns-lexicon==3.25.1
-dnspython==2.9.0
+dnspython==2.9.1
 edgegrid-python==2.0.8
 filelock==4.2.4
 flask==3.1.3

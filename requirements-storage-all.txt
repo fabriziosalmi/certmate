@@ -4,7 +4,7 @@
 # Azure Key Vault
 azure-keyvault-secrets>=4.11.3
 azure-keyvault-certificates>=4.11.3
-azure-identity>=1.26.0
+azure-identity>=1.27.0
 
 # The window the ACME stack works in: certbot and acme 5.8.0 require
 # cryptography>=47 and pyopenssl 26.4.0 requires >=49,<51. This file is
@@ -17,7 +17,7 @@ azure-identity>=1.26.0
 cryptography>=49,<51
 
 # AWS Secrets Manager
-boto3>=1.43.118
+boto3>=1.43.123
 
 # HashiCorp Vault
 hvac>=2.4.0
