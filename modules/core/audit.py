@@ -275,6 +275,74 @@ class AuditLogger:
             "before appending.", self._chain_size, size)
         self._recover_chain_state()
 
+    def _set_aside_a_torn_tail(self) -> None:
+        """Take off the chain a record that a crash cut short, and keep it beside it.
+
+        A line is committed when its newline is. A process killed in the middle
+        of an append leaves the start of a record with no newline; the next
+        append wrote straight after those bytes, so the fragment and the new
+        record became one unparseable line. That event was lost, and the
+        verifier, which reads a bad line in the middle of the file as
+        tampering, reported the chain broken from then on.
+
+        Called with the append lock held, so no other writer is mid-line: bytes
+        after the last newline belong to nobody and are cut. They are appended
+        to ``<chain>.torn`` first (evidence of what the crash interrupted), so
+        nothing is destroyed.
+        """
+        path = self.audit_chain_file
+        try:
+            size = path.stat().st_size
+        except FileNotFoundError:
+            return
+        if size == 0:
+            return
+        with open(path, 'rb') as reader:
+            reader.seek(size - 1)
+            if reader.read(1) == b'\n':
+                return
+            # Walk back to the last newline in blocks; a record is small, so this is one block.
+            block = 64 * 1024
+            start = size
+            keep = 0
+            while start > 0:
+                start = max(0, start - block)
+                reader.seek(start)
+                chunk = reader.read(min(block, size - start))
+                found = chunk.rfind(b'\n')
+                if found != -1:
+                    keep = start + found + 1
+                    break
+            reader.seek(keep)
+            fragment = reader.read()
+        try:
+            whole = json.loads(fragment)
+        except ValueError:
+            whole = None
+        if isinstance(whole, dict) and isinstance(whole.get('seq'), int) and whole.get('hash'):
+            # The write stopped between the record and its newline: the record is
+            # complete, and the next one chains from its hash. Cutting it would
+            # break the chain; the newline is what it lacks.
+            with open(path, 'ab') as handle:
+                handle.write(b'\n')
+                handle.flush()
+                os.fsync(handle.fileno())
+            self._chain_size = size + 1
+            return
+        sidecar = path.with_name(path.name + '.torn')
+        fd = os.open(str(sidecar), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, fragment + b'\n')
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.truncate(path, keep)
+        self._chain_size = keep
+        logger.warning(
+            "Audit chain ended in %d bytes with no newline (a write interrupted by a crash); "
+            "they were moved to %s and the chain continues from its last whole record.",
+            len(fragment), sidecar)
+
     def _chain_append(self, entry: Dict[str, Any]) -> None:
         """Append one audit entry to the hash chain. Best-effort and isolated:
         a chain failure must never break audit logging or the audited
@@ -291,6 +359,7 @@ class AuditLogger:
                     _lock_file(f)
                     try:
                         self._refresh_if_another_writer_appended()
+                        self._set_aside_a_torn_tail()
                         seq = self._next_seq
                         line = audit_chain.make_line(seq, entry, self._last_hash)
                         f.write(json.dumps(line, ensure_ascii=False) + '\n')
