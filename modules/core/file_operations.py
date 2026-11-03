@@ -134,6 +134,36 @@ def _safe_backup_reason(reason) -> str:
 # use, not on memory.
 _MAX_DATA_ENTRY_BYTES = 512 * 1024 * 1024
 
+# Ceiling on everything one restore may write, all members together. Each member
+# is bounded and the archive is bounded compressed, but deflate packs zeros about
+# a thousand to one, so without a total a file the ingest cap lets through
+# (40 MB) restores to tens of gigabytes. Measured: 0.56 MB zipped, 540 MiB
+# written, restore returned True. 2 GiB is above the 512 MiB audit log plus every
+# key and certificate of a large instance; CERTMATE_RESTORE_MAX_BYTES moves it.
+_MAX_RESTORE_BYTES = 2 * 1024 * 1024 * 1024
+
+
+def _restore_ceiling():
+    """The byte ceiling of one restore: CERTMATE_RESTORE_MAX_BYTES when it is a positive integer, else the default."""
+    try:
+        configured = int(os.getenv('CERTMATE_RESTORE_MAX_BYTES', ''))
+    except ValueError:
+        return _MAX_RESTORE_BYTES
+    return configured if configured > 0 else _MAX_RESTORE_BYTES
+
+
+class _RestoreBudget:
+    """What one restore may still write; every member draws on the same account."""
+
+    def __init__(self, total):
+        self.total = total
+        self.remaining = total
+
+    def spend(self, size):
+        self.remaining -= size
+        if self.remaining < 0:
+            raise ValueError(f'the restore would write more than {self.total} bytes in all')
+
 
 class RestoreIncompleteError(RuntimeError):
     """A restore extracted some entries but not all of them.
@@ -156,7 +186,7 @@ class RestoreIncompleteError(RuntimeError):
         )
 
 
-def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes):
+def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes, budget=None):
     """Extract one archive member to *target_path* without ever leaving it in
     a half-written state.
 
@@ -201,6 +231,8 @@ def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes):
                 if not chunk:
                     break
                 written += len(chunk)
+                if budget is not None:
+                    budget.spend(len(chunk))
                 if written > max_bytes:
                     # The header size can understate the real size; this is the
                     # check that actually holds. Treated as a failure, not a
@@ -1183,6 +1215,7 @@ class FileOperations:
             # Extract unified backup
             self.last_restore_error = None
             self.last_restore_keyless = []
+            budget = _RestoreBudget(_restore_ceiling())
             with zipfile.ZipFile(backup_path, 'r') as zipf:
                 # Gate 0: a share-safe archive carries no private keys. Laid
                 # over an instance that has certificates it would replace
@@ -1333,7 +1366,7 @@ class FileOperations:
                         # The promoted file is 0600.
                         try:
                             _extract_zip_member_atomically(
-                                zipf, file_info, target_path, max_entry_size)
+                                zipf, file_info, target_path, max_entry_size, budget)
                         except Exception as e:
                             logger.error(
                                 f"Error extracting {file_info.filename}: {e} "
@@ -1418,7 +1451,7 @@ class FileOperations:
                         try:
                             _extract_zip_member_atomically(
                                 zipf, file_info, target_path,
-                                _MAX_DATA_ENTRY_BYTES)
+                                _MAX_DATA_ENTRY_BYTES, budget)
                         except Exception as e:
                             logger.error(
                                 f"Error extracting {file_info.filename}: {e} "
