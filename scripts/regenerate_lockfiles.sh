@@ -28,6 +28,9 @@
 # -r` on the lock for both architectures, and CI resolves every requirements
 # file with pip for both. A lock uv wrote and pip cannot install fails there.
 #
+# Arguments are handed to uv for the two locks the image installs from, so an
+# advisory is a one-liner: `scripts/regenerate_lockfiles.sh --upgrade-package NAME`.
+#
 # Needs uv (https://docs.astral.sh/uv/): `pip install uv` or `brew install uv`.
 set -euo pipefail
 
@@ -94,7 +97,7 @@ for req in requirements.txt requirements-minimal.txt; do
     lock="${req%.txt}.lock"
     echo
     echo "=== $req -> $lock (+ ${lock%.lock}.constraints) ==="
-    resolve "$req" "$lock"
+    resolve "$req" "$lock" "$@"
     python3 scripts/lockfile.py write "$req" "$WORK/$first.txt" "$lock" --constraints
 done
 
