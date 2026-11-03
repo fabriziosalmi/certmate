@@ -433,8 +433,7 @@ class ClientCertificateManager:
 
             # Save metadata
             metadata_path = cert_subdir / "metadata.json"
-            with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2)
+            self._write_metadata(metadata_path, metadata)
 
             logger.info(f"Successfully created client certificate: {identifier}")
 
@@ -522,6 +521,22 @@ class ClientCertificateManager:
             logger.error(f"Error listing client certificates: {str(e)}")
             return []
 
+    @staticmethod
+    def _write_metadata(path: Path, metadata: dict[str, Any]) -> None:
+        """Replace a certificate's record whole or not at all.
+
+        metadata.json is the only place a client certificate's identity, serial
+        and revocation live. Opening it with 'w' truncated it before the first
+        byte of the new record was written, so a write that stopped in between
+        (a full disk, a killed process) left an empty or half-written file; the
+        listing skips what it cannot parse, and the certificate vanished from
+        the inventory while it stayed valid for the relying parties. The
+        record holds a name and an email, so it is also 0600, as the key files
+        beside it are.
+        """
+        PrivateCAGenerator._atomic_write_bytes(
+            path, json.dumps(metadata, indent=2).encode('utf-8'), 0o600)
+
     def _metadata_lock(self, identifier: str) -> threading.Lock:
         """Return the per-identifier metadata lock, creating it on first use."""
         with self._metadata_locks_mutex:
@@ -583,8 +598,7 @@ class ClientCertificateManager:
                 # the same thing only while the glob yielded exactly one.
                 written = 0
                 for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
-                    with open(metadata_file, 'w') as f:
-                        json.dump(metadata, f, indent=2)
+                    self._write_metadata(metadata_file, metadata)
                     written += 1
                 if not written:
                     # get_certificate_metadata found it a moment ago with the
@@ -849,8 +863,7 @@ class ClientCertificateManager:
                             current = dict(old_metadata)
                         revoked_meanwhile = revoked_meanwhile or bool(current.get("revoked"))
                         current.update(superseded)
-                        with open(metadata_file, 'w') as f:
-                            json.dump(current, f, indent=2)
+                        self._write_metadata(metadata_file, current)
 
                 if revoked_meanwhile:
                     # The identity was revoked while this renewal was signing.
