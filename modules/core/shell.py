@@ -3,11 +3,37 @@ Shell Execution Module for CertMate
 Provides an interface for executing shell commands, enabling easier testing and mocking.
 """
 
-import subprocess
 import logging
+import subprocess
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
+
+# certbot takes the EAB key of a CA account only on the command line, so the
+# value is in the command this module runs and logs. The flags whose next
+# argument is a credential or an address; one list, used by every log line
+# that prints a command.
+_SENSITIVE_FLAGS = frozenset({'--eab-kid', '--eab-hmac-key', '--email'})
+
+
+def redact_command(cmd) -> list[str]:
+    """The command as text that is safe to log: the value after a credential flag is ``***``."""
+    safe: list[str] = []
+    mask_next = False
+    for part in cmd:
+        part = str(part)
+        flag, equals, _ = part.partition('=')
+        if mask_next:
+            safe.append('***')
+            mask_next = False
+        elif part in _SENSITIVE_FLAGS:
+            safe.append(part)
+            mask_next = True
+        elif equals and flag in _SENSITIVE_FLAGS:
+            safe.append(f'{flag}=***')
+        else:
+            safe.append(part)
+    return safe
 
 class ShellExecutor:
     """Interface for executing shell commands"""
@@ -34,7 +60,7 @@ class ShellExecutor:
             subprocess.CompletedProcess instance
         """
         try:
-            logger.debug(f"Executing command: {' '.join(cmd)}")
+            logger.debug(f"Executing command: {' '.join(redact_command(cmd))}")
             return subprocess.run(
                 cmd,
                 check=check,
@@ -44,7 +70,7 @@ class ShellExecutor:
                 **kwargs
             )
         except subprocess.TimeoutExpired:
-            logger.error(f"Command timed out: {' '.join(cmd)}")
+            logger.error(f"Command timed out: {' '.join(redact_command(cmd))}")
             raise
         except Exception as e:
             logger.error(f"Command execution failed: {e}")
@@ -105,7 +131,7 @@ class MockShellExecutor(ShellExecutor):
         self.commands_executed.append(cmd_str)
         self.envs_executed.append(kwargs.get('env'))
         self.call_count += 1
-        logger.info(f"Mock Executing: {cmd_str}")
+        logger.info(f"Mock Executing: {' '.join(redact_command(cmd))}")
         
         # Check for queued response first
         if self.response_queue:
