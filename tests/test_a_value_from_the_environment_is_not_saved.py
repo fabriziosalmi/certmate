@@ -101,7 +101,7 @@ def test_a_value_changed_to_something_else_is_the_operators_and_is_kept(manager,
 
 def test_every_overlay_in_the_table_is_one_the_load_applies(manager, monkeypatch):
     """The table that save_settings() undoes must be the set load_settings() applies."""
-    for variable, path in settings_module._ENV_OVERLAYS:
+    for variable, path, _normalised in settings_module._ENV_OVERLAYS:
         monkeypatch.setenv(variable, f'value-of-{variable}')
         loaded = manager.load_settings(use_cache=False)
         assert settings_module._value_at(loaded, path) == f'value-of-{variable}', variable
@@ -117,3 +117,47 @@ def test_a_key_the_file_never_had_is_removed_again_with_the_dicts_the_overlay_ma
 
     assert written == {'email': 'a@example.com'}
     assert overlaid['dns_providers']['cloudflare']['accounts']['default']['api_token'] == 'env-token'
+
+
+def test_an_address_the_save_normalises_is_still_recognised_as_the_environments(manager, monkeypatch):
+    """save_settings() strips and lower-cases the address before the file is written."""
+    _save_through_the_interface(manager, email='ui@example.com')
+    monkeypatch.setenv('LETSENCRYPT_EMAIL', ' Env@Example.COM ')
+
+    _save_through_the_interface(manager, scheduler_marker='saved')
+
+    assert _on_disk(manager)['email'] == 'ui@example.com'
+
+
+def test_a_file_that_cannot_be_read_is_not_overwritten_while_the_environment_supplies_values(manager, monkeypatch):
+    manager.settings_file.write_text('{ not json')
+    monkeypatch.setenv('LETSENCRYPT_EMAIL', 'env@example.com')
+
+    assert manager.save_settings({'email': 'env@example.com', 'domains': []}, backup_reason=None) is False
+    assert manager.settings_file.read_text() == '{ not json'
+
+
+def test_an_empty_file_has_nothing_to_lose_and_is_written(manager, monkeypatch):
+    manager.settings_file.write_text('')
+    monkeypatch.setenv('LETSENCRYPT_EMAIL', 'env@example.com')
+
+    assert manager.save_settings({'email': 'env@example.com', 'domains': []}, backup_reason=None) is True
+    assert _on_disk(manager).get('email') in ('', None)
+
+
+def test_the_backup_taken_before_a_save_holds_what_was_saved_not_the_environment(manager, monkeypatch):
+    _save_through_the_interface(manager, email='ui@example.com')
+    monkeypatch.setenv('LETSENCRYPT_EMAIL', 'env@example.com')
+    monkeypatch.setenv('CLOUDFLARE_TOKEN', 'env-token')
+    seen = {}
+
+    def create_unified_backup(settings, reason, **kwargs):
+        seen['settings'] = settings
+        return True
+
+    monkeypatch.setattr(manager.file_ops, 'create_unified_backup', create_unified_backup)
+    settings = manager.load_settings(use_cache=False)
+    assert manager.save_settings(settings, backup_reason='ui_save')
+
+    assert seen['settings']['email'] == 'ui@example.com'
+    assert 'env-token' not in json.dumps(seen['settings'])
