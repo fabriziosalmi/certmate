@@ -81,6 +81,24 @@ def test_a_file_that_cannot_be_used_is_refused_with_the_reason(tmp_path, documen
     assert 'Refusing to start' in message
 
 
+def test_a_secret_inside_a_nested_object_is_refused_too(tmp_path):
+    message = _refusal(tmp_path, {'version': 1, 'dns_providers': {
+        'gandi': {'accounts': {'prod': {'options': {'api_key': 'nested-value'}}}}}})
+
+    assert 'dns_providers.gandi.accounts.prod.options.api_key' in message
+    assert 'nested-value' not in message
+
+
+def test_a_kind_that_is_not_an_object_is_refused(tmp_path):
+    assert '"dns_providers" must be an object' in _refusal(tmp_path, {'version': 1, 'dns_providers': []})
+
+
+def test_a_file_larger_than_the_limit_is_refused_without_being_parsed(tmp_path, monkeypatch):
+    monkeypatch.setattr(managed_configuration, 'MAX_BYTES', 64)
+
+    assert 'larger than 64 bytes' in _refusal(tmp_path, VALID)
+
+
 def test_a_secret_written_in_the_file_is_refused_and_the_message_does_not_carry_it(tmp_path):
     message = _refusal(tmp_path, {'version': 1, 'dns_providers': {
         'gandi': {'accounts': {'prod': {'api_token': 'hunter2-the-value'}}}}})
