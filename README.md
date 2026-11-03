@@ -133,6 +133,10 @@ curl -X POST http://localhost:8000/api/certificates/create \
  -d '{"domain": "app.example.com"}'
 ```
 
+## One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/CertMate/)
+
 ## Other ways to run it
 
 - **Linux with systemd:** `curl -fsSL https://raw.githubusercontent.com/fabriziosalmi/certmate/main/deploy/install.sh | sudo sh`
