@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.55.2 (four fixes to what CertMate writes: its logs, a restore, a certificate's record and the audit chain)
+
+[Read the notes](docs/releases/v2.55.2.md)
+
 ## v2.55.1 (security updates for the image, and two fixes)
 
 [Read the notes](docs/releases/v2.55.1.md)
