@@ -892,6 +892,54 @@ def _move_retired_propagation_defaults(settings):
     return moved
 
 
+# Settings that load_settings() takes from the environment instead of the file
+# (variable name, path in the settings document). The overlay exists in memory
+# only: save_settings() puts back what the file held (#1397), so a value an
+# operator delivers through the environment or a Kubernetes Secret never lands
+# in settings.json, and unsetting the variable returns the saved value.
+_ENV_OVERLAYS = (
+    ('LETSENCRYPT_EMAIL', ('email',)),
+    ('CLOUDFLARE_TOKEN', ('dns_providers', 'cloudflare', 'accounts', 'default', 'api_token')),
+)
+
+_ABSENT = object()
+
+
+def _value_at(document, path):
+    for key in path:
+        if not isinstance(document, dict) or key not in document:
+            return _ABSENT
+        document = document[key]
+    return document
+
+
+def _put_back_environment_overlay(settings, on_disk):
+    """A copy of ``settings`` in which every value that came from the environment is what the file holds.
+
+    A value is put back only while it is still the environment's: one an
+    operator changed to something else is theirs and is kept. A key the file
+    never had is removed again, with the empty dicts its overlay created.
+    """
+    result = copy.deepcopy(settings)
+    for variable, path in _ENV_OVERLAYS:
+        wanted = os.getenv(variable)
+        if not wanted or _value_at(result, path) != wanted:
+            continue
+        saved = _value_at(on_disk, path)
+        parents = [result]
+        for key in path[:-1]:
+            parents.append(parents[-1][key])
+        if saved is _ABSENT:
+            del parents[-1][path[-1]]
+            for depth in range(len(path) - 1, 0, -1):
+                if parents[depth]:
+                    break
+                del parents[depth - 1][path[depth - 1]]
+        else:
+            parents[-1][path[-1]] = copy.deepcopy(saved)
+    return result
+
+
 class SettingsManager:
     """Class to handle settings management and migrations"""
 
@@ -1804,8 +1852,18 @@ class SettingsManager:
                     for k, v in defaults.items():
                         settings['dns_propagation_seconds'].setdefault(k, v)
 
+                # What the environment supplies at load is not saved (#1397).
+                on_disk = {}
+                if self.settings_file.exists() and any(os.getenv(variable) for variable, _ in _ENV_OVERLAYS):
+                    try:
+                        read = self.file_ops.safe_file_read(self.settings_file, is_json=True)
+                        on_disk = read if isinstance(read, dict) else {}
+                    except (OSError, ValueError):
+                        on_disk = {}
+                to_write = _put_back_environment_overlay(settings, on_disk)
+
                 # Save settings
-                if self.file_ops.safe_file_write(self.settings_file, settings, is_json=True):
+                if self.file_ops.safe_file_write(self.settings_file, to_write, is_json=True):
                     logger.info("Settings saved successfully")
                     # Invalidate the request-scoped cache: a caller in the
                     # same request that loads again must see the new values
