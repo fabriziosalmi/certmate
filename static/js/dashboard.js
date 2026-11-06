@@ -97,6 +97,9 @@
     // Clear filters function
     function clearFilters() {
         currentTagFilter = '';
+        currentSearch = '';
+        var searchBox = document.getElementById('certificateSearch');
+        if (searchBox) searchBox.value = '';
         renderTagFilterBar();
         setStatusFilter('all');
     }
@@ -375,6 +378,9 @@
     // Active tag filter (#1043): one tag, or '' for none. Combined with the status
     // chips, so "expiring" + "loadbalancer" is a question the page can answer.
     var currentTagFilter = '';
+    // Free-text search of the list (#1385): lower-cased and trimmed, '' for none.
+    // Combined with the status chips and the tag, and applied before the list is paged.
+    var currentSearch = '';
     var certificatePage = 1;
     var certificatePageSize = 25;
     var filteredCertificates = [];
@@ -442,6 +448,26 @@
         }, 300);
     }
 
+    // What a search of the list looks at: the same things the command palette
+    // finds a certificate by, so the two never disagree about what matches: its
+    // name, or its address for an IP certificate, the host it is served at, every
+    // other name it covers (#1247), its tags and its note (#1043).
+    function certificateMatchesSearch(cert, query) {
+        if (!query) return true;
+        var haystack = [cert.domain, cert.ip_address, cert.host, cert.notes]
+            .concat(Array.isArray(cert.san_domains) ? cert.san_domains : [])
+            .concat(Array.isArray(cert.tags) ? cert.tags : []);
+        return haystack.some(function (value) {
+            return typeof value === 'string' && value.toLowerCase().indexOf(query) !== -1;
+        });
+    }
+
+    function setCertificateSearch(value) {
+        currentSearch = String(value || '').trim().toLowerCase();
+        certificatePage = 1;
+        filterCertificates();
+    }
+
     // Filter and search certificates
     function filterCertificates() {
         var statusFilter = currentStatusFilter;
@@ -476,7 +502,7 @@
             var matchesTag = !currentTagFilter ||
                 (Array.isArray(cert.tags) && cert.tags.indexOf(currentTagFilter) !== -1);
 
-            return matchesStatus && matchesTag;
+            return matchesStatus && matchesTag && certificateMatchesSearch(cert, currentSearch);
         });
 
         displayCertificates(filteredCerts);
@@ -877,7 +903,7 @@
         checkVisibleDeployments();
 
         if (certificates.length === 0) {
-            var isFiltered = currentStatusFilter !== 'all' || currentTagFilter;
+            var isFiltered = currentStatusFilter !== 'all' || currentTagFilter || currentSearch;
             thead.style.display = 'none';
 
             if (isFiltered) {
@@ -4561,6 +4587,7 @@
     window.retryCreateJob = retryCreateJob;
     window.dismissPendingJob = dismissPendingJob;
     window.flashCertRow = flashCertRow;
+    window.setCertificateSearch = setCertificateSearch;
     // What the page's controls may ask for by name (`data-click`, `data-change`,
     // `data-input`): see CertMate.actions in certmate.js.
     CertMate.globalActions([
@@ -4570,7 +4597,7 @@
         'copyCurlCommand', 'copyDetailDomain', 'copyFromModal', 'deleteCertificate',
         'dismissPendingJob', 'downloadCertificate', 'exportAllCertificates',
         'invalidateAllCache', 'loadCertificates', 'openReplaceCertificate', 'reissueKeyless', 'renewCertificate',
-        'retryCreateJob', 'runDeployHooks', 'setStatusFilter', 'showCacheStats',
+        'retryCreateJob', 'runDeployHooks', 'setCertificateSearch', 'setStatusFilter', 'showCacheStats',
         'sortCertificates', 'startEditReissue', 'submitReplaceCertificate', 'toggleCertificateImport', 'toggleAdvancedOptions', 'toggleAutoRenew',
         'toggleCertKeyOptions', 'toggleDebugConsole', 'toggleDnsProviderVisibility',
         'updateAccountSelection', 'updateCAProviderInfo'
