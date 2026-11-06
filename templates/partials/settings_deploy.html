@@ -81,7 +81,7 @@
                                             <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook">
                                             <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                         </label>
-                                        <input type="text" x-model="hook.name" placeholder="Hook name"
+                                        <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name"
                                                class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                     </div>
                                     <div class="flex items-center gap-2 ml-3">
@@ -93,7 +93,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                <textarea x-model="hook.command" placeholder="e.g. systemctl reload nginx" rows="2"
+                                <textarea aria-label="Hook command" x-model="hook.command" placeholder="e.g. systemctl reload nginx" rows="2"
                                           class="w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
                                 <div class="flex items-center gap-4 text-xs">
                                     <label class="flex items-center gap-1 text-muted">
@@ -207,7 +207,7 @@
                                                     <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook">
                                                     <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                                 </label>
-                                                <input type="text" x-model="hook.name" placeholder="Hook name"
+                                                <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name"
                                                        class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                             </div>
                                             <div class="flex items-center gap-2 ml-3">
@@ -219,7 +219,7 @@
                                                 </button>
                                             </div>
                                         </div>
-                                        <textarea x-model="hook.command" placeholder="e.g. /opt/scripts/deploy.sh" rows="2"
+                                        <textarea aria-label="Hook command" x-model="hook.command" placeholder="e.g. /opt/scripts/deploy.sh" rows="2"
                                                   class="w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
                                         <div class="flex items-center gap-4 text-xs">
                                             <label class="flex items-center gap-1 text-muted">
@@ -304,7 +304,7 @@
                         </template>
                         <!-- Add domain section -->
                         <div class="flex gap-2">
-                            <input type="text" x-model="newDomain" placeholder="example.com"
+                            <input aria-label="Domain to add hooks for" type="text" x-model="newDomain" placeholder="example.com"
                                    class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
                                    @keydown.enter="addDomainSection()">
                             <button type="button" @click="addDomainSection()"
