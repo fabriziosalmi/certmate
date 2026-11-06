@@ -17,7 +17,7 @@
             <!-- Search -->
             <div class="relative mb-6">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                <input type="text" x-model="search" placeholder="Filter domains…"
+                <input aria-label="Filter domains" type="text" x-model="search" placeholder="Filter domains…"
                        class="w-full pl-10 pr-4 py-2 text-sm border border-border rounded-lg bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none">
             </div>
 
@@ -127,8 +127,8 @@
                 <div class="p-4">
                     <div class="flex flex-wrap items-end gap-2">
                         <div class="flex-1 min-w-0">
-                            <label class="block text-xs text-muted mb-1">Domain</label>
-                            <input list="probe-domain-suggestions" type="text" x-model="addDomain" placeholder="example.com"
+                            <label for="probe-add-domain" class="block text-xs text-muted mb-1">Domain</label>
+                            <input id="probe-add-domain" list="probe-domain-suggestions" type="text" x-model="addDomain" placeholder="example.com"
                                    class="w-full text-sm border border-border rounded px-3 py-2 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none">
                             <datalist id="probe-domain-suggestions">
                                 <template x-for="cert in unconfigured" :key="cert.domain">
