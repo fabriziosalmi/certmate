@@ -89,18 +89,22 @@
     // API Token helper functions
     // =============================================
 
-    function toggleTokenVisibility() {
+    // The field, the eye icon and the button's name and pressed state say the same thing.
+    function setTokenVisible(visible) {
         var tokenField = document.getElementById('api_bearer_token');
         var toggleIcon = document.getElementById('tokenToggleIcon');
-        if (tokenField.type === 'password') {
-            tokenField.type = 'text';
-            toggleIcon.classList.remove('fa-eye');
-            toggleIcon.classList.add('fa-eye-slash');
-        } else {
-            tokenField.type = 'password';
-            toggleIcon.classList.remove('fa-eye-slash');
-            toggleIcon.classList.add('fa-eye');
+        var toggleBtn = document.getElementById('tokenToggleBtn');
+        tokenField.type = visible ? 'text' : 'password';
+        toggleIcon.classList.toggle('fa-eye', !visible);
+        toggleIcon.classList.toggle('fa-eye-slash', visible);
+        if (toggleBtn) {
+            toggleBtn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+            toggleBtn.setAttribute('aria-label', visible ? 'Hide token' : 'Show token');
         }
+    }
+
+    function toggleTokenVisibility() {
+        setTokenVisible(document.getElementById('api_bearer_token').type === 'password');
     }
 
     function generateRandomToken() {
@@ -113,10 +117,7 @@
         var tokenField = document.getElementById('api_bearer_token');
         var newToken = generateRandomToken();
         tokenField.value = newToken;
-        tokenField.type = 'text'; // Show the generated token
-        var toggleIcon = document.getElementById('tokenToggleIcon');
-        toggleIcon.classList.remove('fa-eye');
-        toggleIcon.classList.add('fa-eye-slash');
+        setTokenVisible(true); // Show the generated token
         addDebugLog('Generated new API Bearer Token', 'info');
         showMessage('New API token generated. Remember to save your settings!', 'success');
     }
