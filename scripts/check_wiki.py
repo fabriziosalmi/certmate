@@ -39,6 +39,12 @@ PHANTOM_PATHS = {
 # Environment variables nothing reads.
 DEAD_VARIABLES = ("HOST", "FLASK_DEBUG")
 
+# A link to a file or directory on this repository's main branch; group 1 is
+# the path inside the repository, without an anchor or a query.
+REPOSITORY_LINK = (
+    r"https://github\.com/fabriziosalmi/certmate/(?:blob|tree)/main/"
+    r"([^)\s#?\]>\"']+)")
+
 
 def _truth():
     """The facts, read from the code rather than restated here."""
@@ -123,6 +129,14 @@ def check(wiki):
             for pattern, reason in PHANTOM_PATHS.items():
                 if re.search(pattern, line):
                     findings.append(f"{where}: phantom endpoint — {reason}")
+
+            # The pages point into the repository now (docs/ above all), so a
+            # file renamed or removed there turns a wiki link into a 404.
+            for match in re.finditer(REPOSITORY_LINK, line):
+                if not (REPO_ROOT / match.group(1)).exists():
+                    findings.append(
+                        f"{where}: {match.group(1)} — no such file in the "
+                        f"repository")
 
             for match in re.finditer(r"hub\.docker\.com/r/([\w.-]+/[\w.-]+)", line):
                 if match.group(1) != "fabriziosalmi/certmate":

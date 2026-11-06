@@ -80,3 +80,26 @@ def test_it_aborts_rather_than_reporting_success():
         "check_wiki.py no longer aborts when it cannot read the repository. "
         "Printing a complaint and exiting zero is how a check goes quiet."
     )
+
+
+def _check_wiki_module():
+    spec = importlib.util.spec_from_file_location("check_wiki", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_a_link_into_the_repository_must_name_a_file_that_is_there(tmp_path):
+    """Every wiki page is a pointer to its page in docs/ since 2026-11-06, so
+    the way the wiki now rots is a docs/ file renamed under it."""
+    base = "https://github.com/fabriziosalmi/certmate"
+    (tmp_path / "Home.md").write_text(
+        f"- [kept]({base}/blob/main/docs/docker.md)\n"
+        f"- [index]({base}/tree/main/docs)\n"
+        f"- [with an anchor]({base}/blob/main/docs/dns-providers.md#aws-route53)\n"
+        f"- [renamed]({base}/blob/main/docs/dockerr.md)\n",
+        encoding="utf-8")
+
+    _, findings = _check_wiki_module().check(tmp_path)
+
+    assert findings == ["Home.md:4: docs/dockerr.md — no such file in the repository"]
