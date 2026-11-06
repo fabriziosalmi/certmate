@@ -90,16 +90,16 @@
     // =============================================
 
     // The field, the eye icon and the button's name and pressed state say the same thing.
-    function setTokenVisible(visible) {
+    function setTokenVisible(shown) {
         var tokenField = document.getElementById('api_bearer_token');
         var toggleIcon = document.getElementById('tokenToggleIcon');
         var toggleBtn = document.getElementById('tokenToggleBtn');
-        tokenField.type = visible ? 'text' : 'password';
-        toggleIcon.classList.toggle('fa-eye', !visible);
-        toggleIcon.classList.toggle('fa-eye-slash', visible);
+        tokenField.type = shown ? 'text' : 'password';
+        toggleIcon.classList.toggle('fa-eye', !shown);
+        toggleIcon.classList.toggle('fa-eye-slash', shown);
         if (toggleBtn) {
-            toggleBtn.setAttribute('aria-pressed', visible ? 'true' : 'false');
-            toggleBtn.setAttribute('aria-label', visible ? 'Hide token' : 'Show token');
+            toggleBtn.setAttribute('aria-pressed', shown ? 'true' : 'false');
+            toggleBtn.setAttribute('aria-label', shown ? 'Hide token' : 'Show token');
         }
     }
 
