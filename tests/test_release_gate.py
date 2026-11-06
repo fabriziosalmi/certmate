@@ -298,3 +298,94 @@ def test_prepare_refuses_a_stale_local_checkout():
     assert first_gate != -1
     assert check_pos < first_gate, \
         "the HEAD==origin/main check must precede the gates"
+
+
+# --- the notes travel in the release PR -------------------------------------------
+#
+# `prepare` used to refuse any dirty tree and require the notes to exist, so the
+# notes had to be merged to main first. Main then named a version that did not
+# exist for as long as the gates took: hours usually, days once (v2.55.2, while
+# Let's Encrypt staging was unreachable). Now the notes of the version being
+# released and the index are the only files `prepare` accepts uncommitted, and
+# they go in the release commit.
+
+def _scratch_repo(tmp_path):
+    """A git repository with the files release.sh looks at, committed and clean."""
+    repo = tmp_path / "repo"
+    (repo / "docs" / "releases").mkdir(parents=True)
+    (repo / "RELEASE_NOTES.md").write_text("# Release notes\n")
+    (repo / "docs" / "releases" / "v1.0.0.md").write_text("## v1.0.0 (first)\n")
+    (repo / "app.py").write_text("print('hi')\n")
+    for command in (["git", "init", "-q"], ["git", "add", "-A"],
+                    ["git", "-c", "user.email=t@example.com", "-c", "user.name=t",
+                     "commit", "-q", "-m", "base"]):
+        subprocess.run(command, cwd=repo, check=True, capture_output=True)
+    return repo
+
+
+def _dirty_outside_the_notes(repo, version):
+    out = subprocess.run(
+        ["bash", "-c", f'source "{RELEASE_SH}"; cd "{repo}"; dirty_outside_the_notes {version}'],
+        capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    return out.stdout.splitlines()
+
+
+def test_the_notes_of_the_release_and_the_index_may_be_uncommitted(tmp_path):
+    repo = _scratch_repo(tmp_path)
+    (repo / "docs" / "releases" / "v1.0.1.md").write_text("## v1.0.1 (next)\n")     # new, untracked
+    (repo / "RELEASE_NOTES.md").write_text("# Release notes\n\n## v1.0.1 (next)\n")  # modified
+
+    assert _dirty_outside_the_notes(repo, "1.0.1") == []
+
+
+def test_any_other_uncommitted_file_is_refused_and_named(tmp_path):
+    repo = _scratch_repo(tmp_path)
+    (repo / "docs" / "releases" / "v1.0.1.md").write_text("## v1.0.1 (next)\n")
+    (repo / "app.py").write_text("print('changed')\n")
+    (repo / "scratch.txt").write_text("x\n")
+
+    stray = _dirty_outside_the_notes(repo, "1.0.1")
+
+    assert any(line.endswith("app.py") for line in stray)
+    assert any(line.endswith("scratch.txt") for line in stray)
+    assert not any("v1.0.1.md" in line or "RELEASE_NOTES.md" in line for line in stray)
+
+
+def test_the_notes_of_another_version_are_not_excused(tmp_path):
+    repo = _scratch_repo(tmp_path)
+    (repo / "docs" / "releases" / "v1.0.0.md").write_text("## v1.0.0 (edited after release)\n")
+
+    stray = _dirty_outside_the_notes(repo, "1.0.1")
+
+    assert any("v1.0.0.md" in line for line in stray), \
+        "an edit to the notes of a release already made must not ride along in the next one"
+
+
+def test_a_clean_tree_is_clean(tmp_path):
+    assert _dirty_outside_the_notes(_scratch_repo(tmp_path), "1.0.1") == []
+
+
+def test_prepare_uses_that_rule_not_a_plain_clean_check():
+    src = RELEASE_SH.read_text(encoding="utf-8")
+
+    assert 'dirty_outside_the_notes "$version"' in src
+    assert '[ -z "$(git status --porcelain)" ]' not in src, \
+        "prepare is back to refusing the notes it needs to carry"
+
+
+def test_the_release_commit_carries_the_notes_and_the_index():
+    src = RELEASE_SH.read_text(encoding="utf-8")
+
+    add = re.search(r'^\s*git add ([^\n]*)', src, re.M)
+    assert add, "no git add in the release commit"
+    assert '"$(notes_file "$version")"' in add.group(1)
+    assert 'RELEASE_NOTES.md' in add.group(1)
+
+
+def test_sourcing_the_script_runs_nothing():
+    """The dispatch is guarded, so the functions above can be loaded and tried."""
+    out = subprocess.run(["bash", "-c", f'source "{RELEASE_SH}"; echo loaded'],
+                         capture_output=True, text=True, timeout=60)
+
+    assert out.returncode == 0 and out.stdout.strip() == "loaded", out.stderr
