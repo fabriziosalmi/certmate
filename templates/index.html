@@ -624,10 +624,17 @@
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <h3 class="text-lg font-semibold text-foreground">Your Certificates</h3>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
-                        <!-- Per-page certificate search retired in the redesign:
-                             the global ⌘K / "/" command palette is the single search
-                             surface. Status filtering is a row of chips (phase 5)
-                             driving setStatusFilter(); counts come from updateStats. -->
+                        <!-- Search of the list (#1385): narrows the table in place, next to
+                             the status chips and the tags, over the same things the global
+                             command palette (Ctrl or Cmd + K, or "/") finds a certificate by.
+                             The palette stays the way to jump to one certificate. -->
+                        <div class="relative">
+                            <label for="certificateSearch" class="sr-only">Search certificates</label>
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true"></i>
+                            <input type="search" id="certificateSearch" data-input="setCertificateSearch" data-pass="value"
+                                   autocomplete="off" spellcheck="false" placeholder="Name, SAN, tag or note"
+                                   class="w-full pl-10 pr-4 py-2 text-sm border border-border rounded-lg bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none">
+                        </div>
                         <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter certificates by status">
                             <button type="button" data-status-chip="all" aria-pressed="true" data-click="setStatusFilter" data-args='["all"]'
                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">

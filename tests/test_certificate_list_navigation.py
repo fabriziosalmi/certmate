@@ -1,8 +1,9 @@
 """Pagination bounds rendering and automatic deployment checks.
 
-The certificate lists have no search field of their own: the ⌘K palette is the
-one place certificates are searched (the redesign's decision, recorded in the
-templates), so the same query cannot give two answers.
+The server certificate list searches in place since #1385
+(tests/test_the_certificates_page_searches_in_place.py), over the same things
+the ⌘K palette finds a certificate by, so the same query does not give two
+answers. The client certificate list keeps its filter chips.
 """
 
 import subprocess
@@ -178,8 +179,14 @@ window.testLoad().then(() => {
     assert result.returncode == 0, result.stderr
 
 
-def test_the_certificate_lists_have_no_search_field_of_their_own():
+def test_only_the_server_certificate_list_has_a_search_field():
+    """The server list searches in place (#1385); the client list keeps its filter chips.
+
+    Until #1385 neither list had a field, so that the palette was the one place
+    that answered a query. A field on the client list would be a second,
+    unrequested change to a page nobody asked about.
+    """
     templates = Path(__file__).resolve().parent.parent / 'templates'
-    for name in ('index.html', 'partials/_client_certs.html'):
-        assert 'type="search"' not in (templates / name).read_text(encoding='utf-8'), name
+    assert (templates / 'index.html').read_text(encoding='utf-8').count('type="search"') == 1
+    assert 'type="search"' not in (templates / 'partials/_client_certs.html').read_text(encoding='utf-8')
 
