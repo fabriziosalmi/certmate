@@ -114,3 +114,37 @@ def test_a_wiki_placeholder_does_not_match_a_fixed_route_segment():
     assert module.verbs_for('/api/certificates/<X>', table) == (True, {'GET'})
     # ...and never a fixed segment it merely lines up with.
     assert module.verbs_for('/api/<X>/create', table) == (False, set())
+
+
+def _run(wiki):
+    import subprocess
+    import sys
+
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), str(wiki)],
+        capture_output=True, text=True, cwd=REPO,
+    )
+
+
+def test_a_wiki_that_names_no_api_path_has_nothing_to_compare(tmp_path):
+    """Since 2026-11-06 every wiki page is a pointer to its page in docs/: no
+    endpoint is stated, and that is not the extractor failing."""
+    (tmp_path / 'Home.md').write_text(
+        '# CertMate Wiki\n\nThe documentation lives in docs/.\n', encoding='utf-8')
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert 'nothing to compare' in result.stdout
+
+
+def test_a_wiki_that_names_an_api_path_it_cannot_read_still_fails(tmp_path):
+    """The guard this replaced: text about the API that yields no claim means
+    the extractor stopped reading the wiki."""
+    (tmp_path / 'Home.md').write_text(
+        '# CertMate Wiki\n\nThe API lives under /api/certificates.\n', encoding='utf-8')
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 2
+    assert 'the extractor is not reading it' in result.stderr
