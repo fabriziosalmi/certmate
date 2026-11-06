@@ -70,7 +70,9 @@ def test_it_refuses_to_start_without_its_secrets(service, name):
 def test_the_release_moves_the_pin_and_commits_it():
     script = (REPO / 'scripts' / 'release.sh').read_text()
     assert 'pathlib.Path("deploy/docker-compose.yml")' in script
-    git_add = next(l for l in script.splitlines() if l.strip().startswith('git add modules/__init__.py'))
+    # The release commit is the `git add` that names the version file; the notes come first in it.
+    git_add = next(l for l in script.splitlines()
+                   if l.strip().startswith('git add ') and 'modules/__init__.py' in l)
     assert 'deploy/docker-compose.yml' in git_add
 
 
