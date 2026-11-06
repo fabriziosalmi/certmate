@@ -72,7 +72,7 @@
 
                             <!-- Renewal Threshold Setting -->
                             <div>
-                                <label class="block text-xs font-medium text-muted mb-2">
+                                <label for="renewal_threshold_days" class="block text-xs font-medium text-muted mb-2">
                                     Certificate Renewal Threshold (days)
                                 </label>
                                 <input type="number" id="renewal_threshold_days" name="renewal_threshold_days" 
@@ -87,7 +87,7 @@
 
                             <!-- Cache TTL Setting -->
                             <div>
-                                <label class="block text-xs font-medium text-muted mb-2">
+                                <label for="cache_ttl" class="block text-xs font-medium text-muted mb-2">
                                     Cache TTL (seconds)
                                 </label>
                                 <input type="number" id="cache_ttl" name="cache_ttl"
@@ -163,16 +163,17 @@
                         <div class="space-y-4">
                             <!-- API Bearer Token Setting -->
                             <div>
-                                <label class="block text-xs font-medium text-muted mb-2">
+                                <label for="api_bearer_token" class="block text-xs font-medium text-muted mb-2">
                                     API Bearer Token
                                 </label>
                                 <div class="flex items-center space-x-2">
                                     <input type="password" id="api_bearer_token" name="api_bearer_token" 
                                            placeholder="Enter a secure token for API authentication"
                                            class="flex-1 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
-                                    <button type="button" data-click="toggleTokenVisibility" 
+                                    <button type="button" data-click="toggleTokenVisibility" id="tokenToggleBtn"
+                                            aria-label="Show token" aria-pressed="false" aria-controls="api_bearer_token"
                                             class="px-3 py-2 text-muted hover:text-gray-700 dark:hover:text-gray-200">
-                                        <i class="fas fa-eye" id="tokenToggleIcon"></i>
+                                        <i class="fas fa-eye" id="tokenToggleIcon" aria-hidden="true"></i>
                                     </button>
                                     <button type="button" data-click="generateToken"
                                             class="px-3 py-2 border border-primary text-primary rounded-md hover:bg-primary hover:text-white text-sm transition-colors">
