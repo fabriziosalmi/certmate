@@ -48,9 +48,26 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: npm new enough for trusted publishing
+        # Trusted publishing needs npm 11.5.1 or later, and the Node this job
+        # runs ships an older one. This job holds id-token: write, so the npm it
+        # installs runs with the right to publish: it is installed from a tarball
+        # whose SHA-512 is written here, not from whatever `npm@11` resolves to
+        # on the day of the release. To move it: pick the version, run
+        # `npm view npm@X dist.integrity`, and change both values together.
+        env:
+          NPM_VERSION: '11.21.1'
+          NPM_INTEGRITY: 'sha512-YTzL6QBEJXyHcTu0JiUc7RKMp+mzlJtl7rGLmERaXUQeFHIMc9atdr6G9M9C8vDWbv40epoTQAzNL2/PtZVDhQ=='
         run: |
-          npm install -g npm@11
-          npm --version
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          npm pack "npm@${NPM_VERSION}" --silent
+          got="sha512-$(openssl dgst -sha512 -binary "npm-${NPM_VERSION}.tgz" | openssl base64 -A)"
+          if [ "$got" != "$NPM_INTEGRITY" ]; then
+            echo "::error::npm ${NPM_VERSION} does not match the SHA-512 pinned in this workflow"
+            exit 1
+          fi
+          npm install -g "./npm-${NPM_VERSION}.tgz"
+          test "$(npm --version)" = "$NPM_VERSION"
 
       - name: Fail unless the tag matches package.json
         # npm versions are write-once: a tag that disagrees with package.json
