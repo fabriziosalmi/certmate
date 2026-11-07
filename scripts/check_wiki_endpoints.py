@@ -134,12 +134,25 @@ def main() -> int:
               f'success on a check that read nothing.', file=sys.stderr)
         return 2
 
-    table = route_table()
     stated = claims(wiki)
     if not stated:
-        print('the wiki states no endpoints at all, which cannot be right: the '
-              'extractor is not reading it.', file=sys.stderr)
-        return 2
+        # Nothing stated is two different things. A wiki whose text names an
+        # /api/ path and yields no claim means the extractor stopped reading it,
+        # which must not pass. A wiki that names no /api/ path at all has
+        # nothing to check: since 2026-11-06 every page is a pointer to its
+        # page in docs/, which the repository's own tests cover.
+        mentions = [page.name for page in sorted(wiki.glob('*.md'))
+                    if '/api/' in page.read_text(encoding='utf-8')]
+        if mentions:
+            print(f'the wiki mentions /api/ in {", ".join(mentions)} and states no '
+                  f'endpoint this script can read: the extractor is not reading it.',
+                  file=sys.stderr)
+            return 2
+        print('Wiki endpoints OK: the wiki states no endpoints and names no /api/ '
+              'path, so there is nothing to compare.')
+        return 0
+
+    table = route_table()
 
     problems = []
     for name, number, verb, raw in stated:
