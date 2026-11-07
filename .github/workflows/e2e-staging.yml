@@ -76,15 +76,19 @@ jobs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/requirements*.lock', '**/requirements*.constraints') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Install dependencies
+    - name: Install the locked set and the pinned tools
+      # This job runs on the self-hosted host with the Cloudflare token in its
+      # environment, so nothing it installs may be a release nobody reviewed:
+      # pip and the locked set with --require-hashes, then the test requirements
+      # constrained by the lock's pins (the typecheck job's sequence in ci.yml).
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-test.txt
+        python -m pip install --require-hashes -r requirements-build.lock
+        pip install --require-hashes -r requirements.lock
+        pip install -c requirements.constraints -r requirements-test.txt
 
     - name: Real-cert E2E against Let's Encrypt staging
       env:

@@ -82,15 +82,20 @@ jobs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/requirements*.lock', '**/requirements*.constraints') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Install dependencies
+    - name: Install the locked set and the pinned tools
+      # This job runs on the self-hosted host, so what it installs runs on that
+      # host: pip and the locked set with --require-hashes, then the test
+      # requirements constrained by the lock's pins (the typecheck job's sequence
+      # in ci.yml). The floating install of requirements.txt is ci.yml's `test`
+      # job, on a hosted runner.
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-test.txt
+        python -m pip install --require-hashes -r requirements-build.lock
+        pip install --require-hashes -r requirements.lock
+        pip install -c requirements.constraints -r requirements-test.txt
 
     - name: Install Playwright Chromium
       # --with-deps installs the system libraries (libnss3, libasound2, ...)
