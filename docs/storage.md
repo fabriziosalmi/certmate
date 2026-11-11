@@ -76,6 +76,13 @@ reported as a failure, never as an empty store, and a backend whose SDK is not
 installed says which requirements file installs it. An empty store reports
 success with a count of 0.
 
+The settings page never shows a saved secret, so after a reload its secret
+fields are empty. **Test Connection**, **Migrate Certificates** and saving all
+read an empty secret field as "use the saved one". The Vault token and
+Infisical's client credentials are reused only with the `vault_url` or
+`site_url` they were saved for: testing another address asks for them to be
+entered.
+
 The examples below show the same settings as they are stored in
 `settings.json`.
 

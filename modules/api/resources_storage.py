@@ -84,11 +84,68 @@ SDK_REQUIREMENTS = {
 }
 
 
+class SavedSecretWithheld(ValueError):
+    """A saved secret was not used, because the request names another address for it."""
+
+
+# The field naming where a backend sends its secret itself, rather than a signature over it
+# (SigV4 for S3 and Secrets Manager) or to its identity provider (Azure): the Vault token goes
+# to vault_url in a header, Infisical's client credentials to site_url. A saved secret is reused
+# only for the address it was saved for, with that address's default when none is stored.
+_SECRET_DESTINATION = {
+    'hashicorp_vault': ('vault_url', None),
+    'infisical': ('site_url', 'https://app.infisical.com'),
+}
+
+
+def _saved_storage_config(ctx, backend_type):
+    """The saved configuration of *backend_type*, nested or in the legacy flat shape, or {}."""
+    stored = (ctx.settings.load_settings() or {}).get('certificate_storage') if ctx.settings else None
+    if not isinstance(stored, dict):
+        return {}
+    if isinstance(stored.get(backend_type), dict):
+        return stored[backend_type]
+    if stored.get('backend') == backend_type:
+        # The flat shape keeps the other backends' blocks beside its own keys: not this one's.
+        return {k: v for k, v in stored.items() if k != 'backend' and not isinstance(v, dict)}
+    return {}
+
+
+def _with_saved_secrets(ctx, backend_type, config):
+    """The form's configuration over the saved one, as saving merges it (#1424).
+
+    The settings page never sends a saved secret back to the browser, so after a reload its
+    secret fields are empty, and Test Connection and Migrate built the backend from the form
+    alone: both refused until the token was typed again. Saving already reads an empty or
+    masked secret as "keep the stored one" (_strip_masked_values); these do the same now.
+    """
+    from ..core.settings import _deep_merge_dict, _is_secret_key, _strip_masked_values
+    form = _strip_masked_values(dict(config)) if isinstance(config, dict) else {}
+    saved = _saved_storage_config(ctx, backend_type)
+    field, default = _SECRET_DESTINATION.get(backend_type, (None, None))
+    if field and (form.get(field) or default) != (saved.get(field) or default):
+        missing = sorted(k for k in saved if _is_secret_key(k) and saved[k] and not form.get(k))
+        if missing:
+            raise SavedSecretWithheld(
+                f'The saved {", ".join(missing)} is only used with the {field} it was saved for. '
+                f'Enter it to use {form.get(field)}.')
+        return form
+    return _deep_merge_dict(saved, form)
+
+
+def _migration_failure_message(error):
+    if isinstance(error, SavedSecretWithheld):
+        return f'Migration failed: {error}'
+    return f'Migration failed ({type(error).__name__}). See server logs for details.'
+
+
 def _test_failure(backend_type, error):
     """The answer to a Test Connection that failed: the exception's type only, since the
     message can carry tenant ids and request ids; for a missing SDK, which file installs it,
     which carries nothing secret and is the whole answer (#1422)."""
-    if isinstance(error, ImportError) and backend_type in SDK_REQUIREMENTS:
+    if isinstance(error, SavedSecretWithheld):
+        message = str(error)
+    elif isinstance(error, ImportError) and backend_type in SDK_REQUIREMENTS:
         message = (f'The {backend_type} backend needs a Python package this installation does '
                    f'not have. Install {SDK_REQUIREMENTS[backend_type]} (docs/storage.md, '
                    f'"Adding a backend\'s SDK").')
@@ -262,6 +319,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
 
                 # Test connection based on backend type
                 try:
+                    config = _with_saved_secrets(ctx, backend_type, config)
                     if backend_type == 'local_filesystem':
                         test_backend = LocalFileSystemBackend(
                             _local_dir(ctx, config))
@@ -403,6 +461,8 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                 target_config = _resolve_config(target_backend_type, target_raw)
 
                 try:
+                    source_config = _with_saved_secrets(ctx, source_backend_type, source_config)
+                    target_config = _with_saved_secrets(ctx, target_backend_type, target_config)
                     source_backend = _build_backend(source_backend_type, source_config)
                     target_backend = _build_backend(target_backend_type, target_config)
 
@@ -472,7 +532,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                         )
                     return {
                         'success': False,
-                        'message': f'Migration failed ({type(migration_error).__name__}). See server logs for details.',
+                        'message': _migration_failure_message(migration_error),
                         'source_backend': source_backend_type,
                         'target_backend': target_backend_type,
                     }, 500
