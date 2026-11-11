@@ -1,6 +1,6 @@
 # Documentation CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 7811f0069d21ddc7 -->
+<!-- CERTMATE-TRANSLATED-FROM adc542a44e57813b -->
 
 Bienvenue dans la documentation de CertMate. Ce dossier contient des guides complets pour toutes les fonctionnalités.
 
@@ -31,6 +31,7 @@ Bienvenue dans la documentation de CertMate. Ce dossier contient des guides comp
 - **[Serveur ACME](../acme-server.md)** : certificats pour des noms internes et des adresses IPv4 à certbot, lego, acme.sh et cert-manager, depuis une racine propre à CertMate *(en anglais)*
 - **[Webhooks](../webhooks.md)** — webhooks génériques : modèles de payload, authentification, vérification de signature *(en anglais)*
 - **[Conformité](./compliance.md)** — chaîne d'audit, attribution des acteurs, posture NIS2/eIDAS
+- **[Cryptographie post-quantique](../post-quantum.md)** : ce que CertMate fait aujourd'hui de l'échange de clés, des certificats et de l'inventaire post-quantiques, et ce qu'il ne fait pas *(en anglais)*
 - **[Sauvegardes et restauration](../backup.md)** — les deux types d'archive, copies hors de l'hôte, restauration, mot de passe administrateur perdu *(en anglais)*
 - **[Sondes de déploiement](./probes.md)** — vérifier qu'un certificat renouvelé est réellement servi
 - **[Authentification unique (OIDC)](../sso.md)** — connexion OpenID Connect, correspondance des rôles, provisionnement *(en anglais)*
