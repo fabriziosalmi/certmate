@@ -47,6 +47,10 @@ def tree(tmp_path):
                  'requirements-lint.txt', 'requirements-lint.lock',
                  'requirements-galaxy.txt', 'requirements-galaxy.lock'):
         shutil.copy(REPO / name, tmp_path / name)
+    # The Galaxy lock is resolved for the Python its publish job names.
+    (tmp_path / '.github' / 'workflows').mkdir(parents=True)
+    shutil.copy(REPO / '.github' / 'workflows' / 'publish-galaxy.yml',
+                tmp_path / '.github' / 'workflows' / 'publish-galaxy.yml')
     (tmp_path / 'scripts').mkdir()
     for name in ('lockfile.py', 'regenerate_lockfiles.sh'):
         shutil.copy(REPO / 'scripts' / name, tmp_path / 'scripts' / name)

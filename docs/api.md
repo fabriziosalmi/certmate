@@ -264,6 +264,8 @@ rather than written by hand:
   "expired": false,
   "needs_renewal": false,
   "renews_at": "2026-11-03T08:41:10Z",
+  "expiry_status": "ok",
+  "not_before": "2026-09-01T09:17:12Z",
   "private_key_present": true,
   "private_key_state": "present",
   "reissue_required": false,
@@ -362,6 +364,18 @@ is UTC with a `Z`, `null` when the certificate could not be parsed. Since API
 contract **2.40**; before it, `needs_renewal` was `days_left <= threshold`, which
 could say "due" a night, or for a 45-day certificate two weeks, before the
 sweep renewed.
+
+`expiry_status` says how urgent the certificate is, by the same rule: `warning`
+from `renews_at` on (for an external certificate, from the margin the rule
+would give it), `critical` once the renewal is overdue (a sixth of the lifetime
+left, and never earlier than 7 days before expiry), `expired` after it expires,
+and `ok` before all of that. For a 90-day certificate and the default threshold
+that is 30 and 7 days; for a 47-day one about 15.7 and 7 days; for a 160-hour
+one 80 and 26 hours. The dashboard, the notification bell and the inventory use
+it. It is about time only: a key that is missing shows in `needs_renewal` and
+`private_key_state`. `not_before` is the start of the validity period, UTC with
+a `Z`. Both since API contract **2.62**; before it every short-lived certificate
+was "critical" from the moment it was issued (#1429).
 
 `renewal_info` is what the CA said, per certificate, through ACME Renewal
 Information ([RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html)) at the

@@ -39,7 +39,7 @@ def _stats(certificates):
         "  querySelector: function (sel) { var k = sel.match(/\"(\\w+)\"/)[1];\n"
         "    return chips[k] = chips[k] || {textContent: ''}; }};\n"
         "var CertMate = {escapeHtml: function (s) { return String(s); }};\n"
-        + _function('lifeKnown') + _function('hasExpired') + _function('lostItsKey')
+        + _function('lifeKnown') + _function('hasExpired') + _function('isExpiring') + _function('lostItsKey')
         + _function('updateStats')
         + "updateStats(" + json.dumps(certificates) + ");\n"
         "var text = tiles.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n"

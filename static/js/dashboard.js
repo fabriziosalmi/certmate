@@ -195,6 +195,18 @@
         return cert.expired === true;
     }
 
+    // Renewal due or overdue, by the server's renewal rule (#1429): 30 days for
+    // a 90-day certificate, 80 hours for a 160-hour one, which a fixed 30 days
+    // called expiring from the moment it was issued. An answer from a server
+    // before API contract 2.62 has no expiry_status, so the old 30 days stay as
+    // the fallback for it.
+    function isExpiring(cert) {
+        if (cert.expiry_status) {
+            return cert.expiry_status === 'warning' || cert.expiry_status === 'critical';
+        }
+        return lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30;
+    }
+
     // No private key anywhere (#966): what restoring a share-safe backup
     // leaves. It cannot serve TLS and renewal cannot repair it, only a reissue
     // can, so it is never "Valid", whatever its expiry date says.
@@ -221,7 +233,7 @@
         var total = certificates.length;
         var valid = certificates.filter(function (cert) { return cert.exists && !lostItsKey(cert) && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30; }).length;
         var keyless = certificates.filter(lostItsKey).length;
-        var expiring = certificates.filter(function (cert) { return cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30; }).length;
+        var expiring = certificates.filter(function (cert) { return cert.exists && isExpiring(cert); }).length;
         var expired = certificates.filter(function (cert) { return cert.exists && hasExpired(cert); }).length;
 
         var statsContainer = document.getElementById('statsCards');
@@ -253,7 +265,7 @@
         // The third tile surfaces the MOST urgent lifecycle state. It becomes a
         // red "Expired" tile when any cert has lapsed (expired was computed but
         // never shown — those certs were invisible on the dashboard), an amber
-        // "Expiring" tile within 30 days, else a calm neutral one.
+        // "Expiring" tile once a renewal is due, else a calm neutral one.
         var attn;
         if (expired > 0) {
             attn = ['Expired', expired, 'danger', 'fa-circle-xmark text-danger-fg',
@@ -261,7 +273,7 @@
         } else if (keyless > 0) {
             attn = ['No key', keyless, 'warn', 'fa-key text-warning-fg', 'reissue needed'];
         } else if (expiring > 0) {
-            attn = ['Expiring', expiring, 'warn', 'fa-triangle-exclamation text-warning-fg', 'within 30 days'];
+            attn = ['Expiring', expiring, 'warn', 'fa-triangle-exclamation text-warning-fg', 'renewal due'];
         } else {
             attn = ['Expiring', 0, 'neutral', 'fa-triangle-exclamation text-muted', 'none expiring'];
         }
@@ -483,7 +495,7 @@
             var matchesStatus = true;
             if (statusFilter !== 'all') {
                 var isExpired = cert.exists && hasExpired(cert);
-                var isExpiringSoon = cert.exists && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30;
+                var isExpiringSoon = cert.exists && isExpiring(cert);
                 var isValid = cert.exists && !lostItsKey(cert) && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30;
 
                 switch (statusFilter) {
@@ -1000,7 +1012,7 @@
 
             var daysKnown = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
             var isExpired = hasExpired(cert);
-            var isExpiringSoon = lifeKnown(cert) && !isExpired && cert.days_until_expiry <= 30;
+            var isExpiringSoon = !isExpired && isExpiring(cert);
             var statusClass, statusIcon, statusText, healthClass;
             var keylessRow = lostItsKey(cert);
             if (keylessRow) {
@@ -1398,7 +1410,7 @@
         } else {
             var daysKnown2 = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
             var isExpired = hasExpired(cert);
-            var isExpiringSoon = lifeKnown(cert) && !isExpired && cert.days_until_expiry <= 30;
+            var isExpiringSoon = !isExpired && isExpiring(cert);
             var expiryDate = new Date(cert.expiry_date);
             var statusClass, statusText;
             var keylessDetail = lostItsKey(cert);
@@ -3962,9 +3974,16 @@
             .catch(function () { /* best effort — never block the dashboard */ });
     }
 
+    // Every 2 s for the first minute, then slower, up to every 10 s. No cap: a job that
+    // is still queued or running is still going on the server, and DNS propagation alone
+    // can be configured past 5 minutes. A cap of 150 attempts (~5 min) used to delete the
+    // row of a job still running, and a failure after that was never shown (#1426).
+    function pollDelay(attempts) {
+        return attempts < 30 ? 2000 : Math.min(10000, 2000 + (attempts - 30) * 500);
+    }
+
     function pollCertJob(jobId, statusUrl) {
         var attempts = 0;
-        var MAX_ATTEMPTS = 150;   // ~5 min at 2s — well beyond a normal ACME issue
         function tick() {
             if (!pendingJobs[jobId]) return;   // dismissed/retried away
             attempts++;
@@ -3993,19 +4012,14 @@
                     delete pendingJobs[jobId];
                     delete pendingPollTimers[jobId];
                     loadCertificates();
-                } else if (attempts >= MAX_ATTEMPTS) {
-                    // Still running after the cap: stop polling and drop the row
-                    // rather than fail it — SSE/reload will reconcile the result.
-                    delete pendingJobs[jobId];
-                    delete pendingPollTimers[jobId];
-                    renderPendingRows();
                 } else {
-                    pendingPollTimers[jobId] = setTimeout(tick, 2000);
+                    // queued or running: the row stays until the job ends.
+                    pendingPollTimers[jobId] = setTimeout(tick, pollDelay(attempts));
                 }
             }).catch(function () {
+                // A request that failed says nothing about the job: ask again, slower.
                 if (!pendingJobs[jobId]) return;
-                if (attempts >= MAX_ATTEMPTS) { delete pendingPollTimers[jobId]; return; }
-                pendingPollTimers[jobId] = setTimeout(tick, 2000);
+                pendingPollTimers[jobId] = setTimeout(tick, pollDelay(attempts));
             });
         }
         pendingPollTimers[jobId] = setTimeout(tick, 1500);

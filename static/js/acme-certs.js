@@ -5,6 +5,15 @@
     // viewer as client certificates are (H2), with revocation for an admin
     // (H3). Loaded the first time the view is shown, and again on each return.
 
+    // The topbar's counters for this view (#1423), by the status the API gives.
+    function counted(certificates) {
+        var counts = { total: certificates.length, valid: 0, revoked: 0 };
+        certificates.forEach(function (c) {
+            if (Object.prototype.hasOwnProperty.call(counts, c.status) && c.status !== 'total') counts[c.status] += 1;
+        });
+        return counts;
+    }
+
     function acmeCertificates() {
         return {
             loading: false,
@@ -45,7 +54,10 @@
                 self.loading = true;
                 CertMate.refreshRole().then(function () { self.isAdmin = CertMate.roleAtLeast('admin'); });
                 CertMate.api('GET', '/api/acme/certificates')
-                    .then(function (answer) { self.certificates = answer.certificates; })
+                    .then(function (answer) {
+                        self.certificates = answer.certificates;
+                        self.$store.certs.acme = counted(answer.certificates);
+                    })
                     .catch(function (error) { CertMate.toast(error.message || 'Could not load the ACME certificates', 'error'); })
                     .then(function () { self.loading = false; self.loaded = true; });
             },
