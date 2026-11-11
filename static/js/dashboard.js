@@ -3962,9 +3962,16 @@
             .catch(function () { /* best effort — never block the dashboard */ });
     }
 
+    // Every 2 s for the first minute, then slower, up to every 10 s. No cap: a job that
+    // is still queued or running is still going on the server, and DNS propagation alone
+    // can be configured past 5 minutes. A cap of 150 attempts (~5 min) used to delete the
+    // row of a job still running, and a failure after that was never shown (#1426).
+    function pollDelay(attempts) {
+        return attempts < 30 ? 2000 : Math.min(10000, 2000 + (attempts - 30) * 500);
+    }
+
     function pollCertJob(jobId, statusUrl) {
         var attempts = 0;
-        var MAX_ATTEMPTS = 150;   // ~5 min at 2s — well beyond a normal ACME issue
         function tick() {
             if (!pendingJobs[jobId]) return;   // dismissed/retried away
             attempts++;
@@ -3993,19 +4000,14 @@
                     delete pendingJobs[jobId];
                     delete pendingPollTimers[jobId];
                     loadCertificates();
-                } else if (attempts >= MAX_ATTEMPTS) {
-                    // Still running after the cap: stop polling and drop the row
-                    // rather than fail it — SSE/reload will reconcile the result.
-                    delete pendingJobs[jobId];
-                    delete pendingPollTimers[jobId];
-                    renderPendingRows();
                 } else {
-                    pendingPollTimers[jobId] = setTimeout(tick, 2000);
+                    // queued or running: the row stays until the job ends.
+                    pendingPollTimers[jobId] = setTimeout(tick, pollDelay(attempts));
                 }
             }).catch(function () {
+                // A request that failed says nothing about the job: ask again, slower.
                 if (!pendingJobs[jobId]) return;
-                if (attempts >= MAX_ATTEMPTS) { delete pendingPollTimers[jobId]; return; }
-                pendingPollTimers[jobId] = setTimeout(tick, 2000);
+                pendingPollTimers[jobId] = setTimeout(tick, pollDelay(attempts));
             });
         }
         pendingPollTimers[jobId] = setTimeout(tick, 1500);
