@@ -185,6 +185,7 @@ actions as an agent's. See [the MCP guide](docs/mcp.md).
 | [Client certificates](docs/guide.md) | mTLS and VPN client certificates, renewal timing |
 | [CSR-only certificates](docs/csr-only-certificates.md) | Issuing when the key stays on the device |
 | [ACME server](docs/acme-server.md) | Certificates for internal names and IPv4 addresses to certbot, lego, acme.sh and cert-manager |
+| [Post-quantum cryptography](docs/post-quantum.md) | What CertMate does with post-quantum key exchange, certificates and inventory today, and what it does not |
 | [Discovery and inventory](docs/discovery-inventory.md) | Probes, CT logs, adopting, crypto readiness |
 | [Deploy hooks](docs/deploy-hooks.md) | Commands after issuance and renewal |
 | [Webhooks](docs/webhooks.md) | Payload templates, authentication, signatures |
