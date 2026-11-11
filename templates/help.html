@@ -65,7 +65,7 @@
                         <li>API bearer token lives at <a href="/settings#general" class="text-primary hover:underline">Settings → General</a>. Auto-generated during initial setup; use the eye toggle to reveal it, or <span class="font-medium">Generate</span> to roll a new one.</li>
                     </ol>
                     <p class="text-xs text-muted mt-3">
-                        Renewal runs daily and refreshes anything within 30 days of expiry. No cron setup needed.
+                        Renewal runs daily and renews each certificate when it is due: 30 days before expiry for a 90-day certificate with the default threshold, a third of the lifetime for a shorter one (half under 10 days). No cron setup needed.
                     </p>
                 </div>
             </section>

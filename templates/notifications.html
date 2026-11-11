@@ -54,8 +54,8 @@
         // warning uses the amber palette — mirrors the dashboard status colours.
         function sev(type) {
             if (type === 'expired') return { label: 'Expired', icon: 'fa-circle-xmark', fg: 'text-danger-fg', bg: 'bg-danger-surface', group: 'Expired' };
-            if (type === 'critical') return { label: 'Critical', icon: 'fa-circle-exclamation', fg: 'text-danger-fg', bg: 'bg-danger-surface', group: 'Critical — 7 days or less' };
-            return { label: 'Expiring', icon: 'fa-triangle-exclamation', fg: 'text-warning-fg', bg: 'bg-warning-surface', group: 'Expiring — 30 days or less' };
+            if (type === 'critical') return { label: 'Critical', icon: 'fa-circle-exclamation', fg: 'text-danger-fg', bg: 'bg-danger-surface', group: 'Critical — renewal overdue' };
+            return { label: 'Expiring', icon: 'fa-triangle-exclamation', fg: 'text-warning-fg', bg: 'bg-warning-surface', group: 'Expiring — renewal due' };
         }
         // One sentence, one implementation (#938). This page had its own copy
         // with no "less than a day" case at all, so a certificate with 23 hours
@@ -167,8 +167,8 @@
                 html += '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-circle-check text-3xl text-green-400" aria-hidden="true"></i><p>No certificates need your attention.</p></div>';
             } else {
                 html += groupHtml('Expired', active.filter(function(w){ return w.type === 'expired'; }));
-                html += groupHtml('Critical — 7 days or less', active.filter(function(w){ return w.type === 'critical'; }));
-                html += groupHtml('Expiring — 30 days or less', active.filter(function(w){ return w.type === 'warning'; }));
+                html += groupHtml('Critical — renewal overdue', active.filter(function(w){ return w.type === 'critical'; }));
+                html += groupHtml('Expiring — renewal due', active.filter(function(w){ return w.type === 'warning'; }));
             }
 
             // Snoozed section (toggle)

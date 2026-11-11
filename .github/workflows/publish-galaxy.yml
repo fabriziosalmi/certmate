@@ -23,8 +23,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        # Its own Python, not the image's: ansible-core 2.22 requires 3.13. The lock is
+        # resolved for the version written here (scripts/regenerate_lockfiles.sh reads it).
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install ansible-core
         # From requirements-galaxy.lock, with hashes. This job holds the Galaxy

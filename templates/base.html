@@ -260,7 +260,14 @@
                     // less than a day left has days 0 and has not expired
                     // (#829). Fall back to the day count only when the field
                     // is absent, which is an older response, not a valid one.
-                    if (c.expired === true || (c.expired === undefined && days < 0)) type = 'expired';
+                    // The server classifies by the renewal rule (#1429): a
+                    // 160-hour certificate warns at 80 hours and is critical at
+                    // 26, where 30 and 7 days made every new one critical. The
+                    // day counts stay for an answer that predates the field.
+                    if (c.expiry_status === 'expired' || c.expiry_status === 'critical'
+                        || c.expiry_status === 'warning') type = c.expiry_status;
+                    else if (c.expiry_status) type = null;
+                    else if (c.expired === true || (c.expired === undefined && days < 0)) type = 'expired';
                     else if (days <= 7) type = 'critical';
                     else if (days <= 30) type = 'warning';
                     // `expired` and `seconds_left` travel with the warning.
