@@ -113,12 +113,23 @@ python3 scripts/lockfile.py write requirements-build.txt "$WORK/$first.txt" requ
 # Tools CI runs outside the image: flake8 for the lint job, and ansible-core in
 # the job that publishes to Galaxy with the Galaxy API key. Locked with hashes
 # for the same reason as the image: the version alone does not say which file.
+#
+# The Galaxy job runs the Python its own workflow names, not the image's, and its lock is
+# resolved for that one: ansible-core 2.22 requires Python 3.13 while the image runs 3.12.
+GALAXY_PYTHON_VERSION="$(sed -n "s/^ *python-version: '\([0-9][0-9]*\.[0-9][0-9]*\)'.*/\1/p" .github/workflows/publish-galaxy.yml | head -1)"
+if [ -z "$GALAXY_PYTHON_VERSION" ]; then
+    echo "could not read the Galaxy job's Python version out of publish-galaxy.yml" >&2
+    exit 1
+fi
+IMAGE_PYTHON_VERSION="$PYTHON_VERSION"
 for req in requirements-lint.txt requirements-galaxy.txt; do
     lock="${req%.txt}.lock"
+    if [ "$req" = requirements-galaxy.txt ]; then PYTHON_VERSION="$GALAXY_PYTHON_VERSION"; fi
     echo
-    echo "=== $req -> $lock ==="
+    echo "=== $req -> $lock (Python $PYTHON_VERSION) ==="
     resolve "$req" "$lock"
     python3 scripts/lockfile.py write "$req" "$WORK/$first.txt" "$lock"
+    PYTHON_VERSION="$IMAGE_PYTHON_VERSION"
 done
 
 echo

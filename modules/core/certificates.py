@@ -4545,6 +4545,12 @@ class CertificateManager:
     # last lines are where certbot says what went wrong, the rest is progress.
     CERTBOT_STDOUT_TAIL_LINES = 20
     CERTBOT_DEBUG_LOG_BANNER = 'Saving debug log to '
+    # What certbot prints, on stdout, before the CA's reason for each failed
+    # identifier (certbot/_internal/auth_handler.py, _report_failed_authzrs).
+    CERTBOT_CA_PROBLEMS_MARKER = 'The Certificate Authority reported these problems'
+    # "Identifier:" since certbot 2.x; "Domain:" in the releases before it.
+    _CA_PROBLEM_NAME = re.compile(r'^\s*(?:Identifier|Domain):\s*(\S.*?)\s*$')
+    _CA_PROBLEM_DETAIL = re.compile(r'^\s*Detail:\s*(\S.*?)\s*$')
 
     @staticmethod
     def _certbot_silence(returncode):
@@ -4556,6 +4562,39 @@ class CertificateManager:
                 name = f'signal {-returncode}'
             return f'certbot was killed by {name} before it reported an error'
         return f'certbot exited with code {returncode} without reporting an error'
+
+    @classmethod
+    def _ca_problems(cls, stdout):
+        """The CA's reason for each identifier it refused, as "name: detail" lines.
+
+        On a failed authorization certbot writes "Some challenges have failed."
+        to stderr and the reason itself to stdout, through display_util.notify,
+        which a non-interactive certbot sends to sys.stdout (certbot 5.8.0,
+        main.py). The message was built from stderr alone, so it said "Some
+        challenges have failed" and dropped "DNS problem: NXDOMAIN looking up TXT
+        for _acme-challenge..." (#1427). Read only after certbot's own marker, so
+        other stdout narration is never taken for a CA's answer.
+        """
+        from .utils import sanitize_certbot_stderr
+        text = str(stdout or '')
+        if cls.CERTBOT_CA_PROBLEMS_MARKER not in text:
+            return ''
+        problems, name = [], None
+        for line in text.split(cls.CERTBOT_CA_PROBLEMS_MARKER, 1)[1].splitlines():
+            found = cls._CA_PROBLEM_NAME.match(line)
+            if found:
+                name = found.group(1)
+                continue
+            found = cls._CA_PROBLEM_DETAIL.match(line)
+            if found and name:
+                # Redacted on its own, before the name goes in front of it: the
+                # sanitiser's credential pattern is anchored at the start of a
+                # line, and "name: dns_..._token = x" no longer starts with it.
+                problem = f'{name}: {sanitize_certbot_stderr(found.group(1)).strip()}'
+                if problem not in problems:
+                    problems.append(problem)
+                name = None
+        return '\n'.join(problems)
 
     def _certbot_failure(self, prefix, domain, result, *, secrets=()):
         """The message for a certbot run that exited non-zero, logged and returned.
@@ -4591,6 +4630,11 @@ class CertificateManager:
             tail = sanitize_certbot_stderr(tail).strip()
             if tail:
                 detail += '. The last it printed:\n' + tail
+        # The CA's own reason first, so the first line of the message (and the
+        # list row, which shows 140 characters of it) says what went wrong.
+        problems = self._ca_problems(result.stdout)
+        if problems:
+            detail = problems + '\n' + detail
         for secret in secrets:
             if secret:
                 detail = detail.replace(secret, '***')
