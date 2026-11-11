@@ -1,5 +1,5 @@
 {
- "contract_version": "2.62",
+ "contract_version": "2.63",
  "models": {
   "ACMEDNSConfig": {
    "properties": {

@@ -740,6 +740,10 @@ METADATA_SCHEMA_VERSION = 1
 #                                   `expiry_status` (ok, warning, critical,
 #                                   expired, by the renewal rule) and
 #                                   `not_before` (#1429).
+#                                   2.63, MINOR: POST /api/client-certs/ca/reset
+#                                   takes an optional key_algorithm (rsa-4096,
+#                                   ecdsa-p256, ecdsa-p384) for the new client
+#                                   CA (#1421).
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -765,7 +769,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.62'
+API_CONTRACT_VERSION = '2.63'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
