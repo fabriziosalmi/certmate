@@ -120,6 +120,9 @@ Crea un nuovo certificato client.
     "country": "CH",
     "state": "Switzerland",
     "cert_usage": "api-mtls",
+    "key_type": "rsa",
+    "key_size": 2048,
+    "elliptic_curve": null,
     "key_usage": [
       "digitalSignature",
       "keyEncipherment"
@@ -187,6 +190,9 @@ Elenca tutti i certificati client con filtro opzionale.
       "country": "CH",
       "state": "Switzerland",
       "cert_usage": "api-mtls",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -219,6 +225,9 @@ Elenca tutti i certificati client con filtro opzionale.
       "country": "CH",
       "state": "Switzerland",
       "cert_usage": "api-mtls",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -253,6 +262,9 @@ Elenca tutti i certificati client con filtro opzionale.
       "country": "CH",
       "state": "Switzerland",
       "cert_usage": "vpn",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -320,6 +332,9 @@ Recupera i metadati completi di un certificato.
   "country": "CH",
   "state": "Switzerland",
   "cert_usage": "api-mtls",
+  "key_type": "rsa",
+  "key_size": 2048,
+  "elliptic_curve": null,
   "key_usage": [
     "digitalSignature",
     "keyEncipherment"
@@ -449,6 +464,9 @@ Rinnova un certificato (stesso CN, nuovo numero seriale).
     "country": "CH",
     "state": "Switzerland",
     "cert_usage": "api-mtls",
+    "key_type": "rsa",
+    "key_size": 2048,
+    "elliptic_curve": null,
     "key_usage": [
       "digitalSignature",
       "keyEncipherment"

@@ -923,6 +923,12 @@ Create a new client certificate.
 - `state` (optional) - Subject state or province (default:
   `CERTMATE_CLIENT_CERT_DEFAULT_STATE`, or `Switzerland`)
 - `notes` (optional) - Additional notes
+- `key_type` (optional, since **2.63**) - `rsa` or `ecdsa`: the key CertMate
+  generates. With `key_size` (`2048`, `3072`, `4096`) for RSA or
+  `elliptic_curve` (`secp256r1`, `secp384r1`) for ECDSA. Left out, the
+  `client_cert_key_type` setting applies, RSA 2048 by default. Refused with 400
+  beside a `csr`. A renewal keeps the kind of key
+  ([Configuration](./configuration.md#the-key-of-a-client-certificate)).
 
 Left out or left blank, each of these four takes its default, and so does a
 CSV batch row that leaves its column out or empty. A renewal does not: it
@@ -950,6 +956,9 @@ changed since then does not reach it.
     "country": "CH",
     "state": "Switzerland",
     "cert_usage": "api-mtls",
+    "key_type": "rsa",
+    "key_size": 2048,
+    "elliptic_curve": null,
     "key_usage": [
       "digitalSignature",
       "keyEncipherment"
@@ -1032,6 +1041,9 @@ List all client certificates with optional filtering.
       "country": "CH",
       "state": "Switzerland",
       "cert_usage": "api-mtls",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -1064,6 +1076,9 @@ List all client certificates with optional filtering.
       "country": "CH",
       "state": "Switzerland",
       "cert_usage": "api-mtls",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -1096,6 +1111,9 @@ List all client certificates with optional filtering.
       "organization": "ACME Corp",
       "organizational_unit": "IT",
       "cert_usage": "vpn",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -1172,6 +1190,9 @@ stop reading it.
   "country": "CH",
   "state": "Switzerland",
   "cert_usage": "api-mtls",
+  "key_type": "rsa",
+  "key_size": 2048,
+  "elliptic_curve": null,
   "key_usage": [
     "digitalSignature",
     "keyEncipherment"
@@ -1310,6 +1331,9 @@ certificate that does not exist is a `404` (a `400` before API contract **2.37**
     "country": "CH",
     "state": "Switzerland",
     "cert_usage": "api-mtls",
+    "key_type": "rsa",
+    "key_size": 2048,
+    "elliptic_curve": null,
     "key_usage": [
       "digitalSignature",
       "keyEncipherment"

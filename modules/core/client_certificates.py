@@ -131,6 +131,36 @@ def _slugify_common_name(common_name: str) -> str:
     return slug or 'client'
 
 
+def _key_shape(key_type, key_size, elliptic_curve):
+    """The create_csr keyword arguments for a key shape; nothing chosen is RSA 2048."""
+    if key_type is None and key_size is None and elliptic_curve is None:
+        return {'key_type': 'rsa', 'key_size': 2048, 'elliptic_curve': None}
+    if key_type == 'ecdsa':
+        return {'key_type': 'ecdsa', 'key_size': None, 'elliptic_curve': elliptic_curve}
+    return {'key_type': key_type, 'key_size': key_size, 'elliptic_curve': None}
+
+
+def _key_options_of(certificate):
+    """key_type/key_size/elliptic_curve of a certificate's key, None for another algorithm."""
+    from cryptography.hazmat.primitives.asymmetric import ec, rsa
+    key = certificate.public_key()
+    if isinstance(key, rsa.RSAPublicKey):
+        return {'key_type': 'rsa', 'key_size': key.key_size, 'elliptic_curve': None}
+    if isinstance(key, ec.EllipticCurvePublicKey):
+        return {'key_type': 'ecdsa', 'key_size': None, 'elliptic_curve': key.curve.name}
+    return {'key_type': None, 'key_size': None, 'elliptic_curve': None}
+
+
+def _key_usage_names(certificate):
+    """The key usage bits the certificate carries, by the names the record always used."""
+    try:
+        usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+    except x509.ExtensionNotFound:
+        return []
+    return [name for name, on in (('digitalSignature', usage.digital_signature),
+                                  ('keyEncipherment', usage.key_encipherment)) if on]
+
+
 class ClientCertificateManager:
     """
     Manages client certificates for mTLS, VPN, and user authentication.
@@ -250,10 +280,18 @@ class ClientCertificateManager:
         csr_pem: Optional[bytes] = None,
         country: str = "",
         state: str = "",
-        notes: str = ""
+        notes: str = "",
+        key_type: str | None = None,
+        key_size: int | None = None,
+        elliptic_curve: str | None = None,
     ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
         """
         Create a new client certificate.
+
+        key_type/key_size/elliptic_curve shape the key CertMate generates (#1421): the
+        values server certificates take, RSA 2048/3072/4096 or ECDSA P-256/P-384. None
+        for all three is RSA 2048, what every client certificate had before. Unused with
+        a CSR: that key is the device's.
 
         Args:
             common_name: Common name for the certificate
@@ -326,7 +364,8 @@ class ClientCertificateManager:
                     organizational_unit=organizational_unit,
                     email=email,
                     country=country or default_client_country(),
-                    state=state or default_client_state()
+                    state=state or default_client_state(),
+                    **_key_shape(key_type, key_size, elliptic_curve),
                 )
 
                 if error:
@@ -409,7 +448,11 @@ class ClientCertificateManager:
                 "country": issued_country,
                 "state": issued_state,
                 "cert_usage": cert_usage,
-                "key_usage": ["digitalSignature", "keyEncipherment"],
+                # What the certificate carries, not a constant: keyEncipherment is
+                # an RSA operation, and an ECDSA certificate does not have it.
+                "key_usage": _key_usage_names(signed_cert),
+                # The key's shape, so a renewal generates the same kind of key (#1421).
+                **_key_options_of(signed_cert),
                 "extended_key_usage": ["clientAuth"],
                 "created_at": utc_now().isoformat(),
                 "expires_at": (utc_now() + timedelta(days=days_valid)).isoformat(),
@@ -756,6 +799,18 @@ class ClientCertificateManager:
         days = round((expires - created).total_seconds() / 86400)
         return days if days > 0 else default
 
+    def _renewal_key_shape(self, identifier, metadata):
+        """The key shape a renewal generates: the record's, or for a record written before
+        it kept one, the shape of the certificate it renews, read from its file."""
+        if metadata.get('key_type'):
+            return {k: metadata.get(k) for k in ('key_type', 'key_size', 'elliptic_curve')}
+        for cert_file in self.client_certs_dir.glob(f"*/{identifier}/{identifier}.crt"):
+            try:
+                return _key_options_of(x509.load_pem_x509_certificate(cert_file.read_bytes()))
+            except (OSError, ValueError):
+                break
+        return {'key_type': None, 'key_size': None, 'elliptic_curve': None}
+
     def renew_certificate(self, identifier: str) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
         """
         Renew a client certificate (create new one with same identity).
@@ -799,6 +854,9 @@ class ClientCertificateManager:
             # the 365-day default, so a 730-day certificate quietly halved its
             # lifetime on every renewal.
             success, error, cert_data = self.create_client_certificate(
+                # The same kind of key as the certificate it replaces (#1421): the
+                # renewal used to give every one a new RSA 2048 key.
+                **self._renewal_key_shape(identifier, old_metadata),
                 common_name=old_metadata.get("common_name", ""),
                 email=old_metadata.get("email", ""),
                 organization=old_metadata.get("organization", "CertMate"),

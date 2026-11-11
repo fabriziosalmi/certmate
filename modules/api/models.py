@@ -516,6 +516,19 @@ def create_api_models(api):
             description="Global default ECDSA curve — applied when default_key_type='ecdsa'.",
             enum=['secp256r1', 'secp384r1']
         ),
+        'client_cert_key_type': fields.String(
+            description=("Key type CertMate generates for a client certificate that names none "
+                         "(#1421). Added in API contract 2.63."),
+            enum=['rsa', 'ecdsa']
+        ),
+        'client_cert_key_size': fields.Integer(
+            description="RSA key size for client certificates, when client_cert_key_type='rsa'.",
+            enum=[2048, 3072, 4096]
+        ),
+        'client_cert_elliptic_curve': fields.String(
+            description="ECDSA curve for client certificates, when client_cert_key_type='ecdsa'.",
+            enum=['secp256r1', 'secp384r1']
+        ),
         'dns_propagation_seconds': fields.Raw(
             description=('Seconds certbot waits after publishing the DNS-01 TXT record '
                          'before the CA checks it, per DNS provider, e.g. '

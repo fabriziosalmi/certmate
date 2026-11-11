@@ -245,6 +245,9 @@
             var defaultKeyType = formData.get('default_key_type') || 'rsa';
             var defaultKeySize = parseInt(formData.get('default_key_size'), 10);
             var defaultEllipticCurve = formData.get('default_elliptic_curve') || 'secp256r1';
+            // Client certificates' key (#1421): one list, "rsa:3072" or "ecdsa:secp384r1".
+            // Both fields are always sent; save_settings checks only the active one.
+            var clientShape = (formData.get('client_cert_key_shape') || 'rsa:2048').split(':');
 
             var settings = {
                 email: email.trim(),
@@ -259,7 +262,10 @@
                 default_ca: defaultCA,
                 default_key_type: defaultKeyType,
                 default_key_size: defaultKeyType === 'rsa' ? (defaultKeySize || 2048) : 2048,
-                default_elliptic_curve: defaultEllipticCurve
+                default_elliptic_curve: defaultEllipticCurve,
+                client_cert_key_type: clientShape[0],
+                client_cert_key_size: clientShape[0] === 'rsa' ? parseInt(clientShape[1], 10) : 2048,
+                client_cert_elliptic_curve: clientShape[0] === 'ecdsa' ? clientShape[1] : 'secp256r1'
             };
 
             // The whole propagation map (#974): a provider left out would
@@ -845,6 +851,12 @@
                 if (curveField) {
                     curveField.value = data.default_elliptic_curve;
                 }
+            }
+            var clientShapeField = document.getElementById('client_cert_key_shape');
+            if (clientShapeField && data.client_cert_key_type) {
+                clientShapeField.value = data.client_cert_key_type === 'ecdsa'
+                    ? 'ecdsa:' + (data.client_cert_elliptic_curve || 'secp256r1')
+                    : 'rsa:' + (data.client_cert_key_size || 2048);
             }
             if (typeof toggleDefaultKeyOptions === 'function') {
                 toggleDefaultKeyOptions();

@@ -215,11 +215,18 @@ class TestCreateCSR:
         _, _, csr = CSRHandler.validate_csr_pem(csr_pem)
         assert csr.public_key().key_size == 4096
 
-    @pytest.mark.parametrize("bad_size", [512, 1024, 3072, 8192, 0, -1])
+    # The sizes server certificates take, by the same validator (#1421): 3072 was refused here.
+    @pytest.mark.parametrize("bad_size", [512, 1024, 8192, 0, -1])
     def test_rejects_invalid_key_sizes(self, bad_size):
         csr_pem, key_pem, err = CSRHandler.create_csr("k@example.com", key_size=bad_size)
         assert csr_pem is None and key_pem is None
-        assert err == "Key size must be 2048 or 4096"
+        assert err.startswith("key_size must be one of [2048, 3072, 4096]")
+
+    def test_creates_csr_with_3072_key(self):
+        csr_pem, _, err = CSRHandler.create_csr("k3072@example.com", key_size=3072)
+        assert err is None
+        _, _, csr = CSRHandler.validate_csr_pem(csr_pem)
+        assert csr.public_key().key_size == 3072
 
     def test_rejects_empty_common_name(self):
         csr_pem, _, err = CSRHandler.create_csr("")
