@@ -2631,6 +2631,14 @@ class CertificateManager:
             storage_result = self._storage_retrieve(domain)
             if storage_result:
                 cert_files, metadata = storage_result
+                # The local metadata.json, whole, when there is one (#1425). Issuance and
+                # renewal write it and the backend's copy together, but an edit (a probe,
+                # a note, the tags, auto-renew, the DNS provider) writes only the local one:
+                # read from the backend, every edit was missing from the list until the
+                # next renewal. Whole rather than merged over the backend's, so a field the
+                # edit removed is not brought back from the stale copy. Renewal and the
+                # deployment check already read the local copy.
+                metadata = self._load_metadata(domain) or metadata
                 if 'cert.pem' in cert_files:
                     storage_key_state = self._storage_key_state(
                         domain, cert_files, metadata)
