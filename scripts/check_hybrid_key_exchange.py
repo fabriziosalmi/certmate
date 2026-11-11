@@ -70,6 +70,9 @@ def _handshake(openssl, directory: Path, group: str):
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         context = ssl.create_default_context(cafile=str(directory / 'cert.pem'))
+        # The server speaks TLS 1.3 only, so this changes nothing the check measures:
+        # the groups the default context offers are the same at any minimum version.
+        context.minimum_version = ssl.TLSVersion.TLSv1_3
         deadline = time.monotonic() + 10
         while True:
             try:
