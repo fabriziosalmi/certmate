@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.56.0 (ECDSA client certificates and CA, and what CertMate does with post-quantum cryptography)
+
+[Read the notes](docs/releases/v2.56.0.md)
+
 ## v2.55.2 (four fixes to what CertMate writes: its logs, a restore, a certificate's record and the audit chain)
 
 [Read the notes](docs/releases/v2.55.2.md)
