@@ -193,10 +193,12 @@ class CSRHandler:
             if not ok:
                 return None, None, error
 
+            private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
             if is_ec:
                 logger.info(f"Creating CSR for CN={common_name} with an ECDSA {elliptic_curve} key")
+                # validate_key_options above allowed secp256r1 or secp384r1, nothing else.
                 private_key = ec.generate_private_key(
-                    {'secp256r1': ec.SECP256R1(), 'secp384r1': ec.SECP384R1()}[elliptic_curve])
+                    ec.SECP384R1() if elliptic_curve == 'secp384r1' else ec.SECP256R1())
             else:
                 logger.info(f"Creating CSR for CN={common_name} with {key_size}-bit key")
                 private_key = rsa.generate_private_key(
