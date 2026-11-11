@@ -88,6 +88,14 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Tailwind 3 -> 4 is a migration, not a bump (#544, measured there): tailwindcss 4 ships
+      # no binary (the CLI moved to @tailwindcss/cli, so `npm run css:build` has nothing to
+      # run), and the theme and about 570 uses of project utilities resolve differently. The
+      # one-line bump Dependabot proposes fails frontend-css (#1433). Build-time only: nothing
+      # of it ships to a running CertMate. Minor and patch releases of 3.x still come through.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/"
