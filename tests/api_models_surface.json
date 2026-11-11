@@ -1,5 +1,5 @@
 {
- "contract_version": "2.61",
+ "contract_version": "2.62",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -562,6 +562,15 @@
     "expiry_date": {
      "type": "string"
     },
+    "expiry_status": {
+     "enum": [
+      "critical",
+      "expired",
+      "ok",
+      "warning"
+     ],
+     "type": "string"
+    },
     "external": {
      "type": "boolean"
     },
@@ -579,6 +588,9 @@
     },
     "needs_renewal": {
      "type": "boolean"
+    },
+    "not_before": {
+     "type": "string"
     },
     "notes": {
      "type": "string"

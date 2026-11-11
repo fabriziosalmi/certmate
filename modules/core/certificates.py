@@ -2777,9 +2777,9 @@ class CertificateManager:
             # (renewal_policy, #393): the threshold where it is meaningful for this lifetime,
             # the lifetime rule where it is not, the CA's recorded window within a floor.
             renewal_info = self._renewal_info_for(domain, cert, settings)
+            not_before = cert.not_valid_before_utc.replace(tzinfo=None)
             renew_instant, _ = renewal_policy.renews_at(
-                cert.not_valid_before_utc.replace(tzinfo=None), expiry_date,
-                renewal_threshold_days, renewal_info)
+                not_before, expiry_date, renewal_threshold_days, renewal_info)
 
             return {
                 'domain': domain,
@@ -2814,6 +2814,14 @@ class CertificateManager:
                                   or key_state in ('missing', 'mismatched')),
                 # The instant the sweep renews it at, so a client is told when, not only whether.
                 'renews_at': None if external else renewal_policy.stamp(renew_instant),
+                # How urgent it looks, from the same rule (#1429): the dashboard, the bell and
+                # the notifications read this rather than 30 and 7 days of their own, which made
+                # every 160-hour certificate critical from the moment it was issued. Time only:
+                # a key that is gone shows through `needs_renewal` and `private_key_state`.
+                'expiry_status': renewal_policy.expiry_status(
+                    not_before, expiry_date, renewal_threshold_days, now_utc,
+                    None if external else renew_instant),
+                'not_before': renewal_policy.stamp(not_before),
                 'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
                 'reissue_required': self._reissue_required(domain, key_state),

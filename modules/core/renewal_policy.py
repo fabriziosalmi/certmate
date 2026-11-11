@@ -129,6 +129,50 @@ def renews_at(not_before: datetime, not_after: datetime, threshold_days: int,
     return latest, (REASON_ARI_ENDED if ended else REASON_ARI_FLOOR)
 
 
+# --- how urgent a certificate looks, from the same rule (#1429) ---------------------------------
+#
+# The dashboard, the bell and the inventory called a certificate "expiring" at 30 days left and
+# "critical" at 7, whatever its lifetime. A 160-hour certificate has less than 7 days from the
+# moment it is issued, so every new one was critical, and a 47-day one was "expiring" for 30 of
+# its 47 days: alarms for the normal state of the certificates CertMate is ready for.
+
+EXPIRY_EXPIRED = 'expired'
+EXPIRY_CRITICAL = 'critical'
+EXPIRY_WARNING = 'warning'
+EXPIRY_OK = 'ok'
+
+# Critical never starts earlier than this before expiry: a 90-day certificate is critical in its
+# last 7 days, as it always was.
+CRITICAL_SECONDS = 7 * DAY
+
+
+def expiry_status(not_before: datetime, not_after: datetime, threshold_days: int, now: datetime,
+                  renew_at: datetime | None = None) -> str:
+    """'expired', 'critical', 'warning' or 'ok' for a certificate. All instants naive UTC.
+
+    * **warning**: renewal is due, from the instant it renews at (`renew_at`, as `renews_at`
+      computed it, ARI included) or, for a certificate nothing here renews, from the margin the
+      rule would give it.
+    * **critical**: the renewal is overdue. Past the ARI floor (a sixth of the lifetime left) no
+      rule postpones it any more, so a certificate still not renewed there is late; and never
+      earlier than 7 days before expiry.
+
+    For a 90-day certificate and the default 30-day threshold this is 30 and 7 days, as before.
+    A 47-day certificate warns at a third of its lifetime, a 160-hour one at half of it.
+    """
+    if now >= not_after:
+        return EXPIRY_EXPIRED
+    lifetime = lifetime_seconds(not_before, not_after)
+    left = (not_after - now).total_seconds()
+    if left <= min(CRITICAL_SECONDS, ari_floor_seconds(lifetime)):
+        return EXPIRY_CRITICAL
+    if renew_at is None:
+        renew_at = not_after - timedelta(seconds=margin(lifetime, threshold_days)[0])
+    if now >= renew_at:
+        return EXPIRY_WARNING
+    return EXPIRY_OK
+
+
 def is_early(not_before: datetime, not_after: datetime, threshold_days: int, now: datetime) -> bool:
     """Due only because the operator's threshold is wider than the lifetime rule: the renewal the
     #966 guards (per-sweep cap, minimum age) exist for."""
