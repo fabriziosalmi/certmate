@@ -74,6 +74,22 @@
             <i class="fas fa-lock mr-1"></i>Generate private key (recommended)
         </label>
     </div>
+    <!-- The key CertMate generates (#1421). Hidden with a CSR, whose key is the device's. -->
+    <div id="keyShapeBlock">
+        <label for="clientKeyShape" class="block text-sm font-medium text-label mb-2">
+            <i class="fas fa-key mr-2 text-blue-500"></i>Key
+        </label>
+        <select id="clientKeyShape" name="clientKeyShape"
+                class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
+            <option value="">Settings default</option>
+            <option value="rsa:2048">RSA 2048</option>
+            <option value="rsa:3072">RSA 3072</option>
+            <option value="rsa:4096">RSA 4096</option>
+            <option value="ecdsa:secp256r1">ECDSA P-256</option>
+            <option value="ecdsa:secp384r1">ECDSA P-384</option>
+        </select>
+        <p class="mt-1 text-xs text-muted">Renewals keep the same kind of key.</p>
+    </div>
     <!-- Unticking the box above posts generate_key:false, which needs a CSR.
          There was nowhere to put one, so the box could only ever produce
          "Error creating certificate". -->

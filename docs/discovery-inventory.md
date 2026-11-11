@@ -302,8 +302,10 @@ public-key algorithm/size and signature algorithm, and classifies each as
 **weak** / **acceptable** / **modern**, with **pqc** reserved for post-quantum
 algorithms and **unknown** for anything it does not recognise, flagging everything classically
 quantum-vulnerable. It maps legacy assets against published deprecation guidance
-(informational) — the prerequisite for crypto-agility planning and, in the EU, a
-crypto-inventory obligation. See also [Compliance](./compliance.md).
+(informational): NIST IR 8547 (Final, October 2026) deprecates RSA, ECDSA and EdDSA
+after 2030 and disallows them after 2035. An algorithm the report does not recognise
+is counted as such (`quantum_vulnerability_unknown`), never as quantum-safe. See also
+[Compliance](./compliance.md).
 
 The classification is **data-driven**: a new algorithm (e.g. ML-DSA,
 composite/hybrid) is added by extending a table in

@@ -327,6 +327,14 @@
             generate_key: document.getElementById('generateKey').checked,
             notes: document.getElementById('notes').value
         };
+        // "rsa:3072", "ecdsa:secp384r1", or "" for the settings' default (#1421).
+        var shape = (document.getElementById('clientKeyShape') || {}).value || '';
+        if (data.generate_key && shape) {
+            var parts = shape.split(':');
+            data.key_type = parts[0];
+            if (parts[0] === 'rsa') { data.key_size = parseInt(parts[1], 10); }
+            else { data.elliptic_curve = parts[1]; }
+        }
         if (!data.generate_key) {
             data.csr = (document.getElementById('csrPem').value || '').trim();
             if (!data.csr) {
@@ -628,6 +636,8 @@
     // "Generate the key for me" hides the field for a CSR; unticking it shows it.
     window.ccToggleCsrBlock = function (generateKey) {
         document.getElementById('csrBlock').classList.toggle('hidden', generateKey);
+        var keyShape = document.getElementById('keyShapeBlock');
+        if (keyShape) { keyShape.classList.toggle('hidden', !generateKey); }
     };
 
     // What the page's controls may ask for by name (`data-click`, `data-change`,

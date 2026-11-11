@@ -875,7 +875,7 @@ rebuild with the subject resolved at start — `client_ca_subject`, else the
 `CERTMATE_CLIENT_CA_*` variables, else the default. So after changing the
 variables, a restart and a reset without `subject` applies them.
 
-`key_algorithm` is optional too, since API contract **2.63**: `rsa-4096`, `ecdsa-p256` or
+`key_algorithm` is optional too, since API contract **2.65**: `rsa-4096`, `ecdsa-p256` or
 `ecdsa-p384`, the new CA's key. Omit it to rebuild with the key the instance was started
 with, `CERTMATE_CLIENT_CA_KEY_ALGORITHM` or else `rsa-4096`. A P-384 CA signs with SHA-384,
 every other with SHA-256. Anything else is refused with 400 before the CA is touched.
@@ -928,6 +928,12 @@ Create a new client certificate.
 - `state` (optional) - Subject state or province (default:
   `CERTMATE_CLIENT_CERT_DEFAULT_STATE`, or `Switzerland`)
 - `notes` (optional) - Additional notes
+- `key_type` (optional, since **2.64**) - `rsa` or `ecdsa`: the key CertMate
+  generates. With `key_size` (`2048`, `3072`, `4096`) for RSA or
+  `elliptic_curve` (`secp256r1`, `secp384r1`) for ECDSA. Left out, the
+  `client_cert_key_type` setting applies, RSA 2048 by default. Refused with 400
+  beside a `csr`. A renewal keeps the kind of key
+  ([Configuration](./configuration.md#the-key-of-a-client-certificate)).
 
 Left out or left blank, each of these four takes its default, and so does a
 CSV batch row that leaves its column out or empty. A renewal does not: it
@@ -955,6 +961,9 @@ changed since then does not reach it.
     "country": "CH",
     "state": "Switzerland",
     "cert_usage": "api-mtls",
+    "key_type": "rsa",
+    "key_size": 2048,
+    "elliptic_curve": null,
     "key_usage": [
       "digitalSignature",
       "keyEncipherment"
@@ -1037,6 +1046,9 @@ List all client certificates with optional filtering.
       "country": "CH",
       "state": "Switzerland",
       "cert_usage": "api-mtls",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -1069,6 +1081,9 @@ List all client certificates with optional filtering.
       "country": "CH",
       "state": "Switzerland",
       "cert_usage": "api-mtls",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -1101,6 +1116,9 @@ List all client certificates with optional filtering.
       "organization": "ACME Corp",
       "organizational_unit": "IT",
       "cert_usage": "vpn",
+      "key_type": "rsa",
+      "key_size": 2048,
+      "elliptic_curve": null,
       "key_usage": [
         "digitalSignature",
         "keyEncipherment"
@@ -1177,6 +1195,9 @@ stop reading it.
   "country": "CH",
   "state": "Switzerland",
   "cert_usage": "api-mtls",
+  "key_type": "rsa",
+  "key_size": 2048,
+  "elliptic_curve": null,
   "key_usage": [
     "digitalSignature",
     "keyEncipherment"
@@ -1315,6 +1336,9 @@ certificate that does not exist is a `404` (a `400` before API contract **2.37**
     "country": "CH",
     "state": "Switzerland",
     "cert_usage": "api-mtls",
+    "key_type": "rsa",
+    "key_size": 2048,
+    "elliptic_curve": null,
     "key_usage": [
       "digitalSignature",
       "keyEncipherment"
@@ -2457,6 +2481,13 @@ Classifies the key and signature algorithms across every managed and
 discovered certificate against published deprecation timelines. It is an
 inventory, not a recommendation engine: it counts what is deployed and says
 what is behind. Add `?format=csv` for the per-asset table.
+
+`quantum_vulnerable` counts the certificates whose key algorithm is quantum-vulnerable
+(RSA, ECDSA, EdDSA, DSA). Since API contract **2.63**, a certificate whose key algorithm
+the report does not recognise is counted in `quantum_vulnerability_unknown` instead, and
+its asset's `quantum_vulnerable` is `null` ("not known"), where it was `false`; the CSV
+says `unknown`. The deprecation notes cite NIST IR 8547 (Final, October 2026): RSA,
+ECDSA and EdDSA deprecated after 2030, disallowed after 2035.
 
 #### Domain registrations
 

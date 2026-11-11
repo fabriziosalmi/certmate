@@ -10,7 +10,7 @@ from pathlib import Path
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtensionOID
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
@@ -151,7 +151,9 @@ class CSRHandler:
         locality: str = "",
         email: str = "",
         alternative_names: list = None,
-        key_size: int = 2048
+        key_size: int = 2048,
+        key_type: str = 'rsa',
+        elliptic_curve: str | None = None,
     ) -> Tuple[Optional[bytes], Optional[bytes], Optional[str]]:
         """
         Create a new CSR with private key.
@@ -165,7 +167,9 @@ class CSRHandler:
             locality: City/locality
             email: Email address
             alternative_names: List of alternative names (e.g., ['example.com', 'www.example.com'])
-            key_size: RSA key size (default 2048)
+            key_size: RSA key size (default 2048), for key_type 'rsa'
+            key_type: 'rsa' or 'ecdsa' (#1421), the values server certificates take
+            elliptic_curve: 'secp256r1' or 'secp384r1', for key_type 'ecdsa'
 
         Returns:
             Tuple of (csr_pem, private_key_pem, error_message)
@@ -180,18 +184,28 @@ class CSRHandler:
             if re.search(r'[\x00-\x1f\x7f]', common_name):
                 return None, None, "Common name contains invalid control characters"
 
-            # Validate key size
-            if key_size not in [2048, 4096]:
-                return None, None, "Key size must be 2048 or 4096"
+            # The key shapes server certificates accept, checked by the same validator
+            # (#1421): RSA 2048/3072/4096 (3072 was refused here), ECDSA P-256/P-384.
+            from .utils import KEY_TYPE_ECDSA, validate_key_options
+            is_ec = key_type == KEY_TYPE_ECDSA
+            ok, error = validate_key_options(
+                key_type, None if is_ec else key_size, elliptic_curve if is_ec else None)
+            if not ok:
+                return None, None, error
 
-            logger.info(f"Creating CSR for CN={common_name} with {key_size}-bit key")
-
-            # Generate private key
-            private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=key_size,
-                backend=default_backend()
-            )
+            private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
+            if is_ec:
+                logger.info(f"Creating CSR for CN={common_name} with an ECDSA {elliptic_curve} key")
+                # validate_key_options above allowed secp256r1 or secp384r1, nothing else.
+                private_key = ec.generate_private_key(
+                    ec.SECP384R1() if elliptic_curve == 'secp384r1' else ec.SECP256R1())
+            else:
+                logger.info(f"Creating CSR for CN={common_name} with {key_size}-bit key")
+                private_key = rsa.generate_private_key(
+                    public_exponent=65537,
+                    key_size=key_size,
+                    backend=default_backend()
+                )
 
             # Build subject
             subject_attrs = [
@@ -224,12 +238,13 @@ class CSRHandler:
                     critical=False
                 )
 
-            # Add key usage extension
+            # Add key usage extension. Key encipherment is an RSA operation: an EC key
+            # signs only (RFC 5480), so it asks for digitalSignature alone.
             csr_builder = csr_builder.add_extension(
                 x509.KeyUsage(
                     digital_signature=True,
                     content_commitment=False,
-                    key_encipherment=True,
+                    key_encipherment=not is_ec,
                     data_encipherment=False,
                     key_agreement=False,
                     key_cert_sign=False,

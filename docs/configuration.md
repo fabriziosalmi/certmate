@@ -73,6 +73,27 @@ They are separate on purpose: an organisation usually signs its staff's
 certificates as itself (`O`) and per department (`OU`), while the CA is named
 once, often `OU=Certificate Authority`.
 
+### The key of a client certificate
+
+The key CertMate generates for a client certificate is chosen per certificate
+(`key_type` with `key_size` or `elliptic_curve` on `POST
+/api/client-certs/create`, or the Key list of the create form), with the values
+server certificates take: RSA 2048, 3072 or 4096, ECDSA P-256 or P-384. A
+certificate that names none gets the default in Settings, General, Client
+Certificate Key, stored as `client_cert_key_type`, `client_cert_key_size` and
+`client_cert_elliptic_curve`: RSA 2048, what every client certificate had
+before, until it is changed. A CSV batch takes the default too.
+
+A renewal generates a new key of the same kind as the certificate it replaces,
+whatever the default says by then. A certificate issued before the key was
+recorded is renewed with the kind of key its certificate has. An ECDSA
+certificate carries the `digitalSignature` key usage alone: `keyEncipherment`
+is an RSA operation.
+
+With a CSR (`generate_key` false) the key is the device's, and a key option
+beside it is refused with 400. EAP-TLS in WPA3-Enterprise 192-bit mode, for
+example, needs ECDSA P-384 or RSA 3072 and up.
+
 ## Timing and diagnostics
 
 | Variable           | Required | Default        | Description                         |

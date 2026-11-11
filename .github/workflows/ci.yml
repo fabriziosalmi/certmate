@@ -282,6 +282,17 @@ jobs:
             exit 1
           fi
 
+          # Hybrid post-quantum key exchange (X25519MLKEM768), which CertMate's outbound TLS
+          # offers because the image's OpenSSL does by default. Nothing else would notice a
+          # base-image bump that lost it. The script carries its own control: a server
+          # limited to a group the client does not offer must refuse, or it proves nothing.
+          docker cp scripts/check_hybrid_key_exchange.py "$cid":/app/scripts/check_hybrid_key_exchange.py
+          if ! docker exec "$cid" python /app/scripts/check_hybrid_key_exchange.py; then
+            echo "::error::$req built an image whose TLS client no longer offers hybrid post-quantum key exchange (X25519MLKEM768)"
+            docker rm -f "$cid" >/dev/null 2>&1 || true
+            exit 1
+          fi
+
           docker rm -f "$cid" >/dev/null 2>&1 || true
           echo "::endgroup::"
         done

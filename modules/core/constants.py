@@ -740,7 +740,21 @@ METADATA_SCHEMA_VERSION = 1
 #                                   `expiry_status` (ok, warning, critical,
 #                                   expired, by the renewal rule) and
 #                                   `not_before` (#1429).
-#                                   2.63, MINOR: POST /api/client-certs/ca/reset
+#                                   2.63, MINOR: the crypto report counts the
+#                                   certificates whose key algorithm it does not
+#                                   recognise in quantum_vulnerability_unknown, and
+#                                   each such asset's quantum_vulnerable is null
+#                                   ("not known") where it was false. MINOR, as
+#                                   2.47's null renews_at was: a new case of an
+#                                   existing field, which read as "safe" for an
+#                                   algorithm nobody had classified.
+#                                   2.64, MINOR: a client certificate can be
+#                                   created with key_type, key_size and
+#                                   elliptic_curve, and settings carry the
+#                                   default for them, client_cert_key_type,
+#                                   client_cert_key_size and
+#                                   client_cert_elliptic_curve (#1421).
+#                                   2.65, MINOR: POST /api/client-certs/ca/reset
 #                                   takes an optional key_algorithm (rsa-4096,
 #                                   ecdsa-p256, ecdsa-p384) for the new client
 #                                   CA (#1421).
@@ -769,7 +783,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.63'
+API_CONTRACT_VERSION = '2.65'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

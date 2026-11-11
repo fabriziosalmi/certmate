@@ -83,6 +83,10 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'default_key_type',
     'default_key_size',
     'default_elliptic_curve',
+    # The same three for the keys CertMate generates for client certificates (#1421).
+    'client_cert_key_type',
+    'client_cert_key_size',
+    'client_cert_elliptic_curve',
     # Password used to encrypt the on-disk Windows .pfx export (issue #230).
     # Empty/unset disables the export. Masked on GET and preserved on POST by
     # the generic secret machinery (name matches the secret regex).
@@ -160,6 +164,10 @@ _NON_SECRET_KEY_NAMES = frozenset({
     'default_key_type',
     'default_key_size',
     'default_elliptic_curve',
+    # "key" in the name, and still not a secret: 'rsa', 2048, 'secp384r1' (#1421).
+    'client_cert_key_type',
+    'client_cert_key_size',
+    'client_cert_elliptic_curve',
 })
 
 
@@ -598,6 +606,27 @@ _DEEP_MERGE_SETTINGS_KEYS = frozenset({
     # settings payload that omits it.
     'dns_providers',
 })
+
+
+def _invalid_key_defaults(settings, prefix):
+    """The error for a `<prefix>key_type/key_size/elliptic_curve` triple that does not
+    validate, or '' when it does or is absent.
+
+    Save-time validation only checks the active branch (RSA: key_size; ECDSA:
+    elliptic_curve). The unused field on the inactive branch may keep its default, so
+    toggling RSA and ECDSA in the UI does not require wiping both on every switch.
+    """
+    key_type = settings.get(f'{prefix}key_type')
+    key_size = settings.get(f'{prefix}key_size')
+    elliptic_curve = settings.get(f'{prefix}elliptic_curve')
+    if key_type is None and key_size is None and elliptic_curve is None:
+        return ''
+    if key_type == 'rsa':
+        elliptic_curve = None
+    elif key_type == 'ecdsa':
+        key_size = None
+    is_valid, err = validate_key_options(key_type, key_size, elliptic_curve)
+    return '' if is_valid else err
 
 
 def _deep_merge_dict(base, overlay):
@@ -1315,6 +1344,10 @@ class SettingsManager:
                 'default_key_type': 'rsa',
                 'default_key_size': 2048,
                 'default_elliptic_curve': 'secp256r1',
+                # Client certificates' keys (#1421): RSA 2048, what every one had before.
+                'client_cert_key_type': 'rsa',
+                'client_cert_key_size': 2048,
+                'client_cert_elliptic_curve': 'secp256r1',
                 'pfx_password': '',  # Encrypts the on-disk .pfx export; empty = disabled (#230)
                 'dns_providers': {},  # Start with empty DNS providers - only add what's actually configured
                 'certificate_storage': {  # New storage backend configuration
@@ -1405,6 +1438,9 @@ class SettingsManager:
                 'default_key_type': 'rsa',
                 'default_key_size': 2048,
                 'default_elliptic_curve': 'secp256r1',
+                'client_cert_key_type': 'rsa',
+                'client_cert_key_size': 2048,
+                'client_cert_elliptic_curve': 'secp256r1',
                 'pfx_password': '',  # Encrypts the on-disk .pfx export; empty = disabled (#230)
                 'dns_providers': {
                     'cloudflare': {'api_token': ''},
@@ -1554,6 +1590,7 @@ class SettingsManager:
                     'renewal_threshold_days', 'api_bearer_token', 'setup_completed',
                     'dns_provider', 'challenge_type',
                     'default_key_type', 'default_key_size', 'default_elliptic_curve',
+                    'client_cert_key_type', 'client_cert_key_size', 'client_cert_elliptic_curve',
                     'oidc',
                 ]
                 for key in essential_keys:
@@ -1876,24 +1913,11 @@ class SettingsManager:
                 # creation. The migration path above guarantees all three keys
                 # exist for upgraded installs, so the only callers that hit
                 # this branch with a partial set are POSTs from the UI/API.
-                key_type = settings.get('default_key_type')
-                key_size = settings.get('default_key_size')
-                elliptic_curve = settings.get('default_elliptic_curve')
-                if key_type is not None or key_size is not None or elliptic_curve is not None:
-                    # Save-time validation only checks the active branch
-                    # (RSA → key_size; ECDSA → elliptic_curve). The unused
-                    # field on the inactive branch is allowed to keep its
-                    # default value (so toggling RSA↔ECDSA via the UI does
-                    # not require both to be wiped on every switch).
-                    if key_type == 'rsa':
-                        check = validate_key_options(key_type, key_size, None)
-                    elif key_type == 'ecdsa':
-                        check = validate_key_options(key_type, None, elliptic_curve)
-                    else:
-                        check = validate_key_options(key_type, key_size, elliptic_curve)
-                    is_valid, err = check
-                    if not is_valid:
-                        logger.error(f"Invalid certificate key defaults: {err}")
+                # The server certificates' triple and the client certificates' (#1421).
+                for prefix in ('default_', 'client_cert_'):
+                    err = _invalid_key_defaults(settings, prefix)
+                    if err:
+                        logger.error(f"Invalid certificate key defaults ({prefix}*): {err}")
                         return False
 
                 # Validate domains
