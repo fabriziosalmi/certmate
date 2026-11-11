@@ -29,21 +29,22 @@ its metadata carries a warning that the external copy is missing or stale.
 | Local filesystem (default) | `local_filesystem` | nothing to install | none |
 | Azure Key Vault | `azure_keyvault` | no | `requirements-azure-storage.txt` |
 | AWS Secrets Manager | `aws_secrets_manager` | yes (`boto3`) | `requirements-aws-storage.txt` |
-| HashiCorp Vault | `hashicorp_vault` | no | `requirements-vault-storage.txt` |
+| HashiCorp Vault | `hashicorp_vault` | yes (`hvac`) | `requirements-vault-storage.txt`, for `requirements-minimal.txt` |
 | Infisical | `infisical` | no | `requirements-infisical-storage.txt` |
 | S3-compatible object storage | `s3_compatible` | yes (`boto3`) | none: `boto3` is in `requirements.txt` |
 
 `requirements-storage-all.txt` installs every backend's SDK.
-`requirements-minimal.txt` installs none of them, not even `boto3`, so AWS
-Secrets Manager and S3-compatible storage need it too.
+`requirements-minimal.txt` installs none of them, not even `boto3` or `hvac`,
+so AWS Secrets Manager, S3-compatible storage and HashiCorp Vault need theirs
+too.
 
 ### Adding a backend's SDK
 
 **From source:** install the requirements file into CertMate's environment, for
-example `pip install -r requirements-vault-storage.txt`.
+example `pip install -r requirements-azure-storage.txt`.
 
 **Docker:** the image ships no pip, so the SDK goes into an image of your own.
-Either build CertMate with `--build-arg EXTRA_REQUIREMENTS=requirements-vault-storage.txt`
+Either build CertMate with `--build-arg EXTRA_REQUIREMENTS=requirements-azure-storage.txt`
 (several files are separated by spaces), or derive an image from the published
 one:
 
@@ -52,7 +53,7 @@ FROM fabriziosalmi/certmate:latest
 USER root
 RUN /opt/venv/bin/python -m ensurepip && \
     /opt/venv/bin/python -m pip install --no-cache-dir -c requirements.constraints \
-        -r requirements-vault-storage.txt && \
+        -r requirements-azure-storage.txt && \
     /opt/venv/bin/python -m pip uninstall -y pip
 USER certmate
 ```

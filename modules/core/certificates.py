@@ -2631,6 +2631,14 @@ class CertificateManager:
             storage_result = self._storage_retrieve(domain)
             if storage_result:
                 cert_files, metadata = storage_result
+                # The local metadata.json, whole, when there is one (#1425). Issuance and
+                # renewal write it and the backend's copy together, but an edit (a probe,
+                # a note, the tags, auto-renew, the DNS provider) writes only the local one:
+                # read from the backend, every edit was missing from the list until the
+                # next renewal. Whole rather than merged over the backend's, so a field the
+                # edit removed is not brought back from the stale copy. Renewal and the
+                # deployment check already read the local copy.
+                metadata = self._load_metadata(domain) or metadata
                 if 'cert.pem' in cert_files:
                     storage_key_state = self._storage_key_state(
                         domain, cert_files, metadata)
@@ -2769,9 +2777,9 @@ class CertificateManager:
             # (renewal_policy, #393): the threshold where it is meaningful for this lifetime,
             # the lifetime rule where it is not, the CA's recorded window within a floor.
             renewal_info = self._renewal_info_for(domain, cert, settings)
+            not_before = cert.not_valid_before_utc.replace(tzinfo=None)
             renew_instant, _ = renewal_policy.renews_at(
-                cert.not_valid_before_utc.replace(tzinfo=None), expiry_date,
-                renewal_threshold_days, renewal_info)
+                not_before, expiry_date, renewal_threshold_days, renewal_info)
 
             return {
                 'domain': domain,
@@ -2806,6 +2814,14 @@ class CertificateManager:
                                   or key_state in ('missing', 'mismatched')),
                 # The instant the sweep renews it at, so a client is told when, not only whether.
                 'renews_at': None if external else renewal_policy.stamp(renew_instant),
+                # How urgent it looks, from the same rule (#1429): the dashboard, the bell and
+                # the notifications read this rather than 30 and 7 days of their own, which made
+                # every 160-hour certificate critical from the moment it was issued. Time only:
+                # a key that is gone shows through `needs_renewal` and `private_key_state`.
+                'expiry_status': renewal_policy.expiry_status(
+                    not_before, expiry_date, renewal_threshold_days, now_utc,
+                    None if external else renew_instant),
+                'not_before': renewal_policy.stamp(not_before),
                 'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
                 'reissue_required': self._reissue_required(domain, key_state),
@@ -4537,6 +4553,12 @@ class CertificateManager:
     # last lines are where certbot says what went wrong, the rest is progress.
     CERTBOT_STDOUT_TAIL_LINES = 20
     CERTBOT_DEBUG_LOG_BANNER = 'Saving debug log to '
+    # What certbot prints, on stdout, before the CA's reason for each failed
+    # identifier (certbot/_internal/auth_handler.py, _report_failed_authzrs).
+    CERTBOT_CA_PROBLEMS_MARKER = 'The Certificate Authority reported these problems'
+    # "Identifier:" since certbot 2.x; "Domain:" in the releases before it.
+    _CA_PROBLEM_NAME = re.compile(r'^\s*(?:Identifier|Domain):\s*(\S.*?)\s*$')
+    _CA_PROBLEM_DETAIL = re.compile(r'^\s*Detail:\s*(\S.*?)\s*$')
 
     @staticmethod
     def _certbot_silence(returncode):
@@ -4548,6 +4570,39 @@ class CertificateManager:
                 name = f'signal {-returncode}'
             return f'certbot was killed by {name} before it reported an error'
         return f'certbot exited with code {returncode} without reporting an error'
+
+    @classmethod
+    def _ca_problems(cls, stdout):
+        """The CA's reason for each identifier it refused, as "name: detail" lines.
+
+        On a failed authorization certbot writes "Some challenges have failed."
+        to stderr and the reason itself to stdout, through display_util.notify,
+        which a non-interactive certbot sends to sys.stdout (certbot 5.8.0,
+        main.py). The message was built from stderr alone, so it said "Some
+        challenges have failed" and dropped "DNS problem: NXDOMAIN looking up TXT
+        for _acme-challenge..." (#1427). Read only after certbot's own marker, so
+        other stdout narration is never taken for a CA's answer.
+        """
+        from .utils import sanitize_certbot_stderr
+        text = str(stdout or '')
+        if cls.CERTBOT_CA_PROBLEMS_MARKER not in text:
+            return ''
+        problems, name = [], None
+        for line in text.split(cls.CERTBOT_CA_PROBLEMS_MARKER, 1)[1].splitlines():
+            found = cls._CA_PROBLEM_NAME.match(line)
+            if found:
+                name = found.group(1)
+                continue
+            found = cls._CA_PROBLEM_DETAIL.match(line)
+            if found and name:
+                # Redacted on its own, before the name goes in front of it: the
+                # sanitiser's credential pattern is anchored at the start of a
+                # line, and "name: dns_..._token = x" no longer starts with it.
+                problem = f'{name}: {sanitize_certbot_stderr(found.group(1)).strip()}'
+                if problem not in problems:
+                    problems.append(problem)
+                name = None
+        return '\n'.join(problems)
 
     def _certbot_failure(self, prefix, domain, result, *, secrets=()):
         """The message for a certbot run that exited non-zero, logged and returned.
@@ -4583,6 +4638,11 @@ class CertificateManager:
             tail = sanitize_certbot_stderr(tail).strip()
             if tail:
                 detail += '. The last it printed:\n' + tail
+        # The CA's own reason first, so the first line of the message (and the
+        # list row, which shows 140 characters of it) says what went wrong.
+        problems = self._ca_problems(result.stdout)
+        if problems:
+            detail = problems + '\n' + detail
         for secret in secrets:
             if secret:
                 detail = detail.replace(secret, '***')

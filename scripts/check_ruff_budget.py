@@ -40,7 +40,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 # The ruff these counts were measured with, pinned in requirements-test.txt.
-RUFF_VERSION = '0.17.3'
+RUFF_VERSION = '0.17.4'
 
 # area -> rule -> count.
 BASELINE: dict[str, dict[str, int]] = {

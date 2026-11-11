@@ -10,10 +10,13 @@ readiness report.
 
 from datetime import datetime, timezone
 
+from . import renewal_policy
+from .constants import DEFAULT_RENEWAL_THRESHOLD_DAYS
+
 # Expiry status thresholds (days). Ordered most-severe first.
 EXPIRY_EXPIRED = 'expired'
-EXPIRY_CRITICAL = 'critical'   # <= 7 days
-EXPIRY_WARNING = 'warning'     # <= 30 days
+EXPIRY_CRITICAL = 'critical'   # <= 7 days, for a 90-day certificate (certificate_expiry_status)
+EXPIRY_WARNING = 'warning'     # <= 30 days, likewise
 EXPIRY_OK = 'ok'
 
 CRITICAL_DAYS = 7
@@ -74,6 +77,22 @@ def days_until_expiry(not_after, now=None):
         return None
     now = now or datetime.utcnow()
     return (dt - now).days
+
+
+def certificate_expiry_status(record, now=None):
+    """A certificate's status by its lifetime, from the renewal rule (#1429).
+
+    30 and 7 days are the right thresholds for a 90-day certificate and the wrong ones for
+    anything shorter: a 160-hour certificate was critical from the moment it was issued. With
+    both dates known the status comes from ``renewal_policy.expiry_status`` (the same 30 and 7
+    days for 90 days); without ``not_before`` it falls back to the day thresholds.
+    """
+    not_before = _parse_iso(record.get('not_before'))
+    not_after = _parse_iso(record.get('not_after'))
+    if not_before is None or not_after is None:
+        return expiry_status(days_until_expiry(record.get('not_after'), now))
+    return renewal_policy.expiry_status(
+        not_before, not_after, DEFAULT_RENEWAL_THRESHOLD_DAYS, now or datetime.utcnow())
 
 
 def expiry_status(days):
@@ -174,7 +193,7 @@ def build_inventory_view(records, now=None, include_superseded=True, superseded=
         if is_superseded and not include_superseded:
             continue
         days = days_until_expiry(record.get('not_after'), now)
-        status = expiry_status(days)
+        status = certificate_expiry_status(record, now)
         group = 'issued' if record.get('managed') else 'discovered'
         item = dict(record)
         item['days_until_expiry'] = days
