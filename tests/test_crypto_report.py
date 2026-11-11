@@ -64,10 +64,32 @@ def test_dsa_weak():
     assert a['key_classification'] == CLASS_WEAK
 
 
-def test_unknown_key():
-    a = _one(_rec('a', {'type': 'Frobnicate'}, 'sha256'))
+@pytest.mark.parametrize('key_type', ['Frobnicate', 'ML-DSA-65', 'Unknown'])
+def test_an_algorithm_the_table_does_not_know_is_not_called_quantum_safe(key_type):
+    """It was `False`, which reads as safe and was counted as safe. 'Unknown' is what the
+    probe answers today for an ML-DSA certificate; ML-DSA-65 is what it will name."""
+    a = _one(_rec('a', {'type': key_type}, 'sha256'))
     assert a['key_classification'] == CLASS_UNKNOWN
-    assert a['quantum_vulnerable'] is False
+    assert a['quantum_vulnerable'] is None
+
+
+def test_the_unknown_ones_are_counted_apart():
+    report = build_crypto_report([_rec('a', {'type': 'RSA', 'size': 2048}, 'sha256'),
+                                  _rec('b', {'type': 'Unknown'}, 'ML-DSA-65')])
+    assert report['quantum_vulnerable'] == 1
+    assert report['quantum_vulnerability_unknown'] == 1
+
+
+def test_the_csv_says_unknown_rather_than_leaving_the_cell_empty():
+    csv_text = report_to_csv(build_crypto_report([_rec('b', {'type': 'Unknown'}, 'ML-DSA-65')]))
+    header, row = csv_text.strip().splitlines()
+    assert row.split(',')[header.split(',').index('quantum_vulnerable')] == 'unknown'
+
+
+def test_the_deprecation_notes_cite_only_what_a_source_states():
+    notes = ' '.join(DEPRECATION_NOTES.values())
+    assert 'NIST IR 8547' in notes and '2030' in notes and '2035' in notes
+    assert 'EU' not in notes, 'an EU date no primary source in hand states'
 
 
 # --- signature + worst-of aggregation -------------------------------------- #
