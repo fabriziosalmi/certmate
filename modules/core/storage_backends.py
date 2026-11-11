@@ -1677,16 +1677,17 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
     def _list_certificates_attempt(self) -> List[str]:
         client = self._get_client()
 
-        if self.engine_version == 'v2':
-            response = client.secrets.kv.v2.list_secrets(
-                path="certmate/certificates",
-                mount_point=self.mount_point
-            )
-        else:
-            response = client.secrets.kv.v1.list_secrets(
-                path="certmate/certificates",
-                mount_point=self.mount_point
-            )
+        kv = client.secrets.kv.v2 if self.engine_version == 'v2' else client.secrets.kv.v1
+        try:
+            response = kv.list_secrets(path="certmate/certificates", mount_point=self.mount_point)
+        except Exception as error:
+            # Vault answers 404 for a path nothing has been written under, which
+            # hvac raises as InvalidPath: a store with no certificate yet, not a
+            # failure. Matched by name, as in delete_certificate, so this does not
+            # import hvac where it is absent.
+            if type(error).__name__ == 'InvalidPath':
+                return []
+            raise
 
         return sorted(response.get('data', {}).get('keys', []))
     
