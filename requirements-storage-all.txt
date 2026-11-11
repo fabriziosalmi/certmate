@@ -17,7 +17,7 @@ azure-identity>=1.27.0
 cryptography>=49,<51
 
 # AWS Secrets Manager
-boto3>=1.43.123
+boto3>=1.43.126
 
 # HashiCorp Vault
 hvac>=2.4.0

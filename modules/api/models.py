@@ -357,6 +357,24 @@ def create_api_models(api):
                 'and for an external certificate, which CertMate never renews '
                 '(2.47). Added in API contract 2.40.'
             )),
+        'expiry_status': fields.String(
+            enum=['ok', 'warning', 'critical', 'expired'],
+            description=(
+                "How urgent the certificate is, by the renewal rule rather than "
+                "fixed day counts: 'warning' once renewal is due (renews_at, or "
+                "for an external certificate the margin the rule would give it), "
+                "'critical' once it is overdue (a sixth of the lifetime left, and "
+                "never earlier than 7 days before expiry), 'expired' after "
+                "not_after. 30 and 7 days for a 90-day certificate, 80 and 26 "
+                "hours for a 160-hour one. Expiry only: a missing key shows in "
+                "needs_renewal and private_key_state. Added in API contract 2.62."
+            )),
+        'not_before': fields.String(
+            description=(
+                'The start of the validity period, UTC with a Z. With expires_at '
+                'it gives the lifetime the renewal rule works from. Added in API '
+                'contract 2.62.'
+            )),
         'usable': fields.Boolean(
             description=(
                 'Whether this certificate can actually serve TLS: it exists AND '
