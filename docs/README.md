@@ -29,6 +29,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[ACME server](./acme-server.md)**: certificates for internal names and IPv4 addresses to certbot, lego, acme.sh and cert-manager, from a root of CertMate's own
 - **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
+- **[Post-quantum cryptography](./post-quantum.md)**: what CertMate does with post-quantum key exchange, certificates and inventory today, and what it does not
 - **[Backups and recovery](./backup.md)** — the two kinds of archive, off-site copies, restoring, lost admin password
 - **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
 - **[Single sign-on (OIDC)](./sso.md)** — OpenID Connect sign-in, role mapping, provisioning
@@ -170,6 +171,7 @@ docs/
   backup.md               backups and recovery
   ca-providers.md         certificate authorities
   compliance.md           audit chain, attribution, NIS2/eIDAS
+  post-quantum.md         post-quantum key exchange, certificates, inventory
   configuration.md        environment variables
   csr-only-certificates.md  issuing when the key stays on the device
   deploy-hooks.md         post-issuance deploy hooks
