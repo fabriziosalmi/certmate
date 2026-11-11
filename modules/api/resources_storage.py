@@ -111,7 +111,7 @@ def _saved_storage_config(ctx, backend_type):
     return {}
 
 
-def _with_saved_secrets(ctx, backend_type, config):
+def _form_over_saved_config(ctx, backend_type, config):
     """The form's configuration over the saved one, as saving merges it (#1424).
 
     The settings page never sends a saved secret back to the browser, so after a reload its
@@ -121,6 +121,10 @@ def _with_saved_secrets(ctx, backend_type, config):
     """
     from ..core.settings import _deep_merge_dict, _is_secret_key, _strip_masked_values
     form = _strip_masked_values(dict(config)) if isinstance(config, dict) else {}
+    if backend_type == 'local_filesystem':
+        # Nothing secret to bring back, and the saved settings have no business in a
+        # backend whose constructor logs what it was given.
+        return form
     saved = _saved_storage_config(ctx, backend_type)
     field, default = _SECRET_DESTINATION.get(backend_type, (None, None))
     if field and (form.get(field) or default) != (saved.get(field) or default):
@@ -319,7 +323,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
 
                 # Test connection based on backend type
                 try:
-                    config = _with_saved_secrets(ctx, backend_type, config)
+                    config = _form_over_saved_config(ctx, backend_type, config)
                     if backend_type == 'local_filesystem':
                         test_backend = LocalFileSystemBackend(
                             _local_dir(ctx, config))
@@ -461,8 +465,8 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                 target_config = _resolve_config(target_backend_type, target_raw)
 
                 try:
-                    source_config = _with_saved_secrets(ctx, source_backend_type, source_config)
-                    target_config = _with_saved_secrets(ctx, target_backend_type, target_config)
+                    source_config = _form_over_saved_config(ctx, source_backend_type, source_config)
+                    target_config = _form_over_saved_config(ctx, target_backend_type, target_config)
                     source_backend = _build_backend(source_backend_type, source_config)
                     target_backend = _build_backend(target_backend_type, target_config)
 
