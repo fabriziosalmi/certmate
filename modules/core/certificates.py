@@ -2502,12 +2502,17 @@ class CertificateManager:
                 str(domain).replace(chr(10), ' ').replace(chr(13), ' '), e)
             return 'mismatched'
 
+        # The SubjectPublicKeyInfo bytes, as cert_import does: every algorithm has them, and
+        # they carry the algorithm too, so keys of two types never compare equal.
+        # public_numbers() exists for RSA, EC and DSA only, so a matching Ed25519 or ML-DSA
+        # pair was reported 'mismatched', which forces needs_renewal and reads as unusable.
+        spki = (serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
         try:
-            matches = (private_key.public_key().public_numbers()
-                       == certificate.public_key().public_numbers())
+            matches = (private_key.public_key().public_bytes(*spki)
+                       == certificate.public_key().public_bytes(*spki))
         except Exception:
-            # Different key types have incomparable public_numbers; that is
-            # itself a mismatch.
+            # A key whose public half cannot be encoded is not one this
+            # certificate can be checked against: a mismatch.
             matches = False
         return 'present' if matches else 'mismatched'
 
