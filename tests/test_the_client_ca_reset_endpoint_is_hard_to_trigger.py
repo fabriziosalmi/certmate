@@ -60,6 +60,8 @@ def test_the_crl_is_republished_after_a_reset():
     source = (pathlib.Path(__file__).resolve().parent.parent
               / 'modules' / 'api' / 'client_certificates.py').read_text(encoding='utf-8')
     start = source.index('class ClientCertificateAuthorityReset')
-    block = source[start:start + 2400]
+    # Up to the end of post(), not a fixed number of characters: a comment
+    # added above the call pushed it out of a 2400-character window once.
+    block = source[start:source.index('except HTTPException', start)]
 
     assert 'crl_manager.update_crl()' in block

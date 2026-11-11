@@ -377,8 +377,10 @@ def _build_ca_reset_resource(auth_manager, client_cert_manager, crl_manager,
                                    "organization, organizational_unit and common_name")
 
                     actor = getattr(getattr(request, 'current_user', None), 'get', lambda *_: None)('username')
+                    # The new CA's key (#1421): rsa-4096, ecdsa-p256 or ecdsa-p384. Left out,
+                    # the instance's configured one. The manager validates it, with the subject.
                     success, error, summary = client_cert_manager.reset_certificate_authority(
-                        subject=subject, actor=actor)
+                        subject=subject, actor=actor, key_algorithm=data.get('key_algorithm'))
                     if not success:
                         abort(400, error or "Failed to reset the certificate authority")
 

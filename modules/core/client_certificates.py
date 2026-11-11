@@ -1101,8 +1101,14 @@ class ClientCertificateManager:
         self,
         subject: Optional[Dict[str, str]] = None,
         actor: Optional[str] = None,
+        key_algorithm: str | None = None,
     ) -> Tuple[bool, Optional[str], Dict[str, Any]]:
         """Rebuild the client CA, and remove the certificates it signed (#578).
+
+        `key_algorithm` (#1421), one of PrivateCAGenerator.KEY_ALGORITHMS, is the new CA's
+        key; None keeps the one the instance was configured with (RSA 4096 unless
+        CERTMATE_CLIENT_CA_KEY_ALGORITHM says otherwise). Validated with the subject, before
+        anything is touched.
 
         Two things that have to happen together. Regenerating the CA alone
         would leave a directory of client certificates that nothing can verify
@@ -1131,13 +1137,14 @@ class ClientCertificateManager:
         # produce a certificate; catching it here keeps the caller's contract
         # (ok, error, summary) rather than making every caller handle both.
         try:
-            PrivateCAGenerator(self.private_ca.ca_dir, subject=subject)._build_subject()
+            PrivateCAGenerator(self.private_ca.ca_dir, subject=subject,
+                               key_algorithm=key_algorithm)._build_subject()
         except ValueError as error:
             return False, str(error), summary
 
         existing = self.list_client_certificates()
 
-        if not self.private_ca.regenerate(subject=subject):
+        if not self.private_ca.regenerate(subject=subject, key_algorithm=key_algorithm):
             return False, 'could not regenerate the certificate authority; see the log', summary
         summary['backup'] = str(self.private_ca.ca_dir)
 

@@ -875,6 +875,11 @@ rebuild with the subject resolved at start — `client_ca_subject`, else the
 `CERTMATE_CLIENT_CA_*` variables, else the default. So after changing the
 variables, a restart and a reset without `subject` applies them.
 
+`key_algorithm` is optional too, since API contract **2.65**: `rsa-4096`, `ecdsa-p256` or
+`ecdsa-p384`, the new CA's key. Omit it to rebuild with the key the instance was started
+with, `CERTMATE_CLIENT_CA_KEY_ALGORITHM` or else `rsa-4096`. A P-384 CA signs with SHA-384,
+every other with SHA-256. Anything else is refused with 400 before the CA is touched.
+
 **What it does.** Backs up the existing CA, generates a new one, and removes
 every client certificate the old CA signed, because nothing can verify them
 any more. It republishes the CRL, which was signed by the old key and is

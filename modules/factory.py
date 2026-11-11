@@ -33,7 +33,7 @@ from modules.core.digest import WeeklyDigest
 from modules.core.acme_server import AcmeServer
 from modules.core.deployer import DeployManager
 from modules.core.ca_manager import CAManager
-from modules.core.private_ca import resolve_client_ca_subject
+from modules.core.private_ca import client_ca_key_algorithm_from_environment, resolve_client_ca_subject
 from modules.core.client_certificates import check_client_certificate_defaults
 from modules.api import create_api_models, create_api_resources
 from modules.api.client_certificates import create_client_certificate_resources
@@ -688,8 +688,10 @@ def initialize_managers(container: AppContainer, app):
     # deliberate path is POST /api/client-certs/ca/reset. Without a setting,
     # the CERTMATE_CLIENT_CA_* variables name it, so a fresh container can be
     # born with its own subject instead of booting once as CertMate CA.
+    # Its key the same way: CERTMATE_CLIENT_CA_KEY_ALGORITHM, read only when it is created (#1421).
     private_ca = PrivateCAGenerator(
-        ca_dir, subject=resolve_client_ca_subject(settings_manager.load_settings()))
+        ca_dir, subject=resolve_client_ca_subject(settings_manager.load_settings()),
+        key_algorithm=client_ca_key_algorithm_from_environment())
     private_ca.initialize()
 
     client_certs_dir = container.data_dir / "certs" / "client"

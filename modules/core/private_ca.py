@@ -16,7 +16,7 @@ from typing import Optional, Dict, Any
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtensionOID
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
@@ -81,6 +81,23 @@ def _parse_revoked_at(revoked_at) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _signature_hash(key):
+    """The hash a CA key signs with: SHA-384 for a P-384 key, to match its strength
+    (RFC 5480), and SHA-256 otherwise, which is what every CA here signed with before."""
+    if isinstance(key, ec.EllipticCurvePrivateKey) and key.curve.name == 'secp384r1':
+        return hashes.SHA384()
+    return hashes.SHA256()
+
+
+def _key_algorithm_of(key):
+    """The KEY_ALGORITHMS name of a CA key, read off the key itself."""
+    if isinstance(key, ec.EllipticCurvePrivateKey):
+        return {'secp256r1': 'ecdsa-p256', 'secp384r1': 'ecdsa-p384'}.get(key.curve.name, key.curve.name)
+    if isinstance(key, rsa.RSAPrivateKey):
+        return f'rsa-{key.key_size}'
+    return type(key).__name__
+
+
 class PrivateCAGenerator:
     """
     Generates and manages a self-signed Certificate Authority for CertMate.
@@ -99,6 +116,13 @@ class PrivateCAGenerator:
         'common_name': 'CertMate CA',
     }
 
+    # The keys a CA can be created with (#1421). RSA 4096 is what it always was, and stays
+    # the default; ECDSA lets a whole client-certificate chain use one algorithm (an ECDSA
+    # P-384 chain for WPA3-Enterprise 192-bit mode, for example). Read when the CA is
+    # created, like the subject, and never again.
+    DEFAULT_KEY_ALGORITHM = 'rsa-4096'
+    KEY_ALGORITHMS = ('rsa-4096', 'ecdsa-p256', 'ecdsa-p384')
+
     _SUBJECT_OIDS = (
         ('country', NameOID.COUNTRY_NAME),
         ('state', NameOID.STATE_OR_PROVINCE_NAME),
@@ -107,13 +131,20 @@ class PrivateCAGenerator:
         ('common_name', NameOID.COMMON_NAME),
     )
 
-    def __init__(self, ca_dir: Path, subject: Optional[Dict[str, str]] = None):
+    def __init__(self, ca_dir: Path, subject: Optional[Dict[str, str]] = None,
+                 key_algorithm: str | None = None):
         """
         Initialize Private CA Generator.
 
         Args:
             ca_dir: Directory to store CA private key and certificate
+            key_algorithm: one of KEY_ALGORITHMS, for a CA created from here on; None is
+                RSA 4096. Raises ValueError for anything else, before a key is written.
         """
+        if key_algorithm is not None and key_algorithm not in self.KEY_ALGORITHMS:
+            raise ValueError(f"key_algorithm must be one of {list(self.KEY_ALGORITHMS)}, "
+                             f"got {key_algorithm!r}")
+        self._key_algorithm = key_algorithm or self.DEFAULT_KEY_ALGORITHM
         self.ca_dir = Path(ca_dir)
         # Read when the CA is created and never again. initialize() returns
         # early when both files are present, so editing this later cannot
@@ -269,7 +300,8 @@ class PrivateCAGenerator:
             logger.error(f"Error initializing CA: {e}")
             return False
 
-    def regenerate(self, subject: Optional[Dict[str, str]] = None) -> bool:
+    def regenerate(self, subject: Optional[Dict[str, str]] = None,
+                   key_algorithm: str | None = None) -> bool:
         """Back up the current CA and generate a new one.
 
         The only supported way to change the subject of a CA that already
@@ -284,6 +316,10 @@ class PrivateCAGenerator:
         """
         if subject is not None:
             self._subject = dict(subject)
+        if key_algorithm is not None:
+            if key_algorithm not in self.KEY_ALGORITHMS:
+                raise ValueError(f"key_algorithm must be one of {list(self.KEY_ALGORITHMS)}")
+            self._key_algorithm = key_algorithm
         return self.initialize(force=True)
 
     def _build_subject(self) -> x509.Name:
@@ -329,13 +365,17 @@ class PrivateCAGenerator:
             True if successful
         """
         try:
-            # Generate RSA private key (4096 bits for CA)
-            logger.debug("Generating RSA 4096 private key for CA")
-            private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=4096,
-                backend=default_backend()
-            )
+            logger.debug("Generating the CA's %s private key", self._key_algorithm)
+            private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
+            if self._key_algorithm == 'rsa-4096':
+                private_key = rsa.generate_private_key(
+                    public_exponent=65537,
+                    key_size=4096,
+                    backend=default_backend()
+                )
+            else:
+                private_key = ec.generate_private_key(
+                    ec.SECP384R1() if self._key_algorithm == 'ecdsa-p384' else ec.SECP256R1())
 
             # Create CA subject and issuer (same for self-signed)
             subject = issuer = self._build_subject()
@@ -383,7 +423,7 @@ class PrivateCAGenerator:
             # Self-sign the certificate
             ca_cert = cert_builder.sign(
                 private_key,
-                hashes.SHA256(),
+                _signature_hash(private_key),
                 backend=default_backend()
             )
 
@@ -521,6 +561,7 @@ class PrivateCAGenerator:
                 "expires_at": cert.not_valid_after_utc.isoformat(),
                 "serial_number": str(cert.serial_number),
                 "key_size": key.key_size,
+                "key_algorithm": _key_algorithm_of(key),
                 # Read off the certificate, not retyped. These were hardcoded
                 # to CH / CertMate, which was true only while the subject was,
                 # and would have started lying the moment it became
@@ -775,7 +816,7 @@ class PrivateCAGenerator:
             # Sign the certificate
             signed_cert = cert_builder.sign(
                 self._ca_key,
-                hashes.SHA256(),
+                _signature_hash(self._ca_key),
                 backend=default_backend()
             )
 
@@ -854,7 +895,7 @@ class PrivateCAGenerator:
             # Sign CRL
             crl = crl_builder.sign(
                 private_key=self._ca_key,
-                algorithm=hashes.SHA256(),
+                algorithm=_signature_hash(self._ca_key),
                 backend=default_backend()
             )
 
@@ -923,6 +964,23 @@ def client_ca_subject_from_environment() -> dict[str, str] | None:
     subject = dict(PrivateCAGenerator.DEFAULT_SUBJECT)
     subject.update(present)
     return subject
+
+
+def client_ca_key_algorithm_from_environment() -> str | None:
+    """CERTMATE_CLIENT_CA_KEY_ALGORITHM: the key a new client CA is created with (#1421).
+
+    Read like the CERTMATE_CLIENT_CA_* subject variables: only when a CA is created, on
+    first start or on a reset that names none, never to replace one that exists. Unset or
+    empty is None (RSA 4096). Anything else outside PrivateCAGenerator.KEY_ALGORITHMS
+    raises, naming the variable, so the instance stops before a key is written.
+    """
+    value = (os.environ.get('CERTMATE_CLIENT_CA_KEY_ALGORITHM') or '').strip()
+    if not value:
+        return None
+    if value not in PrivateCAGenerator.KEY_ALGORITHMS:
+        raise ValueError(f"CERTMATE_CLIENT_CA_KEY_ALGORITHM must be one of "
+                         f"{list(PrivateCAGenerator.KEY_ALGORITHMS)}, got {value!r}")
+    return value
 
 
 def resolve_client_ca_subject(settings: dict[str, Any] | None) -> dict[str, str] | None:
