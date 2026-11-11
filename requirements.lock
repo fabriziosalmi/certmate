@@ -3,7 +3,7 @@
 #     scripts/regenerate_lockfiles.sh
 #
 # The fully resolved install set for requirements.txt, resolved by uv for the two
-# published architectures. 43 of these are
+# published architectures. 44 of these are
 # pinned by requirements.txt; the other 80 are transitive and were chosen by
 # the resolver, which is exactly why they are written down here. The image
 # installs them with pip.
@@ -607,6 +607,9 @@ httplib2==0.32.0 \
 httpx==0.28.1 \
     --hash=sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
+hvac==2.4.0 \
+    --hash=sha256:008db5efd8c2f77bd37d2368ea5f713edceae1c65f11fd608393179478649e0f \
+    --hash=sha256:e0056ad9064e7923e874e6769015b032580b639e29246f5ab1044f7959c1c7e0
 idna==3.20 \
     --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44 \
     --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c

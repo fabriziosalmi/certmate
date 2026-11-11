@@ -108,6 +108,7 @@ boto3==1.43.126                    # AWS support
 azure-identity==1.27.0             # Azure support
 azure-mgmt-dns==9.0.0              # Azure DNS support (CertMate's own hook; tests/test_azure_dns_hook.py runs it on this pin)
 google-cloud-dns==0.37.2           # Google Cloud support
+hvac==2.4.0                        # HashiCorp Vault storage backend, in the image since #1422 asked for it: a pure-Python wheel of 156 KB whose one required dependency, requests, is already here. requirements-vault-storage.txt still installs it on requirements-minimal.txt.
 cloudflare==5.8.0                  # Cloudflare API support. certbot-dns-cloudflare 5.8.0 needs `cloudflare>=4.0` and declares no upper bound; the SDK changes its shape between majors, so it stays held and moves with the plugin (#568, #103)
 dns-lexicon==3.25.1                # Provider-neutral DNS API support for alias mode
 
