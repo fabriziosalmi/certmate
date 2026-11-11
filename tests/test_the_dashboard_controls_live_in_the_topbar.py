@@ -54,8 +54,8 @@ _TEMPLATES = os.path.join(os.path.dirname(__file__), "..", "templates")
 
 # The ids the JavaScript writes into and the command palette clicks. Each one
 # must resolve to exactly one element on the dashboard.
-SINGLETON_IDS = ("certViewServerBtn", "certViewClientBtn", "statsCards",
-                 "totalCount", "activeCount", "revokedCount")
+SINGLETON_IDS = ("certViewServerBtn", "certViewClientBtn", "certViewAcmeBtn", "statsCards",
+                 "acmeStatsCards", "totalCount", "activeCount", "revokedCount")
 
 # Markers, not words: the store registration with its argument list, and the
 # toggle group's own label.
