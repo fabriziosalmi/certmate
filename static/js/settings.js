@@ -2792,27 +2792,44 @@
         return config;
     }
 
+    // What the settings answer said about storage when the page loaded, secrets masked. A
+    // secret field the page left empty is still configured when this has it for the same
+    // backend (#1424): the page never fills a saved secret back in, and Test, Migrate and
+    // Save all read an empty secret as "use the stored one".
+    var savedStorageConfig = {};
+
+    function savedSecret(backend, key) {
+        var block = (savedStorageConfig[backend] && typeof savedStorageConfig[backend] === 'object')
+            ? savedStorageConfig[backend]
+            : (savedStorageConfig.backend === backend ? savedStorageConfig : {});
+        return !!(block[key] || block[key + '_file'] || block[key + '_env']);
+    }
+
+    function hasSecret(backend, config, key) {
+        return !!config[key] || savedSecret(backend, key);
+    }
+
     function validateStorageConfig(backend, config) {
         switch (backend) {
             case 'local_filesystem':
                 return config.cert_dir && config.cert_dir.trim() !== '';
 
             case 'azure_keyvault':
-                return config.vault_url && config.tenant_id && config.client_id && config.client_secret;
+                return config.vault_url && config.tenant_id && config.client_id && hasSecret(backend, config, 'client_secret');
 
             case 'aws_secrets_manager':
-                return config.auth_mode === 'iam_role' || (config.access_key_id && config.secret_access_key);
+                return config.auth_mode === 'iam_role' || (hasSecret(backend, config, 'access_key_id') && hasSecret(backend, config, 'secret_access_key'));
 
             case 'hashicorp_vault':
-                return config.vault_url && config.vault_token;
+                return config.vault_url && hasSecret(backend, config, 'vault_token');
 
             case 'infisical':
-                return config.client_id && config.client_secret && config.project_id;
+                return config.client_id && hasSecret(backend, config, 'client_secret') && config.project_id;
 
             case 's3_compatible':
                 if (!config.bucket || (config.assume_role_arn && config.endpoint_url)) return false;
                 if (config.auth_mode === 'iam_role') return !config.endpoint_url;
-                return config.access_key_id && config.secret_access_key;
+                return hasSecret(backend, config, 'access_key_id') && hasSecret(backend, config, 'secret_access_key');
 
             default:
                 return false;
@@ -2834,6 +2851,7 @@
 
     function loadStorageBackendSettings(settings) {
         var storageConfig = settings.certificate_storage || {};
+        savedStorageConfig = storageConfig;
         var backend = storageConfig.backend || 'local_filesystem';
 
         // Set backend selection
@@ -2888,9 +2906,14 @@
                 // Support both nested ({infisical:{...}}) and legacy flat format
                 var infisicalConfig = storageConfig.infisical || storageConfig;
                 document.getElementById('infisical-site-url').value = infisicalConfig.site_url || 'https://app.infisical.com';
+                // The client ID is not a secret, and the settings answer sends it. Left empty, the
+                // next Save of any setting wrote '' over the stored one, because only
+                // secret-named fields are read as "keep" (#1424): Infisical then failed at start
+                // and storage fell back to the local disk.
+                document.getElementById('infisical-client-id').value = infisicalConfig.client_id || '';
                 document.getElementById('infisical-project-id').value = infisicalConfig.project_id || '';
                 document.getElementById('infisical-environment').value = infisicalConfig.environment || 'prod';
-                // Don't populate client credentials for security
+                // Don't populate the client secret for security
                 break;
 
             case 's3_compatible':
