@@ -366,6 +366,7 @@ class PrivateCAGenerator:
         """
         try:
             logger.debug("Generating the CA's %s private key", self._key_algorithm)
+            private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
             if self._key_algorithm == 'rsa-4096':
                 private_key = rsa.generate_private_key(
                     public_exponent=65537,
