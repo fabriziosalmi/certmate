@@ -84,6 +84,19 @@ SDK_REQUIREMENTS = {
 }
 
 
+def _test_failure(backend_type, error):
+    """The answer to a Test Connection that failed: the exception's type only, since the
+    message can carry tenant ids and request ids; for a missing SDK, which file installs it,
+    which carries nothing secret and is the whole answer (#1422)."""
+    if isinstance(error, ImportError) and backend_type in SDK_REQUIREMENTS:
+        message = (f'The {backend_type} backend needs a Python package this installation does '
+                   f'not have. Install {SDK_REQUIREMENTS[backend_type]} (docs/storage.md, '
+                   f'"Adding a backend\'s SDK").')
+    else:
+        message = f'Connection test failed ({type(error).__name__}). See server logs for details.'
+    return {'success': False, 'message': message, 'backend': backend_type}
+
+
 def create_storage_resources(api, models, ctx: ApiContext) -> dict:
     """Build the storage-backend resources against *ctx*."""
 
@@ -300,21 +313,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                     # return the exception type to the client to avoid leaking
                     # those identifiers to anyone who can hit the test endpoint.
                     logger.error(f"Storage backend connection test failed: {test_error}")
-                    if isinstance(test_error, ImportError) and backend_type in SDK_REQUIREMENTS:
-                        # Nothing secret in this one, and it is the whole answer.
-                        return {
-                            'success': False,
-                            'message': (f'The {backend_type} backend needs a Python package this '
-                                        f'installation does not have. Install '
-                                        f'{SDK_REQUIREMENTS[backend_type]} (docs/storage.md, '
-                                        f'"Adding a backend\'s SDK").'),
-                            'backend': backend_type
-                        }
-                    return {
-                        'success': False,
-                        'message': f'Connection test failed ({type(test_error).__name__}). See server logs for details.',
-                        'backend': backend_type
-                    }
+                    return _test_failure(backend_type, test_error)
 
             except Exception as e:
                 logger.error(f"Error testing storage backend: {e}")
