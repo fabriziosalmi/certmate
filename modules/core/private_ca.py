@@ -707,7 +707,9 @@ class PrivateCAGenerator:
                 x509.KeyUsage(
                     digital_signature=True,
                     content_commitment=False,
-                    key_encipherment=True,
+                    # An RSA operation only: an EC (or EdDSA, ML-DSA) leaf signs, and
+                    # keyEncipherment on it is wrong under RFC 5480 (#1421, roadmap T2.2).
+                    key_encipherment=isinstance(csr.public_key(), rsa.RSAPublicKey),
                     data_encipherment=False,
                     key_agreement=False,
                     key_cert_sign=False,

@@ -149,6 +149,19 @@
                                         </select>
                                     </div>
                                 </div>
+                                <!-- Client certificates (#1421): one list, since it is one choice. -->
+                                <div class="mt-4">
+                                    <label for="client_cert_key_shape" class="block text-xs font-medium text-muted mb-1">Client Certificate Key</label>
+                                    <select id="client_cert_key_shape" name="client_cert_key_shape"
+                                            class="w-full md:w-1/2 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
+                                        <option value="rsa:2048">RSA 2048 (default)</option>
+                                        <option value="rsa:3072">RSA 3072</option>
+                                        <option value="rsa:4096">RSA 4096</option>
+                                        <option value="ecdsa:secp256r1">ECDSA P-256</option>
+                                        <option value="ecdsa:secp384r1">ECDSA P-384</option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-muted">The key CertMate generates for a new client certificate that does not pick one. A renewal keeps the kind of key of the certificate it replaces.</p>
+                                </div>
                             </div>
                         </div>
                     </div>

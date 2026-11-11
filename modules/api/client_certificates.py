@@ -5,6 +5,7 @@ from ..core.client_certificates import (
     default_client_organizational_unit, default_client_state,
 )
 from ..core.domain_paths import IDENTIFIER_RE, is_path_safe_segment
+from ..core.utils import validate_key_options
 from werkzeug.exceptions import HTTPException
 from flask_restx import Resource, fields
 from io import BytesIO
@@ -137,7 +138,18 @@ def create_client_certificate_models(api):
         'state': fields.String(
             description=('Subject state or province. Default: '
                          'CERTMATE_CLIENT_CERT_DEFAULT_STATE, or Switzerland')),
-        'notes': fields.String(description='Additional notes')
+        'notes': fields.String(description='Additional notes'),
+        'key_type': fields.String(
+            enum=['rsa', 'ecdsa'],
+            description=('Type of the key CertMate generates. Default: the client_cert_key_type '
+                         "setting, rsa. Not with a csr: that key is the device's. Added in API "
+                         'contract 2.64.')),
+        'key_size': fields.Integer(
+            enum=[2048, 3072, 4096],
+            description="RSA key size, with key_type 'rsa'. Default: client_cert_key_size, 2048."),
+        'elliptic_curve': fields.String(
+            enum=['secp256r1', 'secp384r1'],
+            description="ECDSA curve, with key_type 'ecdsa'. Default: client_cert_elliptic_curve."),
     })
 
     client_cert_revoke_model = api.model('ClientCertificateRevoke', {
@@ -164,7 +176,42 @@ def _blank_is_unset(value):
     return value
 
 
-def _client_cert_create_params(data):
+def _settings_of(settings_manager):
+    """The settings, or {} where there is no manager to read them from."""
+    return settings_manager.load_settings() if settings_manager else {}
+
+
+def _client_cert_key_shape(data, settings, generate_key):
+    """The key shape a create request asks for, or the settings' default (#1421).
+
+    The values server certificates take, checked by the same validator. A request that
+    names none gets client_cert_key_type/_size/_elliptic_curve, RSA 2048 unless changed.
+    With a CSR the key is the device's, so a key option there is refused rather than
+    ignored.
+    """
+    key_type, key_size, curve = data.get('key_type'), data.get('key_size'), data.get('elliptic_curve')
+    asked = key_type is not None or key_size is not None or curve is not None
+    if not generate_key:
+        if asked:
+            abort(400, "key options cannot be combined with a csr: the key is the device's")
+        return {}
+    if not asked:
+        key_type = settings.get('client_cert_key_type') or 'rsa'
+        # The setting keeps both fields; only the active one applies.
+        key_size = (settings.get('client_cert_key_size') or 2048) if key_type == 'rsa' else None
+        curve = (settings.get('client_cert_elliptic_curve') or 'secp256r1') if key_type == 'ecdsa' else None
+    if key_size is not None:
+        try:
+            key_size = int(key_size)
+        except (TypeError, ValueError):
+            abort(400, "key_size must be an integer")
+    ok, error = validate_key_options(key_type, key_size, curve)
+    if not ok:
+        abort(400, error)
+    return {'key_type': key_type, 'key_size': key_size, 'elliptic_curve': curve}
+
+
+def _client_cert_create_params(data, settings=None):
     """Validate a client-certificate create payload into manager kwargs.
 
     Lifted out of `create_client_certificate_resources`, whose complexity is
@@ -222,6 +269,7 @@ def _client_cert_create_params(data):
         'country': country,
         'state': state,
         'notes': data.get('notes', ''),
+        **_client_cert_key_shape(data, settings or {}, generate_key),
     }
 
 
@@ -432,7 +480,7 @@ def create_client_certificate_resources(api, managers):
 
                 # Create certificate
                 success, error, cert_data = client_cert_manager.create_client_certificate(
-                    **_client_cert_create_params(data))
+                    **_client_cert_create_params(data, _settings_of(settings_manager)))
 
                 if not success:
                     abort(400, f"Failed to create certificate: {error}")
@@ -669,6 +717,7 @@ def create_client_certificate_resources(api, managers):
 
                 # Limit batch size to prevent resource exhaustion
                 max_batch = 100
+                batch_settings = _settings_of(settings_manager)
                 if len(rows) > max_batch:
                     abort(400, f"Batch size exceeds maximum of {max_batch} certificates")
 
@@ -713,7 +762,10 @@ def create_client_certificate_resources(api, managers):
                             cert_usage=cert_data.get('cert_usage', 'api-mtls'),
                             days_valid=batch_days,
                             generate_key=True,
-                            notes=cert_data.get('notes', '')
+                            notes=cert_data.get('notes', ''),
+                            # The settings' default key shape, as a single create without
+                            # key options gets (#1421).
+                            **_client_cert_key_shape({}, batch_settings, True),
                         )
 
                         if success:
