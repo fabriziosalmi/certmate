@@ -518,7 +518,7 @@ def create_api_models(api):
         ),
         'client_cert_key_type': fields.String(
             description=("Key type CertMate generates for a client certificate that names none "
-                         "(#1421). Added in API contract 2.63."),
+                         "(#1421). Added in API contract 2.64."),
             enum=['rsa', 'ecdsa']
         ),
         'client_cert_key_size': fields.Integer(

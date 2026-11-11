@@ -105,7 +105,9 @@
                 + card('Weak', c.weak || 0, CLASS_COLOR.weak)
                 + card('Acceptable', c.acceptable || 0, CLASS_COLOR.acceptable)
                 + card('Modern', c.modern || 0, CLASS_COLOR.modern)
-                + card('Quantum-vulnerable', rep.quantum_vulnerable || 0, 'text-warning-fg');
+                + card('Quantum-vulnerable', rep.quantum_vulnerable || 0, 'text-warning-fg')
+                + (rep.quantum_vulnerability_unknown
+                    ? card('Not recognised', rep.quantum_vulnerability_unknown, 'text-muted') : '');
             el('byKey').innerHTML = kvRows(rep.by_key_algorithm);
             el('bySig').innerHTML = kvRows(rep.by_signature_algorithm);
             var assets = rep.assets || [];

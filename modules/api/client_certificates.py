@@ -143,7 +143,7 @@ def create_client_certificate_models(api):
             enum=['rsa', 'ecdsa'],
             description=('Type of the key CertMate generates. Default: the client_cert_key_type '
                          "setting, rsa. Not with a csr: that key is the device's. Added in API "
-                         'contract 2.63.')),
+                         'contract 2.64.')),
         'key_size': fields.Integer(
             enum=[2048, 3072, 4096],
             description="RSA key size, with key_type 'rsa'. Default: client_cert_key_size, 2048."),

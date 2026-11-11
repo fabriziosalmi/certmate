@@ -923,7 +923,7 @@ Create a new client certificate.
 - `state` (optional) - Subject state or province (default:
   `CERTMATE_CLIENT_CERT_DEFAULT_STATE`, or `Switzerland`)
 - `notes` (optional) - Additional notes
-- `key_type` (optional, since **2.63**) - `rsa` or `ecdsa`: the key CertMate
+- `key_type` (optional, since **2.64**) - `rsa` or `ecdsa`: the key CertMate
   generates. With `key_size` (`2048`, `3072`, `4096`) for RSA or
   `elliptic_curve` (`secp256r1`, `secp384r1`) for ECDSA. Left out, the
   `client_cert_key_type` setting applies, RSA 2048 by default. Refused with 400
@@ -2476,6 +2476,13 @@ Classifies the key and signature algorithms across every managed and
 discovered certificate against published deprecation timelines. It is an
 inventory, not a recommendation engine: it counts what is deployed and says
 what is behind. Add `?format=csv` for the per-asset table.
+
+`quantum_vulnerable` counts the certificates whose key algorithm is quantum-vulnerable
+(RSA, ECDSA, EdDSA, DSA). Since API contract **2.63**, a certificate whose key algorithm
+the report does not recognise is counted in `quantum_vulnerability_unknown` instead, and
+its asset's `quantum_vulnerable` is `null` ("not known"), where it was `false`; the CSV
+says `unknown`. The deprecation notes cite NIST IR 8547 (Final, October 2026): RSA,
+ECDSA and EdDSA deprecated after 2030, disallowed after 2035.
 
 #### Domain registrations
 
