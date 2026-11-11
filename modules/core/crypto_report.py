@@ -3,8 +3,8 @@
 Operators increasingly need to know which of their certificates and keys use
 legacy cryptography (RSA, elliptic-curve) and how that maps against published
 deprecation / crypto-agility timelines — the prerequisite for any migration
-planning (and, in the EU, a crypto-inventory obligation). CertMate already has
-the raw data once the inventory exists; this module turns it into a report.
+planning. CertMate already has the raw data once the inventory exists; this
+module turns it into a report.
 
 Framed strictly as **inventory / readiness**: it classifies and counts what is
 deployed. It does NOT change issuance and says nothing about issuing
@@ -62,7 +62,10 @@ def _classify_key(key_type, key_size, curve):
         return CLASS_MODERN, True, ktype
     if upper == 'DSA':
         return CLASS_WEAK, True, 'DSA is deprecated'
-    return CLASS_UNKNOWN, False, ktype or 'unknown key algorithm'
+    # Not False: an algorithm this table does not know is not thereby quantum-safe. False
+    # read as "safe" and was counted that way, so an ML-DSA certificate, which the probe
+    # cannot name yet, looked safe for the wrong reason. None is "not known", counted apart.
+    return CLASS_UNKNOWN, None, ktype or 'unknown key algorithm'
 
 
 # Signature-hash rules, matched as case-insensitive substrings of the
@@ -82,10 +85,13 @@ SIGNATURE_RULES = (
 # Informational deprecation / migration notes, keyed by classification bucket.
 DEPRECATION_NOTES = {
     CLASS_WEAK: 'Below current strength baselines — replace as soon as possible.',
-    CLASS_ACCEPTABLE: ('Classically strong but quantum-vulnerable. Inventory for '
-                       'post-quantum migration (EU crypto-inventory obligation, '
-                       'end of 2026; NIST guidance phases classical PKI toward 2030+).'),
-    CLASS_MODERN: 'Modern classical algorithm; still quantum-vulnerable — track for PQC migration.',
+    # The dates are NIST IR 8547 (Final, October 2026), Table 2. An EU date stood here that no
+    # primary source in hand states; it goes back only with the text that does.
+    CLASS_ACCEPTABLE: ('Classically strong but quantum-vulnerable: NIST IR 8547 deprecates '
+                       'RSA and ECDSA after 2030 and disallows them after 2035. Inventory for '
+                       'post-quantum migration.'),
+    CLASS_MODERN: ('Modern classical algorithm, still quantum-vulnerable: NIST IR 8547 deprecates '
+                   'EdDSA after 2030 and disallows it after 2035. Track for post-quantum migration.'),
     CLASS_PQC: 'Post-quantum algorithm.',
     CLASS_UNKNOWN: 'Algorithm not recognised; review manually.',
 }
@@ -130,6 +136,8 @@ def build_crypto_report(records, generated_at=None):
         'generated_at': generated_at,
         'total': 0,
         'quantum_vulnerable': 0,
+        # Certificates whose key algorithm the table does not know: neither vulnerable nor safe.
+        'quantum_vulnerability_unknown': 0,
         'by_key_algorithm': {},
         'by_signature_algorithm': {},
         'by_classification': {
@@ -166,6 +174,8 @@ def build_crypto_report(records, generated_at=None):
         report['total'] += 1
         if quantum_vulnerable:
             report['quantum_vulnerable'] += 1
+        elif quantum_vulnerable is None:
+            report['quantum_vulnerability_unknown'] += 1
         report['by_key_algorithm'][key_label] = report['by_key_algorithm'].get(key_label, 0) + 1
         if sig:
             report['by_signature_algorithm'][sig] = report['by_signature_algorithm'].get(sig, 0) + 1
@@ -230,5 +240,8 @@ def report_to_csv(report):
     writer = csv.DictWriter(buf, fieldnames=_CSV_COLUMNS, extrasaction='ignore')
     writer.writeheader()
     for asset in report.get('assets', []):
-        writer.writerow({k: _csv_safe(asset.get(k)) for k in _CSV_COLUMNS})
+        row = {k: _csv_safe(asset.get(k)) for k in _CSV_COLUMNS}
+        if asset.get('quantum_vulnerable') is None:
+            row['quantum_vulnerable'] = 'unknown'   # not the empty cell None would give
+        writer.writerow(row)
     return buf.getvalue()

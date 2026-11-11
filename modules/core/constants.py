@@ -740,6 +740,14 @@ METADATA_SCHEMA_VERSION = 1
 #                                   `expiry_status` (ok, warning, critical,
 #                                   expired, by the renewal rule) and
 #                                   `not_before` (#1429).
+#                                   2.63, MINOR: the crypto report counts the
+#                                   certificates whose key algorithm it does not
+#                                   recognise in quantum_vulnerability_unknown, and
+#                                   each such asset's quantum_vulnerable is null
+#                                   ("not known") where it was false. MINOR, as
+#                                   2.47's null renews_at was: a new case of an
+#                                   existing field, which read as "safe" for an
+#                                   algorithm nobody had classified.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -765,7 +773,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.62'
+API_CONTRACT_VERSION = '2.63'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

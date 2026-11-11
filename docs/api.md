@@ -2453,6 +2453,13 @@ discovered certificate against published deprecation timelines. It is an
 inventory, not a recommendation engine: it counts what is deployed and says
 what is behind. Add `?format=csv` for the per-asset table.
 
+`quantum_vulnerable` counts the certificates whose key algorithm is quantum-vulnerable
+(RSA, ECDSA, EdDSA, DSA). Since API contract **2.63**, a certificate whose key algorithm
+the report does not recognise is counted in `quantum_vulnerability_unknown` instead, and
+its asset's `quantum_vulnerable` is `null` ("not known"), where it was `false`; the CSV
+says `unknown`. The deprecation notes cite NIST IR 8547 (Final, October 2026): RSA,
+ECDSA and EdDSA deprecated after 2030, disallowed after 2035.
+
 #### Domain registrations
 
 **Endpoint**: `GET /api/inventory/domains` — viewer, since API contract **2.6**
