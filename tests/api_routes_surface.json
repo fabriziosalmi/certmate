@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.62",
+ "contract_version": "2.63",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -2738,6 +2738,9 @@
     ],
     "generated_at": [
      "str"
+    ],
+    "quantum_vulnerability_unknown": [
+     "int"
     ],
     "quantum_vulnerable": [
      "int"
