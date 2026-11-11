@@ -75,6 +75,28 @@ def _local_storage_update(data):
     chosen = (data.get('cert_dir') or '').strip()
     return {'cert_dir': chosen} if chosen else {}
 
+# Where each optional backend's SDK comes from (docs/storage.md, "Backends").
+SDK_REQUIREMENTS = {
+    'azure_keyvault': 'requirements-azure-storage.txt',
+    'aws_secrets_manager': 'requirements-aws-storage.txt',
+    'hashicorp_vault': 'requirements-vault-storage.txt',
+    'infisical': 'requirements-infisical-storage.txt',
+}
+
+
+def _test_failure(backend_type, error):
+    """The answer to a Test Connection that failed: the exception's type only, since the
+    message can carry tenant ids and request ids; for a missing SDK, which file installs it,
+    which carries nothing secret and is the whole answer (#1422)."""
+    if isinstance(error, ImportError) and backend_type in SDK_REQUIREMENTS:
+        message = (f'The {backend_type} backend needs a Python package this installation does '
+                   f'not have. Install {SDK_REQUIREMENTS[backend_type]} (docs/storage.md, '
+                   f'"Adding a backend\'s SDK").')
+    else:
+        message = f'Connection test failed ({type(error).__name__}). See server logs for details.'
+    return {'success': False, 'message': message, 'backend': backend_type}
+
+
 def create_storage_resources(api, models, ctx: ApiContext) -> dict:
     """Build the storage-backend resources against *ctx*."""
 
@@ -262,12 +284,13 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                     else:
                         return {'error': 'Invalid backend type'}, 400
 
-                    # S3 and Secrets Manager public list_certificates() turn
-                    # failures into [] for callers. The Test button must not
-                    # report IAM/STS permission failures as an empty store.
-                    domains = (test_backend._list_certificates_attempt()
-                               if backend_type in ('s3_compatible', 'aws_secrets_manager')
-                               else test_backend.list_certificates())
+                    # Every remote backend's public list_certificates() turns a
+                    # failure into [] for the callers that must keep going. The
+                    # Test button must not: it answered "Successfully connected"
+                    # for a Vault host that does not exist, a token of `x` and an
+                    # image without hvac (#1422). Ask the attempt, which raises.
+                    lister = getattr(test_backend, '_list_certificates_attempt', None)
+                    domains = lister() if lister else test_backend.list_certificates()
 
                     # When the Azure Key Vault backend is configured to write
                     # Certificate objects, the Service Principal also needs
@@ -290,11 +313,7 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                     # return the exception type to the client to avoid leaking
                     # those identifiers to anyone who can hit the test endpoint.
                     logger.error(f"Storage backend connection test failed: {test_error}")
-                    return {
-                        'success': False,
-                        'message': f'Connection test failed ({type(test_error).__name__}). See server logs for details.',
-                        'backend': backend_type
-                    }
+                    return _test_failure(backend_type, test_error)
 
             except Exception as e:
                 logger.error(f"Error testing storage backend: {e}")
@@ -400,11 +419,14 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
 
                     if ctx.audit:
                         user = getattr(request, 'current_user', None) or {}
+                        # A migration that left a certificate behind is not a
+                        # success: the trail said `success` with `successful: 0,
+                        # failed: 3` (#1422).
                         ctx.audit.log_operation(
                             operation='migrate',
                             resource_type='storage',
                             resource_id=f"{source_backend_type}_to_{target_backend_type}",
-                            status='success',
+                            status='success' if failed == 0 else 'failure',
                             details={
                                 'source_backend': source_backend_type,
                                 'target_backend': target_backend_type,
@@ -414,6 +436,8 @@ def create_storage_resources(api, models, ctx: ApiContext) -> dict:
                             },
                             user=user.get('username'),
                             ip_address=request.remote_addr,
+                            error=(f'{failed} of {total} certificates were not migrated'
+                                   if failed else None),
                         )
 
                     return {

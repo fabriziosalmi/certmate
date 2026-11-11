@@ -70,6 +70,12 @@ Backend**. Pick the backend, fill in its settings, use **Test Connection**,
 then save. Saving does not move existing certificates; see
 [Migrating between backends](#migrating-between-backends).
 
+**Test Connection** lists the backend's certificates with the settings in the
+form. An unreachable host, a refused credential or a missing permission is
+reported as a failure, never as an empty store, and a backend whose SDK is not
+installed says which requirements file installs it. An empty store reports
+success with a count of 0.
+
 The examples below show the same settings as they are stored in
 `settings.json`.
 
@@ -253,7 +259,8 @@ saved in settings, so migrate **before** switching:
 2. Migrate (`POST /api/storage/migrate`, or **Migrate Certificates** in
    Settings).
 3. Read the answer: `migrated_count`, `failed_count`, `total`, and
-   `migration_results`, one `true` or `false` per domain.
+   `migration_results`, one `true` or `false` per domain. The audit trail
+   records the migration as `failure` when `failed_count` is not 0.
 4. Switch the active backend (`POST /api/storage/config`, or save in Settings).
 5. Clean up the old storage yourself if you want to: CertMate never deletes it.
 

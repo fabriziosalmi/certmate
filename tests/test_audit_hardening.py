@@ -264,7 +264,39 @@ class TestStorageConfigAudit:
 class TestStorageMigrateAudit:
     """Tests audit logging for storage migration."""
 
+    def _migrate(self, audit_test_app, results):
+        app, managers = audit_test_app
+        managers['storage'].migrate_certificates.return_value = results
+        response = app.test_client().post('/api/storage/migrate', json={
+            'source_backend': 'local_filesystem',
+            'target_backend': 'azure_keyvault',
+            'target_config': {'azure_keyvault': {
+                'vault_url': 'https://x.vault.azure.net/', 'client_id': 'azure-id',
+                'client_secret': 'azure-secret', 'tenant_id': 'azure-tenant'}},
+        })
+        assert response.status_code == 200
+        return managers['audit'].log_operation
+
     def test_storage_migrate_success(self, audit_test_app):
+        self._migrate(audit_test_app, {'domain1.com': True, 'domain2.com': True}).assert_called_with(
+            operation='migrate',
+            resource_type='storage',
+            resource_id='local_filesystem_to_azure_keyvault',
+            status='success',
+            details={
+                'source_backend': 'local_filesystem',
+                'target_backend': 'azure_keyvault',
+                'total_certificates': 2,
+                'successful': 2,
+                'failed': 0
+            },
+            user='test_admin',
+            ip_address='127.0.0.1',
+            error=None,
+        )
+
+    def test_storage_migrate_that_left_one_behind_is_a_failure(self, audit_test_app):
+        """This case was recorded as `success` until #1422: one of two certificates moved."""
         app, managers = audit_test_app
         client = app.test_client()
 
@@ -292,7 +324,7 @@ class TestStorageMigrateAudit:
             operation='migrate',
             resource_type='storage',
             resource_id='local_filesystem_to_azure_keyvault',
-            status='success',
+            status='failure',
             details={
                 'source_backend': 'local_filesystem',
                 'target_backend': 'azure_keyvault',
@@ -301,7 +333,8 @@ class TestStorageMigrateAudit:
                 'failed': 1
             },
             user='test_admin',
-            ip_address='127.0.0.1'
+            ip_address='127.0.0.1',
+            error='1 of 2 certificates were not migrated',
         )
 
     def test_storage_migrate_failure(self, audit_test_app):

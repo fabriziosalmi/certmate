@@ -3044,7 +3044,7 @@ that cannot authenticate is a backend that silently falls back.
 **Endpoint**: `POST /api/storage/migrate` — admin
 
 Copies certificates from the current backend to another. Read
-`docs/storage-backends.md` before running it.
+[Migrating between backends](storage.md#migrating-between-backends) before running it.
 
 #### Backfill Azure Key Vault certificate objects
 
