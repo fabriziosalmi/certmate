@@ -42,6 +42,18 @@ FIELD = 'input[aria-label="To addresses, comma-separated"]'
 PANEL = "document.getElementById('settings-panel-notifications')"
 
 
+def _to_the_end(field):
+    """The caret to the end of the field, with the key that does it on this platform.
+
+    `End` does not move the caret in a text field on macOS, where it scrolls instead; there
+    it is Cmd+Right. With `End` alone the test depended on the click landing past the text,
+    which held only while the field was wider than its value: in the narrower content column
+    beside the Settings side menu (#1423) the click landed inside it.
+    """
+    on_a_mac = field.page.evaluate("navigator.platform.startsWith('Mac')")
+    field.press('Meta+ArrowRight' if on_a_mac else 'End')
+
+
 @pytest.fixture(scope="module")
 def notifications(browser_page):
     """The Settings page on its Notifications tab, with the Email block open."""
@@ -107,7 +119,7 @@ def test_what_is_typed_key_by_key_is_the_list(field, typed, expected):
 def test_deleting_the_second_address_and_the_separator_leaves_the_first_alone(field, stored):
     stored([A, B])
     field.click()
-    field.press('End')
+    _to_the_end(field)
     for _ in range(len(B) + 2):                 # the address, the comma and the space
         field.press('Backspace')
     assert field.input_value() == A
@@ -119,7 +131,7 @@ def test_a_stored_list_is_shown_joined_and_edited_in_place(field, stored):
     stored([A, B])
     assert field.input_value() == f'{A}, {B}', 'a stored list is written into a field that has no focus'
     field.click()
-    field.press('End')
+    _to_the_end(field)
     field.press_sequentially('x', delay=10)
     assert _list(field) == [A, B + 'x']
 

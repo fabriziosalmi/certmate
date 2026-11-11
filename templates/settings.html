@@ -6,7 +6,7 @@
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"
          x-data="settingsTabs">
         <div class="bg-surface shadow-card rounded-xl">
-            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto scroll-x-affordance">
+            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
                 <div class="flex items-center justify-between mb-2">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
                         <a href="/" aria-label="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
@@ -36,22 +36,51 @@
                         </div>
                     </div>
                 </div>
-                <nav class="flex space-x-1 min-w-max" role="tablist" @keydown="onSettingsTabKeydown($event)">
-                    <template x-for="t in [{id:'general',icon:'fa-cogs',label:'General'},{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'probe',icon:'fa-network-wired',label:'Probe'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'oidc',icon:'fa-id-badge',label:'SSO'},{id:'acme',icon:'fa-certificate',label:'ACME'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
-                        <button type="button" @click="tab = t.id" role="tab"
-                                :id="'settings-tab-' + t.id"
-                                :aria-controls="'settings-panel-' + t.id"
-                                :tabindex="tab === t.id ? '0' : '-1'"
-                                :title="t.label"
-                                :aria-label="t.label"
-                                :aria-selected="tab === t.id ? 'true' : 'false'"
-                                :class="tab === t.id ? 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-primary bg-info-surface border border-info-line' : 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-muted hover:text-foreground hover:bg-hover'">
-                            <i class="fas" :class="t.icon" aria-hidden="true"></i><span class="hidden sm:inline ml-2" x-text="t.label"></span>
-                        </button>
-                    </template>
-                </nav>
+                <!-- On a phone the sections are a list: the side menu needs the width of lg. -->
+                <div class="lg:hidden">
+                    <label for="settings-section" class="block text-xs font-medium text-muted mb-1">Section</label>
+                    <select id="settings-section" x-model="tab"
+                            class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
+                        <template x-for="group in sectionGroups" :key="group.id">
+                            <optgroup :label="group.label">
+                                <template x-for="t in group.tabs" :key="t.id">
+                                    <option :value="t.id" x-text="t.label" :selected="tab === t.id"></option>
+                                </template>
+                            </optgroup>
+                        </template>
+                    </select>
+                </div>
             </div>
-            <div class="px-6 py-6">
+            <!-- Sections in a side menu from lg up, in three groups, and a list on a phone (#1423):
+                 twelve tabs in one row needed a horizontal scroll bar at most widths. Each group is
+                 a tablist of its own, because a tablist may hold only tabs; the arrow keys move
+                 through all three (onSettingsTabKeydown), since only the selected tab is in the
+                 Tab order. The tab ids are the ones the panels and the command palette name. -->
+            <div class="lg:flex">
+            <nav aria-label="Settings sections" data-settings-sections
+                 class="hidden lg:block lg:w-56 shrink-0 border-r border-border px-3 py-5 space-y-5">
+                <template x-for="group in sectionGroups" :key="group.id">
+                    <div>
+                        <p class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted"
+                           :id="'settings-group-' + group.id" x-text="group.label"></p>
+                        <div role="tablist" aria-orientation="vertical" :aria-labelledby="'settings-group-' + group.id"
+                             class="space-y-0.5" @keydown="onSettingsTabKeydown($event)">
+                            <template x-for="t in group.tabs" :key="t.id">
+                                <button type="button" @click="tab = t.id" role="tab"
+                                        :id="'settings-tab-' + t.id"
+                                        :tabindex="tab === t.id ? '0' : '-1'"
+                                        :aria-selected="tab === t.id ? 'true' : 'false'"
+                                        :aria-label="t.label"
+                                        :class="tab === t.id ? 'border-primary text-primary bg-info-surface' : 'border-transparent text-muted hover:text-foreground hover:bg-hover'"
+                                        class="flex w-full items-center gap-2.5 px-3 py-2 text-sm font-medium text-left rounded-r-md border-l-2">
+                                    <i class="fas fa-fw" :class="t.icon" aria-hidden="true"></i><span x-text="t.label"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </nav>
+            <div class="flex-1 min-w-0 px-6 py-6">
                 <form id="settingsForm" class="space-y-8">
 
                     {% include 'partials/settings_dns.html' %}
@@ -176,6 +205,7 @@
             </div>
                     </div>
             </div>
+            </div><!-- /lg:flex -->
         </div>
 
         <!-- Status Messages -->

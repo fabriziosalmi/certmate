@@ -3744,16 +3744,18 @@
     // via @keydown on the [role=tablist]. Clicking the target button triggers
     // Alpine's `tab = t.id`, which also updates the roving tabindex reactively.
     function onSettingsTabKeydown(event) {
-        var keys = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
+        var keys = ['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'];
         if (keys.indexOf(event.key) === -1) return;
-        var tablist = event.currentTarget;
-        var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+        // Every tab of the side menu, across its three tablists (#1423): only the selected
+        // tab is in the Tab order, so the arrows are how the other groups are reached.
+        var scope = event.currentTarget.closest('[data-settings-sections]') || event.currentTarget;
+        var tabs = Array.prototype.slice.call(scope.querySelectorAll('[role="tab"]'));
         if (!tabs.length) return;
         var current = tabs.indexOf(document.activeElement);
         if (current === -1) current = 0;
         var next = current;
-        if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
-        else if (event.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (current + 1) % tabs.length;
+        else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
         else if (event.key === 'Home') next = 0;
         else if (event.key === 'End') next = tabs.length - 1;
         event.preventDefault();
