@@ -11,7 +11,8 @@ wrong entries sat in the most-read table in the README:
     Stable anyway.
   * **Scaleway** — 0.0.7, alpha, still declaring Python 2.7 support. A comment
     in requirements.txt, never a pin.
-  * **PowerDNS** — pulls `dns-lexicon<=3.5.6`, which conflicts with the rest of
+  * **PowerDNS** (since answered by CertMate's own hook) — pulled
+    `dns-lexicon<=3.5.6`, which conflicts with the rest of
     the extended set. Not in the default image.
   * **Infomaniak** — pinned in no requirements file at all.
 
@@ -40,7 +41,6 @@ DISTRIBUTIONS = {
     "AWS Route53": "certbot-dns-route53",
     "Google Cloud DNS": "certbot-dns-google",
     "DigitalOcean": "certbot-dns-digitalocean",
-    "PowerDNS": "certbot-dns-powerdns",
     "RFC2136": "certbot-dns-rfc2136",
     "Linode": "certbot-dns-linode",
     "Akamai Edge DNS": "certbot-plugin-edgedns",
@@ -65,7 +65,9 @@ DISTRIBUTIONS = {
 
 # Providers CertMate implements itself, with no certbot plugin involved.
 # Azure DNS joined them in #103: certbot-dns-azure has no release for certbot 4+.
-NATIVE = {"EfficientIP SOLIDserver", "ACME-DNS", "Custom Script", "Azure DNS"}
+# PowerDNS joined them when certbot-dns-powerdns, which needs dns-lexicon<=3.5.6,
+# gave way to CertMate's own hook.
+NATIVE = {"EfficientIP SOLIDserver", "ACME-DNS", "Custom Script", "Azure DNS", "PowerDNS"}
 
 
 def _requirements(name):

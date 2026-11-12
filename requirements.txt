@@ -37,9 +37,6 @@ certbot-dns-google==5.8.0
 # plugin standing between this stack and certbot 5 (#103).
 
 # DNS provider plugins - Additional providers
-# certbot-dns-powerdns pinned at 0.2.1 (latest) requires dns-lexicon<=3.5.6,
-# which conflicts with newer certbot plugins requiring dns-lexicon>=3.14.
-# Install separately if needed: pip install certbot-dns-powerdns==0.2.1
 certbot-dns-linode==5.8.0
 certbot-dns-gandi==1.6.2
 certbot-dns-ovh==5.8.0

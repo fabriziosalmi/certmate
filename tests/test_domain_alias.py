@@ -113,7 +113,6 @@ def _d_flags(cmd):
     ('provider', 'plugin_flag', 'credentials_flag'),
     [
         ('cloudflare', '--dns-cloudflare', '--dns-cloudflare-credentials'),
-        ('powerdns', '--dns-powerdns', '--dns-powerdns-credentials'),
         ('route53', '--dns-route53', '--dns-route53-credentials'),
     ],
 )

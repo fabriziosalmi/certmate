@@ -1,6 +1,6 @@
 # Guida all'installazione
 
-<!-- CERTMATE-TRANSLATED-FROM 5c5bff50936e6742 -->
+<!-- CERTMATE-TRANSLATED-FROM 940ad809d879176f -->
 
 Questa guida illustra tutti i metodi di installazione e deploy di CertMate.
 
@@ -543,10 +543,6 @@ pip install -r requirements-aws.txt        # Route53, sopra uno dei due
 > Assemblato a mano, un pin finisce fuori da quella finestra; il file fornito da
 > CertMate è l'insieme risolto, costruito e avviato in CI. Vedi SECURITY.md,
 > "Known dependency constraint".
->
-> `certbot-dns-powerdns` richiede un ambiente separato: vuole
-> `dns-lexicon<=3.5.6` mentre i plugin Linode, OVH, RFC2136, DNSMadeEasy e NS1
-> richiedono `>=3.14.1`, e pip non può soddisfare entrambi.
 
 ### Installazione manuale delle dipendenze
 
