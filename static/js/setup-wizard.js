@@ -98,8 +98,7 @@
         namecheap: 'No working certbot plugin exists for Namecheap, so issuance fails. Use ACME-DNS or a custom script for Namecheap domains.',
         'he-ddns': 'Not in the default image: build CertMate with EXTRA_REQUIREMENTS=requirements-extended.txt.',
         dynudns:   'Not in the default image: build CertMate with EXTRA_REQUIREMENTS=requirements-extended.txt.',
-        scaleway:  'In no image: build a derived image that installs its plugin.',
-        powerdns:  'In no image: build a derived image that installs its plugin, in an environment of its own.'
+        scaleway:  'In no image: build a derived image that installs its plugin.'
     };
 
     // availability: null until GET /api/dns/providers answers, then a map of

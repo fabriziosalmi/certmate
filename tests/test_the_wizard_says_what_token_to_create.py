@@ -63,7 +63,7 @@ PLUGIN_TERMS = {
 
 # Availability column name -> wizard key, for the providers that are not Stable.
 NAMES = {'Namecheap': 'namecheap', 'Hurricane Electric': 'he-ddns', 'Dynu': 'dynudns',
-         'Scaleway': 'scaleway', 'PowerDNS': 'powerdns'}
+         'Scaleway': 'scaleway'}
 NOTICE = {'Unavailable': 'No working certbot plugin',
           'Extended image': 'EXTRA_REQUIREMENTS=requirements-extended.txt',
           'Separate install': 'derived image'}

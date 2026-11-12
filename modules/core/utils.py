@@ -877,10 +877,19 @@ def _sweep_orphaned_files(directory: Path, pattern: str, max_age_seconds: int = 
     except OSError:
         pass
 
-def create_powerdns_config(api_url: str, api_key: str) -> Path:
-    """Create PowerDNS credentials file."""
-    content = f"dns_powerdns_api_url = {api_url}\ndns_powerdns_api_key = {api_key}\n"
-    return _create_config_file("powerdns", content)
+def create_powerdns_config(api_url: str, api_key: str, server_id: str = '') -> Path:
+    """Write the config ``powerdns_dns_hook`` reads, and return its path.
+
+    PowerDNS DNS-01 is answered by CertMate's own manual hook, not by
+    ``certbot-dns-powerdns``, which no environment holding CertMate's pins can
+    install. JSON, 0600, one per operation, removed by the caller when the
+    operation ends. ``server_id`` is written only when set; the hook uses
+    ``localhost`` otherwise, as PowerDNS does.
+    """
+    config = {'api_url': api_url, 'api_key': api_key}
+    if str(server_id or '').strip():
+        config['server_id'] = str(server_id).strip()
+    return _create_config_file("powerdns", json.dumps(config), suffix=".json")
 
 def create_digitalocean_config(api_token: str) -> Path:
     """Create DigitalOcean DNS credentials file."""

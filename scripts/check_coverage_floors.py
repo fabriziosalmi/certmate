@@ -165,6 +165,7 @@ FLOORS = {
     'modules/core/deployer.py': 85,
     'modules/core/digest.py': 85,
     'modules/core/azure_dns_hook.py': 90,
+    'modules/core/powerdns_dns_hook.py': 90,
     'modules/core/dns_alias_hook.py': 65,
     # The one home for what a settings['domains'] entry is. High on
     # purpose: it is four small pure functions with no I/O, and every
