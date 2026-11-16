@@ -90,7 +90,11 @@ SAMPLER = r"""
     }
     if (!window.__stillnessStop) requestAnimationFrame(sample);
   }
-  document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(sample));
+  // From the moment the document is parsed, before the deferred scripts (Alpine
+  // among them) run: what they change has to be seen changing.
+  const start = () => requestAnimationFrame(sample);
+  if (document.readyState !== 'loading') start();
+  else document.addEventListener('readystatechange', start, {once: true});
 })();
 """
 
@@ -108,8 +112,11 @@ def _certificate(index, days):
 TWELVE = [_certificate(i, d) for i, d in enumerate([80, 45, 20, 5, 60, 30, 85, 12, 70, 3, 50, 40])]
 # A hundred and fifty: three-digit counters, wider than the placeholder strip.
 # This is the size at which the navigation bar wrapped onto a second line and
-# stayed there.
+# stayed there. And fifteen hundred, the size at which the counters no longer
+# fit beside the toggle at all: the bar still keeps one line, and the labels
+# shorten instead.
 HUNDREDS = [_certificate(i, 40 + i % 50) for i in range(150)]
+THOUSANDS = [_certificate(i, 40 + i % 50) for i in range(1500)]
 
 DEPLOYED = json.dumps({'deployed': True, 'reachable': True, 'certificate_match': True,
                        'method': 'server', 'protocol': 'https-tls'})
@@ -140,7 +147,10 @@ def _fake(certificates):
 
 @pytest.fixture
 def load(browser_page, ui_session_cookie):
-    """Load a page with every /api request held until it has painted.
+    """Load a page with every /api request held until it has painted, and,
+    with hold_alpine, Alpine too: on a slow link the 45 KB of Alpine also
+    arrives after the first paint, and what Alpine shows, hides or moves is
+    then on screen first in its state without Alpine.
 
     Returns what the two witnesses saw after the first paint: the browser's
     layout shifts and the sampler's moves.
@@ -148,7 +158,7 @@ def load(browser_page, ui_session_cookie):
     browser = browser_page.context.browser
     contexts = []
 
-    def run(path, width, answer=None, settled=None, before_answers=None):
+    def run(path, width, answer=None, settled=None, before_answers=None, hold_alpine=False):
         context = browser.new_context(viewport={'width': width, 'height': 900})
         contexts.append(context)
         context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
@@ -163,7 +173,10 @@ def load(browser_page, ui_session_cookie):
                 return (answer or (lambda r: r.continue_()))(route)
             held.append(route)
         page.route('**/api/**', hold)
-        page.goto(f'{BASE_URL}{path}', wait_until='load')
+        if hold_alpine:
+            page.route('**/static/js/alpine.min.js', lambda route: route.continue_() if released else held.append(route))
+        # 'commit', not 'load': a held script keeps 'load' from firing.
+        page.goto(f'{BASE_URL}{path}', wait_until='commit')
         assert page.url.split('#')[0].endswith(path.split('#')[0]), (
             f'{path} landed on {page.url}: the page measured is not the page asked for')
         page.wait_for_function('() => window.__stillness && window.__stillness.firstPaint !== null')
@@ -172,7 +185,11 @@ def load(browser_page, ui_session_cookie):
         early = page.evaluate(before_answers) if before_answers else None
         released.append(True)
         for route in held:
-            (answer or (lambda r: r.continue_()))(route)
+            if route.request.url.endswith('/alpine.min.js'):
+                route.continue_()
+            else:
+                (answer or (lambda r: r.continue_()))(route)
+        page.wait_for_load_state('load')
         page.wait_for_load_state('networkidle')
         if settled:
             page.wait_for_function(settled, timeout=20000)
@@ -214,16 +231,18 @@ def test_the_certificate_list_opens_without_anything_moving(load, width):
     _assert_still(seen, f'dashboard at {width} px')
 
 
+@pytest.mark.parametrize('certificates', [HUNDREDS, THOUSANDS], ids=['150', '1500'])
 @pytest.mark.parametrize('width', [1280, 1440, 1920])
-def test_three_digit_counters_keep_the_navigation_on_one_line(load, width):
-    seen = load('/', width, _fake(HUNDREDS))
+def test_large_counters_keep_the_navigation_on_one_line(load, width, certificates):
+    seen = load('/', width, _fake(certificates))
     page = seen['page']
-    assert page.locator('#statsCards').inner_text().split()[0] == '150'
+    total = str(len(certificates))
+    assert page.locator('#statsCards').inner_text().split()[0] == total
     nav = page.locator('body > nav').first.bounding_box()
     logo = page.locator('body > nav img').first.bounding_box()
     # One line: the bar is as tall as its logo row (64 px) plus its border.
     assert nav['height'] < logo['height'] + 4, f'navigation is {nav["height"]} px tall at {width} px'
-    _assert_still(seen, f'dashboard with 150 certificates at {width} px')
+    _assert_still(seen, f'dashboard with {total} certificates at {width} px')
 
 
 @pytest.mark.parametrize('width', [1280, 1440])
@@ -247,7 +266,7 @@ def test_a_link_to_the_client_or_acme_view_never_shows_the_server_list(load, vie
     """The server list is the default view and is not cloaked. On /#client it
     used to be on screen until Alpine switched views (about 130 ms on a link
     with 400 ms of latency, in a screen recording)."""
-    seen = load(f'/#{view}', 1440, _fake(TWELVE), before_answers=COUNTERS)
+    seen = load(f'/#{view}', 1440, _fake(TWELVE), before_answers=COUNTERS, hold_alpine=True)
     assert seen['serverListSeen'] is False
     # And the strip on screen before any answer is that view's own, not empty.
     assert len(seen['before_answers']) == 1, seen['before_answers']
@@ -263,6 +282,39 @@ def test_no_counter_says_zero_before_its_numbers_arrive(load, path):
     assert len(strips) == 1, f'{path}: {len(strips)} counter strips on screen before the answers'
     numbers = [line for line in strips[0].split() if line[:1].isdigit()]
     assert numbers == [], f'{path}: counters before the answers read {strips[0]!r}'
+
+
+@pytest.mark.parametrize('path, width', [
+    ('/', 390), ('/', 1440), ('/#client', 390), ('/#acme', 390),
+    ('/settings', 1440), ('/settings#dns', 1440), ('/settings#storage', 1440), ('/settings#deploy', 1440),
+])
+def test_nothing_moves_when_alpine_arrives_after_the_first_paint(load, path, width):
+    """Until Alpine runs, x-show is not applied and x-cloak is: an element that
+    is visible without Alpine and hidden with it, or the other way round, takes
+    or gives back its space at that moment. The Save bar of the settings page
+    and the dashboard's counter strip on a phone did."""
+    seen = load(path, width, _fake(TWELVE), hold_alpine=True)
+    _assert_still(seen, f'{path} at {width} px, Alpine late')
+
+
+def test_every_dns_provider_card_has_the_same_glyph_box(browser_page, ui_session_cookie):
+    """provider-icons.js swaps the card's font glyph for a 24 px logo or
+    monogram once the page has loaded, and a font glyph's line also depends on
+    when its font arrives: the card changed height and the rows under it moved
+    7 px. Whatever sits first in a card is the same box, before and after."""
+    context = _context(browser_page, ui_session_cookie, 1440)
+    try:
+        page = context.new_page()
+        page.goto(f'{BASE_URL}/settings#dns', wait_until='networkidle')
+        boxes = page.evaluate('''() => [...document.querySelectorAll(
+            '#dns-provider-section label > div > .text-center > :first-child')]
+            .map(e => [e.tagName.toLowerCase(), e.offsetWidth, e.offsetHeight])''')
+        assert len(boxes) > 20
+        assert {(w, h) for _, w, h in boxes} == {(24, 24)}, boxes
+        # The three kinds are all there: a brand logo, a monogram, a font glyph.
+        assert {tag for tag, _, _ in boxes} >= {'img', 'span', 'i'}, boxes
+    finally:
+        context.close()
 
 
 @pytest.mark.parametrize('path', [

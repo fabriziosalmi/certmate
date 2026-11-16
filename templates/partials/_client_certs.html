@@ -15,9 +15,9 @@
                      palette) and an actions icon group — same vocabulary as the
                      server list header. Counts/filtering are driven by client-certs.js. -->
                 <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter by status">
-                    <button type="button" data-cc-status-chip="" aria-pressed="true" data-click="ccSetStatusFilter" data-args='[""]' class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">All <span class="inline-block min-w-[3ch] text-[10px] tabular-nums opacity-70" data-cc-status-count="all"></span></button>
-                    <button type="button" data-cc-status-chip="active" aria-pressed="false" data-click="ccSetStatusFilter" data-args='["active"]' class="cm-chip aria-pressed:bg-green-500/15 aria-pressed:text-success-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">Active <span class="inline-block min-w-[3ch] text-[10px] tabular-nums opacity-70" data-cc-status-count="active"></span></button>
-                    <button type="button" data-cc-status-chip="revoked" aria-pressed="false" data-click="ccSetStatusFilter" data-args='["revoked"]' class="cm-chip aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">Revoked <span class="inline-block min-w-[3ch] text-[10px] tabular-nums opacity-70" data-cc-status-count="revoked"></span></button>
+                    <button type="button" data-cc-status-chip="" aria-pressed="true" data-click="ccSetStatusFilter" data-args='[""]' class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">All <span class="inline-block min-w-[4ch] text-[10px] tabular-nums opacity-70" data-cc-status-count="all"></span></button>
+                    <button type="button" data-cc-status-chip="active" aria-pressed="false" data-click="ccSetStatusFilter" data-args='["active"]' class="cm-chip aria-pressed:bg-green-500/15 aria-pressed:text-success-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">Active <span class="inline-block min-w-[4ch] text-[10px] tabular-nums opacity-70" data-cc-status-count="active"></span></button>
+                    <button type="button" data-cc-status-chip="revoked" aria-pressed="false" data-click="ccSetStatusFilter" data-args='["revoked"]' class="cm-chip aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">Revoked <span class="inline-block min-w-[4ch] text-[10px] tabular-nums opacity-70" data-cc-status-count="revoked"></span></button>
                 </div>
                 <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter by usage type">
                     <button type="button" data-cc-usage-chip="" aria-pressed="true" data-click="ccSetUsageFilter" data-args='[""]' class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">All</button>
@@ -32,7 +32,13 @@
         </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <!-- Loading is said outside the table, and the table is shown with its
+         first rows (ccRenderCertificates). As a row inside it, the loading
+         text sized the columns its own way: on a phone the headers wrapped
+         onto two lines for it and one for the rows, and the rows then
+         appeared 16 px above where the loading row had been. -->
+    <div id="clientCertificatesLoading" class="px-6 py-8 text-center text-muted">Loading certificates...</div>
+    <div id="clientCertificatesTable" class="hidden overflow-x-auto">
         <table class="min-w-full divide-y divide-border">
             <!-- Header and pager are `invisible` until ccRenderCertificates()
                  draws the first list, as on the server view (index.html): the
@@ -62,9 +68,7 @@
                     <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
-            <tbody id="certTableBody" class="divide-y divide-border">
-                <tr><td colspan="7" class="px-6 py-8 text-center text-muted">Loading certificates...</td></tr>
-            </tbody>
+            <tbody id="certTableBody" class="divide-y divide-border"></tbody>
         </table>
     </div>
     <nav id="clientCertificatePager" class="invisible flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-border text-sm" aria-label="Client certificate pages">
