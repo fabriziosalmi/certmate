@@ -188,6 +188,16 @@
         return lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30;
     }
 
+    // Valid: it exists, has its key, its life is known, and it is neither
+    // expired nor due for renewal. The counter and the Valid filter both ask
+    // here, so they agree with each other and with the row's badge. Both used
+    // "more than 30 days left" after #1429 moved Expiring to the renewal rule:
+    // a 47-day certificate with 20 days left was counted nowhere, and one due
+    // for renewal with 40 days left was counted Valid and Expiring.
+    function isValid(cert) {
+        return cert.exists && !lostItsKey(cert) && lifeKnown(cert) && !hasExpired(cert) && !isExpiring(cert);
+    }
+
     // No private key anywhere (#966): what restoring a share-safe backup
     // leaves. It cannot serve TLS and renewal cannot repair it, only a reissue
     // can, so it is never "Valid", whatever its expiry date says.
@@ -212,7 +222,7 @@
         }
 
         var total = certificates.length;
-        var valid = certificates.filter(function (cert) { return cert.exists && !lostItsKey(cert) && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30; }).length;
+        var valid = certificates.filter(isValid).length;
         var keyless = certificates.filter(lostItsKey).length;
         var expiring = certificates.filter(function (cert) { return cert.exists && isExpiring(cert); }).length;
         var expired = certificates.filter(function (cert) { return cert.exists && hasExpired(cert); }).length;
@@ -477,11 +487,10 @@
             if (statusFilter !== 'all') {
                 var isExpired = cert.exists && hasExpired(cert);
                 var isExpiringSoon = cert.exists && isExpiring(cert);
-                var isValid = cert.exists && !lostItsKey(cert) && lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry > 30;
 
                 switch (statusFilter) {
                     case 'valid':
-                        matchesStatus = isValid;
+                        matchesStatus = isValid(cert);
                         break;
                     case 'expiring':
                         matchesStatus = isExpiringSoon;

@@ -40,6 +40,7 @@ def _stats(certificates):
         "    return chips[k] = chips[k] || {textContent: ''}; }};\n"
         "var CertMate = {escapeHtml: function (s) { return String(s); }};\n"
         + _function('lifeKnown') + _function('hasExpired') + _function('isExpiring') + _function('lostItsKey')
+        + _function('isValid')
         + _function('updateStats')
         + "updateStats(" + json.dumps(certificates) + ");\n"
         "var text = tiles.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n"

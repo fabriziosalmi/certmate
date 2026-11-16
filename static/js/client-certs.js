@@ -172,8 +172,12 @@
         if (next) next.disabled = ccPage >= pages;
         if (filtered.length === 0) {
             // Distinguish "none exist yet" (offer a CTA) from "none match the
-            // active usage/status filter" (offer a reorientation hint).
-            var isFiltered = ccCurrentUsage || ccCurrentStatus;
+            // active usage/status filter" (offer a reorientation hint). A filter
+            // only explains an empty list when there is something for it to
+            // hide: the list opens with "Active" pressed (#562), and with no
+            // certificate at all that read as filtered, so a fresh instance
+            // never showed the button that creates the first one.
+            var isFiltered = certificatesData.length > 0 && (ccCurrentUsage || ccCurrentStatus);
             if (isFiltered) {
                 tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
                     '<div class="mx-auto max-w-sm text-center">' +
