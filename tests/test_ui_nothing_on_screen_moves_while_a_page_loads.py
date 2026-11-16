@@ -317,6 +317,17 @@ def test_every_dns_provider_card_has_the_same_glyph_box(browser_page, ui_session
         context.close()
 
 
+def test_the_dns_provider_cards_keep_their_rows_at_every_width(load):
+    """A card's status starts as "Not configured" and turns "Configured" when
+    the settings arrive. At 1024 px "Not configured" (85 px) is wider than the
+    card (81 px) and took two lines, and on Linux it does at every width (the
+    card is 87 px there): when the tallest card of a row lost that line, the
+    rows under it moved up 16 px. That was the CI failure of #1470."""
+    for width in (1024, 1280, 1440):
+        seen = load('/settings#dns', width)
+        _assert_still(seen, f'/settings#dns at {width} px')
+
+
 @pytest.mark.parametrize('path', [
     '/inventory', '/inventory/crypto-report', '/activity', '/notifications', '/help',
     '/settings', '/settings#dns', '/settings#ca', '/settings#acme', '/settings#oidc', '/settings#backup',
@@ -432,3 +443,4 @@ def test_no_page_is_wider_than_a_phone(browser_page, ui_session_cookie, width):
         assert ends['new'] <= ends['row'] + 0.5 and ends['row'] <= ends['screen'], ends
     finally:
         context.close()
+

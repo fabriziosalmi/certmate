@@ -37,7 +37,12 @@
                             DNS Providers
                         </label>
                         
-                        <!-- Multi-Account Providers. Each card's "N accounts" line is
+                        <!-- Each card's status line is whitespace-nowrap: it reads "Not
+                             configured" until the settings arrive, which is 85 px in an
+                             81 px card at 1024 px and in an 87 px card on Linux, so it
+                             took two lines and gave one back when it turned "Configured";
+                             the rows under the card moved 16 px.
+                             Multi-Account Providers. Each card's "N accounts" line is
                              `invisible` rather than `hidden` when there is none to show,
                              so a card is the same height either way: filled in after the
                              settings arrive, a hidden line that appeared made the whole
@@ -55,9 +60,9 @@
                                         <div class="text-center">
                                             <i class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Cloudflare</div>
-                                            <div class="text-xs text-muted mt-1" id="cloudflare-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="cloudflare-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 invisible" id="cloudflare-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="cloudflare-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="cloudflare-account-count">0</span> accounts
                                             </div>
@@ -70,9 +75,9 @@
                                         <div class="text-center">
                                             <i class="fab fa-aws text-lg text-orange-400 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Route53</div>
-                                            <div class="text-xs text-muted mt-1" id="route53-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="route53-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 invisible" id="route53-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="route53-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="route53-account-count">0</span> accounts
                                             </div>
@@ -85,9 +90,9 @@
                                         <div class="text-center">
                                             <i class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">DigitalOcean</div>
-                                            <div class="text-xs text-muted mt-1" id="digitalocean-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="digitalocean-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 invisible" id="digitalocean-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="digitalocean-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="digitalocean-account-count">0</span> accounts
                                             </div>
@@ -100,9 +105,9 @@
                                         <div class="text-center">
                                             <i class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Azure DNS</div>
-                                            <div class="text-xs text-muted mt-1" id="azure-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="azure-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 invisible" id="azure-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="azure-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="azure-account-count">0</span> accounts
                                             </div>
@@ -115,9 +120,9 @@
                                         <div class="text-center">
                                             <i class="fab fa-google text-lg text-blue-500 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Google DNS</div>
-                                            <div class="text-xs text-muted mt-1" id="google-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="google-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 invisible" id="google-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="google-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="google-account-count">0</span> accounts
                                             </div>
@@ -130,9 +135,9 @@
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-muted mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">PowerDNS</div>
-                                            <div class="text-xs text-muted mt-1" id="powerdns-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="powerdns-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 invisible" id="powerdns-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="powerdns-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="powerdns-account-count">0</span> accounts
                                             </div>
@@ -145,9 +150,9 @@
                                         <div class="text-center">
                                             <i class="fas fa-exchange-alt text-lg text-muted mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">RFC2136</div>
-                                            <div class="text-xs text-muted mt-1" id="rfc2136-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="rfc2136-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 invisible" id="rfc2136-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="rfc2136-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="rfc2136-account-count">0</span> accounts
                                             </div>
@@ -171,7 +176,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Akamai Connected Cloud (Linode)</div>
-                                            <div class="text-xs text-muted mt-1" id="linode-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="linode-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -181,7 +186,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-orange-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Akamai Edge DNS</div>
-                                            <div class="text-xs text-muted mt-1" id="edgedns-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="edgedns-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -191,7 +196,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Vultr</div>
-                                            <div class="text-xs text-muted mt-1" id="vultr-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="vultr-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -201,7 +206,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">SOLIDserver</div>
-                                            <div class="text-xs text-muted mt-1" id="solidserver-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="solidserver-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -211,7 +216,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Hetzner</div>
-                                            <div class="text-xs text-muted mt-1" id="hetzner-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="hetzner-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -221,7 +226,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Hetzner Cloud</div>
-                                            <div class="text-xs text-muted mt-1" id="hetzner-cloud-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="hetzner-cloud-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -231,7 +236,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">ArvanCloud</div>
-                                            <div class="text-xs text-muted mt-1" id="arvancloud-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="arvancloud-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -241,7 +246,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Infomaniak</div>
-                                            <div class="text-xs text-muted mt-1" id="infomaniak-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="infomaniak-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -251,7 +256,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-network-wired text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">ACME-DNS</div>
-                                            <div class="text-xs text-muted mt-1" id="acme-dns-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="acme-dns-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -261,7 +266,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-shield-alt text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">deSEC</div>
-                                            <div class="text-xs text-muted mt-1" id="desec-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="desec-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -271,7 +276,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Scaleway</div>
-                                            <div class="text-xs text-muted mt-1" id="scaleway-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="scaleway-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -281,7 +286,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-globe text-lg text-orange-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Gandi</div>
-                                            <div class="text-xs text-muted mt-1" id="gandi-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="gandi-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -291,7 +296,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">OVH</div>
-                                            <div class="text-xs text-muted mt-1" id="ovh-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="ovh-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -301,7 +306,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Namecheap</div>
-                                            <div class="text-xs text-muted mt-1" id="namecheap-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="namecheap-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -311,7 +316,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-paw text-lg text-pink-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Porkbun</div>
-                                            <div class="text-xs text-muted mt-1" id="porkbun-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="porkbun-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -321,7 +326,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-globe text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">GoDaddy</div>
-                                            <div class="text-xs text-muted mt-1" id="godaddy-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="godaddy-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -331,7 +336,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-cogs text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">DNS Made Easy</div>
-                                            <div class="text-xs text-muted mt-1" id="dnsmadeeasy-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="dnsmadeeasy-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -341,7 +346,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">NS1</div>
-                                            <div class="text-xs text-muted mt-1" id="nsone-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="nsone-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -351,7 +356,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Hurricane Electric</div>
-                                            <div class="text-xs text-muted mt-1" id="he-ddns-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="he-ddns-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -361,7 +366,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Dynu</div>
-                                            <div class="text-xs text-muted mt-1" id="dynudns-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="dynudns-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -371,7 +376,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-feather text-lg text-yellow-500 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">DuckDNS</div>
-                                            <div class="text-xs text-muted mt-1" id="duckdns-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="duckdns-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>
@@ -381,7 +386,7 @@
                                         <div class="text-center">
                                             <i class="fas fa-terminal text-lg text-gray-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Custom Script</div>
-                                            <div class="text-xs text-muted mt-1" id="custom-script-status">Not configured</div>
+                                            <div class="text-xs text-muted mt-1 whitespace-nowrap" id="custom-script-status">Not configured</div>
                                         </div>
                                     </div>
                                 </label>

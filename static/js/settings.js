@@ -696,7 +696,7 @@
                 var providerData = dnsProviders[provider];
                 if (providerData && providerData.configured) {
                     statusEl.textContent = 'Configured';
-                    statusEl.className = 'text-xs text-success-fg mt-1';
+                    statusEl.className = 'text-xs text-success-fg mt-1 whitespace-nowrap';
 
                     if (accountsEl && countEl) {
                         countEl.textContent = providerData.accounts.length;
@@ -704,7 +704,7 @@
                     }
                 } else {
                     statusEl.textContent = 'Not configured';
-                    statusEl.className = 'text-xs text-muted mt-1';
+                    statusEl.className = 'text-xs text-muted mt-1 whitespace-nowrap';
 
                     // `invisible`, not `hidden`: the line keeps its height (settings_dns.html).
                     if (accountsEl) {
