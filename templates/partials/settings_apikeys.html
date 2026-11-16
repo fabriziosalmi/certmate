@@ -42,7 +42,7 @@
                 <div class="mt-4">
                     <label for="apikey-new-allowed-domains" class="block text-xs text-muted mb-1">
                         Allowed Domains (optional)
-                        <span class="ml-1 text-gray-400" title="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access.">
+                        <span class="ml-1 text-muted" title="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access.">
                             <i class="fas fa-info-circle"></i>
                         </span>
                     </label>
@@ -63,7 +63,7 @@
                         <input type="checkbox" x-model="newKey.is_agent"
                                class="rounded border-border text-yellow-600 focus:ring-yellow-500">
                         <span>AI agent key</span>
-                        <span class="text-gray-400" title="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.">
+                        <span class="text-muted" title="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.">
                             <i class="fas fa-info-circle"></i>
                         </span>
                     </label>
@@ -215,7 +215,7 @@
 
             <div class="mt-6 flex justify-end">
                 <button type="button" @click="save()" :disabled="saving" title="Save rate limits"
-                        class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 text-sm whitespace-nowrap">
+                        class="px-4 py-2 bg-yellow-700 text-white rounded-md hover:bg-yellow-800 text-sm whitespace-nowrap">
                     <i class="fas fa-save mr-1"></i>
                     <span x-text="saving ? 'Saving...' : 'Save Rate Limits'"></span>
                 </button>

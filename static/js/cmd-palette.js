@@ -56,7 +56,7 @@
                     '<kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-xs text-gray-400 bg-surface-2 rounded">ESC</kbd>' +
                 '</div>' +
                 '<div id="cmdPaletteResults" class="overflow-y-auto py-2"></div>' +
-                '<div class="px-4 py-2 border-t border-border flex items-center justify-between text-xs text-gray-400">' +
+                '<div class="px-4 py-2 border-t border-border flex items-center justify-between text-xs text-muted">' +
                     '<div><kbd class="px-1.5 py-0.5 bg-surface-2 rounded mr-1">&uarr;&darr;</kbd> navigate <kbd class="px-1.5 py-0.5 bg-surface-2 rounded mx-1">&crarr;</kbd> select</div>' +
                     '<div><kbd class="px-1.5 py-0.5 bg-surface-2 rounded">esc</kbd> close</div>' +
                 '</div>' +
@@ -230,7 +230,7 @@
         currentResults.forEach(function(item, i) {
             if (item.type !== lastType) {
                 lastType = item.type;
-                html += '<div class="px-4 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">' + escapeHtml(typeLabels[item.type] || item.type) + '</div>';
+                html += '<div class="px-4 pt-2 pb-1 text-[10px] font-semibold text-muted uppercase tracking-wider">' + escapeHtml(typeLabels[item.type] || item.type) + '</div>';
             }
             var isSelected = i === selectedIndex;
             html += '<div class="cmd-result flex items-center px-4 py-2 cursor-pointer ' +
@@ -239,7 +239,7 @@
                 '<i class="fas ' + escapeHtml(item.icon) + ' w-5 text-center mr-3 ' + (isSelected ? 'text-primary' : 'text-gray-400') + '"></i>' +
                 '<div class="flex-1 min-w-0">' +
                     '<div class="text-sm font-medium truncate">' + escapeHtml(item.label) + '</div>' +
-                    (item.desc ? '<div class="text-xs text-gray-400 truncate">' + escapeHtml(item.desc) + '</div>' : '') +
+                    (item.desc ? '<div class="text-xs text-muted truncate">' + escapeHtml(item.desc) + '</div>' : '') +
                 '</div>' +
                 (item.type === 'action' ? '<i class="fas fa-bolt text-xs text-gray-400 ml-2"></i>' : '<i class="fas fa-arrow-right text-xs text-gray-400 ml-2"></i>') +
             '</div>';

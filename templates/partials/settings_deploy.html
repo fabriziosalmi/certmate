@@ -67,7 +67,7 @@
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
                             <i class="fas fa-globe mr-2 text-blue-500"></i>Global Hooks
-                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + config.global_hooks.length + ')'"></span>
+                            <span class="text-muted font-normal ml-1" x-text="'(' + config.global_hooks.length + ')'"></span>
                         </span>
                         <i class="fas text-gray-400" :class="showGlobal ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
@@ -183,7 +183,7 @@
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
                             <i class="fas fa-sitemap mr-2 text-purple-500"></i>Domain-Specific Hooks
-                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + domainNames.length + ' domains)'"></span>
+                            <span class="text-muted font-normal ml-1" x-text="'(' + domainNames.length + ' domains)'"></span>
                         </span>
                         <i class="fas text-gray-400" :class="showDomain ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
@@ -324,7 +324,7 @@
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
                             <i class="fas fa-paper-plane mr-2 text-green-500"></i>Deploy Targets
-                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + targets.length + ')'"></span>
+                            <span class="text-muted font-normal ml-1" x-text="'(' + targets.length + ')'"></span>
                         </span>
                         <i class="fas text-gray-400" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
@@ -716,7 +716,7 @@
                             <div class="min-w-0">
                                 <div class="text-[10px] uppercase tracking-wide text-muted">Hook</div>
                                 <div class="text-foreground truncate" x-text="selectedExecution.hook_name || '(unnamed)'" :title="selectedExecution.hook_name || ''"></div>
-                                <div class="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate" x-text="selectedExecution.hook_id || ''" :title="selectedExecution.hook_id || ''"></div>
+                                <div class="text-[10px] text-muted font-mono truncate" x-text="selectedExecution.hook_id || ''" :title="selectedExecution.hook_id || ''"></div>
                             </div>
                             <div class="min-w-0">
                                 <div class="text-[10px] uppercase tracking-wide text-muted">Domain</div>
@@ -774,7 +774,7 @@
                                  x-text="selectedExecution.stderr || '(no output)'"></pre>
                         </div>
 
-                        <div class="text-[10px] text-gray-400 dark:text-gray-500 italic">
+                        <div class="text-[10px] text-muted italic">
                             stdout / stderr are captured at execution time and truncated to 4096 chars per stream.
                         </div>
                     </div>

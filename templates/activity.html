@@ -6,7 +6,7 @@
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
                 <div class="flex items-center justify-between">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                        <a href="/" aria-label="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
+                        <a href="/" aria-label="Home" class="text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Activity</span>
                     </nav>
@@ -440,13 +440,13 @@
                                 (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : '') +
                             '</div>' +
                             '<p class="text-sm text-muted truncate">' + resourceHtml + '</p>' +
-                            (detailStr ? '<p class="text-xs text-gray-400 mt-0.5 truncate">' + escapeHtml(detailStr) + '</p>' : '') +
-                            (entry.error ? '<p class="text-xs text-red-500 mt-0.5 truncate"><i class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
+                            (detailStr ? '<p class="text-xs text-muted mt-0.5 truncate">' + escapeHtml(detailStr) + '</p>' : '') +
+                            (entry.error ? '<p class="text-xs text-danger-fg mt-0.5 truncate"><i class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
                         '</div>' +
                         '<div class="flex-shrink-0 text-right">' +
-                            '<div class="text-xs text-gray-400" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
+                            '<div class="text-xs text-muted" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
                             '<div class="text-[10px] text-muted mt-0.5">' + escapeHtml(compactTime(entry.timestamp)) + '</div>' +
-                            '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
+                            '<div class="text-[10px] text-muted mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
                         '</div>' +
                         // The chevron is the row's last item, centred: inside the
                         // column above it took a line of its own and made every
@@ -484,7 +484,7 @@
         function kvRow(label, value, mono) {
             if (value === null || value === undefined || value === '') return '';
             return '<div class="flex gap-3 py-1.5 border-b border-gray-100 dark:border-gray-700/40 last:border-0">' +
-                '<div class="w-32 flex-shrink-0 text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500 pt-0.5">' + escapeHtml(label) + '</div>' +
+                '<div class="w-32 flex-shrink-0 text-xs uppercase tracking-wide text-muted pt-0.5">' + escapeHtml(label) + '</div>' +
                 '<div class="flex-1 min-w-0 text-sm ' + (mono ? 'font-mono break-all' : 'break-words') + '">' + escapeHtml(String(value)) + '</div>' +
             '</div>';
         }
@@ -525,13 +525,13 @@
             // Command output (deploy hooks): exit code + std streams.
             var out = '';
             if (details.exit_code !== undefined && details.exit_code !== null) {
-                out += '<div class="text-xs"><span class="text-gray-400">Exit code:</span> <span class="font-mono">' + escapeHtml(String(details.exit_code)) + '</span></div>';
+                out += '<div class="text-xs"><span class="text-muted">Exit code:</span> <span class="font-mono">' + escapeHtml(String(details.exit_code)) + '</span></div>';
             }
             if (details.stderr) {
-                out += '<div><div class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">stderr</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stderr) + '</pre></div>';
+                out += '<div><div class="text-[10px] uppercase tracking-wide text-muted mb-1">stderr</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stderr) + '</pre></div>';
             }
             if (details.stdout) {
-                out += '<div><div class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">stdout</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stdout) + '</pre></div>';
+                out += '<div><div class="text-[10px] uppercase tracking-wide text-muted mb-1">stdout</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stdout) + '</pre></div>';
             }
             if (out) body += '<div class="space-y-2">' + out + '</div>';
 
@@ -540,7 +540,7 @@
             var rest = {};
             Object.keys(details).forEach(function(k) { if (!shown[k]) rest[k] = details[k]; });
             if (Object.keys(rest).length) {
-                body += '<div><div class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Details</div>' +
+                body += '<div><div class="text-[10px] uppercase tracking-wide text-muted mb-1">Details</div>' +
                     '<pre class="font-mono text-xs bg-surface-2 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(JSON.stringify(rest, null, 2)) + '</pre></div>';
             }
 
