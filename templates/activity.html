@@ -447,8 +447,11 @@
                             '<div class="text-xs text-gray-400" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
                             '<div class="text-[10px] text-muted mt-0.5">' + escapeHtml(compactTime(entry.timestamp)) + '</div>' +
                             '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
-                            '<i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mt-1" aria-hidden="true"></i>' +
                         '</div>' +
+                        // The chevron is the row's last item, centred: inside the
+                        // column above it took a line of its own and made every
+                        // row 108 px tall instead of 84.
+                        '<i class="fas fa-chevron-right self-center text-[10px] text-gray-300 dark:text-gray-600" aria-hidden="true"></i>' +
                     '</div>' +
                 '</li>';
             }).join('');

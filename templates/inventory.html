@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}CertMate - Inventory{% endblock %}
 {% block content %}
+{% set inventory_admin = (current_user or {}).get('role') == 'admin' %}
 <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="inventoryApp">
 
     <!-- Header -->
@@ -17,7 +18,7 @@
                      unexplained no-op reads as a broken button. -->
                 <span id="scanMsg" class="text-xs text-muted" role="status"></span>
                 <button type="button" id="scanNowBtn" data-click="InventoryPage.runScan"
-                        class="hidden px-2.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"
+                        class="{% if not inventory_admin %}hidden {% endif %}px-2.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"
                         title="Run a discovery sweep and CT-log poll now">
                     <i class="fas fa-magnifying-glass mr-1"></i>Scan now
                 </button>
@@ -121,8 +122,13 @@
         </div>
     </div>
 
-    <!-- Config panel (admin only; revealed by JS when role >= admin) -->
-    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4 hidden" id="configPanel">
+    <!-- Config panel (admin only). Its visibility is decided here, from the
+         same session /api/auth/me reads, so it is on the page from the first
+         paint: revealed by JS after that call returned, it pushed everything
+         under it down 61 px while the page loaded. gateAdminControls() still
+         checks the role and hides it, with the scan button, if the answers
+         ever differ; the configuration endpoints require admin either way. -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4{% if not inventory_admin %} hidden{% endif %}" id="configPanel">
         <details class="group">
             <summary class="px-6 py-3 border-b border-gray-100 dark:border-white/5 cursor-pointer flex items-center justify-between">
                 <span class="text-sm font-medium text-foreground"><i class="fas fa-sliders mr-2 text-muted"></i>Discovery configuration</span>
@@ -240,7 +246,10 @@
             <span class="text-xs text-muted ml-auto" id="invCount"></span>
         </div>
 
-        <div class="overflow-x-auto">
+        <!-- `relative`: the "Actions" header is sr-only, which is position:absolute,
+             and without a positioned ancestor here it escaped the scroll box and
+             made the whole page 590 px wide on a 390 px phone. -->
+        <div class="relative overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
                     <tr>

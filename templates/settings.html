@@ -81,7 +81,12 @@
                 </template>
             </nav>
             <div class="flex-1 min-w-0 px-6 py-6">
-                <form id="settingsForm" class="space-y-8">
+                <!-- A flex gap, not space-y-8: the hidden tabs are siblings, and a
+                     space-y margin went to whichever panel was not first, so
+                     General, CA and Storage started 32 px lower than DNS, and the
+                     tabs outside the form (with their own mt-6) 24 px lower. Every
+                     tab now starts at the same height. -->
+                <form id="settingsForm" class="flex flex-col gap-8">
 
                     {% include 'partials/settings_dns.html' %}
                     {% include 'partials/settings_ca.html' %}
@@ -108,7 +113,7 @@
                     {% include 'partials/settings_acme.html' %}
 
                     <!-- TAB: Backup & Restore Section -->
-                    <div x-show="tab === 'backup'" x-cloak id="settings-panel-backup" role="tabpanel" aria-labelledby="settings-tab-backup" tabindex="0" class="bg-surface rounded-xl shadow-card p-6 mt-6">
+                    <div x-show="tab === 'backup'" x-cloak id="settings-panel-backup" role="tabpanel" aria-labelledby="settings-tab-backup" tabindex="0" class="bg-surface rounded-xl shadow-card p-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-foreground flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>
@@ -164,7 +169,7 @@
                     <label for="backup-upload-input" class="sr-only">Backup archive to upload</label>
                     <input type="file" id="backup-upload-input" accept=".zip,.enc"
                            aria-label="Backup archive to upload"
-                           class="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-surface-2 file:text-foreground hover:file:bg-hover">
+                           class="max-w-full text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-surface-2 file:text-foreground hover:file:bg-hover">
                     <button type="button" data-click="uploadBackup" data-pass="el" class="btn btn-secondary w-full sm:w-auto">
                         <i class="fas fa-upload mr-2"></i>
                         Upload Backup

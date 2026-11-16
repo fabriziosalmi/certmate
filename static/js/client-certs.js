@@ -141,6 +141,11 @@
     function ccRenderCertificates() {
         var tbody = document.getElementById('certTableBody');
         if (!tbody) return;
+        // Waiting, invisible, for the first list (see _client_certs.html).
+        var head = document.getElementById('clientCertificatesHead');
+        if (head) head.classList.remove('invisible');
+        var pager = document.getElementById('clientCertificatePager');
+        if (pager) pager.classList.remove('invisible');
         // The chips filter what was loaded, before pagination; free-text CN/email
         // search lives in the global ⌘K palette.
         var filtered = ccApplySort(certificatesData.filter(function (cert) {

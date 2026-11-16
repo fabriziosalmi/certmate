@@ -154,27 +154,8 @@
         });
     }
 
-    // Update statistics cards with deployment info
-    // Number of stat cards `updateStats` emits below (Total, Valid,
-    // Expiring, Deployed). Drives the initial skeleton render so the
-    // placeholder count always matches the real count — when the metric
-    // list changes, bump this constant in lockstep with the statCard()
-    // calls in `updateStats`.
-    var STAT_METRICS_COUNT = 3;
-
-    function statsSkeletonHtml(count) {
-        var rows = [];
-        for (var i = 0; i < count; i++) {
-            rows.push(
-                '<div class="flex items-baseline gap-1.5 px-3.5 py-3" aria-hidden="true">' +
-                    '<div class="skeleton h-4 w-5"></div>' +
-                    '<div class="skeleton h-2 w-10"></div>' +
-                '</div>'
-            );
-        }
-        return rows.join('');
-    }
-
+    // Update statistics cards with deployment info. The placeholder strip they
+    // replace is markup in _dashboard_topbar.html, shaped like these three.
     // Whether a certificate has expired is the API's answer, not a day count.
     //
     // days_until_expiry is whole days and truncates, so a certificate with 23
@@ -256,7 +237,7 @@
             // Compact KPI segment: number + label on ONE line ("7 TOTAL"), sized
             // to the toggle's height. State shows in the number colour; the old
             // subtitle becomes a hover title since there's no room to print it.
-            return '<div class="flex items-baseline gap-1.5 px-3.5 py-3"' + (subtitle ? ' title="' + CertMate.escapeHtml(subtitle) + '"' : '') + '>' +
+            return '<div class="flex items-baseline gap-1.5 px-2.5 py-3"' + (subtitle ? ' title="' + CertMate.escapeHtml(subtitle) + '"' : '') + '>' +
                 '<span class="text-lg font-bold leading-none tabular-nums ' + valColor + '"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</span>' +
                 '<span class="text-[10px] font-medium text-muted uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</span>' +
                 '</div>';
@@ -722,9 +703,31 @@
     function deploymentSquareClass(display) {
         return 'inline-flex items-center justify-center gap-1 w-10 h-10 rounded-lg border border-border ' + display.chipClass;
     }
+    // The status glyph is fixed-width (fa-fw): check, cross, minus and spinner
+    // are not the same width, and the chip changing width moved the chip beside
+    // it every time a probe finished.
     function deploymentChipInner(display) {
         return '<i class="fas ' + display.roleIcon + '" aria-hidden="true"></i>' +
-            '<i class="fas ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>';
+            '<i class="fas fa-fw ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>';
+    }
+
+    // A chip in a state that is not a probe result (being checked, or the check
+    // failed), drawn by the same helpers as a result. It was a different shape
+    // (a taller pill with px-2.5 py-0.5, and a text label on failure): every
+    // row's Deployment cell shrank and grew back while the dashboard opened, and
+    // the detail modal's square chips lost their square.
+    function setDeploymentChipState(statusElement, statusIcon, chipClass, label) {
+        var display = {
+            roleIcon: statusElement.getAttribute('data-deployment-role') === 'browser' ? 'fa-globe' : 'fa-server',
+            statusIcon: statusIcon,
+            chipClass: chipClass
+        };
+        statusElement.className = (statusElement.getAttribute('data-deployment-variant') === 'square'
+            ? deploymentSquareClass(display)
+            : deploymentChipClass(display));
+        statusElement.innerHTML = deploymentChipInner(display);
+        statusElement.title = label;
+        statusElement.setAttribute('aria-label', label);
     }
 
     function deploymentBadgeHtml(role, result, safeDomain, domainId, square) {
@@ -907,6 +910,11 @@
     function displayCertificates(certificates) {
         var container = document.getElementById('certificatesList');
         var thead = document.querySelector('#certificatesTable thead');
+        // The header and the pager wait, invisible, for the first list (see
+        // index.html): they appear in the same frame as the rows they belong to.
+        thead.classList.remove('invisible');
+        var pager = document.getElementById('certificatePager');
+        if (pager) pager.classList.remove('invisible');
 
         if (!Array.isArray(certificates)) {
             certificates = [];
@@ -1890,8 +1898,7 @@
 
         // Update UI to show checking state
         statusElements.forEach(function (statusElement) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
-            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span class="sr-only">Checking deployment</span>';
+            setDeploymentChipState(statusElement, 'fa-spinner fa-spin', 'bg-info-surface text-info-fg', 'Checking deployment');
         });
 
         var deploymentUrl = '/api/certificates/' + encodeURIComponent(domain) + '/deployment-status';
@@ -1956,8 +1963,7 @@
             });
         }).catch(function () {
             statusElements.forEach(function (statusElement) {
-                statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-2 text-muted';
-                statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
+                setDeploymentChipState(statusElement, 'fa-question', 'bg-surface-2 text-muted', 'Deployment check failed');
             });
         }).finally(function () {
             restoreButton();
@@ -4449,13 +4455,6 @@
     document.addEventListener('DOMContentLoaded', function () {
         var pageSize = document.getElementById('certificatePageSize');
         if (pageSize) pageSize.value = String(certificatePageSize);
-        // Paint the stats-card skeleton placeholders before the cert
-        // fetch returns, so the surface is never an empty grid — count
-        // is driven by STAT_METRICS_COUNT to stay in sync with the
-        // updateStats() output (B4 fix).
-        var statsContainer = document.getElementById('statsCards');
-        if (statsContainer) statsContainer.innerHTML = statsSkeletonHtml(STAT_METRICS_COUNT);
-
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.

@@ -37,7 +37,11 @@
                             DNS Providers
                         </label>
                         
-                        <!-- Multi-Account Providers -->
+                        <!-- Multi-Account Providers. Each card's "N accounts" line is
+                             `invisible` rather than `hidden` when there is none to show,
+                             so a card is the same height either way: filled in after the
+                             settings arrive, a hidden line that appeared made the whole
+                             first row 20 px taller and pushed every row under it down. -->
                         <div class="mb-6">
                             <h4 class="text-sm font-semibold text-label mb-2 flex items-center">
                                 <i class="fas fa-users mr-2 text-blue-500"></i>
@@ -53,7 +57,7 @@
                                             <div class="text-xs font-medium text-foreground">Cloudflare</div>
                                             <div class="text-xs text-muted mt-1" id="cloudflare-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 hidden" id="cloudflare-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible" id="cloudflare-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="cloudflare-account-count">0</span> accounts
                                             </div>
@@ -68,7 +72,7 @@
                                             <div class="text-xs font-medium text-foreground">Route53</div>
                                             <div class="text-xs text-muted mt-1" id="route53-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 hidden" id="route53-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible" id="route53-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="route53-account-count">0</span> accounts
                                             </div>
@@ -83,7 +87,7 @@
                                             <div class="text-xs font-medium text-foreground">DigitalOcean</div>
                                             <div class="text-xs text-muted mt-1" id="digitalocean-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 hidden" id="digitalocean-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible" id="digitalocean-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="digitalocean-account-count">0</span> accounts
                                             </div>
@@ -98,7 +102,7 @@
                                             <div class="text-xs font-medium text-foreground">Azure DNS</div>
                                             <div class="text-xs text-muted mt-1" id="azure-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 hidden" id="azure-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible" id="azure-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="azure-account-count">0</span> accounts
                                             </div>
@@ -113,7 +117,7 @@
                                             <div class="text-xs font-medium text-foreground">Google DNS</div>
                                             <div class="text-xs text-muted mt-1" id="google-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 hidden" id="google-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible" id="google-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="google-account-count">0</span> accounts
                                             </div>
@@ -128,7 +132,7 @@
                                             <div class="text-xs font-medium text-foreground">PowerDNS</div>
                                             <div class="text-xs text-muted mt-1" id="powerdns-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 hidden" id="powerdns-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible" id="powerdns-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="powerdns-account-count">0</span> accounts
                                             </div>
@@ -143,7 +147,7 @@
                                             <div class="text-xs font-medium text-foreground">RFC2136</div>
                                             <div class="text-xs text-muted mt-1" id="rfc2136-status">Not configured</div>
                                             <!-- Multi-account indicator -->
-                                            <div class="text-xs text-info-fg mt-1 hidden" id="rfc2136-accounts">
+                                            <div class="text-xs text-info-fg mt-1 invisible" id="rfc2136-accounts">
                                                 <i class="fas fa-users text-xs mr-1"></i>
                                                 <span id="rfc2136-account-count">0</span> accounts
                                             </div>
