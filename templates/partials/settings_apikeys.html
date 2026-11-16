@@ -2,7 +2,7 @@
         <div x-show="tab === 'apikeys'" x-cloak
              id="settings-panel-apikeys" role="tabpanel" aria-labelledby="settings-tab-apikeys" tabindex="0"
              x-data="apiKeyManager()" x-init="loadKeys()"
-             class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
+             class="bg-surface border-border rounded-lg shadow-sm border p-6">
 
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-foreground flex items-center">
@@ -48,7 +48,7 @@
                     </label>
                     <div class="flex items-center space-x-2">
                         <input type="text" id="apikey-new-allowed-domains" x-model="newKey.allowed_domains" placeholder="example.com, *.foo.org   (empty = unrestricted)"
-                               class="flex-1 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
+                               class="flex-1 min-w-0 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                         <button type="button" @click="createKey()"
                                 class="btn btn-primary whitespace-nowrap">
                             <i class="fas fa-plus mr-1"></i> Create

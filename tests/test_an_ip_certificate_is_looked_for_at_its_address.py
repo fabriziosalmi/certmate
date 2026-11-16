@@ -170,7 +170,7 @@ def _browser_fetches(domain, certificates, server):
         "var allCertificates = " + json.dumps(certificates) + ";\n"
         "var server = " + json.dumps(server) + ";\n"
         "var API_HEADERS = {};\n"
-        "var element = {className: '', innerHTML: '', getAttribute: function () { return "
+        "var element = {className: '', innerHTML: '', setAttribute: function () {}, getAttribute: function () { return "
         + json.dumps(domain) + "; }};\n"
         "var document = {querySelectorAll: function () { return [element]; }};\n"
         "var deploymentCache = {get: function () { return null; }, set: function () {}};\n"
@@ -184,6 +184,8 @@ def _browser_fetches(domain, certificates, server):
         "  }\n"
         "  return Promise.resolve({});\n"
         "}\n"
+        + _function('deploymentChipClass') + _function('deploymentSquareClass')
+        + _function('deploymentChipInner') + _function('setDeploymentChipState')
         + _function('servedHost') + _function('checkDeploymentViaBrowser')
         + _function('checkDeploymentStatus')
         + "checkDeploymentStatus(" + json.dumps(domain) + ", null, true).then(function () {\n"

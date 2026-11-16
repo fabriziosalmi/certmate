@@ -20,13 +20,19 @@
    writes, and the command palette clicks `#certViewServerBtn` /
    `#certViewClientBtn` to change view. Only the surrounding layout moved.
 
-   The breakpoint is `xl` (1280px) because that is where the three clusters
-   measure as fitting: 64px of logo, 596px for this one (a 296px toggle, a
-   252px counter strip, the gap and its own padding) and a 443px icon rail come
-   to 1103px, against the 1216px inside the `max-w-7xl` container at 1280 and
-   the 1136px at 1200. The 1100px this was first written against is not enough
-   — the cluster lands in the bar and then wraps inside itself, leaving a
-   108px-tall navigation, which is worse than giving it a row. #}
+   From `xl` (1280px) the cluster sits in the bar, between the 64px logo and
+   the 443px icon rail, and gets what is left: 698px at 1280, 709px from about
+   1296 up (the `max-w-7xl` container stops growing there), 674 to 685px inside
+   its padding. In it: the 367px toggle, a 12px gap, and the counter strip,
+   245px with two-digit counts and 280px with three (measured 2026-11-16).
+
+   It must never wrap there. It did, from the ACME button (#1423) on: a wrap
+   makes the bar 108px tall instead of 65, and since the strip's width follows
+   the counts, the bar changed height while the dashboard loaded, when the
+   placeholder became numbers. So the cluster is `xl:flex-nowrap`, and when
+   four-digit counts do not fit the strip's labels shorten with an ellipsis
+   (`truncate`); the numbers and the bar's height do not change.
+   tests/test_ui_nothing_on_screen_moves_while_a_page_loads.py holds this. #}
 <script nonce="{{ csp_nonce }}">
 // The dashboard's Server/Client view, as a global Alpine store.
 //
@@ -49,7 +55,8 @@ document.addEventListener('alpine:init', function () {
         view: fromHash(),
         // The ACME view's counters, written by acmeCertificates() when it loads:
         // the list is in index.html and the counters are here, two Alpine roots.
-        acme: { total: 0, valid: 0, revoked: 0 },
+        // A dash, not 0, until the list has loaded: a zero there is a claim.
+        acme: { total: '\u2013', valid: '\u2013', revoked: '\u2013' },
         // Every change goes through here: the URL keeps the view, so a reload
         // or a shared link lands on the same one, and the client list loads
         // the first time it is asked for.
@@ -86,29 +93,31 @@ document.addEventListener('alpine:init', function () {
      clicked one (#1423: 137 px at 1440 px, Server to ACME). -->
 <div x-data
      class="order-last w-full flex flex-wrap items-center justify-between gap-2 py-2 border-t border-border
-            xl:order-none xl:w-auto xl:flex-1 xl:justify-start
-            xl:gap-4 xl:py-0 xl:px-4 xl:border-t-0">
-    <!-- [ Server | Client | New ]. The Server/Client segments are state
+            xl:order-none xl:w-auto xl:flex-1 xl:justify-start xl:flex-nowrap xl:min-w-0
+            xl:gap-3 xl:py-0 xl:px-3 xl:border-t-0">
+    <!-- Below `sm` the paddings are smaller: at the normal ones the group is
+         367 px wide and on a 360 px phone "New" was cut to "+ Ne".
+         [ Server | Client | New ]. The Server/Client segments are state
          toggles (ghost); "New" is an imperative action (filled brand, divider,
          text label) so it never reads as a third certificate type. "New" opens
          the creation drawer (overlay) — no inline form, no layout jump. -->
-    <div class="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-2 p-1" role="group" aria-label="Certificate view and creation">
+    <div class="inline-flex shrink-0 items-center gap-0.5 sm:gap-1 rounded-xl border border-border bg-surface-2 p-0.5 sm:p-1" role="group" aria-label="Certificate view and creation">
         <button type="button" id="certViewServerBtn" @click="$store.certs.select('server')"
                 :aria-pressed="$store.certs.view === 'server' ? 'true' : 'false'"
                 :class="$store.certs.view === 'server' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
-                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
+                class="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-sm font-semibold rounded-lg transition-all">
             <i class="fas fa-globe" aria-hidden="true"></i>Server
         </button>
         <button type="button" id="certViewClientBtn" @click="$store.certs.select('client')"
                 :aria-pressed="$store.certs.view === 'client' ? 'true' : 'false'"
                 :class="$store.certs.view === 'client' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
-                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
+                class="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-sm font-semibold rounded-lg transition-all">
             <i class="fas fa-id-card" aria-hidden="true"></i>Client
         </button>
         <button type="button" id="certViewAcmeBtn" @click="$store.certs.select('acme')"
                 :aria-pressed="$store.certs.view === 'acme' ? 'true' : 'false'"
                 :class="$store.certs.view === 'acme' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
-                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all"
+                class="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-sm font-semibold rounded-lg transition-all"
                 title="Certificates the ACME server issued">
             <i class="fas fa-certificate" aria-hidden="true"></i>ACME
         </button>
@@ -116,17 +125,18 @@ document.addEventListener('alpine:init', function () {
              Invisible rather than removed, so it keeps its width and the three
              view buttons stay where they are when the view changes (#1423);
              `invisible` also takes it out of the tab order and the accessibility tree. -->
-        <span class="mx-1 h-6 w-px bg-border" aria-hidden="true" :class="$store.certs.view === 'acme' ? 'invisible' : ''"></span>
+        <span class="mx-0.5 sm:mx-1 h-6 w-px bg-border" aria-hidden="true" :class="$store.certs.view === 'acme' ? 'invisible' : ''"></span>
         <button type="button" @click="$store.certs.openDrawer()" :class="$store.certs.view === 'acme' ? 'invisible' : ''"
-                class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
+                class="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
                 title="New certificate">
             <i class="fas fa-plus" aria-hidden="true"></i>New
         </button>
     </div>
     <!-- Counters for whichever view the toggle is on. Server is rendered by
          updateStats(); client is static markup filled by ccLoadStatistics()
-         (same ids). Both are cloaked so a single strip is on screen from the
-         first paint rather than both of them until Alpine initialises.
+         (same ids). A single strip is on screen from the first paint: until
+         Alpine owns the view, a rule in index.html hides the two that do not
+         belong to the view in the URL (`data-cert-view` on <html>).
 
          On a phone the strip cannot share a line with the toggle at any
          sensible size, so it takes the full width and its segments share that
@@ -134,26 +144,36 @@ document.addEventListener('alpine:init', function () {
          with dead space beside it. The child variant sets that on the segments
          without touching the two places that generate them (updateStats and
          the static markup below), which would otherwise have to agree. -->
-    <div x-show="$store.certs.view === 'server'" x-cloak id="statsCards"
-         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start"
-         aria-label="Certificate counts"></div>
-    <div x-show="$store.certs.view === 'client'" x-cloak
-         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start"
+    <div x-show="$store.certs.view === 'server'" id="statsCards"
+         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start xl:min-w-0 xl:[&>div]:flex-initial xl:[&>div]:min-w-0 [&>div>span:last-child]:truncate"
+         aria-label="Certificate counts">
+        <!-- Placeholder until updateStats() writes the counts: the same three
+             segments with the same text, transparent over the shimmer, so it is
+             the height and nearly the width of what replaces it. It was drawn by
+             dashboard.js on DOMContentLoaded from smaller blocks: the strip was
+             empty for a frame, then 3 px shorter and 17 px wider than the counts,
+             which is what wrapped the bar onto two lines while the list loaded. -->
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3" aria-hidden="true"><span class="skeleton text-transparent text-lg font-bold leading-none tabular-nums">00</span><span class="skeleton text-transparent text-[10px] font-medium uppercase tracking-wider">Total</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3" aria-hidden="true"><span class="skeleton text-transparent text-lg font-bold leading-none tabular-nums">00</span><span class="skeleton text-transparent text-[10px] font-medium uppercase tracking-wider">Valid</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3" aria-hidden="true"><span class="skeleton text-transparent text-lg font-bold leading-none tabular-nums">0</span><span class="skeleton text-transparent text-[10px] font-medium uppercase tracking-wider">Expiring</span></div>
+    </div>
+    <div x-show="$store.certs.view === 'client'" id="clientStatsCards"
+         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start xl:min-w-0 xl:[&>div]:flex-initial xl:[&>div]:min-w-0 [&>div>span:last-child]:truncate"
          aria-label="Client certificate counts">
-        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" id="totalCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
-        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" id="activeCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Active</span></div>
-        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" id="revokedCount">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" id="totalCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" id="activeCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Active</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" id="revokedCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
     </div>
     <!-- The ACME view has counters too, so the cluster keeps its shape on all
          three views (#1423). Filled from the store by acmeCertificates(). Three,
          like the other two strips: a fourth (Expired) did not fit beside the
          toggle at 1440 px and wrapped the strip onto a second line. Expired
          certificates keep their badge in the table. -->
-    <div x-show="$store.certs.view === 'acme'" x-cloak id="acmeStatsCards"
-         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start"
+    <div x-show="$store.certs.view === 'acme'" id="acmeStatsCards"
+         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start xl:min-w-0 xl:[&>div]:flex-initial xl:[&>div]:min-w-0 [&>div>span:last-child]:truncate"
          aria-label="ACME certificate counts">
-        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" x-text="$store.certs.acme.total">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
-        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" x-text="$store.certs.acme.valid">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Valid</span></div>
-        <div class="flex items-baseline gap-1.5 px-3.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" x-text="$store.certs.acme.revoked">0</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" x-text="$store.certs.acme.total">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" x-text="$store.certs.acme.valid">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Valid</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" x-text="$store.certs.acme.revoked">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
     </div>
 </div>

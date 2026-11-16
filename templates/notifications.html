@@ -38,7 +38,9 @@
                 <!-- groups injected by JS -->
             </div>
         </div>
-        <p class="mt-3 text-xs text-muted text-center">
+        <!-- Invisible until the list or the failure is drawn: under an empty
+             list it sat higher and was pushed down when the groups arrived. -->
+        <p id="notifNote" class="invisible mt-3 text-xs text-muted text-center">
             <i class="fas fa-circle-info mr-1"></i>Notifications are derived from certificate expiry. Snoozes are stored in this browser only.
         </p>
     </div>
@@ -140,6 +142,7 @@
             var content = document.getElementById('notifContent');
             var summary = document.getElementById('notifSummary');
             content.setAttribute('aria-busy', 'false');
+            document.getElementById('notifNote').classList.remove('invisible');
 
             var all = N.deriveWarnings(_certs);
             var active = all.filter(function(w) { return !N.isSnoozed(w.domain); });
@@ -206,6 +209,7 @@
                     // sighted users and assistive tech.
                     var node = document.getElementById('notifContent');
                     node.setAttribute('aria-busy', 'false');
+                    document.getElementById('notifNote').classList.remove('invisible');
                     document.getElementById('notifSummary').innerHTML =
                         '<i class="fas fa-triangle-exclamation text-gray-400 mr-2"></i>Could not load certificates.';
                     node.innerHTML =

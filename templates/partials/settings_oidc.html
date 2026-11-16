@@ -2,7 +2,7 @@
         <div x-show="tab === 'oidc'" x-cloak
              id="settings-panel-oidc" role="tabpanel" aria-labelledby="settings-tab-oidc" tabindex="0"
              x-data="oidcSettings()" x-init="load()"
-             class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
+             class="bg-surface border-border rounded-lg shadow-sm border p-6">
 
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-foreground flex items-center">
@@ -16,7 +16,7 @@
 
             <p class="text-muted text-sm mb-6">
                 Authenticate users against an external OpenID Connect provider (Keycloak, Authentik, Okta, Google Workspace, ...). Local authentication and API keys keep working alongside SSO. Configure the redirect URI in your provider to
-                <code class="font-mono px-1 py-0.5 rounded bg-surface-2" x-text="redirectUriHint"></code>.
+                <code class="font-mono px-1 py-0.5 rounded bg-surface-2 break-all" x-text="redirectUriHint"></code>.
             </p>
 
             <template x-if="loading">

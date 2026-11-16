@@ -342,7 +342,11 @@
                          their own APIs from the modal, so the page-wide "Save
                          Settings" bar had nothing to save on that tab and only
                          re-posted the other tabs' legacy payload. -->
-                    <div id="formControls" x-show="['dns','general','storage'].includes(tab)">
+                    <!-- x-cloak like the tab panels around it: until Alpine starts
+                         every panel is hidden and this bar was not, so on a slow
+                         link it sat at the top of an empty form and was then
+                         pushed down, or hidden, when the tab appeared. -->
+                    <div id="formControls" x-show="['dns','general','storage'].includes(tab)" x-cloak>
                         <!-- DNS Provider Test Connection -->
                         <div id="testConnectionResult" class="mt-4 hidden">
                             <div class="p-4 rounded-md text-sm" id="testConnectionMessage">

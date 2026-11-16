@@ -10,6 +10,13 @@
     <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
     <link rel="manifest" href="/static/manifest.json">
+    <!-- The icon font is asked for at once rather than when the first icon is
+         laid out. fontawesome.min.css declares it `font-display: block`, so
+         until it arrives every icon is laid out with fallback metrics: on a
+         cold cache the navigation's icon rail grew 37 px wide a moment after
+         the first paint, on every page. `crossorigin` is required for a font
+         preload even from the same origin, or the browser fetches it twice. -->
+    <link rel="preload" href="/static/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
     <style>
@@ -418,7 +425,12 @@
     <script defer src="/static/js/shortcuts.js"></script>
     <script defer src="/static/js/setup-wizard.js"></script>
 
-    <main id="main-content" tabindex="-1" class="page-enter">
+    <!-- At least a screen tall, so the footer starts below the fold. Every page
+         fills in after its first paint (a list, a report, a settings tab), and
+         while it was still short the footer sat in the middle of the screen and
+         was then pushed down by what arrived: a line of text jumping on every
+         page load. Below the fold it is never seen moving. -->
+    <main id="main-content" tabindex="-1" class="page-enter min-h-screen">
     {% block content %}{% endblock %}
     </main>
 

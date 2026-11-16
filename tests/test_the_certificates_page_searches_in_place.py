@@ -34,7 +34,7 @@ const elements = {
   createCertForm: {addEventListener() {}}, certificatesList: list, certificateSearch: searchBox,
   certificatePageSummary: {textContent: ''}, certificatePreviousPage: {}, certificateNextPage: {}
 };
-const head = {style: {}};
+const head = {style: {}, classList: {remove() {}}};
 global.document = {addEventListener() {}, getElementById(id) { return elements[id] || null; },
   querySelector(selector) { return selector === '#certificatesTable thead' ? head : null; },
   querySelectorAll() { return []; }};

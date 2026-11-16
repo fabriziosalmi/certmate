@@ -32,6 +32,11 @@
         only — this does not change certificate issuance.
     </p>
 
+    <!-- The report body is drawn in one go from one response, and stays
+         `invisible` until then ("Generating…" above says it is coming). Shown
+         empty, its headings and tables were pushed down twice as the summary
+         and the breakdowns filled in. -->
+    <div id="reportBody" class="invisible">
     <!-- Summary -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" id="reportSummary"></div>
 
@@ -64,6 +69,7 @@
             <tbody id="reportAssets"></tbody>
         </table>
     </div>
+    </div><!-- /#reportBody -->
 </div>
 
 <script nonce="{{ csp_nonce }}">
@@ -122,6 +128,7 @@
                     + '<td class="px-3 py-1.5 text-xs text-muted">' + esc(a.detail || '') + '</td>'
                     + '</tr>';
             }).join('') : '<tr><td colspan="6" class="px-3 py-6 text-center text-muted">Inventory is empty.</td></tr>';
+            el('reportBody').classList.remove('invisible');
         })
         .catch(function (err) { el('reportMeta').textContent = 'Failed to load report (' + esc(err) + ').'; });
 }());

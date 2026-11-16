@@ -567,3 +567,18 @@ button[class*="bg-red-6"]:active {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── DNS provider cards: one glyph box in every state ────────── */
+/* provider-icons.js swaps each card's FontAwesome glyph (an inline <i>, a    */
+/* 28 px line of text-lg) for a 24 px brand logo or monogram once the page    */
+/* has loaded, and a font glyph's line box also depends on when its font      */
+/* arrives. The card changed height either way and the rows under it moved   */
+/* 7 px. Whatever sits first in the card is now the same 24 px block.         */
+#dns-provider-section label > div > .text-center > :first-child {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0 auto 0.25rem;
+}

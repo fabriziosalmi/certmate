@@ -629,11 +629,12 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
                 currentRole = (me && (me.role || (me.user && me.user.role))) || 'viewer';
-                if (roleAtLeast('admin')) {
-                    el('configPanel').classList.remove('hidden');
-                    el('scanNowBtn').classList.remove('hidden');
-                    loadConfig();
-                }
+                // The template already drew both for an admin (inventory.html);
+                // this is the check, and it hides as well as shows.
+                var admin = roleAtLeast('admin');
+                el('configPanel').classList.toggle('hidden', !admin);
+                el('scanNowBtn').classList.toggle('hidden', !admin);
+                if (admin) { loadConfig(); }
                 // Re-render so operator+ get the Adopt buttons now the role is known.
                 if (records.length) { render(); }
             })

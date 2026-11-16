@@ -141,6 +141,16 @@
     function ccRenderCertificates() {
         var tbody = document.getElementById('certTableBody');
         if (!tbody) return;
+        // The table, its header and its pager wait for the first list, while
+        // the loading line says so (see _client_certs.html).
+        var loading = document.getElementById('clientCertificatesLoading');
+        if (loading) loading.classList.add('hidden');
+        var table = document.getElementById('clientCertificatesTable');
+        if (table) table.classList.remove('hidden');
+        var head = document.getElementById('clientCertificatesHead');
+        if (head) head.classList.remove('invisible');
+        var pager = document.getElementById('clientCertificatePager');
+        if (pager) pager.classList.remove('invisible');
         // The chips filter what was loaded, before pagination; free-text CN/email
         // search lives in the global ⌘K palette.
         var filtered = ccApplySort(certificatesData.filter(function (cert) {
