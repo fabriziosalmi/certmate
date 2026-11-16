@@ -69,7 +69,7 @@
     --color-surface:      0  0% 100%;  /* card / panel    (was bg-white)  */
     --color-surface-2:  220 14% 96%;   /* elevated / sunken              */
     --color-foreground: 222 47% 11%;   /* primary text    (~gray-900)     */
-    --color-muted:      220  9% 46%;   /* secondary text  (~gray-500)     */
+    --color-muted:      220  9% 44%;   /* secondary text: 46% (gray-500) measured 4.39:1 on surface-2, under AA's 4.5; 44% is 4.75 there and 5.2 on white */
     --color-label:      217 19% 27%;   /* label / mid body (~gray-700)    */
     --color-border:     220 13% 91%;   /* hairlines       (~gray-200)     */
     --color-input:        0  0% 100%;  /* form field fill (was bg-white)  */
@@ -581,4 +581,19 @@ button[class*="bg-red-6"]:active {
   width: 1.5rem;
   height: 1.5rem;
   margin: 0 auto 0.25rem;
+}
+
+/* ── Brand blue as text, in dark mode ─────────────────────────── */
+/* `primary` is one fixed blue (tailwind.config.js) for buttons and text alike.  */
+/* As text on the dark surfaces it measured 2.5 to 2.7:1, under AA's 4.5: links  */
+/* on the help page, the active settings menu item, the pressed status chips.    */
+/* Here it reads as the accent, blue-400 in dark (4.5:1 and more on every dark   */
+/* surface). In the utilities layer, so a hover variant written on the element   */
+/* (hover:text-white on a filled hover) still comes after it and wins.          */
+@layer utilities {
+  .dark .text-primary,
+  .dark .hover\:text-primary:hover,
+  .dark .aria-pressed\:text-primary[aria-pressed="true"] {
+    color: hsl(var(--color-accent));
+  }
 }
