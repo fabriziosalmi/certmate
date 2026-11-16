@@ -16,8 +16,8 @@ Two witnesses, because one is not enough. The browser's own layout-shift entries
 (what Core Web Vitals call CLS) did not report the DNS settings cards moving
 20 px, which a screen recording shows plainly. So a sampler also records, frame
 by frame, where every element a person reads or clicks is laid out (navigation,
-headings, table headers, buttons, labels, inputs, the Deployment chips, the
-footer), and an element that was on screen at one place and is later at another
+headings, paragraphs, table headers, buttons, labels, inputs, the Deployment
+chips, the footer), and an element that was on screen at one place and is later at another
 moved. Layout positions, not painted ones: the deliberate entrance animations
 (`page-enter`, `row-enter`) move by transform and are not layout.
 
@@ -64,7 +64,7 @@ SAMPLER = r"""
     for (const e of list.getEntries()) if (e.name === 'first-paint') log.firstPaint = e.startTime;
   }).observe({type: 'paint', buffered: true});
   const WATCHED = 'nav, nav a, nav button, footer, main h1, main h2, main h3, main th, main label, '
-    + 'main button, main input, main select, main table, [data-deployment-domain]';
+    + 'main button, main input, main select, main table, main p, [data-deployment-domain]';
   const last = new Map();
   log.serverListSeen = false;
   function sample() {
