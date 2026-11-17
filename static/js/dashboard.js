@@ -2307,6 +2307,10 @@
                 var grouped = {};
                 list.forEach(function (account) {
                     if (!account || !account.provider || !account.account_id) return;
+                    // Only accounts that can issue are offered (#1469). A fresh
+                    // instance carries an empty "default" account per provider;
+                    // picking it sent a certificate to a blank credential.
+                    if (account.configured === false) return;
                     (grouped[account.provider] = grouped[account.provider] || []).push(account);
                 });
                 providerAccounts = grouped;

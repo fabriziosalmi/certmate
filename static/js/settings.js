@@ -658,18 +658,50 @@
                 });
             }
 
-            // Update provider status indicators
-            updateProviderStatusIndicators();
-
-            // Update account lists in DNS config sections
-            updateAccountLists();
-
-            addDebugLog('DNS provider configurations loaded', 'info');
-
         } catch (error) {
             addDebugLog('Failed to load DNS providers: ' + error.message, 'error');
             console.error('Error loading DNS providers:', error);
         }
+
+        // Whether an account can issue is the server's call (#1469): it checks
+        // the provider's own required fields, as issuance does. Counting the
+        // accounts here called every provider of a fresh instance "Configured":
+        // the first-run settings carry an empty "default" account for sixteen
+        // of them.
+        return fetch('/api/dns/accounts', { headers: API_HEADERS })
+            .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
+            })
+            .then(applyCredentialVerdict)
+            .catch(function (error) {
+                addDebugLog('Could not ask which DNS accounts have credentials: ' + error.message, 'error');
+                Object.keys(dnsProviders).forEach(function (provider) { dnsProviders[provider].configured = null; });
+            })
+            .then(function () {
+                updateProviderStatusIndicators();
+                updateAccountLists();
+                addDebugLog('DNS provider configurations loaded', 'info');
+            });
+    }
+
+    // Each account gets `hasCredentials` from the server's list, and a provider
+    // is configured when one of its accounts has them.
+    function applyCredentialVerdict(list) {
+        var verdict = {};
+        (Array.isArray(list) ? list : []).forEach(function (account) {
+            if (!account || !account.provider) return;
+            (verdict[account.provider] = verdict[account.provider] || {})[account.account_id] = account.configured === true;
+        });
+        Object.keys(dnsProviders).forEach(function (provider) {
+            var known = verdict[provider] || {};
+            dnsProviders[provider].accounts.forEach(function (account) {
+                account.hasCredentials = known[account.id] === true;
+            });
+            dnsProviders[provider].configured = dnsProviders[provider].accounts.some(function (account) {
+                return account.hasCredentials;
+            });
+        });
     }
 
     // =============================================
@@ -698,9 +730,19 @@
                     statusEl.textContent = 'Configured';
                     statusEl.className = 'text-xs text-success-fg mt-1 whitespace-nowrap';
 
+                    // The accounts that can issue, not every account on file.
                     if (accountsEl && countEl) {
-                        countEl.textContent = providerData.accounts.length;
+                        countEl.textContent = providerData.accounts.filter(function (account) {
+                            return account.hasCredentials;
+                        }).length;
                         accountsEl.classList.remove('invisible');
+                    }
+                } else if (providerData && providerData.configured === null) {
+                    // The server could not be asked: say so rather than guess.
+                    statusEl.textContent = 'Status unknown';
+                    statusEl.className = 'text-xs text-muted mt-1 whitespace-nowrap';
+                    if (accountsEl) {
+                        accountsEl.classList.add('invisible');
                     }
                 } else {
                     statusEl.textContent = 'Not configured';
@@ -1602,12 +1644,19 @@
         var descHtml = account.description ? '<p class="text-xs text-muted mt-1">' + safeDesc + '</p>' : '';
         var defaultBadge = isDefault ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-info-surface text-blue-800 dark:text-blue-400"><i class="fas fa-star mr-1"></i>Default</span>' : '';
 
+        // An account the server says cannot issue (#1469): the empty "default"
+        // a fresh instance carries, or one missing a required field.
+        var noCredentialsBadge = account.hasCredentials === false
+            ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-warning-surface text-warning-fg">No credentials</span>'
+            : '';
+
         card.innerHTML =
             '<div class="flex items-center justify-between">' +
             '<div class="flex-1">' +
-            '<div class="flex items-center space-x-2">' +
+            // Wraps: with both badges the row was 3 px wider than a 360 px phone.
+            '<div class="flex flex-wrap items-center gap-2">' +
             '<h5 class="text-sm font-medium text-foreground">' + safeName + '</h5>' +
-            defaultBadge +
+            defaultBadge + noCredentialsBadge +
             '</div>' +
             descHtml +
             '<div class="text-xs text-muted mt-1">ID: ' + safeId + '</div>' +
