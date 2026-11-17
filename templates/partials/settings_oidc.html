@@ -1,7 +1,7 @@
 <!-- TAB: OIDC / SSO -->
         <div x-show="tab === 'oidc'" x-cloak
              id="settings-panel-oidc" role="tabpanel" aria-labelledby="settings-tab-oidc" tabindex="0"
-             x-data="oidcSettings()" x-init="load()"
+             x-data="oidcSettings()" x-init="load()" data-unsaved-scope="single sign-on"
              class="bg-surface border-border rounded-lg shadow-sm border p-6">
 
             <div class="flex items-center justify-between mb-4">
@@ -235,7 +235,7 @@
 
                     <!-- Save button -->
                     <div class="flex justify-end pt-2 border-t border-border">
-                        <button type="button" @click="save()" :disabled="saving"
+                        <button type="button" @click="save()" :disabled="saving" data-saves
                                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-md disabled:opacity-50">
                             <i class="fas mr-1" :class="saving ? 'fa-spinner fa-spin' : 'fa-save'"></i>
                             Save SSO settings

@@ -24,7 +24,7 @@
             </template>
 
             <!-- Options -->
-            <div class="mb-6 p-4 bg-surface-2 rounded-lg" x-show="!loading">
+            <div class="mb-6 p-4 bg-surface-2 rounded-lg" x-show="!loading" data-unsaved-scope="ACME server">
                 <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-sliders-h mr-1"></i> Options</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
@@ -55,7 +55,7 @@
                            class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground font-mono">
                 </div>
                 <div class="mt-4 flex justify-end">
-                    <button type="button" @click="save()" :disabled="saving" class="btn btn-primary" id="acmeSave">
+                    <button type="button" @click="save()" :disabled="saving" class="btn btn-primary" id="acmeSave" data-saves>
                         <i class="fas fa-save mr-1"></i> Save
                     </button>
                 </div>
