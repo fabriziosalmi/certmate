@@ -962,12 +962,9 @@
                     '<span class="text-label"><a href="/settings" class="text-info-fg font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
                     '<span class="text-label">Create your first certificate with the <strong>Create Certificate</strong> button below</span></li>' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
-                    '<span class="text-label">Enable <a href="/settings#users" class="text-info-fg font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
+                    // No "enable authentication" step: setup turns local login
+                    // on before this page can be reached (UX audit, 2026-11-17).
                     '</ol>' +
-                    '<div class="bg-warning-surface border border-warning-line rounded-lg p-3 mb-6">' +
-                    '<p class="text-xs text-warning-strong"><i class="fas fa-shield-alt mr-1"></i><strong>Security:</strong> Authentication is disabled by default. Enable it before exposing CertMate to the internet.</p>' +
-                    '</div>' +
                     '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
@@ -4341,7 +4338,21 @@
         });
     }
 
+    // Force renew asks first (UX audit, 2026-11-17): it was one click from the
+    // row, the menu and the detail panel, and it skips the due check, counts
+    // against the CA's rate limits and, on a paid CA, can cost an issuance.
     function renewCertificate(domain, force) {
+        if (force !== true) return startRenewal(domain, false);
+        return CertMate.confirm(
+            'Renew ' + domain + ' now, although it is not due? This skips the due check and counts ' +
+            'against the CA\'s rate limits; on a paid CA it can cost an issuance.',
+            'Force renew', { confirmText: 'Force renew', danger: true }
+        ).then(function (confirmed) {
+            if (confirmed) startRenewal(domain, true);
+        });
+    }
+
+    function startRenewal(domain, force) {
         force = force === true;
         var progressInterval = showLoadingModal(
             (force ? 'Force Renewing Certificate for ' : 'Renewing Certificate for ') + domain,

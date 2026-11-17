@@ -105,10 +105,18 @@
                                 </label>
                                 <input type="password" id="pfx_password" name="pfx_password"
                                        autocomplete="new-password"
-                                       placeholder="Leave blank to disable / keep current"
+                                       placeholder="Leave blank to keep the current password"
+                                       aria-describedby="pfx_password_help pfx_password_state"
                                        class="w-72 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
-                                <p class="mt-1 text-xs text-muted">
-                                    When set, each certificate is also written as an encrypted <code class="text-xs">cert.pfx</code> (PKCS#12) using this password, downloadable for Windows hosts. Leave blank to disable. Stored like other secrets and never shown again after saving.
+                                <!-- A line's height from the first paint: filled once the settings load,
+                                     and an empty one would push the rest down then. -->
+                                <p id="pfx_password_state" class="mt-1 text-xs text-label">&nbsp;</p>
+                                <label class="mt-1 flex items-center gap-2 text-xs text-label">
+                                    <input type="checkbox" id="pfx_password_clear" class="rounded border-border">
+                                    Remove the saved password and stop writing <code class="text-xs">cert.pfx</code>
+                                </label>
+                                <p id="pfx_password_help" class="mt-1 text-xs text-muted">
+                                    When set, each certificate is also written as an encrypted <code class="text-xs">cert.pfx</code> (PKCS#12) using this password, downloadable for Windows hosts. A blank field keeps the current password; to turn the export off, tick the box above and save. Stored like other secrets and never shown again after saving.
                                 </p>
                             </div>
 

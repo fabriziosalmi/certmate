@@ -280,7 +280,12 @@
             // empty would be treated the same way, but omitting it keeps the
             // payload clean.
             var pfxPasswordField = document.getElementById('pfx_password');
-            if (pfxPasswordField && pfxPasswordField.value) {
+            var pfxClear = document.getElementById('pfx_password_clear');
+            if (pfxClear && pfxClear.checked) {
+                // null, not '': a blank secret means "keep" on the server, so
+                // the password could never be removed (UX audit, 2026-11-17).
+                settings.pfx_password = null;
+            } else if (pfxPasswordField && pfxPasswordField.value) {
                 settings.pfx_password = pfxPasswordField.value;
             }
 
@@ -865,6 +870,17 @@
                 var checkedProvider = document.querySelector('input[name="dns_provider"]:checked');
                 renderPropagationField(checkedProvider ? checkedProvider.value : data.dns_provider);
             }
+
+            // A saved PFX password comes back masked: say whether there is one,
+            // since the field itself is always shown empty.
+            var pfxState = document.getElementById('pfx_password_state');
+            if (pfxState) {
+                pfxState.textContent = data.pfx_password
+                    ? 'A password is saved: each certificate is also written as cert.pfx.'
+                    : 'No password saved: no cert.pfx is written.';
+            }
+            var pfxClearBox = document.getElementById('pfx_password_clear');
+            if (pfxClearBox) pfxClearBox.checked = false;
 
             if (data.renewal_threshold_days !== undefined) {
                 var thresholdField = document.getElementById('renewal_threshold_days');
