@@ -1565,7 +1565,8 @@
     // =============================================
 
     function deleteAccount(provider, accountId) {
-        CertMate.confirm('Are you sure you want to delete this account? This action cannot be undone.', 'Delete Account').then(function (confirmed) {
+        CertMate.confirm('Delete the ' + provider + ' account "' + accountId + '"? This cannot be undone. ' +
+            'An account that certificates renew through is refused, and the refusal names them.', 'Delete Account').then(function (confirmed) {
             if (!confirmed) return;
 
             addDebugLog('Deleting account ' + provider + ':' + accountId, 'info');
@@ -1577,7 +1578,11 @@
                 .then(function (response) {
                     if (!response.ok) {
                         return response.text().then(function (t) {
-                            throw new Error('HTTP ' + response.status + ': ' + t);
+                            // The server's sentence when it sent one: an account
+                            // in use answers 409 and names its certificates.
+                            var said = null;
+                            try { said = JSON.parse(t).error; } catch (_) { /* not JSON */ }
+                            throw new Error(said || ('HTTP ' + response.status + ': ' + t));
                         });
                     }
                     addDebugLog('Account deleted: ' + accountId, 'info');

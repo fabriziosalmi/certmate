@@ -5,7 +5,10 @@ Handles DNS provider configuration, account management, and provider-specific op
 
 import logging
 from functools import wraps
+from pathlib import Path
 
+from .constants import iter_cert_domain_dirs
+from .domain_entries import entry_domain
 from .secret_refs import SecretReferenceError, has_value, resolve
 from .structured_logging import scrub_log_value
 from .utils import _DNS_PROVIDER_CREDENTIALS
@@ -47,6 +50,71 @@ def refuses_a_taken_account(dns_manager_of):
                 if account_id and provider and dns_manager_of().account_with_credentials(provider, account_id):
                     return make_response(jsonify({'error': taken_account_message(provider, account_id),
                                                   'code': 'DNS_ACCOUNT_EXISTS'}), 409)
+            return view(*args, **kwargs)
+        return guarded
+    return decorator
+
+
+def certificates_using_dns_account(managers, provider, account_id):
+    """The domains whose certificates renew through *provider*'s account *account_id*.
+
+    What issuance records: ``dns_provider`` (or ``alias_dns_provider``) and
+    ``account_id``, which is empty when the provider's default was used, so a
+    certificate with no account recorded uses whichever account is the default.
+    """
+    service = managers.get('cert_service')
+    settings_manager = managers.get('settings')
+    if service is None or settings_manager is None:
+        return []
+    settings = settings_manager.load_settings()
+    default = (settings.get('default_accounts') or {}).get(provider) or 'default'
+    domains = {entry_domain(entry) for entry in settings.get('domains') or []}
+    cert_dir = getattr(managers.get('certificates'), 'cert_dir', None)
+    if cert_dir and Path(cert_dir).is_dir():
+        domains.update(path.name for path in iter_cert_domain_dirs(Path(cert_dir)))
+    using = []
+    for domain in sorted(d for d in domains if d):
+        metadata = service.read_metadata(domain) or {}
+        if provider not in (metadata.get('dns_provider'), metadata.get('alias_dns_provider')):
+            continue
+        if (metadata.get('account_id') or default) == account_id:
+            using.append(domain)
+    return using
+
+
+def _sole_owner(dns_manager, account_id):
+    owners = {a.get('provider') for a in dns_manager.list_accounts() if a.get('account_id') == account_id}
+    return owners.pop() if len(owners) == 1 else None
+
+
+def refuses_to_delete_an_account_in_use(managers_of):
+    """Decorator: deleting a DNS account that certificates renew through answers 409.
+
+    The account went with 200 and no warning, and the next renewal of those
+    certificates failed (UX audit, 2026-11-17). CA accounts already had this
+    guard. The refusal names the certificates, so the operator knows what to
+    move first. Returned rather than raised, for the same reasons as
+    refuses_a_taken_account. *managers_of* returns the managers dict.
+    """
+    def decorator(view):
+        @wraps(view)
+        def guarded(*args, **kwargs):
+            from flask import jsonify, make_response, request
+            if request.method == 'DELETE':
+                managers = managers_of()
+                account_id = kwargs.get('account_id')
+                provider = kwargs.get('provider') or _sole_owner(managers['dns'], account_id)
+                using = (certificates_using_dns_account(managers, provider, account_id)
+                         if provider and account_id else [])
+                if using:
+                    named = ', '.join(using[:5]) + (f' and {len(using) - 5} more' if len(using) > 5 else '')
+                    return make_response(jsonify({
+                        'error': (f"The {provider} account '{account_id}' is used by {len(using)} "
+                                  f"certificate(s): {named}. Move them to another account, or "
+                                  f"delete them, before deleting the account."),
+                        'code': 'DNS_ACCOUNT_IN_USE',
+                        'certificates': using,
+                    }), 409)
             return view(*args, **kwargs)
         return guarded
     return decorator

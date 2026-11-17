@@ -10,7 +10,7 @@ from modules.core.request_fields import json_booleans
 from modules.core.constants import iter_cert_domain_dirs
 from modules.core.utils import validate_email
 from modules.core.domain_entries import entry_domain
-from modules.core.dns_providers import refuses_a_taken_account
+from modules.core.dns_providers import refuses_a_taken_account, refuses_to_delete_an_account_in_use
 
 logger = logging.getLogger(__name__)
 
@@ -816,6 +816,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/api/web/settings/accounts/<string:account_id>',
                methods=['DELETE', 'PUT'])
     @auth_manager.require_role('admin')
+    @refuses_to_delete_an_account_in_use(lambda: managers)
     def api_dns_account_detail(account_id, provider=None):
         """Route for updating or deleting a DNS provider account"""
         provider = _provider_of_account(dns_manager, account_id, provider)
