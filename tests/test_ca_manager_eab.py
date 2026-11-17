@@ -18,6 +18,9 @@ secret-name pattern (masked on GET, blank-on-save preserves the
 on-disk value).
 """
 
+import os
+import stat
+
 import pytest
 
 from modules.core.ca_manager import CAManager
@@ -29,6 +32,25 @@ from modules.core.settings import (
 )
 
 pytestmark = [pytest.mark.unit]
+
+
+@pytest.fixture
+def temp_files(tmp_path, monkeypatch):
+    """The caller's list of files to remove; the EAB file lands under tmp_path."""
+    monkeypatch.chdir(tmp_path)
+    files = []
+    yield files
+    for path in files:
+        if os.path.exists(path):
+            os.unlink(path)
+
+
+def eab_config_of(cmd, temp_files):
+    """The EAB pair certbot will read: the -c file, which the caller owns."""
+    path = cmd[cmd.index('-c') + 1]
+    assert path in temp_files
+    with open(path, encoding='utf-8') as handle:
+        return dict(line.split(' = ', 1) for line in handle.read().splitlines())
 
 
 @pytest.fixture
@@ -90,7 +112,7 @@ def test_get_eab_credentials_missing_raises(ca_manager):
         ca_manager.get_eab_credentials('zerossl', {'email': 'a@b.it'})
 
 
-def test_build_certbot_command_emits_eab_flags_from_ui_config(ca_manager):
+def test_build_certbot_command_emits_eab_flags_from_ui_config(ca_manager, temp_files):
     cmd, _env = ca_manager.build_certbot_command(
         domain='example.com',
         email='admin@example.com',
@@ -98,12 +120,12 @@ def test_build_certbot_command_emits_eab_flags_from_ui_config(ca_manager):
         dns_provider='cloudflare',
         dns_config={},
         account_config={'eab_kid': 'ui-kid', 'eab_hmac': 'ui-hmac'},
+        temp_files=temp_files,
     )
-    assert '--eab-kid' in cmd and cmd[cmd.index('--eab-kid') + 1] == 'ui-kid'
-    assert '--eab-hmac-key' in cmd and cmd[cmd.index('--eab-hmac-key') + 1] == 'ui-hmac'
+    assert eab_config_of(cmd, temp_files) == {'eab-kid': 'ui-kid', 'eab-hmac-key': 'ui-hmac'}
 
 
-def test_private_ca_optional_eab_reaches_certbot(ca_manager):
+def test_private_ca_optional_eab_reaches_certbot(ca_manager, temp_files):
     # The Private CA panel offers optional EAB fields ("if required by
     # your CA") — e.g. a public EAB-enforcing CA like Actalis configured
     # through the generic entry. Those credentials were collected and
@@ -120,9 +142,9 @@ def test_private_ca_optional_eab_reaches_certbot(ca_manager):
             'eab_kid': 'pc-kid',
             'eab_hmac': 'pc-hmac',
         },
+        temp_files=temp_files,
     )
-    assert '--eab-kid' in cmd and cmd[cmd.index('--eab-kid') + 1] == 'pc-kid'
-    assert '--eab-hmac-key' in cmd and cmd[cmd.index('--eab-hmac-key') + 1] == 'pc-hmac'
+    assert eab_config_of(cmd, temp_files) == {'eab-kid': 'pc-kid', 'eab-hmac-key': 'pc-hmac'}
     assert '--server' in cmd
     assert cmd[cmd.index('--server') + 1] == 'https://acme-api.actalis.com/acme/directory'
 
@@ -138,6 +160,44 @@ def test_private_ca_without_eab_omits_flags(ca_manager):
     )
     assert '--eab-kid' not in cmd
     assert '--eab-hmac-key' not in cmd
+    assert '-c' not in cmd
+
+
+def test_the_eab_pair_is_never_on_the_command_line(ca_manager, temp_files):
+    """#1461: certbot logs its command line ("Arguments: [...]") to
+    <cert>/logs/letsencrypt.log on every run. The pair goes in a 0600 config
+    file, which certbot reads and does not log; the caller owns the file."""
+    cmd, _env = ca_manager.build_certbot_command(
+        domain='example.com', email='admin@example.com', ca_provider='zerossl',
+        dns_provider='cloudflare', dns_config={},
+        account_config={'eab_kid': 'kid-on-disk', 'eab_hmac': 'hmac-on-disk'},
+        temp_files=temp_files,
+    )
+    assert not [part for part in cmd if 'kid-on-disk' in part or 'hmac-on-disk' in part], cmd
+    assert '--eab-kid' not in cmd and '--eab-hmac-key' not in cmd
+    path = cmd[cmd.index('-c') + 1]
+    assert temp_files == [path]
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+def test_a_builder_with_no_owner_for_the_file_refuses(ca_manager):
+    """A credentials file nobody removes is a key left on disk."""
+    with pytest.raises(ValueError, match='temp_files'):
+        ca_manager.build_certbot_command(
+            domain='example.com', email='admin@example.com', ca_provider='zerossl',
+            dns_provider='cloudflare', dns_config={},
+            account_config={'eab_kid': 'k', 'eab_hmac': 'h'})
+
+
+def test_a_line_break_in_a_credential_cannot_add_a_setting(ca_manager, temp_files):
+    """The file is certbot config: a value with a newline would be a second key."""
+    with pytest.raises(ValueError, match='line break'):
+        ca_manager.build_certbot_command(
+            domain='example.com', email='admin@example.com', ca_provider='zerossl',
+            dns_provider='cloudflare', dns_config={},
+            account_config={'eab_kid': 'k', 'eab_hmac': 'h\nserver = https://evil.example/dir'},
+            temp_files=temp_files)
+    assert temp_files == []
 
 
 def test_non_eab_public_ca_ignores_stray_eab_fields(ca_manager):

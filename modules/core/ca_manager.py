@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 from .domain_paths import certificate_dir
 from .secret_refs import SecretReferenceError, resolve_field
-from .utils import is_ip_identifier
+from .utils import create_eab_config, is_ip_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -465,7 +465,8 @@ class CAManager:
                             key_size: Optional[int] = None,
                             elliptic_curve: Optional[str] = None,
                             acme_profile: str | None = None,
-                            identifier: str | None = None) -> tuple:
+                            identifier: str | None = None,
+                            temp_files: list | None = None) -> tuple:
         """Build certbot command with CA-specific parameters.
 
         Args:
@@ -491,6 +492,12 @@ class CAManager:
                 come back as another kind of certificate. The renewal
                 configuration is softened to preferred afterwards
                 (modules/core/acme_profiles.py).
+            temp_files: The list the caller removes when certbot is done. A
+                CA account with EAB needs one: the pair goes to certbot in a
+                0600 config file (``-c``), never on the command line, because
+                certbot writes its whole command line to its own log at the
+                start of every run (#1461). The file is appended here as soon
+                as it exists.
 
         Returns:
             Tuple of (certbot_cmd list, extra_env dict) — extra_env contains
@@ -547,13 +554,20 @@ class CAManager:
             ])
 
         # Add EAB credentials if required — or optionally configured for
-        # a private CA whose ACME server enforces account binding.
+        # a private CA whose ACME server enforces account binding. In a config
+        # file, not on argv: certbot logs its argv ("Arguments: [...]") to
+        # <cert>/logs/letsencrypt.log on every run, failed ones included, and
+        # the key piled up there and in every rotated copy (#1461). The file's
+        # contents are never logged; certbot reads both values from it.
         eab_key_id, eab_hmac_key = self.get_eab_credentials(ca_provider, account_config)
         if eab_key_id and eab_hmac_key:
-            certbot_cmd.extend([
-                '--eab-kid', eab_key_id,
-                '--eab-hmac-key', eab_hmac_key
-            ])
+            if temp_files is None:
+                raise ValueError(
+                    "build_certbot_command needs temp_files for a CA account with EAB: "
+                    "the credentials file it writes must have an owner that removes it")
+            eab_config = create_eab_config(eab_key_id, eab_hmac_key)
+            temp_files.append(str(eab_config))
+            certbot_cmd.extend(['-c', str(eab_config)])
 
         # Add CA bundle for private CAs (pass via extra_env, not os.environ)
         if ca_provider == 'private_ca':

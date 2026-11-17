@@ -9,10 +9,10 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-# certbot takes the EAB key of a CA account only on the command line, so the
-# value is in the command this module runs and logs. The flags whose next
-# argument is a credential or an address; one list, used by every log line
-# that prints a command.
+# The flags whose next argument is a credential or an address; one list, used
+# by every log line that prints a command. CertMate no longer puts the EAB pair
+# on certbot's command line (#1461: certbot logs its own command line), so for
+# those two flags this is a second line of defence for any command that does.
 _SENSITIVE_FLAGS = frozenset({'--eab-kid', '--eab-hmac-key', '--email'})
 
 

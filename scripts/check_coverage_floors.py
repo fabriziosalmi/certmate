@@ -141,6 +141,9 @@ FLOORS = {
     'modules/core/audit_verify.py': 75,
     'modules/core/auth.py': 85,
     'modules/core/ca_manager.py': 70,
+    # 90 from a measured 91% (#1461): the masking pass over certbot's logs,
+    # run against logs the real certbot wrote.
+    'modules/core/certbot_logs.py': 90,
     'modules/core/cache.py': 60,
     'modules/core/caa.py': 95,
     'modules/core/cert_adopt.py': 95,

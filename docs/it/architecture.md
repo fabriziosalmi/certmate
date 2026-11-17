@@ -1,6 +1,6 @@
 # Architettura di CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM cdb5c55f49cdf777 -->
+<!-- CERTMATE-TRANSLATED-FROM 017ac1230cadbab9 -->
 
 Questo documento descrive l'architettura completa di CertMate — sia il sistema principale per i certificati server che il sottosistema per i certificati client.
 
@@ -153,7 +153,7 @@ CertMateApp (main application)
      --email {email}
      --{dns_plugin} --{dns_plugin}-credentials {cred_file}
      --{dns_plugin}-propagation-seconds {timeout}
-     --eab-kid/--eab-hmac-key (if required)
+     -c {eab_config_file} (if EAB is required: a 0600 file, never on the command line)
      -d {domain}
 7. Create temporary DNS credentials file (600 permissions)
 8. Execute certbot (30-minute timeout)

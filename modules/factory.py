@@ -2030,6 +2030,9 @@ def create_app(test_config=None):
     _flask_app = app
     setup_scheduler(container)
     reconcile_served_copies(container)
+    # EAB keys certbot logged before #1461, masked once, off the startup path.
+    from .core.certbot_logs import mask_in_background
+    container.certbot_log_mask = mask_in_background(container.cert_dir, container.data_dir)
     check_issuance_readiness(container)
     warn_if_multiple_workers()
     _stop_background_work_at_exit(container)
