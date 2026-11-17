@@ -945,7 +945,13 @@ class FileOperations:
             # List unified backups (only format)
             unified_backup_dir = self.backup_dir / "unified"
             if unified_backup_dir.exists():
-                for backup_file in sorted(unified_backup_dir.glob("backup_*.zip*")):
+                # Newest first: the settings page shows the first eight, and
+                # oldest first hid the backup just made behind "Show more" once
+                # automatic backups had piled up (UX audit, 2026-11-17: 28 after
+                # an hour). The name starts with the UTC time it was made
+                # (%Y%m%d_%H%M%S_%f), which a copy or a restore does not change
+                # the way it changes the file's mtime.
+                for backup_file in sorted(unified_backup_dir.glob("backup_*.zip*"), reverse=True):
                     try:
                         stat = backup_file.stat()
                         metadata = {"size": stat.st_size,
