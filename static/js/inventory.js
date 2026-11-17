@@ -139,7 +139,7 @@
         // Replaced on every endpoint it was seen on (#1044): kept in the history, and said so.
         if (r.superseded) {
             s += ' <span class="inline-block px-1.5 py-0.5 rounded text-xs bg-surface-2 text-muted" '
-                + 'title="Every endpoint this was seen on has since been seen serving a different certificate">superseded</span>';
+                + 'title="A newer certificate replaced it: every endpoint it was seen on now serves another, or CertMate renewed it">superseded</span>';
         }
         s += '</div>';
         if (sans) { s += '<div class="text-xs text-muted truncate max-w-xs">' + escapeHtml(sans) + escapeHtml(extra) + '</div>'; }

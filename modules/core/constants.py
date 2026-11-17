@@ -781,6 +781,14 @@ METADATA_SCHEMA_VERSION = 1
 #                                   record has `hint`, null until then. A new
 #                                   field, and a new case of an existing one
 #                                   (error_code was null for these), as 2.63.
+#                                   2.68, MINOR: GET /api/inventory lists the
+#                                   certificates CertMate holds, read from disk,
+#                                   as managed with source `issued` (or
+#                                   `imported`) and their managed_domain; they
+#                                   were there only when discovery had probed
+#                                   them. summary.by_source counts the two
+#                                   sources; a certificate renewed here is
+#                                   superseded by its successor.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -806,7 +814,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.67'
+API_CONTRACT_VERSION = '2.68'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

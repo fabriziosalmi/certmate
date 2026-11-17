@@ -833,6 +833,14 @@ def initialize_managers(container: AppContainer, app):
     expiry_watch = ExpiryWatch(settings_manager, certificate_manager,
                                cert_inventory, event_bus)
 
+    # The inventory counts the certificates CertMate holds, read from disk:
+    # its `issued` source was never written, so it showed "Managed 0" unless
+    # discovery probed them (decided 2026-11-17). Every created or renewed
+    # certificate is recorded; the rest once at startup, below.
+    from .core.inventory_held import HeldCertificatesInInventory
+    held_in_inventory = HeldCertificatesInInventory(cert_inventory, certificate_manager)
+    event_bus.add_listener(held_in_inventory.on_event)
+
     # Opt-in, and off until it is. docs/ca-providers.md offers the private CA
     # for air-gapped systems, so an instance nobody asked to reach the
     # internet must not reach it.
@@ -874,6 +882,7 @@ def initialize_managers(container: AppContainer, app):
         'domain_registration': domain_registration,
         'domain_health': domain_health,
         'expiry_watch': expiry_watch,
+        'inventory_held': held_in_inventory,
         # The ACME server (#476). Off until acme_server.enabled; its routes
         # answer 404 until then, and its database is created on first use.
         'acme_server': AcmeServer(settings_manager, container.data_dir),
@@ -2033,6 +2042,8 @@ def create_app(test_config=None):
     # EAB keys certbot logged before #1461, masked once, off the startup path.
     from .core.certbot_logs import mask_in_background
     container.certbot_log_mask = mask_in_background(container.cert_dir, container.data_dir)
+    held = container.managers.get('inventory_held')
+    container.inventory_held_sync = held.record_all_in_background() if held else None
     check_issuance_readiness(container)
     warn_if_multiple_workers()
     _stop_background_work_at_exit(container)

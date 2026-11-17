@@ -2405,12 +2405,19 @@ logs. Discovery is what fills the second half.
 Returns managed and discovered certificates with an expiry forecast. Filters:
 `?managed=true|false`, `?source=`, `?include_superseded=false`, and the usual paging.
 
+Since API contract **2.68** the certificates CertMate holds are in it whether or not
+discovery has probed them: each one is read from disk at startup and after every
+issuance and renewal, and recorded as managed, with source `issued` (or `imported`
+for an upload not renewed yet), its `managed_domain`, and no endpoint. Before 2.68
+they appeared only once a discovery sweep had probed their host.
+
 Since API contract **2.36** every certificate carries `superseded`, and the summary
 carries a `superseded` count. A certificate is superseded when **every endpoint it
 was seen on has since been seen serving a different certificate**: the old
 certificate of a host that now serves its renewal. One still served on any endpoint
-is never superseded, and neither is one with no endpoint (found in a Certificate
-Transparency log, or issued here and never probed). Nothing is deleted: the inventory
+is never superseded, and neither is one with no endpoint found in a Certificate
+Transparency log. A certificate CertMate holds and has renewed is superseded by its
+successor (since **2.68**). Nothing is deleted: the inventory
 stays a history, which is how a renewal that was never deployed is caught. By default
 the answer still lists every certificate, with the flag; `?include_superseded=false`
 leaves the superseded ones out of the list **and** of the summary, so the counts

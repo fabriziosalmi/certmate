@@ -144,6 +144,9 @@ FLOORS = {
     # 90 from a measured 91% (#1461): the masking pass over certbot's logs,
     # run against logs the real certbot wrote.
     'modules/core/certbot_logs.py': 90,
+    # 90 from a measured 90% (2026-11-17): the certificates CertMate holds,
+    # recorded in the inventory from disk.
+    'modules/core/inventory_held.py': 90,
     'modules/core/cache.py': 60,
     'modules/core/caa.py': 95,
     'modules/core/cert_adopt.py': 95,

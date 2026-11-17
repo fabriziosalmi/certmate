@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.67",
+ "contract_version": "2.68",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -2414,7 +2414,7 @@
      "bool"
     ],
     "certificates[].managed_domain": [
-     "null"
+     "str"
     ],
     "certificates[].not_after": [
      "str"
@@ -2472,6 +2472,12 @@
     ],
     "summary.by_source": [
      "dict"
+    ],
+    "summary.by_source.imported": [
+     "int"
+    ],
+    "summary.by_source.issued": [
+     "int"
     ],
     "summary.by_source.probed": [
      "int"
