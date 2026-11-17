@@ -213,3 +213,32 @@ def test_every_text_and_icon_control_reaches_wcag_contrast(open_page, path, sche
     icons = page.evaluate('() => __contrast.controls()')
     assert text == [], f'{path}, {scheme}: text under AA: {text[:8]}'
     assert icons == [], f'{path}, {scheme}: icon-only controls under 3:1: {icons[:8]}'
+
+
+# A dialog is closed when the page loads, so the check above never sees what is
+# inside one. The UI audit of 2026-11-17 measured the close button the modal
+# macro draws (templates/partials/_modal.html): text-gray-400 with no padding,
+# 2.54:1 in light and 3.45:1 in dark, a 10x24 px target; the activity detail's
+# was a bare glyph of 13x20 px.
+DIALOGS = [('/', 'curlModal'), ('/settings#dns', 'addAccountModal'), ('/settings#dns', 'editAccountModal'),
+           ('/settings#deploy', 'executionDetailModal'), ('/activity', 'activityDetailModal')]
+
+
+@pytest.mark.parametrize('scheme', ['light', 'dark'])
+@pytest.mark.parametrize('path, dialog', DIALOGS)
+def test_a_dialog_s_close_control_is_readable_and_big_enough(open_page, path, dialog, scheme):
+    page = open_page(path, scheme)
+    page.evaluate(f"""() => {{
+        const root = document.getElementById({dialog!r});
+        root.classList.remove('hidden');
+        root.classList.add('flex');
+    }}""")
+    page.wait_for_timeout(200)
+    close = page.locator(f'#{dialog} button[aria-label="Close"]')
+    assert close.count() == 1, f'{dialog}: no close button'
+    box = close.bounding_box()
+    ratio = page.evaluate(f"""() => __contrast.ratio(
+        document.querySelector('#{dialog} button[aria-label="Close"]').querySelector('i, svg'))""")
+    assert ratio >= 3, f'{path} {dialog}, {scheme}: close icon {ratio:.2f}:1'
+    # WCAG 2.5.8, target size (minimum): 24 by 24 CSS pixels.
+    assert box['width'] >= 24 and box['height'] >= 24, f'{dialog}: close target {box}'

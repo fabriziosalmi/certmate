@@ -7,8 +7,8 @@
         </div>
         <div class="flex items-center gap-2">
             <input type="search" x-model="filter" placeholder="Filter by name or EAB key" aria-label="Filter ACME certificates"
-                   class="px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
-            <button type="button" @click="load()" title="Refresh" class="btn btn-secondary"><i class="fas fa-sync-alt"></i></button>
+                   class="h-10 px-3 border border-border rounded-md text-sm bg-input text-foreground">
+            <button type="button" @click="load()" title="Refresh the ACME certificates" aria-label="Refresh ACME certificates" class="cm-icon-btn"><i class="fas fa-arrows-rotate" aria-hidden="true"></i></button>
         </div>
     </div>
 
@@ -17,7 +17,7 @@
     </template>
     <template x-if="empty">
         <div class="text-center py-10 px-6 text-muted text-sm" id="acmeEmpty">
-            <i class="fas fa-certificate text-2xl mb-2 block"></i>
+            <div class="mb-2"><i class="fas fa-certificate text-2xl" aria-hidden="true"></i></div>
             No certificate has been issued over ACME yet. An admin turns the ACME server on and creates
             EAB keys in <a href="/settings#acme" class="underline">Settings, ACME</a>; clients do the rest.
         </div>
