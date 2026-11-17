@@ -206,8 +206,14 @@ def register_acme_routes(app, managers):
         if not req.is_post_as_get:
             raise AcmeProblem('malformed', 'A certificate is read with POST-as-GET')
         found = server.owned(server.store.certificate(certificate_id), req.account, 'certificate')
-        # Decision G3 on #476: the leaf alone; the root is installed from /acme/root.
-        return Response(found['pem'], mimetype='application/pem-certificate-chain')
+        # The leaf, then the root (#1484). G3 on #476 sent the leaf alone, and
+        # certbot refuses a download of one certificate ("less than 2
+        # certificates in chain"). The root is redundant for a TLS server and
+        # allowed (RFC 8446 section 4.4.2); added here, at download, so what is
+        # stored is unchanged and a certificate issued before reads the same.
+        root = server.ca.root_pem()
+        chain = found['pem'] if root is None else found['pem'].rstrip('\n') + '\n' + root.decode('ascii')
+        return Response(chain, mimetype='application/pem-certificate-chain')
 
     @bp.route('/revoke-cert', methods=['POST'])
     def revoke_cert():
