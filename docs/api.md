@@ -3096,8 +3096,8 @@ domains that already exist as secrets. It does not re-issue anything.
 
 **Endpoint**: `GET /api/backups` — viewer
 
-Each entry has `filename`, `size` (bytes) and `created`, and the archive's own
-`metadata`. `size` and `created` were declared on the entry and always `null` before
+Newest first. Each entry has `filename`, `size` (bytes) and `created`, and the
+archive's own `metadata`. `size` and `created` were declared on the entry and always `null` before
 API contract **2.37**; they were only inside `metadata`.
 
 #### Create one
