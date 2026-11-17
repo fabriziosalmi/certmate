@@ -2808,6 +2808,12 @@ client speaks.
 Deprecating does not move the contract version, which is the point of
 deprecating rather than removing; the removal is what would bump the major.
 
+A name that is already an account of that provider with credentials is a `409`
+with `code: DNS_ACCOUNT_EXISTS`, since API contract **2.66**, and the account keeps
+its credentials; change them with `PUT` below. Before 2.66 the create replaced
+them and answered `200`. An account without credentials, such as the empty
+`default` a new instance carries, can still be filled in by a create.
+
 A **Route53** account takes two optional fields, since API contract **2.35**:
 `auth_mode` (`access_keys`, the default, or `iam_role`) and `assume_role_arn`. In
 `iam_role` mode CertMate uses the AWS credential chain of the host and the two
@@ -2831,6 +2837,12 @@ refusal writes anything.
 `DELETE /api/dns/<provider>/accounts/<account_id>` is a `404` when that provider has
 no account with that id, and a `500` only when the settings could not be written.
 Before API contract **2.37** both were a `500`.
+
+An account that certificates renew through is not deleted: the answer is a `409`
+with `code: DNS_ACCOUNT_IN_USE` and `certificates`, the domains that use it, since
+API contract **2.66**. A certificate uses the account its metadata names, as its
+DNS or alias provider; one that names none uses the provider's default. Move
+those certificates to another account, or delete them, first.
 
 #### Provider configuration
 
@@ -3096,7 +3108,7 @@ domains that already exist as secrets. It does not re-issue anything.
 
 **Endpoint**: `GET /api/backups` — viewer
 
-Newest first. Each entry has `filename`, `size` (bytes) and `created`, and the
+Newest first, since API contract **2.66**. Each entry has `filename`, `size` (bytes) and `created`, and the
 archive's own `metadata`. `size` and `created` were declared on the entry and always `null` before
 API contract **2.37**; they were only inside `metadata`.
 

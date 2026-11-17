@@ -758,6 +758,21 @@ METADATA_SCHEMA_VERSION = 1
 #                                   takes an optional key_algorithm (rsa-4096,
 #                                   ecdsa-p256, ecdsa-p384) for the new client
 #                                   CA (#1421).
+#                                   2.66: POST /api/dns/<provider>/accounts (and
+#                                   /api/dns/accounts) answers 409
+#                                   DNS_ACCOUNT_EXISTS for a name that is an
+#                                   account with credentials, where it replaced
+#                                   them and answered 200 (#1486). DELETE
+#                                   /api/dns/<provider>/accounts/<id> answers 409
+#                                   DNS_ACCOUNT_IN_USE, with `certificates`, for
+#                                   an account certificates renew through, where
+#                                   it deleted it and answered 200 (#1487).
+#                                   GET /api/backups lists newest first (#1488).
+#                                   New answers to existing requests, which the
+#                                   rule below calls MAJOR; counted as the
+#                                   data-loss fixes they are (a credential
+#                                   overwritten in silence, renewals broken by a
+#                                   delete), the precedent being 2.7 and 2.31.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -783,7 +798,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.65'
+API_CONTRACT_VERSION = '2.66'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
