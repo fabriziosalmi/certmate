@@ -51,6 +51,8 @@ window.__contrast = (function () {
   function background(el) {
     const layers = [];
     for (let n = el; n; n = n.parentElement) {
+      // A gradient or an image behind the text has no single colour to measure.
+      if (getComputedStyle(n).backgroundImage !== 'none') return null;
       const c = parse(getComputedStyle(n).backgroundColor);
       if (c && c[3] > 0) { layers.push(c); if (c[3] >= 1) break; }
     }
@@ -70,6 +72,7 @@ window.__contrast = (function () {
   }
   function ratio(el) {
     const fg = parse(getComputedStyle(el).color), b = background(el), op = opacity(el);
+    if (!b) return null;
     const f = fg.slice(0, 3).map((v, k) => v * fg[3] * op + b[k] * (1 - fg[3] * op));
     const L1 = lum(f), L2 = lum(b);
     return (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
@@ -92,11 +95,41 @@ window.__contrast = (function () {
       if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
       if (getComputedStyle(el).color !== colour || opacity(el) < 1) continue;
       const r = ratio(el);
-      if (r < need) out.push([el.innerText.trim().slice(0, 30), +r.toFixed(2)]);
+      if (r !== null && r < need) out.push([el.innerText.trim().slice(0, 30), +r.toFixed(2)]);
     }
     return out;
   }
-  return {ratio, colourOf, below};
+  // Every visible text under AA (3:1 when large), outside dimmed and disabled parts.
+  function texts() {
+    const out = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (el.closest('[inert],[aria-hidden=true],[disabled],[aria-disabled=true],option')) continue;
+      if (el.matches(':disabled')) continue;
+      if (!el.checkVisibility({opacityProperty: true, visibilityProperty: true})) continue;
+      if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+      if (opacity(el) < 1) continue;
+      const st = getComputedStyle(el), size = parseFloat(st.fontSize), bold = parseInt(st.fontWeight) >= 700;
+      const need = (size >= 24 || (bold && size >= 18.66)) ? 3 : 4.5;
+      const r = ratio(el);
+      if (r !== null && r < need) out.push([el.innerText.trim().slice(0, 30), +r.toFixed(2)]);
+    }
+    return out;
+  }
+  // Every visible control that is only an icon, under 3:1 (WCAG 1.4.11).
+  function controls() {
+    const out = [];
+    for (const el of document.querySelectorAll('a[href], button, [role=button]')) {
+      if (el.closest('[inert],[aria-hidden=true]') || el.matches(':disabled')) continue;
+      if (!el.checkVisibility({opacityProperty: true, visibilityProperty: true})) continue;
+      if ((el.innerText || '').trim() || el.querySelector('img')) continue;
+      const icon = el.querySelector('i, svg');
+      if (!icon || opacity(icon) < 1) continue;
+      const r = ratio(icon);
+      if (r !== null && r < 3) out.push([el.getAttribute('aria-label') || el.title || '(unnamed)', +r.toFixed(2)]);
+    }
+    return out;
+  }
+  return {ratio, colourOf, below, texts, controls};
 })();
 """
 
@@ -159,3 +192,24 @@ def test_every_status_chip_is_readable_when_pressed(open_page, scheme):
                 if r < AA:
                     low.append((target, round(r, 2)))
     assert low == [], f'{scheme}: pressed chips under {AA}:1: {low}'
+
+
+EVERY_VIEW = ['/', '/#client', '/#acme', '/inventory', '/inventory/crypto-report', '/activity', '/notifications',
+              '/help'] + [f'/settings#{tab}' for tab in (
+                  'general', 'dns', 'ca', 'storage', 'deploy', 'probe', 'acme', 'users', 'apikeys', 'oidc',
+                  'notifications', 'backup')]
+
+
+@pytest.mark.parametrize('scheme', ['light', 'dark'])
+@pytest.mark.parametrize('path', EVERY_VIEW)
+def test_every_text_and_icon_control_reaches_wcag_contrast(open_page, path, scheme):
+    """On every view, every visible text reaches 4.5:1 (3:1 when large) and every
+    control that is only an icon 3:1. Hard-coded text-gray-400 was 2.5:1 on white
+    in about fifty places (the activity list, help, settings hints, the breadcrumb
+    Home, the shortcuts button on every page, the client row actions), white on
+    yellow-600 buttons 2.9:1, and muted text on dark inputs and hovered rows 4.0:1."""
+    page = open_page(path, scheme)
+    text = page.evaluate('() => __contrast.texts()')
+    icons = page.evaluate('() => __contrast.controls()')
+    assert text == [], f'{path}, {scheme}: text under AA: {text[:8]}'
+    assert icons == [], f'{path}, {scheme}: icon-only controls under 3:1: {icons[:8]}'

@@ -9,14 +9,14 @@
              without taking real estate from the content below. -->
         <div class="flex items-center justify-between mb-4 px-4 sm:px-0">
             <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                <a href="/" aria-label="Home" title="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
+                <a href="/" aria-label="Home" title="Home" class="text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
                 <i class="fas fa-chevron-right text-xs text-gray-300 dark:text-gray-600 mx-2"></i>
                 <span class="text-gray-700 dark:text-gray-200 font-medium">Help</span>
             </nav>
             <div class="flex items-center gap-3 text-xs">
-                <a href="/health" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="Live health endpoint — JSON status of scheduler, cert dir, disk"><i class="fas fa-heartbeat mr-1" aria-hidden="true"></i>Health</a>
-                <a href="/docs/" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="Swagger UI — try API requests live"><i class="fas fa-flask mr-1" aria-hidden="true"></i>Swagger</a>
-                <a href="/redoc" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="ReDoc — read-only API reference"><i class="fas fa-book mr-1" aria-hidden="true"></i>ReDoc</a>
+                <a href="/health" target="_blank" rel="noopener" class="text-muted hover:text-primary transition-colors" title="Live health endpoint — JSON status of scheduler, cert dir, disk"><i class="fas fa-heartbeat mr-1" aria-hidden="true"></i>Health</a>
+                <a href="/docs/" target="_blank" rel="noopener" class="text-muted hover:text-primary transition-colors" title="Swagger UI — try API requests live"><i class="fas fa-flask mr-1" aria-hidden="true"></i>Swagger</a>
+                <a href="/redoc" target="_blank" rel="noopener" class="text-muted hover:text-primary transition-colors" title="ReDoc — read-only API reference"><i class="fas fa-book mr-1" aria-hidden="true"></i>ReDoc</a>
             </div>
         </div>
 
@@ -150,13 +150,13 @@
                         <div>
                             <h4 class="text-sm font-medium text-foreground mb-2">Common endpoints</h4>
                             <ul class="text-xs text-gray-700 dark:text-gray-200 space-y-1 font-mono overflow-x-auto whitespace-nowrap">
-                                <li><span class="text-blue-500">GET</span> /api/certificates</li>
-                                <li><span class="text-green-500">POST</span> /api/certificates/create</li>
-                                <li><span class="text-green-500">POST</span> /api/certificates/{domain}/renew</li>
-                                <li><span class="text-blue-500">GET</span> /api/certificates/{domain}/download <span class="text-gray-400 not-italic">(ZIP bundle)</span></li>
-                                <li><span class="text-blue-500">GET</span> /api/certificates/{domain}/download/{cert|chain|fullchain|privkey|combined} <span class="text-gray-400 not-italic">(privkey, combined: operator+)</span></li>
-                                <li><span class="text-blue-500">GET</span> /api/activity</li>
-                                <li><span class="text-blue-500">GET</span> /api/deploy/history</li>
+                                <li><span class="text-info-fg">GET</span> /api/certificates</li>
+                                <li><span class="text-success-fg">POST</span> /api/certificates/create</li>
+                                <li><span class="text-success-fg">POST</span> /api/certificates/{domain}/renew</li>
+                                <li><span class="text-info-fg">GET</span> /api/certificates/{domain}/download <span class="text-muted not-italic">(ZIP bundle)</span></li>
+                                <li><span class="text-info-fg">GET</span> /api/certificates/{domain}/download/{cert|chain|fullchain|privkey|combined} <span class="text-muted not-italic">(privkey, combined: operator+)</span></li>
+                                <li><span class="text-info-fg">GET</span> /api/activity</li>
+                                <li><span class="text-info-fg">GET</span> /api/deploy/history</li>
                             </ul>
                         </div>
                         <div>
@@ -293,7 +293,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
             <!-- Footer: one-line about + link. No marketing copy — the
                  source code is the documentation of intent. -->
-            <p class="text-xs text-center text-gray-400 dark:text-gray-500 mt-6 px-4">
+            <p class="text-xs text-center text-muted mt-6 px-4">
                 CertMate is open source.
                 <a href="https://github.com/fabriziosalmi/certmate" target="_blank" rel="noopener" class="hover:text-primary underline">github.com/fabriziosalmi/certmate</a>
             </p>

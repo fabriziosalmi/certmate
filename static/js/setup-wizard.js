@@ -191,7 +191,7 @@
                         'Start Fresh Setup' +
                     '</button>' +
                 '</div>' +
-                '<p class="mt-4 text-xs text-gray-400">' +
+                '<p class="mt-4 text-xs text-muted">' +
                     'Need help? Check the logs for <code class="bg-surface-2 px-1 rounded">DOWNGRADE DETECTED</code> or run <code class="bg-surface-2 px-1 rounded">scripts/reset_admin_password.py</code> inside the container to regain access.' +
                 '</p>' +
             '</div>';
@@ -242,7 +242,7 @@
                         '</div>' +
                         '<div class="flex items-center gap-3">' +
                             '<div class="flex items-center gap-1.5" id="wizardSteps"></div>' +
-                            '<button type="button" id="wizClose" aria-label="Dismiss setup wizard" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none px-1">&times;</button>' +
+                            '<button type="button" id="wizClose" aria-label="Dismiss setup wizard" class="text-muted hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none px-1">&times;</button>' +
                         '</div>' +
                     '</div>' +
                 '</div>' +
@@ -316,12 +316,12 @@
                 '<label for="wizEmail" class="block text-sm font-medium text-label mb-2">Email Address</label>' +
                 '<input type="email" id="wizEmail" value="' + escapeHtml(state.email) + '" placeholder="admin@example.com" ' +
                        'class="w-full px-4 py-3 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary text-sm" required>' +
-                '<p class="mt-2 text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Used by Let\'s Encrypt for expiry warnings and account recovery</p>' +
+                '<p class="mt-2 text-xs text-muted"><i class="fas fa-info-circle mr-1"></i>Used by Let\'s Encrypt for expiry warnings and account recovery</p>' +
             '</div>';
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
-            '<button type="button" id="wizSkip" class="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Skip wizard</button>' +
+            '<button type="button" id="wizSkip" class="text-sm text-muted hover:text-gray-600 dark:hover:text-gray-300">Skip wizard</button>' +
             '<button type="button" id="wizNext1" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition">Next <i class="fas fa-arrow-right ml-1"></i></button>';
 
         document.getElementById('wizNext1').addEventListener('click', function() {

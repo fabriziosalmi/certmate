@@ -958,11 +958,11 @@
                     '<p class="text-muted">Follow these steps to get started:</p>' +
                     '</div>' +
                     '<ol class="space-y-3 mb-6 text-sm">' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
+                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
                     '<span class="text-label"><a href="/settings" class="text-info-fg font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
+                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
                     '<span class="text-label">Create your first certificate with the <strong>Create Certificate</strong> button below</span></li>' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
+                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
                     '<span class="text-label">Enable <a href="/settings#users" class="text-info-fg font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
                     '</ol>' +
                     '<div class="bg-warning-surface border border-warning-line rounded-lg p-3 mb-6">' +
@@ -1422,7 +1422,7 @@
                 '<p class="text-muted mb-6">Certificate not found on disk.</p>' +
                 (roleAtLeast('admin')
                     ? '<button type="button"' + CertMate.does('click', 'deleteCertificate', [cert.domain]) + 'class="inline-flex items-center px-4 py-2 border border-danger-line shadow-sm text-sm font-medium rounded-md text-danger-fg bg-danger-surface hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>'
-                    : '<p class="text-xs text-gray-400">Ask an admin to remove this entry.</p>') +
+                    : '<p class="text-xs text-muted">Ask an admin to remove this entry.</p>') +
                 '</div>';
         } else {
             var daysKnown2 = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;

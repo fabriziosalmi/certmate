@@ -126,7 +126,7 @@ def _advertised():
     html = (REPO_ROOT / "templates" / "help.html").read_text(encoding="utf-8")
     found = []
     for match in re.finditer(
-            r'<span class="text-\w+-500">(GET|POST|PUT|PATCH|DELETE)</span>\s*'
+            r'<span class="text-[\w-]+">(GET|POST|PUT|PATCH|DELETE)</span>\s*'
             r'([^\s<]+)', html):
         found.append(("templates/help.html", match.group(1), match.group(2)))
     # The curl examples underneath. These are the ones people actually run, so

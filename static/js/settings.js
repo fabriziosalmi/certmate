@@ -1610,7 +1610,7 @@
             defaultBadge +
             '</div>' +
             descHtml +
-            '<div class="text-xs text-gray-400 dark:text-gray-500 mt-1">ID: ' + safeId + '</div>' +
+            '<div class="text-xs text-muted mt-1">ID: ' + safeId + '</div>' +
             '</div>' +
             '<div class="flex items-center space-x-2">' +
             '<button type="button" data-action="edit" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
@@ -3061,7 +3061,7 @@
             '<h3 id="storageMigrationModal-title" class="text-lg font-medium text-foreground">' +
             '<i class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
             '</h3>' +
-            '<button type="button" id="storageMigCloseBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">' +
+            '<button type="button" id="storageMigCloseBtn" class="text-muted hover:text-gray-600 dark:hover:text-gray-300">' +
             '<i class="fas fa-times"></i>' +
             '</button>' +
             '</div>' +

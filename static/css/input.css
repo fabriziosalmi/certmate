@@ -91,7 +91,7 @@
     --color-surface:    222 24% 13%;   /* surface.card */
     --color-surface-2:  222 20% 17%;   /* surface.elevated */
     --color-foreground:   0  0% 100%;  /* white */
-    --color-muted:      220  9% 65%;   /* ~gray-400 */
+    --color-muted:      220  9% 70%;   /* 65% (gray-400) measured 4.0:1 on input, hover and sunken (gray-700); 70% is 4.7 there, 7.7 on the card */
     --color-label:      216 12% 84%;   /* ~gray-300 */
     --color-border:     222 20% 22%;   /* ~white/5 equivalent */
     --color-input:      217 19% 27%;   /* gray-700 — inputs read lighter than the card */
