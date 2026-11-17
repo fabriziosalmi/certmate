@@ -279,6 +279,11 @@ def _backup_passphrase():
     return os.environ.get(BACKUP_PASSPHRASE_ENV, '')
 
 
+def backup_passphrase_configured() -> bool:
+    """Whether backups are encrypted at rest, so a complete one is safe to keep."""
+    return bool(_backup_passphrase())
+
+
 def _derive_backup_key(passphrase: str, salt: bytes, iterations: int) -> bytes:
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
