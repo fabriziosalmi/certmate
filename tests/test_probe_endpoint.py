@@ -12,8 +12,15 @@ the certificate without trusting it, and it refuses what it must not do —
 probe outside a scoped key's domains, or reach a private address.
 """
 import secrets
+import socket
+import ssl
+import threading
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from tests.conftest import third_party_down
 
 pytestmark = [pytest.mark.unit]
 
@@ -136,13 +143,22 @@ def test_it_is_rate_limited_as_its_own_category():
 # Against a real host
 # --------------------------------------------------------------------------- #
 
+def _live(application, body):
+    """Probe a third-party host; when the host itself does not answer, the run
+    has measured nothing about CertMate and says so (a countable skip)."""
+    answer = _probe(application, body).get_json()
+    if answer.get('status') == 'unreachable':
+        third_party_down(body['host'], answer.get('error'))
+    return answer
+
+
 @pytest.mark.network
 def test_a_live_host_is_described_with_its_revocation(probe_app):
     """The answer another tool consumes: the certificate, the chain, the
     hostname match, and a revocation status that was checked rather than
     assumed."""
     application, _container = probe_app
-    body = _probe(application, {'host': 'letsencrypt.org'}).get_json()
+    body = _live(application, {'host': 'letsencrypt.org'})
     assert body['status'] == 'ok'
     certificate = body['certificate']
     assert certificate['subject_cn']
@@ -156,10 +172,80 @@ def test_a_live_host_is_described_with_its_revocation(probe_app):
 
 @pytest.mark.network
 def test_a_revoked_certificate_is_reported_as_revoked(probe_app):
+    """Against a real CA's revoked certificate. The offline twin below is the
+    guard: on 2026-11-17 this host refused 5 connections in 12 for hours, and
+    the release gate cannot depend on it."""
     application, _container = probe_app
-    body = _probe(application, {'host': 'revoked.badssl.com'}).get_json()
+    body = _live(application, {'host': 'revoked.badssl.com'})
     assert body['status'] == 'ok'
     assert body['revocation']['status'] == 'revoked'
+
+
+@pytest.fixture
+def revoked_on_loopback(tmp_path, monkeypatch):
+    """A TLS server on 127.0.0.1 presenting a certificate its CA has revoked,
+    with that CA's OCSP responder and CRL on 127.0.0.1 too. Built from the PKI
+    of tests/test_revocation.py, so the answers are signed by real keys."""
+    from modules.core import revocation
+    from tests.test_revocation import _crl, _der, _make_ca, _make_leaf, _ocsp_response, _Server
+
+    revocation.clear_caches()
+    responder = _Server()
+    ca_key, ca_cert = _make_ca()
+    leaf_key = ec.generate_private_key(ec.SECP256R1())
+    leaf = _make_leaf(ca_key, ca_cert, responder.base_url, cn='revoked.test', key=leaf_key)
+    responder.routes['/ca.der'] = (200, _der(ca_cert))
+    responder.routes['/crl'] = (200, _crl(ca_key, ca_cert, [leaf.serial_number]))
+    responder.routes['/ocsp'] = (200, _ocsp_response(leaf, ca_cert, ca_key, ca_cert, status='revoked'))
+
+    chain = tmp_path / 'chain.pem'
+    chain.write_bytes(leaf.public_bytes(serialization.Encoding.PEM)
+                      + ca_cert.public_bytes(serialization.Encoding.PEM))
+    key = tmp_path / 'key.pem'
+    key.write_bytes(leaf_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                           serialization.NoEncryption()))
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(str(chain), str(key))
+    listener = socket.create_server(('127.0.0.1', 0))
+    listener.settimeout(0.2)
+    stop = threading.Event()
+
+    def serve():
+        while not stop.is_set():
+            try:
+                connection, _ = listener.accept()
+            except (TimeoutError, OSError):
+                continue
+            try:
+                with context.wrap_socket(connection, server_side=True):
+                    pass
+            except (ssl.SSLError, OSError):
+                connection.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    # The probe refuses loopback unless told otherwise, as it must for a host
+    # a caller names; here the host is the test's own.
+    monkeypatch.setenv('CERTMATE_PROBE_ALLOW_PRIVATE', 'true')
+    yield listener.getsockname()[1], responder
+    stop.set()
+    thread.join(timeout=2)
+    listener.close()
+    responder.close()
+    revocation.clear_caches()
+
+
+def test_a_revoked_certificate_is_reported_as_revoked_without_the_network(probe_app, revoked_on_loopback):
+    """The same path as the live test, through the endpoint: the TLS probe,
+    then the revocation check against the issuer's OCSP responder."""
+    application, _container = probe_app
+    port, responder = revoked_on_loopback
+    body = _probe(application, {'host': '127.0.0.1', 'port': port, 'server_name': 'revoked.test'}).get_json()
+    assert body['status'] == 'ok', body
+    assert body['certificate']['subject_cn'] == 'revoked.test'
+    assert body['revocation']['status'] == 'revoked', body['revocation']
+    assert body['revocation']['method'] == 'ocsp'
+    assert '/ocsp' in responder.paths()
 
 
 @pytest.mark.network
@@ -167,7 +253,7 @@ def test_revocation_can_be_left_out(probe_app):
     """A caller that only wants the certificate does not pay for the CA
     round-trip, and gets None rather than a guess."""
     application, _container = probe_app
-    body = _probe(application, {'host': 'letsencrypt.org', 'check_revocation': False}).get_json()
+    body = _live(application, {'host': 'letsencrypt.org', 'check_revocation': False})
     assert body['status'] == 'ok'
     assert body['revocation'] is None
 

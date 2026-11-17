@@ -614,6 +614,18 @@ def _credential_missing(variable, what):
 
 CREDENTIALED_FIXTURES = frozenset({"cloudflare_token"})
 
+# The same shape, for a third-party HOST a network test reaches. A live
+# test whose host did not answer has measured nothing about CertMate: it skips
+# with this mark and the summary says so. Each such test has an offline twin
+# that covers the same path on loopback and is the one that guards it.
+THIRD_PARTY_SKIP_MARK = "[third-party-down]"
+
+
+def third_party_down(host, detail):
+    """Skip countably: the third-party *host* a live test needs did not answer."""
+    pytest.skip(f"{THIRD_PARTY_SKIP_MARK} {host} did not answer ({detail}): not measured")
+
+
 # The same shape, for a TOOL rather than a credential. The frontend unit tests
 # execute static/js through node, and a machine without node must not report
 # them as passing. CI sets CERTMATE_REQUIRE_NODE=1, so the one job that exists
@@ -675,6 +687,16 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
             f"{len(toolless)} test(s) did not run because a required tool is "
             f"not installed. They are not passing; they are unmeasured. "
             f"CERTMATE_REQUIRE_NODE=1 makes their absence a failure."
+        )
+
+    down = [r for r in skipped
+            if THIRD_PARTY_SKIP_MARK in str(getattr(r, "longrepr", ""))]
+    if down:
+        terminalreporter.write_sep("=", "not executed: a third-party host did not answer",
+                                   yellow=True, bold=True)
+        terminalreporter.write_line(
+            f"{len(down)} live test(s) could not reach their host. They are not "
+            f"passing; they are unmeasured. Their offline twins ran."
         )
 
     missing = [r for r in skipped
