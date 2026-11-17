@@ -3791,30 +3791,33 @@
             });
         }
 
-        // Users and backups load when their tab is first opened. They waited
+        // Users and backups load when their panel is first shown. They waited
         // a fixed 4 and 3 seconds after the page, to spread the startup
         // requests, so the Users tab showed local authentication as off and
         // "Loading users..." for four seconds when /api/users answers in
         // milliseconds (UX audit, 2026-11-17). Opening the tab is spread
-        // enough. The tabs component announces each change; the page may
-        // also open on one, before that component has started.
-        var loadedTabs = {};
-        function loadForTab(tab) {
-            if (loadedTabs[tab]) return;
-            if (tab === 'users') {
-                loadedTabs[tab] = true;
-                loadAuthConfig();
-                refreshUserList();
-            } else if (tab === 'backup') {
-                loadedTabs[tab] = true;
-                refreshBackupList();
-            }
-        }
-        window.addEventListener('settings:tab', function (event) {
-            loadForTab(event.detail && event.detail.tab);
+        // enough. Read from the panel itself (Alpine shows it), not from the
+        // URL, so the page opening on a tab and a click on one are the same.
+        loadWhenShown('settings-panel-users', function () {
+            loadAuthConfig();
+            refreshUserList();
         });
-        loadForTab(location.hash.slice(1) || 'general');
+        loadWhenShown('settings-panel-backup', refreshBackupList);
     });
+
+    // Run *load* once, the first time the panel *id* is on screen.
+    function loadWhenShown(id, load) {
+        var panel = document.getElementById(id);
+        if (!panel) return;
+        var observer = new MutationObserver(check);
+        function check() {
+            if (panel.offsetParent === null) return;
+            observer.disconnect();
+            load();
+        }
+        observer.observe(panel, { attributes: true, attributeFilter: ['style', 'class', 'x-cloak'] });
+        check();
+    }
 
     // =============================================
     // Cross-module bridge for extracted Alpine components

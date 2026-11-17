@@ -41,17 +41,8 @@
             ],
             init: function () {
                 var self = this;
-                // Every tab change is announced, so a section can load when it
-                // is opened rather than after a fixed delay (settings.js).
-                function announce(tab) {
-                    window.dispatchEvent(new CustomEvent('settings:tab', { detail: { tab: tab } }));
-                }
-                this.$watch('tab', function (tab) {
-                    history.replaceState(null, '', '#' + tab);
-                    announce(tab);
-                });
+                this.$watch('tab', function (tab) { history.replaceState(null, '', '#' + tab); });
                 window.addEventListener('hashchange', function () { self.tab = fromHash(); });
-                announce(this.tab);
             },
             // WAI-ARIA tabs: the arrow keys, Home and End, across the groups. See settings.js.
             onSettingsTabKeydown: function (event) { window.onSettingsTabKeydown(event); }
