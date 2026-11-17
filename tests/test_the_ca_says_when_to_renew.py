@@ -773,7 +773,7 @@ def _sweep_manager(days_left, window=None, threshold_hint=30):
 
 def _summary():
     return {'checked': 0, 'renewed': 0, 'failed': 0, 'skipped_busy': 0,
-            'skipped_not_due': 0, 'ari_advanced': 0, 'ari_postponed': 0,
+            'not_due': 0, 'skipped_not_due': 0, 'ari_advanced': 0, 'ari_postponed': 0,
             'early_forced': 0, 'early_deferred': 0}
 
 

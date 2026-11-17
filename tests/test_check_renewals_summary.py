@@ -56,6 +56,10 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         'failed': 0,
         'skipped_disabled': 1,  # disabled.com
         'skipped_invalid': 3,   # empty, dict-without-domain, int
+        # fresh.com: CertMate's own rule left it alone. It was counted
+        # nowhere before #1459, so the line read "0 not-due" on a night when
+        # most certificates were exactly that.
+        'not_due': 1,
         'skipped_not_due': 0,   # certbot didn't report any "not yet due" no-op
         # `skipped_busy`: a domain whose lock was held this sweep. It used
         # to land in `failed`, which drove a failure metric, an audit failure

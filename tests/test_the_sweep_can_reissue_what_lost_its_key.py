@@ -41,7 +41,7 @@ def _manager(tmp_path, *, reissue_fails=()):
 
 def _summary():
     return {'checked': 0, 'renewed': 0, 'failed': 0, 'skipped_busy': 0,
-            'skipped_not_due': 0, 'ari_advanced': 0, 'reissue_required': 0,
+            'not_due': 0, 'skipped_not_due': 0, 'ari_advanced': 0, 'reissue_required': 0,
             'auto_reissued': 0}
 
 
