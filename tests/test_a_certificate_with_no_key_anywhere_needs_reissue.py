@@ -93,7 +93,8 @@ def test_the_sweep_counts_it_and_says_what_to_do(tmp_path):
     manager._publish_failed_event = MagicMock()
     manager._publish_renewed_event = MagicMock()
     summary = {'checked': 0, 'renewed': 0, 'failed': 0, 'skipped_busy': 0,
-               'skipped_not_due': 0, 'ari_advanced': 0, 'reissue_required': 0}
+               'not_due': 0, 'skipped_not_due': 0, 'ari_advanced': 0,
+               'reissue_required': 0}
 
     assert manager._renew_if_due(DOMAIN, {}, summary) is False
 

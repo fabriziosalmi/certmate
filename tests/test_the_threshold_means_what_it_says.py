@@ -92,7 +92,8 @@ def _manager(tmp_path, *, seconds_left, age_days=60, key_state='present',
 
 def _summary():
     return {'checked': 0, 'renewed': 0, 'failed': 0, 'skipped_busy': 0,
-            'skipped_not_due': 0, 'ari_advanced': 0, 'ari_postponed': 0, 'reissue_required': 0,
+            'not_due': 0, 'skipped_not_due': 0, 'ari_advanced': 0, 'ari_postponed': 0,
+            'reissue_required': 0,
             'auto_reissued': 0, 'early_forced': 0, 'early_deferred': 0}
 
 

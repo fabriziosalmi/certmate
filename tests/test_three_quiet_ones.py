@@ -264,3 +264,6 @@ def test_every_shape_of_the_summary_carries_the_key():
         keys = {k.value for k in node.keys if isinstance(k, ast.Constant)}
         assert 'skipped_busy' in keys, (
             f'a sweep summary is missing skipped_busy: {sorted(keys)}')
+        # The same holds for the count of certificates not due yet (#1459).
+        assert 'not_due' in keys, (
+            f'a sweep summary is missing not_due: {sorted(keys)}')

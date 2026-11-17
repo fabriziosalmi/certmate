@@ -4751,7 +4751,7 @@ class CertificateManager:
             # sweep "did not consider" when it considered none would be noise.
             return {'checked': 0, 'renewed': 0, 'failed': 0,
                     'skipped_disabled': 0, 'skipped_invalid': 0,
-                    'skipped_not_due': 0, 'skipped_busy': 0,
+                    'not_due': 0, 'skipped_not_due': 0, 'skipped_busy': 0,
                     'unmanaged': 0, 'reregistered': 0, 'ari_advanced': 0,
                     'ari_postponed': 0, 'early_forced': 0, 'early_deferred': 0,
                     'reissue_required': 0, 'auto_reissued': 0,
@@ -4765,7 +4765,11 @@ class CertificateManager:
 
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
                    'skipped_disabled': 0, 'skipped_invalid': 0,
-                   'skipped_not_due': 0, 'skipped_busy': 0,
+                   # Left alone because CertMate's own rule says they are
+                   # not due yet: on most nights, most certificates (#1459).
+                   # `skipped_not_due` is narrower: a renewal CertMate asked
+                   # for that certbot declined.
+                   'not_due': 0, 'skipped_not_due': 0, 'skipped_busy': 0,
                    'unmanaged': 0, 'reregistered': 0,
                    # Renewals the CA's window brought forward, which the
                    # configured threshold would not have started tonight; and
@@ -4896,14 +4900,14 @@ class CertificateManager:
         self._mark_sweep_finished(summary, duration)
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
-            "%d failed, %d disabled, %d external, %d invalid, %d not-due, "
-            "%d busy, %d unmanaged, %d re-registered, %d need reissue, "
+            "%d failed, %d disabled, %d external, %d invalid, %d not due yet, "
+            "%d declined by certbot, %d busy, %d unmanaged, %d re-registered, %d need reissue, "
             "%d auto-reissued, %d early (forced), %d early deferred, "
             "%d brought forward by the CA, %d postponed by the CA",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['external'],
-            summary['skipped_invalid'],
+            summary['skipped_invalid'], summary['not_due'],
             summary['skipped_not_due'], summary['skipped_busy'],
             summary['unmanaged'], summary['reregistered'],
             summary['reissue_required'], summary['auto_reissued'],
@@ -5122,6 +5126,7 @@ class CertificateManager:
         else:
             due = timing['due'] or cert_info.get('private_key_state') in ('missing', 'mismatched')
         if not due:
+            summary['not_due'] += 1
             if timing and timing['postponed']:
                 summary['ari_postponed'] += 1
                 logger.info("%s would be due by %s, but its CA's renewal window says later; "
