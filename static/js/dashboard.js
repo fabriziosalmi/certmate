@@ -2124,8 +2124,39 @@
         });
     }
 
-    // Load certificates with deployment status
+    // One listing at a time per tab (#1463). On an estate of 2,000
+    // certificates a listing takes seconds to minutes, and the page asks for
+    // one after every action, every SSE event and every click on refresh:
+    // overlapping listings each took the full time and, together, every
+    // gunicorn thread, so /health stopped answering. A call made while a
+    // listing is in flight does not start another; it shares the one listing
+    // queued behind it, which starts when the current one ends. Queued rather
+    // than reused, because the call usually follows a change (a renewal, a
+    // deletion) that the listing already in flight may have read too early.
+    var listingInFlight = null;
+    var listingQueued = null;
+
     function loadCertificates() {
+        if (listingInFlight) {
+            if (!listingQueued) {
+                // On either outcome: a listing that failed must not leave
+                // the queued one waiting forever.
+                var next = function () {
+                    listingQueued = null;
+                    return loadCertificates();
+                };
+                listingQueued = listingInFlight.then(next, next);
+            }
+            return listingQueued;
+        }
+        listingInFlight = fetchCertificateListing().finally(function () {
+            listingInFlight = null;
+        });
+        return listingInFlight;
+    }
+
+    // Load certificates with deployment status
+    function fetchCertificateListing() {
         addDebugLog('Loading certificates from API...', 'info');
 
         return fetch('/api/certificates', {
