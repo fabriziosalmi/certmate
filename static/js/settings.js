@@ -1467,7 +1467,11 @@
             .then(function (response) {
                 if (!response.ok) {
                     return response.text().then(function (errorData) {
-                        throw new Error('HTTP ' + response.status + ': ' + errorData);
+                        // The server's own sentence when it sent one: a name
+                        // already in use answers 409 and says what to do.
+                        var said = null;
+                        try { said = JSON.parse(errorData).error; } catch (_) { /* not JSON */ }
+                        throw new Error(said || ('HTTP ' + response.status + ': ' + errorData));
                     });
                 }
                 return response.json();

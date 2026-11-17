@@ -73,6 +73,9 @@ def audit_test_app(tmp_path):
     dns_manager.list_accounts.return_value = []
     dns_manager.add_account.return_value = True
     dns_manager.delete_account.return_value = True
+    # No account of the name being created exists yet: a taken name is a 409
+    # before the route runs (tests/test_a_dns_account_name_in_use_is_not_overwritten.py).
+    dns_manager.account_with_credentials.return_value = False
 
     audit_logger = MagicMock()
 
