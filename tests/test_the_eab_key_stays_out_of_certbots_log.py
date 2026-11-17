@@ -209,10 +209,9 @@ def test_certbot_registers_with_the_pair_from_the_file(
     """The server refuses an account without EAB, so an account here means
     certbot read both values from the file and bound the account with them.
 
-    The run goes on to prove http-01 and finalize. It then stops at certbot's
-    own check of the chain: this server signs from the root directly and sends
-    the leaf alone, and certbot 5.8.0 wants at least two certificates. That is
-    the server's, not this change's, and is not asserted either way here.
+    The run goes on to prove http-01, finalize and write the certificate;
+    tests/test_certbot_gets_a_certificate_from_the_acme_server.py asserts that
+    part (#1484).
     """
     entry, directory, http01_port = acme_server_requiring_eab
     result, _lineage, logs = _issue(tmp_path, monkeypatch, directory, http01_port,
