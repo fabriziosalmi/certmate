@@ -4,12 +4,52 @@ Handles DNS provider configuration, account management, and provider-specific op
 """
 
 import logging
+from functools import wraps
 
 from .secret_refs import SecretReferenceError, has_value, resolve
 from .structured_logging import scrub_log_value
 from .utils import _DNS_PROVIDER_CREDENTIALS
 
 logger = logging.getLogger(__name__)
+
+
+class DNSAccountTaken(Exception):
+    """A create named an account that already has its provider's credentials."""
+
+
+def taken_account_message(provider, account_id):
+    return (f"A {provider} account named '{account_id}' already exists. "
+            f"Edit it, or give the new account another name.")
+
+
+def refuses_a_taken_account(dns_manager_of):
+    """Decorator: a POST that creates an account under a name in use answers 409.
+
+    Creating an account under a name in use replaced that account's credentials
+    and said "created" (UX audit, 2026-11-17): the id is the name, lowercased,
+    and the create path assigned over whatever was there. Editing has its own
+    route. An account without credentials, such as the empty "default" a fresh
+    instance carries, can still be filled in by a create.
+
+    A decorator that returns the refusal, so it reads the same under Flask and
+    flask-restx (an abort raised inside the routes' try blocks was answered
+    500), and the routes' budgeted complexity does not grow. *dns_manager_of*
+    is a callable returning the DNSManager, read when the request comes.
+    """
+    def decorator(view):
+        @wraps(view)
+        def guarded(*args, **kwargs):
+            from flask import jsonify, make_response, request
+            if request.method == 'POST':
+                data = request.get_json(silent=True) or {}
+                account_id = data.get('name') or data.get('account_id')
+                provider = kwargs.get('provider') or data.get('provider')
+                if account_id and provider and dns_manager_of().account_with_credentials(provider, account_id):
+                    return make_response(jsonify({'error': taken_account_message(provider, account_id),
+                                                  'code': 'DNS_ACCOUNT_EXISTS'}), 409)
+            return view(*args, **kwargs)
+        return guarded
+    return decorator
 
 
 class DNSManager:
@@ -361,14 +401,21 @@ class DNSManager:
         # Default to global setting
         return settings.get('dns_provider', 'cloudflare'), 30
 
-    def create_dns_account(self, provider, account_id, account_config, settings=None):
+    def create_dns_account(self, provider, account_id, account_config, settings=None,
+                           refuse_taken=False):
         """Create or update a DNS provider account.
 
         The ``settings`` parameter is accepted for backward compatibility
         but ignored — the read/modify/write happens under the settings
         manager's lock so two concurrent admins editing different
         accounts can no longer race and lose each other's changes.
+
+        ``refuse_taken``: a create, not an update. An account of that name
+        that already has credentials is left as it is, and DNSAccountTaken is
+        raised. Checked under the lock, so two creates of one name at once
+        cannot both write.
         """
+        taken = {'yes': False}
         try:
             def _mutate(settings):
                 # Migration mutates the settings dict in place.
@@ -382,6 +429,10 @@ class DNSManager:
                 provider_config = settings['dns_providers'][provider]
                 if 'accounts' not in provider_config:
                     provider_config['accounts'] = {}
+                existing = provider_config['accounts'].get(account_id)
+                if refuse_taken and existing is not None and self._account_has_credentials(provider, existing):
+                    taken['yes'] = True
+                    return
                 provider_config['accounts'][account_id] = account_config
 
                 # Claim the default slot for the first REAL account. The
@@ -408,17 +459,28 @@ class DNSManager:
             success = self.settings_manager.update(
                 _mutate, f"dns_account_create_{provider}_{account_id}"
             )
-            if success:
+            if success and not taken['yes']:
                 logger.info(f"Created/updated DNS account '{account_id}' for provider '{provider}'")
-            return success
-
         except Exception as e:
             logger.error(f"Error creating DNS account for {provider}: {e}")
             return False
+        if taken['yes']:
+            raise DNSAccountTaken(taken_account_message(provider, account_id))
+        return success
 
-    def add_account(self, account_id, provider, account_config, settings=None):
+    def add_account(self, account_id, provider, account_config, settings=None,
+                    refuse_taken=False):
         """Alias for create_dns_account with consistent naming"""
-        return self.create_dns_account(provider, account_id, account_config, settings)
+        return self.create_dns_account(provider, account_id, account_config, settings,
+                                       refuse_taken=refuse_taken)
+
+    def account_with_credentials(self, provider, account_id, settings=None):
+        """Does *provider* hold an account named *account_id* that has its credentials?"""
+        settings = self.settings_manager.migrate_dns_providers_to_multi_account(
+            settings or self.settings_manager.load_settings())
+        account = (settings.get('dns_providers', {}).get(provider, {})
+                   .get('accounts', {}).get(account_id))
+        return account is not None and self._account_has_credentials(provider, account)
 
     def delete_dns_account(self, provider, account_id, settings=None):
         """Delete a DNS provider account.

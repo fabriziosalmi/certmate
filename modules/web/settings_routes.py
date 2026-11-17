@@ -10,6 +10,7 @@ from modules.core.request_fields import json_booleans
 from modules.core.constants import iter_cert_domain_dirs
 from modules.core.utils import validate_email
 from modules.core.domain_entries import entry_domain
+from modules.core.dns_providers import refuses_a_taken_account
 
 logger = logging.getLogger(__name__)
 
@@ -741,6 +742,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                endpoint='api_dns_accounts_deprecated')
     @app.route('/api/web/settings/accounts', methods=['GET', 'POST'])
     @auth_manager.require_role('admin')
+    @refuses_a_taken_account(lambda: dns_manager)
     def api_dns_accounts(provider=None):
         """Route for getting or adding DNS provider accounts"""
         if request.method == 'GET':
@@ -760,7 +762,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             if not name or not req_provider:
                 return jsonify({'error': 'Account name and provider required'}), 400
 
-            if dns_manager.add_account(name, req_provider, config):
+            if dns_manager.add_account(name, req_provider, config, refuse_taken=True):
                 # Honour the operator's explicit "set as default" choice on
                 # create, mirroring the update path — the flag the UI sends was
                 # previously dropped here.

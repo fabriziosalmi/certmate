@@ -17,6 +17,7 @@ from flask_restx import Resource
 import logging
 
 from ..core import dns_availability
+from ..core.dns_providers import refuses_a_taken_account
 from ..core.settings import mask_secrets_in_settings
 from .resource_context import ApiContext, instance_wide
 
@@ -205,6 +206,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
+        @refuses_a_taken_account(lambda: ctx.dns)
         def post(self, provider=None):
             """Add new DNS provider account"""
             try:
@@ -217,7 +219,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                 if not name or not req_provider:
                     return {'error': 'Account name and provider required'}, 400
 
-                if ctx.dns.add_account(name, req_provider, config):
+                if ctx.dns.add_account(name, req_provider, config, refuse_taken=True):
                     # Honour the operator's explicit "set as default" choice on
                     # create, mirroring the update path — the flag the UI sends
                     # was previously dropped here.
