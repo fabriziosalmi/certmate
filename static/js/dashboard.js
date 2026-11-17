@@ -2162,6 +2162,18 @@
         return fetch('/api/certificates', {
             headers: API_HEADERS
         }).then(function (response) {
+            if (response.status === 401) {
+                // The session ended: a logout in another tab, or a restart
+                // (sessions are kept in memory). The login page, and back here
+                // after, as CertMate.api does. Rendering the failure instead
+                // drew "Welcome to CertMate, 0 certificates" (UX audit,
+                // 2026-11-17), as if every certificate were gone.
+                window.location.href = '/login?next=' +
+                    encodeURIComponent(window.location.pathname + window.location.search);
+                var signedOut = new Error('HTTP 401: signed out');
+                signedOut.signedOut = true;
+                throw signedOut;
+            }
             if (!response.ok) {
                 throw new Error('HTTP ' + response.status + ': ' + response.statusText);
             }
@@ -2181,6 +2193,7 @@
             addDebugLog('Loaded ' + certificates.length + ' certificates successfully', 'success');
 
             allCertificates = certificates;
+            listingLoaded = true;
             updateStats(certificates);
             renderTagFilterBar();
             filterCertificates();
@@ -2188,21 +2201,38 @@
 
         }).catch(function (error) {
             addDebugLog('Failed to load certificates: ' + error.message, 'error');
+            if (error.signedOut) return;
 
-            // Initialize with empty array to prevent further errors
-            allCertificates = [];
-            updateStats([]);
-            displayCertificates([]);
-
-            // Show appropriate error message
-            if (error.message.indexOf('401') !== -1 || error.message.indexOf('Unauthorized') !== -1) {
-                showMessage('Authentication failed. Please check your API token.', 'error');
-            } else if (error.message.indexOf('403') !== -1 || error.message.indexOf('Forbidden') !== -1) {
-                showMessage('Access denied. Please check your permissions.', 'error');
-            } else {
-                showMessage('Failed to load certificates. Please try again.', 'error');
+            var forbidden = error.message.indexOf('403') !== -1 || error.message.indexOf('Forbidden') !== -1;
+            if (listingLoaded) {
+                // Keep the list on screen: an empty one reads as "every
+                // certificate is gone", and these are the last ones loaded.
+                showMessage(forbidden ? 'Access denied. Please check your permissions.'
+                    : 'Could not refresh the certificate list (' + error.message + '). ' +
+                      'It shows the last successful load.', 'error');
+                return;
             }
+            renderListingFailed(error);
+            showMessage(forbidden ? 'Access denied. Please check your permissions.'
+                : 'Failed to load certificates. Please try again.', 'error');
         });
+    }
+
+    // Set by the first listing that succeeds: until then a failure has no list
+    // to keep, and says so instead of drawing the first-run welcome.
+    var listingLoaded = false;
+
+    function renderListingFailed(error) {
+        var container = document.getElementById('certificatesList');
+        document.querySelector('#certificatesTable thead').style.display = 'none';
+        container.innerHTML = '<tr data-empty-state data-listing-failed><td colspan="7">' +
+            '<div class="px-6 py-12 text-center">' +
+            '<h3 class="text-lg font-medium text-foreground mb-2">The certificate list could not be loaded</h3>' +
+            '<p class="text-muted mb-6">' + escapeHtml(error.message) + '</p>' +
+            '<button type="button" data-click="loadCertificates" class="inline-flex items-center px-4 py-2 border border-border ' +
+            'shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-hover">' +
+            '<i class="fas fa-arrows-rotate mr-2" aria-hidden="true"></i>Try again</button>' +
+            '</div></td></tr>';
     }
 
     // Listen for cache settings updates from the settings page. The settings
