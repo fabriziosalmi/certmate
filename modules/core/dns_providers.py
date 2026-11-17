@@ -6,6 +6,7 @@ Handles DNS provider configuration, account management, and provider-specific op
 import logging
 
 from .secret_refs import SecretReferenceError, has_value, resolve
+from .structured_logging import scrub_log_value
 from .utils import _DNS_PROVIDER_CREDENTIALS
 
 logger = logging.getLogger(__name__)
@@ -186,7 +187,10 @@ class DNSManager:
                         account_config = accounts[account_id]
                         if self._account_has_credentials(provider, account_config):
                             return account_config, account_id
-                        logger.warning("Account %r of provider %r has no credentials", account_id, provider)
+                        # Both come from the request: CR/LF stripped so they
+                        # cannot forge a log record (CodeQL py/log-injection).
+                        logger.warning("Account %s of provider %s has no credentials",
+                                       scrub_log_value(account_id), scrub_log_value(provider))
                         return None, None
                     else:
                         logger.warning(f"Account '{account_id}' not found for provider '{provider}'")
