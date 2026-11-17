@@ -214,9 +214,9 @@
             return '<tr data-cc-id="' + safeId + '" role="button" tabindex="0" aria-label="View details for ' + safeCN + '" class="' + healthClass + ' cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
                 '<td class="px-6 py-4 text-sm font-medium text-foreground cm-mono">' + safeCN + '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
-                '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium">' + safeUsage + '</span></td>' +
-                '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell">' + CertMate.formatDate(createdDate) + '</td>' +
-                '<td class="px-6 py-4 text-sm ' + (isExpiringSoon ? 'text-danger-fg font-semibold' : 'text-muted') + '">' + CertMate.formatDate(expiresDate) + '</td>' +
+                '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium whitespace-nowrap">' + safeUsage + '</span></td>' +
+                '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell whitespace-nowrap">' + CertMate.formatDate(createdDate) + '</td>' +
+                '<td class="px-6 py-4 text-sm whitespace-nowrap ' + (isExpiringSoon ? 'text-warning-fg font-semibold' : 'text-muted') + '">' + CertMate.formatDate(expiresDate) + '</td>' +
                 '<td class="px-6 py-4 text-sm">' +
                     (cert.revoked
                         ? '<span class="px-2 py-1 bg-danger-surface text-danger-strong rounded text-xs font-medium">Revoked</span>'

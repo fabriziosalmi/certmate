@@ -1013,7 +1013,7 @@
 
             if (!cert.exists) {
                 return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${title}" data-click="openCertRow" data-pass="el">
-                    <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${title}</div>${ipHint}</td>
+                    <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="${title}">${title}</div>${ipHint}</td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
@@ -1115,7 +1115,7 @@
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${title}</div>
+                            <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="${title}">${title}</div>
                             ${ipHint}
                             ${aliasHint}
                             ${tagHint}
@@ -1469,7 +1469,7 @@
                     '<i class="fas ' + icon + '"></i></button>';
             }
             function detailRow(label, valueHtml) {
-                return '<div class="flex items-center justify-between gap-4 py-2.5"><dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
+                return '<div class="flex items-start justify-between gap-4 py-2.5"><dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
                     '<dd class="text-sm font-medium text-right text-foreground min-w-0">' + valueHtml + '</dd></div>';
             }
 
@@ -3859,7 +3859,7 @@
         return '<tr data-pending-job="' + jobId + '" class="bg-blue-50/40 dark:bg-blue-900/10">' +
             '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
             '<i class="fas fa-spinner fa-spin text-info-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
-            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">' + domain + '</div>' +
+            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="' + domain + '">' + domain + '</div>' +
             '<div class="mt-1 text-xs text-muted">' + sub + '</div></div></div></td>' +
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-info-fg ring-1 ring-inset ring-blue-500/20"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Issuing</span></td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
@@ -3889,7 +3889,7 @@
         return '<tr data-pending-job="' + jobId + '" class="bg-red-50/40 dark:bg-red-900/10">' +
             '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
             '<i class="fas fa-times-circle text-danger-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
-            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">' + domain + '</div>' +
+            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="' + domain + '">' + domain + '</div>' +
             '<div class="mt-1 text-xs text-danger-fg break-words" title="' + errTitle + '">' + errText + '</div></div></div></td>' +
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +

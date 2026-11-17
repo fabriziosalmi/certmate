@@ -56,7 +56,7 @@
                         <p id="activityDetailSub" class="text-xs text-muted truncate"></p>
                     </div>
                 </div>
-                <button type="button" data-click="closeDetail" aria-label="Close" class="text-muted hover:text-foreground transition text-xl leading-none flex-shrink-0">&times;</button>
+                <button type="button" data-click="closeDetail" aria-label="Close" class="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 text-muted hover:text-foreground rounded-lg hover:bg-hover transition-colors"><i class="fas fa-times text-lg" aria-hidden="true"></i></button>
             </div>
             <div id="activityDetailBody" class="px-5 py-4 space-y-4 overflow-y-auto" style="min-height:0;"></div>
             <div id="activityDetailActions" class="flex items-center justify-end gap-2 px-5 py-3 border-t border-border flex-wrap"></div>
@@ -88,6 +88,7 @@
             create:              { icon: 'fa-plus-circle',       color: 'text-green-500',  bg: 'bg-success-surface' },
             create_account:      { icon: 'fa-user-plus',         color: 'text-green-500',  bg: 'bg-success-surface' },
             batch_create:        { icon: 'fa-layer-group',       color: 'text-green-500',  bg: 'bg-success-surface' },
+            import:              { icon: 'fa-file-import',       color: 'text-green-500',  bg: 'bg-success-surface' },
             oidc_login_success:  { icon: 'fa-right-to-bracket',  color: 'text-green-500',  bg: 'bg-success-surface' },
             // update (blue)
             update:              { icon: 'fa-pen',               color: 'text-blue-500',   bg: 'bg-info-surface' },
@@ -176,6 +177,7 @@
                 download: 'Downloaded',
                 api_request: 'API call',
                 batch_create: 'Batch created',
+                import: 'Imported',
                 batch_download: 'Batch downloaded',
                 create_account: 'Account added',
                 update_account: 'Account updated',
