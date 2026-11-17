@@ -163,7 +163,8 @@ def test_reissue_recognises_a_rate_limit_the_way_create_does():
     route = (REPO / 'modules' / 'api' /
              'resources_lifecycle.py').read_text(encoding='utf-8')
     assert "if 'rate limit' in error_msg.lower()" not in route
-    assert route.count('_certbot_hint(error_msg)') >= 2
+    # Both failure paths ask the same hint, now with the challenge it is about (#1460).
+    assert route.count('_certbot_hint(error_msg, ') >= 2
 
 
 # ── 4-6. sentences that outlived what they described ─────────────────

@@ -117,7 +117,43 @@ def _configuration_hint(error_msg: str):
 _CREATION_PREFIX = CREATION_FAILED + ': '
 
 
-def _certbot_hint(error_msg: str) -> str:
+# The CA refused the challenge answer: certbot's "The Certificate Authority
+# reported these problems" block, or the ACME problem types for a failed
+# validation. What to check then depends on the challenge, not on DNS
+# credentials (#1460).
+_CA_REFUSED_MARKERS = (
+    'the certificate authority reported these problems',
+    'some challenges have failed',
+    'authorizations were not finalized',
+    'acme:error:unauthorized',
+    'acme:error:connection',
+    'acme:error:dns',
+    'acme:error:incorrectresponse',
+    'invalid response from',
+    'incorrect txt record',
+    'dns problem',
+)
+# A DNS provider refusing CertMate's own credentials. "auth" alone also matched
+# "authorizations", which is the CA's word for a validation.
+_DNS_CREDENTIAL_MARKERS = ('unauthorized', 'authentication', 'invalid token', 'invalid api',
+                           'credentials', 'forbidden')
+
+_HTTP01_HINT = ('The CA could not reach the http-01 challenge: check that the name resolves to '
+                'this host and that port 80 reaches CertMate.')
+_DNS01_HINT = ('The CA could not verify the DNS TXT record: check that it was created in the '
+               "name's zone and has had time to propagate.")
+
+
+def _challenge_named_in(lowered: str):
+    """The challenge the CA's own words point to, or None."""
+    if '/.well-known/acme-challenge/' in lowered or 'http-01' in lowered:
+        return 'http-01'
+    if '_acme-challenge' in lowered or 'dns-01' in lowered or 'txt record' in lowered:
+        return 'dns-01'
+    return None
+
+
+def _certbot_hint(error_msg: str, challenge_type: str | None = None) -> str:
     """The same, for a failure certbot reported.
 
     Rate limits are tested first, and with `is_acme_rate_limit` rather than
@@ -141,10 +177,20 @@ def _certbot_hint(error_msg: str) -> str:
     if is_acme_rate_limit(error_msg):
         return "You've hit the certificate authority's rate limit. Wait before trying again."
     lowered = (error_msg or '').lower()
-    if 'unauthorized' in lowered or 'auth' in lowered:
+    # The CA's words name the challenge more surely than the request does: an
+    # IP certificate is http-01 whatever the request or the default said.
+    challenge = _challenge_named_in(lowered) or (challenge_type or '').lower() or None
+    http01 = challenge == 'http-01'
+    if any(marker in lowered for marker in _CA_REFUSED_MARKERS):
+        return _HTTP01_HINT if http01 else _DNS01_HINT
+    if not http01 and any(marker in lowered for marker in _DNS_CREDENTIAL_MARKERS):
         return 'DNS provider authentication failed. Verify your API credentials in settings.'
-    if 'timeout' in lowered:
+    if 'timeout' in lowered or 'timed out' in lowered:
+        if http01:
+            return 'The CA timed out reaching this host: check that port 80 is open and reaches CertMate.'
         return 'DNS propagation timed out. Try increasing DNS propagation time in settings.'
+    if http01:
+        return 'Check that the name resolves to this host and that port 80 reaches CertMate.'
     return 'Check DNS provider credentials and ensure DNS records can be created.'
 
 
@@ -167,11 +213,19 @@ def _prefixed(prefix: str, error_msg: str) -> str:
     return prefix + error_msg
 
 
-def _creation_failure(error_msg: str):
+def _creation_failure(error_msg: str, challenge_type: str | None = None):
     """The error body for a certbot failure, prefixed exactly once."""
     return {'code': 'CERTIFICATE_CREATION_FAILED',
             'error': _prefixed(_CREATION_PREFIX, error_msg),
-            'hint': _certbot_hint(error_msg)}
+            'hint': _certbot_hint(error_msg, challenge_type)}
+
+
+def _requested_challenge(data, settings_manager):
+    """The challenge the request asked for, else the instance default: what the
+    hint falls back on when certbot's message does not name one (#1460)."""
+    if data.get('challenge_type'):
+        return data['challenge_type']
+    return (settings_manager.load_settings() or {}).get('challenge_type', 'dns-01')
 
 
 def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
@@ -296,7 +350,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
             except RuntimeError as e:
                 # Certbot execution errors
-                return _creation_failure(str(e)), 422
+                return _creation_failure(str(e), _requested_challenge(data, ctx.settings)), 422
             except Exception as e:
                 logger.error(f"Certificate creation failed: {str(e)}")
                 return {
@@ -447,7 +501,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 # problem; and the create path already prefixes its message,
                 # so a reissue that failed during issuance read "Certificate
                 # reissue failed: Certificate creation failed: ...".
-                hint = _certbot_hint(error_msg)
+                hint = _certbot_hint(error_msg, _requested_challenge(data, ctx.settings))
                 return {
                     'code': 'CERTIFICATE_REISSUE_FAILED',
                     'error': _prefixed(_REISSUE_PREFIX, error_msg),

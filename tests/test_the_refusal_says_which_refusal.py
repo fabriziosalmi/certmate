@@ -97,6 +97,44 @@ def test_the_other_hints_still_work(message, expected):
     assert expected in _certbot_hint(message).lower()
 
 
+# ── the challenge (#1460) ────────────────────────────────────────────
+# A failed http-01 validation was told to check DNS credentials: the hint
+# matched "auth" in "authorizations" and had no idea which challenge ran.
+
+HTTP01_REFUSAL = (
+    "Certificate creation failed: Some challenges have failed.\n"
+    "app.example.com: Invalid response from "
+    "http://app.example.com/.well-known/acme-challenge/abc123: 404")
+DNS01_REFUSAL = (
+    "Certificate creation failed: urn:ietf:params:acme:error:unauthorized: "
+    "Incorrect TXT record found at _acme-challenge.app.example.com")
+
+
+def test_a_failed_http01_validation_is_not_sent_to_dns():
+    hint = _certbot_hint('All authorizations were not finalized by the CA.', 'http-01').lower()
+    assert 'dns' not in hint and 'credentials' not in hint, hint
+    assert 'port 80' in hint
+
+
+def test_the_cas_own_words_name_the_challenge():
+    """An IP certificate is http-01 whatever the request said: the CA's
+    answer names the challenge path, and that wins."""
+    hint = _certbot_hint(HTTP01_REFUSAL, None).lower()
+    assert 'port 80' in hint and 'dns' not in hint, hint
+    assert 'port 80' in _certbot_hint(HTTP01_REFUSAL, 'dns-01').lower()
+
+
+def test_a_refused_txt_record_is_about_the_record_not_the_credentials():
+    hint = _certbot_hint(DNS01_REFUSAL, 'dns-01').lower()
+    assert 'authentication failed' not in hint and 'credentials' not in hint, hint
+    assert 'txt record' in hint
+
+
+def test_an_http01_failure_with_nothing_to_go_on_points_at_port_80():
+    hint = _certbot_hint('certbot exited with code 1 without reporting an error', 'http-01').lower()
+    assert 'port 80' in hint and 'dns' not in hint, hint
+
+
 # ── the prefix ───────────────────────────────────────────────────────
 
 def test_an_already_prefixed_message_is_not_prefixed_again():
