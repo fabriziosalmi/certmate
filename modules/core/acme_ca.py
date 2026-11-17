@@ -13,8 +13,10 @@ certificate carries the order's identifiers, DNS names as dNSName and
 addresses as iPAddress (RFC 8738, #1338), a subject of the first DNS name,
 and the key usage its key type calls for. An order of addresses alone has no
 name for a subject: the subject is empty and the SAN extension critical, as
-RFC 5280 section 4.2.1.6 requires then, and as Let's Encrypt issues them. Its chain is the leaf alone (G3): the
-root goes into trust stores from /acme/root, and a TLS server need not send it.
+RFC 5280 section 4.2.1.6 requires then, and as Let's Encrypt issues them. The
+root goes into trust stores from /acme/root, and a TLS server need not send it;
+the download carries it after the leaf anyway (modules/web/acme_routes.py),
+because certbot refuses a chain of one certificate (#1484, replacing G3).
 """
 import ipaddress
 import os

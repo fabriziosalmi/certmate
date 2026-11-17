@@ -96,9 +96,10 @@ def test_a_ready_order_becomes_a_certificate_built_from_the_order(client, respon
     assert finalized.get_json()['status'] == 'valid'
     assert pem.mimetype == 'application/pem-certificate-chain'
     chain = x509.load_pem_x509_certificates(pem.data)
-    assert len(chain) == 1  # G3: the leaf alone
-    cert = chain[0]
+    # The leaf, then the root (#1484): certbot refuses a chain of one.
     root = _root(client)
+    assert len(chain) == 2 and chain[1] == root
+    cert = chain[0]
     cert.verify_directly_issued_by(root)  # raises unless the root signed it
     assert cert.issuer == root.subject
     assert root.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value.startswith('CertMate ACME CA ')
@@ -302,7 +303,9 @@ def test_the_certificate_is_kept_with_its_order(app, client, responder):
     with sqlite3.connect(store.path) as con:
         row = con.execute('SELECT order_id, names, pem FROM certificates').fetchone()
     assert row[0] == location.rsplit('/', 1)[-1] and row[1] == '["web.lab.internal"]'
-    assert row[2] == pem.get_data(as_text=True)
+    # The leaf is what is kept; the root is added when it is downloaded (#1484).
+    assert len(x509.load_pem_x509_certificates(row[2].encode())) == 1
+    assert pem.get_data(as_text=True).startswith(row[2])
 
 
 def test_a_crl_read_before_a_revocation_is_made_again_after_it(client, responder):
