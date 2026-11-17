@@ -63,21 +63,29 @@ def test_metadata_and_validation(accounts):
     assert not valid and 'https' in message.lower()
 
 
-def test_account_specific_directory_and_certbot_command(accounts):
+def test_account_specific_directory_and_certbot_command(accounts, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     manager = CAManager(Settings(accounts))
     for account_id, expected in accounts.items():
         config, used = manager.get_ca_config('sectigo', account_id)
         assert used == account_id
         assert manager.get_acme_server_url('sectigo', account_config=config) == expected['acme_url']
+        temp_files = []
         command, env = manager.build_certbot_command(
-            'example.com', expected['email'], 'sectigo', 'custom-script', {}, config)
+            'example.com', expected['email'], 'sectigo', 'custom-script', {}, config,
+            temp_files=temp_files)
         assert env == {}
-        for flag, value in [('--server', expected['acme_url']),
-                            ('--eab-kid', expected['eab_kid']),
-                            ('--eab-hmac-key', expected['eab_hmac'])]:
-            assert command[command.index(flag) + 1] == value
+        assert command[command.index('--server') + 1] == expected['acme_url']
+        # The pair is in the -c file certbot reads, never on the command line (#1461).
+        assert expected['eab_hmac'] not in ' '.join(command)
+        eab_file = command[command.index('-c') + 1]
+        assert temp_files == [eab_file]
+        with open(eab_file, encoding='utf-8') as handle:
+            assert handle.read() == (f"eab-kid = {expected['eab_kid']}\n"
+                                     f"eab-hmac-key = {expected['eab_hmac']}\n")
         other = accounts['production-dv' if account_id == 'production-ov' else 'production-ov']
-        assert other['eab_hmac'] not in command
+        with open(eab_file, encoding='utf-8') as handle:
+            assert other['eab_hmac'] not in handle.read()
 
 
 def test_missing_directory_fails_closed_and_existing_ca_urls_unchanged(accounts):

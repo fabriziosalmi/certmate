@@ -1,6 +1,7 @@
 """SCM-authorized identifiers can issue without CertMate serving a challenge."""
 
 import json
+import os
 import shlex
 from unittest.mock import MagicMock, patch
 
@@ -41,16 +42,31 @@ def issuer(tmp_path):
 
 def test_sectigo_wildcard_issues_without_http_or_dns_credentials(issuer, tmp_path):
     manager, shell, dns = issuer
+    eab_seen = []
+    real_run = shell.run
+
+    def run(cmd, **kwargs):
+        # What certbot would read from its -c file, while it runs.
+        if '-c' in cmd:
+            with open(cmd[cmd.index('-c') + 1], encoding='utf-8') as handle:
+                eab_seen.append(handle.read())
+        return real_run(cmd, **kwargs)
+
+    shell.run = run
     manager.create_certificate(
         domain='example.com', email='ops@example.com',
         ca_provider='sectigo', ca_account_id='scm',
         challenge_type='prevalidated', san_domains=['*.example.com'])
+    assert eab_seen == ['eab-kid = example-kid\neab-hmac-key = example-hmac\n']
     cmd = shlex.split(shell.commands_executed[0])
     for flag, value in [('--server', 'https://acme.sectigo.com/v2/OV'),
-                        ('--eab-kid', 'example-kid'),
-                        ('--eab-hmac-key', 'example-hmac'),
                         ('--manual-auth-hook', '/usr/bin/false')]:
         assert cmd[cmd.index(flag) + 1] == value
+    # The EAB pair reached certbot in a -c file, not on the command line, and
+    # the file is gone once certbot is done (#1461).
+    assert 'example-hmac' not in shell.commands_executed[0]
+    assert '--eab-hmac-key' not in cmd and '--eab-kid' not in cmd
+    assert not os.path.exists(cmd[cmd.index('-c') + 1])
     assert '--manual' in cmd
     assert cmd[cmd.index('--preferred-challenges') + 1] == 'dns'
     assert cmd.count('-d') == 2

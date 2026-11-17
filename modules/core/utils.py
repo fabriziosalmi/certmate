@@ -781,6 +781,19 @@ def _create_config_file(plugin_name: str, content: str, suffix: str = ".ini") ->
         f.write(content)
     return config_file
 
+def create_eab_config(eab_kid: str, eab_hmac_key: str) -> Path:
+    """A certbot config file (``-c``) holding a CA account's EAB pair (#1461).
+
+    certbot logs its command line to its own log on every run; the contents of
+    a config file it is given are not logged.
+    """
+    for value in (eab_kid, eab_hmac_key):
+        if '\n' in value or '\r' in value:
+            raise ValueError("An EAB credential cannot contain a line break")
+    return _create_config_file(
+        "certbot-eab", f"eab-kid = {eab_kid}\neab-hmac-key = {eab_hmac_key}\n")
+
+
 def create_cloudflare_config(token: str) -> Path:
     """Create Cloudflare credentials file."""
     return _create_config_file("cloudflare", f"dns_cloudflare_api_token = {token}\n")

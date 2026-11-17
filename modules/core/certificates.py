@@ -511,6 +511,12 @@ class _IssuanceArtifacts:
     credentials_file: str | None = None
     extra_credential_files: list = field(default_factory=list)
     alias_hook_config: str | None = None
+    # The certbot config file holding the CA account's EAB pair (#1461). Its
+    # own list: the DNS step reassigns extra_credential_files after the
+    # command is built, which dropped this file from the cleanup.
+    eab_config_files: list = field(default_factory=list)
+    # The same pair, masked in certbot's error text.
+    eab_secrets: tuple = ()
 
     def temp_paths(self):
         """Every path whose file must be removed when the operation ends.
@@ -526,6 +532,7 @@ class _IssuanceArtifacts:
             self.credentials_file,
             self.alias_hook_config,
             *self.extra_credential_files,
+            *self.eab_config_files,
             self.ca_extra_env.get('REQUESTS_CA_BUNDLE'),
         ]
 
@@ -3386,7 +3393,13 @@ class CertificateManager:
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
             acme_profile=prepared.acme_profile,
             identifier=all_domains[0],
+            temp_files=artifacts.eab_config_files,
         )
+        # Masked in certbot's error text should it ever echo them (#666 S6).
+        # Read from the account, not from argv: the pair is no longer on it (#1461).
+        artifacts.eab_secrets = tuple(
+            value for value in builder.get_eab_credentials(ca_provider, ca_account_config or {})
+            if value)
 
         if replace:
             # If the existing lineage is broken (stale paths / non-symlink
@@ -3751,12 +3764,9 @@ class CertificateManager:
             if result.returncode != 0:
                 # One builder for create and renew (#666 S6): what is logged
                 # and what is raised are the same redacted text.
-                eab_secrets = tuple(
-                    certbot_cmd[certbot_cmd.index(flag) + 1]
-                    for flag in ('--eab-kid', '--eab-hmac-key') if flag in certbot_cmd)
                 raise RuntimeError(
                     self._certbot_failure(CREATION_FAILED, domain,
-                                          result, secrets=eab_secrets)
+                                          result, secrets=artifacts.eab_secrets)
                     + self._caa_explanation(ca_provider, all_domains, challenge_type))
             
             # Move certificates to standard location. Publish live/ to the flat

@@ -782,7 +782,10 @@ def test_first_renewal_uses_selected_source_and_then_normal_certbot_renew(instan
         assert (instance.directory / 'cert.pem').read_bytes() == original
         assert command[1] == 'certonly'
         assert command[command.index('--server') + 1] == 'https://acme.sectigo.com/v2/OV'
-        assert '--eab-kid' in command
+        # The account's EAB pair, in the -c file certbot reads (#1461).
+        with open(command[command.index('-c') + 1], encoding='utf-8') as handle:
+            assert handle.read().startswith('eab-kid = ')
+        assert '--eab-kid' not in command
         assert DOMAIN in command and SAN in command
         assert '--dns-cloudflare' not in command
         live = lineage_live_dir(instance.directory, DOMAIN)
