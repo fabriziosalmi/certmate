@@ -1777,6 +1777,13 @@ With `async`, **202 Accepted** at once, and the job to poll with
 The answer is not the certificate record; read it with
 `GET /api/certificates/<domain>`.
 
+A job that failed carries `error`, certbot's message, and since API contract
+**2.67** the `error_code` and `hint` the synchronous request would have answered
+with: `CERTIFICATE_CREATION_FAILED` (or `CERTIFICATE_REISSUE_FAILED` for a
+reissue) and what to check, for the challenge it was about. A CA directory
+that cannot be reached at all is named, with its URL. `hint` is `null` while
+the job runs, after it succeeds, and for a renewal.
+
 **Errors**: 400 validation or configuration (the body names the problem),
 403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a
 certificate (renew it, or reissue it to change its configuration) or an

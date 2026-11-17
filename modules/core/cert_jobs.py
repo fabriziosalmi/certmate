@@ -87,9 +87,15 @@ class IssuanceExecutor:
         self._jobs = OrderedDict()  # job_id -> record (insertion-ordered for eviction)
         self._lock = threading.Lock()
 
-    def submit(self, kind, domain, fn):
+    def submit(self, kind, domain, fn, explain=None):
         """Register a job and run *fn* (a zero-arg callable performing the
         blocking issuance) on the pool. Returns the job_id immediately.
+
+        *explain*, when given, turns a failure's message into the
+        ``{'code', 'hint'}`` the synchronous route would have answered with,
+        so a job that failed says what to check too. The dashboard always
+        issues through a job, so without it the hint was never shown (UX
+        audit, 2026-11-17).
 
         Raises `IssuanceQueueFull` when the backlog is already at the limit,
         which the API turns into a 429. The check and the registration happen
@@ -118,10 +124,11 @@ class IssuanceExecutor:
                 'result': None,
                 'error': None,
                 'error_code': None,
+                'hint': None,
             }
             self._evict_locked()
         try:
-            self._pool.submit(self._run, job_id, kind, domain, fn)
+            self._pool.submit(self._run, job_id, kind, domain, fn, explain)
         except RuntimeError as e:
             # The pool is shut down, which now actually happens: nothing will
             # ever run this job, so it must not be left at 'queued' for a
@@ -192,7 +199,7 @@ class IssuanceExecutor:
             else:
                 break  # nothing terminal to evict yet
 
-    def _run(self, job_id, kind, domain, fn):
+    def _run(self, job_id, kind, domain, fn, explain=None):
         self._set(job_id, status='running', started_at=utc_now_iso())
         # Background threads have no Flask app/request context; push one so
         # Flask-bound code (settings cache via flask.g, etc.) behaves like the
@@ -208,9 +215,12 @@ class IssuanceExecutor:
         except Exception as e:  # record every failure on the job, never crash the worker
             busy = isinstance(e, DomainOperationInProgress)
             logger.error("Async %s job %s failed for %s: %s", kind, job_id, domain, e)
+            explained = {} if busy or explain is None else explain(str(e))
             self._set(job_id, status='failed', finished_at=utc_now_iso(),
                       error=str(e),
-                      error_code='DOMAIN_OPERATION_IN_PROGRESS' if busy else None)
+                      error_code=('DOMAIN_OPERATION_IN_PROGRESS' if busy
+                                  else explained.get('code')),
+                      hint=explained.get('hint'))
         finally:
             if ctx is not None:
                 ctx.pop()

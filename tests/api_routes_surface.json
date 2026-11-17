@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.66",
+ "contract_version": "2.67",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -1447,6 +1447,9 @@
     "jobs[].finished_at": [
      "null"
     ],
+    "jobs[].hint": [
+     "null"
+    ],
     "jobs[].job_id": [
      "str"
     ],
@@ -1479,9 +1482,12 @@
      "str"
     ],
     "error_code": [
-     "null"
+     "str"
     ],
     "finished_at": [
+     "str"
+    ],
+    "hint": [
      "str"
     ],
     "job_id": [
