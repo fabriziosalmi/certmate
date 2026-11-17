@@ -51,7 +51,11 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
     @auth_manager.require_role('admin')
     def settings_page():
         """Settings page"""
-        return render_template('settings.html')
+        # The backup section offers a complete, restorable backup only when
+        # it is encrypted at rest (decided 2026-11-17).
+        from ..core.file_operations import backup_passphrase_configured
+        return render_template('settings.html',
+                               backup_passphrase_configured=backup_passphrase_configured())
 
     @app.route('/audit')
     def audit_page():

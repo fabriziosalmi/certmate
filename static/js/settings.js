@@ -1749,7 +1749,10 @@
             },
             body: JSON.stringify({
                 type: backupType,
-                reason: 'manual_backup'
+                reason: 'manual_backup',
+                // Offered only when backups are encrypted at rest (the box is
+                // rendered then): a complete backup can restore the instance.
+                include_secrets: !!(document.getElementById('backupIncludeSecrets') || {}).checked
             })
         })
             .then(function (response) {
