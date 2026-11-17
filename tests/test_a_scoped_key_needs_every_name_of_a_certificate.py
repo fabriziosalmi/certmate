@@ -91,6 +91,10 @@ def instance(tmp_path_factory):
         current = settings.load_settings()
         current['email'] = 'ops@team.example'
         current['domains'] = [{'domain': d, 'dns_provider': 'cloudflare'} for d in sans]
+        # The certificates name Cloudflare's account "default". A fresh
+        # instance carries one with an empty token, which since #1469 is not
+        # handed to issuance; give it the token an operator would have.
+        current['dns_providers']['cloudflare']['accounts']['default']['api_token'] = 'test-' + 'x' * 36
         settings.save_settings(current)
 
         auth = container.managers['auth']

@@ -175,23 +175,31 @@ class DNSManager:
                 if not isinstance(accounts, dict):
                     return None, None
                 
+                # Only an account with its provider's credentials is handed
+                # out (#1469). A fresh instance's migrated settings hold an
+                # empty "default" account per provider, set as the default;
+                # resolved, its blank token went into certbot's credentials
+                # file and the failure came from the DNS provider.
                 # If account_id is specified, look for it directly
                 if account_id:
                     if account_id in accounts:
                         account_config = accounts[account_id]
-                        if isinstance(account_config, dict):
+                        if self._account_has_credentials(provider, account_config):
                             return account_config, account_id
+                        logger.warning("Account %r of provider %r has no credentials", account_id, provider)
+                        return None, None
                     else:
                         logger.warning(f"Account '{account_id}' not found for provider '{provider}'")
                         return None, None
-                
-                # If no account_id specified, try to use default account
+
+                # If no account_id specified, try to use default account; a
+                # default with no credentials gives way to one that has them.
                 default_accounts = settings.get('default_accounts', {})
                 default_account_id = default_accounts.get(provider)
-                
+
                 if default_account_id and default_account_id in accounts:
                     account_config = accounts[default_account_id]
-                    if isinstance(account_config, dict):
+                    if self._account_has_credentials(provider, account_config):
                         return account_config, default_account_id
                 
                 # If we get here and no account_id was specified, try to use the first available account
