@@ -383,26 +383,43 @@ class PowerDNSStrategy(DNSProviderStrategy):
         return create_powerdns_config(
             config_data.get('api_url', ''),
             config_data.get('api_key', ''),
+            config_data.get('server_id', ''),
         )
 
     @property
     def plugin_name(self) -> str:
-        return 'dns-powerdns'
+        # 'manual': PowerDNS DNS-01 is answered by CertMate's own hook, not by
+        # certbot-dns-powerdns, whose last release needs dns-lexicon<=3.5.6 and
+        # cannot be installed alongside CertMate's pins.
+        return 'manual'
+
+    @property
+    def supports_propagation_seconds_flag(self) -> bool:
+        # --manual has no propagation flag; the hook does the waiting.
+        return False
+
+    @property
+    def propagation_via_environment(self) -> bool:
+        return True
+
+    def prepare_environment(self, env: dict[str, str], config_data: dict[str, Any]) -> None:
+        # An account-level wait wins over the global one, which
+        # CertificateManager sets with setdefault.
+        propagation = config_data.get('propagation_seconds')
+        if propagation:
+            env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(
+                clamp_propagation_seconds(propagation, self.default_propagation_seconds))
 
     @property
     def default_propagation_seconds(self) -> int:
         return 60
 
     def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
-        cmd.extend(['--authenticator', self.plugin_name])
-        if credentials_file:
-            cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
-
-        if domain_alias:
-            logger.info(
-                f"DNS alias '{domain_alias}' requested for PowerDNS — ensure a CNAME "
-                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
-            )
+        if not credentials_file:
+            raise ValueError("PowerDNS needs the hook config create_config_file writes")
+        cmd.extend(manual_hook_arguments(
+            Path(__file__).with_name('powerdns_dns_hook.py'), credentials_file))
+        self._note_domain_alias(domain_alias)
 
 class DigitalOceanStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:

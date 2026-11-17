@@ -86,13 +86,13 @@ def test_the_answer_is_the_preflights_decision(installed):
     assert not differ, f'the API and the issuance preflight disagree on {differ}'
 
 
-def test_the_image_issues_with_24_of_29():
-    """The published image: 20 plugins, plus the four providers CertMate drives itself and ACME-DNS."""
+def test_the_image_issues_with_25_of_29():
+    """The published image: 20 plugins, plus the five providers CertMate drives itself."""
     answer = dns_availability.availability(IMAGE_PLUGINS)
     missing = sorted(p['provider'] for p in answer if not p['available'])
-    assert missing == ['dynudns', 'he-ddns', 'namecheap', 'powerdns', 'scaleway']
+    assert missing == ['dynudns', 'he-ddns', 'namecheap', 'scaleway']
     assert {p['provider'] for p in answer if p['plugin'] is None} == {
-        'acme-dns', 'azure', 'custom-script', 'solidserver'}
+        'acme-dns', 'azure', 'custom-script', 'powerdns', 'solidserver'}
 
 
 def test_the_parser_reads_what_certbot_prints():

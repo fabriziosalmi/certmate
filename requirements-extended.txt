@@ -2,17 +2,6 @@
 # Install this in addition to requirements-minimal.txt for additional DNS providers
 
 # Self-hosted and enterprise DNS
-# certbot-dns-powerdns is NOT listed here, and this file was unusable until it
-# was removed: 0.2.1 (the latest) requires dns-lexicon<=3.5.6, while
-# certbot-dns-linode below requires dns-lexicon>=3.14.1. pip cannot satisfy
-# both, so `pip install -r requirements-extended.txt` ended in
-# ResolutionImpossible — alone in an empty venv, layered on
-# requirements-minimal.txt as the header suggests, and layered on
-# requirements.txt as the Dockerfile advertises. Every path.
-# requirements.txt had already excluded it for exactly this reason and says
-# "Install separately if needed"; this file reintroduced the conflict it
-# documented avoiding, and nothing built it, so nothing ever said so.
-#   pip install certbot-dns-powerdns==0.2.1   # in its own environment
 certbot-dns-rfc2136==5.8.0
 
 # Popular hosting providers

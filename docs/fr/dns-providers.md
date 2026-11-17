@@ -1,6 +1,6 @@
 # Fournisseurs DNS
 
-<!-- CERTMATE-TRANSLATED-FROM f2105fc570be338c -->
+<!-- CERTMATE-TRANSLATED-FROM b45dde63ca3fa196 -->
 
 CertMate supporte une large gamme de fournisseurs DNS pour les défis Let's Encrypt DNS-01 via des plugins certbot individuels. La liste complète est dans le tableau ci-dessous.
 
@@ -14,7 +14,7 @@ CertMate supporte une large gamme de fournisseurs DNS pour les défis Let's Encr
 | **AWS Route53** | `certbot-dns-route53` | Clés d'accès ou chaîne d'identification AWS / rôle IAM | Cloud majeur | **Stable** |
 | **Azure DNS** | Hook propre à CertMate (`azure-mgmt-dns`) | Service Principal | Cloud majeur | **Stable** |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Cloud majeur | **Stable** |
-| **PowerDNS** | `certbot-dns-powerdns` | URL API, Clé API | Entreprise | **Installation séparée** |
+| **PowerDNS** | Hook propre à CertMate (API PowerDNS) | URL API, Clé API | Entreprise | **Stable** |
 | **EfficientIP SOLIDserver** | script personnalisé via API REST | Hôte, Identifiants API | Entreprise | **Stable** |
 | **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | Clé API, Secret Key | Entreprise | **Stable** |
 | **NS1** | `certbot-dns-nsone` | Clé API | Entreprise | **Stable** |
@@ -48,12 +48,12 @@ La dernière colonne indique si l'image Docker peut utiliser le fournisseur tell
 | --- | --- |
 | **Stable** | Le plugin est figé dans `requirements.txt`, il est donc dans l'image par défaut. |
 | **Image étendue** | Figé dans `requirements-extended.txt`. Construire avec `--build-arg EXTRA_REQUIREMENTS=requirements-extended.txt`. |
-| **Installation séparée** | Dans aucune image. Construire une image dérivée qui l'installe (ci-dessous), dans son propre environnement quand c'est indiqué. |
+| **Installation séparée** | Dans aucune image. Construire une image dérivée qui l'installe (ci-dessous). |
 | **Indisponible** | Il n'existe aucun plugin utilisable pour la pile prise en charge. CertMate peut être configuré pour lui, mais l'émission échoue. |
 
 `Namecheap` est l'indisponible : la seule version de `certbot-dns-namecheap` sur PyPI est la 1.0.0, une alpha pour Python 2.7-3.8 qui ne fonctionne pas avec certbot 2 sous Python 3.12. Pour les domaines Namecheap, utilisez ACME-DNS ou le script personnalisé.
 
-`Scaleway` est une alpha (0.0.7, qui déclare la prise en charge de Python 2.7), et `PowerDNS` exige `dns-lexicon<=3.5.6`, en conflit avec le reste de l'ensemble étendu, d'où son propre environnement.
+`Scaleway` est une alpha (0.0.7, qui déclare la prise en charge de Python 2.7).
 
 L'image n'a pas de pip : un plugin installé séparément va donc dans une image dérivée, qui remet pip pour sa propre construction seulement :
 
