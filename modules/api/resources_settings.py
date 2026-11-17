@@ -17,7 +17,7 @@ from flask_restx import Resource
 import logging
 
 from ..core import dns_availability
-from ..core.dns_providers import refuses_a_taken_account
+from ..core.dns_providers import refuses_a_taken_account, refuses_to_delete_an_account_in_use
 from ..core.settings import mask_secrets_in_settings
 from .resource_context import ApiContext, instance_wide
 
@@ -330,6 +330,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
 
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
+        @refuses_to_delete_an_account_in_use(lambda: ctx.managers)
         def delete(self, provider, account_id):
             """Delete a DNS provider account"""
             try:
