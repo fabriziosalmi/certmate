@@ -104,7 +104,8 @@
 
     // availability: null until GET /api/dns/providers answers, then a map of
     // provider -> true/false/null, or false when the request failed.
-    var state = { step: 1, email: '', provider: '', credentials: {}, availability: null };
+    // challenge: how the CA validates names. http-01 needs no DNS provider (decided 2026-11-17).
+    var state = { step: 1, email: '', challenge: 'dns-01', provider: '', credentials: {}, availability: null };
 
     // "Skip wizard" must stick: without persistence the modal re-appeared on
     // every dashboard load until setup was completed. Stored per browser in
@@ -390,10 +391,23 @@
                 '<div class="w-16 h-16 bg-success-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-server text-success-fg text-2xl"></i>' +
                 '</div>' +
-                '<h3 class="text-lg font-semibold text-foreground">DNS Provider</h3>' +
-                '<p class="text-sm text-muted mt-1">Select where your domains are managed</p>' +
+                '<h3 class="text-lg font-semibold text-foreground">How names are validated</h3>' +
+                '<p class="text-sm text-muted mt-1">The CA checks that you control each name before it issues</p>' +
             '</div>' +
-            '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="providerGrid">';
+            '<div class="grid grid-cols-2 gap-2 mb-4" id="challengeChoice" role="radiogroup" aria-label="Challenge type">' +
+                challengeButton('dns-01', 'fa-globe-americas', 'DNS-01', 'A TXT record through your DNS provider. Wildcards work.') +
+                challengeButton('http-01', 'fa-globe', 'HTTP-01', 'A file on this host over port 80. No DNS credentials.') +
+            '</div>';
+
+        if (state.challenge === 'http-01') {
+            html +=
+                '<div id="http01Note" class="p-3 rounded-lg bg-info-surface text-sm text-label">' +
+                    'The CA fetches a file from <code class="text-xs">http://&lt;name&gt;/.well-known/acme-challenge/</code>, ' +
+                    'so each name must reach CertMate on port 80, directly or through your reverse proxy. ' +
+                    'Wildcard names need DNS-01; you can add a DNS provider later in Settings.' +
+                '</div>';
+        } else {
+            html += '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="providerGrid">';
 
         Object.keys(PROVIDERS).forEach(function(key) {
             var p = PROVIDERS[key];
@@ -416,8 +430,16 @@
             html += renderCredentialFields(state.provider);
         }
         html += '</div>';
+        }
 
         body.innerHTML = html;
+
+        body.querySelectorAll('[data-challenge]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                state.challenge = btn.dataset.challenge;
+                renderStep();
+            });
+        });
 
         // Provider selection handlers
         body.querySelectorAll('.wiz-provider').forEach(function(btn) {
@@ -438,10 +460,11 @@
             toggleKeys();
         }
 
+        var ready = state.challenge === 'http-01' || !!state.provider;
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-muted hover:text-foreground"><i class="fas fa-arrow-left mr-1"></i> Back</button>' +
-            '<button type="button" id="wizNext2" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition ' + (!state.provider ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!state.provider ? 'disabled' : '') + '>Save & Finish <i class="fas fa-check ml-1"></i></button>';
+            '<button type="button" id="wizNext2" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition ' + (!ready ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!ready ? 'disabled' : '') + '>Save & Finish <i class="fas fa-check ml-1"></i></button>';
 
         document.getElementById('wizBack2').addEventListener('click', function() {
             state.step = 1;
@@ -449,6 +472,10 @@
         });
 
         document.getElementById('wizNext2').addEventListener('click', function() {
+            if (state.challenge === 'http-01') {
+                saveSettings();
+                return;
+            }
             if (!state.provider) return;
             // Collect credentials
             var providerDef = PROVIDERS[state.provider];
@@ -469,6 +496,16 @@
             state.credentials = creds;
             saveSettings();
         });
+    }
+
+    function challengeButton(value, icon, label, detail) {
+        var selected = state.challenge === value;
+        return '<button type="button" role="radio" aria-checked="' + selected + '" data-challenge="' + value + '"' +
+            ' class="flex flex-col items-start text-left p-3 rounded-lg border-2 transition ' +
+            (selected ? 'border-primary bg-primary/5' : 'border-border hover:border-gray-400') + '">' +
+            '<span class="text-sm font-medium text-foreground"><i class="fas ' + icon + ' mr-1" aria-hidden="true"></i>' + label + '</span>' +
+            '<span class="text-xs text-muted mt-1">' + detail + '</span>' +
+        '</button>';
     }
 
     function renderCredentialFields(provider) {
@@ -520,16 +557,18 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Saving...';
         }
 
-        var dnsProviders = {};
-        dnsProviders[state.provider] = { accounts: { default: state.credentials } };
-
         var payload = {
             email: state.email,
-            dns_provider: state.provider,
-            dns_providers: dnsProviders,
+            challenge_type: state.challenge,
             auto_renew: true,
             setup_completed: true
         };
+        if (state.challenge !== 'http-01') {
+            var dnsProviders = {};
+            dnsProviders[state.provider] = { accounts: { default: state.credentials } };
+            payload.dns_provider = state.provider;
+            payload.dns_providers = dnsProviders;
+        }
 
         fetch('/api/web/settings', {
             method: 'POST',
@@ -566,7 +605,9 @@
                 '<p class="text-sm text-muted mb-4">CertMate is configured and ready to manage your certificates.</p>' +
                 '<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-left text-sm space-y-2">' +
                     '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Email: <strong>' + escapeHtml(state.email) + '</strong></span></div>' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>' +
+                    (state.challenge === 'http-01'
+                        ? '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Validation: <strong>HTTP-01, on port 80</strong></span></div>'
+                        : '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>') +
                     '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Auto-renewal: <strong>Enabled</strong></span></div>' +
                 '</div>' +
             '</div>';
@@ -582,9 +623,17 @@
             // inside the drawer, which is `inert` while closed, so the focus was
             // a silent no-op and nothing opened. openCertDrawer focuses #domain
             // itself once the drawer is shown.
-            if (typeof window.openCertDrawer === 'function') {
-                window.openCertDrawer('server');
-            }
+            // The CA list was read when the page loaded, before the wizard
+            // saved the email: the form said "Configure a CA in Settings"
+            // (UX audit, 2026-11-17). Read it again first.
+            var reload = typeof window.loadCAProviders === 'function'
+                ? Promise.resolve(window.loadCAProviders()).catch(function () {})
+                : Promise.resolve();
+            reload.then(function () {
+                if (typeof window.openCertDrawer === 'function') {
+                    window.openCertDrawer('server');
+                }
+            });
         });
     }
 
