@@ -737,9 +737,16 @@
 
                     // The accounts that can issue, not every account on file.
                     if (accountsEl && countEl) {
-                        countEl.textContent = providerData.accounts.filter(function (account) {
+                        var usable = providerData.accounts.filter(function (account) {
                             return account.hasCredentials;
                         }).length;
+                        countEl.textContent = usable;
+                        // The word after the number is in the template; it read
+                        // "1 accounts" (UX audit, 2026-11-17).
+                        var noun = countEl.nextSibling;
+                        if (noun && noun.nodeType === Node.TEXT_NODE) {
+                            noun.textContent = usable === 1 ? ' account' : ' accounts';
+                        }
                         accountsEl.classList.remove('invisible');
                     }
                 } else if (providerData && providerData.configured === null) {
@@ -1453,7 +1460,11 @@
         for (var i = 0; i < requiredFields.length; i++) {
             var field = requiredFields[i];
             if (!field.value || !field.value.trim()) {
-                validationError = (field.placeholder || field.name) + ' is required';
+                // The field's label, not its placeholder: that read "Enter your
+                // Cloudflare API token is required" (UX audit, 2026-11-17).
+                var fieldLabel = field.id && providerFieldsContainer.querySelector('label[for="' + field.id + '"]');
+                var fieldName = fieldLabel ? fieldLabel.textContent.replace(/\*\s*$/, '').trim() : field.name;
+                validationError = fieldName + ' is required';
                 break;
             }
         }
@@ -3780,14 +3791,29 @@
             });
         }
 
-        // Backup list (delayed further)
-        setTimeout(function () { refreshBackupList(); }, 3000);
-
-        // User management (delayed further still)
-        setTimeout(function () {
-            loadAuthConfig();
-            refreshUserList();
-        }, 4000);
+        // Users and backups load when their tab is first opened. They waited
+        // a fixed 4 and 3 seconds after the page, to spread the startup
+        // requests, so the Users tab showed local authentication as off and
+        // "Loading users..." for four seconds when /api/users answers in
+        // milliseconds (UX audit, 2026-11-17). Opening the tab is spread
+        // enough. The tabs component announces each change; the page may
+        // also open on one, before that component has started.
+        var loadedTabs = {};
+        function loadForTab(tab) {
+            if (loadedTabs[tab]) return;
+            if (tab === 'users') {
+                loadedTabs[tab] = true;
+                loadAuthConfig();
+                refreshUserList();
+            } else if (tab === 'backup') {
+                loadedTabs[tab] = true;
+                refreshBackupList();
+            }
+        }
+        window.addEventListener('settings:tab', function (event) {
+            loadForTab(event.detail && event.detail.tab);
+        });
+        loadForTab(location.hash.slice(1) || 'general');
     });
 
     // =============================================
