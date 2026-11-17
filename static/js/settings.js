@@ -737,9 +737,16 @@
 
                     // The accounts that can issue, not every account on file.
                     if (accountsEl && countEl) {
-                        countEl.textContent = providerData.accounts.filter(function (account) {
+                        var usable = providerData.accounts.filter(function (account) {
                             return account.hasCredentials;
                         }).length;
+                        countEl.textContent = usable;
+                        // The word after the number is in the template; it read
+                        // "1 accounts" (UX audit, 2026-11-17).
+                        var noun = countEl.nextSibling;
+                        if (noun && noun.nodeType === Node.TEXT_NODE) {
+                            noun.textContent = usable === 1 ? ' account' : ' accounts';
+                        }
                         accountsEl.classList.remove('invisible');
                     }
                 } else if (providerData && providerData.configured === null) {
@@ -1453,7 +1460,11 @@
         for (var i = 0; i < requiredFields.length; i++) {
             var field = requiredFields[i];
             if (!field.value || !field.value.trim()) {
-                validationError = (field.placeholder || field.name) + ' is required';
+                // The field's label, not its placeholder: that read "Enter your
+                // Cloudflare API token is required" (UX audit, 2026-11-17).
+                var fieldLabel = field.id && providerFieldsContainer.querySelector('label[for="' + field.id + '"]');
+                var fieldName = fieldLabel ? fieldLabel.textContent.replace(/\*\s*$/, '').trim() : field.name;
+                validationError = fieldName + ' is required';
                 break;
             }
         }
@@ -3780,15 +3791,33 @@
             });
         }
 
-        // Backup list (delayed further)
-        setTimeout(function () { refreshBackupList(); }, 3000);
-
-        // User management (delayed further still)
-        setTimeout(function () {
+        // Users and backups load when their panel is first shown. They waited
+        // a fixed 4 and 3 seconds after the page, to spread the startup
+        // requests, so the Users tab showed local authentication as off and
+        // "Loading users..." for four seconds when /api/users answers in
+        // milliseconds (UX audit, 2026-11-17). Opening the tab is spread
+        // enough. Read from the panel itself (Alpine shows it), not from the
+        // URL, so the page opening on a tab and a click on one are the same.
+        loadWhenShown('settings-panel-users', function () {
             loadAuthConfig();
             refreshUserList();
-        }, 4000);
+        });
+        loadWhenShown('settings-panel-backup', refreshBackupList);
     });
+
+    // Run *load* once, the first time the panel *id* is on screen.
+    function loadWhenShown(id, load) {
+        var panel = document.getElementById(id);
+        if (!panel) return;
+        var observer = new MutationObserver(check);
+        function check() {
+            if (panel.offsetParent === null) return;
+            observer.disconnect();
+            load();
+        }
+        observer.observe(panel, { attributes: true, attributeFilter: ['style', 'class', 'x-cloak'] });
+        check();
+    }
 
     // =============================================
     // Cross-module bridge for extracted Alpine components
