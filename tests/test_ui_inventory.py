@@ -41,8 +41,17 @@ class TestInventoryPage:
         # Summary cards + crypto readiness panel are present.
         expect(browser_page.locator("#summaryCards")).to_be_visible()
         expect(browser_page.locator("#cryptoQuantum")).to_be_visible()
-        # Empty inventory shows its guidance, not a spinner stuck forever.
-        expect(browser_page.locator("#inventoryBody")).to_contain_text("Inventory is empty")
+        # The list finishes loading, not a spinner stuck forever: the guidance
+        # when the inventory holds nothing, one row per certificate otherwise.
+        # Since contract 2.68 it holds the certificates CertMate manages, so on
+        # the shared instance what it holds depends on the tests before this.
+        expect(browser_page.locator("#invPlaceholder")).to_have_count(0)
+        listed = browser_page.request.get(
+            f"{BASE_URL}/api/inventory?include_superseded=false").json()["certificates"]
+        if listed:
+            expect(browser_page.locator("#inventoryBody tr")).to_have_count(len(listed))
+        else:
+            expect(browser_page.locator("#inventoryBody")).to_contain_text("Inventory is empty")
         assert errors == [], f"JS errors on /inventory: {errors}"
 
     def test_admin_config_panel_revealed(self, browser_page):

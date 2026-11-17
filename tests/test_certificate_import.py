@@ -323,10 +323,21 @@ def instance(tmp_path, monkeypatch):
     certs.shell_executor = shell
     client = app.test_client()
     headers = {'Authorization': f'Bearer {token}'}
+
+    def post(data):
+        answer = client.post('/api/certificates/import', json=data, headers=headers)
+        # The import announces certificate_created, and its listeners run on
+        # the event bus's threads after the answer: the inventory reads the
+        # new certificate's metadata then. Wait for them, so a test that
+        # replaces a manager method afterwards sees only what it calls itself
+        # (a metadata read landed inside such a window on CI).
+        managers['events']._work.join()
+        return answer
+
     return SimpleNamespace(
         app=app, managers=managers, certs=certs, shell=shell,
         client=client, headers=headers, directory=tmp_path / 'certificates' / DOMAIN,
-        post=lambda data: client.post('/api/certificates/import', json=data, headers=headers))
+        post=post)
 
 
 def import_payload(bundle, **options):

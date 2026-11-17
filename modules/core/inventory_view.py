@@ -123,8 +123,11 @@ def superseded_fingerprints(records):
     So:
 
     * one still served on any endpoint is never superseded;
-    * one with no endpoint (found in a CT log, or issued here and never probed)
-      is never superseded: there is nothing to compare;
+    * one with no endpoint found in a CT log is never superseded: there is
+      nothing to compare;
+    * one with no endpoint that CertMate holds (recorded from disk,
+      modules/core/inventory_held.py) is superseded once a newer certificate is
+      recorded for the same managed name: the renewal replaced it on disk;
     * two certificates last seen at the same instant on an endpoint are both
       current, and a ``last_seen`` that cannot be read is never taken as evidence
       of replacement;
@@ -154,7 +157,23 @@ def superseded_fingerprints(records):
 
     return {record.get('fingerprint') for record in records
             if record.get('endpoints')
-            and all(replaced_at(record.get('fingerprint'), endpoint) for endpoint in record['endpoints'])}
+            and all(replaced_at(record.get('fingerprint'), endpoint) for endpoint in record['endpoints'])
+            } | _held_and_renewed(records)
+
+
+def _held_and_renewed(records):
+    """Managed certificates without an endpoint for which a newer one of the
+    same name has been recorded since: a renewal replaced them on disk."""
+    newest = {}
+    for record in records:
+        name, first = record.get('managed_domain'), _parse_iso(record.get('first_seen'))
+        if record.get('managed') and name and first and (name not in newest or first > newest[name]):
+            newest[name] = first
+    return {record.get('fingerprint') for record in records
+            if record.get('managed') and not record.get('endpoints')
+            and record.get('managed_domain') in newest
+            and _parse_iso(record.get('first_seen')) is not None
+            and _parse_iso(record.get('first_seen')) < newest[record['managed_domain']]}
 
 
 def build_inventory_view(records, now=None, include_superseded=True, superseded=None):
