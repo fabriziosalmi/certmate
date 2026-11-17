@@ -3920,7 +3920,9 @@
             '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
             '<i class="fas fa-times-circle text-danger-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
             '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="' + domain + '">' + domain + '</div>' +
-            '<div class="mt-1 text-xs text-danger-fg break-words" title="' + errTitle + '">' + errText + '</div></div></div></td>' +
+            '<div class="mt-1 text-xs text-danger-fg break-words" title="' + errTitle + '">' + errText + '</div>' +
+            (job.hint ? '<div class="mt-1 text-xs text-label break-words" data-failure-hint>' + escapeHtml(job.hint) + '</div>' : '') +
+            '</div></div></td>' +
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
@@ -4081,12 +4083,17 @@
                     pendingJobs[jobId].state = 'failed';
                     pendingJobs[jobId].error = (jobRec && jobRec.error) || 'Certificate issuance failed';
                     pendingJobs[jobId].errorCode = jobRec && jobRec.error_code;
+                    // What to check, from the same rule the synchronous answer
+                    // uses: the toast leads with it, certbot's output stays in
+                    // the row (UX audit, 2026-11-17).
+                    pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
                     delete pendingPollTimers[jobId];
                     renderPendingRows();
                     showMessage((pendingJobs[jobId].kind === 'renew'
                         ? 'Certificate renewal failed for '
                         : 'Certificate issuance failed for ') +
-                        pendingJobs[jobId].domain + ': ' + pendingJobs[jobId].error, 'error');
+                        pendingJobs[jobId].domain + ': ' +
+                        (pendingJobs[jobId].hint || pendingJobs[jobId].error), 'error');
                 } else if (status === '__gone__') {
                     // Job evicted/unknown — drop the optimistic row and resync.
                     delete pendingJobs[jobId];

@@ -773,6 +773,14 @@ METADATA_SCHEMA_VERSION = 1
 #                                   data-loss fixes they are (a credential
 #                                   overwritten in silence, renewals broken by a
 #                                   delete), the precedent being 2.7 and 2.31.
+#                                   2.67, MINOR: a create or reissue job that
+#                                   failed carries the error_code and the new
+#                                   `hint` its synchronous request answers with
+#                                   (CERTIFICATE_CREATION_FAILED,
+#                                   CERTIFICATE_REISSUE_FAILED); every job
+#                                   record has `hint`, null until then. A new
+#                                   field, and a new case of an existing one
+#                                   (error_code was null for these), as 2.63.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -798,7 +806,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.66'
+API_CONTRACT_VERSION = '2.67'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

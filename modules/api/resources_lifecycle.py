@@ -6,6 +6,7 @@ an explicit `ApiContext`, which is what makes them importable — and
 therefore testable — without constructing the whole manager graph.
 """
 import logging
+import re
 
 from flask import current_app, request
 from flask_restx import Resource
@@ -48,7 +49,7 @@ def _auto_renew_failure(error):
     return {'error': message, 'code': 'AUTO_RENEW_UPDATE_FAILED'}, 500
 
 
-def _submit(ctx, operation, domain, fn):
+def _submit(ctx, operation, domain, fn, explain=None):
     """Hand the blocking half to the executor, or say no.
 
     The queue is bounded: two workers with an unbounded queue turned a retry
@@ -61,7 +62,7 @@ def _submit(ctx, operation, domain, fn):
     complexity budget.
     """
     try:
-        job_id = ctx.cert_executor.submit(operation, domain, fn)
+        job_id = ctx.cert_executor.submit(operation, domain, fn, explain=explain)
     except IssuanceQueueFull as e:
         return {
             'code': 'ISSUANCE_QUEUE_FULL',
@@ -153,6 +154,36 @@ def _challenge_named_in(lowered: str):
     return None
 
 
+# certbot could not reach the CA's ACME directory at all (UX audit,
+# 2026-11-17: a private CA on a closed port was told to check its DNS
+# credentials). Recognised by urllib3's own words, which only certbot's own
+# requests produce: "Connection refused" alone is also what the CA says when
+# it cannot reach this host for http-01, and that keeps its own hint.
+_CA_UNREACHABLE_MARKERS = (
+    'max retries exceeded with url',
+    'newconnectionerror',
+    'connectionpool(host=',
+)
+_CA_TLS_MARKERS = ('certificate verify failed', 'sslcertverificationerror')
+_POOL_URL = re.compile(r"(https?)connectionpool\(host='([^']+)', port=(\d+)\): max retries exceeded with url: (\S+)",
+                       re.IGNORECASE)
+
+
+def _ca_unreachable_hint(error_msg: str):
+    """What to check when the CA's directory could not be reached, or None."""
+    lowered = error_msg.lower()
+    if not any(marker in lowered for marker in _CA_UNREACHABLE_MARKERS):
+        return None
+    tls = any(marker in lowered for marker in _CA_TLS_MARKERS)
+    found = _POOL_URL.search(error_msg)
+    where = f' at {found.group(1).lower()}://{found.group(2)}:{found.group(3)}{found.group(4)}' if found else ''
+    if tls:
+        return (f"CertMate could not verify the TLS certificate of the CA's ACME directory{where}: "
+                "for a private CA, add its root certificate to the CA account's trust bundle.")
+    return (f"CertMate could not reach the CA's ACME directory{where}: check the directory URL, "
+            "that its name resolves from this host, and that outbound HTTPS to it is allowed.")
+
+
 def _certbot_hint(error_msg: str, challenge_type: str | None = None) -> str:
     """The same, for a failure certbot reported.
 
@@ -177,6 +208,9 @@ def _certbot_hint(error_msg: str, challenge_type: str | None = None) -> str:
     if is_acme_rate_limit(error_msg):
         return "You've hit the certificate authority's rate limit. Wait before trying again."
     lowered = (error_msg or '').lower()
+    unreachable = _ca_unreachable_hint(error_msg or '')
+    if unreachable:
+        return unreachable
     # The CA's words name the challenge more surely than the request does: an
     # IP certificate is http-01 whatever the request or the default said.
     challenge = _challenge_named_in(lowered) or (challenge_type or '').lower() or None
@@ -218,6 +252,17 @@ def _creation_failure(error_msg: str, challenge_type: str | None = None):
     return {'code': 'CERTIFICATE_CREATION_FAILED',
             'error': _prefixed(_CREATION_PREFIX, error_msg),
             'hint': _certbot_hint(error_msg, challenge_type)}
+
+
+def _reissue_failure(error_msg: str, challenge_type: str | None = None):
+    """The error body for a reissue that failed in certbot, prefixed exactly once.
+
+    The previous certificate is untouched by a failed reissue, and the hint
+    says so.
+    """
+    return {'code': 'CERTIFICATE_REISSUE_FAILED',
+            'error': _prefixed(_REISSUE_PREFIX, error_msg),
+            'hint': _certbot_hint(error_msg, challenge_type) + ' The previous certificate is still in place.'}
 
 
 def _requested_challenge(data, settings_manager):
@@ -284,8 +329,10 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     # The job carries the certificate's name: an IP address
                     # becomes ip-<dashed> (#1130), and a domain its normalised
                     # form, which is what polling and the list key on.
+                    challenge = _requested_challenge(data, ctx.settings)
                     return _submit(ctx, 'create', prepared['domain'],
-                                   lambda: ctx.cert_service.issue_create(prepared))
+                                   lambda: ctx.cert_service.issue_create(prepared),
+                                   explain=lambda message: _creation_failure(message, challenge))
 
                 result = ctx.cert_service.create(
                     domain=domain,
@@ -468,8 +515,10 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
 
                 if _wants_async(data) and ctx.cert_executor is not None:
                     prepared = ctx.cert_service.prepare_reissue(**kwargs)
+                    challenge = _requested_challenge(data, ctx.settings)
                     return _submit(ctx, 'reissue', domain,
-                                   lambda: ctx.cert_service.issue_reissue(prepared))
+                                   lambda: ctx.cert_service.issue_reissue(prepared),
+                                   explain=lambda message: _reissue_failure(message, challenge))
 
                 result = ctx.cert_service.issue_reissue(
                     ctx.cert_service.prepare_reissue(**kwargs)
@@ -501,12 +550,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 # problem; and the create path already prefixes its message,
                 # so a reissue that failed during issuance read "Certificate
                 # reissue failed: Certificate creation failed: ...".
-                hint = _certbot_hint(error_msg, _requested_challenge(data, ctx.settings))
-                return {
-                    'code': 'CERTIFICATE_REISSUE_FAILED',
-                    'error': _prefixed(_REISSUE_PREFIX, error_msg),
-                    'hint': hint + ' The previous certificate is still in place.'
-                }, 422
+                return _reissue_failure(error_msg, _requested_challenge(data, ctx.settings)), 422
             except Exception as e:
                 # Scrub CR/LF before logging: domain comes from the URL path
                 # and a crafted value could forge log entries (CodeQL
