@@ -184,7 +184,7 @@
 
         <!-- TAB: API Keys — Configurable API rate limits (#319) -->
         <div x-show="tab === 'apikeys'" x-cloak
-             x-data="rateLimitManager()" x-init="load()"
+             x-data="rateLimitManager()" x-init="load()" data-unsaved-scope="API rate limits"
              class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
 
             <div class="flex items-center justify-between mb-4">
@@ -214,7 +214,7 @@
             </div>
 
             <div class="mt-6 flex justify-end">
-                <button type="button" @click="save()" :disabled="saving" title="Save rate limits"
+                <button type="button" @click="save()" :disabled="saving" title="Save rate limits" data-saves
                         class="px-4 py-2 bg-yellow-700 text-white rounded-md hover:bg-yellow-800 text-sm whitespace-nowrap">
                     <i class="fas fa-save mr-1"></i>
                     <span x-text="saving ? 'Saving...' : 'Save Rate Limits'"></span>

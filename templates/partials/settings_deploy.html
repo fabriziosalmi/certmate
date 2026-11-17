@@ -1,5 +1,5 @@
 <!-- TAB: Deploy Hooks -->
-        <div x-show="tab === 'deploy'" x-cloak id="settings-panel-deploy" role="tabpanel" aria-labelledby="settings-tab-deploy" tabindex="0"
+        <div x-show="tab === 'deploy'" x-cloak id="settings-panel-deploy" data-unsaved-scope="deploy" role="tabpanel" aria-labelledby="settings-tab-deploy" tabindex="0"
              class="bg-surface border-border rounded-lg shadow-sm border p-6"
              x-data="deployManager()" x-init="loadConfig()">
 
@@ -393,7 +393,7 @@
 
                         <!-- The editor. x-if, not x-show: with no draft there is nothing to bind. -->
                         <template x-if="draft">
-                            <div class="rounded-lg border border-primary p-4 space-y-4" id="webhook-target-editor">
+                            <div class="rounded-lg border border-primary p-4 space-y-4" id="webhook-target-editor" data-unsaved-scope="deploy target">
                                 <h4 class="text-sm font-semibold text-foreground"
                                     x-text="draft.isNew ? 'New webhook target' : 'Edit webhook target'"></h4>
 
@@ -577,11 +577,11 @@
                                             class="px-3 py-1.5 bg-info-surface text-info-fg rounded text-sm hover:bg-blue-200 dark:hover:bg-blue-900/50 transition disabled:opacity-50">
                                         <i class="fas fa-eye mr-1"></i>Preview what would be sent
                                     </button>
-                                    <button type="button" @click="save()" :disabled="!canSave()"
+                                    <button type="button" @click="save()" :disabled="!canSave()" data-saves
                                             class="px-3 py-1.5 bg-primary text-white rounded text-sm hover:bg-secondary transition disabled:opacity-50 disabled:cursor-not-allowed">
                                         <i class="fas fa-save mr-1"></i>Save target
                                     </button>
-                                    <button type="button" @click="cancel()" class="px-3 py-1.5 bg-surface-2 text-label rounded text-sm hover:bg-hover transition">Cancel</button>
+                                    <button type="button" @click="cancel()" data-discards class="px-3 py-1.5 bg-surface-2 text-label rounded text-sm hover:bg-hover transition">Cancel</button>
                                 </div>
 
                                 <p x-show="previewError" x-text="previewError" role="alert" class="text-xs text-danger-fg" id="webhook-target-preview-error"></p>
@@ -689,7 +689,7 @@
 
             <!-- Save button -->
             <div class="mt-6 flex justify-end">
-                <button type="button" @click="saveConfig()"
+                <button type="button" @click="saveConfig()" data-saves
                         class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary transition text-sm">
                     <i class="fas fa-save mr-2"></i>Save Deploy Settings
                 </button>

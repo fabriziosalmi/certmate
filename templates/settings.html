@@ -86,7 +86,7 @@
                      General, CA and Storage started 32 px lower than DNS, and the
                      tabs outside the form (with their own mt-6) 24 px lower. Every
                      tab now starts at the same height. -->
-                <form id="settingsForm" class="flex flex-col gap-8">
+                <form id="settingsForm" data-unsaved-scope="dns, ca, general and storage" class="flex flex-col gap-8">
 
                     {% include 'partials/settings_dns.html' %}
                     {% include 'partials/settings_ca.html' %}
@@ -326,6 +326,7 @@
             aria-label="Open settings debug console">
         <i class="fas fa-bug"></i> Debug
     </button>
+    <script src="/static/js/settings-unsaved.js"></script>
     <script src="/static/js/settings.js"></script>
     <script src="/static/js/settings-tabs.js"></script>
     <script src="/static/js/settings-notifications.js"></script>
