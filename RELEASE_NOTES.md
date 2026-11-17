@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.57.0 (a CA account's EAB key stays out of certbot's log, DNS accounts are no longer overwritten or deleted from under their certificates, and the dashboard says when it could not load)
+
+[Read the notes](docs/releases/v2.57.0.md)
+
 ## v2.56.1 (nothing moves while a page loads, every text readable in both themes, and a DNS account without credentials is never used to issue)
 
 [Read the notes](docs/releases/v2.56.1.md)
