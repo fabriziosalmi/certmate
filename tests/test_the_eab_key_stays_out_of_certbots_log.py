@@ -91,7 +91,7 @@ def test_the_logs_earlier_runs_left_are_masked_once(tmp_path):
     live = cert_dir / DOMAIN / 'logs' / 'letsencrypt.log'
     rotated = live.with_name('letsencrypt.log.1')
     rotated.write_bytes(live.read_bytes())
-    os.chmod(live, 0o640)
+    os.chmod(live, 0o400)   # not the 0o600 the staged copy is created with
     before = live.read_text(encoding='utf-8')
 
     result = mask_eab_in_certbot_logs(cert_dir, tmp_path / 'data')
@@ -103,7 +103,7 @@ def test_the_logs_earlier_runs_left_are_masked_once(tmp_path):
         assert "'--eab-hmac-key', '***'" in text and "'--eab-kid', '***'" in text
     # Nothing else in the log changed.
     assert live.read_text(encoding='utf-8') == before.replace(KID, '***').replace(HMAC, '***')
-    assert stat.S_IMODE(live.stat().st_mode) == 0o640
+    assert stat.S_IMODE(live.stat().st_mode) == 0o400
     assert (tmp_path / 'data' / MARKER).exists()
     assert not (cert_dir / MARKER).exists(), 'every entry of cert_dir is read as a certificate'
     assert not list(cert_dir.glob('*/logs/*.masking'))
