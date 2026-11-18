@@ -431,9 +431,9 @@ def test_a_certificate_without_its_key_shows_no_renewal_rule(page):
     assert page.locator('#certDetailContent [data-renewal-rule]').count() == 1
 
 
-def test_an_expired_certificate_says_expired_under_its_renewal_date(page):
-    """The line under a past renewal date named the state Overdue under an
-    Expired chip."""
+def test_an_expired_certificate_is_promised_no_renewal(page):
+    """The line under a past renewal date said "Overdue: the next renewal run
+    renews it" under an Expired chip, a promise the sweep does not always keep."""
     gone = dict(_cert('gone.example.test', 90 * DAY, -2 * DAY), expired=True)
     assert gone['needs_renewal'] is True, gone
     page.unroute('**/api/certificates')
@@ -442,8 +442,15 @@ def test_an_expired_certificate_says_expired_under_its_renewal_date(page):
     _dashboard(page)
     _open_detail(page, 'gone.example.test')
     detail = page.inner_text('#certDetailContent')
-    assert 'Expired: the next renewal run renews it while auto-renew is on' in detail, detail
-    assert 'Overdue: the next renewal run renews it' not in detail, detail
+    assert 'Renewal due since' in detail, detail
+    # No renewal is promised: the sweep may skip it (auto-renew off globally,
+    # or a certificate with no settings entry it cannot renew on its own).
+    assert 'the next renewal run renews it' not in detail, detail
+    # Nor to a Due certificate with auto-renew on, for the same reasons.
+    _close_detail(page)
+    _open_detail(page, 'ops-api.example.test')
+    due = page.inner_text('#certDetailContent')
+    assert 'Renewal due since' in due and 'the next renewal run renews it' not in due, due
 
 
 def test_a_certificate_with_auto_renew_off_is_not_promised_a_renewal(page):

@@ -1008,12 +1008,16 @@
         var tone = late ? 'text-danger-fg' : 'text-warning-fg';
         return '<span class="' + tone + '">' + RENEWAL_DUE_SINCE + ' ' +
             escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
-            (lastRenewalFailure(cert) ? '' : '<div class="text-xs ' + tone + '">' + (hasExpired(cert) ? 'Expired' : late ? 'Overdue' : 'Due') + ': ' +
-                // The sweep skips a certificate whose auto-renew is off, and
-                // every certificate when it is off globally (a setting this
-                // page does not read): promise nothing it would not do.
-                (cert.auto_renew === false ? 'auto-renew is off for this certificate, so renew it by hand'
-                    : 'the next renewal run renews it while auto-renew is on') + '</div>');
+            // No promise that the sweep renews it: it skips a certificate whose
+            // auto-renew is off, every certificate while auto-renew is off
+            // globally, and a certificate on disk with no settings entry that
+            // it cannot renew on its own; the listing says auto_renew true for
+            // that last one. Only an auto-renew that is off is certain, and
+            // then the certificate is renewed by hand.
+            (!lastRenewalFailure(cert) && cert.auto_renew === false
+                ? '<div class="text-xs ' + tone + '">' + (hasExpired(cert) ? 'Expired' : late ? 'Overdue' : 'Due') +
+                    ': auto-renew is off for this certificate, so renew it by hand</div>'
+                : '');
     }
 
     // The last renewal of this certificate that failed, as the server keeps it
