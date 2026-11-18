@@ -72,6 +72,13 @@ class _StubManager:
     def _record_renewal_metrics(self, domain, cert_info, success, duration, error=None):
         pass
 
+    # And keeps a failed renewal on the certificate through these (P37).
+    def record_renewal_failure(self, domain, error):
+        pass
+
+    def forget_renewal_failure(self, domain):
+        pass
+
 
 @pytest.fixture
 def watched(instance):

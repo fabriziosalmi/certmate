@@ -5427,7 +5427,11 @@ class CertificateManager:
         Tied to the certificate it was about by its fingerprint.
 
         Never raises: the renewal's own error is what the caller is owed, and
-        losing this record only loses the marker.
+        losing this record only loses the marker. The sweep calls this from
+        the arm that counts, audits and notifies a failure; a defect in what
+        is only a display record must not end the sweep for every certificate
+        after this one (the reasoning of `_renewal_info_for`), hence the
+        AttributeError and TypeError beside the I/O errors.
         """
         try:
             directory = certificate_dir(self.cert_dir, domain)
@@ -5440,11 +5444,10 @@ class CertificateManager:
                 'cert_sha256': _held_fingerprint(directory / 'cert.pem'),
             }
             self._atomic_json_write(directory / LAST_RENEWAL_ATTEMPT_FILE, record)
-        except (OSError, ValueError) as e:
+            self._invalidate_certificate_info_cache(domain)
+        except (OSError, ValueError, TypeError, AttributeError) as e:
             logger.warning("Could not record the failed renewal of %s: %s",
                            domain, e.__class__.__name__)
-            return
-        self._invalidate_certificate_info_cache(domain)
 
     def _renewal_challenge_type(self, domain):
         """The challenge the certificate was issued with, else the instance
@@ -5457,14 +5460,16 @@ class CertificateManager:
 
     def forget_renewal_failure(self, domain):
         """A renewal happened: the failure before it is no longer the news.
-        Never raises, for the reason `record_renewal_failure` gives."""
+        Never raises, for the reason `record_renewal_failure` gives. With no
+        record there is nothing to forget, and the cached answer stands."""
         try:
-            (certificate_dir(self.cert_dir, domain) / LAST_RENEWAL_ATTEMPT_FILE).unlink(missing_ok=True)
-        except (OSError, ValueError) as e:
+            (certificate_dir(self.cert_dir, domain) / LAST_RENEWAL_ATTEMPT_FILE).unlink()
+            self._invalidate_certificate_info_cache(domain)
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError, TypeError, AttributeError) as e:
             logger.warning("Could not clear the failed renewal of %s: %s",
                            domain, e.__class__.__name__)
-            return
-        self._invalidate_certificate_info_cache(domain)
 
     def _last_renewal_attempt_for(self, domain, cert):
         """The failed renewal kept for *cert*, or None.
