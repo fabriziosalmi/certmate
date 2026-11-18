@@ -145,7 +145,8 @@ def test_a_plain_save_on_route53_makes_no_account(page):
         page.wait_for_function("() => document.getElementById('route53-status').textContent.trim() !== ''")
         page.click('label:has(input[name="dns_provider"][value="route53"])')
         listed = page.locator('#route53-accounts-list').inner_text()
-        assert 'No accounts configured yet' in listed, listed
+        assert 'No credentials' not in listed and 'Default Route53 Account' not in listed, listed
+        assert page.locator('#route53-status').inner_text().strip() == 'Not configured'
         assert page.locator('#route53_access_key_id').is_visible()
     finally:
         page.request.delete(f'{BASE_URL}/api/dns/route53/accounts/default', headers={'Origin': BASE_URL})
