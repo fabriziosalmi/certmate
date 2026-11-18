@@ -211,6 +211,7 @@ FLOORS = {
     # expiry timestamp that the registration check writes in ISO form.
     'modules/core/expiry_watch.py': 90,
     'modules/core/http_errors.py': 95,
+    'modules/core/failure_hints.py': 95,
     'modules/core/file_operations.py': 80,
     'modules/core/key_formats.py': 95,
     'modules/core/inventory_sources.py': 95,
