@@ -4062,6 +4062,21 @@
     }
 
     function pollCertJob(jobId, statusUrl) {
+        // The cause a failed job's error names, short enough for a toast: the
+        // first line, without the "Certificate ... failed:" prefix the toast
+        // already says, cut at its first sentence and at 160 characters. certbot's
+        // "An unexpected error occurred:" line ends on a colon, read as a stop.
+        function failureCause(error) {
+            var text = String(error || '').replace(/^\s*Certificate (creation|reissue|renewal|issuance) failed:\s*/i, '');
+            text = (text.split('\n')[0] || '').trim();
+            var sentence = text.search(/[.!?](\s|$)/);
+            if (sentence !== -1) text = text.slice(0, sentence + 1);
+            if (text.length > 160) text = text.slice(0, 159).trim() + '\u2026';
+            text = text.replace(/:$/, '');
+            if (text && !/[.!?\u2026]$/.test(text)) text += '.';
+            return text || 'The job failed without a message.';
+        }
+
         var attempts = 0;
         function tick() {
             if (!pendingJobs[jobId]) return;   // dismissed/retried away
@@ -4081,16 +4096,24 @@
                     pendingJobs[jobId].error = (jobRec && jobRec.error) || 'Certificate issuance failed';
                     pendingJobs[jobId].errorCode = jobRec && jobRec.error_code;
                     // What to check, from the same rule the synchronous answer
-                    // uses: the toast leads with it, certbot's output stays in
-                    // the row (UX audit, 2026-11-17).
+                    // uses. The toast leads with the error's own cause and the
+                    // hint follows it: a renewal's hint can be only "The
+                    // previous certificate is still in place.", which alone
+                    // hid why it failed (UX audit, 2026-11-18). certbot's full
+                    // output stays in the row.
                     pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
                     delete pendingPollTimers[jobId];
                     renderPendingRows();
-                    showMessage((pendingJobs[jobId].kind === 'renew'
+                    var failedKind = pendingJobs[jobId].kind || (jobRec && jobRec.operation);
+                    var failedHint = pendingJobs[jobId].hint;
+                    showMessage((failedKind === 'renew'
                         ? 'Certificate renewal failed for '
-                        : 'Certificate issuance failed for ') +
+                        : failedKind === 'reissue'
+                            ? 'Certificate reissue failed for '
+                            : 'Certificate issuance failed for ') +
                         pendingJobs[jobId].domain + ': ' +
-                        (pendingJobs[jobId].hint || pendingJobs[jobId].error), 'error');
+                        failureCause(pendingJobs[jobId].error) +
+                        (failedHint ? ' ' + failedHint : ''), 'error');
                 } else if (status === '__gone__') {
                     // Job evicted/unknown — drop the optimistic row and resync.
                     delete pendingJobs[jobId];

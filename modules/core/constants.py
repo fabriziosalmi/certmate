@@ -790,16 +790,18 @@ METADATA_SCHEMA_VERSION = 1
 #                                   sources; a certificate renewed here is
 #                                   superseded by its successor.
 #                                   2.69, MINOR: a renew job that failed carries
-#                                   the error_code its synchronous request
-#                                   answers with (classify_renewal_error) and a
-#                                   `hint` that ends "The previous certificate
-#                                   is still in place."; both were null. The
-#                                   certbot hint is null when no rule knows the
-#                                   error (it was a generic DNS or port-80
-#                                   guess), so `hint` on a create job and on the
-#                                   422 CERTIFICATE_CREATION_FAILED can be null,
-#                                   as it already was on the 400 of that code.
-#                                   A new case of existing fields, as 2.67.
+#                                   error_code and hint; both were null. The
+#                                   code is the synchronous renew's
+#                                   (classify_renewal_error) and the hint ends
+#                                   "The previous certificate is still in
+#                                   place.". A create job's hint can be null
+#                                   for an error no rule knows (it was a
+#                                   generic DNS or port-80 guess), as a renew
+#                                   job's already could: GET jobs/<id> `hint`
+#                                   was nullable before. The synchronous 422
+#                                   CERTIFICATE_CREATION_FAILED keeps a string
+#                                   hint, so no response field is retyped. A
+#                                   new case of existing fields, as 2.67.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the

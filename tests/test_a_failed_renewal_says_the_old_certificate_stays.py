@@ -1,24 +1,26 @@
 """A renewal that failed in a background job says what to check, and that the
-previous certificate is still in place; a hint never names a cause the error
-does not.
+previous certificate is still in place; a job's hint never names a cause the
+error does not.
 
 Found by the UX perception audit of 2026-11-18.
 
 P02: the dashboard renews through a job (`async: true`), and the renew route
-handed the job no explanation, so a failed renewal had `hint: null` while a
-create or a reissue against the same dead CA had one. The toast then showed
-certbot's raw dump, with the Let's Encrypt forum and a server-side log path,
-and nothing said the site was still served by the old certificate.
+handed the job no explanation, so a failed renewal had `hint: null` and
+`error_code: null` while a create or a reissue against the same dead CA had
+one. The toast then showed certbot's raw dump, and nothing said the site was
+still served by the old certificate.
 
 P01: `_certbot_hint` ended on a generic DNS or port-80 hint whatever the
 error said. Let's Encrypt refusing the account email was told to check DNS
 credentials, and CertMate's own "HTTP-01 challenge does not support wildcard
-domains" was told to check port 80. The toast leads with the hint, so the
-wrong cause was the first thing read.
+domains" was told to check port 80. A job's explanation no longer takes that
+fallback; the synchronous 422 keeps it, so its `hint` stays a string. The
+toast leads with the error's cause either way (tests/
+test_ui_a_failed_job_toast_leads_with_the_cause.py).
 """
 import pytest
 
-from modules.api.resources_lifecycle import _certbot_hint, _creation_failure
+from modules.api.resources_lifecycle import _PREVIOUS_KEPT, _certbot_hint, _creation_failure
 from tests.test_a_failed_job_says_what_to_check import CA_CLOSED
 from tests.test_async_issuance import _build_app, _exec, _wait_terminal
 
@@ -29,10 +31,17 @@ pytestmark = [pytest.mark.unit]
 EMAIL_REFUSED = ("Certificate creation failed: Unable to register an account with ACME server. "
                  "The ACME server believes me@homelab.example is an invalid email address. "
                  "Please ensure it is a valid email and attempt registration again.")
-# The same refusal as an RFC 8555 problem type, as a CA other than certbot's
-# wording may report it. Not measured: built from the problem type's name.
-EMAIL_PROBLEM_TYPE =("urn:ietf:params:acme:error:invalidEmail :: The ACME server believes "
-                      "me@homelab.example is an invalid email address")
+# The refusal as each ACME problem type may name it, one marker per message,
+# so deleting any one marker fails its own case. invalidContact and
+# unsupportedContact are RFC 8555's; invalidEmail is the ACME v1 name. Not
+# measured: built from the problem types' names.
+ACCOUNT_REFUSALS = {
+    'certbot': 'Unable to register an account with ACME server',
+    'invalidcontact': 'urn:ietf:params:acme:error:invalidContact :: contact email has invalid domain',
+    'unsupportedcontact': 'urn:ietf:params:acme:error:unsupportedContact :: contact URL scheme not supported',
+    'invalidemail': 'urn:ietf:params:acme:error:invalidEmail :: Error creating new account',
+    'wording': 'The ACME server believes me@homelab.example is an invalid email address',
+}
 # CertMate's own ValueError, raised inside create_certificate (certificates.py).
 WILDCARD_HTTP01 = 'HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.'
 
@@ -48,38 +57,82 @@ def _renew_job(tmp_path, side_effect):
     return client.get(accepted.get_json()['status_url']).get_json()
 
 
+def _create(tmp_path, side_effect, asynchronous):
+    ex = _exec()
+    app, managers = _build_app(tmp_path, ex)
+    managers['certificates'].create_certificate.side_effect = side_effect
+    client = app.test_client()
+    answer = client.post('/api/certificates/create', json={
+        'domain': 'x.example.com', 'dns_provider': 'cloudflare', 'async': asynchronous})
+    if not asynchronous:
+        return answer.status_code, answer.get_json()
+    assert answer.status_code == 202, answer.get_json()
+    _wait_terminal(ex, answer.get_json()['job_id'])
+    return 200, client.get(answer.get_json()['status_url']).get_json()
+
+
 def test_a_failed_async_renewal_says_what_to_check_and_that_the_old_certificate_stays(tmp_path):
     job = _renew_job(tmp_path, RuntimeError(CA_CLOSED))
     assert job['status'] == 'failed'
-    assert job['hint'], job
+    assert job['error_code'] == 'RENEWAL_FAILED'
     assert 'could not reach the CA' in job['hint']
-    assert 'still in place' in job['hint']
+    assert job['hint'].endswith(_PREVIOUS_KEPT)
     assert 'community.letsencrypt.org' not in job['hint']
 
 
-def test_a_renewal_with_nothing_to_explain_still_says_the_old_certificate_stays(tmp_path):
+@pytest.mark.parametrize('error,code,says', [
+    ("DNS provider 'cloudflare' account 'default' not configured", 'DNS_ACCOUNT_NOT_CONFIGURED',
+     'Re-add it in Settings'),
+    ('ReissueRequired: x.example.com has no private key anywhere', 'REISSUE_REQUIRED', 'Reissue it'),
+    ('renewal configuration file is broken (parsefail)', 'RENEWAL_CONFIG_BROKEN', 'Use Edit & Reissue'),
+])
+def test_a_renewal_whose_cause_is_known_says_it_as_the_synchronous_renew_does(tmp_path, error, code, says):
+    """The synchronous renew answers these with classify_renewal_error's
+    message; the job carries the same code and that message as its hint."""
+    job = _renew_job(tmp_path, RuntimeError(error))
+    assert job['error_code'] == code, job
+    assert says in job['hint'], job['hint']
+    assert job['hint'].endswith(' ' + _PREVIOUS_KEPT), job['hint']
+
+
+def test_a_renewal_no_rule_knows_names_no_cause_and_keeps_the_error(tmp_path):
+    """No guessed cause: the hint only says the old certificate stays, and the
+    error carries the real one, which the toast shows first."""
     job = _renew_job(tmp_path, RuntimeError('Renewal failed: something no rule knows'))
-    assert job['hint'] == 'The previous certificate is still in place.'
+    assert job['error_code'] == 'RENEWAL_FAILED'
+    assert job['hint'] == _PREVIOUS_KEPT
+    assert 'something no rule knows' in job['error']
 
 
-@pytest.mark.parametrize('message', [EMAIL_REFUSED, EMAIL_PROBLEM_TYPE])
+@pytest.mark.parametrize('marker', sorted(ACCOUNT_REFUSALS))
 @pytest.mark.parametrize('challenge', ['dns-01', 'http-01'])
-def test_a_refused_account_email_points_at_the_email_not_dns(message, challenge):
-    hint = _certbot_hint(message, challenge)
+def test_a_refused_account_email_points_at_the_email_not_dns(marker, challenge):
+    hint = _certbot_hint(ACCOUNT_REFUSALS[marker], challenge)
     assert hint and 'email' in hint.lower(), hint
     assert 'Settings > CA' in hint
     assert 'dns' not in hint.lower() and 'port 80' not in hint, hint
 
 
 @pytest.mark.parametrize('challenge', ['http-01', 'dns-01', None])
-def test_certmates_own_wildcard_refusal_gets_no_generic_hint(challenge):
-    assert _certbot_hint(WILDCARD_HTTP01, challenge) is None
-    body = _creation_failure(WILDCARD_HTTP01, challenge)
+def test_a_job_gets_no_generic_hint_for_certmates_own_wildcard_refusal(challenge):
+    assert _certbot_hint(WILDCARD_HTTP01, challenge, fallback=False) is None
+    body = _creation_failure(WILDCARD_HTTP01, challenge, fallback=False)
     assert body['hint'] is None
     assert 'wildcard' in body['error']
 
 
-def test_an_error_no_rule_knows_gets_no_hint():
-    """The toast reads hint || error: a guessed hint hides the real cause."""
-    assert _certbot_hint('something else entirely', 'dns-01') is None
-    assert _certbot_hint('something else entirely', 'http-01') is None
+def test_an_async_create_no_rule_knows_has_a_null_hint(tmp_path):
+    _, job = _create(tmp_path, RuntimeError('something else entirely'), asynchronous=True)
+    assert job['status'] == 'failed'
+    assert job['error_code'] == 'CERTIFICATE_CREATION_FAILED'
+    assert job['hint'] is None
+    assert 'something else entirely' in job['error']
+
+
+def test_the_synchronous_422_keeps_a_string_hint(tmp_path):
+    """CONTROL: the 422 CERTIFICATE_CREATION_FAILED is not retyped; an error no
+    rule knows still answers with the generic hint, a string."""
+    status, body = _create(tmp_path, RuntimeError('something else entirely'), asynchronous=False)
+    assert status == 422, body
+    assert body['code'] == 'CERTIFICATE_CREATION_FAILED'
+    assert isinstance(body['hint'], str) and body['hint']
