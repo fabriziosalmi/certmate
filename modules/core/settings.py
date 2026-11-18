@@ -742,7 +742,7 @@ _DNS_FLAT_FALLBACK_KEYS = ['api_token', 'api_key', 'username']
 _DNS_PLACEHOLDER_DESCRIPTION = 'Migrated from single-account configuration'
 _DNS_LABELS = frozenset({'name', 'description'})
 _DNS_SCAFFOLD_VALUES = {'region': 'us-east-1', 'auth_mode': 'access_keys'}
-_STALE_FLAT_DNS_WARNED = set()
+_STALE_FLAT_DNS_WARNED: set[str] = set()
 
 
 def _holds_nothing(config):
