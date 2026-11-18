@@ -55,9 +55,22 @@ def test_sdk_backup_create_and_list(sdk):
     assert created["filename"] in names
 
 
-def test_sdk_dns_accounts_present(sdk):
-    accounts = sdk.list_dns_accounts()
-    assert accounts  # the server ships default accounts for every provider
+def test_sdk_lists_the_dns_accounts_that_were_added(sdk):
+    """A fresh server has no DNS account: it no longer makes an empty
+    placeholder for every provider (perception audit P05). One added through
+    the API is listed."""
+    def names(answer):
+        rows = answer.values() if isinstance(answer, dict) else answer
+        return {str(row.get('account_id') or row.get('id'))
+                for row in rows if isinstance(row, dict)}
+
+    before = sdk.list_dns_accounts()
+    assert isinstance(before, (list, dict)), before
+    assert not [row for row in (before.values() if isinstance(before, dict) else before)
+                if isinstance(row, dict) and 'Migrated from single-account' in str(row.get('description'))], before
+    sdk._request("POST", "/api/dns/cloudflare/accounts",
+                 json={"name": "e2e-listed", "config": {"api_token": "e2e-not-a-real-token"}})
+    assert 'e2e-listed' in names(sdk.list_dns_accounts()) | names(sdk.list_dns_accounts('cloudflare'))
 
 
 def test_sdk_missing_cert_raises_not_found(sdk):
