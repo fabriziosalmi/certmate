@@ -6,7 +6,8 @@ so every row looked empty on the one page meant to reassure.
 
 The first test makes a real backup on the instance and reads its row; the
 second answers the listing in the browser with sizes on each side of a unit
-boundary, so the choice of unit is checked without writing big archives.
+boundary, so the choice of unit is checked without writing big archives;
+the third checks that the issue report writes a size the same way.
 """
 import json
 import os
@@ -68,7 +69,9 @@ def test_a_real_backup_of_a_few_kb_is_listed_in_kb(page, ui_session_cookie):
 
 
 def test_each_size_is_shown_in_the_unit_that_reads(page):
-    sizes = [512, 1943, 52262, 3670016, 5 * 1024 ** 3]
+    # 52700 bytes is 51.46 KB: shown as "51 KB", since there is no decimal
+    # at 10 of a unit and above; 1.5 MB keeps its one decimal below 10.
+    sizes = [512, 1943, 52262, 52700, 1572864, 3670016, 5 * 1024 ** 3]
     rows = [{'filename': f'certmate_backup_2026111{i}_000000.zip', 'type': 'unified',
              'metadata': {'size': n, 'created': '2026-11-18T01:49:00Z', 'total_domains': 1,
                           'backup_reason': 'manual'}}
@@ -78,4 +81,15 @@ def test_each_size_is_shown_in_the_unit_that_reads(page):
         route.fulfill(status=200, content_type='application/json',
                       body=json.dumps({'unified': rows}))
     page.route('**/api/backups', answer)
-    assert _sizes(page) == ['512 B', '1.9 KB', '51 KB', '3.5 MB', '5 GB']
+    assert _sizes(page) == ['512 B', '1.9 KB', '51 KB', '51 KB', '1.5 MB', '3.5 MB', '5 GB']
+
+
+def test_the_issue_report_writes_sizes_as_the_settings_page_does(page):
+    """One formatter: the issue report used its own, which always printed
+    one decimal ("51.5 KB" where the backup list says "51 KB")."""
+    page.goto(f'{BASE_URL}/settings#backup', wait_until='networkidle')
+    got = page.evaluate('''() => {
+        const r = window.CertMate.reportIssueInternals._humanBytes;
+        return [r(52700), r(1572864), r(512), r(null), window.CertMate.formatBytes(52700)];
+    }''')
+    assert got == ['51 KB', '1.5 MB', '512 B', 'unknown', '51 KB']

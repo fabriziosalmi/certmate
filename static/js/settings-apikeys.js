@@ -235,16 +235,16 @@
     // settings form.
     var RATE_LIMIT_LABELS = {
         'default': 'Default',
-        'certificate_create': 'Certificate creation',
-        'certificate_batch': 'Certificate batch',
-        'certificate_list': 'Certificate list',
-        'certificate_revoke': 'Certificate revocation',
-        'certificate_renew': 'Certificate renewal',
+        'certificate_create': 'Certificate Create',
+        'certificate_batch': 'Certificate Batch',
+        'certificate_list': 'Certificate List',
+        'certificate_revoke': 'Certificate Revoke',
+        'certificate_renew': 'Certificate Renew',
         'probe': 'Probe',
-        'ocsp_status': 'OCSP status',
-        'crl_download': 'CRL download',
+        'ocsp_status': 'OCSP Status',
+        'crl_download': 'CRL Download',
         'acme': 'ACME',
-        'ip_ceiling': 'IP ceiling'
+        'ip_ceiling': 'IP Ceiling'
     };
 
     function rateLimitManager() {
@@ -298,12 +298,13 @@
             },
             // Written labels for the buckets the server ships (RateLimitConfig.
             // DEFAULT_LIMITS). Capitalising each word of the key turned the
-            // acronyms into "Acme", "Crl Download", "Ip Ceiling". A key not
-            // listed here still gets the generated label, so a new bucket is
-            // never shown without a name.
+            // acronyms into "Acme", "Crl Download", "Ip Ceiling". The table
+            // keeps the page's Title Case ("Key Name") and only spells the
+            // acronyms. A key not listed here, inherited names such as
+            // "constructor" included, still gets the generated label, so a
+            // new bucket is never shown without a name.
             label: function (k) {
-                var written = RATE_LIMIT_LABELS[k];
-                if (written) return written;
+                if (Object.prototype.hasOwnProperty.call(RATE_LIMIT_LABELS, k)) return RATE_LIMIT_LABELS[k];
                 return k.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
             }
         };
