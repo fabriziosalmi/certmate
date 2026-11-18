@@ -90,7 +90,10 @@ def test_the_worst_case_no_longer_blames_the_credentials():
 @pytest.mark.parametrize('message,expected', [
     ('DNS provider returned unauthorized', 'authentication failed'),
     ('DNS propagation timeout waiting for TXT', 'propagation timed out'),
-    ('something else entirely', 'ensure dns records can be created'),
+    # The generic hint is kept only for certbot saying nothing at all; an
+    # error no rule knows now gets no hint (tests/
+    # test_a_failed_renewal_says_the_old_certificate_stays.py).
+    ('certbot exited with code 1 without reporting an error', 'ensure dns records can be created'),
 ])
 def test_the_other_hints_still_work(message, expected):
     """Putting the rate-limit test first must not swallow the rest."""

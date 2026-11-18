@@ -789,6 +789,17 @@ METADATA_SCHEMA_VERSION = 1
 #                                   them. summary.by_source counts the two
 #                                   sources; a certificate renewed here is
 #                                   superseded by its successor.
+#                                   2.69, MINOR: a renew job that failed carries
+#                                   the error_code its synchronous request
+#                                   answers with (classify_renewal_error) and a
+#                                   `hint` that ends "The previous certificate
+#                                   is still in place."; both were null. The
+#                                   certbot hint is null when no rule knows the
+#                                   error (it was a generic DNS or port-80
+#                                   guess), so `hint` on a create job and on the
+#                                   422 CERTIFICATE_CREATION_FAILED can be null,
+#                                   as it already was on the 400 of that code.
+#                                   A new case of existing fields, as 2.67.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -814,7 +825,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.68'
+API_CONTRACT_VERSION = '2.69'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
