@@ -322,7 +322,7 @@ def _renewal_challenge(ctx, domain):
     not name one. Read before the job runs, so nothing here can raise inside
     the worker's failure handler."""
     try:
-        metadata = ctx.certificates._load_metadata(domain)
+        metadata = ctx.cert_service.read_metadata(domain)
     except (OSError, ValueError):
         metadata = None
     challenge = metadata.get('challenge_type') if isinstance(metadata, dict) else None
