@@ -233,6 +233,20 @@
     // Configurable API rate limits (#319). Self-contained: reads/writes the
     // dedicated /api/settings/rate-limits endpoint, independent of the main
     // settings form.
+    var RATE_LIMIT_LABELS = {
+        'default': 'Default',
+        'certificate_create': 'Certificate creation',
+        'certificate_batch': 'Certificate batch',
+        'certificate_list': 'Certificate list',
+        'certificate_revoke': 'Certificate revocation',
+        'certificate_renew': 'Certificate renewal',
+        'probe': 'Probe',
+        'ocsp_status': 'OCSP status',
+        'crl_download': 'CRL download',
+        'acme': 'ACME',
+        'ip_ceiling': 'IP ceiling'
+    };
+
     function rateLimitManager() {
         return {
             enabled: true,
@@ -282,7 +296,14 @@
                         showMessage('Failed to save rate limits', 'error');
                     });
             },
+            // Written labels for the buckets the server ships (RateLimitConfig.
+            // DEFAULT_LIMITS). Capitalising each word of the key turned the
+            // acronyms into "Acme", "Crl Download", "Ip Ceiling". A key not
+            // listed here still gets the generated label, so a new bucket is
+            // never shown without a name.
             label: function (k) {
+                var written = RATE_LIMIT_LABELS[k];
+                if (written) return written;
                 return k.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
             }
         };
