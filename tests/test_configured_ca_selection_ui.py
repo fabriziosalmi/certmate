@@ -45,12 +45,12 @@ eval(fs.readFileSync(process.argv[2], 'utf8'));
 window.loadCAProviders().then(() => {
     const ca = elements.ca_provider_select;
     if (ca.options.map(o => o.value).join(',') !== ',letsencrypt,sectigo') throw Error('Unconfigured CA offered');
-    if (ca.options[0].textContent !== "Global default: Let's Encrypt — le@example.com")
+    if (ca.options[0].textContent !== "Global default: Let's Encrypt — Default account (le@example.com)")
         throw Error('Global default CA account not identified');
     if (!prevalidated.hidden || !prevalidated.disabled) throw Error('Default LE offers Sectigo challenge');
     ca.value = 'sectigo'; window.updateCAProviderInfo();
     if (elements.ca_account_id.options.map(o => o.value).join(',') !== ',scm,bertrand' ||
-        elements.ca_account_id.options[0].textContent !== 'Default for Sectigo: Bertrand')
+        elements.ca_account_id.options[0].textContent !== 'Default for Sectigo: Bertrand (b@example.com)')
         throw Error('Sectigo default and accounts missing');
     ca.value = 'letsencrypt'; window.updateCAProviderInfo();
     if (elements.ca_account_id.options.length !== 2 || elements.ca_account_id.options[1].value !== 'default')
@@ -61,7 +61,7 @@ window.loadCAProviders().then(() => {
 }).then(() => {
     if (elements.ca_provider_select.value !== '' ||
         elements.ca_account_id.options.map(o => o.value).join(',') !== ',scm,bertrand' ||
-        elements.ca_provider_select.options[0].textContent !== 'Global default: Sectigo — Bertrand')
+        elements.ca_provider_select.options[0].textContent !== 'Global default: Sectigo — Bertrand (b@example.com)')
         throw Error('Default CA account not offered');
     if (prevalidated.hidden || prevalidated.disabled) throw Error('Default Sectigo challenge unavailable');
     elements.challenge_type_select.value = 'prevalidated';
@@ -118,4 +118,47 @@ if (!nameField.disabled || !nameField.classList.classes['opacity-60'] ||
 """
     result = subprocess.run([node, '-e', script, str(settings_js)],
                             capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
+def test_eab_credentials_given_by_reference_count_as_given(node):
+    """Accounts declared in CERTMATE_CONFIG_FILE (#1317) give their EAB secrets
+    as `<field>_env` or `<field>_file`, which the server reads when it issues
+    (ca_manager.get_eab_credentials via secret_refs.resolve_field). Such an
+    account can issue, so it is offered and not called incomplete."""
+    certmate_js = Path(__file__).resolve().parent.parent / 'static' / 'js' / 'certmate.js'
+    script = r"""
+const fs = require('fs');
+global.window = global;
+global.document = { addEventListener() {} };
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+const CM = window.CertMate;
+const check = (label, got, want) => {
+    if (JSON.stringify(got) !== JSON.stringify(want))
+        throw Error(label + ': ' + JSON.stringify(got) + ' != ' + JSON.stringify(want));
+};
+const email = {email: 'ops@example.com'};
+check('env', CM.caAccountMissing('zerossl', {...email, eab_kid_env: 'ZS_KID', eab_hmac_env: '********'}), []);
+check('file', CM.caAccountMissing('google', {...email, eab_key_id_file: '/run/secrets/kid',
+    eab_hmac_key_file: '********'}), []);
+check('half', CM.caAccountMissing('zerossl', {...email, eab_kid_env: 'ZS_KID'}), ['eab']);
+check('none', CM.caAccountMissing('zerossl', email), ['eab']);
+// The directory URL is required only where the server has no pinned one to fall back
+// on (ca_manager.get_acme_server_url: private_ca and requires_acme_url, i.e. Sectigo).
+// DigiCert's is pinned and an account may override it, so its absence is not a gap.
+const eab = {eab_kid_env: 'KID', eab_hmac_env: '********'};
+check('digicert pinned url', CM.caAccountMissing('digicert', {...email, ...eab}), []);
+check('sectigo needs url', CM.caAccountMissing('sectigo', {...email, ...eab}), ['acme_url']);
+check('private_ca needs url', CM.caAccountMissing('private_ca', email), ['acme_url']);
+const settings = {email: '', default_ca: 'zerossl', ca_providers: {zerossl: {accounts: {zs: {name: 'zs-prod',
+    ...email, eab_kid_env: 'ZS_KID', eab_hmac_env: '********'}}}}};
+check('offered', CM.configuredCAProviders(settings, true), ['zerossl']);
+check('flat listed', CM.configuredCAProviders({ca_providers: {zerossl: {eab_kid_file: '/k'}}}, false),
+    ['letsencrypt', 'zerossl']);
+check('one', CM.caAccountMissingText(['email'], 'noun', 'or'), 'contact email');
+check('two', CM.caAccountMissingText(['eab', 'email'], 'phrase', 'and'), 'EAB credentials and a contact email');
+check('three', CM.caAccountMissingText(['acme_url', 'eab', 'email'], 'noun', 'or'),
+    'ACME directory URL, EAB credentials or contact email');
+"""
+    result = subprocess.run([node, '-e', script, str(certmate_js)], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr

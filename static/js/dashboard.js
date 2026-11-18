@@ -1402,6 +1402,11 @@
         var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
         var external = cert.external === true;
         var caDetailLabel = caDisplayName(cert.ca_provider);
+        // The account is named when it tells something: not for the one
+        // 'default' account of a CA (or a flat, account-less CA config).
+        if (caDetailLabel && cert.ca_account_id && !caOnlyDefaultAccount(cert.ca_provider, cert.ca_account_id)) {
+            caDetailLabel += ', account ' + escapeHtml(caAccountName(cert.ca_provider, cert.ca_account_id));
+        }
         if (caDetailLabel && cert.imported_at) caDetailLabel = 'Renewal: ' + caDetailLabel;
         var sanDomains = Array.isArray(cert.san_domains) ? cert.san_domains : [];
         var sanDomainsHtml = sanDomains.map(function (san) {
@@ -2284,11 +2289,48 @@
         digicert: 'DigiCert', sectigo: 'Sectigo', sslcom: 'SSL.com', private_ca: 'Private CA'
     };
 
+    // An account by the name Settings > CA gives it, then its email and, for a
+    // private CA, the host of its directory: two accounts on one address stay
+    // apart, and the name the operator chose is the one shown.
+    function caOnlyDefaultAccount(provider, id) {
+        var others = Object.keys(((caAccounts[provider] || {}).accounts) || {}).filter(function (key) {
+            return key !== 'default';
+        });
+        return id === 'default' && others.length === 0;
+    }
+
+    function caAccountName(provider, id) {
+        var config = caAccounts[provider] || {};
+        var account = (config.accounts || {})[id] || (id === 'default' ? config : {});
+        return account.name || (id === 'default' ? 'Default account' : id);
+    }
+
     function caAccountLabel(provider, id, config) {
         var accounts = config.accounts || {};
         var account = accounts[id] || (id === 'default' ? config : {});
-        return provider === 'sectigo' ? (account.name || id) :
-            (account.email || account.name || (provider === 'letsencrypt' ? globalCAEmail : '') || id);
+        var email = account.email ||
+            (provider === 'letsencrypt' || provider === 'letsencrypt_staging' ? globalCAEmail : '');
+        var details = email ? [email] : [];
+        if (provider === 'private_ca' && account.acme_url) {
+            try { details.push(new URL(account.acme_url).host); } catch (e) { /* not a URL: no host to show */ }
+        }
+        var name = account.name || (id === 'default' ? 'Default account' : id);
+        return name + (details.length ? ' (' + details.join(', ') + ')' : '');
+    }
+
+    // Why the form cannot issue: the global default CA and what its default
+    // account lacks, in the words of Settings > CA. '' when that is not why.
+    function caNotUsableReason() {
+        var config = caAccounts[defaultCAProvider] || {};
+        var ids = Object.keys(config.accounts || {});
+        var id = defaultCAAccounts[defaultCAProvider] ||
+            (ids.indexOf('default') !== -1 ? 'default' : (ids[0] || 'default'));
+        var account = (config.accounts || {})[id] || (id === 'default' ? config : {});
+        var missing = CertMate.caAccountMissing(defaultCAProvider, account, {email: globalCAEmail});
+        if (!missing.length) return '';
+        return (CA_NAMES[defaultCAProvider] || defaultCAProvider) + ' needs ' +
+            CertMate.caAccountMissingText(missing, 'phrase', 'and') + ': add ' +
+            (missing.length === 1 ? 'it' : 'them') + ' in Settings > CA';
     }
 
     function loadCAProviders() {
@@ -2339,9 +2381,9 @@
             caAccountLabel(provider, defaultId, config), ''));
         Object.keys(config.accounts || {}).forEach(function (id) {
             select.add(new Option(caAccountLabel(provider, id, config) +
-                (id === defaultId ? ' (default for this CA)' : ''), id));
+                (id === defaultId ? ', default for this CA' : ''), id));
         });
-        if (!config.accounts && (config.email || config.eab_kid || config.acme_url)) {
+        if (!config.accounts && (config.email || CertMate.caAccountHas(config, 'eab_kid', 'eab_key_id') || config.acme_url)) {
             select.add(new Option(caAccountLabel(provider, 'default', config), 'default'));
         }
         container.classList.toggle('hidden', !configuredCAs.length);
@@ -2453,6 +2495,14 @@
                     break;
             }
             infoDiv.innerHTML = infoText;
+            infoDiv.classList.remove('hidden');
+        } else if (!configuredCAs.length && caNotUsableReason()) {
+            // No CA can issue: say which one needs what, and where to add it.
+            var reason = caNotUsableReason();
+            var cut = reason.lastIndexOf(': ');
+            infoDiv.innerHTML = '<i class="fas fa-exclamation-triangle mr-1 text-warning-fg" aria-hidden="true"></i> ' +
+                escapeHtml(reason.slice(0, cut)) + ': <a href="/settings#ca" class="underline text-primary">' +
+                escapeHtml(reason.slice(cut + 2)) + '</a>';
             infoDiv.classList.remove('hidden');
         } else {
             infoDiv.classList.add('hidden');
@@ -3598,7 +3648,7 @@
         }
 
         if (!configuredCAs.length) {
-            showMessage('Configure a certificate authority in Settings before issuing', 'error');
+            showMessage(caNotUsableReason() || 'Configure a certificate authority in Settings before issuing', 'error');
             return;
         }
 
