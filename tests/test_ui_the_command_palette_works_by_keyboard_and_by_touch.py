@@ -297,3 +297,14 @@ def test_a_wide_screen_keeps_the_full_search_placeholder(make_page):
     _open_with_keys(page)
     assert page.get_attribute('#cmdPaletteInput', 'placeholder') == 'Search pages, settings, certificates...'
     assert page.get_attribute('#cmdPaletteInput', 'aria-label') == 'Search pages, settings, certificates'
+
+
+def test_the_placeholder_still_fits_after_the_window_is_narrowed_while_the_palette_is_open(make_page):
+    page = make_page(DESKTOP)
+    _open_with_keys(page)
+    page.set_viewport_size({'width': 360, 'height': 740})
+    page.wait_for_function("() => document.getElementById('cmdPaletteInput').clientWidth < 300")
+    # The resize event is dispatched at the next animation frame, after layout.
+    page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    seen = page.evaluate(_PLACEHOLDER_FITS)
+    assert seen['needs'] <= seen['room'], seen
