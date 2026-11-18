@@ -206,7 +206,7 @@ def _bulk_columns():
     """The columns the bulk importer reads, and the one it refuses a file
     without (modules/api/client_certificates.py)."""
     api = (REPO / 'modules' / 'api' / 'client_certificates.py').read_text(encoding='utf-8')
-    read = set(re.findall(r"cert_data\.get\('(\w+)'", api))
+    read = set(re.findall(r"""cert_data\.get\(['"](\w+)['"]""", api))
     required = set(re.findall(r"'(\w+)' not in headers", api))
     limit = int(re.search(r'max_batch = (\d+)', api).group(1))
     return read, required, limit
@@ -245,14 +245,23 @@ def test_the_csv_downloads_and_the_json_opens_as_help_says(app_client):
     assert 'JSON download' not in text
 
 
-def test_quick_start_does_not_say_a_fresh_instance_is_never_open():
-    """Until the first admin exists, setup mode serves every caller as admin
-    (modules/core/auth.py); Help said the instance is never left open."""
+def test_quick_start_says_what_setup_mode_allows_and_what_ends_it():
+    """Help said the instance is never left open, then that a visitor can
+    read it. Setup mode serves every caller as admin until sign-in is on with
+    a user, an operator token is set or single sign-on is configured
+    (auth.setup_mode_for); it refuses every write but the first admin and the
+    reads that carry private keys or backups away (_SETUP_READS_REFUSED)."""
     auth = (REPO / 'modules' / 'core' / 'auth.py').read_text(encoding='utf-8')
-    assert 'serves every caller as admin until a' in auth
+    predicate = auth[auth.index('def setup_mode_for'):auth.index('def would_open_setup_mode')]
+    assert 'has_operator_bearer_token' in predicate and "oidc.get('client_id')" in predicate
+    assert "local_auth_enabled" in predicate and 'len(users) > 0' in predicate
+    refused = auth[auth.index('_SETUP_READS_REFUSED ='):auth.index('_READ_METHODS =')]
+    assert '/download' in refused and 'backups/download' in refused
     quick = _text(_section('quick-start'))
     assert 'never left open' not in quick, quick
-    assert 'setup mode' in quick, quick
+    for fact in ('sign-in is on with a first user', 'API_BEARER_TOKEN', 'single sign-on',
+                 'everything but private keys and backups', 'create the first admin'):
+        assert fact in quick, (fact, quick)
 
 
 def test_the_acme_section_matches_the_server():
