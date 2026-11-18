@@ -1,6 +1,6 @@
 # Sondas de Despliegue (Probes)
 
-<!-- CERTMATE-TRANSLATED-FROM a2a255458b3ae83f -->
+<!-- CERTMATE-TRANSLATED-FROM 711dc606f0c87d6a -->
 
 Las sondas verifican que sus certificados son accesibles en la red realizando un handshake TLS en vivo contra el servidor desplegado.
 
@@ -49,6 +49,8 @@ Cuando la sonda backend indica que el servidor es inaccesible **y** el protocolo
 Consulta el host que sondeó el backend (`probe_host`): el `deployment_host` si hay uno, la dirección de un certificado IP y, en otro caso, el nombre del certificado. Si el backend no responde, consulta dónde se sirve el certificado: su dirección para un certificado IP, su nombre en otro caso.
 
 Para los protocolos `TLS` y `SMTP STARTTLS`, la sonda de navegador se **omite** porque los navegadores no pueden realizar conexiones TLS sin HTTP ni SMTP. El estado del navegador muestra "No verificado".
+
+Cuando el navegador lo intenta y su solicitud falla, el estado del navegador muestra "No se pudo conectar" (o "Inaccesible" tras el tiempo de espera de 10 segundos). Una solicitud `no-cors` notifica igual un nombre que no se resuelve, una conexión rechazada y un certificado en el que el navegador no confía, así que el chip no dice más que eso. Solo un resultado accesible se comunica al servidor.
 
 ### Caché
 

@@ -2779,12 +2779,18 @@ ignored: pressing the button is the decision to deploy now.
 
 It answers **200 even when `ok` is false**, so the summary can be read: deploy
 hooks disabled, or nothing configured for this domain, come back as `ok: false`
-with an `error` that says which. Non-2xx is reserved for a bad domain path
+and `total: 0` with an `error` that says which. A run with `total: 0` ran
+nothing and writes no `deploy` entry to the audit log; a run that ran something
+writes one, `success` or `failure`. Non-2xx is reserved for a bad domain path
 (`400`), a certificate that does not exist (`404 CERTIFICATE_NOT_FOUND`), a
 deploy manager that is not running (`503`) and an unexpected failure (`500`).
-Each `results[]` entry is one hook or target run (`hook_name`, `exit_code`,
-`success`, `stdout`, `stderr`, ...), the same record `GET /api/deploy/history`
-keeps.
+Each `results[]` entry is one hook or target run. A shell hook's entry carries
+`hook_name`, `exit_code`, `success`, `stdout`, `stderr`, `error`, ..., the same
+record `GET /api/deploy/history` keeps. A typed target's entry carries `target`,
+`type`, `success`, `status_code` and `message`, which holds the reason a failed
+target gives. A certificate issued from a CSR has no key for a target that
+publishes one: its entry has `target` and `type` set to `null` and a `message`
+that says so.
 
 #### Check what a domain is actually serving
 
@@ -3059,10 +3065,14 @@ also enables local authentication, and the response says so with
 needed (on an instance already closed it answers `401`).
 
 Until setup is complete, the anonymous admin is also refused, with the same
-`409 SETUP_BOOTSTRAP_ONLY`, anything that outlives setup or carries private
-keys away: deploy-hook changes, tests and runs, certificate and key downloads,
-and backup creation and download. Restoring and uploading a backup stay
-allowed, since that is how an instance is recovered onto a fresh host.
+`409 SETUP_BOOTSTRAP_ONLY`, every write except the two the first-run screen
+makes (creating the first admin, and `POST /api/auth/config`), and the reads
+that carry private keys away: certificate downloads, client certificate key and
+PFX downloads, and backup downloads. Restoring and uploading a backup are
+refused too: a restore in that window planted a deploy hook and an admin API
+key that outlived setup. To recover onto a fresh host, create the first admin
+and sign in first, or start the instance with `API_BEARER_TOKEN` set
+([backup](./backup.md)).
 
 #### Revoke an API key
 

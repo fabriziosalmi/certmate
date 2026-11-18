@@ -458,6 +458,12 @@ button[class*="bg-red-6"]:active {
     @apply inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-foreground hover:bg-hover hover:border-border-strong transition;
   }
 
+  /* The same chrome with its word beside the icon: what a touch browser, which
+     never shows a title, can read. Used for the certificate actions. */
+  .cm-text-btn {
+    @apply inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-lg border border-border bg-input text-sm font-medium text-muted whitespace-nowrap hover:text-foreground hover:bg-hover hover:border-border-strong transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-input disabled:hover:text-muted;
+  }
+
   /* ── Filter chip ────────────────────────────────────────────── */
   /* Base chrome for the status/usage filter chips (active colours are applied
      per-chip via aria-pressed: utilities). Matches the server status chips. */

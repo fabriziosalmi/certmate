@@ -213,10 +213,12 @@ class TestCAAndChallengeToggles:
         # The DNS-tab Google panel is a distinct element and stays hidden.
         expect(browser_page.locator('#google-config')).to_be_hidden()
 
-    def test_http01_hides_dns_config_panels(self, browser_page):
-        """Choosing HTTP-01 hides both the provider picker and the per-provider
-        config panels. Regression: the panels are siblings of the picker, so a
-        previously selected DNS config lingered under HTTP-01 (#226)."""
+    def test_http01_keeps_the_dns_providers_in_reach(self, browser_page):
+        """Choosing HTTP-01 leaves the provider picker and the per-provider
+        config panels where they are (audit P21). They used to be hidden
+        (#226), and a user told by the setup wizard to add a DNS provider
+        later in Settings found no provider and no Add Account there. A
+        certificate can choose DNS-01 whatever the default."""
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
 
@@ -230,18 +232,18 @@ class TestCAAndChallengeToggles:
         browser_page.wait_for_timeout(300)
         expect(browser_page.locator('#cloudflare-config')).to_be_visible(timeout=5000)
 
-        # Switch to HTTP-01 — picker and config panels must both disappear.
+        # Switch to HTTP-01: picker, panel and Add Account stay.
         browser_page.click('label:has(input[name="challenge_type"][value="http-01"])')
-        browser_page.wait_for_timeout(300)
-        expect(browser_page.locator('#dns-provider-section')).to_be_hidden()
-        expect(browser_page.locator('#dns-config-section')).to_be_hidden()
-        expect(browser_page.locator('#cloudflare-config')).to_be_hidden()
-
-        # Switching back to DNS-01 restores them.
-        browser_page.click('label:has(input[name="challenge_type"][value="dns-01"])')
         browser_page.wait_for_timeout(300)
         expect(browser_page.locator('#dns-provider-section')).to_be_visible()
         expect(browser_page.locator('#dns-config-section')).to_be_visible()
+        expect(browser_page.locator('#cloudflare-config')).to_be_visible()
+        expect(browser_page.locator('#cloudflare-add-account')).to_be_visible()
+
+        # Back to DNS-01 for the tests after this one.
+        browser_page.click('label:has(input[name="challenge_type"][value="dns-01"])')
+        browser_page.wait_for_timeout(300)
+        expect(browser_page.locator('#dns-provider-section')).to_be_visible()
 
 
 class TestSettingsCloudflareFlow:

@@ -76,8 +76,9 @@ def test_a_token_from_the_environment_never_reaches_the_file(manager, monkeypatc
     _save_through_the_interface(manager, scheduler_marker='saved')
 
     assert 'env-token' not in manager.settings_file.read_text()
-    # The file holds the empty default the settings migration writes, not the token.
-    assert _token(_on_disk(manager)) == ''
+    # The file holds no Cloudflare account at all: a fresh instance has none
+    # (audit P05), and the overlay is not one.
+    assert _token(_on_disk(manager)) is settings_module._ABSENT
 
 
 def test_the_token_saved_through_the_interface_is_kept(manager, monkeypatch):
