@@ -175,6 +175,10 @@
                                        autocomplete="off" aria-describedby="domain_help ip_address_note"
                                        class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200 placeholder-gray-400"
                                        placeholder="example.com, *.example.com or a public IPv4 address" required>
+                                <!-- An error about the names (a refused domain, a wildcard under
+                                     HTTP-01): written here, in the drawer, and added to the
+                                     field's aria-describedby while shown. -->
+                                <p id="domain_error" class="mt-1 text-xs text-danger-fg hidden" role="alert"></p>
                                 <p id="domain_help" class="mt-1 text-xs text-muted">
                                     <i class="fas fa-info-circle mr-1"></i>
                                     Supports wildcard domains (*.example.com), single domains and public IPv4 addresses
