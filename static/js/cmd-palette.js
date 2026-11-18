@@ -9,6 +9,7 @@
     var paletteEl = null;
     var inputEl = null;
     var resultsEl = null;
+    var statusEl = null;
     var selectedIndex = 0;
     var currentResults = [];
     var certCache = null;        // server certificates (lazy-fetched)
@@ -23,7 +24,7 @@
         { type: 'nav', icon: 'fa-question-circle', label: 'Help & Documentation', desc: 'Getting started, guides', url: '/help' },
         { type: 'nav', icon: 'fa-history', label: 'Activity Log', desc: 'Recent operations and events', url: '/activity' },
         { type: 'nav', icon: 'fa-boxes-stacked', label: 'Certificate Inventory', desc: 'Discovered certificates, probes, adoption', url: '/inventory' },
-        { type: 'nav', icon: 'fa-shield-halved', label: 'Crypto Audit Report', desc: 'Key types, algorithms, readiness', url: '/inventory/crypto-report' },
+        { type: 'nav', icon: 'fa-shield-alt', label: 'Crypto Audit Report', desc: 'Key types, algorithms, readiness', url: '/inventory/crypto-report' },
         { type: 'nav', icon: 'fa-book', label: 'API Documentation', desc: 'ReDoc API reference', url: '/redoc' },
         { type: 'settings', icon: 'fa-server', label: 'DNS Provider Settings', desc: 'Configure DNS providers', url: '/settings#dns' },
         { type: 'settings', icon: 'fa-shield-alt', label: 'CA Settings', desc: 'Certificate authority configuration', url: '/settings#ca' },
@@ -46,17 +47,27 @@
         var div = document.createElement('div');
         div.id = 'cmdPalette';
         div.className = 'fixed inset-0 z-[100] hidden';
+        // The input is a combobox over a listbox (P36): the highlighted result
+        // is named to assistive technology through aria-activedescendant, and
+        // the number of results is spoken through the status line. On a touch
+        // screen or a narrow one (P57) the key hints are hidden and a Cancel
+        // button closes the palette. The media variant below is where a
+        // keyboard is assumed; it is written out in full each time because
+        // Tailwind finds classes by reading this file as text.
         div.innerHTML =
             '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm" id="cmdPaletteOverlay"></div>' +
             '<div role="dialog" aria-modal="true" aria-label="Command palette" class="fixed inset-x-4 top-[15vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg bg-surface border-border rounded-xl shadow-2xl border overflow-hidden">' +
                 '<div class="flex items-center px-4 border-b border-border">' +
                     '<i class="fas fa-search text-gray-400 mr-3" aria-hidden="true"></i>' +
-                    '<input id="cmdPaletteInput" type="text" aria-label="Search pages, settings, certificates" placeholder="Search pages, settings, certificates..." ' +
-                           'class="flex-1 py-3 bg-transparent text-foreground placeholder-gray-400 outline-none text-sm">' +
-                    '<kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-xs text-gray-400 bg-surface-2 rounded">ESC</kbd>' +
+                    '<input id="cmdPaletteInput" type="text" role="combobox" aria-expanded="false" aria-controls="cmdPaletteResults" aria-autocomplete="list" ' +
+                           'aria-label="Search pages, settings, certificates" placeholder="Search pages, settings, certificates..." autocomplete="off" ' +
+                           'class="flex-1 min-w-0 py-3 bg-transparent text-foreground placeholder-gray-400 outline-none text-sm">' +
+                    '<kbd class="hidden [@media(hover:hover)_and_(min-width:640px)]:inline-flex items-center px-2 py-0.5 text-xs text-gray-400 bg-surface-2 rounded">ESC</kbd>' +
+                    '<button type="button" id="cmdPaletteCancel" class="inline-flex [@media(hover:hover)_and_(min-width:640px)]:hidden items-center justify-center min-h-[44px] min-w-[44px] -mr-2 px-2 text-sm font-medium text-accent">Cancel</button>' +
                 '</div>' +
-                '<div id="cmdPaletteResults" class="overflow-y-auto py-2"></div>' +
-                '<div class="px-4 py-2 border-t border-border flex items-center justify-between text-xs text-muted">' +
+                '<div id="cmdPaletteResults" role="listbox" aria-label="Results" class="overflow-y-auto py-2"></div>' +
+                '<div id="cmdPaletteStatus" role="status" class="sr-only"></div>' +
+                '<div class="hidden [@media(hover:hover)_and_(min-width:640px)]:flex px-4 py-2 border-t border-border items-center justify-between text-xs text-muted">' +
                     '<div><kbd class="px-1.5 py-0.5 bg-surface-2 rounded mr-1">&uarr;&darr;</kbd> navigate <kbd class="px-1.5 py-0.5 bg-surface-2 rounded mx-1">&crarr;</kbd> select</div>' +
                     '<div><kbd class="px-1.5 py-0.5 bg-surface-2 rounded">esc</kbd> close</div>' +
                 '</div>' +
@@ -65,15 +76,64 @@
         paletteEl = div;
         inputEl = document.getElementById('cmdPaletteInput');
         resultsEl = document.getElementById('cmdPaletteResults');
+        statusEl = document.getElementById('cmdPaletteStatus');
 
         // Event listeners
         document.getElementById('cmdPaletteOverlay').addEventListener('click', closePalette);
+        document.getElementById('cmdPaletteCancel').addEventListener('click', closePalette);
+        // On the document, not the dialog: a click on a spot inside the
+        // palette that takes no focus (a group header, "No results found")
+        // leaves focus on the body, and Tab from there must still land here.
+        document.addEventListener('keydown', function(e) {
+            if (isOpen()) keepTabInside(e);
+        }, true);
         inputEl.addEventListener('input', onSearch);
         inputEl.addEventListener('keydown', onKeyDown);
         // Re-size the results pane on viewport changes while open.
         window.addEventListener('resize', function() {
-            if (isOpen()) sizeResults();
+            if (isOpen()) {
+                sizeResults();
+                fitPlaceholder();
+            }
         });
+    }
+
+    // The palette is modal: Tab and Shift+Tab move between the controls it
+    // shows (the input, and Cancel where it is visible) and never to the page
+    // behind it (P36), wherever focus was when the key was pressed. Results
+    // are reached with the arrow keys.
+    function keepTabInside(e) {
+        if (e.key !== 'Tab') return;
+        var stops = [inputEl, document.getElementById('cmdPaletteCancel')].filter(function(el) {
+            return el && el.getClientRects().length > 0;
+        });
+        e.preventDefault();
+        var at = stops.indexOf(document.activeElement);
+        var next = at === -1 ? 0 : (at + (e.shiftKey ? stops.length - 1 : 1)) % stops.length;
+        if (stops[next]) stops[next].focus();
+    }
+
+    // The full placeholder needs about 246px at text-sm; on a phone the
+    // Cancel button leaves the input 212px at 360 and 242px at 390, and the
+    // text was cut to "Search pages, settings, certifica". Where it does not
+    // fit, the short one is shown; the aria-label keeps the full name.
+    var PLACEHOLDER_FULL = 'Search pages, settings, certificates...';
+    var PLACEHOLDER_SHORT = 'Search...';
+    var measureCtx = null;
+
+    function fitPlaceholder() {
+        if (!inputEl) return;
+        var style = window.getComputedStyle(inputEl);
+        var room = inputEl.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        var fits = true;
+        if (room > 0) {
+            if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+            if (measureCtx) {
+                measureCtx.font = style.font;
+                fits = Math.ceil(measureCtx.measureText(PLACEHOLDER_FULL).width) <= room;
+            }
+        }
+        inputEl.placeholder = fits ? PLACEHOLDER_FULL : PLACEHOLDER_SHORT;
     }
 
     // Size the results pane to fit the viewport without overflowing.
@@ -95,6 +155,7 @@
         inputEl.value = '';
         selectedIndex = 0;
         sizeResults();
+        fitPlaceholder();
         onSearch();
         // Delay focus to ensure visible
         setTimeout(function() { inputEl.focus(); }, 50);
@@ -215,11 +276,17 @@
 
         selectedIndex = 0;
         renderResults();
+        var n = currentResults.length;
+        statusEl.textContent = n === 0 ? 'No results' : n === 1 ? '1 result' : n + ' results';
     }
+
+    function optionId(i) { return 'cmdPaletteOption-' + i; }
 
     function renderResults() {
         if (currentResults.length === 0) {
-            resultsEl.innerHTML = '<div class="px-4 py-6 text-center text-sm text-muted"><i class="fas fa-search mr-2"></i>No results found</div>';
+            inputEl.setAttribute('aria-expanded', 'false');
+            inputEl.removeAttribute('aria-activedescendant');
+            resultsEl.innerHTML = '<div role="presentation" class="px-4 py-6 text-center text-sm text-muted"><i class="fas fa-search mr-2" aria-hidden="true"></i>No results found</div>';
             return;
         }
 
@@ -229,23 +296,28 @@
 
         currentResults.forEach(function(item, i) {
             if (item.type !== lastType) {
+                if (lastType) html += '</div>';
                 lastType = item.type;
-                html += '<div class="px-4 pt-2 pb-1 text-[10px] font-semibold text-muted uppercase tracking-wider">' + escapeHtml(typeLabels[item.type] || item.type) + '</div>';
+                html += '<div role="group" aria-labelledby="cmdPaletteGroup-' + i + '">' +
+                    '<div aria-hidden="true" id="cmdPaletteGroup-' + i + '" class="px-4 pt-2 pb-1 text-[10px] font-semibold text-muted uppercase tracking-wider">' + escapeHtml(typeLabels[item.type] || item.type) + '</div>';
             }
             var isSelected = i === selectedIndex;
             html += '<div class="cmd-result flex items-center px-4 py-2 cursor-pointer ' +
                 (isSelected ? 'bg-primary/10 text-primary' : 'text-label hover:bg-gray-100 dark:hover:bg-gray-700/50') +
-                '" data-index="' + i + '">' +
-                '<i class="fas ' + escapeHtml(item.icon) + ' w-5 text-center mr-3 ' + (isSelected ? 'text-primary' : 'text-gray-400') + '"></i>' +
+                '" role="option" id="' + optionId(i) + '" aria-selected="' + (isSelected ? 'true' : 'false') + '" data-index="' + i + '">' +
+                '<i class="fas ' + escapeHtml(item.icon) + ' w-5 text-center mr-3 ' + (isSelected ? 'text-primary' : 'text-gray-400') + '" aria-hidden="true"></i>' +
                 '<div class="flex-1 min-w-0">' +
                     '<div class="text-sm font-medium truncate">' + escapeHtml(item.label) + '</div>' +
                     (item.desc ? '<div class="text-xs text-muted truncate">' + escapeHtml(item.desc) + '</div>' : '') +
                 '</div>' +
-                (item.type === 'action' ? '<i class="fas fa-bolt text-xs text-gray-400 ml-2"></i>' : '<i class="fas fa-arrow-right text-xs text-gray-400 ml-2"></i>') +
+                (item.type === 'action' ? '<i class="fas fa-bolt text-xs text-gray-400 ml-2" aria-hidden="true"></i>' : '<i class="fas fa-arrow-right text-xs text-gray-400 ml-2" aria-hidden="true"></i>') +
             '</div>';
         });
+        html += '</div>';
 
         resultsEl.innerHTML = html;
+        inputEl.setAttribute('aria-expanded', 'true');
+        inputEl.setAttribute('aria-activedescendant', optionId(selectedIndex));
 
         // Click handlers on result items
         resultsEl.querySelectorAll('.cmd-result').forEach(function(el) {
