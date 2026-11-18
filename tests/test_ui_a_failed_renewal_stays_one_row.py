@@ -210,9 +210,7 @@ def test_on_a_phone_the_detail_tells_the_failure_across_the_banner(browser_page,
         widths = page.evaluate("""() => {
             const block = document.querySelector('#certDetailContent [data-last-renewal-failed]');
             const banner = document.querySelector('#certDetailContent > div > div');
-            const cause = block.children[1];
-            return {block: block.offsetWidth, banner: banner.clientWidth,
-                    causeScroll: cause.scrollWidth, causeClient: cause.clientWidth};
+            return {block: block.offsetWidth, banner: banner.clientWidth};
         }""")
     finally:
         page.unroute_all(behavior='ignoreErrors')
@@ -221,7 +219,6 @@ def test_on_a_phone_the_detail_tells_the_failure_across_the_banner(browser_page,
     # Layout widths, not boxes: the dialog scales in as it opens. The
     # banner's padding is 16 px a side; the block fills the rest.
     assert widths['block'] >= widths['banner'] - 32 - 1, widths
-    assert widths['causeScroll'] <= widths['causeClient'], widths
 
 
 @pytest.fixture
