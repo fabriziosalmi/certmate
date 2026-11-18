@@ -736,11 +736,12 @@ _DNS_FLAT_CREDENTIAL_KEYS = {
 }
 _DNS_FLAT_FALLBACK_KEYS = ['api_token', 'api_key', 'username']
 
-# What the migration wrote into the "default" account it made, and the one
-# value the first-run settings filled in for a provider (Route53's region).
+# What the migration wrote into the "default" account it made, and the
+# values a form fills in by itself for Route53 (the first-run region, the
+# settings page's mode select): on their own they are not a credential.
 _DNS_PLACEHOLDER_DESCRIPTION = 'Migrated from single-account configuration'
 _DNS_LABELS = frozenset({'name', 'description'})
-_DNS_SCAFFOLD_VALUES = {'region': 'us-east-1'}
+_DNS_SCAFFOLD_VALUES = {'region': 'us-east-1', 'auth_mode': 'access_keys'}
 _STALE_FLAT_DNS_WARNED = set()
 
 
@@ -809,8 +810,13 @@ def _name_the_default_dns_account(provider, config, default_accounts):
     default = config['accounts'].get('default')
     if not isinstance(default, dict) or _holds_nothing(default):
         return
+    if 'name' in default and provider in default_accounts:
+        return
     default.setdefault('name', _default_dns_account_name(provider))
     default_accounts.setdefault(provider, 'default')
+    logger.info("DNS provider %r: its account 'default' had no name or the provider "
+                "no default account; named it %r, default account %r",
+                provider, default['name'], default_accounts[provider])
 
 
 def _fold_legacy_dns_write(existing_dns, incoming_dns, default_accounts):

@@ -120,6 +120,39 @@ def test_the_token_saved_in_the_single_field_is_the_account_issuance_reads(page)
         _clear(page, 'default')
 
 
+def test_a_plain_save_on_route53_makes_no_account(page):
+    """The Route53 form fills in its mode and region by itself. Saved with no
+    key typed, they made an account "default" with no credential: a card
+    saying "No credentials", the tile "Not configured", and the key fields
+    hidden behind the card's Edit."""
+    try:
+        page.goto(f'{BASE_URL}/settings#dns', wait_until='networkidle')
+        page.wait_for_function("() => document.getElementById('route53-status').textContent.trim() !== ''")
+        page.click('label:has(input[name="dns_provider"][value="route53"])')
+        assert page.locator('#route53_access_key_id').is_visible()
+        with page.expect_response(lambda r: r.url.endswith('/api/web/settings')
+                                  and r.request.method == 'POST') as saved:
+            page.click('#saveBtn')
+        assert saved.value.ok, saved.value.status
+
+        answer = page.request.get(f'{BASE_URL}/api/dns/accounts')
+        assert answer.ok, answer.status
+        assert [a for a in answer.json() if a['provider'] == 'route53'] == []
+        defaults = page.request.get(f'{BASE_URL}/api/web/settings').json().get('default_accounts') or {}
+        assert 'route53' not in defaults, defaults
+
+        page.reload(wait_until='networkidle')
+        page.wait_for_function("() => document.getElementById('route53-status').textContent.trim() !== ''")
+        page.click('label:has(input[name="dns_provider"][value="route53"])')
+        listed = page.locator('#route53-accounts-list').inner_text()
+        assert 'No accounts configured yet' in listed, listed
+        assert page.locator('#route53_access_key_id').is_visible()
+    finally:
+        page.request.delete(f'{BASE_URL}/api/dns/route53/accounts/default', headers={'Origin': BASE_URL})
+        page.request.post(f'{BASE_URL}/api/web/settings', headers={'Origin': BASE_URL},
+                          data={'dns_provider': 'cloudflare'})
+
+
 def test_the_providers_stay_in_reach_under_http01(page):
     saved = page.request.post(f'{BASE_URL}/api/web/settings', headers={'Origin': BASE_URL},
                               data={'challenge_type': 'http-01'})

@@ -212,11 +212,53 @@ def test_an_account_written_without_a_name_is_named_and_made_the_default(tmp_pat
     The placeholder used to supply its name and the default slot."""
     on_disk = _upgraded({'cloudflare': {'accounts': {'default': {'api_token': TOKEN}}}})
     manager, settings_file = _manager(tmp_path, on_disk)
-    settings = manager.load_settings()
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        settings = manager.load_settings()
     assert settings['dns_providers']['cloudflare']['accounts']['default'] == {
         'name': 'Default Cloudflare Account', 'api_token': TOKEN}
     assert settings['default_accounts'] == {'cloudflare': 'default'}
+    named = [r.getMessage() for r in caplog.records if 'DNS' in r.getMessage() and 'cloudflare' in r.getMessage()]
+    assert any('Default Cloudflare Account' in line for line in named), named
     _second_load_changes_nothing(manager, settings_file, caplog)
+
+
+ROUTE53_FORM_DEFAULTS = {'auth_mode': 'access_keys', 'region': 'us-east-1', 'assume_role_arn': ''}
+
+
+def test_route53_form_defaults_saved_by_an_earlier_page_make_no_account(tmp_path, caplog):
+    """An earlier settings page, saved on Route53 with no key typed, wrote the
+    form's own mode and region beside the placeholder. They are not a
+    credential: folded in, they kept an account with nothing to issue with."""
+    on_disk = _upgraded(
+        {'route53': {'accounts': {'default': _placeholder(
+            'route53', access_key_id='', secret_access_key='', region='us-east-1')}, **ROUTE53_FORM_DEFAULTS}},
+        {'route53': 'default'})
+    manager, settings_file = _manager(tmp_path, on_disk)
+    settings = manager.load_settings()
+    assert settings['dns_providers'].get('route53', {}).get('accounts', {}) == {}
+    assert settings['default_accounts'] == {}
+    assert DNSManager(manager).list_accounts(settings=settings) == []
+    _second_load_changes_nothing(manager, settings_file, caplog)
+
+
+def test_route53_form_defaults_alone_are_not_named_the_default_account(tmp_path, caplog):
+    on_disk = _upgraded({'route53': {'accounts': {'default': dict(ROUTE53_FORM_DEFAULTS)}}})
+    manager, settings_file = _manager(tmp_path, on_disk)
+    settings = manager.load_settings()
+    assert settings['dns_providers']['route53']['accounts']['default'] == ROUTE53_FORM_DEFAULTS
+    assert settings['default_accounts'] == {}
+    _second_load_changes_nothing(manager, settings_file, caplog)
+
+
+def test_an_iam_role_account_without_keys_is_a_real_account(tmp_path):
+    """CONTROL: the IAM-role mode needs no keys, so it is a value of its own."""
+    iam = {**ROUTE53_FORM_DEFAULTS, 'auth_mode': 'iam_role'}
+    on_disk = _upgraded({'route53': {'accounts': {'default': dict(iam)}}})
+    manager, _ = _manager(tmp_path, on_disk)
+    settings = manager.load_settings()
+    assert settings['dns_providers']['route53']['accounts']['default'] == {
+        'name': 'Default Route53 Account', **iam}
+    assert settings['default_accounts'] == {'route53': 'default'}
 
 
 def test_the_single_token_field_is_saved_into_the_default_account(node):
@@ -254,6 +296,25 @@ if (!cloudflare || 'api_token' in cloudflare || !cloudflare.accounts ||
     throw Error('The token went beside the accounts: ' + JSON.stringify(cloudflare));
 legacy.style.display = 'none'; sent = null; window.__test(settings); window.__save();
 if (sent.dns_providers) throw Error('A hidden single-account field was saved: ' + JSON.stringify(sent.dns_providers));
+// Route53 fills in its mode and region by itself: with no key typed, a
+// plain save makes no account. With a key, or in IAM-role mode, it does.
+for (const key of Object.keys(values)) delete values[key];
+Object.assign(values, {default_ca: 'letsencrypt', dns_provider: 'route53', challenge_type: 'dns-01',
+    route53_auth_mode: 'access_keys', route53_region: 'us-east-1'});
+elements['route53-legacy-config'] = {style: {display: 'block'}};
+sent = null; window.__test(settings); window.__save();
+if (sent.dns_providers && sent.dns_providers.route53)
+    throw Error('Route53 form defaults made an account: ' + JSON.stringify(sent.dns_providers.route53));
+values.route53_access_key_id = 'AKIA' + 'Q'.repeat(16); values.route53_secret_access_key = 'S'.repeat(40);
+sent = null; window.__test(settings); window.__save();
+const keyed = sent.dns_providers && sent.dns_providers.route53 && sent.dns_providers.route53.accounts.default;
+if (!keyed || keyed.access_key_id !== values.route53_access_key_id || keyed.region !== 'us-east-1')
+    throw Error('Route53 keys were not saved into the default account: ' + JSON.stringify(sent.dns_providers));
+delete values.route53_access_key_id; delete values.route53_secret_access_key; values.route53_auth_mode = 'iam_role';
+sent = null; window.__test(settings); window.__save();
+const iam = sent.dns_providers && sent.dns_providers.route53 && sent.dns_providers.route53.accounts.default;
+if (!iam || iam.auth_mode !== 'iam_role')
+    throw Error('An IAM-role Route53 save made no account: ' + JSON.stringify(sent.dns_providers));
 """
     result = subprocess.run([node, '-e', script, str(settings_js)],
                             capture_output=True, text=True, timeout=30)

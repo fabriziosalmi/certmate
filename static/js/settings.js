@@ -350,7 +350,15 @@
             // The single-account fields are the provider's "default" account.
             // Issuance reads accounts only: written flat beside them, a token
             // was saved, reported as saved, and never used (audit P05).
-            if (Object.keys(legacyConfig).length > 0) {
+            // Route53's mode, region and role ARN are filled in by the form
+            // itself, so on their own they would make an account with no
+            // credential. The IAM-role mode needs no keys and counts.
+            var accountSettings = ['auth_mode', 'region', 'assume_role_arn'];
+            var holdsCredential = legacyConfig.auth_mode === 'iam_role' ||
+                Object.keys(legacyConfig).some(function (key) {
+                    return legacyConfig[key] && accountSettings.indexOf(key) === -1;
+                });
+            if (holdsCredential) {
                 if (!settings.dns_providers) settings.dns_providers = {};
                 settings.dns_providers[provider] = {accounts: {default: legacyConfig}};
             }
