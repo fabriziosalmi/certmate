@@ -53,9 +53,10 @@ def page(browser_page, ui_session_cookie):
     context.close()
 
 
-def _clear(page):
-    for account in ('default', ADDED):
-        page.request.delete(f'{BASE_URL}/api/dns/cloudflare/accounts/{account}', headers={'Origin': BASE_URL})
+def _clear(page, account=ADDED):
+    # Only what a test made: deleting "default" here would also delete the
+    # placeholder an unfixed instance carries, and hide the bug.
+    page.request.delete(f'{BASE_URL}/api/dns/cloudflare/accounts/{account}', headers={'Origin': BASE_URL})
 
 
 def _cloudflare_accounts(page):
@@ -78,33 +79,6 @@ def test_no_provider_has_an_empty_placeholder_account(page):
     assert placeholders == [], placeholders
 
 
-def test_the_token_saved_in_the_single_field_is_the_account_issuance_reads(page):
-    _open_cloudflare(page)
-    field = page.locator('#cloudflare_api_token')
-    assert field.is_visible()
-    field.fill(TOKEN)
-    with page.expect_response(lambda r: r.url.endswith('/api/web/settings')
-                              and r.request.method == 'POST') as saved:
-        page.click('#saveBtn')
-    assert saved.value.ok, saved.value.status
-    page.wait_for_function("() => document.getElementById('cloudflare-status').textContent.trim() === 'Configured'",
-                           timeout=10000)
-
-    stored = page.request.get(f'{BASE_URL}/api/web/settings').json()['dns_providers']['cloudflare']
-    assert 'api_token' not in stored, stored
-    assert stored['accounts']['default']['api_token'] == '********', stored
-    assert [(a['account_id'], a['configured']) for a in _cloudflare_accounts(page)] == [('default', True)]
-
-    page.reload(wait_until='networkidle')
-    _open_cloudflare(page)
-    cards = page.locator('#cloudflare-accounts-list > div')
-    assert cards.count() == 1
-    assert 'No credentials' not in cards.first.inner_text()
-    assert page.locator('#cloudflare-status').inner_text().strip() == 'Configured'
-    # One place per credential: the card's Edit, not a second field under it.
-    assert not page.locator('#cloudflare_api_token').is_visible()
-
-
 def test_one_account_added_is_one_card_and_the_tile_counts_it(page):
     answer = page.request.post(f'{BASE_URL}/api/dns/cloudflare/accounts', headers={'Origin': BASE_URL}, data={
         'account_id': ADDED, 'name': ADDED, 'config': {'name': ADDED, 'api_token': TOKEN}})
@@ -114,6 +88,36 @@ def test_one_account_added_is_one_card_and_the_tile_counts_it(page):
     assert cards.count() == 1, page.locator('#cloudflare-accounts-list').inner_text()
     assert PLACEHOLDER not in page.locator('#cloudflare-accounts-list').inner_text()
     assert page.locator('#cloudflare-account-count').inner_text().strip() == str(cards.count())
+
+
+def test_the_token_saved_in_the_single_field_is_the_account_issuance_reads(page):
+    try:
+        _open_cloudflare(page)
+        field = page.locator('#cloudflare_api_token')
+        assert field.is_visible()
+        field.fill(TOKEN)
+        with page.expect_response(lambda r: r.url.endswith('/api/web/settings')
+                                  and r.request.method == 'POST') as saved:
+            page.click('#saveBtn')
+        assert saved.value.ok, saved.value.status
+        page.wait_for_function("() => document.getElementById('cloudflare-status').textContent.trim() === 'Configured'",
+                               timeout=10000)
+
+        stored = page.request.get(f'{BASE_URL}/api/web/settings').json()['dns_providers']['cloudflare']
+        assert 'api_token' not in stored, stored
+        assert stored['accounts']['default']['api_token'] == '********', stored
+        assert [(a['account_id'], a['configured']) for a in _cloudflare_accounts(page)] == [('default', True)]
+
+        page.reload(wait_until='networkidle')
+        _open_cloudflare(page)
+        cards = page.locator('#cloudflare-accounts-list > div')
+        assert cards.count() == 1
+        assert 'No credentials' not in cards.first.inner_text()
+        assert page.locator('#cloudflare-status').inner_text().strip() == 'Configured'
+        # One place per credential: the card's Edit, not a second field under it.
+        assert not page.locator('#cloudflare_api_token').is_visible()
+    finally:
+        _clear(page, 'default')
 
 
 def test_the_providers_stay_in_reach_under_http01(page):
