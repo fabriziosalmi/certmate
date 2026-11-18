@@ -161,7 +161,10 @@
         section.classList.remove('hidden');
     }
 
-    function showDNSConfig(provider) {
+    // reveal: scroll the section into view, for a provider the user has just
+    // picked (UX audit P18). On a phone the tiles are two to a row, and the
+    // section opened two screens below the tile with nothing moving.
+    function showDNSConfig(provider, reveal) {
         renderPropagationField(provider);
         // Hide all DNS config sections
         document.querySelectorAll('.dns-config').forEach(function (config) {
@@ -172,6 +175,10 @@
         var configSection = document.getElementById(provider + '-config');
         if (configSection) {
             configSection.classList.remove('hidden');
+            if (reveal) {
+                var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                configSection.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+            }
             addDebugLog('Showing DNS config for ' + provider, 'info');
         } else {
             addDebugLog('No config section found for ' + provider, 'warn');
@@ -3777,11 +3784,17 @@
             });
         }
 
-        // Add radio button listeners
+        // Add radio button listeners. A tile picked with the pointer brings
+        // its section into view; arrow keys moving through the group do not,
+        // or each step would scroll the group away from the keyboard.
+        var dnsPickedByKey = false;
         document.querySelectorAll('input[name="dns_provider"]').forEach(function (radio) {
+            radio.addEventListener('keydown', function (e) { dnsPickedByKey = e.key.indexOf('Arrow') === 0; });
             radio.addEventListener('change', function () {
+                var reveal = !dnsPickedByKey;
+                dnsPickedByKey = false;
                 if (this.checked) {
-                    showDNSConfig(this.value);
+                    showDNSConfig(this.value, reveal);
                     addDebugLog('DNS provider changed to: ' + this.value, 'info');
                 }
             });

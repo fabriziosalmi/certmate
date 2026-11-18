@@ -957,14 +957,7 @@
                     '<h3 class="text-lg font-medium text-foreground mb-2">Welcome to CertMate</h3>' +
                     '<p class="text-muted">Follow these steps to get started:</p>' +
                     '</div>' +
-                    '<ol class="space-y-3 mb-6 text-sm">' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
-                    '<span class="text-label"><a href="/settings" class="text-info-fg font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
-                    '<span class="text-label">Create your first certificate with the <strong>Create Certificate</strong> button below</span></li>' +
-                    // No "enable authentication" step: setup turns local login
-                    // on before this page can be reached (UX audit, 2026-11-17).
-                    '</ol>' +
+                    '<ol id="welcomeSteps" class="space-y-3 mb-6 text-sm">' + welcomeStepsHtml() + '</ol>' +
                     '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
@@ -1819,21 +1812,25 @@
         // listener lives on `document`, so it resolved to the document and
         // every button.* write was a silent no-op: no spinner, no disable,
         // and the user re-clicked.
+        // A sweep already running: a second press does not start another.
+        if (button && button.getAttribute('aria-busy') === 'true') return;
         var originalText = button ? button.innerHTML : '';
         var originalLabel = button ? button.getAttribute('aria-label') : null;
         var originalTitle = button ? button.getAttribute('title') : null;
         if (button) {
             // The control is a fixed 40x40 icon button, so progress goes to its
-            // title/aria-label, not as text inside it.
+            // title/aria-label, not as text inside it. Marked busy rather than
+            // disabled: disabling the focused button dropped focus to the
+            // page body for the whole sweep (UX audit P33).
             button.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
-            button.disabled = true;
+            button.setAttribute('aria-disabled', 'true');
             button.setAttribute('aria-busy', 'true');
         }
 
         var restoreButton = function () {
             if (button) {
                 button.innerHTML = originalText;
-                button.disabled = false;
+                button.removeAttribute('aria-disabled');
                 button.removeAttribute('aria-busy');
                 if (originalLabel !== null) button.setAttribute('aria-label', originalLabel);
                 if (originalTitle !== null) button.setAttribute('title', originalTitle);
@@ -2281,6 +2278,9 @@
     var configuredCAs = [];
     var defaultCAProvider = 'letsencrypt';
     var defaultChallengeType = 'dns-01';
+    // What the empty dashboard's steps are built from (UX audit P17): read
+    // with the settings in loadCAProviders.
+    var setupState = { loaded: false, email: '', dnsProvider: '' };
     var defaultCAAccounts = {};
     var globalCAEmail = '';
     var CA_NAMES = {
@@ -2347,6 +2347,7 @@
                 var defaultCA = settings.default_ca || 'letsencrypt';
                 defaultCAProvider = defaultCA;
                 defaultChallengeType = settings.challenge_type || 'dns-01';
+                setupState = { loaded: true, email: settings.email || '', dnsProvider: settings.dns_provider || '' };
                 if (configuredCAs.indexOf(defaultCA) !== -1) {
                     var config = caAccounts[defaultCA] || {};
                     var ids = Object.keys(config.accounts || {});
@@ -2361,8 +2362,51 @@
                 if (!configuredCAs.length) select.add(new Option('Configure a CA in Settings', ''));
                 select.value = configuredCAs.indexOf(previous) !== -1 ? previous : '';
                 updateCAProviderInfo();
+                refreshWelcomeSteps();
             })
             .catch(function () { showMessage('Could not load configured certificate authorities', 'error'); });
+    }
+
+    // The empty dashboard's steps, from what setup has actually left to do
+    // (UX audit P17). They were fixed text: "Go to Settings and configure
+    // your DNS provider", after the wizard had saved one, after it had been
+    // finished with HTTP-01, and after Skip, where the email was missing;
+    // and the link opened Settings on General. Each step now names its gap
+    // and links to the tab where it is closed. No "enable authentication"
+    // step: setup turns local login on before this page can be reached.
+    function welcomeStepsHtml() {
+        var steps = [];
+        var settingsLink = function (tab, label) {
+            return '<a href="/settings#' + tab + '" class="text-info-fg font-medium hover:underline">' + label + '</a>';
+        };
+        if (setupState.loaded) {
+            if (!configuredCAs.length) {
+                steps.push(setupState.email
+                    ? 'Set up your certificate authority in ' + settingsLink('ca', 'Settings, CA')
+                    : 'Add the contact email for your certificate authority account, in ' +
+                        settingsLink('ca', 'Settings, CA'));
+            }
+            if (defaultChallengeType === 'dns-01' &&
+                    !(setupState.dnsProvider && (providerAccounts[setupState.dnsProvider] || []).length)) {
+                var option = setupState.dnsProvider &&
+                    document.querySelector('#dns_provider_select option[value="' + CSS.escape(setupState.dnsProvider) + '"]');
+                var name = option ? option.textContent.trim() : '';
+                steps.push('Add the credentials of your DNS provider' +
+                    (name ? ' (' + CertMate.escapeHtml(name) + ')' : '') + ' in ' + settingsLink('dns', 'Settings, DNS'));
+            }
+        }
+        steps.push('Create your first certificate with the <strong>Create Certificate</strong> button below');
+        return steps.map(function (step, i) {
+            return '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">' +
+                (i + 1) + '</span><span class="text-label">' + step + '</span></li>';
+        }).join('');
+    }
+
+    // Settings or DNS accounts read again (after the wizard saved them): the
+    // steps on screen follow.
+    function refreshWelcomeSteps() {
+        var list = document.getElementById('welcomeSteps');
+        if (list) list.innerHTML = welcomeStepsHtml();
     }
 
     function updateCAAccountSelection() {
@@ -2416,6 +2460,7 @@
                 providerAccounts = grouped;
                 // The drawer may already be open on a provider: refresh it.
                 updateAccountSelection();
+                refreshWelcomeSteps();
             })
             .catch(function () { providerAccounts = {}; });
     }
@@ -2523,7 +2568,10 @@
             prevalidated.disabled = !allowed;
             if (!allowed && select.value === 'prevalidated') select.value = '';
         }
-        if (select && (select.value === 'http-01' || select.value === 'prevalidated')) {
+        // "Use default from settings" ('') is the instance's default: an
+        // HTTP-01 default needs no DNS provider either (UX audit P20).
+        var challenge = select ? (select.value || defaultChallengeType) : '';
+        if (challenge === 'http-01' || challenge === 'prevalidated') {
             container.style.display = 'none';
         } else {
             container.style.display = '';
@@ -3662,13 +3710,18 @@
             showMessage('Please enter a domain', 'error');
             return;
         }
+        clearDomainError();
 
-        // Warn: HTTP-01 + wildcard is not supported
-        if (challengeType === 'http-01') {
+        // HTTP-01 cannot issue a wildcard. Left on "Use default from
+        // settings" the challenge is the instance's default, which the
+        // server applies (UX audit P20): the check read only the select, so
+        // a wildcard under an HTTP-01 default went out and came back failed.
+        if ((challengeType || defaultChallengeType) === 'http-01') {
             var allDomains = [domain].concat(sanDomains);
             for (var i = 0; i < allDomains.length; i++) {
                 if (allDomains[i].indexOf('*.') === 0) {
-                    showMessage('HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.', 'error');
+                    showDomainError('Wildcard names need DNS-01: choose DNS-01 as the challenge type, and a DNS provider.',
+                        domain.indexOf('*.') === 0);
                     return;
                 }
             }
@@ -3710,14 +3763,28 @@
         // disabled state of each field is snapshotted so any field that
         // was already disabled (e.g. account_select hidden by the DNS
         // provider toggle) stays disabled after re-enable.
+        //
+        // Except the control that has focus: disabling it dropped focus to
+        // the page body for the whole request and after it (UX audit P33).
+        // It is marked busy instead, and an input made read-only; the
+        // isCreatingCert gate above already refuses a second submit.
         isCreatingCert = true;
         var form = e.target;
         var formFields = form.querySelectorAll('input, select, textarea, button');
         var previouslyDisabled = [];
+        var focused = document.activeElement;
+        var keptFocus = null;
         formFields.forEach(function (el, i) {
             previouslyDisabled[i] = el.disabled;
+            if (el === focused && !el.disabled) {
+                keptFocus = { el: el, readOnly: el.readOnly };
+                el.setAttribute('aria-disabled', 'true');
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.readOnly = true;
+                return;
+            }
             el.disabled = true;
         });
+        var domainError = '';
         var submitBtn = form.querySelector('button[type="submit"]');
         var submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : null;
         if (submitBtn) {
@@ -3838,6 +3905,10 @@
                     updateAccountSelection();
                     loadCertificates();
                     if (typeof closeCertDrawer === 'function') closeCertDrawer();
+                } else if (isDomainRefusal(result)) {
+                    // A refusal of the name itself: written under the field
+                    // once the form is enabled again, below.
+                    domainError = result.error;
                 } else {
                     var errorMsg = result.error || result.message || 'Failed to create certificate';
                     if (result.hint) {
@@ -3870,12 +3941,62 @@
             formFields.forEach(function (el, i) {
                 el.disabled = previouslyDisabled[i];
             });
+            if (keptFocus) {
+                keptFocus.el.removeAttribute('aria-disabled');
+                keptFocus.el.readOnly = keptFocus.readOnly;
+            }
             if (submitBtn && submitBtnOriginalHtml !== null) {
                 submitBtn.innerHTML = submitBtnOriginalHtml;
             }
             isCreatingCert = false;
+            if (domainError) showDomainError(domainError, true);
         });
     });
+
+    // The server's refusal of the name itself (resources_lifecycle.py answers
+    // a ValueError from validation with its text): "Invalid domain: ..." or
+    // "Invalid IP address: ...". Other refusals are not about the field.
+    function isDomainRefusal(result) {
+        return !!(result && typeof result.error === 'string' &&
+            /^Invalid (domain|IP address):/.test(result.error));
+    }
+
+    // An error about the names, written under #domain inside the drawer,
+    // rather than only in a toast at the corner of the page (UX audit P33):
+    // the field is described by it and focused, and marked invalid when the
+    // error is about what it holds.
+    function showDomainError(message, fieldInvalid) {
+        var field = document.getElementById('domain');
+        var note = document.getElementById('domain_error');
+        if (!field || !note) {
+            showMessage(message, 'error');
+            return;
+        }
+        note.textContent = message;
+        note.classList.remove('hidden');
+        var ids = (field.getAttribute('aria-describedby') || '').split(/\s+/).filter(function (id) {
+            return id && id !== 'domain_error';
+        });
+        field.setAttribute('aria-describedby', ['domain_error'].concat(ids).join(' '));
+        if (fieldInvalid) field.setAttribute('aria-invalid', 'true');
+        else field.removeAttribute('aria-invalid');
+        field.focus();
+    }
+
+    function clearDomainError() {
+        var field = document.getElementById('domain');
+        var note = document.getElementById('domain_error');
+        if (note) {
+            note.textContent = '';
+            note.classList.add('hidden');
+        }
+        if (!field) return;
+        field.removeAttribute('aria-invalid');
+        var ids = (field.getAttribute('aria-describedby') || '').split(/\s+/).filter(function (id) {
+            return id && id !== 'domain_error';
+        });
+        field.setAttribute('aria-describedby', ids.join(' '));
+    }
 
     // ===== Async issuance lifecycle (redesign phase 3) =======================
     // When a create is accepted asynchronously the table gets an optimistic
@@ -3901,6 +4022,7 @@
         if (aliasField) { aliasField.value = ''; }
         updateDnsAliasHelp();
         toggleDnsProviderVisibility();
+        clearDomainError();
     }
 
     function buildPendingRowsHtml() {
@@ -4639,7 +4761,11 @@
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () {
+        // The settings and the DNS accounts first, too: an empty list shows
+        // the steps setup still needs, built from them, and is drawn once
+        // with them rather than drawn and then rewritten under the reader.
+        var setupRead = Promise.all([loadProviderAccounts(), loadCAProviders()]);
+        Promise.all([refreshCurrentRole(), setupRead]).then(function () {
             loadCertificates().then(function () {
                 maybeOpenCertFromQuery();
                 maybeFlashCertFromQuery();
@@ -4648,13 +4774,16 @@
                 adoptInFlightJobs();
             });
         });
-        loadProviderAccounts();
-        loadCAProviders();
 
         // Status filtering is driven by the chips (onclick -> setStatusFilter);
         // free-text search moved to the ⌘K palette. No select listener needed.
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('domain').addEventListener('input', applyIpAddressMode);
+        // An error written under the domain goes once what it was about changes.
+        document.getElementById('domain').addEventListener('input', clearDomainError);
+        ['challenge_type_select', 'wildcard-cert'].forEach(function (id) {
+            document.getElementById(id).addEventListener('change', clearDomainError);
+        });
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
         initSanEditor();
         initCsrPanel();
@@ -4775,6 +4904,7 @@
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
     window.loadCAProviders = loadCAProviders;
+    window.loadProviderAccounts = loadProviderAccounts;
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
     window.copyAliasValueToClipboard = copyAliasValueToClipboard;
