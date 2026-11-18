@@ -48,22 +48,6 @@
         document.getElementById('settingsDebugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
     }
 
-    // =============================================
-    // Challenge type toggle
-    // =============================================
-
-    function toggleChallengeType() {
-        var selected = document.querySelector('input[name="challenge_type"]:checked');
-        var isHttp = selected && selected.value === 'http-01';
-        // Hide both the provider picker and the per-provider config panels.
-        // The config panels are siblings of the picker, so hiding the picker
-        // alone left a stale DNS panel visible under HTTP-01 (issue #226).
-        ['dns-provider-section', 'dns-config-section'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.style.display = isHttp ? 'none' : '';
-        });
-    }
-
     function toggleRoute53LegacyAuthMode() {
         var mode = document.getElementById('route53_auth_mode').value;
         document.querySelectorAll('.route53-legacy-key').forEach(function (field) {
@@ -357,9 +341,9 @@
             var provider = settings.dns_provider;
             var legacyFields = getLegacyFieldsForProvider(provider);
 
-            var legacyRoute53 = document.getElementById('route53-legacy-config');
-            if (provider === 'route53' && legacyRoute53 && legacyRoute53.style.display === 'none') {
-                legacyFields = []; // Multi-account Route53 is edited in its own account modal.
+            var legacyContainer = document.getElementById(provider + '-legacy-config');
+            if (legacyContainer && legacyContainer.style.display === 'none') {
+                legacyFields = []; // A provider with accounts is edited in its account modal.
             }
             legacyFields.forEach(function (fieldName) {
                 var value = formData.get(fieldName);
@@ -370,22 +354,20 @@
                 }
             });
 
-            // Only include legacy config if we have some values and no multi-account data
-            if (Object.keys(legacyConfig).length > 0) {
-                if (!settings.dns_providers) settings.dns_providers = {};
-                if (!settings.dns_providers[provider]) settings.dns_providers[provider] = {};
-
-                // Check if we already have multi-account data
-                var hasMultiAccount = Object.values(settings.dns_providers[provider]).some(function (val) {
-                    return typeof val === 'object' && val.name;
+            // The single-account fields are the provider's "default" account.
+            // Issuance reads accounts only: written flat beside them, a token
+            // was saved, reported as saved, and never used (audit P05).
+            // Route53's mode, region and role ARN are filled in by the form
+            // itself, so on their own they would make an account with no
+            // credential. The IAM-role mode needs no keys and counts.
+            var accountSettings = ['auth_mode', 'region', 'assume_role_arn'];
+            var holdsCredential = legacyConfig.auth_mode === 'iam_role' ||
+                Object.keys(legacyConfig).some(function (key) {
+                    return legacyConfig[key] && accountSettings.indexOf(key) === -1;
                 });
-
-                var existingAccounts = ((currentSettings.dns_providers || {}).route53 || {}).accounts;
-                if (provider === 'route53' && existingAccounts && existingAccounts.default) {
-                    settings.dns_providers.route53 = {accounts: {default: legacyConfig}};
-                } else if (!hasMultiAccount) {
-                    Object.assign(settings.dns_providers[provider], legacyConfig);
-                }
+            if (holdsCredential) {
+                if (!settings.dns_providers) settings.dns_providers = {};
+                settings.dns_providers[provider] = {accounts: {default: legacyConfig}};
             }
 
             addDebugLog('Saving settings: ' + Object.keys(settings).join(', '), 'info');
@@ -965,7 +947,11 @@
                     addDebugLog('Challenge type set to ' + data.challenge_type, 'info');
                 }
             }
-            toggleChallengeType();
+            // The DNS providers are not hidden under HTTP-01 (audit P21): a
+            // certificate can choose DNS-01 whatever the default, a wildcard
+            // has to, and the setup wizard sends an HTTP-01 user here to add a
+            // provider. Hidden, there was no Add Account until the default
+            // was changed.
 
             // DNS provider selection
             if (data.dns_provider) {
@@ -1657,8 +1643,9 @@
                     accountsListContainer.appendChild(accountCard);
                 });
 
-                // Hide legacy config if we have multi-account data
-                if (legacyConfigContainer && providerData.accounts.some(function (acc) { return acc.id !== 'default'; })) {
+                // One place per credential: once a provider has an account,
+                // its card's Edit is where the credential changes.
+                if (legacyConfigContainer) {
                     legacyConfigContainer.style.display = 'none';
                 }
             } else {
@@ -2342,6 +2329,7 @@
         var list = document.getElementById('configured-ca-list');
         var types = document.getElementById('add-ca-type');
         list.replaceChildren();
+        var allUsable = true;
         configuredCAProviders.forEach(function (provider) {
             var config = ((currentSettings.ca_providers || {})[provider]) || {};
             var accounts = config.accounts || {default: config};
@@ -2355,6 +2343,23 @@
                 name.textContent = (option ? option.textContent : provider) + ' - ' +
                     (account.name || (accountId === 'default' ? 'Default account' : accountId));
                 row.appendChild(name);
+                // Listed is not usable: an account the create form would
+                // refuse says what it lacks, and opens to add it.
+                var missing = CertMate.caAccountMissing(provider, account, currentSettings);
+                if (missing.length) {
+                    allUsable = false;
+                    var lacks = document.createElement('span');
+                    lacks.className = 'text-xs font-medium text-warning-fg';
+                    lacks.textContent = 'No ' + CertMate.caAccountMissingText(missing, 'noun', 'or') +
+                        ': cannot issue';
+                    row.appendChild(lacks);
+                    var complete = document.createElement('button');
+                    complete.type = 'button';
+                    complete.textContent = missing.length === 1 && missing[0] === 'email' ? 'Add email' : 'Complete account';
+                    complete.className = 'text-xs px-2 py-1 rounded bg-warning-surface text-warning-fg hover:bg-hover';
+                    complete.addEventListener('click', function () { openCAAccountModal(provider, accountId); });
+                    row.appendChild(complete);
+                }
                 var selectedAccount = ((currentSettings.default_ca_accounts || {})[provider]) ||
                     (accounts.default ? 'default' : Object.keys(accounts)[0]);
                 var perCA = selectedAccount === accountId;
@@ -2400,6 +2405,13 @@
                 list.appendChild(row);
             });
         });
+        // The heading's green check only over accounts that can all issue.
+        var status = document.querySelector('[data-ca-accounts-status]');
+        if (status) {
+            status.className = allUsable
+                ? 'fas fa-fw fa-check-circle mr-2 text-green-500'
+                : 'fas fa-fw fa-exclamation-triangle mr-2 text-warning-fg';
+        }
     }
 
     function currentCAAccountConfig() {
@@ -3757,7 +3769,6 @@
         // Add challenge type radio listeners
         document.querySelectorAll('input[name="challenge_type"]').forEach(function (radio) {
             radio.addEventListener('change', function () {
-                toggleChallengeType();
                 addDebugLog('Challenge type changed to: ' + this.value, 'info');
             });
         });
@@ -3891,7 +3902,6 @@
     window.deleteBackup = deleteBackup;
     window.clearSettingsDebugConsole = clearSettingsDebugConsole;
     window.toggleSettingsDebugConsole = toggleSettingsDebugConsole;
-    window.toggleChallengeType = toggleChallengeType;
     window.toggleRoute53LegacyAuthMode = toggleRoute53LegacyAuthMode;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;

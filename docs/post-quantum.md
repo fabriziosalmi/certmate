@@ -43,8 +43,10 @@ so it is less urgent than key exchange, and it is not yet possible on the public
   certificates. Let's Encrypt has announced Merkle Tree Certificates as its post-quantum
   path, with staging targeted for late 2026 and production for 2027 (its post of 3 June
   2026). CertMate will follow when certbot supports it.
-- **CertMate's own CAs** (the client certificate CA and the ACME server) have RSA 4096
-  roots. The cryptography library CertMate ships can sign ML-DSA certificates, CSRs and CRLs
+- **CertMate's own CAs**: the ACME server's CA has an RSA 4096 root. The client
+  certificate CA has an RSA 4096 root by default, or an ECDSA P-256 or P-384 one chosen
+  with `CERTMATE_CLIENT_CA_KEY_ALGORITHM` when the CA is created
+  ([configuration](./configuration.md)). The cryptography library CertMate ships can sign ML-DSA certificates, CSRs and CRLs
   (`tests/test_the_pinned_cryptography_speaks_ml_dsa.py`), but CertMate does not offer an
   ML-DSA CA yet.
 - **The audit trail** is signed with Ed25519, a classical algorithm.

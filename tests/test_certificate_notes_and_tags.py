@@ -100,6 +100,21 @@ def test_there_is_one_definition_of_a_tag():
 # --------------------------------------------------------------------------
 
 @pytest.fixture
+def slow_startup_inventory(monkeypatch):
+    """The startup thread that records held certificates, made slow, so a
+    test sees what happens when it is still reading metadata.json."""
+    import time
+
+    from modules.core.inventory_held import HeldCertificatesInInventory
+    original = HeldCertificatesInInventory.record_all
+
+    def slow(self):
+        time.sleep(0.5)
+        return original(self)
+    monkeypatch.setattr(HeldCertificatesInInventory, 'record_all', slow)
+
+
+@pytest.fixture
 def instance(tmp_path, monkeypatch):
     for var, sub in (('CERTMATE_CERT_DIR', 'certificates'), ('CERTMATE_DATA_DIR', 'data'),
                      ('CERTMATE_BACKUP_DIR', 'backups'), ('CERTMATE_LOGS_DIR', 'logs')):
@@ -128,6 +143,14 @@ def instance(tmp_path, monkeypatch):
 
     from modules.factory import create_app
     app, container = create_app()
+    # The startup thread reads every metadata.json to record held certificates
+    # in the inventory. A test that then rewrites metadata.json by hand (not
+    # atomically) can be read half-written; the read quarantines it as corrupt
+    # and the file is gone, so a hook saw no tags (CI, #1514). Wait for it.
+    sync = getattr(container, 'inventory_held_sync', None)
+    if sync is not None:
+        sync.join(10)
+        assert not sync.is_alive(), 'the startup inventory thread did not finish'
     client = app.test_client()
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
 
@@ -379,3 +402,15 @@ def test_a_bad_tag_in_a_hand_edited_file_is_dropped_not_fatal(instance):
 def test_unreadable_metadata_means_no_tags_and_the_hook_still_runs(instance):
     (instance.cert_dir / 'metadata.json').write_text('{not json')
     assert _hook_env(instance)['CERTMATE_TAGS'] == ''
+
+
+def test_the_instance_is_handed_over_after_the_startup_inventory_thread(slow_startup_inventory, instance):
+    """A hand edit of metadata.json must not race the startup thread that
+    reads it: a half-written read quarantines the file and the hook sees no
+    tags (CI on #1514). The fixture waits for the thread."""
+    assert not instance.container.inventory_held_sync.is_alive()
+    metadata = instance.stored()
+    metadata['tags'] = ['good', 'also-good']
+    (instance.cert_dir / 'metadata.json').write_text(json.dumps(metadata))
+    assert _hook_env(instance)['CERTMATE_TAGS'] == 'good,also-good'
+    assert not list(instance.cert_dir.glob('metadata.json.corrupt-*'))

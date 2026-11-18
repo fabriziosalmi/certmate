@@ -156,7 +156,12 @@ def test_an_id_two_providers_have_is_a_409_that_names_the_unambiguous_path(insta
 
 
 @pytest.mark.parametrize('verb', ['put', 'delete'])
-def test_default_is_always_ambiguous_because_every_provider_has_one(instance, verb):
+def test_default_is_ambiguous_when_two_providers_have_one(instance, verb):
+    # A fresh instance used to give every provider an empty "default" account
+    # (audit P05 removed it); "default" is still the id most providers share.
+    for provider, token in (('cloudflare', 'h' * 24), ('digitalocean', 'i' * 24)):
+        if provider not in _owners(instance, 'default'):
+            _create(instance, provider, 'default', token)
     before = _stored(instance)
     kwargs = {'json': {'api_token': 'g' * 24}} if verb == 'put' else {}
 

@@ -1,6 +1,6 @@
 # Provider DNS
 
-<!-- CERTMATE-TRANSLATED-FROM f2105fc570be338c -->
+<!-- CERTMATE-TRANSLATED-FROM 37ab5d691c5ca606 -->
 
 CertMate supporta un'ampia gamma di provider DNS per le challenge DNS-01 di Let's Encrypt tramite plugin certbot individuali. La lista completa si trova nella tabella seguente.
 
@@ -671,6 +671,14 @@ curl -X DELETE http://localhost:8000/api/dns/cloudflare/accounts/old-account \
 ### Retrocompatibilità
 
 Le configurazioni a singolo account esistenti vengono migrate automaticamente al formato multi-account al primo utilizzo. Non sono richiesti tempi di inattività né migrazioni manuali.
+
+Lo stesso caricamento fa anche tre cose una sola volta, ognuna registrata nel log:
+
+- Un account `default` vuoto che una versione precedente ha creato per un provider senza credenziali ("Migrated from single-account configuration") viene rimosso.
+- Una credenziale salvata accanto agli `accounts` di un provider (il campo token singolo della pagina Impostazioni la metteva lì) viene spostata nell'account `default`, che è dove l'emissione la legge. Un account `default` che ha già credenziali proprie non viene mai sovrascritto: la credenziale piatta resta dov'è e un avviso nomina il provider.
+- Un account `default` scritto con le sole credenziali (lo fa la procedura guidata di configurazione) riceve il nome `Default <Provider> Account` e diventa l'account predefinito del provider se questo non ne ha uno.
+
+I provider DNS restano in Impostazioni > DNS quando HTTP-01 è la challenge predefinita: un certificato può scegliere DNS-01 qualunque sia il predefinito, e un wildcard deve farlo.
 
 ---
 

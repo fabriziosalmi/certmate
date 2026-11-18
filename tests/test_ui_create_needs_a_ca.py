@@ -57,7 +57,7 @@ def test_without_a_usable_ca_the_form_says_so_and_sends_nothing(browser_page):
     page.fill('#domain', 'api.example.com')
     page.click('#createCertForm button[type="submit"]')
 
-    page.get_by_text('Configure a certificate authority in Settings').first.wait_for(
+    page.locator('#cm-toasts').get_by_text("Let's Encrypt needs a contact email: add it in Settings > CA").first.wait_for(
         state='visible', timeout=5000)
     page.wait_for_timeout(1000)
     assert posts == []

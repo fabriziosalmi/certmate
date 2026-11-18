@@ -415,8 +415,15 @@ def _walk(app, token, trace, certbot, container, seeded, report):
          body={'api_token': 'y' * 24})
     call('put', '/api/dns-providers/accounts/<account_id>', path='/api/dns-providers/accounts/nope',
          body={'api_token': 'y' * 24})                                                          # 404
-    call('put', '/api/dns-providers/accounts/<account_id>', path='/api/dns-providers/accounts/default',
+    # An id two providers have is ambiguous. A fresh instance has no DNS account
+    # (audit P05), so the walk makes the two it needs.
+    for provider in ('cloudflare', 'digitalocean'):
+        call('post', '/api/dns/<provider>/accounts', path=f'/api/dns/{provider}/accounts',
+             body={'account_id': 'shared', 'name': 'shared', 'config': {'api_token': 's' * 24}})
+    call('put', '/api/dns-providers/accounts/<account_id>', path='/api/dns-providers/accounts/shared',
          body={'api_token': 'y' * 24})                                                          # 409
+    for provider in ('cloudflare', 'digitalocean'):
+        call('delete', '/api/dns/<provider>/accounts/<account_id>', path=f'/api/dns/{provider}/accounts/shared')
     call('delete', '/api/dns-providers/accounts/<account_id>', path='/api/dns-providers/accounts/acct1')
     call('delete', '/api/dns-providers/accounts/<account_id>', path='/api/dns-providers/accounts/nope')
 

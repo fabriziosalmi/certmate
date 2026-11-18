@@ -41,18 +41,22 @@ def _providers(settings):
     return settings.load_settings(use_cache=False).get('dns_providers', {})
 
 
+def _default_account(settings, provider):
+    """Where issuance reads a provider's credential: its account "default".
+    A flat write lands there (audit P05), not beside the accounts."""
+    return _providers(settings).get(provider, {}).get('accounts', {}).get('default', {})
+
+
 def test_configuring_a_second_provider_keeps_the_first(settings):
     """The reported bug, as the user described it."""
     settings.atomic_update({'dns_providers': {'cloudflare': {'api_token': CF_TOKEN}}})
     settings.atomic_update({'dns_providers': {'route53': {'access_key_id': AWS_KEY}}})
 
-    providers = _providers(settings)
-
-    assert providers.get('cloudflare', {}).get('api_token') == CF_TOKEN, (
+    assert _default_account(settings, 'cloudflare').get('api_token') == CF_TOKEN, (
         'configuring Route53 deleted the Cloudflare credential; the provider '
         'stays selectable on the certificate form and issuance fails later'
     )
-    assert providers.get('route53', {}).get('access_key_id') == AWS_KEY
+    assert _default_account(settings, 'route53').get('access_key_id') == AWS_KEY
 
 
 def test_a_third_provider_keeps_both(settings):
@@ -61,10 +65,9 @@ def test_a_third_provider_keeps_both(settings):
     settings.atomic_update({'dns_providers': {'route53': {'access_key_id': AWS_KEY}}})
     settings.atomic_update({'dns_providers': {'azure': {'client_id': 'azure-id'}}})
 
-    providers = _providers(settings)
-    assert providers['cloudflare']['api_token'] == CF_TOKEN
-    assert providers['route53']['access_key_id'] == AWS_KEY
-    assert providers['azure']['client_id'] == 'azure-id'
+    assert _default_account(settings, 'cloudflare')['api_token'] == CF_TOKEN
+    assert _default_account(settings, 'route53')['access_key_id'] == AWS_KEY
+    assert _default_account(settings, 'azure')['client_id'] == 'azure-id'
 
 
 def test_updating_a_provider_still_overwrites_its_own_fields(settings):
@@ -76,7 +79,8 @@ def test_updating_a_provider_still_overwrites_its_own_fields(settings):
     settings.atomic_update({'dns_providers': {'cloudflare': {'api_token': 'old'}}})
     settings.atomic_update({'dns_providers': {'cloudflare': {'api_token': 'new'}}})
 
-    assert _providers(settings)['cloudflare']['api_token'] == 'new'
+    assert _default_account(settings, 'cloudflare')['api_token'] == 'new'
+    assert 'api_token' not in _providers(settings)['cloudflare']
 
 
 def test_dns_providers_is_in_the_deep_merge_set():
