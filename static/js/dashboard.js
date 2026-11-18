@@ -999,15 +999,21 @@
         if (!cert.renews_at) return '<span class="text-muted">\u2014</span>';
         // Without its private key a renewal cannot run: only a reissue repairs
         // it (LOST_KEY_TITLE says so in the banner), so no date is promised.
-        if (lostItsKey(cert)) return '<span class="text-muted">Not renewed: reissue it</span>';
+        // Whether the sweep reissues it (auto_reissue_keyless) is a setting
+        // this page does not read, so the line says what it needs, not who.
+        if (lostItsKey(cert)) return '<span class="text-muted">Needs a reissue: it has no private key</span>';
         var due = cert.needs_renewal && new Date(cert.renews_at) <= new Date();
         if (!due) return '<span>' + escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>';
         var late = isOverdue(cert) || hasExpired(cert);
         var tone = late ? 'text-danger-fg' : 'text-warning-fg';
         return '<span class="' + tone + '">' + RENEWAL_DUE_SINCE + ' ' +
             escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
-            (lastRenewalFailure(cert) ? '' : '<div class="text-xs ' + tone + '">' + (hasExpired(cert) ? 'Expired' : late ? 'Overdue' : 'Due') +
-                ': the next renewal run renews it</div>');
+            (lastRenewalFailure(cert) ? '' : '<div class="text-xs ' + tone + '">' + (hasExpired(cert) ? 'Expired' : late ? 'Overdue' : 'Due') + ': ' +
+                // The sweep skips a certificate whose auto-renew is off, and
+                // every certificate when it is off globally (a setting this
+                // page does not read): promise nothing it would not do.
+                (cert.auto_renew === false ? 'auto-renew is off for this certificate, so renew it by hand'
+                    : 'the next renewal run renews it while auto-renew is on') + '</div>');
     }
 
     // The last renewal of this certificate that failed, as the server keeps it

@@ -424,7 +424,7 @@ def test_a_certificate_without_its_key_shows_no_renewal_rule(page):
     assert 'No private key anywhere' in detail, detail
     assert page.locator('#certDetailContent [data-renewal-rule]').count() == 0, detail
     assert 'the next renewal run renews it' not in detail, detail
-    assert 'Not renewed: reissue it' in detail, detail
+    assert 'Needs a reissue: it has no private key' in detail, detail
     # CONTROL: a certificate with its key keeps the rule line.
     _close_detail(page)
     _open_detail(page, 'site3.example.test')
@@ -442,6 +442,21 @@ def test_an_expired_certificate_says_expired_under_its_renewal_date(page):
     _dashboard(page)
     _open_detail(page, 'gone.example.test')
     detail = page.inner_text('#certDetailContent')
-    assert 'Expired: the next renewal run renews it' in detail, detail
+    assert 'Expired: the next renewal run renews it while auto-renew is on' in detail, detail
     assert 'Overdue: the next renewal run renews it' not in detail, detail
+
+
+def test_a_certificate_with_auto_renew_off_is_not_promised_a_renewal(page):
+    """The sweep skips a certificate whose auto-renew is off (skipped_disabled),
+    yet its line said the next renewal run renews it."""
+    off = dict(_cert('manual.example.test', 90 * DAY, 19 * DAY + datetime.timedelta(hours=1)), auto_renew=False)
+    assert off['needs_renewal'] is True, off
+    page.unroute('**/api/certificates')
+    page.route('**/api/certificates', lambda route: _json(route, [*CERTS, off])
+               if route.request.method == 'GET' else route.continue_())
+    _dashboard(page)
+    _open_detail(page, 'manual.example.test')
+    detail = page.inner_text('#certDetailContent')
+    assert 'auto-renew is off for this certificate, so renew it by hand' in detail, detail
+    assert 'the next renewal run renews it' not in detail, detail
 
