@@ -2616,8 +2616,12 @@ answer opens on what is wrong; a scoped key sees only its own names.
 ```
 
 `summary.tracked` (since **2.70**) is how many names the next scan checks,
-within the caller's scope, read from the same sources as the registrations;
-0 with no row means there is nothing to check.
+within the caller's scope: the names of the certificates CertMate manages,
+in its settings or on disk (certificates for an IP address left out), the inventory's names when
+`domain_health.include_inventory` is on, and `domain_health.extra_domains`,
+each with the registrable domain behind it. These are the domain health
+settings, not the registration ones. 0 with no row means there is nothing to
+check.
 
 Every check reports one of four statuses, and `unknown` is the one to read
 carefully: it means the check could not be completed, and it is **not** a pass.
