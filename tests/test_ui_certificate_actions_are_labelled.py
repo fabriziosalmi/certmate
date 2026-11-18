@@ -357,13 +357,14 @@ def test_a_failed_target_run_names_the_target_and_its_reason(open_page):
     toast = _run_and_read_the_toast(open_page, FAILED_TARGET_RUN)
     assert 'Deploy target lb-webhook failed' in toast, toast
     assert TARGET_REASON in toast, toast
-    assert 'Deploy hook' not in toast, toast
+    assert 'deploy hook' not in toast.lower(), toast
 
 
 def test_a_target_refused_for_want_of_a_key_says_why(open_page):
     toast = _run_and_read_the_toast(open_page, NO_KEY_RUN)
     assert 'has no private key on this node' in toast, toast
-    assert 'a hook' not in toast and 'Deploy hook' not in toast, toast
+    assert 'A deploy target failed' in toast, toast
+    assert 'deploy hook' not in toast.lower(), toast
 
 
 # --- P52 -------------------------------------------------------------------
