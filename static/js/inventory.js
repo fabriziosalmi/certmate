@@ -17,7 +17,10 @@
 
     var ROLE_LEVELS = { viewer: 0, operator: 1, admin: 2 };
     var records = [];
-    var currentRole = 'viewer';
+    // The session's role as the page was served (inventory.html), so the first
+    // list already has the buttons it will keep: drawn without them and again
+    // with them once /api/auth/me answered, the columns moved under the eye.
+    var currentRole = ((document.getElementById('inventoryApp') || {}).dataset || {}).role || 'viewer';
 
     function el(id) { return document.getElementById(id); }
 
@@ -142,7 +145,11 @@
                 + 'title="A newer certificate replaced it: every endpoint it was seen on now serves another, or CertMate renewed it">superseded</span>';
         }
         s += '</div>';
-        if (sans) { s += '<div class="text-xs text-muted truncate max-w-xs">' + escapeHtml(sans) + escapeHtml(extra) + '</div>'; }
+        // Below md the subject is the only column: the names fill the cell
+        // and take no width of their own (w-0 min-w-full), so a long list of
+        // them is cut with an ellipsis instead of widening the table past a
+        // 360 px screen.
+        if (sans) { s += '<div class="text-xs text-muted truncate max-w-xs max-md:w-0 max-md:min-w-full">' + escapeHtml(sans) + escapeHtml(extra) + '</div>'; }
         return s;
     }
 
@@ -189,6 +196,29 @@
             + 'title="Remove this certificate from the inventory">'
             + '<i class="fas fa-eraser mr-1"></i>Forget</button>';
         return html;
+    }
+
+    function issuerText(r) {
+        return r.issuer_cn || r.issuer || '—';
+    }
+
+    // Below md the row is the subject cell alone, and this is what the other
+    // columns say, under the subject: the expiry with its date, the issuer,
+    // the source and the actions. The seven columns were 911 px wide on a
+    // 390 px phone, so all a person saw was the names (P11).
+    function phoneSummary(r) {
+        var date = (r.not_after || '').slice(0, 10);
+        var actions = actionsCell(r);
+        return '<div class="md:hidden mt-1 space-y-1">'
+            + '<div class="flex flex-wrap items-center gap-x-2 gap-y-1">'
+                + statusBadge(r.expiry_status, r.days_until_expiry)
+                + (date ? '<span class="text-xs text-muted">' + escapeHtml(date) + '</span>' : '')
+                + sourceBadge(r.source, r.managed)
+                + revocationBadge(r.revocation)
+            + '</div>'
+            + '<div class="text-xs text-muted break-words">' + escapeHtml(issuerText(r)) + '</div>'
+            + (actions ? '<div class="pt-1">' + actions + '</div>' : '')
+            + '</div>';
     }
 
     function passesFilters(r) {
@@ -282,6 +312,7 @@
     function render() {
         var body = el('inventoryBody');
         var rows = applySort(records.filter(passesFilters));
+        el('inventoryHead').classList.remove('invisible');
         el('invCount').textContent = rows.length + ' of ' + records.length
             + (hiddenSuperseded ? ' · ' + hiddenSuperseded + ' superseded hidden' : '');
         if (!rows.length) {
@@ -295,14 +326,14 @@
         }
         body.innerHTML = rows.map(function (r) {
             return '<tr class="hover:bg-hover">'
-                + '<td class="px-4 py-2">' + subjectCell(r) + '</td>'
-                + '<td class="px-4 py-2 text-xs text-muted">' + escapeHtml(r.issuer_cn || r.issuer || '—') + '</td>'
-                + '<td class="px-4 py-2">' + statusBadge(r.expiry_status, r.days_until_expiry)
+                + '<td class="px-4 py-2">' + subjectCell(r) + phoneSummary(r) + '</td>'
+                + '<td class="px-4 py-2 text-xs text-muted hidden md:table-cell">' + escapeHtml(issuerText(r)) + '</td>'
+                + '<td class="px-4 py-2 hidden md:table-cell">' + statusBadge(r.expiry_status, r.days_until_expiry)
                     + '<div>' + revocationBadge(r.revocation) + '</div></td>'
-                + '<td class="px-4 py-2 text-xs">' + keyLabel(r.key) + '</td>'
-                + '<td class="px-4 py-2">' + sourceBadge(r.source, r.managed) + '</td>'
-                + '<td class="px-4 py-2">' + endpointsCell(r) + '</td>'
-                + '<td class="px-4 py-2 text-right">' + actionsCell(r) + '</td>'
+                + '<td class="px-4 py-2 text-xs hidden md:table-cell">' + keyLabel(r.key) + '</td>'
+                + '<td class="px-4 py-2 hidden md:table-cell">' + sourceBadge(r.source, r.managed) + '</td>'
+                + '<td class="px-4 py-2 hidden md:table-cell">' + endpointsCell(r) + '</td>'
+                + '<td class="px-4 py-2 text-right hidden md:table-cell">' + actionsCell(r) + '</td>'
                 + '</tr>';
         }).join('');
     }
@@ -413,7 +444,48 @@
             + '" title="' + escapeHtml(words[1]) + '">' + escapeHtml(words[0]) + '</span>';
     }
 
+    // A domain check (registrations, health) is drawn on or off by the
+    // template (inventory_page); `data-check-when` parts follow the state, and
+    // a check that is off loads nothing.
+    function checkOn(panelId) {
+        var panel = el(panelId);
+        return !!panel && panel.getAttribute('data-check-on') === 'true';
+    }
+
+    function showCheck(panelId, on) {
+        var panel = el(panelId);
+        if (!panel) { return; }
+        panel.setAttribute('data-check-on', on ? 'true' : 'false');
+        panel.querySelectorAll('[data-check-when]').forEach(function (part) {
+            part.classList.toggle('hidden', (part.getAttribute('data-check-when') === 'on') !== on);
+        });
+    }
+
+    // The rows in the table, or, when there are none, a sentence in place of
+    // the table: outside its scroll box, so a phone shows it whole.
+    function fillCheck(name, rowsHtml, sentence, failed) {
+        el(name + 'Body').innerHTML = rowsHtml || '';
+        el(name + 'Table').classList.toggle('hidden', !rowsHtml);
+        var note = el(name + 'Note');
+        note.classList.toggle('hidden', !!rowsHtml);
+        note.textContent = sentence || '';
+        note.classList.toggle('text-danger-fg', !!failed);
+        note.classList.toggle('text-muted', !failed);
+    }
+
+    // Where both checks take their names from, for the sentence that says
+    // there is nothing to check.
+    var CHECK_SOURCES = 'The check takes them from the certificates CertMate holds, '
+        + 'from the inventory when it is included, and from the extra domains in the Discovery configuration.';
+
+    // With no row: a scan that has names to check has not run yet, or there
+    // is nothing for any scan to check (summary.tracked is 0).
+    function emptyCheckSentence(tracked, notYet, nothing) {
+        return tracked === 0 ? nothing + ' ' + CHECK_SOURCES : notYet;
+    }
+
     function loadRegistrations() {
+        if (!checkOn('registrationsPanel')) { return; }
         fetch('/api/inventory/domains', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (data) {
@@ -426,11 +498,12 @@
                 setCount('regNotPublished', (s.by_status || {}).not_published);
                 el('regCount').textContent = rows.length ? rows.length + ' domains' : '';
                 if (!rows.length) {
-                    el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-muted">'
-                        + 'No domain registrations checked yet. Enable the check in Discovery configuration, then Scan now.</td></tr>';
+                    fillCheck('registrations', '', emptyCheckSentence(s.tracked,
+                        'No domain registrations checked yet: the next scan checks them.',
+                        'Nothing to check: there is no domain to track.'));
                     return;
                 }
-                el('registrationsBody').innerHTML = rows.map(function (r) {
+                fillCheck('registrations', rows.map(function (r) {
                     return '<tr class="hover:bg-hover">'
                         + '<td class="px-4 py-2 font-medium text-foreground">' + escapeHtml(r.domain) + '</td>'
                         + '<td class="px-4 py-2">' + registrationExpiryCell(r) + '</td>'
@@ -438,10 +511,10 @@
                         + '<td class="px-4 py-2 text-xs text-muted" title="Checked ' + escapeHtml(r.checked_at || '') + '">'
                         + escapeHtml((r.source || '—').toUpperCase()) + '</td>'
                         + '</tr>';
-                }).join('');
+                }).join(''));
             })
             .catch(function (err) {
-                el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-red-500">Failed to load domain registrations (' + escapeHtml(err) + ').</td></tr>';
+                fillCheck('registrations', '', 'Failed to load domain registrations (' + err + ').', true);
             });
     }
 
@@ -463,22 +536,25 @@
     }
 
     function loadDomainHealth() {
+        if (!checkOn('domainHealthPanel')) { return; }
         fetch('/api/inventory/health', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (data) {
                 var rows = data.names || [];
-                var by = (data.summary || {}).by_status || {};
+                var summary = data.summary || {};
+                var by = summary.by_status || {};
                 setCount('healthFailing', by.failing);
                 setCount('healthWarning', by.warning);
                 setCount('healthUnknown', by.unknown);
                 setCount('healthOk', by.ok);
                 el('healthCount').textContent = rows.length ? rows.length + ' names' : '';
                 if (!rows.length) {
-                    el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-muted">'
-                        + 'No names checked yet. Enable Domain health in Discovery configuration, then Scan now.</td></tr>';
+                    fillCheck('domainHealth', '', emptyCheckSentence(summary.tracked,
+                        'No names checked yet: the next scan checks them.',
+                        'Nothing to check: there is no name to track.'));
                     return;
                 }
-                el('domainHealthBody').innerHTML = rows.map(function (r) {
+                fillCheck('domainHealth', rows.map(function (r) {
                     var c = r.checks || {};
                     return '<tr class="hover:bg-hover">'
                         + '<td class="px-4 py-2 font-medium text-foreground" title="Checked '
@@ -492,10 +568,10 @@
                         + '<td class="px-4 py-2">' + healthChip(c.disclosure) + '</td>'
                         + '<td class="px-4 py-2">' + healthChip(c.weak_tls) + '</td>'
                         + '</tr>';
-                }).join('');
+                }).join(''));
             })
             .catch(function (err) {
-                el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-red-500">Failed to load domain health (' + escapeHtml(err) + ').</td></tr>';
+                fillCheck('domainHealth', '', 'Failed to load domain health (' + err + ').', true);
             });
     }
 
@@ -590,6 +666,12 @@
             .then(function (res) {
                 msg.textContent = res.ok ? 'Saved.' : ('Error: ' + (res.j.error || 'failed'));
                 msg.className = 'text-xs mr-auto ' + (res.ok ? 'text-green-600' : 'text-red-500');
+                if (!res.ok) { return; }
+                // A check turned on or off here opens or folds its section now.
+                showCheck('registrationsPanel', body.domain_registration.enabled);
+                showCheck('domainHealthPanel', body.domain_health.enabled);
+                loadRegistrations();
+                loadDomainHealth();
             })
             .catch(function () { msg.textContent = 'Save failed.'; msg.className = 'text-xs mr-auto text-red-500'; });
     }
@@ -628,6 +710,7 @@
         fetch('/api/auth/me', { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
+                var served = currentRole;
                 currentRole = (me && (me.role || (me.user && me.user.role))) || 'viewer';
                 // The template already drew both for an admin (inventory.html);
                 // this is the check, and it hides as well as shows.
@@ -635,8 +718,9 @@
                 el('configPanel').classList.toggle('hidden', !admin);
                 el('scanNowBtn').classList.toggle('hidden', !admin);
                 if (admin) { loadConfig(); }
-                // Re-render so operator+ get the Adopt buttons now the role is known.
-                if (records.length) { render(); }
+                // Re-render only when the answer differs from the role the page
+                // was served with: the Adopt and Forget buttons follow it.
+                if (records.length && currentRole !== served) { render(); }
             })
             .catch(function () { /* stay read-only */ });
     }
@@ -658,6 +742,19 @@
         forget(fp, match && match.subject_cn);
     }
 
+    // "Turn on in Discovery configuration" on a check that is off: the
+    // configuration opened at that check's switch. Saving it is still the
+    // admin's step.
+    function openConfig(fieldId) {
+        var details = el('configPanel') && el('configPanel').querySelector('details');
+        if (details) { details.open = true; }
+        var field = el(fieldId);
+        if (field) {
+            field.scrollIntoView({ block: 'center' });
+            field.focus();
+        }
+    }
+
     // The one control that changes what both the list and the readiness cards describe.
     function toggleSuperseded() {
         load();
@@ -666,7 +763,7 @@
 
     window.InventoryPage = {
         load: load, render: render, saveConfig: saveConfig, toggleSuperseded: toggleSuperseded,
-        sortBy: sortBy,
+        sortBy: sortBy, openConfig: openConfig,
         runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl,
         forget: forget, forgetFromEl: forgetFromEl
     };
@@ -681,7 +778,7 @@
     // What the page's controls may ask for by name (`data-click`, `data-change`,
     // `data-input`): see CertMate.actions in certmate.js.
     CertMate.globalActions([
-        'InventoryPage.adoptFromEl', 'InventoryPage.forgetFromEl', 'InventoryPage.load',
+        'InventoryPage.adoptFromEl', 'InventoryPage.forgetFromEl', 'InventoryPage.load', 'InventoryPage.openConfig',
         'InventoryPage.render', 'InventoryPage.runScan', 'InventoryPage.saveConfig',
         'InventoryPage.sortBy', 'InventoryPage.toggleSuperseded'
     ]);

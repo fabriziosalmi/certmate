@@ -2571,10 +2571,20 @@ scoped key sees only the domains its scope covers.
   "summary": {
     "total": 1,
     "by_status": {"ok": 1, "not_published": 0, "not_registered": 0, "unavailable": 0},
-    "expiry": {"expired": 0, "30": 0, "60": 1, "90": 1}
+    "expiry": {"expired": 0, "30": 0, "60": 1, "90": 1},
+    "tracked": 1
   }
 }
 ```
+
+`summary.tracked` (since **2.71**) is how many registrable domains are
+tracked, within the caller's scope: those of the certificates CertMate holds,
+of the inventory when `include_inventory` is on (the default), and the
+`extra_domains`. A scan looks them up only when registration checks are
+enabled (off by default), and then only the ones due (never asked, a failed
+lookup after 6 hours, a domain expiring within 60 days daily, the rest
+weekly), at most 100 per run. With no row, `tracked` above 0 means none has
+been looked up yet, and 0 means there is nothing to check.
 
 `status` is `ok`, `not_published` (the registry does not publish an expiry —
 `.de`, `.eu`), `not_registered` or `unavailable`; only `ok` carries a date and a
@@ -2630,9 +2640,21 @@ answer opens on what is wrong; a scoped key sees only its own names.
       "first_seen": "2026-09-01T06:30:09Z"
     }
   ],
-  "summary": {"total": 1, "by_status": {"failing": 1, "warning": 0, "unknown": 0, "ok": 0}}
+  "summary": {"total": 1, "by_status": {"failing": 1, "warning": 0, "unknown": 0, "ok": 0},
+              "tracked": 1}
 }
 ```
+
+`summary.tracked` (since **2.71**) is how many names domain health tracks,
+within the caller's scope: the names of the certificates CertMate manages, in
+its settings or on disk (a managed certificate for an IP address is left out),
+the inventory's names when `domain_health.include_inventory` is on (the
+default), and `domain_health.extra_domains`, each with the registrable domain
+behind it; a wildcard counts as the name under it (`*.sub.example.org` as
+`sub.example.org`). These are the domain health settings, not the
+registration ones. A scan checks them only when `domain_health.enabled` is on
+(off by default), and then only the names not checked in the last 20 hours,
+at most 200 per run. 0 with no row means there is nothing to check.
 
 Every check reports one of four statuses, and `unknown` is the one to read
 carefully: it means the check could not be completed, and it is **not** a pass.

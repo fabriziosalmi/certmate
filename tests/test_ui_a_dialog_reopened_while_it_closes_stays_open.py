@@ -1,7 +1,7 @@
 """A dialog reopened while it closes stays open.
 
 The certificate dialog fades out for 200 ms before it is hidden, and closing it
-gives the focus back to the row it was opened from. So Escape and then Enter is
+gives the focus back to the name it was opened from. So Escape and then Enter is
 all it takes to open it again while the fade is still running, and the timer of
 the first close then hid the dialog that had just been opened, emptied it, and
 left the focus on nothing.
@@ -46,7 +46,9 @@ DIALOG = """() => ({
     title: document.getElementById('detailDomain').textContent,
     filled: document.getElementById('certDetailContent').innerHTML.length > 0,
     focus: document.activeElement.hasAttribute('data-detail-close') ? 'the close button'
-        : (document.activeElement.getAttribute('data-row-domain') || document.activeElement.tagName),
+        : document.activeElement.closest('[data-row-domain]')
+            ? document.activeElement.closest('[data-row-domain]').getAttribute('data-row-domain')
+            : document.activeElement.tagName,
 })"""
 OPEN = "() => !document.getElementById('certDetailPanel').classList.contains('hidden')"
 
@@ -61,7 +63,7 @@ def dashboard(browser_page):
     page.clock.install(time=start)
     page.goto(f'{BASE_URL}/', wait_until="networkidle")
     row = page.locator('tr[data-row-domain="alpha.example.test"]')
-    row.locator('td').first.click()
+    row.get_by_role('button', name='View details for alpha.example.test').click()
     page.wait_for_function(OPEN)
     page.clock.run_for(1000)                    # the dialog has finished opening
     page.wait_for_function("() => document.getElementById('certDetailContent').innerHTML.length > 0")
@@ -73,7 +75,7 @@ def dashboard(browser_page):
 def test_enter_right_after_escape_opens_the_dialog_and_it_stays(dashboard):
     page = dashboard
     page.keyboard.press('Escape')
-    # Closing gave the focus back to the row, and the dialog is still fading.
+    # Closing gave the focus back to the row's name, and the dialog is still fading.
     assert page.evaluate(DIALOG) == {
         'open': True, 'title': 'alpha.example.test', 'filled': True, 'focus': 'alpha.example.test'}
     page.keyboard.press('Enter')
@@ -93,7 +95,7 @@ def test_closing_twice_and_reopening_leaves_no_close_behind(dashboard):
     page = dashboard
     page.keyboard.press('Escape')
     page.mouse.click(6, 6)                      # the backdrop is still there for 200 ms
-    page.locator('tr[data-row-domain="alpha.example.test"]').press('Enter')
+    page.get_by_role('button', name='View details for alpha.example.test').press('Enter')
     page.clock.run_for(1000)
     state = page.evaluate(DIALOG)
     assert (state['open'], state['filled'], state['focus']) == (True, True, 'the close button'), state

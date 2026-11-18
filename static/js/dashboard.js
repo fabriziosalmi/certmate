@@ -1056,6 +1056,15 @@
             return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
+        // The name in the first cell is the row's button: a screen reader
+        // walks the list as a table, with the row's actions beside the name
+        // and not inside a row that was itself a button (P13). A click
+        // anywhere else on the row still opens the certificate, for the
+        // mouse: that is the row's data-click, and a control in it wins.
+        function nameButton(title) {
+            return rowRaw(rowHtml`<button type="button" data-click="openCertRow" data-pass="el" class="block max-w-full text-left text-sm font-medium text-foreground break-words md:truncate cm-mono hover:underline" title="${title}" aria-label="View details for ${title}">${title}</button>`);
+        }
+
         container.innerHTML = visibleCertificates.map(function (cert, i) {
             // providerDisplayName(...) already calls escapeHtml internally —
             // when interpolating into the rowHtml template we wrap it with
@@ -1075,8 +1084,8 @@
                 : false;
 
             if (!cert.exists) {
-                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${title}" data-click="openCertRow" data-pass="el">
-                    <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="${title}">${title}</div>${ipHint}</td>
+                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" data-click="openCertRow" data-pass="el">
+                    <td class="px-6 py-4 md:max-w-0">${nameButton(title)}${ipHint}</td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
@@ -1187,12 +1196,12 @@
             // A certificate with no key gets a key glyph, not a padlock: it
             // secures nothing until it is reissued.
             var lockIcon = keylessRow ? 'fa-key' : isExpired ? 'fa-lock-open' : 'fa-lock';
-            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(Math.min(i, 10) * 30))}ms" tabindex="0" role="button" aria-label="View details for ${title}" data-click="openCertRow" data-pass="el">
+            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(Math.min(i, 10) * 30))}ms" data-click="openCertRow" data-pass="el">
                 <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="${title}">${title}</div>
+                            ${nameButton(title)}
                             ${ipHint}
                             ${aliasHint}
                             ${renewalFailedHint}
@@ -5136,7 +5145,7 @@
     ]);
     CertMate.actions({
         // A row of the list opens its certificate; the name is on the row.
-        openCertRow: function (row) { openCertDetail(row.getAttribute('data-row-domain')); },
+        openCertRow: function (el) { openCertDetail(el.closest('[data-row-domain]').getAttribute('data-row-domain')); },
         // "Check now" in the detail panel: past the cache, with the button to spin.
         checkDeploymentStatusNow: function (domain, button) { return checkDeploymentStatus(domain, button, true); }
     });

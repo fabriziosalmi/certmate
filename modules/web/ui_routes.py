@@ -4,6 +4,12 @@ from flask import request, render_template, redirect, url_for, send_from_directo
 from ..core.client_certificates import default_client_organization
 
 
+def _check_is_on(managers, name):
+    """Whether the inventory check *name* (a manager with get_config) is enabled."""
+    manager = managers.get(name)
+    return bool(manager is not None and manager.get_config().get('enabled'))
+
+
 def register_ui_routes(app, managers, require_web_auth, auth_manager):
     """Register UI-related routes"""
 
@@ -90,8 +96,17 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
     @app.route('/inventory')
     @auth_manager.require_role('viewer')
     def inventory_page():
-        """Certificate inventory page — issued + discovered certificates."""
-        return render_template('inventory.html')
+        """Certificate inventory page — issued + discovered certificates.
+
+        Whether the two domain checks are on is decided here, so a check that
+        is off is one line from the first paint: drawn as an empty card, the
+        two pushed the certificate list below the fold, and collapsed from
+        script they would have moved it after the page appeared.
+        """
+        return render_template(
+            'inventory.html',
+            registrations_on=_check_is_on(managers, 'domain_registration'),
+            health_on=_check_is_on(managers, 'domain_health'))
 
     @app.route('/inventory/crypto-report')
     @auth_manager.require_role('viewer')

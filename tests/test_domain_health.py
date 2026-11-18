@@ -1311,7 +1311,8 @@ def test_the_health_endpoint_lists_what_was_found(real_app):
     assert [n['name'] for n in body['names']] == ['bad.example', 'fine.example']
     assert body['summary'] == {'total': 2,
                                'by_status': {'failing': 1, 'warning': 0,
-                                             'unknown': 0, 'ok': 1}}
+                                             'unknown': 0, 'ok': 1},
+                               'tracked': 0}
     assert body['names'][0]['checks']['spf']['detail'] == 'no v=spf1 record'
 
 
@@ -1361,6 +1362,30 @@ def test_the_health_endpoint_filters_by_scope(tmp_path, monkeypatch):
     everything = client.get('/api/inventory/health', headers=admin).get_json()
     assert [n['name'] for n in everything['names']] == ['tenant-a.example',
                                                         'tenant-b.example']
+    # What the next scan checks is counted within the scope too.
+    saved = client.post('/api/inventory/config', headers=admin, json={'domain_health': {
+        'extra_domains': ['tenant-a.example', 'tenant-b.example']}})
+    assert saved.status_code == 200, saved.get_json()
+    assert client.get('/api/inventory/health', headers=scoped).get_json()['summary']['tracked'] == 1
+    assert client.get('/api/inventory/health', headers=admin).get_json()['summary']['tracked'] == 2
+
+
+def test_the_health_answer_counts_the_names_the_next_scan_checks(real_app):
+    """With no row, summary.tracked tells "not checked yet" from "nothing to check".
+
+    UX perception audit, 2026-11-18 (P50 review): with the checks on and
+    nothing to track the page still said the next scan would check the names.
+    """
+    application, _ = real_app
+    client = application.test_client()
+    nothing = client.get('/api/inventory/health').get_json()
+    assert (nothing['names'], nothing['summary']['tracked']) == ([], 0)
+    saved = client.post('/api/inventory/config', json={'domain_health': {
+        'enabled': True, 'extra_domains': ['www.brand.it']}})
+    assert saved.status_code == 200, saved.get_json()
+    pending = client.get('/api/inventory/health').get_json()
+    # The host and the registrable domain behind it: www.brand.it and brand.it.
+    assert (pending['names'], pending['summary']['tracked']) == ([], 2)
 
 
 def test_the_health_endpoint_says_so_when_there_is_no_inventory(real_app):
