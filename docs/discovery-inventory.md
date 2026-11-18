@@ -44,8 +44,9 @@ polling CT logs until you enable it.
 Each certificate is stored **once**, keyed by its SHA-256 fingerprint. One
 certificate served on many hosts is a single record with many endpoints.
 
-Issuing a certificate does not by itself write to the inventory. A discovery
-sweep records where each certificate it finds came from by its fingerprint, not
+The certificates CertMate holds are recorded too, read from disk: at startup,
+and when one is created or renewed (API contract 2.68). A renewal supersedes
+the record of the certificate it replaced. A discovery sweep records where each certificate it finds came from by its fingerprint, not
 by the host it was found at: `source=issued` for a certificate CertMate holds
 and obtained (the one it serves, or an earlier generation of its certbot
 lineage), `imported` for one it holds and was given (an external certificate,
