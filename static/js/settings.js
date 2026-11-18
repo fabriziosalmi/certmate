@@ -2356,9 +2356,8 @@
                     allUsable = false;
                     var lacks = document.createElement('span');
                     lacks.className = 'text-xs font-medium text-warning-fg';
-                    lacks.textContent = 'No ' + missing.map(function (key) {
-                        return CertMate.CA_ACCOUNT_NEEDS[key].noun;
-                    }).join(' or ') + ': cannot issue';
+                    lacks.textContent = 'No ' + CertMate.caAccountMissingText(missing, 'noun', 'or') +
+                        ': cannot issue';
                     row.appendChild(lacks);
                     var complete = document.createElement('button');
                     complete.type = 'button';

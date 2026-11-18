@@ -1402,7 +1402,9 @@
         var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
         var external = cert.external === true;
         var caDetailLabel = caDisplayName(cert.ca_provider);
-        if (caDetailLabel && cert.ca_account_id) {
+        // The account is named when it tells something: not for the one
+        // 'default' account of a CA (or a flat, account-less CA config).
+        if (caDetailLabel && cert.ca_account_id && !caOnlyDefaultAccount(cert.ca_provider, cert.ca_account_id)) {
             caDetailLabel += ', account ' + escapeHtml(caAccountName(cert.ca_provider, cert.ca_account_id));
         }
         if (caDetailLabel && cert.imported_at) caDetailLabel = 'Renewal: ' + caDetailLabel;
@@ -2290,6 +2292,13 @@
     // An account by the name Settings > CA gives it, then its email and, for a
     // private CA, the host of its directory: two accounts on one address stay
     // apart, and the name the operator chose is the one shown.
+    function caOnlyDefaultAccount(provider, id) {
+        var others = Object.keys(((caAccounts[provider] || {}).accounts) || {}).filter(function (key) {
+            return key !== 'default';
+        });
+        return id === 'default' && others.length === 0;
+    }
+
     function caAccountName(provider, id) {
         var config = caAccounts[provider] || {};
         var account = (config.accounts || {})[id] || (id === 'default' ? config : {});
@@ -2319,9 +2328,9 @@
         var account = (config.accounts || {})[id] || (id === 'default' ? config : {});
         var missing = CertMate.caAccountMissing(defaultCAProvider, account, {email: globalCAEmail});
         if (!missing.length) return '';
-        return (CA_NAMES[defaultCAProvider] || defaultCAProvider) + ' needs ' + missing.map(function (key) {
-            return CertMate.CA_ACCOUNT_NEEDS[key].phrase;
-        }).join(' and ') + ': add ' + (missing.length === 1 ? 'it' : 'them') + ' in Settings > CA';
+        return (CA_NAMES[defaultCAProvider] || defaultCAProvider) + ' needs ' +
+            CertMate.caAccountMissingText(missing, 'phrase', 'and') + ': add ' +
+            (missing.length === 1 ? 'it' : 'them') + ' in Settings > CA';
     }
 
     function loadCAProviders() {
@@ -2374,7 +2383,7 @@
             select.add(new Option(caAccountLabel(provider, id, config) +
                 (id === defaultId ? ', default for this CA' : ''), id));
         });
-        if (!config.accounts && (config.email || config.eab_kid || config.acme_url)) {
+        if (!config.accounts && (config.email || CertMate.caAccountHas(config, 'eab_kid', 'eab_key_id') || config.acme_url)) {
             select.add(new Option(caAccountLabel(provider, 'default', config), 'default'));
         }
         container.classList.toggle('hidden', !configuredCAs.length);

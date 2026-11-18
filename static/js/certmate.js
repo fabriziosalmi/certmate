@@ -26,16 +26,33 @@
         eab: {noun: 'EAB credentials', phrase: 'EAB credentials'},
         email: {noun: 'contact email', phrase: 'a contact email'}
     };
+    // A field is given when it has a value or names where its value lives
+    // (`<field>_env`, `<field>_file`), as the server reads it
+    // (modules/core/secret_refs.py has_value). The reference is not resolved here.
+    CM.caAccountHas = function(account) {
+        account = account || {};
+        return Array.prototype.slice.call(arguments, 1).some(function (field) {
+            return Boolean(account[field] || account[field + '_env'] || account[field + '_file']);
+        });
+    };
     CM.caAccountMissing = function(provider, account, settings) {
         account = account || {};
         var missing = [];
         var acme = provider !== 'letsencrypt' && provider !== 'letsencrypt_staging';
         if (acme && (provider === 'private_ca' || provider === 'digicert' || provider === 'sectigo') &&
                 !account.acme_url) missing.push('acme_url');
-        if (acme && provider !== 'private_ca' && !((account.eab_kid || account.eab_key_id) &&
-                (account.eab_hmac || account.eab_hmac_key))) missing.push('eab');
+        if (acme && provider !== 'private_ca' && !(CM.caAccountHas(account, 'eab_kid', 'eab_key_id') &&
+                CM.caAccountHas(account, 'eab_hmac', 'eab_hmac_key'))) missing.push('eab');
         if (!(account.email || (settings && settings.email))) missing.push('email');
         return missing;
+    };
+    // The missing keys in one sentence part: 'noun' words for "No ...",
+    // 'phrase' words for "... needs ...", e.g. "an ACME directory URL, EAB
+    // credentials and a contact email".
+    CM.caAccountMissingText = function(missing, form, conjunction) {
+        var words = missing.map(function (key) { return CM.CA_ACCOUNT_NEEDS[key][form]; });
+        if (words.length < 2) return words.join('');
+        return words.slice(0, -1).join(', ') + ' ' + conjunction + ' ' + words[words.length - 1];
     };
 
     CM.configuredCAProviders = function(settings, usableOnly) {
@@ -48,8 +65,8 @@
                     return CM.caAccountMissing(id, account, settings).length === 0;
                 });
             }
-            return Boolean(config.enabled || config.email || config.acme_url || config.eab_kid ||
-                config.eab_key_id || Object.keys(config.accounts || {}).length);
+            return Boolean(config.enabled || config.email || config.acme_url ||
+                CM.caAccountHas(config, 'eab_kid', 'eab_key_id') || Object.keys(config.accounts || {}).length);
         });
         var defaultCA = (settings && settings.default_ca) || 'letsencrypt';
         if (defaultCA === 'letsencrypt' && (!usableOnly || settings.email) && configured.indexOf(defaultCA) < 0) {

@@ -53,19 +53,24 @@ CERT = {
 }
 
 
-def _dashboard(page):
+def _dashboard(page, ca_settings=None, cert=None):
+    ca_settings = ca_settings or CA_SETTINGS
+    cert = cert or CERT
+
     def settings(route):
         if route.request.method != 'GET':
             route.continue_()
             return
         body = route.fetch().json()
-        body.update(CA_SETTINGS)
+        body.update(ca_settings)
         route.fulfill(status=200, content_type='application/json', body=json.dumps(body))
 
+    page.unroute_all(behavior='ignoreErrors')
     page.route('**/api/web/settings', settings)
     page.route('**/api/certificates', lambda route: route.fulfill(
-        status=200, content_type='application/json', body=json.dumps([CERT]))
+        status=200, content_type='application/json', body=json.dumps([cert]))
         if route.request.method == 'GET' else route.continue_())
+    page.goto('about:blank')
     page.goto(BASE_URL, wait_until="networkidle")
 
 
@@ -102,9 +107,26 @@ def test_a_private_ca_account_shows_its_directory_host(page):
     assert accounts[0] == 'Default for Private CA: internal (pki@example.com, acme.internal.example:9000)', accounts
 
 
-def test_the_detail_names_the_account_that_issued_the_certificate(page):
-    _dashboard(page)
+def _issuing_ca(page):
     page.click('tr[data-row-domain="named.example.com"]')
     page.wait_for_selector('#certDetailContent dt:text("Issuing CA")', state='visible')
     row = page.locator('#certDetailContent div', has=page.locator('dt:text("Issuing CA")')).last
-    assert row.locator('dd').inner_text() == "Let's Encrypt, account shop", row.inner_text()
+    return row.locator('dd').inner_text()
+
+
+def test_the_detail_names_the_account_that_issued_the_certificate(page):
+    _dashboard(page)
+    assert _issuing_ca(page) == "Let's Encrypt, account shop"
+
+
+# Every certificate records the account it was issued with, 'default' when
+# the CA has only that one: naming it ("account default") tells nothing.
+@pytest.mark.parametrize('letsencrypt', [
+    {'email': 'le@example.com'},
+    {'accounts': {'default': {'name': 'default', 'email': 'le@example.com'}}},
+], ids=['flat', 'saved-through-the-modal'])
+def test_the_detail_does_not_name_the_only_default_account(page, letsencrypt):
+    _dashboard(page, {'email': 'le@example.com', 'default_ca': 'letsencrypt', 'default_ca_accounts': {},
+                      'ca_providers': {'letsencrypt': letsencrypt}},
+               {**CERT, 'ca_account_id': 'default'})
+    assert _issuing_ca(page) == "Let's Encrypt"

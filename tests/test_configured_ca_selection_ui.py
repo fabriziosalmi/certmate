@@ -119,3 +119,39 @@ if (!nameField.disabled || !nameField.classList.classes['opacity-60'] ||
     result = subprocess.run([node, '-e', script, str(settings_js)],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_eab_credentials_given_by_reference_count_as_given(node):
+    """Accounts declared in CERTMATE_CONFIG_FILE (#1317) give their EAB secrets
+    as `<field>_env` or `<field>_file`, which the server reads when it issues
+    (ca_manager.get_eab_credentials via secret_refs.resolve_field). Such an
+    account can issue, so it is offered and not called incomplete."""
+    certmate_js = Path(__file__).resolve().parent.parent / 'static' / 'js' / 'certmate.js'
+    script = r"""
+const fs = require('fs');
+global.window = global;
+global.document = { addEventListener() {} };
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+const CM = window.CertMate;
+const check = (label, got, want) => {
+    if (JSON.stringify(got) !== JSON.stringify(want))
+        throw Error(label + ': ' + JSON.stringify(got) + ' != ' + JSON.stringify(want));
+};
+const email = {email: 'ops@example.com'};
+check('env', CM.caAccountMissing('zerossl', {...email, eab_kid_env: 'ZS_KID', eab_hmac_env: '********'}), []);
+check('file', CM.caAccountMissing('google', {...email, eab_key_id_file: '/run/secrets/kid',
+    eab_hmac_key_file: '********'}), []);
+check('half', CM.caAccountMissing('zerossl', {...email, eab_kid_env: 'ZS_KID'}), ['eab']);
+check('none', CM.caAccountMissing('zerossl', email), ['eab']);
+const settings = {email: '', default_ca: 'zerossl', ca_providers: {zerossl: {accounts: {zs: {name: 'zs-prod',
+    ...email, eab_kid_env: 'ZS_KID', eab_hmac_env: '********'}}}}};
+check('offered', CM.configuredCAProviders(settings, true), ['zerossl']);
+check('flat listed', CM.configuredCAProviders({ca_providers: {zerossl: {eab_kid_file: '/k'}}}, false),
+    ['letsencrypt', 'zerossl']);
+check('one', CM.caAccountMissingText(['email'], 'noun', 'or'), 'contact email');
+check('two', CM.caAccountMissingText(['eab', 'email'], 'phrase', 'and'), 'EAB credentials and a contact email');
+check('three', CM.caAccountMissingText(['acme_url', 'eab', 'email'], 'noun', 'or'),
+    'ACME directory URL, EAB credentials or contact email');
+"""
+    result = subprocess.run([node, '-e', script, str(certmate_js)], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
