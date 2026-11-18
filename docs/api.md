@@ -2752,7 +2752,9 @@ ignored: pressing the button is the decision to deploy now.
 
 It answers **200 even when `ok` is false**, so the summary can be read: deploy
 hooks disabled, or nothing configured for this domain, come back as `ok: false`
-with an `error` that says which. Non-2xx is reserved for a bad domain path
+and `total: 0` with an `error` that says which. A run with `total: 0` ran
+nothing and writes no `deploy` entry to the audit log; a run that ran something
+writes one, `success` or `failure`. Non-2xx is reserved for a bad domain path
 (`400`), a certificate that does not exist (`404 CERTIFICATE_NOT_FOUND`), a
 deploy manager that is not running (`503`) and an unexpected failure (`500`).
 Each `results[]` entry is one hook or target run (`hook_name`, `exit_code`,

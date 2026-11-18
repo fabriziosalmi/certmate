@@ -255,7 +255,7 @@
 
                             <div data-renewal-source>
                                 <label for="ca_provider_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-certificate mr-2 text-green-500"></i>
+                                    <i class="fas fa-shield-alt mr-2 text-green-500"></i>
                                     Certificate Authority
                                 </label>
                                 <select id="ca_provider_select" name="ca_provider" 
@@ -281,7 +281,7 @@
                         <div class="space-y-4">
                             <div data-renewal-source>
                                 <label for="challenge_type_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-shield-alt mr-2 text-teal-500"></i>
+                                    <i class="fas fa-flag-checkered mr-2 text-teal-500"></i>
                                     Challenge Type
                                 </label>
                                 <select id="challenge_type_select" name="challenge_type"
@@ -687,21 +687,24 @@
                                 Expired <span class="inline-block min-w-[4ch] text-[10px] tabular-nums" data-status-count="expired"></span>
                             </button>
                         </div>
-                        <!-- List actions — quick-action icon group (replaces the
-                             labelled "Check All"). -->
-                        <div class="inline-flex items-center gap-1.5" role="group" aria-label="Certificate list actions">
-                            <button type="button" data-click="checkAllDeploymentStatuses" data-pass="el" class="cm-icon-btn"
+                        <!-- List actions: each says what it does in a word beside
+                             its icon, since a touch browser never shows a title. The
+                             words are left out from sm to xl only, where this row
+                             shares its line with the search box and the chips: there
+                             they took the search box from 132 to 95 px at 768. -->
+                        <div class="inline-flex flex-wrap sm:flex-nowrap items-center gap-1.5" role="group" aria-label="Certificate list actions">
+                            <button type="button" data-click="checkAllDeploymentStatuses" data-pass="el" class="cm-text-btn sm:w-10 sm:px-0 xl:w-auto xl:px-3"
                                     title="Re-check deployment status for every certificate (server + browser probe)."
                                     aria-label="Check all deployments">
-                                <i class="fas fa-tower-broadcast" aria-hidden="true"></i>
+                                <i class="fas fa-fw fa-tower-broadcast" aria-hidden="true"></i><span class="sm:hidden xl:inline">Check all</span>
                             </button>
-                            <button type="button" data-click="exportAllCertificates" class="cm-icon-btn"
+                            <button type="button" data-click="exportAllCertificates" class="cm-text-btn sm:w-10 sm:px-0 xl:w-auto xl:px-3"
                                     title="Export all certificates as a ZIP" aria-label="Export all certificates as ZIP">
-                                <i class="fas fa-file-zipper" aria-hidden="true"></i>
+                                <i class="fas fa-fw fa-file-zipper" aria-hidden="true"></i><span class="sm:hidden xl:inline">Export all</span>
                             </button>
-                            <button type="button" data-click="loadCertificates" class="cm-icon-btn"
+                            <button type="button" data-click="loadCertificates" class="cm-text-btn sm:w-10 sm:px-0 xl:w-auto xl:px-3"
                                     title="Refresh the certificate list" aria-label="Refresh certificate list">
-                                <i class="fas fa-arrows-rotate" aria-hidden="true"></i>
+                                <i class="fas fa-fw fa-arrows-rotate" aria-hidden="true"></i><span class="sm:hidden xl:inline">Refresh</span>
                             </button>
                             <button type="button" data-debug-control data-click="toggleDebugConsole" class="cm-icon-btn hidden"
                                     title="Open the deployment-check debug console" aria-label="Open deployment-check debug console">
@@ -772,7 +775,9 @@
                             <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
                                 Deployment
                             </th>
-                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">
+                            <!-- Not drawn below md: on a phone the row actions sat past the
+                                 table's edge. A tap on the row opens the panel that has them. -->
+                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider hidden md:table-cell">
                                 Actions
                             </th>
                         </tr>

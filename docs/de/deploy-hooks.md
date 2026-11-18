@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM 00d67a9dd1de1e78 -->
+<!-- CERTMATE-TRANSLATED-FROM 1e5b97c8a731e39d -->
 
 Schließt [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -225,7 +225,7 @@ Löst jeden aktivierten globalen und domainspezifischen Hook (und jedes passende
 }
 ```
 
-Dies ist das, was die Schaltfläche **Deploy Hooks jetzt ausführen** (Play-Symbol, Abschnitt Deployment im Detailbereich des Zertifikats) aufruft.
+Dies ist das, was die Schaltfläche **Run deploy hooks** (Play-Symbol, Abschnitt Deployment im Detailbereich des Zertifikats, nur für Admins) aufruft. Solange Deploy Hooks ausgeschaltet sind, wird die Schaltfläche nicht angeboten, und ihr Tooltip sagt, wo man sie einschaltet. Schlägt ein Hook fehl, nennt die Meldung den ersten fehlgeschlagenen Hook und die erste Zeile seiner Ausgabe auf stderr; **Settings → Deploy → Recent Executions** enthält die vollständige Ausgabe. Ein Lauf, der nichts ausgeführt hat (Hooks aus, oder kein Hook und kein Ziel für das Zertifikat), wird nicht in Activity geschrieben.
 
 ---
 

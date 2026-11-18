@@ -1,6 +1,6 @@
 # Deploy Hooks
 
-<!-- CERTMATE-TRANSLATED-FROM 00d67a9dd1de1e78 -->
+<!-- CERTMATE-TRANSLATED-FROM 1e5b97c8a731e39d -->
 
 Cierra [#117](https://github.com/fabriziosalmi/certmate/issues/117).
 
@@ -225,7 +225,7 @@ Dispara todos los hooks globales y específicos del dominio que estén habilitad
 }
 ```
 
-Esto es lo que invoca el botón **Run deploy hooks now** (icono de play, sección Deployment del panel de detalles del certificado).
+Esto es lo que invoca el botón **Run deploy hooks** (icono de play, sección Deployment del panel de detalles del certificado, solo administradores). Mientras los deploy hooks están desactivados el botón no se ofrece, y su tooltip indica dónde activarlos. Cuando un hook falla, el mensaje nombra el primer hook que falló y la primera línea de lo que escribió en stderr; **Settings → Deploy → Recent Executions** conserva la salida completa. Una ejecución que no ejecutó nada (hooks desactivados, o ningún hook ni destino para el certificado) no se registra en Activity.
 
 ---
 
