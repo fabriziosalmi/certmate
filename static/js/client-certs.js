@@ -209,10 +209,14 @@
             var safeUsage = escapeHtml(cert.cert_usage);
             var safeId = escapeHtml(cert.identifier);
 
-            // Whole row opens the detail modal (role=button + keyboard); the
-            // action buttons stopPropagation so they don't also open it.
-            return '<tr data-cc-id="' + safeId + '" role="button" tabindex="0" aria-label="View details for ' + safeCN + '" class="' + healthClass + ' cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
-                '<td class="px-6 py-4 text-sm font-medium text-foreground cm-mono">' + safeCN + '</td>' +
+            // A native row, so a screen reader walks the list as a table (P13):
+            // the name is the button that opens the detail dialog, and a click
+            // anywhere else on the row opens it too, for the mouse. The action
+            // buttons stopPropagation so they don't also open it.
+            return '<tr data-cc-id="' + safeId + '" class="' + healthClass + ' cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors">' +
+                '<td class="px-6 py-4 text-sm font-medium text-foreground cm-mono">' +
+                    '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="text-left hover:underline" aria-label="View details for ' + safeCN + '">' + safeCN + '</button>' +
+                '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
                 '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium whitespace-nowrap">' + safeUsage + '</span></td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell whitespace-nowrap">' + CertMate.formatDate(createdDate) + '</td>' +
@@ -224,9 +228,9 @@
                 '</td>' +
                 '<td class="px-6 py-4 text-sm text-right">' +
                     '<div class="flex items-center justify-end gap-1">' +
-                        '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-hover" title="Details"><i class="fas fa-eye"></i></button>' +
-                        (!cert.revoked ? '<button type="button" data-cc-action="revoke" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-hover" title="Revoke"><i class="fas fa-ban"></i></button>' : '') +
-                        '<button type="button" data-cc-action="renew" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-hover" title="Renew"><i class="fas fa-sync"></i></button>' +
+                        '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-hover" title="Details" aria-label="Details ' + safeCN + '"><i class="fas fa-eye" aria-hidden="true"></i></button>' +
+                        (!cert.revoked ? '<button type="button" data-cc-action="revoke" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-hover" title="Revoke" aria-label="Revoke ' + safeCN + '"><i class="fas fa-ban" aria-hidden="true"></i></button>' : '') +
+                        '<button type="button" data-cc-action="renew" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-hover" title="Renew" aria-label="Renew ' + safeCN + '"><i class="fas fa-sync" aria-hidden="true"></i></button>' +
                     '</div>' +
                 '</td>' +
             '</tr>';
@@ -246,9 +250,6 @@
 
         tbody.querySelectorAll('tr[data-cc-id]').forEach(function(tr) {
             tr.addEventListener('click', function() { ccShowCertDetails(tr.dataset.ccId); });
-            tr.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ccShowCertDetails(tr.dataset.ccId); }
-            });
         });
     }
 

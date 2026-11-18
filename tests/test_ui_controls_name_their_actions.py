@@ -238,8 +238,8 @@ def test_the_dashboard_a_row_its_dialog_and_the_buttons_a_script_built(page):
         assert page.evaluate(pressed) == [status]
     assert page.locator('tr[data-row-domain]:visible').count() == 2
 
-    # The row opens its certificate; a button in the row does not.
-    row.locator('button').first.click()
+    # The row opens its certificate; an action button in the row does not.
+    row.locator('button[data-action]').first.click()
     assert not is_open()
     page.keyboard.press('Escape')
     row.locator('td').first.click()
@@ -277,7 +277,9 @@ def test_the_dashboard_a_row_its_dialog_and_the_buttons_a_script_built(page):
     # the dialog this key opens when the steps above came close enough
     # together. tests/test_ui_a_dialog_reopened_while_it_closes_stays_open.py
     # is where that is held; here the key only has to do what a click does.
-    row.press('Enter')
+    # The key goes to the name, the row's button: the row itself is a table
+    # row and takes no focus (tests/test_ui_certificate_lists_read_as_tables.py).
+    row.get_by_role('button', name='View details for alpha.example.test').press('Enter')
     try:
         page.wait_for_function(
             "() => !document.getElementById('certDetailPanel').classList.contains('hidden')", timeout=10000)
