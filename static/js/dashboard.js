@@ -666,6 +666,12 @@
         if (isBrowser) {
             if (result && result.reachable) {
                 chipClass = 'bg-success-surface text-success-fg'; statusIcon = 'fa-check'; statusText = 'Reachable';
+            } else if (result && result.reachable === false && result.error === 'network') {
+                // The browser tried and its request failed. A no-cors fetch says
+                // no more than that: a name that does not resolve, a refused
+                // connection and a certificate the browser does not trust all
+                // fail the same way, so it is not called "Unreachable".
+                chipClass = 'bg-danger-surface text-danger-fg'; statusIcon = 'fa-xmark'; statusText = 'Could not connect';
             } else if (result && result.reachable === false) {
                 chipClass = 'bg-danger-surface text-danger-fg'; statusIcon = 'fa-xmark'; statusText = 'Unreachable';
             } else {
@@ -707,17 +713,19 @@
         return 'inline-flex items-center gap-1 px-1.5 py-1 rounded-md ' + display.chipClass;
     }
 
-    // Square variant (w-10 h-10, bordered) so the detail modal's two deploy
-    // indicators line up with the quick-action buttons on a single row.
+    // Detail variant (bordered, as tall as the action buttons): the two chips
+    // of the detail panel, which also say in words what the probe found.
     function deploymentSquareClass(display) {
-        return 'inline-flex items-center justify-center gap-1 w-10 h-10 rounded-lg border border-border ' + display.chipClass;
+        return 'inline-flex items-center gap-1.5 h-10 px-3 rounded-lg border border-border text-sm font-medium whitespace-nowrap ' + display.chipClass;
     }
     // The status glyph is fixed-width (fa-fw): check, cross, minus and spinner
     // are not the same width, and the chip changing width moved the chip beside
     // it every time a probe finished.
-    function deploymentChipInner(display) {
+    // `withText`: the detail variant, which carries "Server: Deployed" in words.
+    function deploymentChipInner(display, withText) {
         return '<i class="fas ' + display.roleIcon + '" aria-hidden="true"></i>' +
-            '<i class="fas fa-fw ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>';
+            '<i class="fas fa-fw ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>' +
+            (withText ? '<span>' + escapeHtml(display.text) + '</span>' : '');
     }
 
     // A chip in a state that is not a probe result (being checked, or the check
@@ -725,16 +733,17 @@
     // (a taller pill with px-2.5 py-0.5, and a text label on failure): every
     // row's Deployment cell shrank and grew back while the dashboard opened, and
     // the detail modal's square chips lost their square.
-    function setDeploymentChipState(statusElement, statusIcon, chipClass, label) {
+    function setDeploymentChipState(statusElement, statusIcon, chipClass, label, word) {
+        var browser = statusElement.getAttribute('data-deployment-role') === 'browser';
+        var detail = statusElement.getAttribute('data-deployment-variant') === 'square';
         var display = {
-            roleIcon: statusElement.getAttribute('data-deployment-role') === 'browser' ? 'fa-globe' : 'fa-server',
+            roleIcon: browser ? 'fa-globe' : 'fa-server',
             statusIcon: statusIcon,
-            chipClass: chipClass
+            chipClass: chipClass,
+            text: (browser ? 'Browser' : 'Server') + ': ' + word
         };
-        statusElement.className = (statusElement.getAttribute('data-deployment-variant') === 'square'
-            ? deploymentSquareClass(display)
-            : deploymentChipClass(display));
-        statusElement.innerHTML = deploymentChipInner(display);
+        statusElement.className = detail ? deploymentSquareClass(display) : deploymentChipClass(display);
+        statusElement.innerHTML = deploymentChipInner(display, detail);
         statusElement.title = label;
         statusElement.setAttribute('aria-label', label);
     }
@@ -772,7 +781,7 @@
             (square ? ' data-deployment-variant="square"' : '') +
             ' title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '"' +
             ' class="' + (square ? deploymentSquareClass(display) : deploymentChipClass(display)) + '">' +
-            deploymentChipInner(display) +
+            deploymentChipInner(display, square) +
             '</span>';
     }
 
@@ -1089,7 +1098,7 @@
             // em-dashes on a phone is noise. The detail panel is where an
             // unanswered field still gets said out loud.
             var mobileCaLine = caLabel
-                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted"><i class="fas fa-certificate mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span>${rowRaw(caLabel)}</span></div>`)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted"><i class="fas fa-shield-alt mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span>${rowRaw(caLabel)}</span></div>`)
                 : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileCaLine}${mobileDeploymentLine}</div>`);
@@ -1118,11 +1127,11 @@
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-right">
+                <td class="px-4 py-4 whitespace-nowrap text-right hidden md:table-cell">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? (external ? actionBtn('replace', cert.domain, 'green', 'Replace certificate', 'fa-file-arrow-up') : actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt')) : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
-                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-external="' + (external ? '1' : '0') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
+                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-external="' + (external ? '1' : '0') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu" aria-expanded="false"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
                     </div>
                 </td>
             </tr>`;
@@ -1169,17 +1178,43 @@
     // (position:fixed) so the table's overflow-hidden / overflow-x-auto wrappers
     // don't clip it.
     var _rowMenu = null;
-    function closeRowMenu() {
+    var _rowMenuButton = null;
+    // `refocus`: give focus back to the button that opened the menu (Escape,
+    // Tab), so a keyboard user stays on the row instead of on the page body.
+    function closeRowMenu(refocus) {
         if (!_rowMenu) return;
         _rowMenu.remove();
         _rowMenu = null;
         document.removeEventListener('click', _rowMenuAway, true);
         document.removeEventListener('keydown', _rowMenuKey, true);
+        if (_rowMenuButton) {
+            _rowMenuButton.setAttribute('aria-expanded', 'false');
+            if (refocus === true && _rowMenuButton.isConnected) _rowMenuButton.focus();
+        }
+        _rowMenuButton = null;
     }
     function _rowMenuAway(e) {
         if (_rowMenu && !_rowMenu.contains(e.target) && !e.target.closest('[data-more-domain]')) closeRowMenu();
     }
-    function _rowMenuKey(e) { if (e.key === 'Escape') closeRowMenu(); }
+    // A role="menu" answers the arrow keys, Home and End (roving focus over its
+    // items, wrapping at either end). Escape closes it on its button; Tab closes
+    // it on its button too and then moves on from there, as Tab from the button would.
+    function _rowMenuKey(e) {
+        if (!_rowMenu) return;
+        if (e.key === 'Escape') { e.preventDefault(); closeRowMenu(true); return; }
+        if (e.key === 'Tab') { closeRowMenu(true); return; }
+        var items = Array.prototype.slice.call(_rowMenu.querySelectorAll('[role="menuitem"]'));
+        if (!items.length) return;
+        var at = items.indexOf(document.activeElement);
+        var next = null;
+        if (e.key === 'ArrowDown') next = at < 0 ? 0 : (at + 1) % items.length;
+        else if (e.key === 'ArrowUp') next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = items.length - 1;
+        if (next === null) return;
+        e.preventDefault();
+        items[next].focus();
+    }
     function _menuItem(icon, label, danger) {
         return '<button type="button" role="menuitem" class="w-full flex items-center gap-2 px-3 py-2 text-left ' +
             (danger ? 'text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/20' : 'text-foreground hover:bg-hover') +
@@ -1219,11 +1254,48 @@
             b.addEventListener('click', function () { closeRowMenu(); actions[i].fn(); });
         });
         _rowMenu = menu;
+        _rowMenuButton = btn;
+        btn.setAttribute('aria-expanded', 'true');
+        // The click listener waits a tick so the click that opened the menu does
+        // not close it; the keys are the menu's at once.
+        document.addEventListener('keydown', _rowMenuKey, true);
         setTimeout(function () {
-            document.addEventListener('click', _rowMenuAway, true);
-            document.addEventListener('keydown', _rowMenuKey, true);
+            if (_rowMenu === menu) document.addEventListener('click', _rowMenuAway, true);
         }, 0);
         if (items[0]) items[0].focus();
+    }
+
+    // Whether deploy hooks are on, read from /api/deploy/config: admin only,
+    // like the Run button that needs it. Asked once per page, when an admin
+    // first opens a certificate. null until it answers, and after a failed
+    // request, which leaves the button offered: the run then says what it found.
+    var _deployHooksOn = null;
+    var _deployHooksAsked = null;
+    var DEPLOY_HOOKS_OFF_TITLE = 'Deploy hooks are off: turn them on in Settings → Deploy';
+    function loadDeployHooksState() {
+        if (!_deployHooksAsked) {
+            _deployHooksAsked = fetch('/api/deploy/config', { credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (config) { _deployHooksOn = config ? config.enabled === true : null; })
+                .catch(function () { _deployHooksOn = null; });
+        }
+        return _deployHooksAsked;
+    }
+    function applyDeployHooksState() {
+        document.querySelectorAll('#certDetailPanel [data-run-deploy-hooks]').forEach(function (button) {
+            var off = _deployHooksOn === false;
+            button.disabled = off;
+            button.title = off ? DEPLOY_HOOKS_OFF_TITLE : 'Run deploy hooks now';
+        });
+    }
+    // "Run deploy hooks now", not offered while deploy hooks are off: it used to
+    // be confirmed with "All enabled hooks will execute" and then run nothing.
+    function runDeployHooksButtonHtml(domain) {
+        var off = _deployHooksOn === false;
+        return '<button type="button" data-run-deploy-hooks' + CertMate.does('click', 'runDeployHooks', [domain]) +
+            'title="' + (off ? DEPLOY_HOOKS_OFF_TITLE : 'Run deploy hooks now') + '" aria-label="Run deploy hooks now"' +
+            (off ? ' disabled' : '') + ' class="cm-text-btn">' +
+            '<i class="fas fa-fw fa-play" aria-hidden="true"></i><span>Run deploy hooks</span></button>';
     }
 
     // Certificate detail slide-out panel
@@ -1441,27 +1513,26 @@
             var bannerIcon = keylessDetail ? 'fa-key' : isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
             var autoOn = cert.auto_renew !== false;
 
-            // Quick-action icon button — same glyphs as the dashboard table row
-            // actions so the action vocabulary reads identically everywhere; the
-            // label lives in the tooltip + aria-label.
+            // Quick-action button: its icon and its word (`label`, a part of
+            // `title`). The word is what a touch browser shows, which never shows
+            // a title; title and aria-label keep the full name.
             // `action` and `args` name what the button does (see CertMate.actions).
-            function actIcon(action, args, icon, hover, title, pass) {
+            function actIcon(action, args, icon, title, label, pass, more) {
                 return '<button type="button"' + CertMate.does('click', action, args, pass) + 'title="' + title + '" aria-label="' + title + '" ' +
-                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
-                    '<i class="fas ' + icon + '"></i></button>';
+                    (more || '') + 'class="cm-text-btn">' +
+                    '<i class="fas fa-fw ' + icon + '" aria-hidden="true"></i><span>' + label + '</span></button>';
             }
             // Link variant of actIcon (same chrome) for controls that navigate.
-            function actLink(href, icon, hover, title) {
-                return '<a href="' + href + '" title="' + title + '" aria-label="' + title + '" ' +
-                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
-                    '<i class="fas ' + icon + '"></i></a>';
+            function actLink(href, icon, title, label) {
+                return '<a href="' + href + '" title="' + title + '" aria-label="' + title + '" class="cm-text-btn">' +
+                    '<i class="fas fa-fw ' + icon + '" aria-hidden="true"></i><span>' + label + '</span></a>';
             }
-            // Danger variant — red at rest, same chrome as the topbar Logout, for
-            // the destructive delete. (deleteCertificate still confirms first.)
-            function actIconDanger(action, args, icon, title) {
+            // Danger variant: red at rest, for the destructive delete, on a line
+            // of its own below the other actions. (deleteCertificate still confirms first.)
+            function actIconDanger(action, args, icon, title, label) {
                 return '<button type="button"' + CertMate.does('click', action, args) + 'title="' + title + '" aria-label="' + title + '" ' +
-                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-danger-line text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 transition">' +
-                    '<i class="fas ' + icon + '"></i></button>';
+                    'class="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-lg border border-danger-line text-sm font-medium text-danger-fg whitespace-nowrap hover:bg-red-50 dark:hover:bg-red-900/30 transition">' +
+                    '<i class="fas fa-fw ' + icon + '" aria-hidden="true"></i><span>' + label + '</span></button>';
             }
             function detailRow(label, valueHtml) {
                 return '<div class="flex items-start justify-between gap-4 py-2.5"><dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
@@ -1514,16 +1585,18 @@
                 '</dl>' +
                 // Notes and tags (#1043): what CertMate cannot know by itself.
                 '<div id="certLabelsSection" class="pt-4 border-t border-border">' + labelsSectionHtml(cert) + '</div>' +
-                // Deployment + Actions side by side — two sections, one column
-                // each, every control a quick-action button (points 2 & 3).
-                '<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t border-border">' +
+                // Deployment, then Actions: every control says what it does in a
+                // word, so each section takes the panel's width. The chips have a
+                // line of their own, so their words changing when a probe answers
+                // moves none of the buttons.
+                '<div class="grid grid-cols-1 gap-y-4 pt-4 border-t border-border">' +
                 '<div>' +
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Deployment</h4>' +
+                '<div class="flex flex-wrap items-center gap-2 mb-2">' + deploymentBadgesHtml(cert, true) + '</div>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
-                deploymentBadgesHtml(cert, true) +
-                actIcon('checkDeploymentStatusNow', [cert.domain], 'fa-arrows-rotate', 'indigo', 'Check deployment now', 'el') +
-                actLink('/settings#deploy', 'fa-pen-to-square', 'blue', 'View / edit deploy hooks') +
-                (roleAtLeast('admin') ? actIcon('runDeployHooks', [cert.domain], 'fa-play', 'green', 'Run deploy hooks now') : '') +
+                actIcon('checkDeploymentStatusNow', [cert.domain], 'fa-tower-broadcast', 'Check deployment now', 'Check', 'el') +
+                actLink('/settings#deploy', 'fa-rocket', 'View / edit deploy hooks', 'Deploy hooks') +
+                (roleAtLeast('admin') ? runDeployHooksButtonHtml(cert.domain) : '') +
                 '</div>' +
                 (safeDomainAlias ? '<button type="button"' + CertMate.does('click', 'checkDnsAliasForCertificate', [cert.domain]) + 'class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden mt-2"></div>' +
@@ -1532,19 +1605,21 @@
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 (roleAtLeast('operator') && external
-                    ? actIcon('openReplaceCertificate', [cert.domain], 'fa-file-arrow-up', 'green', 'Replace certificate')
+                    ? actIcon('openReplaceCertificate', [cert.domain], 'fa-file-arrow-up', 'Replace certificate', 'Replace')
                     : '') +
                 (roleAtLeast('operator') && !external
-                    ? actIcon('renewCertificate', [cert.domain], 'fa-sync-alt', 'green', 'Renew certificate') +
-                      actIcon('renewCertificate', [cert.domain, true], 'fa-bolt', 'amber', 'Force renew') +
-                      actIcon('startEditReissue', [cert.domain], 'fa-pen', 'blue', 'Edit & reissue')
+                    ? actIcon('renewCertificate', [cert.domain], 'fa-sync-alt', 'Renew certificate', 'Renew') +
+                      actIcon('renewCertificate', [cert.domain, true], 'fa-bolt', 'Force renew', 'Force renew') +
+                      actIcon('startEditReissue', [cert.domain], 'fa-pen', 'Edit & reissue', 'Edit &amp; reissue')
                     : '') +
-                actIcon('downloadCertificate', [cert.domain], 'fa-download', 'blue', 'Download certificate') +
-                actIcon('copyCurlCommand', [cert.domain], 'fa-code', 'indigo', 'Show API command') +
-                (roleAtLeast('admin')
-                    ? actIconDanger('deleteCertificate', [cert.domain], 'fa-trash-alt', 'Delete certificate')
-                    : '') +
+                actIcon('downloadCertificate', [cert.domain], 'fa-download', 'Download certificate', 'Download') +
+                actIcon('copyCurlCommand', [cert.domain], 'fa-code', 'Show API command', 'API command') +
                 '</div>' +
+                (roleAtLeast('admin')
+                    ? '<div class="mt-4 pt-4 border-t border-border">' +
+                      actIconDanger('deleteCertificate', [cert.domain], 'fa-trash-alt', 'Delete certificate', 'Delete') +
+                      '</div>'
+                    : '') +
                 '</div>' +
                 '</div>' +
                 (external && roleAtLeast('operator') ? replaceSectionHtml(cert) : '') +
@@ -1552,6 +1627,7 @@
         }
 
         if (cert.exists) wireLabelsSection(cert.domain);
+        if (cert.exists && roleAtLeast('admin')) loadDeployHooksState().then(applyDeployHooksState);
         if (cert.exists && external && roleAtLeast('operator')) {
             bundlePicker('replace', content.querySelectorAll('[data-replace-dropzone]'), 'replace');
         }
@@ -1818,11 +1894,12 @@
         var originalLabel = button ? button.getAttribute('aria-label') : null;
         var originalTitle = button ? button.getAttribute('title') : null;
         if (button) {
-            // The control is a fixed 40x40 icon button, so progress goes to its
-            // title/aria-label, not as text inside it. Marked busy rather than
-            // disabled: disabling the focused button dropped focus to the
-            // page body for the whole sweep (UX audit P33).
-            button.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
+            // Only the icon turns into the spinner: the button keeps its word
+            // and its width, so the buttons beside it stay where they are.
+            // Marked busy rather than disabled: disabling the focused button
+            // dropped focus to the page body for the whole sweep (UX audit P33).
+            var busyIcon = button.querySelector('i');
+            if (busyIcon) busyIcon.className = 'fas fa-fw fa-spinner fa-spin';
             button.setAttribute('aria-disabled', 'true');
             button.setAttribute('aria-busy', 'true');
         }
@@ -1881,7 +1958,11 @@
         if (triggerButton) {
             triggerButton.dataset.originalHtml = triggerButton.innerHTML;
             triggerButton.disabled = true;
-            triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+            // The icon turns into the spinner and the word stays: the button
+            // keeps its width while the check runs.
+            var busyIcon = triggerButton.querySelector('i');
+            if (busyIcon) busyIcon.className = 'fas fa-fw fa-spinner fa-spin';
+            else triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
         }
 
         var statusElements = Array.prototype.filter.call(
@@ -1906,7 +1987,7 @@
 
         // Update UI to show checking state
         statusElements.forEach(function (statusElement) {
-            setDeploymentChipState(statusElement, 'fa-spinner fa-spin', 'bg-info-surface text-info-fg', 'Checking deployment');
+            setDeploymentChipState(statusElement, 'fa-spinner fa-spin', 'bg-info-surface text-info-fg', 'Checking deployment', 'Checking');
         });
 
         var deploymentUrl = '/api/certificates/' + encodeURIComponent(domain) + '/deployment-status';
@@ -1971,7 +2052,7 @@
             });
         }).catch(function () {
             statusElements.forEach(function (statusElement) {
-                setDeploymentChipState(statusElement, 'fa-question', 'bg-surface-2 text-muted', 'Deployment check failed');
+                setDeploymentChipState(statusElement, 'fa-question', 'bg-surface-2 text-muted', 'Deployment check failed', 'Check failed');
             });
         }).finally(function () {
             restoreButton();
@@ -2019,7 +2100,17 @@
                     timestamp: new Date().toISOString()
                 };
             }
-            return null;
+            // Any other failure is the browser's own answer too: it tried and
+            // could not connect. It used to be dropped (null), and the chip
+            // said "Not Checked" as if no probe had run.
+            return {
+                deployed: false,
+                reachable: false,
+                certificate_match: false,
+                method: 'browser-fallback',
+                error: 'network',
+                timestamp: new Date().toISOString()
+            };
         });
     }
 
@@ -2041,10 +2132,9 @@
                 // Re-render through the SAME chip helpers the initial paint uses
                 // so a completed probe updates the icon + colour in place instead
                 // of replacing the chip with stale "Role: Status" text.
-                statusElement.className = (statusElement.getAttribute('data-deployment-variant') === 'square'
-                    ? deploymentSquareClass(display)
-                    : deploymentChipClass(display));
-                statusElement.innerHTML = deploymentChipInner(display);
+                var detail = statusElement.getAttribute('data-deployment-variant') === 'square';
+                statusElement.className = detail ? deploymentSquareClass(display) : deploymentChipClass(display);
+                statusElement.innerHTML = deploymentChipInner(display, detail);
                 var title = display.text;
                 if (roleResult && roleResult.method) {
                     title += ' via ' + roleResult.method;
@@ -4068,7 +4158,7 @@
             // out of the Actions column.
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
-            '<td class="px-4 py-4 whitespace-nowrap text-right"><span class="text-xs text-muted">Just now</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap text-right hidden md:table-cell"><span class="text-xs text-muted">Just now</span></td>' +
             '</tr>';
     }
 
@@ -4098,6 +4188,8 @@
             // CA and Deployment columns (seven-column table): see issuingRowHtml.
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            // Drawn at every width, unlike a certificate row's actions: a failed
+            // issuance opens no panel, so Retry and Dismiss are only here.
             '<td class="px-4 py-4 whitespace-nowrap text-right"><div class="flex items-center justify-end gap-1">' +
             retryButton +
             '<button type="button"' + CertMate.does('click', 'dismissPendingJob', [jobId]) + 'class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="Dismiss" aria-label="Dismiss failed issuance for ' + domain + '"><i class="fas fa-times" aria-hidden="true"></i></button>' +
@@ -4401,6 +4493,35 @@
         });
     }
 
+    // The toast of a manual deploy run that failed: what failed and the first
+    // line of what it said. A shell hook names itself in hook_name and speaks on
+    // stderr (error holds "exit code N: ..." or the timeout); a typed deploy
+    // target names itself in target (or only its type) and gives its reason in
+    // message. A target refusal made before any target ran (a CSR-only
+    // certificate has no key to publish) has no name at all, only the message.
+    function deployRunFailureMessage(domain, summary) {
+        var failed = (summary.results || []).filter(function (r) { return r && r.success === false; });
+        var first = failed[0];
+        var lead = 'Deploy hooks ran with errors for ' + domain + ': '
+            + summary.succeeded + '/' + summary.total + ' succeeded, ' + summary.failed + ' failed.';
+        if (!first) return lead + ' Check Settings → Deploy → Recent Executions for details.';
+        var isHook = first.hook_name != null || first.hook_id != null;
+        var name = isHook ? first.hook_name : (first.target || first.type);
+        var kind = isHook ? 'hook' : 'target';
+        var what = name ? 'Deploy ' + kind + ' ' + name : 'A deploy ' + kind;
+        var firstLine = function (text) {
+            return String(text || '').split('\n').map(function (line) { return line.trim(); })
+                .filter(Boolean)[0] || '';
+        };
+        var said = isHook ? (firstLine(first.stderr) || firstLine(first.error) || firstLine(first.message))
+            : (firstLine(first.message) || firstLine(first.error));
+        if (said && !/[.!?]$/.test(said)) said += '.';
+        var others = failed.length > 1 ? ' (and ' + (failed.length - 1) + ' more)' : '';
+        return what + others + ' failed for ' + domain + (said ? ': ' + said : '.')
+            + ' ' + summary.succeeded + ' of ' + summary.total + ' succeeded;'
+            + ' Settings → Deploy → Recent Executions has the full output.';
+    }
+
     // Manually trigger deploy hooks for a domain (issue #109).
     async function runDeployHooks(domain) {
         var confirmed = await CertMate.confirm('Run deploy hooks for ' + domain + ' now?\n\nAll enabled global and domain-specific hooks will execute with CERTMATE_EVENT=manual.', 'Run Deploy Hooks', { confirmText: 'Run Hooks', danger: false });
@@ -4458,9 +4579,7 @@
             if (s.ok) {
                 showMessage('Deploy hooks ran for ' + domain + ': ' + s.succeeded + '/' + s.total + ' succeeded', 'success');
             } else {
-                showMessage('Deploy hooks ran with errors for ' + domain + ': '
-                    + s.succeeded + '/' + s.total + ' succeeded, ' + s.failed + ' failed. '
-                    + 'Check Settings → Deploy → Recent Executions for details.', 'error');
+                showMessage(deployRunFailureMessage(domain, s), 'error');
             }
         }).catch(function (error) {
             console.error('Error running deploy hooks:', error);

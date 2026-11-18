@@ -47,6 +47,8 @@ It fetches the host the backend probed (`probe_host`): the `deployment_host` whe
 
 For `TLS` and `SMTP STARTTLS` protocols, the browser fallback is **skipped** because browsers cannot perform raw TLS or SMTP connections. The browser status shows "Not Checked".
 
+When the browser does try and its request fails, the browser status shows "Could not connect" (or "Unreachable" after the 10-second timeout). A `no-cors` request reports a name that does not resolve, a refused connection and a certificate the browser does not trust as the same failure, so the chip says no more than that. Only a reachable result is reported back to the server.
+
 ### Cache
 
 | Layer | TTL | Bypass |

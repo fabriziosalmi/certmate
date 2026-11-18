@@ -1,6 +1,6 @@
 # Sondes de Déploiement (Probes)
 
-<!-- CERTMATE-TRANSLATED-FROM a2a255458b3ae83f -->
+<!-- CERTMATE-TRANSLATED-FROM 711dc606f0c87d6a -->
 
 Les sondes vérifient que vos certificats sont accessibles sur le réseau en effectuant une poignée de main TLS en direct avec le serveur déployé.
 
@@ -49,6 +49,8 @@ Quand la sonde backend indique que le serveur est injoignable **et** que le prot
 Elle interroge l'hôte que le backend a sondé (`probe_host`) : le `deployment_host` s'il est défini, l'adresse d'un certificat IP, et sinon le nom du certificat. Si le backend ne répond pas du tout, elle interroge l'endroit où le certificat est servi : son adresse pour un certificat IP, son nom sinon.
 
 Pour les protocoles `TLS` et `SMTP STARTTLS`, la sonde navigateur est **ignorée** car les navigateurs ne peuvent pas effectuer de connexions TLS brutes ou SMTP. Le statut navigateur affiche « Non vérifié ».
+
+Quand le navigateur essaie et que sa requête échoue, le statut navigateur affiche « Connexion impossible » (ou « Injoignable » après le délai de 10 secondes). Une requête `no-cors` signale de la même façon un nom qui ne se résout pas, une connexion refusée et un certificat auquel le navigateur ne fait pas confiance : le badge n'en dit donc pas plus. Seul un résultat joignable est renvoyé au serveur.
 
 ### Cache
 
