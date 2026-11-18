@@ -181,8 +181,11 @@ button:not(.btn):focus-visible,
 
 /* ── Settings save bar ───────────────────────────────────────── */
 /* Sticky on the form's own child, so it sticks for the whole form; below md
-   it sits on top of the fixed bottom nav (#bottomTabBar: h-14, a 1 px top
-   border and the safe-area padding). */
+   it sits on top of the fixed bottom nav. The 57px is #bottomTabBar's height
+   (templates/base.html): its h-14 row (56px) plus its 1px top border, with
+   the safe-area padding added on top. A change to that nav needs this value
+   to follow; test_ui_settings_save_says_why_it_did_not_save checks that the
+   stuck bar ends where the nav starts at 360 wide. */
 .settings-save-bar {
   position: sticky;
   z-index: 10;

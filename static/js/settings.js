@@ -3889,10 +3889,18 @@
 
     // The form's `invalid` event, in the capture phase: the browser fires it
     // once for each invalid field when Save is pressed, and the first one of
-    // that press is the one shown. Its tab is opened the way the side menu
-    // opens one (the URL fragment, read by settingsTabs), then the field is
-    // focused once the panel shows, and a toast names it and its tab.
+    // that press is the one shown, in a toast naming the field and its tab.
+    // Whether the browser can show its own message is decided by the field,
+    // not its panel: a field on the showing tab can still be hidden, inside
+    // a provider block that is not selected. A field that can be shown keeps
+    // the browser's bubble. A hidden one gets preventDefault (otherwise the
+    // browser only logs that it cannot focus it); if its tab is hidden, the
+    // tab is opened the way the side menu opens one (the URL fragment, read
+    // by settingsTabs) and the field is focused once it shows.
     var settingsInvalidShown = false;
+    function settingsFieldHidden(el) {
+        return el.offsetParent === null || el.getClientRects().length === 0;
+    }
     function onSettingsFieldInvalid(event) {
         var field = event.target;
         if (settingsInvalidShown) {
@@ -3908,19 +3916,23 @@
         var tabLabel = (tabButton && tabButton.getAttribute('aria-label')) || tabId;
         var label = field.id ? document.querySelector('label[for="' + field.id + '"]') : null;
         var name = (label && label.textContent.trim()) || field.name || field.id;
+        // The limits are the reason only when the value is outside them; a
+        // step mismatch (7.5 in a whole-days field) keeps the browser's text.
         var why = field.validationMessage;
-        if (field.type === 'number' && field.min !== '' && field.max !== '') {
+        if ((field.validity.rangeUnderflow || field.validity.rangeOverflow)
+                && field.min !== '' && field.max !== '') {
             why = 'It must be between ' + field.min + ' and ' + field.max + '.';
         }
-        showMessage(name + ' (' + tabLabel + '): ' + why + ' Nothing was saved.', 'error');
+        var where = tabLabel ? tabLabel + ' tab, ' : '';
+        showMessage(where + name + ': ' + why + ' Nothing was saved.', 'error');
 
-        if (panel && panel.offsetParent === null) {
-            // A hidden field cannot show the browser's own message.
-            event.preventDefault();
+        if (!settingsFieldHidden(field)) return;
+        event.preventDefault();
+        if (panel && settingsFieldHidden(panel)) {
             location.hash = tabId;
             var tries = 0;
             (function focusWhenShown() {
-                if (panel.offsetParent !== null) {
+                if (!settingsFieldHidden(field)) {
                     field.focus();
                 } else if (tries++ < 40) {
                     setTimeout(focusWhenShown, 25);
