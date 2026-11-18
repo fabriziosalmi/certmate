@@ -2757,9 +2757,13 @@ nothing and writes no `deploy` entry to the audit log; a run that ran something
 writes one, `success` or `failure`. Non-2xx is reserved for a bad domain path
 (`400`), a certificate that does not exist (`404 CERTIFICATE_NOT_FOUND`), a
 deploy manager that is not running (`503`) and an unexpected failure (`500`).
-Each `results[]` entry is one hook or target run (`hook_name`, `exit_code`,
-`success`, `stdout`, `stderr`, ...), the same record `GET /api/deploy/history`
-keeps.
+Each `results[]` entry is one hook or target run. A shell hook's entry carries
+`hook_name`, `exit_code`, `success`, `stdout`, `stderr`, `error`, ..., the same
+record `GET /api/deploy/history` keeps. A typed target's entry carries `target`,
+`type`, `success`, `status_code` and `message`, which holds the reason a failed
+target gives. A certificate issued from a CSR has no key for a target that
+publishes one: its entry has `target` and `type` set to `null` and a `message`
+that says so.
 
 #### Check what a domain is actually serving
 

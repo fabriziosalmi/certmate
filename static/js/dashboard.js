@@ -4321,21 +4321,31 @@
         });
     }
 
-    // The toast of a manual deploy run that failed: which hook (or target)
-    // failed and the first line of what it said. The answer carries both; the
-    // toast used to give only the counts and send the reader to Settings.
+    // The toast of a manual deploy run that failed: what failed and the first
+    // line of what it said. A shell hook names itself in hook_name and speaks on
+    // stderr (error holds "exit code N: ..." or the timeout); a typed deploy
+    // target names itself in target (or only its type) and gives its reason in
+    // message. A target refusal made before any target ran (a CSR-only
+    // certificate has no key to publish) has no name at all, only the message.
     function deployRunFailureMessage(domain, summary) {
         var failed = (summary.results || []).filter(function (r) { return r && r.success === false; });
         var first = failed[0];
         var lead = 'Deploy hooks ran with errors for ' + domain + ': '
             + summary.succeeded + '/' + summary.total + ' succeeded, ' + summary.failed + ' failed.';
         if (!first) return lead + ' Check Settings → Deploy → Recent Executions for details.';
-        var name = first.hook_name || first.target || first.name || 'a hook';
-        var said = String(first.stderr || '').split('\n').map(function (line) { return line.trim(); })
-            .filter(Boolean)[0] || String(first.error || '').split('\n')[0].trim();
+        var isHook = first.hook_name != null || first.hook_id != null;
+        var name = isHook ? first.hook_name : (first.target || first.type);
+        var kind = isHook ? 'hook' : 'target';
+        var what = name ? 'Deploy ' + kind + ' ' + name : 'A deploy ' + kind;
+        var firstLine = function (text) {
+            return String(text || '').split('\n').map(function (line) { return line.trim(); })
+                .filter(Boolean)[0] || '';
+        };
+        var said = isHook ? (firstLine(first.stderr) || firstLine(first.error) || firstLine(first.message))
+            : (firstLine(first.message) || firstLine(first.error));
         if (said && !/[.!?]$/.test(said)) said += '.';
         var others = failed.length > 1 ? ' (and ' + (failed.length - 1) + ' more)' : '';
-        return 'Deploy hook ' + name + others + ' failed for ' + domain + (said ? ': ' + said : '.')
+        return what + others + ' failed for ' + domain + (said ? ': ' + said : '.')
             + ' ' + summary.succeeded + ' of ' + summary.total + ' succeeded;'
             + ' Settings → Deploy → Recent Executions has the full output.';
     }

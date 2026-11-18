@@ -322,6 +322,50 @@ def test_a_failed_hook_run_names_the_hook_and_its_error(open_page):
     assert len(page.runs) == 1
 
 
+# A typed deploy target reports in its own shape (modules/core/deploy_targets.py
+# run_targets): its name in `target`, its kind in `type`, its reason in
+# `message`, and no hook_name, stderr or error. The refusal a CSR-only
+# certificate gets before any target runs (modules/core/deployer.py) has no
+# name at all.
+TARGET_REASON = 'connection refused by lb01.internal:443'
+FAILED_TARGET_RUN = {'ok': False, 'total': 1, 'succeeded': 0, 'failed': 1, 'results': [
+    {'success': False, 'status_code': None, 'message': TARGET_REASON,
+     'target': 'lb-webhook', 'type': 'webhook', 'domain': DOMAIN}]}
+NO_KEY_REASON = (f'{DOMAIN} has no private key on this node: it was issued from a CSR and the key '
+                 'stays on the device that generated it. Typed deploy targets publish the key with '
+                 'the certificate, so use a shell hook that fetches only the certificate instead.')
+NO_KEY_RUN = {'ok': False, 'total': 1, 'succeeded': 0, 'failed': 1, 'results': [
+    {'success': False, 'target': None, 'type': None, 'domain': DOMAIN, 'status_code': None,
+     'message': NO_KEY_REASON}]}
+
+
+def _run_and_read_the_toast(open_page, deploy_run):
+    page = open_page(deploy_config=HOOKS_ON, deploy_run=deploy_run)
+    panel = _open_detail(page)
+    run = panel.locator('button[aria-label="Run deploy hooks now"]')
+    page.wait_for_timeout(300)
+    run.click()
+    page.get_by_role('alertdialog').get_by_role('button', name='Run Hooks').click()
+    page.wait_for_function(
+        "() => document.getElementById('cm-toasts') && document.getElementById('cm-toasts').innerText"
+        ".includes('succeeded')", timeout=10000)
+    assert len(page.runs) == 1
+    return page.inner_text('#cm-toasts')
+
+
+def test_a_failed_target_run_names_the_target_and_its_reason(open_page):
+    toast = _run_and_read_the_toast(open_page, FAILED_TARGET_RUN)
+    assert 'Deploy target lb-webhook failed' in toast, toast
+    assert TARGET_REASON in toast, toast
+    assert 'Deploy hook' not in toast, toast
+
+
+def test_a_target_refused_for_want_of_a_key_says_why(open_page):
+    toast = _run_and_read_the_toast(open_page, NO_KEY_RUN)
+    assert 'has no private key on this node' in toast, toast
+    assert 'a hook' not in toast and 'Deploy hook' not in toast, toast
+
+
 # --- P52 -------------------------------------------------------------------
 
 def test_the_browser_chip_says_the_browser_could_not_connect(open_page):
