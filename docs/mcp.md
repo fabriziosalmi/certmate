@@ -67,7 +67,7 @@ npm install
 ### Environment Variables
 The MCP server communicates with the CertMate REST API and requires two environment variables:
 - `CERTMATE_URL` — The URL of your CertMate instance (default: `http://localhost:8000`).
-- `CERTMATE_TOKEN` — A valid API Bearer token with appropriate role permissions (typically `operator` or `admin`). For an auditable agent, use a key flagged as an agent key (see [Audit attribution](#audit-attribution)).
+- `CERTMATE_TOKEN` — An API key with the role permissions it needs (typically `operator` or `admin`), or the API Bearer Token, which has full admin access. For an auditable agent, use a key flagged as an agent key (see [Audit attribution](#audit-attribution)).
 
 Optional:
 - `CERTMATE_AGENT_SESSION` — Overrides the per-process session id the server sends on every call (`X-CertMate-Agent-Session`), so a run can be correlated with an external orchestrator's id. A fresh UUID is generated per process if unset.

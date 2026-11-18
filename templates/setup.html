@@ -221,14 +221,16 @@
                                                        email ? { email } : {}))
                 });
 
-                // Divergent-token lockout: the box enforces the STORED bearer token,
-                // which can differ from the env token if it was added/rotated after
-                // the first start. Point the operator at the recovery script rather
-                // than the generic "invalid token" message. #397
+                // The box checks the token CertMate was last started with: at
+                // startup the stored token is replaced by API_BEARER_TOKEN_FILE's
+                // content if that is set, otherwise by API_BEARER_TOKEN
+                // (auth.reconcile_bearer_token_from_env). A token added or rotated
+                // after the last start is not in force until a restart. #397
                 if (requiresToken && (response.status === 401 || response.status === 403)) {
-                    showMessage('The pasted API Bearer Token was not accepted. If you added or '
-                        + 'rotated API_BEARER_TOKEN after the first start, the token this '
-                        + 'instance stored differs — reset with scripts/reset_admin_password.py.');
+                    showMessage('The pasted API Bearer Token was not accepted. Paste the token '
+                        + 'CertMate was last started with: the content of API_BEARER_TOKEN_FILE '
+                        + 'if it is set (the file wins), otherwise API_BEARER_TOKEN. A token '
+                        + 'changed since then takes effect after a restart.');
                     return;
                 }
 

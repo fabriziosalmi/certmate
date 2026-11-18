@@ -1,6 +1,6 @@
 # Serveur MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 7597770c164960c7 -->
+<!-- CERTMATE-TRANSLATED-FROM 58ca0a53ff2c8362 -->
 
 CertMate inclut un serveur MCP (Model Context Protocol) intégré écrit en Node.js. Cela permet aux assistants IA agentiques (tels que Claude ou Gemini) d'inspecter les statuts des certificats, de déclencher des renouvellements, de demander des diagnostics et d'interagir directement avec l'API CertMate.
 
@@ -69,7 +69,7 @@ npm install
 ### Variables d'environnement
 Le serveur MCP communique avec l'API REST CertMate et nécessite deux variables d'environnement :
 - `CERTMATE_URL` — L'URL de votre instance CertMate (défaut : `http://localhost:8000`).
-- `CERTMATE_TOKEN` — Un token Bearer API valide avec les permissions de rôle appropriées (généralement `operator` ou `admin`). Pour un agent auditable, utilisez une clé marquée comme clé d'agent (voir [Attribution d'audit](#attribution-daudit)).
+- `CERTMATE_TOKEN` — Une clé d'API avec les permissions de rôle nécessaires (généralement `operator` ou `admin`), ou l'API Bearer Token, qui a un accès administrateur complet. Pour un agent auditable, utilisez une clé marquée comme clé d'agent (voir [Attribution d'audit](#attribution-daudit)).
 
 Optionnel :
 - `CERTMATE_AGENT_SESSION` — Surcharge l'ID de session par processus que le serveur envoie à chaque appel (`X-CertMate-Agent-Session`), pour qu'une exécution puisse être corrélée avec l'ID d'un orchestrateur externe. Un nouvel UUID est généré par processus s'il n'est pas défini.

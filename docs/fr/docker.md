@@ -1,6 +1,6 @@
 # Construction et déploiement Docker
 
-<!-- CERTMATE-TRANSLATED-FROM a2ddb147c72573c7 -->
+<!-- CERTMATE-TRANSLATED-FROM 76cd987c6ac961ac -->
 
 Ce guide couvre la construction, le déploiement et l'exécution de CertMate dans Docker — incluant le support multi-plateforme pour ARM et AMD64.
 
@@ -152,7 +152,7 @@ docker run -d --name certmate \
 | `SECRET_KEY` | Non | Clé secrète Flask pour les sessions (auto-générée si non définie) |
 | `SECRET_KEY_FILE` | Non | Chemin vers un fichier contenant la clé secrète Flask (prioritaire sur `SECRET_KEY`). S'il est défini et que le fichier ne peut pas être lu ou est vide, CertMate refuse de démarrer : un secret dont le montage a échoué est une erreur de configuration, et générer une clé à la place déconnecterait chaque utilisateur, à chaque redémarrage, avec des sessions signées par une clé que vous n'avez pas choisie. |
 | `API_BEARER_TOKEN` | Non (auto-généré) | Token d'authentification de l'API. Auto-généré si non défini, mais définissez-le avant d'exposer sur un réseau une instance pas encore configurée ; une fois défini, collez-le une fois sur l'écran de premier démarrage pour créer l'administrateur. **Cette valeur fait autorité :** si elle diffère du token déjà enregistré, celui-ci est remplacé au démarrage et cesse de fonctionner. C'est ce qui permet à l'ajout ou à la rotation de la variable sur une installation existante de prendre effet — auparavant, le contrôle d'accès utilisait cette valeur alors que l'authentification vérifiait encore l'ancienne, et l'écran de premier démarrage demandait un token qu'il refusait ensuite |
-| `API_BEARER_TOKEN_FILE` | Non | Chemin vers un fichier contenant le token bearer API (prioritaire sur `API_BEARER_TOKEN`) |
+| `API_BEARER_TOKEN_FILE` | Non | Chemin vers un fichier contenant l'API Bearer Token (prioritaire sur `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | Non | `INFO` (défaut), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **À définir si vous voulez des sauvegardes automatiques à partir desquelles restaurer** | Chiffre au repos les sauvegardes unifiées (`.zip.enc`, PBKDF2-SHA256 + Fernet), et c'est elle qui rend les sauvegardes automatiques *complètes* — avec elle, elles peuvent restaurer cette instance ; sans elle, elles gardent leurs identifiants masqués et ne le peuvent pas. La même phrase secrète est requise pour les restaurer, et CertMate ne la stocke jamais à votre place. Conservez-la ailleurs que sur la machine qui contient les sauvegardes |
 | `CERTMATE_RESTORE_MAX_BYTES` | Non | Le maximum qu'une restauration de sauvegarde peut écrire au total, en octets (2 Gio par défaut). Une restauration qui écrirait davantage s'arrête et signale qu'elle n'est pas terminée ; voir [Backup](../backup.md#restoring) |

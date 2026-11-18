@@ -17,8 +17,8 @@ pytestmark = [pytest.mark.unit]
 REPO = Path(__file__).resolve().parent.parent
 PARTIALS = REPO / 'templates' / 'partials'
 NAME = 'API Bearer Token'
-OTHER_NAMES = ('legacy API token', 'API bearer token', 'global bearer token',
-               'legacy bearer token', 'legacy token')
+OTHER_NAMES = ('legacy API token', 'API bearer token', 'API Bearer token', 'global bearer token',
+               'legacy bearer token', 'legacy token', 'Bearer token for API')
 
 
 class _Field(HTMLParser):
@@ -64,6 +64,7 @@ def test_the_general_tab_says_the_token_has_full_admin_access_and_how_to_rotate_
     assert 'full admin access' in text, text
     assert 'API_BEARER_TOKEN' in text and 'API_BEARER_TOKEN_FILE' in text, text
     assert 'restart' in text, text
+    assert 'wins when both are set' in text, text
     assert '#apikeys' in links, links
 
 
@@ -76,6 +77,11 @@ def test_the_general_tab_says_the_token_has_full_admin_access_and_how_to_rotate_
     'templates/help.html',
     'docs/api.md',
     'docs/mcp.md',
+    'templates/index.html',
+    'docs/configuration.md',
+    'docs/docker.md',
+    'mcp/README.md',
+    'clients/certmate-cli/certmate_cli/main.py',
 ])
 def test_the_token_goes_by_one_name(path):
     text = ' '.join((REPO / path).read_text(encoding='utf-8').split())
@@ -90,3 +96,20 @@ def test_the_token_goes_by_one_name(path):
 ])
 def test_the_places_that_mention_the_token_use_its_name(path):
     assert NAME in (REPO / path).read_text(encoding='utf-8'), path
+
+
+def test_the_setup_page_says_which_token_it_wants_after_a_rotation():
+    """It sent someone who rotated API_BEARER_TOKEN to
+    scripts/reset_admin_password.py, which does nothing with the token; since
+    #401 a restart puts the rotated token in force, the file first
+    (auth.reconcile_bearer_token_from_env)."""
+    setup = (REPO / 'templates' / 'setup.html').read_text(encoding='utf-8')
+    auth = (REPO / 'modules' / 'core' / 'auth.py').read_text(encoding='utf-8')
+    assert 'def reconcile_bearer_token_from_env' in auth
+    flat = ' '.join(setup.split())
+    start = flat.index('The pasted API Bearer Token was not accepted.')
+    message = flat[start:flat.index(');', start)]
+    assert 'reset_admin_password' not in message, message
+    assert "API_BEARER_TOKEN_FILE ' + 'if it is set (the file wins)" in message, message
+    assert 'after a restart' in message, message
+

@@ -202,7 +202,7 @@
                                 <p id="api_bearer_token_help" class="mt-1 text-xs text-muted">
                                     This token has full admin access. It cannot be changed here.
                                     To rotate it, set <code class="text-xs">API_BEARER_TOKEN</code>
-                                    (or <code class="text-xs">API_BEARER_TOKEN_FILE</code>, the path of a file that holds it)
+                                    (or <code class="text-xs">API_BEARER_TOKEN_FILE</code>, the path of a file that holds it, which wins when both are set)
                                     to a new random token of at least 32 characters, for example from <code class="text-xs">openssl rand -hex 32</code>,
                                     and restart CertMate: the old token then stops working.
                                     For scripts and agents, create a scoped key in <a href="#apikeys" class="text-primary hover:underline">Settings → API Keys</a> instead.
