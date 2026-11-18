@@ -55,13 +55,15 @@ def _now():
     return datetime.datetime.now(datetime.UTC).replace(tzinfo=None, microsecond=0)
 
 
-def _cert(domain, lifetime, left):
+def _cert(domain, lifetime, left, threshold=None):
     """A certificate as /api/certificates answers it, its status and renewal
-    instant from renewal_policy with the default 30-day threshold."""
+    instant from renewal_policy with the default 30-day threshold (or the one
+    given)."""
+    threshold = THRESHOLD_DAYS if threshold is None else threshold
     now = _now()
     not_after = now + left
     not_before = not_after - lifetime
-    renew_at, _reason = renewal_policy.renews_at(not_before, not_after, THRESHOLD_DAYS)
+    renew_at, _reason = renewal_policy.renews_at(not_before, not_after, threshold)
     seconds_left = int((not_after - now).total_seconds())
     return {
         'domain': domain, 'host': domain, 'ip_address': None, 'exists': True,
@@ -71,7 +73,7 @@ def _cert(domain, lifetime, left):
         'reissue_required': False, 'external': False,
         'expiry_date': not_after.strftime('%Y-%m-%d %H:%M:%S'),
         'expires_at': renewal_policy.stamp(not_after),
-        'expiry_status': renewal_policy.expiry_status(not_before, not_after, THRESHOLD_DAYS, now, renew_at),
+        'expiry_status': renewal_policy.expiry_status(not_before, not_after, threshold, now, renew_at),
         'not_before': renewal_policy.stamp(not_before), 'renews_at': renewal_policy.stamp(renew_at),
         'dns_provider': 'cloudflare', 'ca_provider': 'letsencrypt', 'challenge_type': 'dns-01',
         'san_domains': [], 'auto_renew': True, 'tags': [], 'notes': None, 'renewal_info': None,
@@ -343,3 +345,49 @@ def test_each_inventory_card_shows_the_rows_it_counts(page):
                 '(spans) => spans.map(s => s.className)')
             assert not [p for p in pills if 'green' in p], (labels[i], pills)
     assert seen['Renewal overdue'] == 1 and seen['Renewal due'] == 1, seen
+
+
+# --- review of this batch: "since" only for a date already past; the bell readable
+
+def _contrast(page, selector):
+    """WCAG contrast of an element's text against its own background."""
+    return page.evaluate("""(sel) => {
+        const el = document.querySelector(sel);
+        const s = getComputedStyle(el);
+        const rgb = (c) => c.match(/[0-9.]+/g).slice(0, 3).map(Number);
+        const lum = (c) => { const [r, g, b] = rgb(c).map((v) => { v /= 255;
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+        const a = lum(s.color), b = lum(s.backgroundColor);
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    }""", selector)
+
+
+def test_an_overdue_certificate_whose_renewal_is_still_ahead_says_no_since(page):
+    """With a renewal threshold under 7 days the server calls a certificate
+    Overdue before its renews_at; its title said "renewal due since <a future
+    date>". It says when it expires and when the renewal is set for."""
+    early = _cert('early.example.test', 90 * DAY, 5 * DAY + datetime.timedelta(hours=1), threshold=3)
+    assert early['expiry_status'] == 'critical' and early['needs_renewal'] is False, early
+    page.unroute('**/api/certificates')
+    page.route('**/api/certificates', lambda route: _json(route, [*CERTS, early])
+               if route.request.method == 'GET' else route.continue_())
+    _dashboard(page)
+    title = _chip(page, 'early.example.test').get_attribute('title') or ''
+    renews = page.evaluate('(at) => CertMate.formatDate(new Date(at))', early['renews_at'])
+    assert title.startswith('Overdue:'), title
+    assert 'since' not in title, title
+    assert 'renewal set for ' + renews in title, title
+    # CONTROL: past renewal dates still say since, with the state's word.
+    assert 'renewal overdue since' in (_chip(page, 'payments.example.test').get_attribute('title') or '')
+    assert 'renewal due since' in (_chip(page, 'ops-api.example.test').get_attribute('title') or '')
+
+
+def test_the_bell_badge_is_readable_as_soon_as_it_shows(page):
+    """P53 shows the badge at once, so the readable guard measures it: white
+    on red-500 was 3.76:1, under AA."""
+    _dashboard(page)
+    page.wait_for_selector('#notifBadge:not(.hidden)', timeout=3000)
+    ratio = _contrast(page, '#notifBadge')
+    assert ratio >= 4.5, ratio
+

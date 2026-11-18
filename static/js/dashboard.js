@@ -263,7 +263,21 @@
         if (!cert.renews_at) return '';
         var rule = renewalRuleText(cert);
         var date = CertMate.formatDate(new Date(cert.renews_at));
-        var when = isExpiring(cert) || hasExpired(cert) ? 'renewal due since ' + date : 'renews ' + date;
+        var late = isOverdue(cert) || hasExpired(cert);
+        // "Since" only for a date already past, as renewsAtHtml decides: with a
+        // renewal threshold under 7 days the server calls a certificate
+        // Overdue (under min(7 days, a sixth of its life) left) before its
+        // renews_at, and "due since <a future date>" was false.
+        var when;
+        if (cert.needs_renewal && new Date(cert.renews_at) <= new Date()) {
+            when = (late ? 'renewal overdue since ' : 'renewal due since ') + date;
+        } else if (late) {
+            var expires = cert.expires_at || cert.expiry_date;
+            when = (expires ? 'expires ' + CertMate.formatDate(new Date(expires)) + ', ' : '') +
+                'renewal set for ' + date;
+        } else {
+            when = 'renews ' + date;
+        }
         return when + (rule ? ' (' + rule + ')' : '') + (isOverdue(cert) ? ', and not renewed yet' : '');
     }
 
