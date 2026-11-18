@@ -202,6 +202,39 @@ def test_the_client_certificate_section_matches_the_form():
     assert '/api/client-certs/ca' in section
 
 
+def test_the_bulk_csv_needs_only_the_common_name_as_help_says():
+    """Help listed email and organization as columns the file takes, as the
+    form's hint does; the importer refuses only a file without common_name, and
+    at most 100 rows (modules/api/client_certificates.py)."""
+    api = (REPO / 'modules' / 'api' / 'client_certificates.py').read_text(encoding='utf-8')
+    assert "'common_name' not in headers" in api and 'max_batch = 100' in api
+    assert "'email' not in headers" not in api and "'organization' not in headers" not in api
+    section = _text(_section('client-certificates'))
+    assert 'common_name column, the only one required' in section, section
+    assert 'up to 100 rows' in section, section
+
+
+def test_help_says_json_opens_in_a_tab_not_that_it_downloads():
+    """The inventory's JSON link opens the report in a new tab (target=_blank);
+    only CSV is a download."""
+    inventory = (REPO / 'templates' / 'inventory.html').read_text(encoding='utf-8')
+    json_link = re.search(r'<a href="/api/inventory/crypto-report"([^>]*)>', inventory).group(1)
+    assert 'target="_blank"' in json_link and 'download' not in json_link
+    text = _text(HELP)
+    assert 'JSON opens it in a new tab' in text, text[:200]
+    assert 'JSON download' not in text
+
+
+def test_quick_start_does_not_say_a_fresh_instance_is_never_open():
+    """Until the first admin exists, setup mode serves every caller as admin
+    (modules/core/auth.py); Help said the instance is never left open."""
+    auth = (REPO / 'modules' / 'core' / 'auth.py').read_text(encoding='utf-8')
+    assert 'serves every caller as admin until a' in auth
+    quick = _text(_section('quick-start'))
+    assert 'never left open' not in quick, quick
+    assert 'setup mode' in quick, quick
+
+
 def test_the_acme_section_matches_the_server():
     from modules.core import acme_ca
     from modules.core.acme_server import DEFAULTS
