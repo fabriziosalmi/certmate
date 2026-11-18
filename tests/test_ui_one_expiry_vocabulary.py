@@ -412,7 +412,8 @@ def test_no_line_says_overdue_since_the_date_the_renewal_fell_due(page):
 def test_a_certificate_without_its_key_shows_no_renewal_rule(page):
     """A keyless certificate cannot be renewed, only reissued: its banner said
     "Renews <date> (...)" right above "No private key anywhere"."""
-    keyless = dict(_cert('nokey.example.test', 90 * DAY, 60 * DAY),
+    # Due, so the renewal date is past and a promise could be drawn.
+    keyless = dict(_cert('nokey.example.test', 90 * DAY, 19 * DAY + datetime.timedelta(hours=1)),
                    private_key_present=False, private_key_state='missing', reissue_required=True)
     page.unroute('**/api/certificates')
     page.route('**/api/certificates', lambda route: _json(route, [*CERTS, keyless])
@@ -422,8 +423,25 @@ def test_a_certificate_without_its_key_shows_no_renewal_rule(page):
     detail = page.inner_text('#certDetailContent')
     assert 'No private key anywhere' in detail, detail
     assert page.locator('#certDetailContent [data-renewal-rule]').count() == 0, detail
+    assert 'the next renewal run renews it' not in detail, detail
+    assert 'Not renewed: reissue it' in detail, detail
     # CONTROL: a certificate with its key keeps the rule line.
     _close_detail(page)
     _open_detail(page, 'site3.example.test')
     assert page.locator('#certDetailContent [data-renewal-rule]').count() == 1
+
+
+def test_an_expired_certificate_says_expired_under_its_renewal_date(page):
+    """The line under a past renewal date named the state Overdue under an
+    Expired chip."""
+    gone = dict(_cert('gone.example.test', 90 * DAY, -2 * DAY), expired=True)
+    assert gone['needs_renewal'] is True, gone
+    page.unroute('**/api/certificates')
+    page.route('**/api/certificates', lambda route: _json(route, [*CERTS, gone])
+               if route.request.method == 'GET' else route.continue_())
+    _dashboard(page)
+    _open_detail(page, 'gone.example.test')
+    detail = page.inner_text('#certDetailContent')
+    assert 'Expired: the next renewal run renews it' in detail, detail
+    assert 'Overdue: the next renewal run renews it' not in detail, detail
 

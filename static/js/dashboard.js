@@ -997,13 +997,16 @@
 
     function renewsAtHtml(cert) {
         if (!cert.renews_at) return '<span class="text-muted">\u2014</span>';
+        // Without its private key a renewal cannot run: only a reissue repairs
+        // it (LOST_KEY_TITLE says so in the banner), so no date is promised.
+        if (lostItsKey(cert)) return '<span class="text-muted">Not renewed: reissue it</span>';
         var due = cert.needs_renewal && new Date(cert.renews_at) <= new Date();
         if (!due) return '<span>' + escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>';
         var late = isOverdue(cert) || hasExpired(cert);
         var tone = late ? 'text-danger-fg' : 'text-warning-fg';
         return '<span class="' + tone + '">' + RENEWAL_DUE_SINCE + ' ' +
             escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
-            (lastRenewalFailure(cert) ? '' : '<div class="text-xs ' + tone + '">' + (late ? 'Overdue' : 'Due') +
+            (lastRenewalFailure(cert) ? '' : '<div class="text-xs ' + tone + '">' + (hasExpired(cert) ? 'Expired' : late ? 'Overdue' : 'Due') +
                 ': the next renewal run renews it</div>');
     }
 
