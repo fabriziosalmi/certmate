@@ -827,6 +827,21 @@
                                    hour12: CLOCK.hour12 });
     };
 
+    // A size in the unit that reads: 512 B, 1.9 KB, 51 KB, 3.5 MB. One decimal
+    // below 10 of a unit, none above. Rounding everything to tenths of a MB
+    // listed a 44 KB backup as "0 MB", which reads as an empty archive.
+    CM.formatBytes = function (bytes) {
+        var n = Number(bytes) || 0;
+        var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        var i = 0;
+        while (n >= 1024 && i < units.length - 1) {
+            n /= 1024;
+            i++;
+        }
+        var shown = (i === 0 || n >= 10) ? Math.round(n) : Math.round(n * 10) / 10;
+        return shown + ' ' + units[i];
+    };
+
     // ── Actions ──────────────────────────────────────────────────
     // What a control does is named in the markup and looked up here, so that
     // no markup carries script (an `onclick` attribute is inline script, and a

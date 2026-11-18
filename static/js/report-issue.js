@@ -33,13 +33,12 @@
     // Pure helpers (no side effects — testable as a unit)
     // ──────────────────────────────────────────────────────────────────
 
+    // Sizes read the same here as on the rest of the UI: CertMate.formatBytes
+    // (certmate.js, loaded before this file by base.html) picks the unit. A
+    // size the snapshot does not have is said to be unknown, not "0 B".
     function _humanBytes(n) {
         if (n === null || n === undefined) return 'unknown';
-        if (n < 1024) return n + ' B';
-        var units = ['KB', 'MB', 'GB', 'TB'];
-        var v = n / 1024, i = 0;
-        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-        return v.toFixed(1) + ' ' + units[i];
+        return CM.formatBytes(n);
     }
 
     function _browserLabel(ua) {
