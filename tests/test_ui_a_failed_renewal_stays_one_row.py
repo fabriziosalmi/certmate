@@ -36,9 +36,16 @@ pytestmark = [pytest.mark.e2e, pytest.mark.ui]
 
 BASE_URL = f"http://localhost:{os.environ.get('CERTMATE_TEST_PORT', '18888')}"
 DOMAIN = 'shop.oncall.example.test'
+# certbot's own words when the CA is not there, as the job records them: the
+# cause line carries tokens without spaces (NewConnectionError("HTTPSConnection(...)
 ERROR = ("Certificate creation failed: An unexpected error occurred:\n"
          "requests.exceptions.ConnectionError: HTTPSConnectionPool(host='127.0.0.1', port=9): "
-         "Max retries exceeded with url: /acme/directory")
+         "Max retries exceeded with url: /acme/directory (Caused by NewConnectionError("
+         "\"HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: "
+         "[Errno 61] Connection refused\"))\n"
+         "Ask for help or search for solutions at https://community.letsencrypt.org. See the logfile "
+         "/var/lib/certmate/certificates/shop.oncall.example.test/logs/letsencrypt.log or re-run "
+         "Certbot with -v for more details.")
 HINT = ("CertMate could not reach the CA's ACME directory at https://127.0.0.1:9/acme/directory: "
         "check the directory URL, that its name resolves from this host, and that outbound HTTPS "
         "to it is allowed. The previous certificate is still in place.")
@@ -154,6 +161,67 @@ def test_a_renewal_after_a_failure_clears_the_marker(page):
     page.wait_for_selector(f'tr[data-row-domain="{DOMAIN}"] [data-renewal-failed]', state='detached',
                            timeout=15000)
     assert _rows(page).count() == 1
+
+
+def test_on_a_phone_the_failure_line_does_not_widen_the_domain_column(browser_page, ui_session_cookie):
+    """At 390 px the cause under the name wraps inside the Domain cell. With
+    break-words, certbot's tokens without spaces set the cell's min-content
+    width: in review the cell grew from 280 to 430 px and the line ran past the
+    screen."""
+    context = browser_page.context.browser.new_context(viewport={'width': 390, 'height': 844})
+    context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
+    page = context.new_page()
+    try:
+        _serve(page, {'cert': _cert(FAILED), 'after': _cert(FAILED)}, {'status': 'failed'})
+        page.goto(BASE_URL, wait_until='networkidle')
+        marker = f'tr[data-row-domain="{DOMAIN}"] [data-renewal-failed]'
+        page.wait_for_selector(marker, state='visible', timeout=5000)
+        widths = page.evaluate("""(marker) => {
+            const line = document.querySelector(marker);
+            const cell = line.closest('td');
+            const text = line.querySelector('span').getBoundingClientRect();
+            const withLine = cell.getBoundingClientRect();
+            line.remove();
+            const without = cell.getBoundingClientRect();
+            return {withLine: withLine.width, without: without.width,
+                    textRight: text.right, cellRight: withLine.right};
+        }""", marker)
+    finally:
+        page.unroute_all(behavior='ignoreErrors')
+        context.close()
+
+    assert widths['withLine'] <= widths['without'] + 1, widths
+    assert widths['textRight'] <= widths['cellRight'] + 1, widths
+
+
+def test_on_a_phone_the_detail_tells_the_failure_across_the_banner(browser_page, ui_session_cookie):
+    """At 390 px the failure is told under the banner's status row, across its
+    width. Inside the status column, beside the Auto-renew switch, it had some
+    90 px and the cause ran to twenty lines."""
+    context = browser_page.context.browser.new_context(viewport={'width': 390, 'height': 844})
+    context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
+    page = context.new_page()
+    try:
+        _serve(page, {'cert': _cert(FAILED), 'after': _cert(FAILED)}, {'status': 'failed'})
+        page.goto(BASE_URL, wait_until='networkidle')
+        page.wait_for_selector(f'tr[data-row-domain="{DOMAIN}"]', state='visible')
+        page.evaluate(f"openCertDetail('{DOMAIN}')")
+        page.wait_for_selector('#certDetailContent [data-last-renewal-failed]', state='visible', timeout=5000)
+        widths = page.evaluate("""() => {
+            const block = document.querySelector('#certDetailContent [data-last-renewal-failed]');
+            const banner = document.querySelector('#certDetailContent > div > div');
+            const cause = block.children[1];
+            return {block: block.offsetWidth, banner: banner.clientWidth,
+                    causeScroll: cause.scrollWidth, causeClient: cause.clientWidth};
+        }""")
+    finally:
+        page.unroute_all(behavior='ignoreErrors')
+        context.close()
+
+    # Layout widths, not boxes: the dialog scales in as it opens. The
+    # banner's padding is 16 px a side; the block fills the rest.
+    assert widths['block'] >= widths['banner'] - 32 - 1, widths
+    assert widths['causeScroll'] <= widths['causeClient'], widths
 
 
 @pytest.fixture

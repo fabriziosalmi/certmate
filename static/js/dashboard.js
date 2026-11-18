@@ -924,7 +924,7 @@
         var when = CertMate.formatDateTime(failed.attempted_at);
         return '<div class="mt-2 text-sm text-danger-fg" data-last-renewal-failed>' +
             '<div class="font-semibold">Last renewal failed' + (when ? ' ' + escapeHtml(when) : '') + '</div>' +
-            '<div class="break-words" title="' + escapeHtml(failed.error || '') + '">' + escapeHtml(failureCause(failed.error)) + '</div>' +
+            '<div class="[overflow-wrap:anywhere]" title="' + escapeHtml(failed.error || '') + '">' + escapeHtml(failureCause(failed.error)) + '</div>' +
             (failed.hint ? '<div class="mt-1 text-label break-words">' + escapeHtml(failed.hint) + '</div>' : '') +
             '<a href="/activity" class="text-xs text-info-fg hover:underline">See it in the Activity log</a>' +
             '</div>';
@@ -1144,9 +1144,13 @@
             // A renewal that failed is said on the certificate's own row, which
             // keeps its expiry and its CA (P38): the cause under the name, the
             // whole error and the hint on hover, a chip beside the status.
+            // Below md the cause wraps anywhere: certbot's error carries
+            // tokens without spaces (NewConnectionError("HTTPSConnection(...)
+            // that break-words would leave whole, widening the column past
+            // the screen.
             var renewalFailed = lastRenewalFailure(cert);
             var renewalFailedHint = renewalFailed
-                ? rowRaw(rowHtml`<div class="mt-1 flex items-start text-xs text-danger-fg min-w-0" data-renewal-failed><i class="fas fa-circle-exclamation mr-1 mt-0.5 shrink-0" aria-hidden="true"></i><span class="min-w-0 break-words md:truncate" title="${(renewalFailed.error || '') + (renewalFailed.hint ? '\n\n' + renewalFailed.hint : '')}">Renewal failed: ${failureCause(renewalFailed.error)}</span></div>`)
+                ? rowRaw(rowHtml`<div class="mt-1 flex items-start text-xs text-danger-fg min-w-0" data-renewal-failed><i class="fas fa-circle-exclamation mr-1 mt-0.5 shrink-0" aria-hidden="true"></i><span class="min-w-0 [overflow-wrap:anywhere] md:truncate" title="${(renewalFailed.error || '') + (renewalFailed.hint ? '\n\n' + renewalFailed.hint : '')}">Renewal failed: ${failureCause(renewalFailed.error)}</span></div>`)
                 : false;
             var renewalFailedChip = renewalFailed
                 ? rowRaw('<div class="mt-1"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-circle-exclamation mr-1" aria-hidden="true"></i>Renewal failed</span></div>')
@@ -1549,14 +1553,17 @@
                 '<div class="space-y-5">' +
                 // Status banner: status word + days + date, integrated and at one
                 // weight (the day count and the calendar date are the same datum).
-                '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + '">' +
+                // A failed renewal is told under the row, across the banner's
+                // width: beside the Auto-renew switch, at 390 px, its column
+                // was some 90 px wide and the cause ran to twenty lines.
+                '<div class="p-4 rounded-lg ' + bannerBg + '">' +
+                '<div class="flex items-center gap-3">' +
                 '<i class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
                 '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
                 (keylessDetail ? '<div class="text-sm ' + statusClass + ' mt-1">' + LOST_KEY_TITLE + ' Use Edit &amp; Reissue, or Reissue all on the dashboard.</div>' : '') +
                 (external ? '<div class="text-sm ' + statusClass + ' mt-1">Not renewed by CertMate: upload its replacement before it expires.</div>' : '') +
-                lastRenewalFailureHtml(cert) +
                 '</div>' +
                 // Auto-Renew moved into the banner's empty right side (point 1).
                 // An external certificate has no switch to turn: it says what it is.
@@ -1568,6 +1575,8 @@
                           ? autoRenewSwitchHtml(cert.domain, autoOn)
                           : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>')) +
                 '</div>' +
+                '</div>' +
+                lastRenewalFailureHtml(cert) +
                 '</div>' +
                 // Details
                 '<dl class="divide-y divide-border">' +
