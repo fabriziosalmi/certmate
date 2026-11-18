@@ -22,9 +22,9 @@ change to either side that makes them disagree fails here. The browser half,
 that each link lands on the tab it names and that the search finds the new
 sections, is tests/test_ui_help_links_and_search_reach_what_they_name.py.
 """
-import html as html_lib
 import pathlib
 import re
+from html.parser import HTMLParser
 
 import pytest
 
@@ -34,12 +34,32 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 HELP = (REPO / 'templates' / 'help.html').read_text(encoding='utf-8')
 
 
+class _VisibleText(HTMLParser):
+    """The text a reader sees: no script or style, no comments, no tags."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts, self._hidden = [], 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self._hidden += 1
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style') and self._hidden:
+            self._hidden -= 1
+
+    def handle_data(self, data):
+        if not self._hidden:
+            self.parts.append(data)
+
+
 def _text(fragment):
     """Visible text of a piece of markup, whitespace collapsed."""
-    fragment = re.sub(r'<script\b.*?</script>', ' ', fragment, flags=re.S)
-    fragment = re.sub(r'<!--.*?-->', ' ', fragment, flags=re.S)
-    fragment = re.sub(r'<[^>]+>', ' ', fragment)
-    return re.sub(r'\s+', ' ', html_lib.unescape(fragment)).strip()
+    parser = _VisibleText()
+    parser.feed(fragment)
+    parser.close()
+    return re.sub(r'\s+', ' ', ' '.join(parser.parts)).strip()
 
 
 def _section(section_id):
