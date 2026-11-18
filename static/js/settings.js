@@ -48,22 +48,6 @@
         document.getElementById('settingsDebugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
     }
 
-    // =============================================
-    // Challenge type toggle
-    // =============================================
-
-    function toggleChallengeType() {
-        var selected = document.querySelector('input[name="challenge_type"]:checked');
-        var isHttp = selected && selected.value === 'http-01';
-        // Hide both the provider picker and the per-provider config panels.
-        // The config panels are siblings of the picker, so hiding the picker
-        // alone left a stale DNS panel visible under HTTP-01 (issue #226).
-        ['dns-provider-section', 'dns-config-section'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.style.display = isHttp ? 'none' : '';
-        });
-    }
-
     function toggleRoute53LegacyAuthMode() {
         var mode = document.getElementById('route53_auth_mode').value;
         document.querySelectorAll('.route53-legacy-key').forEach(function (field) {
@@ -350,9 +334,9 @@
             var provider = settings.dns_provider;
             var legacyFields = getLegacyFieldsForProvider(provider);
 
-            var legacyRoute53 = document.getElementById('route53-legacy-config');
-            if (provider === 'route53' && legacyRoute53 && legacyRoute53.style.display === 'none') {
-                legacyFields = []; // Multi-account Route53 is edited in its own account modal.
+            var legacyContainer = document.getElementById(provider + '-legacy-config');
+            if (legacyContainer && legacyContainer.style.display === 'none') {
+                legacyFields = []; // A provider with accounts is edited in its account modal.
             }
             legacyFields.forEach(function (fieldName) {
                 var value = formData.get(fieldName);
@@ -363,22 +347,12 @@
                 }
             });
 
-            // Only include legacy config if we have some values and no multi-account data
+            // The single-account fields are the provider's "default" account.
+            // Issuance reads accounts only: written flat beside them, a token
+            // was saved, reported as saved, and never used (audit P05).
             if (Object.keys(legacyConfig).length > 0) {
                 if (!settings.dns_providers) settings.dns_providers = {};
-                if (!settings.dns_providers[provider]) settings.dns_providers[provider] = {};
-
-                // Check if we already have multi-account data
-                var hasMultiAccount = Object.values(settings.dns_providers[provider]).some(function (val) {
-                    return typeof val === 'object' && val.name;
-                });
-
-                var existingAccounts = ((currentSettings.dns_providers || {}).route53 || {}).accounts;
-                if (provider === 'route53' && existingAccounts && existingAccounts.default) {
-                    settings.dns_providers.route53 = {accounts: {default: legacyConfig}};
-                } else if (!hasMultiAccount) {
-                    Object.assign(settings.dns_providers[provider], legacyConfig);
-                }
+                settings.dns_providers[provider] = {accounts: {default: legacyConfig}};
             }
 
             addDebugLog('Saving settings: ' + Object.keys(settings).join(', '), 'info');
@@ -958,7 +932,11 @@
                     addDebugLog('Challenge type set to ' + data.challenge_type, 'info');
                 }
             }
-            toggleChallengeType();
+            // The DNS providers are not hidden under HTTP-01 (audit P21): a
+            // certificate can choose DNS-01 whatever the default, a wildcard
+            // has to, and the setup wizard sends an HTTP-01 user here to add a
+            // provider. Hidden, there was no Add Account until the default
+            // was changed.
 
             // DNS provider selection
             if (data.dns_provider) {
@@ -1650,8 +1628,9 @@
                     accountsListContainer.appendChild(accountCard);
                 });
 
-                // Hide legacy config if we have multi-account data
-                if (legacyConfigContainer && providerData.accounts.some(function (acc) { return acc.id !== 'default'; })) {
+                // One place per credential: once a provider has an account,
+                // its card's Edit is where the credential changes.
+                if (legacyConfigContainer) {
                     legacyConfigContainer.style.display = 'none';
                 }
             } else {
@@ -3750,7 +3729,6 @@
         // Add challenge type radio listeners
         document.querySelectorAll('input[name="challenge_type"]').forEach(function (radio) {
             radio.addEventListener('change', function () {
-                toggleChallengeType();
                 addDebugLog('Challenge type changed to: ' + this.value, 'info');
             });
         });
@@ -3878,7 +3856,6 @@
     window.deleteBackup = deleteBackup;
     window.clearSettingsDebugConsole = clearSettingsDebugConsole;
     window.toggleSettingsDebugConsole = toggleSettingsDebugConsole;
-    window.toggleChallengeType = toggleChallengeType;
     window.toggleRoute53LegacyAuthMode = toggleRoute53LegacyAuthMode;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;
