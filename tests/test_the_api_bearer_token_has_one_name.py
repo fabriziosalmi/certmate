@@ -142,3 +142,20 @@ def test_each_translation_of_the_docker_page_names_the_token_as_often_as_the_eng
     translated = (REPO / 'docs' / lang / 'docker.md').read_text(encoding='utf-8').count(NAME)
     assert english and translated == english, (lang, english, translated)
 
+
+# Each translation's own former words for this token in docs/<lang>/docker.md
+# (DNS providers' "API token" lives elsewhere, not on this page).
+OLD_WORDS = {
+    'de': ('das API-Token', 'API-Authentifizierungs-Token', 'API-Bearer-Token'),
+    'es': ('el token de la API', 'Token de autenticación de la API', 'bearer token de la API'),
+    'fr': ('le jeton API', "Token d'authentification de l'API", 'token bearer'),
+    'it': ('il token API', 'Token di autenticazione API', 'token bearer API'),
+}
+
+
+@pytest.mark.parametrize('lang', sorted(OLD_WORDS))
+def test_no_translation_of_the_docker_page_keeps_its_old_word_for_the_token(lang):
+    text = (REPO / 'docs' / lang / 'docker.md').read_text(encoding='utf-8')
+    kept = [word for word in OLD_WORDS[lang] if word in text]
+    assert kept == [], (lang, kept)
+
