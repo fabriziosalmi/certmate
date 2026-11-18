@@ -1,6 +1,6 @@
 # Construcción y despliegue con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 76cd987c6ac961ac -->
+<!-- CERTMATE-TRANSLATED-FROM dc4d39e1c9e32663 -->
 
 Esta guía cubre la construcción, el despliegue y la ejecución de CertMate en Docker — incluyendo soporte multiplataforma para ARM y AMD64.
 
@@ -151,7 +151,7 @@ docker run -d --name certmate \
 |----------|-----------|-------------|
 | `SECRET_KEY` | No | Clave secreta de Flask para las sesiones (se genera automáticamente si no se define) |
 | `SECRET_KEY_FILE` | No | Ruta a un archivo que contiene la clave secreta de Flask (tiene prioridad sobre `SECRET_KEY`). Si está definida y el archivo no se puede leer o está vacío, CertMate se niega a arrancar: un secreto que no se ha podido montar es un error de configuración, y generar una clave en su lugar cerraría la sesión de todos los usuarios, en cada reinicio, con sesiones firmadas por una clave que no has elegido tú. |
-| `API_BEARER_TOKEN` | No (autogenerado) | Token de autenticación de la API. Se genera automáticamente si no se define, pero defínelo antes de exponer en red una instancia aún sin configurar; cuando está definido, pégalo una vez en la pantalla de primer inicio para crear el admin. **Este valor es el que manda:** si difiere del token ya almacenado, el almacenado se reemplaza al arrancar y deja de funcionar. Eso es lo que hace que añadir o rotar la variable en una instalación existente surta efecto — antes, la exigencia del token se basaba en este valor mientras la autenticación seguía comprobando el antiguo, y la pantalla de primer inicio pedía un token que luego rechazaba |
+| `API_BEARER_TOKEN` | No (autogenerado) | El API Bearer Token, con acceso completo de administrador. Se genera automáticamente si no se define, pero defínelo antes de exponer en red una instancia aún sin configurar; cuando está definido, pégalo una vez en la pantalla de primer inicio para crear el admin. **Este valor es el que manda:** si difiere del token ya almacenado, el almacenado se reemplaza al arrancar y deja de funcionar. Eso es lo que hace que añadir o rotar la variable en una instalación existente surta efecto — antes, la exigencia del token se basaba en este valor mientras la autenticación seguía comprobando el antiguo, y la pantalla de primer inicio pedía un token que luego rechazaba |
 | `API_BEARER_TOKEN_FILE` | No | Ruta a un archivo que contiene el API Bearer Token (tiene prioridad sobre `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | No | `INFO` (por defecto), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **Defínela si quieres copias de seguridad automáticas desde las que poder restaurar** | Cifra en reposo las copias de seguridad unificadas (`.zip.enc`, PBKDF2-SHA256 + Fernet), y es lo que hace que las copias automáticas sean *completas* — con ella pueden restaurar esta instancia, sin ella mantienen sus credenciales enmascaradas y no pueden. Se requiere la misma frase de contraseña para restaurarlas, y CertMate nunca la guarda por ti. Guárdala en un lugar distinto de la máquina que contiene las copias de seguridad |
@@ -188,7 +188,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
-      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
+      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the API Bearer Token
       - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates

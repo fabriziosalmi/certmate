@@ -137,7 +137,7 @@ Da die Bedingungen im Prompt liegen, können Sie die Richtlinie (Schwellenwert, 
 
 ## Audit-Zuordnung
 
-Damit das Auditprotokoll die Aktionen eines Agenten von denen eines menschlichen Operators unterscheiden kann, geben Sie dem MCP Server einen **dedizierten, als Agent markierten API-Schlüssel** anstelle des API Bearer Token:
+Damit das Auditprotokoll die Aktionen eines Agenten von denen eines menschlichen Operators unterscheiden kann, geben Sie dem MCP Server einen **dedizierten, als Agent markierten API-Schlüssel** anstelle des API Bearer Tokens:
 
 1. Gehen Sie in CertMate zu **Einstellungen → API-Schlüssel**, erstellen Sie einen Schlüssel und aktivieren Sie **KI-Agent-Schlüssel** (oder senden Sie `"is_agent": true` an `POST /api/keys`). Geben Sie ihm die minimal benötigte Rolle, und beschränken Sie einen `viewer`- oder `operator`-Schlüssel mit `allowed_domains`. Ein `admin`-Schlüssel kann nicht auf Domains beschränkt werden: Der Server lehnt ihn mit einem 400 ab.
 2. Setzen Sie diesen Schlüssel als `CERTMATE_TOKEN` für den MCP Server.

@@ -18,7 +18,8 @@ REPO = Path(__file__).resolve().parent.parent
 PARTIALS = REPO / 'templates' / 'partials'
 NAME = 'API Bearer Token'
 OTHER_NAMES = ('legacy API token', 'API bearer token', 'API Bearer token', 'global bearer token',
-               'legacy bearer token', 'legacy token', 'Bearer token for API')
+               'legacy bearer token', 'legacy token', 'Bearer token for API', 'API auth token',
+               'containing the bearer token')
 
 
 class _Field(HTMLParser):
@@ -112,4 +113,22 @@ def test_the_setup_page_says_which_token_it_wants_after_a_rotation():
     assert 'reset_admin_password' not in message, message
     assert "API_BEARER_TOKEN_FILE ' + 'if it is set (the file wins)" in message, message
     assert 'after a restart' in message, message
+
+
+def test_the_download_note_names_the_credentials_that_can_download_keys():
+    """The dashboard's download command fetches private keys: a viewer key is
+    refused (403, operator role required), so the note names an operator or
+    admin key, or the API Bearer Token."""
+    index = ' '.join((REPO / 'templates' / 'index.html').read_text(encoding='utf-8').split())
+    assert 'operator or admin API key' in index
+    assert 'or the API Bearer Token' in index
+
+
+def test_the_log_does_not_send_anyone_to_rotate_the_token_where_it_cannot_be():
+    """modules/core/settings.py logged 'rotate it via the API Keys UI', where
+    the API Bearer Token cannot be rotated; it is set by API_BEARER_TOKEN(_FILE)
+    and a restart."""
+    settings = (REPO / 'modules' / 'core' / 'settings.py').read_text(encoding='utf-8')
+    assert 'API Keys UI' not in settings
+    assert 'to rotate it, set API_BEARER_TOKEN' in settings
 
