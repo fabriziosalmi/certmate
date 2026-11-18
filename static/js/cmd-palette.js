@@ -81,18 +81,27 @@
         // Event listeners
         document.getElementById('cmdPaletteOverlay').addEventListener('click', closePalette);
         document.getElementById('cmdPaletteCancel').addEventListener('click', closePalette);
-        div.addEventListener('keydown', keepTabInside);
+        // On the document, not the dialog: a click on a spot inside the
+        // palette that takes no focus (a group header, "No results found")
+        // leaves focus on the body, and Tab from there must still land here.
+        document.addEventListener('keydown', function(e) {
+            if (isOpen()) keepTabInside(e);
+        }, true);
         inputEl.addEventListener('input', onSearch);
         inputEl.addEventListener('keydown', onKeyDown);
         // Re-size the results pane on viewport changes while open.
         window.addEventListener('resize', function() {
-            if (isOpen()) sizeResults();
+            if (isOpen()) {
+                sizeResults();
+                fitPlaceholder();
+            }
         });
     }
 
     // The palette is modal: Tab and Shift+Tab move between the controls it
     // shows (the input, and Cancel where it is visible) and never to the page
-    // behind it (P36). Results are reached with the arrow keys.
+    // behind it (P36), wherever focus was when the key was pressed. Results
+    // are reached with the arrow keys.
     function keepTabInside(e) {
         if (e.key !== 'Tab') return;
         var stops = [inputEl, document.getElementById('cmdPaletteCancel')].filter(function(el) {
@@ -102,6 +111,29 @@
         var at = stops.indexOf(document.activeElement);
         var next = at === -1 ? 0 : (at + (e.shiftKey ? stops.length - 1 : 1)) % stops.length;
         if (stops[next]) stops[next].focus();
+    }
+
+    // The full placeholder needs about 246px at text-sm; on a phone the
+    // Cancel button leaves the input 212px at 360 and 242px at 390, and the
+    // text was cut to "Search pages, settings, certifica". Where it does not
+    // fit, the short one is shown; the aria-label keeps the full name.
+    var PLACEHOLDER_FULL = 'Search pages, settings, certificates...';
+    var PLACEHOLDER_SHORT = 'Search...';
+    var measureCtx = null;
+
+    function fitPlaceholder() {
+        if (!inputEl) return;
+        var style = window.getComputedStyle(inputEl);
+        var room = inputEl.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        var fits = true;
+        if (room > 0) {
+            if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+            if (measureCtx) {
+                measureCtx.font = style.font;
+                fits = Math.ceil(measureCtx.measureText(PLACEHOLDER_FULL).width) <= room;
+            }
+        }
+        inputEl.placeholder = fits ? PLACEHOLDER_FULL : PLACEHOLDER_SHORT;
     }
 
     // Size the results pane to fit the viewport without overflowing.
@@ -123,6 +155,7 @@
         inputEl.value = '';
         selectedIndex = 0;
         sizeResults();
+        fitPlaceholder();
         onSearch();
         // Delay focus to ensure visible
         setTimeout(function() { inputEl.focus(); }, 50);

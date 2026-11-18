@@ -168,16 +168,41 @@ def test_the_number_of_results_is_announced(make_page):
     assert _highlighted(page)['expanded'] == 'false'
 
 
+def _focus(page):
+    return page.evaluate("""() => ({
+        open: !document.getElementById('cmdPalette').classList.contains('hidden'),
+        inside: document.getElementById('cmdPalette').contains(document.activeElement),
+        focus: document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : null,
+    })""")
+
+
 def test_tab_does_not_leave_focus_on_the_page_behind_the_palette(make_page):
     page = make_page(DESKTOP)
     _open_with_keys(page)
     for key in ['Tab'] * 6 + ['Shift+Tab'] * 6:
         page.keyboard.press(key)
-        where = page.evaluate("""() => ({
-            open: !document.getElementById('cmdPalette').classList.contains('hidden'),
-            inside: document.getElementById('cmdPalette').contains(document.activeElement),
-            focus: document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : null,
-        })""")
+        where = _focus(page)
+        assert where['inside'] or not where['open'], (key, where)
+
+
+@pytest.mark.parametrize('spot', ['group-header', 'no-results'])
+def test_tab_stays_in_the_palette_after_a_click_on_a_spot_that_takes_no_focus(make_page, spot):
+    """A click on a group header or on the "No results found" line leaves
+    focus on the body, outside the palette; Tab from there still lands in it
+    (review of P36: Tab 1 went to the skip link, Tab 2 to the logo)."""
+    page = make_page(DESKTOP)
+    _open_with_keys(page)
+    if spot == 'group-header':
+        _type(page, 'site')
+        _wait_for_certificates(page)
+        page.click('#cmdPaletteResults [id^=cmdPaletteGroup-]:text-is("Server Certificates")')
+    else:
+        _type(page, 'nothing-matches-this')
+        page.click('#cmdPaletteResults :text("No results found")')
+    assert _focus(page)['open'], 'the click closed the palette'
+    for key in ['Tab'] * 3 + ['Shift+Tab'] * 3:
+        page.keyboard.press(key)
+        where = _focus(page)
         assert where['inside'] or not where['open'], (key, where)
 
 
@@ -234,3 +259,41 @@ def test_every_entry_in_the_palette_draws_its_icon(make_page):
                 blank.add(row['label'])
     assert len(seen) >= 23, sorted(seen)
     assert not blank, sorted(blank)
+
+
+_PLACEHOLDER_FITS = """() => {
+    const input = document.getElementById('cmdPaletteInput');
+    const style = getComputedStyle(input);
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = style.font;
+    const room = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    return {placeholder: input.placeholder, needs: Math.ceil(ctx.measureText(input.placeholder).width), room: room};
+}"""
+
+
+@pytest.mark.parametrize('device', [
+    PHONE,
+    {'viewport': {'width': 390, 'height': 844}, 'has_touch': True, 'is_mobile': True},
+    {'viewport': {'width': 414, 'height': 896}, 'has_touch': True, 'is_mobile': True},
+    TABLET,
+    DESKTOP,
+], ids=['phone-360', 'phone-390', 'phone-414', 'touch-tablet-1024', 'desktop-1280'])
+def test_the_search_placeholder_is_not_cut_off(make_page, device):
+    """Review of P57: at 360 and 390 the Cancel button left the input 212 and
+    242 px, and "Search pages, settings, certificates..." needs about 246,
+    so it read "Search pages, settings, certifica"."""
+    page = make_page(device)
+    if device.get('has_touch'):
+        _open_with_the_search_button(page)
+    else:
+        _open_with_keys(page)
+    seen = page.evaluate(_PLACEHOLDER_FITS)
+    assert seen['placeholder'].startswith('Search'), seen
+    assert seen['needs'] <= seen['room'], seen
+
+
+def test_a_wide_screen_keeps_the_full_search_placeholder(make_page):
+    page = make_page(DESKTOP)
+    _open_with_keys(page)
+    assert page.get_attribute('#cmdPaletteInput', 'placeholder') == 'Search pages, settings, certificates...'
+    assert page.get_attribute('#cmdPaletteInput', 'aria-label') == 'Search pages, settings, certificates'

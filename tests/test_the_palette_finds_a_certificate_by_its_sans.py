@@ -25,13 +25,14 @@ global.setInterval = () => 0;
 global.setTimeout = () => 0;
 window.innerHeight = 900;
 window.addEventListener = () => {};
+window.getComputedStyle = () => ({paddingLeft: '0', paddingRight: '0', font: ''});
 window.location = {pathname: '/elsewhere', href: '', hash: '', search: ''};
 const classes = () => {
   const values = new Set(['hidden']);
   return {add(n) { values.add(n); }, remove(n) { values.delete(n); }, contains(n) { return values.has(n); }};
 };
 const listeners = {};
-const input = {value: '', focus() {}, setAttribute() {}, removeAttribute() {},
+const input = {value: '', clientWidth: 0, focus() {}, setAttribute() {}, removeAttribute() {},
                addEventListener(type, fn) { listeners['input:' + type] = fn; }};
 const results = {innerHTML: '', style: {}, querySelectorAll() { return []; }};
 const overlay = {addEventListener() {}};
