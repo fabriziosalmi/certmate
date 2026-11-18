@@ -95,6 +95,9 @@ def test_after_skip_it_asks_for_the_email_on_the_ca_tab(page):
     steps = _empty_dashboard(page, [], email='', challenge_type='dns-01', dns_provider='cloudflare')
     assert 'email' in steps['text'].lower(), steps
     assert any(href.endswith('#ca') for href in steps['links']), steps
+    # Let's Encrypt, the default CA here, stopped sending expiry emails on
+    # 2025-06-04: the step must not promise notices the CA does not send.
+    assert 'expir' not in steps['text'].lower() and 'notice' not in steps['text'].lower(), steps
 
 
 def test_dns01_without_credentials_links_to_the_dns_tab(page):

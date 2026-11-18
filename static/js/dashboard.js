@@ -2341,7 +2341,7 @@
             if (!configuredCAs.length) {
                 steps.push(setupState.email
                     ? 'Set up your certificate authority in ' + settingsLink('ca', 'Settings, CA')
-                    : 'Add the email address your certificate authority sends expiry notices to, in ' +
+                    : 'Add the contact email for your certificate authority account, in ' +
                         settingsLink('ca', 'Settings, CA'));
             }
             if (defaultChallengeType === 'dns-01' &&
