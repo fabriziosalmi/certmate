@@ -59,19 +59,32 @@
         </div>
     </div>
 
+    <!-- The two domain checks are off until an admin turns them on. A check
+         that is off is this one line: drawn as a card of zero counters over
+         an empty table, the two pushed the certificate list below the fold.
+         Which is on comes from inventory_page(), so nothing here changes
+         size after the first paint. A check that is on says what it has, and
+         its empty state is a sentence outside the scrolled table: inside it,
+         on a phone, the sentence was as wide as the table and cut at the
+         screen's edges. `data-check-when` parts follow `data-check-on`
+         (inventory.js showCheck). -->
+
     <!-- Domain registrations: when the domain itself lapses (RDAP, WHOIS where a TLD has no RDAP) -->
-    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="registrationsPanel">
-        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="registrationsPanel" data-check-on="{{ 'true' if registrations_on else 'false' }}">
+        <div class="px-6 py-3 flex items-center justify-between flex-wrap gap-2">
             <span class="text-sm font-medium text-foreground"><i class="fas fa-globe mr-2 text-muted"></i>Domain registrations</span>
-            <span class="text-xs text-muted" id="regCount"></span>
+            <span class="text-xs text-muted{% if not registrations_on %} hidden{% endif %}" id="regCount" data-check-when="on"></span>
+            <span class="text-xs text-muted{% if registrations_on %} hidden{% endif %}" data-check-when="off">Off{% if inventory_admin %} · <button type="button" data-click="InventoryPage.openConfig" data-args='["cfgRegEnabled"]' class="text-primary hover:underline">Turn on in Discovery configuration</button>{% endif %}</span>
         </div>
+        <div class="border-t border-gray-100 dark:border-white/5{% if not registrations_on %} hidden{% endif %}" data-check-when="on">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="regExpired">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="reg30">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="reg90">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The registry does not publish an expiry date (.de, .eu, ...)">Not published</div><div class="text-xl font-semibold text-foreground" id="regNotPublished">–</div></div>
         </div>
-        <div class="overflow-x-auto">
+        <p id="registrationsNote" class="px-4 py-6 text-center text-sm text-muted">Loading…</p>
+        <div id="registrationsTable" class="overflow-x-auto hidden">
             <table class="min-w-full text-sm">
                 <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
                     <tr>
@@ -81,26 +94,28 @@
                         <th class="text-left font-medium px-4 py-2">Source</th>
                     </tr>
                 </thead>
-                <tbody id="registrationsBody" class="divide-y divide-gray-100 dark:divide-white/5">
-                    <tr><td colspan="4" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
-                </tbody>
+                <tbody id="registrationsBody" class="divide-y divide-gray-100 dark:divide-white/5"></tbody>
             </table>
+        </div>
         </div>
     </div>
 
     <!-- Domain health: the checks that are about the name, not the certificate -->
-    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="domainHealthPanel">
-        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="domainHealthPanel" data-check-on="{{ 'true' if health_on else 'false' }}">
+        <div class="px-6 py-3 flex items-center justify-between flex-wrap gap-2">
             <span class="text-sm font-medium text-foreground"><i class="fas fa-heart-pulse mr-2 text-muted"></i>Domain health</span>
-            <span class="text-xs text-muted" id="healthCount"></span>
+            <span class="text-xs text-muted{% if not health_on %} hidden{% endif %}" id="healthCount" data-check-when="on"></span>
+            <span class="text-xs text-muted{% if health_on %} hidden{% endif %}" data-check-when="off">Off{% if inventory_admin %} · <button type="button" data-click="InventoryPage.openConfig" data-args='["cfgHealthEnabled"]' class="text-primary hover:underline">Turn on in Discovery configuration</button>{% endif %}</span>
         </div>
+        <div class="border-t border-gray-100 dark:border-white/5{% if not health_on %} hidden{% endif %}" data-check-when="on">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Failing</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="healthFailing">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Warning</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="healthWarning">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="The check could not be completed. This is not a pass.">Not verifiable</div><div class="text-xl font-semibold text-foreground" id="healthUnknown">–</div></div>
             <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">OK</div><div class="text-xl font-semibold text-foreground" id="healthOk">–</div></div>
         </div>
-        <div class="overflow-x-auto">
+        <p id="domainHealthNote" class="px-4 py-6 text-center text-sm text-muted">Loading…</p>
+        <div id="domainHealthTable" class="overflow-x-auto hidden">
             <table class="min-w-full text-sm">
                 <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
                     <tr>
@@ -115,10 +130,9 @@
                         <th class="text-left font-medium px-4 py-2" title="Whether the host still accepts TLS 1.0 or 1.1, deprecated by RFC 8996">Old TLS</th>
                     </tr>
                 </thead>
-                <tbody id="domainHealthBody" class="divide-y divide-gray-100 dark:divide-white/5">
-                    <tr><td colspan="9" class="px-4 py-6 text-center text-muted">Loading…</td></tr>
-                </tbody>
+                <tbody id="domainHealthBody" class="divide-y divide-gray-100 dark:divide-white/5"></tbody>
             </table>
+        </div>
         </div>
     </div>
 

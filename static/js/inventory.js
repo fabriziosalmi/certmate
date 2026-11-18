@@ -436,7 +436,37 @@
             + '" title="' + escapeHtml(words[1]) + '">' + escapeHtml(words[0]) + '</span>';
     }
 
+    // A domain check (registrations, health) is drawn on or off by the
+    // template (inventory_page); `data-check-when` parts follow the state, and
+    // a check that is off loads nothing.
+    function checkOn(panelId) {
+        var panel = el(panelId);
+        return !!panel && panel.getAttribute('data-check-on') === 'true';
+    }
+
+    function showCheck(panelId, on) {
+        var panel = el(panelId);
+        if (!panel) { return; }
+        panel.setAttribute('data-check-on', on ? 'true' : 'false');
+        panel.querySelectorAll('[data-check-when]').forEach(function (part) {
+            part.classList.toggle('hidden', (part.getAttribute('data-check-when') === 'on') !== on);
+        });
+    }
+
+    // The rows in the table, or, when there are none, a sentence in place of
+    // the table: outside its scroll box, so a phone shows it whole.
+    function fillCheck(name, rowsHtml, sentence, failed) {
+        el(name + 'Body').innerHTML = rowsHtml || '';
+        el(name + 'Table').classList.toggle('hidden', !rowsHtml);
+        var note = el(name + 'Note');
+        note.classList.toggle('hidden', !!rowsHtml);
+        note.textContent = sentence || '';
+        note.classList.toggle('text-danger-fg', !!failed);
+        note.classList.toggle('text-muted', !failed);
+    }
+
     function loadRegistrations() {
+        if (!checkOn('registrationsPanel')) { return; }
         fetch('/api/inventory/domains', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (data) {
@@ -449,11 +479,10 @@
                 setCount('regNotPublished', (s.by_status || {}).not_published);
                 el('regCount').textContent = rows.length ? rows.length + ' domains' : '';
                 if (!rows.length) {
-                    el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-muted">'
-                        + 'No domain registrations checked yet. Enable the check in Discovery configuration, then Scan now.</td></tr>';
+                    fillCheck('registrations', '', 'No domain registrations checked yet: the next scan checks them.');
                     return;
                 }
-                el('registrationsBody').innerHTML = rows.map(function (r) {
+                fillCheck('registrations', rows.map(function (r) {
                     return '<tr class="hover:bg-hover">'
                         + '<td class="px-4 py-2 font-medium text-foreground">' + escapeHtml(r.domain) + '</td>'
                         + '<td class="px-4 py-2">' + registrationExpiryCell(r) + '</td>'
@@ -461,10 +490,10 @@
                         + '<td class="px-4 py-2 text-xs text-muted" title="Checked ' + escapeHtml(r.checked_at || '') + '">'
                         + escapeHtml((r.source || '—').toUpperCase()) + '</td>'
                         + '</tr>';
-                }).join('');
+                }).join(''));
             })
             .catch(function (err) {
-                el('registrationsBody').innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-red-500">Failed to load domain registrations (' + escapeHtml(err) + ').</td></tr>';
+                fillCheck('registrations', '', 'Failed to load domain registrations (' + err + ').', true);
             });
     }
 
@@ -486,6 +515,7 @@
     }
 
     function loadDomainHealth() {
+        if (!checkOn('domainHealthPanel')) { return; }
         fetch('/api/inventory/health', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (data) {
@@ -497,11 +527,10 @@
                 setCount('healthOk', by.ok);
                 el('healthCount').textContent = rows.length ? rows.length + ' names' : '';
                 if (!rows.length) {
-                    el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-muted">'
-                        + 'No names checked yet. Enable Domain health in Discovery configuration, then Scan now.</td></tr>';
+                    fillCheck('domainHealth', '', 'No names checked yet: the next scan checks them.');
                     return;
                 }
-                el('domainHealthBody').innerHTML = rows.map(function (r) {
+                fillCheck('domainHealth', rows.map(function (r) {
                     var c = r.checks || {};
                     return '<tr class="hover:bg-hover">'
                         + '<td class="px-4 py-2 font-medium text-foreground" title="Checked '
@@ -515,10 +544,10 @@
                         + '<td class="px-4 py-2">' + healthChip(c.disclosure) + '</td>'
                         + '<td class="px-4 py-2">' + healthChip(c.weak_tls) + '</td>'
                         + '</tr>';
-                }).join('');
+                }).join(''));
             })
             .catch(function (err) {
-                el('domainHealthBody').innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-red-500">Failed to load domain health (' + escapeHtml(err) + ').</td></tr>';
+                fillCheck('domainHealth', '', 'Failed to load domain health (' + err + ').', true);
             });
     }
 
@@ -613,6 +642,12 @@
             .then(function (res) {
                 msg.textContent = res.ok ? 'Saved.' : ('Error: ' + (res.j.error || 'failed'));
                 msg.className = 'text-xs mr-auto ' + (res.ok ? 'text-green-600' : 'text-red-500');
+                if (!res.ok) { return; }
+                // A check turned on or off here opens or folds its section now.
+                showCheck('registrationsPanel', body.domain_registration.enabled);
+                showCheck('domainHealthPanel', body.domain_health.enabled);
+                loadRegistrations();
+                loadDomainHealth();
             })
             .catch(function () { msg.textContent = 'Save failed.'; msg.className = 'text-xs mr-auto text-red-500'; });
     }
@@ -681,6 +716,19 @@
         forget(fp, match && match.subject_cn);
     }
 
+    // "Turn on in Discovery configuration" on a check that is off: the
+    // configuration opened at that check's switch. Saving it is still the
+    // admin's step.
+    function openConfig(fieldId) {
+        var details = el('configPanel') && el('configPanel').querySelector('details');
+        if (details) { details.open = true; }
+        var field = el(fieldId);
+        if (field) {
+            field.scrollIntoView({ block: 'center' });
+            field.focus();
+        }
+    }
+
     // The one control that changes what both the list and the readiness cards describe.
     function toggleSuperseded() {
         load();
@@ -689,7 +737,7 @@
 
     window.InventoryPage = {
         load: load, render: render, saveConfig: saveConfig, toggleSuperseded: toggleSuperseded,
-        sortBy: sortBy,
+        sortBy: sortBy, openConfig: openConfig,
         runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl,
         forget: forget, forgetFromEl: forgetFromEl
     };
@@ -704,7 +752,7 @@
     // What the page's controls may ask for by name (`data-click`, `data-change`,
     // `data-input`): see CertMate.actions in certmate.js.
     CertMate.globalActions([
-        'InventoryPage.adoptFromEl', 'InventoryPage.forgetFromEl', 'InventoryPage.load',
+        'InventoryPage.adoptFromEl', 'InventoryPage.forgetFromEl', 'InventoryPage.load', 'InventoryPage.openConfig',
         'InventoryPage.render', 'InventoryPage.runScan', 'InventoryPage.saveConfig',
         'InventoryPage.sortBy', 'InventoryPage.toggleSuperseded'
     ]);
