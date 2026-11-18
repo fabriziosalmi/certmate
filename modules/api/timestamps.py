@@ -26,6 +26,7 @@ TIMESTAMP_KEYS = frozenset({
     'last_seen', 'checked_at', 'generated_at', 'exported_at', 'probed_at', 'this_update', 'next_update',
     'last_update', 'not_before', 'not_after', 'window_start', 'window_end', 'renew_at',
     'renews_at', 'acme_profile_withdrawn_at', 'updated_at', 'last_used_at', 'confirmed_at',
+    'attempted_at',
 })
 
 _NAIVE_OR_ZERO_OFFSET = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)(?:[+-]00:00)?$')

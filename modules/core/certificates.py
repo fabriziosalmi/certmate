@@ -38,6 +38,7 @@ from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStr
                              manual_hook_arguments, plugin_install_hint)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs)
+from .failure_hints import renewal_failure
 from .inventory_sources import collect_domain_sources
 from . import acme_profiles, renewal_policy
 from .domain_entries import entry_auto_renew, entry_domain, entry_external
@@ -239,6 +240,17 @@ _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
 RENEWAL_INFO_FILE = 'renewal-info.json'
 RENEWAL_INFO_FIELDS = ('status', 'checked_at', 'window_start', 'window_end',
                        'renew_at', 'explanation_url')
+
+# The last renewal that failed, kept beside the certificate until a renewal
+# replaces it (UX perception audit, 2026-11-18, P37). A file of its own for
+# the reason `_record_renewal_info` gives: its writers, the renewal service
+# and the sweep, write it after the domain lock is released. The fields are
+# what the API returns; `cert_sha256` is kept on disk only, to tell a failure
+# of this certificate from one of the certificate it replaced.
+LAST_RENEWAL_ATTEMPT_FILE = 'last-renewal-attempt.json'
+LAST_RENEWAL_ATTEMPT_FIELDS = ('attempted_at', 'outcome', 'error', 'hint')
+# certbot's output can run to pages; the panel shows its first line.
+_RENEWAL_ERROR_KEPT = 2000
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -2865,6 +2877,9 @@ class CertificateManager:
                 # What the CA's ARI endpoint said at the last sweep (#962),
                 # read from the record the sweep keeps — never fetched here.
                 'renewal_info': renewal_info,
+                # The last renewal of this certificate that failed, until a
+                # renewal replaces it (P37).
+                'last_renewal_attempt': self._last_renewal_attempt_for(domain, cert),
                 # The ACME profile it was issued with (#395), and when a renewal found the
                 # CA no longer offers it (the CA's default was issued instead).
                 'acme_profile': metadata.get('acme_profile'),
@@ -2918,6 +2933,8 @@ class CertificateManager:
             # A certificate that cannot be parsed cannot be named in ARI, so
             # there is no record that could belong to it.
             'renewal_info': None,
+            # Nor a fingerprint to tie a failed renewal to.
+            'last_renewal_attempt': None,
             # Nor a lifetime to renew within: it is due now (needs_renewal above).
             'renews_at': None,
             'acme_profile': metadata.get('acme_profile'),
@@ -5174,6 +5191,7 @@ class CertificateManager:
                 logger.info(f"{domain} not yet due for renewal per certbot; will retry next run")
                 return False
             summary['renewed'] += 1
+            self.forget_renewal_failure(domain)
             if ari_advanced:
                 # Counted after the renewal, not before the attempt: the
                 # counter exists to attribute a renewal, so it must not report
@@ -5196,6 +5214,7 @@ class CertificateManager:
             # a failure, because the renewal did not happen.
             summary['reissue_required'] += 1
             logger.warning("%s", e)
+            self.record_renewal_failure(domain, e)
             self._audit_scheduled_renew(domain, 'failure', error=e)
             self._publish_failed_event(domain, e)
             return False
@@ -5215,6 +5234,8 @@ class CertificateManager:
         except Exception as e:
             summary['failed'] += 1
             logger.error(f"Failed to renew certificate for {domain}: {e}")
+            # Kept on the certificate (P37): nobody watched this one fail.
+            self.record_renewal_failure(domain, e)
             self._record_renewal_metrics(
                 domain, cert_info, False, time.time() - renew_started, error=e)
             self._audit_scheduled_renew(domain, 'failure', error=e)
@@ -5396,6 +5417,86 @@ class CertificateManager:
                         domain, e.__class__.__name__)
             return
         self._invalidate_certificate_info_cache(domain)
+
+    def record_renewal_failure(self, domain, error):
+        """Keep the renewal that just failed beside the certificate (P37).
+
+        With the hint the renewal job gives for the same error
+        (`failure_hints.renewal_failure`), so the dashboard says after a
+        reload, and for the sweep's failures, what the job's toast said.
+        Tied to the certificate it was about by its fingerprint.
+
+        Never raises: the renewal's own error is what the caller is owed, and
+        losing this record only loses the marker. The sweep calls this from
+        the arm that counts, audits and notifies a failure; a defect in what
+        is only a display record must not end the sweep for every certificate
+        after this one (the reasoning of `_renewal_info_for`), hence the
+        AttributeError and TypeError beside the I/O errors.
+        """
+        try:
+            directory = certificate_dir(self.cert_dir, domain)
+            message = str(error)
+            record = {
+                'attempted_at': renewal_policy.stamp(utc_now()),
+                'outcome': 'failed',
+                'error': message[:_RENEWAL_ERROR_KEPT],
+                'hint': renewal_failure(message, self._renewal_challenge_type(domain))['hint'],
+                'cert_sha256': _held_fingerprint(directory / 'cert.pem'),
+            }
+            self._atomic_json_write(directory / LAST_RENEWAL_ATTEMPT_FILE, record)
+            self._invalidate_certificate_info_cache(domain)
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            logger.warning("Could not record the failed renewal of %s: %s",
+                           domain, e.__class__.__name__)
+
+    def _renewal_challenge_type(self, domain):
+        """The challenge the certificate was issued with, else the instance
+        default: what the hint falls back on when certbot's message names
+        none (the same rule the API's renewal job uses)."""
+        challenge = (self._load_metadata(domain) or {}).get('challenge_type')
+        if isinstance(challenge, str) and challenge:
+            return challenge
+        return (self.settings_manager.load_settings() or {}).get('challenge_type', 'dns-01')
+
+    def forget_renewal_failure(self, domain):
+        """A renewal happened: the failure before it is no longer the news.
+        Never raises, for the reason `record_renewal_failure` gives. With no
+        record there is nothing to forget, and the cached answer stands."""
+        try:
+            (certificate_dir(self.cert_dir, domain) / LAST_RENEWAL_ATTEMPT_FILE).unlink()
+            self._invalidate_certificate_info_cache(domain)
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            logger.warning("Could not clear the failed renewal of %s: %s",
+                           domain, e.__class__.__name__)
+
+    def _last_renewal_attempt_for(self, domain, cert):
+        """The failed renewal kept for *cert*, or None.
+
+        None when the record is about another certificate: a reissue or an
+        upload replaced the one that failed to renew. Never raises, for the
+        reason `_renewal_info_for` gives: this runs inside
+        `_parse_certificate_info`'s try.
+        """
+        cert_dir = getattr(self, 'cert_dir', None)
+        if cert_dir is None:
+            return None
+        # Only a file inside cert_dir: the name comes from the certificate
+        # listing, but this read must not trust that (CodeQL py/path-injection).
+        path = os.path.realpath(certificate_dir(cert_dir, domain) / LAST_RENEWAL_ATTEMPT_FILE)
+        if not path.startswith(os.path.realpath(cert_dir) + os.sep):
+            return None
+        try:
+            with open(path, encoding='utf-8') as handle:
+                record = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        if not isinstance(record, dict):
+            return None
+        if record.get('cert_sha256') != cert.fingerprint(hashes.SHA256()).hex():
+            return None
+        return {key: record.get(key) for key in LAST_RENEWAL_ATTEMPT_FIELDS}
 
     def _renewal_info_for(self, domain, cert, settings):
         """The recorded ARI answer for *cert*, or None — never fetched here.

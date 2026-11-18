@@ -278,6 +278,22 @@ def create_api_models(api):
             description="The CA's page explaining the window, when it gave one (https only)."),
     })
 
+    # The last renewal that failed, kept beside the certificate until a renewal
+    # replaces it (UX perception audit, 2026-11-18, P37).
+    last_renewal_attempt_model = api.model('LastRenewalAttempt', {
+        'attempted_at': fields.String(
+            description='When the renewal failed, RFC 3339 UTC with Z.'),
+        'outcome': fields.String(
+            enum=['failed'],
+            description="'failed': the only outcome kept; a renewal that happens removes the record."),
+        'error': fields.String(
+            description="What the renewal raised, certbot's own output included, up to 2000 characters."),
+        'hint': fields.String(
+            description=(
+                'What to check, the hint the renewal job gives for the same error, ending with '
+                '"The previous certificate is still in place."')),
+    })
+
     certificate_model = api.model('Certificate', {
         'domain': fields.String(required=True, description='Domain name'),
         'exists': fields.Boolean(description='Whether certificate exists'),
@@ -450,6 +466,13 @@ def create_api_models(api):
                 "What the CA's ARI endpoint said at the last renewal sweep. "
                 'Null when no sweep has asked about this certificate yet, '
                 'including right after a renewal. Since API contract 2.23.')),
+        'last_renewal_attempt': fields.Nested(
+            last_renewal_attempt_model, allow_null=True,
+            description=(
+                'The last renewal of this certificate that failed: a request, a job or the '
+                'renewal sweep. Null when none has failed, after a renewal that happened, and '
+                'once a reissue or an upload has replaced the certificate it was about. The '
+                'certificate being served is unchanged by a failed renewal. Since API contract 2.70.')),
         # The six fields below have been null in every answer since they were added (v2.2.0):
         # nothing computes them. Deprecated, and removed by the next MAJOR of the API contract
         # (#1114); they are sent, as null, until then. `latest_issuance` is `created_at` or

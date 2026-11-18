@@ -867,12 +867,76 @@
     // answer, and an absent row would read as "nothing to know".
     // When the sweep renews it (#393): the one instant the server decided, after the threshold,
     // the lifetime and the CA's window. Shown as it is, never recomputed here.
+    //
+    // A past date says how long the renewal is overdue (UX perception audit,
+    // 2026-11-18, P37). The word is kept here, once, while the vocabulary for
+    // late renewals is still being decided. "The next renewal run renews it"
+    // is said only while no renewal of this certificate has failed: after a
+    // failure the next run meets the same cause, and the banner says it.
+    var RENEWAL_OVERDUE_SINCE = 'Renewal overdue since';
+
     function renewsAtHtml(cert) {
         if (!cert.renews_at) return '<span class="text-muted">\u2014</span>';
         var due = cert.needs_renewal && new Date(cert.renews_at) <= new Date();
-        return '<span class="' + (due ? 'text-warning-fg' : '') + '">' +
+        if (!due) return '<span>' + escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>';
+        return '<span class="text-warning-fg">' + RENEWAL_OVERDUE_SINCE + ' ' +
             escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
-            (due ? '<div class="text-xs text-warning-fg">Due: the next renewal run renews it</div>' : '');
+            (lastRenewalFailure(cert) ? '' : '<div class="text-xs text-warning-fg">Due: the next renewal run renews it</div>');
+    }
+
+    // The last renewal of this certificate that failed, as the server keeps it
+    // (`last_renewal_attempt`, P37), or null. Kept until a renewal replaces
+    // the certificate, so it is there after a reload and for the sweep's own
+    // failures, not only for a job this page watched.
+    function lastRenewalFailure(cert) {
+        var attempt = cert && cert.last_renewal_attempt;
+        return attempt && attempt.outcome === 'failed' && cert.external !== true ? attempt : null;
+    }
+
+    // The cause a failed job's error names, short enough for a toast: the
+    // first non-empty line, without the "Certificate ... failed:" prefix
+    // the toast already says (or the lineage path's "Renewal failed:"), kept
+    // whole up to 200 characters and cut on a word beyond. A first line that
+    // ends on a colon only announces the cause, so the next line is the one
+    // shown. Used by the toast and by the detail panel's last failed renewal.
+    function failureCause(error) {
+        var text = String(error || '').replace(/^\s*(Certificate )?(creation|reissue|renewal|issuance) failed:\s*/i, '');
+        var lines = text.split('\n').map(function (line) { return line.trim(); })
+            .filter(function (line) { return line; });
+        text = lines[0] || '';
+        // certbot's "An unexpected error occurred:" names the cause on
+        // the next line. CertMate's own "certbot exited ... without
+        // reporting an error. The last it printed:" states the cause
+        // before its colon: keep that sentence, drop the announcement.
+        if (/:$/.test(text)) {
+            var stated = text.match(/^(.*[.!?])\s+[^.!?]*:$/);
+            if (stated) text = stated[1];
+            else if (lines[1]) text = lines[1];
+        }
+        // The whole line, not its first sentence: a refusal's second
+        // sentence is often the remedy ("Use DNS-01 instead.").
+        if (text.length > 200) {
+            var cut = text.slice(0, 199);
+            var space = cut.lastIndexOf(' ');
+            text = (space > 0 ? cut.slice(0, space) : cut).replace(/[\s.,;:]+$/, '') + '\u2026';
+        }
+        text = text.replace(/:$/, '');
+        if (text && !/[.!?\u2026]$/.test(text)) text += '.';
+        return text || 'The job failed without a message.';
+    }
+
+    // The banner's account of the last failed renewal: when, why, what to
+    // check, and where the run is recorded.
+    function lastRenewalFailureHtml(cert) {
+        var failed = lastRenewalFailure(cert);
+        if (!failed) return '';
+        var when = CertMate.formatDateTime(failed.attempted_at);
+        return '<div class="mt-2 text-sm text-danger-fg" data-last-renewal-failed>' +
+            '<div class="font-semibold">Last renewal failed' + (when ? ' ' + escapeHtml(when) : '') + '</div>' +
+            '<div class="[overflow-wrap:anywhere]" title="' + escapeHtml(failed.error || '') + '">' + escapeHtml(failureCause(failed.error)) + '</div>' +
+            (failed.hint ? '<div class="mt-1 text-label break-words">' + escapeHtml(failed.hint) + '</div>' : '') +
+            '<a href="/activity" class="text-xs text-info-fg hover:underline">See it in the Activity log</a>' +
+            '</div>';
     }
 
     // The ACME profile it was issued with (#395), and the warning a renewal leaves when the CA
@@ -1079,6 +1143,20 @@
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-info-fg min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
+            // A renewal that failed is said on the certificate's own row, which
+            // keeps its expiry and its CA (P38): the cause under the name, the
+            // whole error and the hint on hover, a chip beside the status.
+            // Below md the cause wraps anywhere: certbot's error carries
+            // tokens without spaces (NewConnectionError("HTTPSConnection(...)
+            // that break-words would leave whole, widening the column past
+            // the screen.
+            var renewalFailed = lastRenewalFailure(cert);
+            var renewalFailedHint = renewalFailed
+                ? rowRaw(rowHtml`<div class="mt-1 flex items-start text-xs text-danger-fg min-w-0" data-renewal-failed><i class="fas fa-circle-exclamation mr-1 mt-0.5 shrink-0" aria-hidden="true"></i><span class="min-w-0 [overflow-wrap:anywhere] md:truncate" title="${(renewalFailed.error || '') + (renewalFailed.hint ? '\n\n' + renewalFailed.hint : '')}">Renewal failed: ${failureCause(renewalFailed.error)}</span></div>`)
+                : false;
+            var renewalFailedChip = renewalFailed
+                ? rowRaw('<div class="mt-1"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-circle-exclamation mr-1" aria-hidden="true"></i>Renewal failed</span></div>')
+                : false;
             // R-5 mobile card layout: surface the three desktop-only columns
             // (Expires / Provider / Deployment) as stacked rows inside the
             // Domain cell when below md (768 px). The table semantics are
@@ -1117,12 +1195,13 @@
                             <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="${title}">${title}</div>
                             ${ipHint}
                             ${aliasHint}
+                            ${renewalFailedHint}
                             ${tagHint}
                             ${mobileMeta}
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${keylessRow ? LOST_KEY_TITLE : ''}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
+                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${keylessRow ? LOST_KEY_TITLE : ''}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span>${renewalFailedChip}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${external ? 'Replace by ' + expiryStr : expiryStr}</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
@@ -1543,7 +1622,11 @@
                 '<div class="space-y-5">' +
                 // Status banner: status word + days + date, integrated and at one
                 // weight (the day count and the calendar date are the same datum).
-                '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + '">' +
+                // A failed renewal is told under the row, across the banner's
+                // width: beside the Auto-renew switch, at 390 px, its column
+                // was some 90 px wide and the cause ran to twenty lines.
+                '<div class="p-4 rounded-lg ' + bannerBg + '">' +
+                '<div class="flex items-center gap-3">' +
                 '<i class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
                 '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
@@ -1561,6 +1644,8 @@
                           ? autoRenewSwitchHtml(cert.domain, autoOn)
                           : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>')) +
                 '</div>' +
+                '</div>' +
+                lastRenewalFailureHtml(cert) +
                 '</div>' +
                 // Details
                 '<dl class="divide-y divide-border">' +
@@ -1647,6 +1732,19 @@
         });
         var closeBtn = panel.querySelector('[data-detail-close]');
         if (closeBtn) closeBtn.focus();
+    }
+
+    // Draw the open panel again from the list just loaded, when it is the
+    // panel of *domain*: a renewal started from it ended, and the panel must
+    // not keep saying what it said before (P37). Focus goes back where it
+    // was when the panel was first opened, not to a button now replaced.
+    function refreshOpenDetail(domain) {
+        var panel = document.getElementById('certDetailPanel');
+        if (!panel || panel.classList.contains('hidden')) return;
+        if (document.getElementById('detailDomain').textContent !== domain) return;
+        var focusBefore = _lastDetailFocus;
+        openCertDetail(domain);
+        _lastDetailFocus = focusBefore;
     }
 
     function closeCertDetail() {
@@ -4139,6 +4237,13 @@
         return escapeHtml(ipAddressOf(job.domain || '') || job.domain || '');
     }
 
+    // The CA a pending create or reissue asked for, as the real row names it
+    // (P38: a failed create with Private CA chosen showed "—"). A request that
+    // named none takes the instance default, which this page does not guess.
+    function pendingCaLabel(job) {
+        return job.caProvider ? caDisplayName(job.caProvider) : '—';
+    }
+
     function issuingRowHtml(jobId, job) {
         var domain = pendingRowTitle(job);
         var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
@@ -4155,8 +4260,8 @@
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
             // CA and Deployment columns: the table has seven, and a pending row
             // must fill both lg cells or the "Just now"/actions cell slides left
-            // out of the Actions column.
-            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            // out of the Actions column. The CA is the one the request chose.
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + pendingCaLabel(job) + '</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap text-right hidden md:table-cell"><span class="text-xs text-muted">Just now</span></td>' +
             '</tr>';
@@ -4186,7 +4291,7 @@
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
             // CA and Deployment columns (seven-column table): see issuingRowHtml.
-            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + pendingCaLabel(job) + '</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             // Drawn at every width, unlike a certificate row's actions: a failed
             // issuance opens no panel, so Retry and Dismiss are only here.
@@ -4230,11 +4335,12 @@
     // the poll, and exactly right here, since a renewal is only ever asked for
     // a certificate that exists.
     //
-    // A FAILED job is rendered even so (`job.state !== 'failed' && live[...]`),
-    // which is what should happen: the row carries the reason the renewal
-    // failed, beside the certificate that is still serving. Retry hides itself
-    // because this record has no `payload` to replay — and it must, since the
-    // retry path posts to /create, which is not what was asked for.
+    // Nor a "Failed" row: a failed renewal job is dropped when it ends, the
+    // list is loaded again, and the certificate's own row and detail panel
+    // say the renewal failed, from the `last_renewal_attempt` the server
+    // keeps (P38, P37). The separate red row this used to leave sat at the top
+    // of the table with no expiry, provider or CA, read as a second
+    // certificate that had failed, and was gone after a reload.
     function adoptRenewalJob(job, domain, force) {
         var jobId = job.job_id;
         pendingJobs[jobId] = {
@@ -4255,6 +4361,7 @@
         pendingJobs[jobId] = {
             domain: job.domain || requestBody.domain,
             provider: requestBody.dns_provider || '',
+            caProvider: requestBody.ca_provider || '',
             sanCount: (requestBody.san_domains || []).length,
             state: 'issuing',
             kind: isReissue ? 'reissue' : 'create',
@@ -4326,37 +4433,6 @@
     }
 
     function pollCertJob(jobId, statusUrl) {
-        // The cause a failed job's error names, short enough for a toast: the
-        // first non-empty line, without the "Certificate ... failed:" prefix
-        // the toast already says, kept whole up to 200 characters and cut on
-        // a word beyond. A first line that ends on a colon only announces the
-        // cause, so the next line is the one shown.
-        function failureCause(error) {
-            var text = String(error || '').replace(/^\s*Certificate (creation|reissue|renewal|issuance) failed:\s*/i, '');
-            var lines = text.split('\n').map(function (line) { return line.trim(); })
-                .filter(function (line) { return line; });
-            text = lines[0] || '';
-            // certbot's "An unexpected error occurred:" names the cause on
-            // the next line. CertMate's own "certbot exited ... without
-            // reporting an error. The last it printed:" states the cause
-            // before its colon: keep that sentence, drop the announcement.
-            if (/:$/.test(text)) {
-                var stated = text.match(/^(.*[.!?])\s+[^.!?]*:$/);
-                if (stated) text = stated[1];
-                else if (lines[1]) text = lines[1];
-            }
-            // The whole line, not its first sentence: a refusal's second
-            // sentence is often the remedy ("Use DNS-01 instead.").
-            if (text.length > 200) {
-                var cut = text.slice(0, 199);
-                var space = cut.lastIndexOf(' ');
-                text = (space > 0 ? cut.slice(0, space) : cut).replace(/[\s.,;:]+$/, '') + '\u2026';
-            }
-            text = text.replace(/:$/, '');
-            if (text && !/[.!?\u2026]$/.test(text)) text += '.';
-            return text || 'The job failed without a message.';
-        }
-
         var attempts = 0;
         function tick() {
             if (!pendingJobs[jobId]) return;   // dismissed/retried away
@@ -4368,9 +4444,12 @@
                 if (!pendingJobs[jobId]) return;   // dismissed during the request
                 var status = jobRec && jobRec.status;
                 if (status === 'succeeded') {
+                    var doneDomain = pendingJobs[jobId].domain;
                     delete pendingJobs[jobId];
                     delete pendingPollTimers[jobId];
-                    loadCertificates();   // the real row replaces the optimistic one
+                    // The real row replaces the optimistic one, and an open
+                    // panel drops a failure the renewal has just replaced.
+                    loadCertificates().then(function () { refreshOpenDetail(doneDomain); });
                 } else if (status === 'failed') {
                     pendingJobs[jobId].state = 'failed';
                     pendingJobs[jobId].error = (jobRec && jobRec.error) || 'Certificate issuance failed';
@@ -4383,17 +4462,27 @@
                     // output stays in the row.
                     pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
                     delete pendingPollTimers[jobId];
-                    renderPendingRows();
                     var failedKind = pendingJobs[jobId].kind || (jobRec && jobRec.operation);
                     var failedHint = pendingJobs[jobId].hint;
+                    var failedDomain = pendingJobs[jobId].domain;
                     showMessage((failedKind === 'renew'
                         ? 'Certificate renewal failed for '
                         : failedKind === 'reissue'
                             ? 'Certificate reissue failed for '
                             : 'Certificate issuance failed for ') +
-                        pendingJobs[jobId].domain + ': ' +
+                        failedDomain + ': ' +
                         failureCause(pendingJobs[jobId].error) +
                         (failedHint ? ' ' + failedHint : ''), 'error');
+                    if (failedKind === 'renew') {
+                        // The certificate is still there and still served: the
+                        // failure goes on its own row and in its detail panel,
+                        // from the record the server keeps (P38, P37), not on a
+                        // second row that reads as a certificate without expiry.
+                        delete pendingJobs[jobId];
+                        loadCertificates().then(function () { refreshOpenDetail(failedDomain); });
+                    } else {
+                        renderPendingRows();
+                    }
                 } else if (status === '__gone__') {
                     // Job evicted/unknown — drop the optimistic row and resync.
                     delete pendingJobs[jobId];

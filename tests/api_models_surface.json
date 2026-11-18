@@ -1,5 +1,5 @@
 {
- "contract_version": "2.69",
+ "contract_version": "2.70",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -583,6 +583,7 @@
     "ip_address": {
      "type": "string"
     },
+    "last_renewal_attempt": {},
     "latest_issuance": {
      "type": "string"
     },
@@ -1116,6 +1117,26 @@
      "type": "string"
     },
     "site_url": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "LastRenewalAttempt": {
+   "properties": {
+    "attempted_at": {
+     "type": "string"
+    },
+    "error": {
+     "type": "string"
+    },
+    "hint": {
+     "type": "string"
+    },
+    "outcome": {
+     "enum": [
+      "failed"
+     ],
      "type": "string"
     }
    },
