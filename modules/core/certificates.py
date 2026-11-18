@@ -5482,9 +5482,13 @@ class CertificateManager:
         cert_dir = getattr(self, 'cert_dir', None)
         if cert_dir is None:
             return None
+        # Only a file inside cert_dir: the name comes from the certificate
+        # listing, but this read must not trust that (CodeQL py/path-injection).
+        path = os.path.realpath(certificate_dir(cert_dir, domain) / LAST_RENEWAL_ATTEMPT_FILE)
+        if not path.startswith(os.path.realpath(cert_dir) + os.sep):
+            return None
         try:
-            with open(certificate_dir(cert_dir, domain) / LAST_RENEWAL_ATTEMPT_FILE,
-                      encoding='utf-8') as handle:
+            with open(path, encoding='utf-8') as handle:
                 record = json.load(handle)
         except (OSError, ValueError):
             return None

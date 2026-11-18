@@ -201,3 +201,27 @@ def test_a_certificate_never_renewed_has_none(tmp_path):
 
     assert 'last_renewal_attempt' in info
     assert info['last_renewal_attempt'] is None
+
+
+def test_a_record_outside_the_certificate_root_is_not_read(tmp_path):
+    """The record is read only from inside cert_dir: a certificate directory
+    that is a link to somewhere else does not lend it a record."""
+    from modules.core.certificates import LAST_RENEWAL_ATTEMPT_FIELDS, LAST_RENEWAL_ATTEMPT_FILE
+    root = tmp_path / 'certs'
+    root.mkdir()
+    outside = tmp_path / 'elsewhere'
+    _certificate(tmp_path)
+    write_certificate(outside, DOMAIN)
+    cert = x509.load_pem_x509_certificate((outside / 'cert.pem').read_bytes())
+    record = dict.fromkeys(LAST_RENEWAL_ATTEMPT_FIELDS, 'x')
+    record['cert_sha256'] = cert.fingerprint(hashes.SHA256()).hex()
+    (outside / LAST_RENEWAL_ATTEMPT_FILE).write_text(json.dumps(record), encoding='utf-8')
+    (root / 'linked.example.com').symlink_to(outside, target_is_directory=True)
+    mgr = _manager(tmp_path, _shell(0))
+    mgr.cert_dir = root
+
+    assert mgr._last_renewal_attempt_for('linked.example.com', cert) is None
+    # CONTROL: the same record inside the root is read.
+    (root / 'inside.example.com').mkdir()
+    (root / 'inside.example.com' / LAST_RENEWAL_ATTEMPT_FILE).write_text(json.dumps(record), encoding='utf-8')
+    assert mgr._last_renewal_attempt_for('inside.example.com', cert) is not None
