@@ -46,7 +46,7 @@ def test_a_failed_job_carries_the_code_and_the_hint():
 
 
 def test_a_job_without_an_explanation_has_none():
-    """CONTROL: a renewal job passes no explanation, and invents none."""
+    """CONTROL: a job submitted without an explanation invents none."""
     job = _failing_job(HTTP01_REFUSED, None)
     assert job['error_code'] is None and job['hint'] is None
 

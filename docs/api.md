@@ -1781,8 +1781,20 @@ A job that failed carries `error`, certbot's message, and since API contract
 **2.67** the `error_code` and `hint` the synchronous request would have answered
 with: `CERTIFICATE_CREATION_FAILED` (or `CERTIFICATE_REISSUE_FAILED` for a
 reissue) and what to check, for the challenge it was about. A CA directory
-that cannot be reached at all is named, with its URL. `hint` is `null` while
-the job runs, after it succeeds, and for a renewal.
+that cannot be reached at all is named, with its URL. Since **2.69** a renewal
+job that failed carries them too: the `error_code` of the synchronous renew
+(`RENEWAL_FAILED`, `REISSUE_REQUIRED`, `DNS_ACCOUNT_NOT_CONFIGURED`, ...) and a
+`hint`. When the code names the cause, the hint is the synchronous renew's
+message; otherwise it is certbot's hint, when one applies. Either way it ends
+"The previous certificate is still in place.", and that sentence is the whole
+hint when no rule knows the error. A reissue job's hint ends the same way. A
+CA that refused to register the ACME account (`invalidContact`,
+`unsupportedContact`) is pointed at the contact email under Settings > CA.
+On a create job, an error no rule knows has a `null` hint, as a renew job's
+already could, instead of a generic DNS or port-80 guess: read `error`. The
+synchronous 422 `CERTIFICATE_CREATION_FAILED` is unchanged and keeps that
+generic hint, a string. `hint` is also `null` while the job runs and after it
+succeeds.
 
 **Errors**: 400 validation or configuration (the body names the problem),
 403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a

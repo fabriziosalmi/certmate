@@ -4062,6 +4062,37 @@
     }
 
     function pollCertJob(jobId, statusUrl) {
+        // The cause a failed job's error names, short enough for a toast: the
+        // first non-empty line, without the "Certificate ... failed:" prefix
+        // the toast already says, kept whole up to 200 characters and cut on
+        // a word beyond. A first line that ends on a colon only announces the
+        // cause, so the next line is the one shown.
+        function failureCause(error) {
+            var text = String(error || '').replace(/^\s*Certificate (creation|reissue|renewal|issuance) failed:\s*/i, '');
+            var lines = text.split('\n').map(function (line) { return line.trim(); })
+                .filter(function (line) { return line; });
+            text = lines[0] || '';
+            // certbot's "An unexpected error occurred:" names the cause on
+            // the next line. CertMate's own "certbot exited ... without
+            // reporting an error. The last it printed:" states the cause
+            // before its colon: keep that sentence, drop the announcement.
+            if (/:$/.test(text)) {
+                var stated = text.match(/^(.*[.!?])\s+[^.!?]*:$/);
+                if (stated) text = stated[1];
+                else if (lines[1]) text = lines[1];
+            }
+            // The whole line, not its first sentence: a refusal's second
+            // sentence is often the remedy ("Use DNS-01 instead.").
+            if (text.length > 200) {
+                var cut = text.slice(0, 199);
+                var space = cut.lastIndexOf(' ');
+                text = (space > 0 ? cut.slice(0, space) : cut).replace(/[\s.,;:]+$/, '') + '\u2026';
+            }
+            text = text.replace(/:$/, '');
+            if (text && !/[.!?\u2026]$/.test(text)) text += '.';
+            return text || 'The job failed without a message.';
+        }
+
         var attempts = 0;
         function tick() {
             if (!pendingJobs[jobId]) return;   // dismissed/retried away
@@ -4081,16 +4112,24 @@
                     pendingJobs[jobId].error = (jobRec && jobRec.error) || 'Certificate issuance failed';
                     pendingJobs[jobId].errorCode = jobRec && jobRec.error_code;
                     // What to check, from the same rule the synchronous answer
-                    // uses: the toast leads with it, certbot's output stays in
-                    // the row (UX audit, 2026-11-17).
+                    // uses. The toast leads with the error's own cause and the
+                    // hint follows it: a renewal's hint can be only "The
+                    // previous certificate is still in place.", which alone
+                    // hid why it failed (UX audit, 2026-11-18). certbot's full
+                    // output stays in the row.
                     pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
                     delete pendingPollTimers[jobId];
                     renderPendingRows();
-                    showMessage((pendingJobs[jobId].kind === 'renew'
+                    var failedKind = pendingJobs[jobId].kind || (jobRec && jobRec.operation);
+                    var failedHint = pendingJobs[jobId].hint;
+                    showMessage((failedKind === 'renew'
                         ? 'Certificate renewal failed for '
-                        : 'Certificate issuance failed for ') +
+                        : failedKind === 'reissue'
+                            ? 'Certificate reissue failed for '
+                            : 'Certificate issuance failed for ') +
                         pendingJobs[jobId].domain + ': ' +
-                        (pendingJobs[jobId].hint || pendingJobs[jobId].error), 'error');
+                        failureCause(pendingJobs[jobId].error) +
+                        (failedHint ? ' ' + failedHint : ''), 'error');
                 } else if (status === '__gone__') {
                     // Job evicted/unknown — drop the optimistic row and resync.
                     delete pendingJobs[jobId];

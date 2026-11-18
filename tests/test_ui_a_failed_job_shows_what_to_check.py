@@ -2,8 +2,9 @@
 
 The server side is tests/test_a_failed_job_says_what_to_check.py. Here the
 job answers are given in the browser (page.route): a job the page adopts at
-load, which then fails with a hint. The toast leads with the hint instead of
-certbot's output, and the failed row carries it under the error.
+load, which then fails with a hint. The toast carries the hint after the
+error's first sentence (tests/test_ui_a_failed_job_toast_leads_with_the_cause.py),
+and the failed row carries it under the error.
 """
 import json
 import os
@@ -58,7 +59,7 @@ def test_the_toast_and_the_row_say_what_to_check(page):
     page.goto(f'{BASE_URL}/', wait_until='networkidle')
     page.wait_for_selector('[data-pending-job="j1"] [data-failure-hint]', timeout=15000)
     assert page.inner_text('[data-pending-job="j1"] [data-failure-hint]') == HINT
-    assert page.locator(f'text={HINT[:60]}').count() >= 2, 'the toast does not lead with the hint'
+    assert page.locator(f'text={HINT[:60]}').count() >= 2, 'the toast does not carry the hint'
 
 
 def test_a_failure_with_no_hint_shows_the_error_as_before(page):

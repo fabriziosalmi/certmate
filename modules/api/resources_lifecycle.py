@@ -184,7 +184,23 @@ def _ca_unreachable_hint(error_msg: str):
             "that its name resolves from this host, and that outbound HTTPS to it is allowed.")
 
 
-def _certbot_hint(error_msg: str, challenge_type: str | None = None) -> str:
+# The CA refused to register the ACME account, nearly always for its contact
+# email (UX perception audit, 2026-11-18: Let's Encrypt refusing
+# me@homelab.example was told to check DNS credentials). RFC 8555 names the
+# problem types invalidContact and unsupportedContact; invalidEmail is the
+# ACME v1 name, which a CA still on the old wording may send.
+_ACCOUNT_REFUSED_MARKERS = ('unable to register an account', 'invalidcontact', 'unsupportedcontact',
+                            'invalidemail', 'invalid email address')
+_ACCOUNT_REFUSED_HINT = ('The CA refused to register the ACME account: check the contact email on the '
+                         'CA account under Settings > CA (it must be a real, deliverable address).')
+# certbot exited without a word (certificates.py): the one unmatched failure
+# whose own text gives no cause, so the challenge's usual suspect is better
+# than nothing.
+_NOTHING_REPORTED = 'without reporting an error'
+_PREVIOUS_KEPT = 'The previous certificate is still in place.'
+
+
+def _certbot_hint(error_msg: str, challenge_type: str | None = None, fallback: bool = True) -> str | None:
     """The same, for a failure certbot reported.
 
     Rate limits are tested first, and with `is_acme_rate_limit` rather than
@@ -202,6 +218,13 @@ def _certbot_hint(error_msg: str, challenge_type: str | None = None) -> str:
     The third is the one that decided the order. It contains "auth", so it
     reached the authentication branch and told an operator to go and rotate
     credentials that were working, about a refusal that retrying makes worse.
+
+    An error no rule knows ends on the generic DNS or port-80 hint when
+    *fallback* is set: the synchronous 422 answers with a string hint, and
+    a caller may rely on it. A job's explanation passes fallback=False and
+    gets None instead: the generic hint guessed a wrong cause (CertMate's
+    own "HTTP-01 challenge does not support wildcard domains" was told to
+    check port 80), and the dashboard's toast shows the error's cause first.
     """
     from ..core.utils import is_acme_rate_limit
 
@@ -211,6 +234,8 @@ def _certbot_hint(error_msg: str, challenge_type: str | None = None) -> str:
     unreachable = _ca_unreachable_hint(error_msg or '')
     if unreachable:
         return unreachable
+    if any(marker in lowered for marker in _ACCOUNT_REFUSED_MARKERS):
+        return _ACCOUNT_REFUSED_HINT
     # The CA's words name the challenge more surely than the request does: an
     # IP certificate is http-01 whatever the request or the default said.
     challenge = _challenge_named_in(lowered) or (challenge_type or '').lower() or None
@@ -223,6 +248,8 @@ def _certbot_hint(error_msg: str, challenge_type: str | None = None) -> str:
         if http01:
             return 'The CA timed out reaching this host: check that port 80 is open and reaches CertMate.'
         return 'DNS propagation timed out. Try increasing DNS propagation time in settings.'
+    if not fallback and _NOTHING_REPORTED not in lowered:
+        return None
     if http01:
         return 'Check that the name resolves to this host and that port 80 reaches CertMate.'
     return 'Check DNS provider credentials and ensure DNS records can be created.'
@@ -247,14 +274,15 @@ def _prefixed(prefix: str, error_msg: str) -> str:
     return prefix + error_msg
 
 
-def _creation_failure(error_msg: str, challenge_type: str | None = None):
-    """The error body for a certbot failure, prefixed exactly once."""
+def _creation_failure(error_msg: str, challenge_type: str | None = None, fallback: bool = True):
+    """The error body for a certbot failure, prefixed exactly once. A job
+    passes fallback=False: see `_certbot_hint`."""
     return {'code': 'CERTIFICATE_CREATION_FAILED',
             'error': _prefixed(_CREATION_PREFIX, error_msg),
-            'hint': _certbot_hint(error_msg, challenge_type)}
+            'hint': _certbot_hint(error_msg, challenge_type, fallback)}
 
 
-def _reissue_failure(error_msg: str, challenge_type: str | None = None):
+def _reissue_failure(error_msg: str, challenge_type: str | None = None, fallback: bool = True):
     """The error body for a reissue that failed in certbot, prefixed exactly once.
 
     The previous certificate is untouched by a failed reissue, and the hint
@@ -262,7 +290,43 @@ def _reissue_failure(error_msg: str, challenge_type: str | None = None):
     """
     return {'code': 'CERTIFICATE_REISSUE_FAILED',
             'error': _prefixed(_REISSUE_PREFIX, error_msg),
-            'hint': _certbot_hint(error_msg, challenge_type) + ' The previous certificate is still in place.'}
+            'hint': _with_previous_kept(_certbot_hint(error_msg, challenge_type, fallback))}
+
+
+def _with_previous_kept(hint: str | None) -> str:
+    """*hint*, then the sentence a failed reissue or renewal always earns."""
+    return f'{hint} {_PREVIOUS_KEPT}' if hint else _PREVIOUS_KEPT
+
+
+def _renewal_failure(error_msg: str, challenge_type: str | None = None):
+    """What a renewal job that failed says to check (UX perception audit,
+    2026-11-18: the async renew passed no explanation, so the dashboard
+    showed certbot's raw output and nothing said the site was still up).
+
+    The code is the one the synchronous renew answers with, from the same
+    `classify_renewal_error`. When it knows the cause (any code but the
+    generic RENEWAL_FAILED), its message is the hint, as the synchronous
+    renew answers; otherwise certbot's hint, with no generic fallback. A
+    failed renewal leaves the previous certificate served, and the hint ends
+    by saying so. With no rule matching, that sentence is the whole hint,
+    and the dashboard's toast leads with the error's own cause.
+    """
+    message, code = classify_renewal_error(error_msg)
+    hint = message if code != 'RENEWAL_FAILED' else _certbot_hint(error_msg, challenge_type, fallback=False)
+    return {'code': code, 'hint': _with_previous_kept(hint)}
+
+
+def _renewal_challenge(ctx, domain):
+    """The challenge the certificate was issued with, else the instance
+    default: what the renewal hint falls back on when certbot's message does
+    not name one. Read before the job runs, so nothing here can raise inside
+    the worker's failure handler."""
+    try:
+        metadata = ctx.cert_service.read_metadata(domain)
+    except (OSError, ValueError):
+        metadata = None
+    challenge = metadata.get('challenge_type') if isinstance(metadata, dict) else None
+    return challenge if isinstance(challenge, str) and challenge else _requested_challenge({}, ctx.settings)
 
 
 def _requested_challenge(data, settings_manager):
@@ -332,7 +396,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     challenge = _requested_challenge(data, ctx.settings)
                     return _submit(ctx, 'create', prepared['domain'],
                                    lambda: ctx.cert_service.issue_create(prepared),
-                                   explain=lambda message: _creation_failure(message, challenge))
+                                   explain=lambda message: _creation_failure(message, challenge, fallback=False))
 
                 result = ctx.cert_service.create(
                     domain=domain,
@@ -426,8 +490,10 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                         domain=domain, user=user, ip_address=request.remote_addr,
                         audit_ctx=audit_ctx,
                     )
+                    challenge = _renewal_challenge(ctx, domain)
                     return _submit(ctx, 'renew', domain,
-                                   lambda: ctx.cert_service.issue_renew(prepared, force=force))
+                                   lambda: ctx.cert_service.issue_renew(prepared, force=force),
+                                   explain=lambda message: _renewal_failure(message, challenge))
 
                 result = ctx.cert_service.renew(
                     domain=domain, force=force,
@@ -518,7 +584,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     challenge = _requested_challenge(data, ctx.settings)
                     return _submit(ctx, 'reissue', domain,
                                    lambda: ctx.cert_service.issue_reissue(prepared),
-                                   explain=lambda message: _reissue_failure(message, challenge))
+                                   explain=lambda message: _reissue_failure(message, challenge, fallback=False))
 
                 result = ctx.cert_service.issue_reissue(
                     ctx.cert_service.prepare_reissue(**kwargs)
