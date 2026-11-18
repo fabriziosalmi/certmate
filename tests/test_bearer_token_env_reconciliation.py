@@ -137,6 +137,10 @@ def test_a_refused_save_says_the_supplied_token_is_not_in_force(instance, monkey
     text = ' '.join(r.getMessage() for r in caplog.records)
     assert 'Could not store the API Bearer Token' in text, text
     assert 'Reconciled' not in text, text
+    # Read as the log handler writes it: "name: value" would be redacted.
+    from modules.core.structured_logging import sanitize_text
+    mine = ' '.join(r.getMessage() for r in caplog.records if 'Could not store' in r.getMessage())
+    assert sanitize_text(mine) == mine, sanitize_text(mine)
     assert _authenticates(auth, settings, OTHER_TOKEN)
     assert not _authenticates(auth, settings, ENV_TOKEN)
 

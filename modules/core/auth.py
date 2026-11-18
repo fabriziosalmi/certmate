@@ -1458,8 +1458,8 @@ class AuthManager:
                 # elsewhere in settings.json, a write failure): the stored
                 # token is unchanged and still the one that authenticates.
                 logger.error(
-                    "Could not store the API Bearer Token supplied in %s: the "
-                    "settings save was refused (the settings error above says "
+                    "Could not store the API Bearer Token supplied in %s, because "
+                    "the settings save was refused (the settings error above says "
                     "why). The previously stored token still authenticates and "
                     "the supplied one does not, until settings.json can be "
                     "saved and CertMate is restarted.", source)
@@ -1538,7 +1538,7 @@ class AuthManager:
                 "rotated, or SECRET_KEY changed since it was hashed (for "
                 "example a backup restored onto a new host; the hash is "
                 "HMAC-SHA256 bound to SECRET_KEY). Startup now stores the "
-                "supplied token in its place; the next message says whether "
+                "supplied token in its place; a later message says whether "
                 "it could. If SECRET_KEY changed, other values bound to it "
                 "may need attention too.",
                 source)

@@ -138,7 +138,7 @@ def test_the_message_says_what_happens_and_sends_no_one_to_the_api_keys_page(mon
     msg = ' '.join(r.getMessage() for r in caplog.records)
     assert 'does not match the stored' in msg, msg
     assert '401' not in msg and 'API Keys' not in msg, msg
-    assert 'the next message says whether it could' in msg, msg
+    assert 'a later message says whether it could' in msg, msg
     # Read as the log handler writes it: a "name: value" in the text would be
     # redacted, hiding the word after the colon.
     from modules.core.structured_logging import sanitize_text
