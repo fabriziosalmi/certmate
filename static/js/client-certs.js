@@ -235,7 +235,7 @@
                     '<div class="flex items-center justify-end gap-1">' +
                         '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-hover" title="Details" aria-label="Details ' + safeCN + '"><i class="fas fa-eye" aria-hidden="true"></i></button>' +
                         (!cert.revoked ? '<button type="button" data-cc-action="revoke" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-hover" title="Revoke" aria-label="Revoke ' + safeCN + '"><i class="fas fa-ban" aria-hidden="true"></i></button>' : '') +
-                        '<button type="button" data-cc-action="renew" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-hover" title="Renew" aria-label="Renew ' + safeCN + '"><i class="fas fa-sync" aria-hidden="true"></i></button>' +
+                        '<button type="button" data-cc-action="renew" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-hover" title="Renew" aria-label="Renew ' + safeCN + '"><i class="fas fa-sync-alt" aria-hidden="true"></i></button>' +
                     '</div>' +
                 '</td>' +
             '</tr>';

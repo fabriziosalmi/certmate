@@ -362,6 +362,23 @@ def _record_a_renewal_window(directory):
     (directory / RENEWAL_INFO_FILE).write_text(json.dumps(record), encoding='utf-8')
 
 
+def _record_a_failed_renewal(directory):
+    """What a renewal that failed leaves beside the certificate (P37), with the hint built by the
+    same function: without it `last_renewal_attempt` is only ever `null` in the walk."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+
+    from modules.core.certificates import LAST_RENEWAL_ATTEMPT_FILE
+    from modules.core.failure_hints import renewal_failure
+
+    cert = x509.load_pem_x509_certificate((directory / 'cert.pem').read_bytes())
+    error = 'Certificate renewal failed: DNS problem: NXDOMAIN looking up TXT for _acme-challenge.alias.example.test'
+    record = {'attempted_at': '2026-09-30T03:00:04Z', 'outcome': 'failed', 'error': error,
+              'hint': renewal_failure(error, 'dns-01')['hint'],
+              'cert_sha256': cert.fingerprint(hashes.SHA256()).hex()}
+    (directory / LAST_RENEWAL_ATTEMPT_FILE).write_text(json.dumps(record), encoding='utf-8')
+
+
 def seed(container, port):
     """Certificates on disk the way an issuance leaves them, an inventory with two certificates
     nobody issued, a key from setup mode, and settings that allow another issuance.
@@ -406,6 +423,7 @@ def seed(container, port):
         _metadata(ALIAS, domain_alias='alias-zone.example.test', alias_dns_provider='cloudflare',
                   acme_profile='shortlived', acme_profile_withdrawn_at='2026-09-30T03:00:04'),
         encoding='utf-8')
+    _record_a_failed_renewal(cert_dir / ALIAS)
 
     settings = container.managers['settings']
     current = settings.load_settings()

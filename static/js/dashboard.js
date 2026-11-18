@@ -666,6 +666,12 @@
         if (isBrowser) {
             if (result && result.reachable) {
                 chipClass = 'bg-success-surface text-success-fg'; statusIcon = 'fa-check'; statusText = 'Reachable';
+            } else if (result && result.reachable === false && result.error === 'network') {
+                // The browser tried and its request failed. A no-cors fetch says
+                // no more than that: a name that does not resolve, a refused
+                // connection and a certificate the browser does not trust all
+                // fail the same way, so it is not called "Unreachable".
+                chipClass = 'bg-danger-surface text-danger-fg'; statusIcon = 'fa-xmark'; statusText = 'Could not connect';
             } else if (result && result.reachable === false) {
                 chipClass = 'bg-danger-surface text-danger-fg'; statusIcon = 'fa-xmark'; statusText = 'Unreachable';
             } else {
@@ -707,17 +713,19 @@
         return 'inline-flex items-center gap-1 px-1.5 py-1 rounded-md ' + display.chipClass;
     }
 
-    // Square variant (w-10 h-10, bordered) so the detail modal's two deploy
-    // indicators line up with the quick-action buttons on a single row.
+    // Detail variant (bordered, as tall as the action buttons): the two chips
+    // of the detail panel, which also say in words what the probe found.
     function deploymentSquareClass(display) {
-        return 'inline-flex items-center justify-center gap-1 w-10 h-10 rounded-lg border border-border ' + display.chipClass;
+        return 'inline-flex items-center gap-1.5 h-10 px-3 rounded-lg border border-border text-sm font-medium whitespace-nowrap ' + display.chipClass;
     }
     // The status glyph is fixed-width (fa-fw): check, cross, minus and spinner
     // are not the same width, and the chip changing width moved the chip beside
     // it every time a probe finished.
-    function deploymentChipInner(display) {
+    // `withText`: the detail variant, which carries "Server: Deployed" in words.
+    function deploymentChipInner(display, withText) {
         return '<i class="fas ' + display.roleIcon + '" aria-hidden="true"></i>' +
-            '<i class="fas fa-fw ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>';
+            '<i class="fas fa-fw ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>' +
+            (withText ? '<span>' + escapeHtml(display.text) + '</span>' : '');
     }
 
     // A chip in a state that is not a probe result (being checked, or the check
@@ -725,16 +733,17 @@
     // (a taller pill with px-2.5 py-0.5, and a text label on failure): every
     // row's Deployment cell shrank and grew back while the dashboard opened, and
     // the detail modal's square chips lost their square.
-    function setDeploymentChipState(statusElement, statusIcon, chipClass, label) {
+    function setDeploymentChipState(statusElement, statusIcon, chipClass, label, word) {
+        var browser = statusElement.getAttribute('data-deployment-role') === 'browser';
+        var detail = statusElement.getAttribute('data-deployment-variant') === 'square';
         var display = {
-            roleIcon: statusElement.getAttribute('data-deployment-role') === 'browser' ? 'fa-globe' : 'fa-server',
+            roleIcon: browser ? 'fa-globe' : 'fa-server',
             statusIcon: statusIcon,
-            chipClass: chipClass
+            chipClass: chipClass,
+            text: (browser ? 'Browser' : 'Server') + ': ' + word
         };
-        statusElement.className = (statusElement.getAttribute('data-deployment-variant') === 'square'
-            ? deploymentSquareClass(display)
-            : deploymentChipClass(display));
-        statusElement.innerHTML = deploymentChipInner(display);
+        statusElement.className = detail ? deploymentSquareClass(display) : deploymentChipClass(display);
+        statusElement.innerHTML = deploymentChipInner(display, detail);
         statusElement.title = label;
         statusElement.setAttribute('aria-label', label);
     }
@@ -772,7 +781,7 @@
             (square ? ' data-deployment-variant="square"' : '') +
             ' title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '"' +
             ' class="' + (square ? deploymentSquareClass(display) : deploymentChipClass(display)) + '">' +
-            deploymentChipInner(display) +
+            deploymentChipInner(display, square) +
             '</span>';
     }
 
@@ -858,12 +867,76 @@
     // answer, and an absent row would read as "nothing to know".
     // When the sweep renews it (#393): the one instant the server decided, after the threshold,
     // the lifetime and the CA's window. Shown as it is, never recomputed here.
+    //
+    // A past date says how long the renewal is overdue (UX perception audit,
+    // 2026-11-18, P37). The word is kept here, once, while the vocabulary for
+    // late renewals is still being decided. "The next renewal run renews it"
+    // is said only while no renewal of this certificate has failed: after a
+    // failure the next run meets the same cause, and the banner says it.
+    var RENEWAL_OVERDUE_SINCE = 'Renewal overdue since';
+
     function renewsAtHtml(cert) {
         if (!cert.renews_at) return '<span class="text-muted">\u2014</span>';
         var due = cert.needs_renewal && new Date(cert.renews_at) <= new Date();
-        return '<span class="' + (due ? 'text-warning-fg' : '') + '">' +
+        if (!due) return '<span>' + escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>';
+        return '<span class="text-warning-fg">' + RENEWAL_OVERDUE_SINCE + ' ' +
             escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
-            (due ? '<div class="text-xs text-warning-fg">Due: the next renewal run renews it</div>' : '');
+            (lastRenewalFailure(cert) ? '' : '<div class="text-xs text-warning-fg">Due: the next renewal run renews it</div>');
+    }
+
+    // The last renewal of this certificate that failed, as the server keeps it
+    // (`last_renewal_attempt`, P37), or null. Kept until a renewal replaces
+    // the certificate, so it is there after a reload and for the sweep's own
+    // failures, not only for a job this page watched.
+    function lastRenewalFailure(cert) {
+        var attempt = cert && cert.last_renewal_attempt;
+        return attempt && attempt.outcome === 'failed' && cert.external !== true ? attempt : null;
+    }
+
+    // The cause a failed job's error names, short enough for a toast: the
+    // first non-empty line, without the "Certificate ... failed:" prefix
+    // the toast already says (or the lineage path's "Renewal failed:"), kept
+    // whole up to 200 characters and cut on a word beyond. A first line that
+    // ends on a colon only announces the cause, so the next line is the one
+    // shown. Used by the toast and by the detail panel's last failed renewal.
+    function failureCause(error) {
+        var text = String(error || '').replace(/^\s*(Certificate )?(creation|reissue|renewal|issuance) failed:\s*/i, '');
+        var lines = text.split('\n').map(function (line) { return line.trim(); })
+            .filter(function (line) { return line; });
+        text = lines[0] || '';
+        // certbot's "An unexpected error occurred:" names the cause on
+        // the next line. CertMate's own "certbot exited ... without
+        // reporting an error. The last it printed:" states the cause
+        // before its colon: keep that sentence, drop the announcement.
+        if (/:$/.test(text)) {
+            var stated = text.match(/^(.*[.!?])\s+[^.!?]*:$/);
+            if (stated) text = stated[1];
+            else if (lines[1]) text = lines[1];
+        }
+        // The whole line, not its first sentence: a refusal's second
+        // sentence is often the remedy ("Use DNS-01 instead.").
+        if (text.length > 200) {
+            var cut = text.slice(0, 199);
+            var space = cut.lastIndexOf(' ');
+            text = (space > 0 ? cut.slice(0, space) : cut).replace(/[\s.,;:]+$/, '') + '\u2026';
+        }
+        text = text.replace(/:$/, '');
+        if (text && !/[.!?\u2026]$/.test(text)) text += '.';
+        return text || 'The job failed without a message.';
+    }
+
+    // The banner's account of the last failed renewal: when, why, what to
+    // check, and where the run is recorded.
+    function lastRenewalFailureHtml(cert) {
+        var failed = lastRenewalFailure(cert);
+        if (!failed) return '';
+        var when = CertMate.formatDateTime(failed.attempted_at);
+        return '<div class="mt-2 text-sm text-danger-fg" data-last-renewal-failed>' +
+            '<div class="font-semibold">Last renewal failed' + (when ? ' ' + escapeHtml(when) : '') + '</div>' +
+            '<div class="[overflow-wrap:anywhere]" title="' + escapeHtml(failed.error || '') + '">' + escapeHtml(failureCause(failed.error)) + '</div>' +
+            (failed.hint ? '<div class="mt-1 text-label break-words">' + escapeHtml(failed.hint) + '</div>' : '') +
+            '<a href="/activity" class="text-xs text-info-fg hover:underline">See it in the Activity log</a>' +
+            '</div>';
     }
 
     // The ACME profile it was issued with (#395), and the warning a renewal leaves when the CA
@@ -957,14 +1030,7 @@
                     '<h3 class="text-lg font-medium text-foreground mb-2">Welcome to CertMate</h3>' +
                     '<p class="text-muted">Follow these steps to get started:</p>' +
                     '</div>' +
-                    '<ol class="space-y-3 mb-6 text-sm">' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
-                    '<span class="text-label"><a href="/settings" class="text-info-fg font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
-                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
-                    '<span class="text-label">Create your first certificate with the <strong>Create Certificate</strong> button below</span></li>' +
-                    // No "enable authentication" step: setup turns local login
-                    // on before this page can be reached (UX audit, 2026-11-17).
-                    '</ol>' +
+                    '<ol id="welcomeSteps" class="space-y-3 mb-6 text-sm">' + welcomeStepsHtml() + '</ol>' +
                     '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
@@ -1086,6 +1152,20 @@
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-info-fg min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
+            // A renewal that failed is said on the certificate's own row, which
+            // keeps its expiry and its CA (P38): the cause under the name, the
+            // whole error and the hint on hover, a chip beside the status.
+            // Below md the cause wraps anywhere: certbot's error carries
+            // tokens without spaces (NewConnectionError("HTTPSConnection(...)
+            // that break-words would leave whole, widening the column past
+            // the screen.
+            var renewalFailed = lastRenewalFailure(cert);
+            var renewalFailedHint = renewalFailed
+                ? rowRaw(rowHtml`<div class="mt-1 flex items-start text-xs text-danger-fg min-w-0" data-renewal-failed><i class="fas fa-circle-exclamation mr-1 mt-0.5 shrink-0" aria-hidden="true"></i><span class="min-w-0 [overflow-wrap:anywhere] md:truncate" title="${(renewalFailed.error || '') + (renewalFailed.hint ? '\n\n' + renewalFailed.hint : '')}">Renewal failed: ${failureCause(renewalFailed.error)}</span></div>`)
+                : false;
+            var renewalFailedChip = renewalFailed
+                ? rowRaw('<div class="mt-1"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-circle-exclamation mr-1" aria-hidden="true"></i>Renewal failed</span></div>')
+                : false;
             // R-5 mobile card layout: surface the three desktop-only columns
             // (Expires / Provider / Deployment) as stacked rows inside the
             // Domain cell when below md (768 px). The table semantics are
@@ -1105,7 +1185,7 @@
             // em-dashes on a phone is noise. The detail panel is where an
             // unanswered field still gets said out loud.
             var mobileCaLine = caLabel
-                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted"><i class="fas fa-certificate mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span>${rowRaw(caLabel)}</span></div>`)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted"><i class="fas fa-shield-alt mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span>${rowRaw(caLabel)}</span></div>`)
                 : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileCaLine}${mobileDeploymentLine}</div>`);
@@ -1124,21 +1204,22 @@
                             ${nameButton(title)}
                             ${ipHint}
                             ${aliasHint}
+                            ${renewalFailedHint}
                             ${tagHint}
                             ${mobileMeta}
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${keylessRow ? LOST_KEY_TITLE : ''}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
+                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${keylessRow ? LOST_KEY_TITLE : ''}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span>${renewalFailedChip}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${external ? 'Replace by ' + expiryStr : expiryStr}</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-right">
+                <td class="px-4 py-4 whitespace-nowrap text-right hidden md:table-cell">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? (external ? actionBtn('replace', cert.domain, 'green', 'Replace certificate', 'fa-file-arrow-up') : actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt')) : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
-                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-external="' + (external ? '1' : '0') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
+                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-external="' + (external ? '1' : '0') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu" aria-expanded="false"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
                     </div>
                 </td>
             </tr>`;
@@ -1185,17 +1266,43 @@
     // (position:fixed) so the table's overflow-hidden / overflow-x-auto wrappers
     // don't clip it.
     var _rowMenu = null;
-    function closeRowMenu() {
+    var _rowMenuButton = null;
+    // `refocus`: give focus back to the button that opened the menu (Escape,
+    // Tab), so a keyboard user stays on the row instead of on the page body.
+    function closeRowMenu(refocus) {
         if (!_rowMenu) return;
         _rowMenu.remove();
         _rowMenu = null;
         document.removeEventListener('click', _rowMenuAway, true);
         document.removeEventListener('keydown', _rowMenuKey, true);
+        if (_rowMenuButton) {
+            _rowMenuButton.setAttribute('aria-expanded', 'false');
+            if (refocus === true && _rowMenuButton.isConnected) _rowMenuButton.focus();
+        }
+        _rowMenuButton = null;
     }
     function _rowMenuAway(e) {
         if (_rowMenu && !_rowMenu.contains(e.target) && !e.target.closest('[data-more-domain]')) closeRowMenu();
     }
-    function _rowMenuKey(e) { if (e.key === 'Escape') closeRowMenu(); }
+    // A role="menu" answers the arrow keys, Home and End (roving focus over its
+    // items, wrapping at either end). Escape closes it on its button; Tab closes
+    // it on its button too and then moves on from there, as Tab from the button would.
+    function _rowMenuKey(e) {
+        if (!_rowMenu) return;
+        if (e.key === 'Escape') { e.preventDefault(); closeRowMenu(true); return; }
+        if (e.key === 'Tab') { closeRowMenu(true); return; }
+        var items = Array.prototype.slice.call(_rowMenu.querySelectorAll('[role="menuitem"]'));
+        if (!items.length) return;
+        var at = items.indexOf(document.activeElement);
+        var next = null;
+        if (e.key === 'ArrowDown') next = at < 0 ? 0 : (at + 1) % items.length;
+        else if (e.key === 'ArrowUp') next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = items.length - 1;
+        if (next === null) return;
+        e.preventDefault();
+        items[next].focus();
+    }
     function _menuItem(icon, label, danger) {
         return '<button type="button" role="menuitem" class="w-full flex items-center gap-2 px-3 py-2 text-left ' +
             (danger ? 'text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/20' : 'text-foreground hover:bg-hover') +
@@ -1235,11 +1342,48 @@
             b.addEventListener('click', function () { closeRowMenu(); actions[i].fn(); });
         });
         _rowMenu = menu;
+        _rowMenuButton = btn;
+        btn.setAttribute('aria-expanded', 'true');
+        // The click listener waits a tick so the click that opened the menu does
+        // not close it; the keys are the menu's at once.
+        document.addEventListener('keydown', _rowMenuKey, true);
         setTimeout(function () {
-            document.addEventListener('click', _rowMenuAway, true);
-            document.addEventListener('keydown', _rowMenuKey, true);
+            if (_rowMenu === menu) document.addEventListener('click', _rowMenuAway, true);
         }, 0);
         if (items[0]) items[0].focus();
+    }
+
+    // Whether deploy hooks are on, read from /api/deploy/config: admin only,
+    // like the Run button that needs it. Asked once per page, when an admin
+    // first opens a certificate. null until it answers, and after a failed
+    // request, which leaves the button offered: the run then says what it found.
+    var _deployHooksOn = null;
+    var _deployHooksAsked = null;
+    var DEPLOY_HOOKS_OFF_TITLE = 'Deploy hooks are off: turn them on in Settings → Deploy';
+    function loadDeployHooksState() {
+        if (!_deployHooksAsked) {
+            _deployHooksAsked = fetch('/api/deploy/config', { credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (config) { _deployHooksOn = config ? config.enabled === true : null; })
+                .catch(function () { _deployHooksOn = null; });
+        }
+        return _deployHooksAsked;
+    }
+    function applyDeployHooksState() {
+        document.querySelectorAll('#certDetailPanel [data-run-deploy-hooks]').forEach(function (button) {
+            var off = _deployHooksOn === false;
+            button.disabled = off;
+            button.title = off ? DEPLOY_HOOKS_OFF_TITLE : 'Run deploy hooks now';
+        });
+    }
+    // "Run deploy hooks now", not offered while deploy hooks are off: it used to
+    // be confirmed with "All enabled hooks will execute" and then run nothing.
+    function runDeployHooksButtonHtml(domain) {
+        var off = _deployHooksOn === false;
+        return '<button type="button" data-run-deploy-hooks' + CertMate.does('click', 'runDeployHooks', [domain]) +
+            'title="' + (off ? DEPLOY_HOOKS_OFF_TITLE : 'Run deploy hooks now') + '" aria-label="Run deploy hooks now"' +
+            (off ? ' disabled' : '') + ' class="cm-text-btn">' +
+            '<i class="fas fa-fw fa-play" aria-hidden="true"></i><span>Run deploy hooks</span></button>';
     }
 
     // Certificate detail slide-out panel
@@ -1411,6 +1555,11 @@
         var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
         var external = cert.external === true;
         var caDetailLabel = caDisplayName(cert.ca_provider);
+        // The account is named when it tells something: not for the one
+        // 'default' account of a CA (or a flat, account-less CA config).
+        if (caDetailLabel && cert.ca_account_id && !caOnlyDefaultAccount(cert.ca_provider, cert.ca_account_id)) {
+            caDetailLabel += ', account ' + escapeHtml(caAccountName(cert.ca_provider, cert.ca_account_id));
+        }
         if (caDetailLabel && cert.imported_at) caDetailLabel = 'Renewal: ' + caDetailLabel;
         var sanDomains = Array.isArray(cert.san_domains) ? cert.san_domains : [];
         var sanDomainsHtml = sanDomains.map(function (san) {
@@ -1452,27 +1601,26 @@
             var bannerIcon = keylessDetail ? 'fa-key' : isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
             var autoOn = cert.auto_renew !== false;
 
-            // Quick-action icon button — same glyphs as the dashboard table row
-            // actions so the action vocabulary reads identically everywhere; the
-            // label lives in the tooltip + aria-label.
+            // Quick-action button: its icon and its word (`label`, a part of
+            // `title`). The word is what a touch browser shows, which never shows
+            // a title; title and aria-label keep the full name.
             // `action` and `args` name what the button does (see CertMate.actions).
-            function actIcon(action, args, icon, hover, title, pass) {
+            function actIcon(action, args, icon, title, label, pass, more) {
                 return '<button type="button"' + CertMate.does('click', action, args, pass) + 'title="' + title + '" aria-label="' + title + '" ' +
-                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
-                    '<i class="fas ' + icon + '"></i></button>';
+                    (more || '') + 'class="cm-text-btn">' +
+                    '<i class="fas fa-fw ' + icon + '" aria-hidden="true"></i><span>' + label + '</span></button>';
             }
             // Link variant of actIcon (same chrome) for controls that navigate.
-            function actLink(href, icon, hover, title) {
-                return '<a href="' + href + '" title="' + title + '" aria-label="' + title + '" ' +
-                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
-                    '<i class="fas ' + icon + '"></i></a>';
+            function actLink(href, icon, title, label) {
+                return '<a href="' + href + '" title="' + title + '" aria-label="' + title + '" class="cm-text-btn">' +
+                    '<i class="fas fa-fw ' + icon + '" aria-hidden="true"></i><span>' + label + '</span></a>';
             }
-            // Danger variant — red at rest, same chrome as the topbar Logout, for
-            // the destructive delete. (deleteCertificate still confirms first.)
-            function actIconDanger(action, args, icon, title) {
+            // Danger variant: red at rest, for the destructive delete, on a line
+            // of its own below the other actions. (deleteCertificate still confirms first.)
+            function actIconDanger(action, args, icon, title, label) {
                 return '<button type="button"' + CertMate.does('click', action, args) + 'title="' + title + '" aria-label="' + title + '" ' +
-                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-danger-line text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 transition">' +
-                    '<i class="fas ' + icon + '"></i></button>';
+                    'class="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-lg border border-danger-line text-sm font-medium text-danger-fg whitespace-nowrap hover:bg-red-50 dark:hover:bg-red-900/30 transition">' +
+                    '<i class="fas fa-fw ' + icon + '" aria-hidden="true"></i><span>' + label + '</span></button>';
             }
             function detailRow(label, valueHtml) {
                 return '<div class="flex items-start justify-between gap-4 py-2.5"><dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
@@ -1483,7 +1631,11 @@
                 '<div class="space-y-5">' +
                 // Status banner: status word + days + date, integrated and at one
                 // weight (the day count and the calendar date are the same datum).
-                '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + '">' +
+                // A failed renewal is told under the row, across the banner's
+                // width: beside the Auto-renew switch, at 390 px, its column
+                // was some 90 px wide and the cause ran to twenty lines.
+                '<div class="p-4 rounded-lg ' + bannerBg + '">' +
+                '<div class="flex items-center gap-3">' +
                 '<i class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
                 '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
@@ -1501,6 +1653,8 @@
                           ? autoRenewSwitchHtml(cert.domain, autoOn)
                           : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>')) +
                 '</div>' +
+                '</div>' +
+                lastRenewalFailureHtml(cert) +
                 '</div>' +
                 // Details
                 '<dl class="divide-y divide-border">' +
@@ -1525,16 +1679,18 @@
                 '</dl>' +
                 // Notes and tags (#1043): what CertMate cannot know by itself.
                 '<div id="certLabelsSection" class="pt-4 border-t border-border">' + labelsSectionHtml(cert) + '</div>' +
-                // Deployment + Actions side by side — two sections, one column
-                // each, every control a quick-action button (points 2 & 3).
-                '<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t border-border">' +
+                // Deployment, then Actions: every control says what it does in a
+                // word, so each section takes the panel's width. The chips have a
+                // line of their own, so their words changing when a probe answers
+                // moves none of the buttons.
+                '<div class="grid grid-cols-1 gap-y-4 pt-4 border-t border-border">' +
                 '<div>' +
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Deployment</h4>' +
+                '<div class="flex flex-wrap items-center gap-2 mb-2">' + deploymentBadgesHtml(cert, true) + '</div>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
-                deploymentBadgesHtml(cert, true) +
-                actIcon('checkDeploymentStatusNow', [cert.domain], 'fa-arrows-rotate', 'indigo', 'Check deployment now', 'el') +
-                actLink('/settings#deploy', 'fa-pen-to-square', 'blue', 'View / edit deploy hooks') +
-                (roleAtLeast('admin') ? actIcon('runDeployHooks', [cert.domain], 'fa-play', 'green', 'Run deploy hooks now') : '') +
+                actIcon('checkDeploymentStatusNow', [cert.domain], 'fa-tower-broadcast', 'Check deployment now', 'Check', 'el') +
+                actLink('/settings#deploy', 'fa-rocket', 'View / edit deploy hooks', 'Deploy hooks') +
+                (roleAtLeast('admin') ? runDeployHooksButtonHtml(cert.domain) : '') +
                 '</div>' +
                 (safeDomainAlias ? '<button type="button"' + CertMate.does('click', 'checkDnsAliasForCertificate', [cert.domain]) + 'class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden mt-2"></div>' +
@@ -1543,19 +1699,21 @@
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 (roleAtLeast('operator') && external
-                    ? actIcon('openReplaceCertificate', [cert.domain], 'fa-file-arrow-up', 'green', 'Replace certificate')
+                    ? actIcon('openReplaceCertificate', [cert.domain], 'fa-file-arrow-up', 'Replace certificate', 'Replace')
                     : '') +
                 (roleAtLeast('operator') && !external
-                    ? actIcon('renewCertificate', [cert.domain], 'fa-sync-alt', 'green', 'Renew certificate') +
-                      actIcon('renewCertificate', [cert.domain, true], 'fa-bolt', 'amber', 'Force renew') +
-                      actIcon('startEditReissue', [cert.domain], 'fa-pen', 'blue', 'Edit & reissue')
+                    ? actIcon('renewCertificate', [cert.domain], 'fa-sync-alt', 'Renew certificate', 'Renew') +
+                      actIcon('renewCertificate', [cert.domain, true], 'fa-bolt', 'Force renew', 'Force renew') +
+                      actIcon('startEditReissue', [cert.domain], 'fa-pen', 'Edit & reissue', 'Edit &amp; reissue')
                     : '') +
-                actIcon('downloadCertificate', [cert.domain], 'fa-download', 'blue', 'Download certificate') +
-                actIcon('copyCurlCommand', [cert.domain], 'fa-code', 'indigo', 'Show API command') +
-                (roleAtLeast('admin')
-                    ? actIconDanger('deleteCertificate', [cert.domain], 'fa-trash-alt', 'Delete certificate')
-                    : '') +
+                actIcon('downloadCertificate', [cert.domain], 'fa-download', 'Download certificate', 'Download') +
+                actIcon('copyCurlCommand', [cert.domain], 'fa-code', 'Show API command', 'API command') +
                 '</div>' +
+                (roleAtLeast('admin')
+                    ? '<div class="mt-4 pt-4 border-t border-border">' +
+                      actIconDanger('deleteCertificate', [cert.domain], 'fa-trash-alt', 'Delete certificate', 'Delete') +
+                      '</div>'
+                    : '') +
                 '</div>' +
                 '</div>' +
                 (external && roleAtLeast('operator') ? replaceSectionHtml(cert) : '') +
@@ -1563,6 +1721,7 @@
         }
 
         if (cert.exists) wireLabelsSection(cert.domain);
+        if (cert.exists && roleAtLeast('admin')) loadDeployHooksState().then(applyDeployHooksState);
         if (cert.exists && external && roleAtLeast('operator')) {
             bundlePicker('replace', content.querySelectorAll('[data-replace-dropzone]'), 'replace');
         }
@@ -1582,6 +1741,19 @@
         });
         var closeBtn = panel.querySelector('[data-detail-close]');
         if (closeBtn) closeBtn.focus();
+    }
+
+    // Draw the open panel again from the list just loaded, when it is the
+    // panel of *domain*: a renewal started from it ended, and the panel must
+    // not keep saying what it said before (P37). Focus goes back where it
+    // was when the panel was first opened, not to a button now replaced.
+    function refreshOpenDetail(domain) {
+        var panel = document.getElementById('certDetailPanel');
+        if (!panel || panel.classList.contains('hidden')) return;
+        if (document.getElementById('detailDomain').textContent !== domain) return;
+        var focusBefore = _lastDetailFocus;
+        openCertDetail(domain);
+        _lastDetailFocus = focusBefore;
     }
 
     function closeCertDetail() {
@@ -1823,21 +1995,26 @@
         // listener lives on `document`, so it resolved to the document and
         // every button.* write was a silent no-op: no spinner, no disable,
         // and the user re-clicked.
+        // A sweep already running: a second press does not start another.
+        if (button && button.getAttribute('aria-busy') === 'true') return;
         var originalText = button ? button.innerHTML : '';
         var originalLabel = button ? button.getAttribute('aria-label') : null;
         var originalTitle = button ? button.getAttribute('title') : null;
         if (button) {
-            // The control is a fixed 40x40 icon button, so progress goes to its
-            // title/aria-label, not as text inside it.
-            button.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
-            button.disabled = true;
+            // Only the icon turns into the spinner: the button keeps its word
+            // and its width, so the buttons beside it stay where they are.
+            // Marked busy rather than disabled: disabling the focused button
+            // dropped focus to the page body for the whole sweep (UX audit P33).
+            var busyIcon = button.querySelector('i');
+            if (busyIcon) busyIcon.className = 'fas fa-fw fa-spinner fa-spin';
+            button.setAttribute('aria-disabled', 'true');
             button.setAttribute('aria-busy', 'true');
         }
 
         var restoreButton = function () {
             if (button) {
                 button.innerHTML = originalText;
-                button.disabled = false;
+                button.removeAttribute('aria-disabled');
                 button.removeAttribute('aria-busy');
                 if (originalLabel !== null) button.setAttribute('aria-label', originalLabel);
                 if (originalTitle !== null) button.setAttribute('title', originalTitle);
@@ -1888,7 +2065,11 @@
         if (triggerButton) {
             triggerButton.dataset.originalHtml = triggerButton.innerHTML;
             triggerButton.disabled = true;
-            triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+            // The icon turns into the spinner and the word stays: the button
+            // keeps its width while the check runs.
+            var busyIcon = triggerButton.querySelector('i');
+            if (busyIcon) busyIcon.className = 'fas fa-fw fa-spinner fa-spin';
+            else triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
         }
 
         var statusElements = Array.prototype.filter.call(
@@ -1913,7 +2094,7 @@
 
         // Update UI to show checking state
         statusElements.forEach(function (statusElement) {
-            setDeploymentChipState(statusElement, 'fa-spinner fa-spin', 'bg-info-surface text-info-fg', 'Checking deployment');
+            setDeploymentChipState(statusElement, 'fa-spinner fa-spin', 'bg-info-surface text-info-fg', 'Checking deployment', 'Checking');
         });
 
         var deploymentUrl = '/api/certificates/' + encodeURIComponent(domain) + '/deployment-status';
@@ -1978,7 +2159,7 @@
             });
         }).catch(function () {
             statusElements.forEach(function (statusElement) {
-                setDeploymentChipState(statusElement, 'fa-question', 'bg-surface-2 text-muted', 'Deployment check failed');
+                setDeploymentChipState(statusElement, 'fa-question', 'bg-surface-2 text-muted', 'Deployment check failed', 'Check failed');
             });
         }).finally(function () {
             restoreButton();
@@ -2026,7 +2207,17 @@
                     timestamp: new Date().toISOString()
                 };
             }
-            return null;
+            // Any other failure is the browser's own answer too: it tried and
+            // could not connect. It used to be dropped (null), and the chip
+            // said "Not Checked" as if no probe had run.
+            return {
+                deployed: false,
+                reachable: false,
+                certificate_match: false,
+                method: 'browser-fallback',
+                error: 'network',
+                timestamp: new Date().toISOString()
+            };
         });
     }
 
@@ -2048,10 +2239,9 @@
                 // Re-render through the SAME chip helpers the initial paint uses
                 // so a completed probe updates the icon + colour in place instead
                 // of replacing the chip with stale "Role: Status" text.
-                statusElement.className = (statusElement.getAttribute('data-deployment-variant') === 'square'
-                    ? deploymentSquareClass(display)
-                    : deploymentChipClass(display));
-                statusElement.innerHTML = deploymentChipInner(display);
+                var detail = statusElement.getAttribute('data-deployment-variant') === 'square';
+                statusElement.className = detail ? deploymentSquareClass(display) : deploymentChipClass(display);
+                statusElement.innerHTML = deploymentChipInner(display, detail);
                 var title = display.text;
                 if (roleResult && roleResult.method) {
                     title += ' via ' + roleResult.method;
@@ -2285,6 +2475,9 @@
     var configuredCAs = [];
     var defaultCAProvider = 'letsencrypt';
     var defaultChallengeType = 'dns-01';
+    // What the empty dashboard's steps are built from (UX audit P17): read
+    // with the settings in loadCAProviders.
+    var setupState = { loaded: false, email: '', dnsProvider: '' };
     var defaultCAAccounts = {};
     var globalCAEmail = '';
     var CA_NAMES = {
@@ -2293,11 +2486,48 @@
         digicert: 'DigiCert', sectigo: 'Sectigo', sslcom: 'SSL.com', private_ca: 'Private CA'
     };
 
+    // An account by the name Settings > CA gives it, then its email and, for a
+    // private CA, the host of its directory: two accounts on one address stay
+    // apart, and the name the operator chose is the one shown.
+    function caOnlyDefaultAccount(provider, id) {
+        var others = Object.keys(((caAccounts[provider] || {}).accounts) || {}).filter(function (key) {
+            return key !== 'default';
+        });
+        return id === 'default' && others.length === 0;
+    }
+
+    function caAccountName(provider, id) {
+        var config = caAccounts[provider] || {};
+        var account = (config.accounts || {})[id] || (id === 'default' ? config : {});
+        return account.name || (id === 'default' ? 'Default account' : id);
+    }
+
     function caAccountLabel(provider, id, config) {
         var accounts = config.accounts || {};
         var account = accounts[id] || (id === 'default' ? config : {});
-        return provider === 'sectigo' ? (account.name || id) :
-            (account.email || account.name || (provider === 'letsencrypt' ? globalCAEmail : '') || id);
+        var email = account.email ||
+            (provider === 'letsencrypt' || provider === 'letsencrypt_staging' ? globalCAEmail : '');
+        var details = email ? [email] : [];
+        if (provider === 'private_ca' && account.acme_url) {
+            try { details.push(new URL(account.acme_url).host); } catch (e) { /* not a URL: no host to show */ }
+        }
+        var name = account.name || (id === 'default' ? 'Default account' : id);
+        return name + (details.length ? ' (' + details.join(', ') + ')' : '');
+    }
+
+    // Why the form cannot issue: the global default CA and what its default
+    // account lacks, in the words of Settings > CA. '' when that is not why.
+    function caNotUsableReason() {
+        var config = caAccounts[defaultCAProvider] || {};
+        var ids = Object.keys(config.accounts || {});
+        var id = defaultCAAccounts[defaultCAProvider] ||
+            (ids.indexOf('default') !== -1 ? 'default' : (ids[0] || 'default'));
+        var account = (config.accounts || {})[id] || (id === 'default' ? config : {});
+        var missing = CertMate.caAccountMissing(defaultCAProvider, account, {email: globalCAEmail});
+        if (!missing.length) return '';
+        return (CA_NAMES[defaultCAProvider] || defaultCAProvider) + ' needs ' +
+            CertMate.caAccountMissingText(missing, 'phrase', 'and') + ': add ' +
+            (missing.length === 1 ? 'it' : 'them') + ' in Settings > CA';
     }
 
     function loadCAProviders() {
@@ -2314,6 +2544,7 @@
                 var defaultCA = settings.default_ca || 'letsencrypt';
                 defaultCAProvider = defaultCA;
                 defaultChallengeType = settings.challenge_type || 'dns-01';
+                setupState = { loaded: true, email: settings.email || '', dnsProvider: settings.dns_provider || '' };
                 if (configuredCAs.indexOf(defaultCA) !== -1) {
                     var config = caAccounts[defaultCA] || {};
                     var ids = Object.keys(config.accounts || {});
@@ -2328,8 +2559,51 @@
                 if (!configuredCAs.length) select.add(new Option('Configure a CA in Settings', ''));
                 select.value = configuredCAs.indexOf(previous) !== -1 ? previous : '';
                 updateCAProviderInfo();
+                refreshWelcomeSteps();
             })
             .catch(function () { showMessage('Could not load configured certificate authorities', 'error'); });
+    }
+
+    // The empty dashboard's steps, from what setup has actually left to do
+    // (UX audit P17). They were fixed text: "Go to Settings and configure
+    // your DNS provider", after the wizard had saved one, after it had been
+    // finished with HTTP-01, and after Skip, where the email was missing;
+    // and the link opened Settings on General. Each step now names its gap
+    // and links to the tab where it is closed. No "enable authentication"
+    // step: setup turns local login on before this page can be reached.
+    function welcomeStepsHtml() {
+        var steps = [];
+        var settingsLink = function (tab, label) {
+            return '<a href="/settings#' + tab + '" class="text-info-fg font-medium hover:underline">' + label + '</a>';
+        };
+        if (setupState.loaded) {
+            if (!configuredCAs.length) {
+                steps.push(setupState.email
+                    ? 'Set up your certificate authority in ' + settingsLink('ca', 'Settings, CA')
+                    : 'Add the contact email for your certificate authority account, in ' +
+                        settingsLink('ca', 'Settings, CA'));
+            }
+            if (defaultChallengeType === 'dns-01' &&
+                    !(setupState.dnsProvider && (providerAccounts[setupState.dnsProvider] || []).length)) {
+                var option = setupState.dnsProvider &&
+                    document.querySelector('#dns_provider_select option[value="' + CSS.escape(setupState.dnsProvider) + '"]');
+                var name = option ? option.textContent.trim() : '';
+                steps.push('Add the credentials of your DNS provider' +
+                    (name ? ' (' + CertMate.escapeHtml(name) + ')' : '') + ' in ' + settingsLink('dns', 'Settings, DNS'));
+            }
+        }
+        steps.push('Create your first certificate with the <strong>Create Certificate</strong> button below');
+        return steps.map(function (step, i) {
+            return '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-white rounded-full text-xs font-bold mr-3 mt-0.5">' +
+                (i + 1) + '</span><span class="text-label">' + step + '</span></li>';
+        }).join('');
+    }
+
+    // Settings or DNS accounts read again (after the wizard saved them): the
+    // steps on screen follow.
+    function refreshWelcomeSteps() {
+        var list = document.getElementById('welcomeSteps');
+        if (list) list.innerHTML = welcomeStepsHtml();
     }
 
     function updateCAAccountSelection() {
@@ -2348,9 +2622,9 @@
             caAccountLabel(provider, defaultId, config), ''));
         Object.keys(config.accounts || {}).forEach(function (id) {
             select.add(new Option(caAccountLabel(provider, id, config) +
-                (id === defaultId ? ' (default for this CA)' : ''), id));
+                (id === defaultId ? ', default for this CA' : ''), id));
         });
-        if (!config.accounts && (config.email || config.eab_kid || config.acme_url)) {
+        if (!config.accounts && (config.email || CertMate.caAccountHas(config, 'eab_kid', 'eab_key_id') || config.acme_url)) {
             select.add(new Option(caAccountLabel(provider, 'default', config), 'default'));
         }
         container.classList.toggle('hidden', !configuredCAs.length);
@@ -2383,6 +2657,7 @@
                 providerAccounts = grouped;
                 // The drawer may already be open on a provider: refresh it.
                 updateAccountSelection();
+                refreshWelcomeSteps();
             })
             .catch(function () { providerAccounts = {}; });
     }
@@ -2463,6 +2738,14 @@
             }
             infoDiv.innerHTML = infoText;
             infoDiv.classList.remove('hidden');
+        } else if (!configuredCAs.length && caNotUsableReason()) {
+            // No CA can issue: say which one needs what, and where to add it.
+            var reason = caNotUsableReason();
+            var cut = reason.lastIndexOf(': ');
+            infoDiv.innerHTML = '<i class="fas fa-exclamation-triangle mr-1 text-warning-fg" aria-hidden="true"></i> ' +
+                escapeHtml(reason.slice(0, cut)) + ': <a href="/settings#ca" class="underline text-primary">' +
+                escapeHtml(reason.slice(cut + 2)) + '</a>';
+            infoDiv.classList.remove('hidden');
         } else {
             infoDiv.classList.add('hidden');
         }
@@ -2482,7 +2765,10 @@
             prevalidated.disabled = !allowed;
             if (!allowed && select.value === 'prevalidated') select.value = '';
         }
-        if (select && (select.value === 'http-01' || select.value === 'prevalidated')) {
+        // "Use default from settings" ('') is the instance's default: an
+        // HTTP-01 default needs no DNS provider either (UX audit P20).
+        var challenge = select ? (select.value || defaultChallengeType) : '';
+        if (challenge === 'http-01' || challenge === 'prevalidated') {
             container.style.display = 'none';
         } else {
             container.style.display = '';
@@ -3607,7 +3893,7 @@
         }
 
         if (!configuredCAs.length) {
-            showMessage('Configure a certificate authority in Settings before issuing', 'error');
+            showMessage(caNotUsableReason() || 'Configure a certificate authority in Settings before issuing', 'error');
             return;
         }
 
@@ -3621,13 +3907,18 @@
             showMessage('Please enter a domain', 'error');
             return;
         }
+        clearDomainError();
 
-        // Warn: HTTP-01 + wildcard is not supported
-        if (challengeType === 'http-01') {
+        // HTTP-01 cannot issue a wildcard. Left on "Use default from
+        // settings" the challenge is the instance's default, which the
+        // server applies (UX audit P20): the check read only the select, so
+        // a wildcard under an HTTP-01 default went out and came back failed.
+        if ((challengeType || defaultChallengeType) === 'http-01') {
             var allDomains = [domain].concat(sanDomains);
             for (var i = 0; i < allDomains.length; i++) {
                 if (allDomains[i].indexOf('*.') === 0) {
-                    showMessage('HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.', 'error');
+                    showDomainError('Wildcard names need DNS-01: choose DNS-01 as the challenge type, and a DNS provider.',
+                        domain.indexOf('*.') === 0);
                     return;
                 }
             }
@@ -3669,14 +3960,28 @@
         // disabled state of each field is snapshotted so any field that
         // was already disabled (e.g. account_select hidden by the DNS
         // provider toggle) stays disabled after re-enable.
+        //
+        // Except the control that has focus: disabling it dropped focus to
+        // the page body for the whole request and after it (UX audit P33).
+        // It is marked busy instead, and an input made read-only; the
+        // isCreatingCert gate above already refuses a second submit.
         isCreatingCert = true;
         var form = e.target;
         var formFields = form.querySelectorAll('input, select, textarea, button');
         var previouslyDisabled = [];
+        var focused = document.activeElement;
+        var keptFocus = null;
         formFields.forEach(function (el, i) {
             previouslyDisabled[i] = el.disabled;
+            if (el === focused && !el.disabled) {
+                keptFocus = { el: el, readOnly: el.readOnly };
+                el.setAttribute('aria-disabled', 'true');
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.readOnly = true;
+                return;
+            }
             el.disabled = true;
         });
+        var domainError = '';
         var submitBtn = form.querySelector('button[type="submit"]');
         var submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : null;
         if (submitBtn) {
@@ -3797,6 +4102,10 @@
                     updateAccountSelection();
                     loadCertificates();
                     if (typeof closeCertDrawer === 'function') closeCertDrawer();
+                } else if (isDomainRefusal(result)) {
+                    // A refusal of the name itself: written under the field
+                    // once the form is enabled again, below.
+                    domainError = result.error;
                 } else {
                     var errorMsg = result.error || result.message || 'Failed to create certificate';
                     if (result.hint) {
@@ -3829,12 +4138,62 @@
             formFields.forEach(function (el, i) {
                 el.disabled = previouslyDisabled[i];
             });
+            if (keptFocus) {
+                keptFocus.el.removeAttribute('aria-disabled');
+                keptFocus.el.readOnly = keptFocus.readOnly;
+            }
             if (submitBtn && submitBtnOriginalHtml !== null) {
                 submitBtn.innerHTML = submitBtnOriginalHtml;
             }
             isCreatingCert = false;
+            if (domainError) showDomainError(domainError, true);
         });
     });
+
+    // The server's refusal of the name itself (resources_lifecycle.py answers
+    // a ValueError from validation with its text): "Invalid domain: ..." or
+    // "Invalid IP address: ...". Other refusals are not about the field.
+    function isDomainRefusal(result) {
+        return !!(result && typeof result.error === 'string' &&
+            /^Invalid (domain|IP address):/.test(result.error));
+    }
+
+    // An error about the names, written under #domain inside the drawer,
+    // rather than only in a toast at the corner of the page (UX audit P33):
+    // the field is described by it and focused, and marked invalid when the
+    // error is about what it holds.
+    function showDomainError(message, fieldInvalid) {
+        var field = document.getElementById('domain');
+        var note = document.getElementById('domain_error');
+        if (!field || !note) {
+            showMessage(message, 'error');
+            return;
+        }
+        note.textContent = message;
+        note.classList.remove('hidden');
+        var ids = (field.getAttribute('aria-describedby') || '').split(/\s+/).filter(function (id) {
+            return id && id !== 'domain_error';
+        });
+        field.setAttribute('aria-describedby', ['domain_error'].concat(ids).join(' '));
+        if (fieldInvalid) field.setAttribute('aria-invalid', 'true');
+        else field.removeAttribute('aria-invalid');
+        field.focus();
+    }
+
+    function clearDomainError() {
+        var field = document.getElementById('domain');
+        var note = document.getElementById('domain_error');
+        if (note) {
+            note.textContent = '';
+            note.classList.add('hidden');
+        }
+        if (!field) return;
+        field.removeAttribute('aria-invalid');
+        var ids = (field.getAttribute('aria-describedby') || '').split(/\s+/).filter(function (id) {
+            return id && id !== 'domain_error';
+        });
+        field.setAttribute('aria-describedby', ids.join(' '));
+    }
 
     // ===== Async issuance lifecycle (redesign phase 3) =======================
     // When a create is accepted asynchronously the table gets an optimistic
@@ -3860,6 +4219,7 @@
         if (aliasField) { aliasField.value = ''; }
         updateDnsAliasHelp();
         toggleDnsProviderVisibility();
+        clearDomainError();
     }
 
     function buildPendingRowsHtml() {
@@ -3886,6 +4246,13 @@
         return escapeHtml(ipAddressOf(job.domain || '') || job.domain || '');
     }
 
+    // The CA a pending create or reissue asked for, as the real row names it
+    // (P38: a failed create with Private CA chosen showed "—"). A request that
+    // named none takes the instance default, which this page does not guess.
+    function pendingCaLabel(job) {
+        return job.caProvider ? caDisplayName(job.caProvider) : '—';
+    }
+
     function issuingRowHtml(jobId, job) {
         var domain = pendingRowTitle(job);
         var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
@@ -3902,10 +4269,10 @@
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
             // CA and Deployment columns: the table has seven, and a pending row
             // must fill both lg cells or the "Just now"/actions cell slides left
-            // out of the Actions column.
+            // out of the Actions column. The CA is the one the request chose.
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + pendingCaLabel(job) + '</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
-            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
-            '<td class="px-4 py-4 whitespace-nowrap text-right"><span class="text-xs text-muted">Just now</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap text-right hidden md:table-cell"><span class="text-xs text-muted">Just now</span></td>' +
             '</tr>';
     }
 
@@ -3933,8 +4300,10 @@
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
             // CA and Deployment columns (seven-column table): see issuingRowHtml.
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + pendingCaLabel(job) + '</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
-            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            // Drawn at every width, unlike a certificate row's actions: a failed
+            // issuance opens no panel, so Retry and Dismiss are only here.
             '<td class="px-4 py-4 whitespace-nowrap text-right"><div class="flex items-center justify-end gap-1">' +
             retryButton +
             '<button type="button"' + CertMate.does('click', 'dismissPendingJob', [jobId]) + 'class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="Dismiss" aria-label="Dismiss failed issuance for ' + domain + '"><i class="fas fa-times" aria-hidden="true"></i></button>' +
@@ -3975,11 +4344,12 @@
     // the poll, and exactly right here, since a renewal is only ever asked for
     // a certificate that exists.
     //
-    // A FAILED job is rendered even so (`job.state !== 'failed' && live[...]`),
-    // which is what should happen: the row carries the reason the renewal
-    // failed, beside the certificate that is still serving. Retry hides itself
-    // because this record has no `payload` to replay — and it must, since the
-    // retry path posts to /create, which is not what was asked for.
+    // Nor a "Failed" row: a failed renewal job is dropped when it ends, the
+    // list is loaded again, and the certificate's own row and detail panel
+    // say the renewal failed, from the `last_renewal_attempt` the server
+    // keeps (P38, P37). The separate red row this used to leave sat at the top
+    // of the table with no expiry, provider or CA, read as a second
+    // certificate that had failed, and was gone after a reload.
     function adoptRenewalJob(job, domain, force) {
         var jobId = job.job_id;
         pendingJobs[jobId] = {
@@ -4000,6 +4370,7 @@
         pendingJobs[jobId] = {
             domain: job.domain || requestBody.domain,
             provider: requestBody.dns_provider || '',
+            caProvider: requestBody.ca_provider || '',
             sanCount: (requestBody.san_domains || []).length,
             state: 'issuing',
             kind: isReissue ? 'reissue' : 'create',
@@ -4071,37 +4442,6 @@
     }
 
     function pollCertJob(jobId, statusUrl) {
-        // The cause a failed job's error names, short enough for a toast: the
-        // first non-empty line, without the "Certificate ... failed:" prefix
-        // the toast already says, kept whole up to 200 characters and cut on
-        // a word beyond. A first line that ends on a colon only announces the
-        // cause, so the next line is the one shown.
-        function failureCause(error) {
-            var text = String(error || '').replace(/^\s*Certificate (creation|reissue|renewal|issuance) failed:\s*/i, '');
-            var lines = text.split('\n').map(function (line) { return line.trim(); })
-                .filter(function (line) { return line; });
-            text = lines[0] || '';
-            // certbot's "An unexpected error occurred:" names the cause on
-            // the next line. CertMate's own "certbot exited ... without
-            // reporting an error. The last it printed:" states the cause
-            // before its colon: keep that sentence, drop the announcement.
-            if (/:$/.test(text)) {
-                var stated = text.match(/^(.*[.!?])\s+[^.!?]*:$/);
-                if (stated) text = stated[1];
-                else if (lines[1]) text = lines[1];
-            }
-            // The whole line, not its first sentence: a refusal's second
-            // sentence is often the remedy ("Use DNS-01 instead.").
-            if (text.length > 200) {
-                var cut = text.slice(0, 199);
-                var space = cut.lastIndexOf(' ');
-                text = (space > 0 ? cut.slice(0, space) : cut).replace(/[\s.,;:]+$/, '') + '\u2026';
-            }
-            text = text.replace(/:$/, '');
-            if (text && !/[.!?\u2026]$/.test(text)) text += '.';
-            return text || 'The job failed without a message.';
-        }
-
         var attempts = 0;
         function tick() {
             if (!pendingJobs[jobId]) return;   // dismissed/retried away
@@ -4113,9 +4453,12 @@
                 if (!pendingJobs[jobId]) return;   // dismissed during the request
                 var status = jobRec && jobRec.status;
                 if (status === 'succeeded') {
+                    var doneDomain = pendingJobs[jobId].domain;
                     delete pendingJobs[jobId];
                     delete pendingPollTimers[jobId];
-                    loadCertificates();   // the real row replaces the optimistic one
+                    // The real row replaces the optimistic one, and an open
+                    // panel drops a failure the renewal has just replaced.
+                    loadCertificates().then(function () { refreshOpenDetail(doneDomain); });
                 } else if (status === 'failed') {
                     pendingJobs[jobId].state = 'failed';
                     pendingJobs[jobId].error = (jobRec && jobRec.error) || 'Certificate issuance failed';
@@ -4128,17 +4471,27 @@
                     // output stays in the row.
                     pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
                     delete pendingPollTimers[jobId];
-                    renderPendingRows();
                     var failedKind = pendingJobs[jobId].kind || (jobRec && jobRec.operation);
                     var failedHint = pendingJobs[jobId].hint;
+                    var failedDomain = pendingJobs[jobId].domain;
                     showMessage((failedKind === 'renew'
                         ? 'Certificate renewal failed for '
                         : failedKind === 'reissue'
                             ? 'Certificate reissue failed for '
                             : 'Certificate issuance failed for ') +
-                        pendingJobs[jobId].domain + ': ' +
+                        failedDomain + ': ' +
                         failureCause(pendingJobs[jobId].error) +
                         (failedHint ? ' ' + failedHint : ''), 'error');
+                    if (failedKind === 'renew') {
+                        // The certificate is still there and still served: the
+                        // failure goes on its own row and in its detail panel,
+                        // from the record the server keeps (P38, P37), not on a
+                        // second row that reads as a certificate without expiry.
+                        delete pendingJobs[jobId];
+                        loadCertificates().then(function () { refreshOpenDetail(failedDomain); });
+                    } else {
+                        renderPendingRows();
+                    }
                 } else if (status === '__gone__') {
                     // Job evicted/unknown — drop the optimistic row and resync.
                     delete pendingJobs[jobId];
@@ -4238,6 +4591,35 @@
         });
     }
 
+    // The toast of a manual deploy run that failed: what failed and the first
+    // line of what it said. A shell hook names itself in hook_name and speaks on
+    // stderr (error holds "exit code N: ..." or the timeout); a typed deploy
+    // target names itself in target (or only its type) and gives its reason in
+    // message. A target refusal made before any target ran (a CSR-only
+    // certificate has no key to publish) has no name at all, only the message.
+    function deployRunFailureMessage(domain, summary) {
+        var failed = (summary.results || []).filter(function (r) { return r && r.success === false; });
+        var first = failed[0];
+        var lead = 'Deploy hooks ran with errors for ' + domain + ': '
+            + summary.succeeded + '/' + summary.total + ' succeeded, ' + summary.failed + ' failed.';
+        if (!first) return lead + ' Check Settings → Deploy → Recent Executions for details.';
+        var isHook = first.hook_name != null || first.hook_id != null;
+        var name = isHook ? first.hook_name : (first.target || first.type);
+        var kind = isHook ? 'hook' : 'target';
+        var what = name ? 'Deploy ' + kind + ' ' + name : 'A deploy ' + kind;
+        var firstLine = function (text) {
+            return String(text || '').split('\n').map(function (line) { return line.trim(); })
+                .filter(Boolean)[0] || '';
+        };
+        var said = isHook ? (firstLine(first.stderr) || firstLine(first.error) || firstLine(first.message))
+            : (firstLine(first.message) || firstLine(first.error));
+        if (said && !/[.!?]$/.test(said)) said += '.';
+        var others = failed.length > 1 ? ' (and ' + (failed.length - 1) + ' more)' : '';
+        return what + others + ' failed for ' + domain + (said ? ': ' + said : '.')
+            + ' ' + summary.succeeded + ' of ' + summary.total + ' succeeded;'
+            + ' Settings → Deploy → Recent Executions has the full output.';
+    }
+
     // Manually trigger deploy hooks for a domain (issue #109).
     async function runDeployHooks(domain) {
         var confirmed = await CertMate.confirm('Run deploy hooks for ' + domain + ' now?\n\nAll enabled global and domain-specific hooks will execute with CERTMATE_EVENT=manual.', 'Run Deploy Hooks', { confirmText: 'Run Hooks', danger: false });
@@ -4295,9 +4677,7 @@
             if (s.ok) {
                 showMessage('Deploy hooks ran for ' + domain + ': ' + s.succeeded + '/' + s.total + ' succeeded', 'success');
             } else {
-                showMessage('Deploy hooks ran with errors for ' + domain + ': '
-                    + s.succeeded + '/' + s.total + ' succeeded, ' + s.failed + ' failed. '
-                    + 'Check Settings → Deploy → Recent Executions for details.', 'error');
+                showMessage(deployRunFailureMessage(domain, s), 'error');
             }
         }).catch(function (error) {
             console.error('Error running deploy hooks:', error);
@@ -4598,7 +4978,11 @@
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () {
+        // The settings and the DNS accounts first, too: an empty list shows
+        // the steps setup still needs, built from them, and is drawn once
+        // with them rather than drawn and then rewritten under the reader.
+        var setupRead = Promise.all([loadProviderAccounts(), loadCAProviders()]);
+        Promise.all([refreshCurrentRole(), setupRead]).then(function () {
             loadCertificates().then(function () {
                 maybeOpenCertFromQuery();
                 maybeFlashCertFromQuery();
@@ -4607,13 +4991,16 @@
                 adoptInFlightJobs();
             });
         });
-        loadProviderAccounts();
-        loadCAProviders();
 
         // Status filtering is driven by the chips (onclick -> setStatusFilter);
         // free-text search moved to the ⌘K palette. No select listener needed.
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('domain').addEventListener('input', applyIpAddressMode);
+        // An error written under the domain goes once what it was about changes.
+        document.getElementById('domain').addEventListener('input', clearDomainError);
+        ['challenge_type_select', 'wildcard-cert'].forEach(function (id) {
+            document.getElementById(id).addEventListener('change', clearDomainError);
+        });
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
         initSanEditor();
         initCsrPanel();
@@ -4734,6 +5121,7 @@
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
     window.loadCAProviders = loadCAProviders;
+    window.loadProviderAccounts = loadProviderAccounts;
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
     window.copyAliasValueToClipboard = copyAliasValueToClipboard;

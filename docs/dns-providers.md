@@ -680,6 +680,14 @@ curl -X DELETE http://localhost:8000/api/dns/cloudflare/accounts/old-account \
 
 Existing single-account configurations are automatically migrated to multi-account format on first use. No downtime or manual migration required.
 
+The same load also does three things once, each logged:
+
+- An empty account `default` that an earlier version made for a provider with no credentials ("Migrated from single-account configuration") is removed.
+- A credential saved beside a provider's `accounts` (the Settings page's single token field used to put it there) is moved into the account `default`, which is where issuance reads it. An account `default` that already has a credential of its own is never overwritten: the flat credential is then left where it is and a warning names the provider.
+- An account `default` written with its credentials only (the setup wizard does this) gets the name `Default <Provider> Account` and becomes the provider's default when it has none.
+
+The DNS providers stay in Settings > DNS when HTTP-01 is the default challenge: a certificate can choose DNS-01 whatever the default, and a wildcard has to.
+
 ---
 
 ## Multi-Master DNS & Domain Alias (CNAME Delegation)

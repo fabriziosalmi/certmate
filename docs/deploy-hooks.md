@@ -223,7 +223,7 @@ Fires every enabled global + domain-specific hook (and every matching typed depl
 }
 ```
 
-This is what the **Run deploy hooks now** button (play icon, Deployment section of the certificate detail panel) calls.
+This is what the **Run deploy hooks** button (play icon, Deployment section of the certificate detail panel, admins only) calls. While deploy hooks are off the button is not offered, and its tooltip says where to turn them on. When a hook or a typed target fails, the message names the first one that failed and gives the first line of what it said: a hook's stderr, or a target's reason; **Settings → Deploy → Recent Executions** keeps the full output. A run that ran nothing (hooks off, or no hook or target for the certificate) is not written to Activity.
 
 ---
 

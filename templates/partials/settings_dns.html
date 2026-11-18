@@ -30,12 +30,17 @@
                         </div>
                     </div>
 
-                    <!-- DNS Provider Selection (hidden when HTTP-01) -->
+                    <!-- DNS Provider Selection. Shown under HTTP-01 too (audit P21):
+                         a certificate can choose DNS-01 whatever the default, and
+                         the setup wizard sends an HTTP-01 user here to add one.
+                         The note is the same under both, so nothing moves when
+                         the saved challenge type arrives. -->
                     <div id="dns-provider-section" class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <label class="block text-sm font-medium text-label mb-3" id="dns-provider-label">
+                        <label class="block text-sm font-medium text-label mb-1" id="dns-provider-label">
                             <i class="fas fa-server mr-1"></i>
                             DNS Providers
                         </label>
+                        <p class="text-xs text-muted mb-3" id="dns-provider-note">Used only by certificates that choose DNS-01, such as wildcards. The provider selected here is the one they use unless they name another.</p>
                         
                         <!-- Each card's status line is whitespace-nowrap: it reads "Not
                              configured" until the settings arrive, which is 85 px in an
@@ -395,10 +400,7 @@
                     </div>
 
                     <!-- DNS Provider Configurations -->
-                    <!-- Wrapped so HTTP-01 can hide the whole block: these
-                         panels are siblings of #dns-provider-section, not
-                         children, so hiding the picker alone left them
-                         visible (issue #226). -->
+                    <!-- The per-provider panels, siblings of #dns-provider-section. -->
                     <div id="dns-config-section">
                     <!-- Per-provider propagation wait (#974). Shows and edits the
                          value for the provider selected above; the whole map is

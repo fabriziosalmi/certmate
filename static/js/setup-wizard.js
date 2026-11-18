@@ -145,6 +145,8 @@
         rememberSkip();
         persistDismissal();
         closeWizard();
+        // Closed on its last step, after the save: the dashboard reads again.
+        if (state.step === 3) rereadDashboardSetup();
     }
 
     function checkSetup() {
@@ -248,7 +250,9 @@
                     '</div>' +
                 '</div>' +
                 '<div id="wizardBody" class="px-6 py-6"></div>' +
-                '<div id="wizardFooter" class="px-6 py-4 border-t border-border flex items-center justify-between"></div>' +
+                // Sticky: below the 28 provider tiles, "Save & Finish" was out
+                // of the card's view (UX audit P18).
+                '<div id="wizardFooter" class="sticky bottom-0 bg-surface px-6 py-4 border-t border-border flex items-center justify-between"></div>' +
             '</div>';
         document.body.appendChild(overlay);
 
@@ -447,6 +451,7 @@
                 state.provider = btn.dataset.provider;
                 state.credentials = {};
                 renderStep(); // re-render to show credentials
+                revealCredentials();
             });
         });
         var route53Mode = document.getElementById('wiz_auth_mode');
@@ -481,21 +486,62 @@
             var providerDef = PROVIDERS[state.provider];
             var creds = {};
             var valid = true;
+            var firstMissing = null;
             providerDef.fields.forEach(function(f) {
                 var el = document.getElementById('wiz_' + f.key);
                 var val = el ? el.value.trim() : '';
-                if (!val && !f.optional && !(state.provider === 'route53' &&
+                var missing = !val && !f.optional && !(state.provider === 'route53' &&
                         (f.key === 'access_key_id' || f.key === 'secret_access_key') &&
-                        document.getElementById('wiz_auth_mode').value === 'iam_role')) {
-                    if (el) el.classList.add('border-red-500');
+                        document.getElementById('wiz_auth_mode').value === 'iam_role');
+                if (el) markRequired(el, f.label, missing);
+                if (missing) {
                     valid = false;
+                    firstMissing = firstMissing || el;
                 }
                 creds[f.key] = val;
             });
-            if (!valid) return;
+            if (!valid) {
+                if (firstMissing) firstMissing.focus();
+                return;
+            }
             state.credentials = creds;
             saveSettings();
         });
+    }
+
+    // A picked provider's credentials, brought into the card's view with the
+    // first field focused (UX audit P18): the click only changed the tile's
+    // border, and the form opened below the visible bottom of the card.
+    function revealCredentials() {
+        var creds = document.getElementById('credFields');
+        if (!creds) return;
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        creds.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+        var first = creds.querySelector('input, select, textarea');
+        if (first) first.focus({ preventScroll: true });
+    }
+
+    // An empty required credential says so in words, beside the field and
+    // linked to it, not only with a red border (UX audit P18).
+    function markRequired(el, label, missing) {
+        var id = el.id + '_error';
+        var note = document.getElementById(id);
+        el.classList.toggle('border-red-500', missing);
+        if (!missing) {
+            if (note) note.remove();
+            el.removeAttribute('aria-invalid');
+            el.removeAttribute('aria-describedby');
+            return;
+        }
+        if (!note) {
+            note = document.createElement('p');
+            note.id = id;
+            note.className = 'mt-1 text-xs text-danger-fg';
+            el.insertAdjacentElement('afterend', note);
+        }
+        note.textContent = label + ' is required';
+        el.setAttribute('aria-invalid', 'true');
+        el.setAttribute('aria-describedby', id);
     }
 
     function challengeButton(value, icon, label, detail) {
@@ -626,15 +672,24 @@
             // The CA list was read when the page loaded, before the wizard
             // saved the email: the form said "Configure a CA in Settings"
             // (UX audit, 2026-11-17). Read it again first.
-            var reload = typeof window.loadCAProviders === 'function'
-                ? Promise.resolve(window.loadCAProviders()).catch(function () {})
-                : Promise.resolve();
+            var reload = rereadDashboardSetup();
             reload.then(function () {
                 if (typeof window.openCertDrawer === 'function') {
                     window.openCertDrawer('server');
                 }
             });
         });
+    }
+
+    // What the dashboard read before the wizard saved: the CA list, and the
+    // DNS accounts, from which (with the settings) the empty dashboard lists
+    // the steps setup still needs (UX audit P17). Never rejects.
+    function rereadDashboardSetup() {
+        return Promise.all(['loadCAProviders', 'loadProviderAccounts'].map(function (name) {
+            return typeof window[name] === 'function'
+                ? Promise.resolve(window[name]()).catch(function () { return null; })
+                : Promise.resolve();
+        }));
     }
 
     function closeWizard() {

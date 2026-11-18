@@ -707,6 +707,186 @@ def _fold_legacy_ca_write(existing_ca, incoming_ca, default_ca_accounts):
             del config[key]
 
 
+# The keys a DNS provider kept at its top level before it had `accounts`.
+_DNS_FLAT_CREDENTIAL_KEYS = {
+    'cloudflare': ['api_token'],
+    'route53': ['access_key_id', 'secret_access_key', 'region',
+                'auth_mode', 'assume_role_arn'],
+    'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
+    'google': ['project_id', 'service_account_key'],
+    'powerdns': ['api_url', 'api_key'],
+    'digitalocean': ['api_token'],
+    'linode': ['api_key'],
+    'gandi': ['api_token'],
+    'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
+    'namecheap': ['username', 'api_key'],
+    'rfc2136': ['nameserver', 'tsig_key', 'tsig_secret', 'api_key'],
+    'vultr': ['api_key'],
+    'hetzner': ['api_token'],
+    'hetzner-cloud': ['api_token'],
+    'porkbun': ['api_key', 'secret_key'],
+    'godaddy': ['api_key', 'secret'],
+    'he-ddns': ['username', 'password'],
+    'arvancloud': ['api_key'],
+    'infomaniak': ['api_token'],
+    'acme-dns': ['api_url', 'username', 'password', 'subdomain'],
+    'duckdns': ['api_token'],
+    'edgedns': ['client_token', 'client_secret', 'access_token', 'host'],
+    'custom-script': ['auth_hook', 'cleanup_hook']
+}
+_DNS_FLAT_FALLBACK_KEYS = ['api_token', 'api_key', 'username']
+
+# What the migration wrote into the "default" account it made, and the
+# values a form fills in by itself for Route53 (the first-run region, the
+# settings page's mode select): on their own they are not a credential.
+_DNS_PLACEHOLDER_DESCRIPTION = 'Migrated from single-account configuration'
+_DNS_LABELS = frozenset({'name', 'description'})
+_DNS_SCAFFOLD_VALUES = {'region': 'us-east-1', 'auth_mode': 'access_keys'}
+_STALE_FLAT_DNS_WARNED: set[str] = set()
+
+
+def _holds_nothing(config):
+    """True when *config* has no value of its own: labels, empty strings and
+    the first-run settings' Route53 region do not count."""
+    return not any(
+        value for key, value in config.items()
+        if key not in _DNS_LABELS and _DNS_SCAFFOLD_VALUES.get(key) != value)
+
+
+def _default_dns_account_name(provider):
+    return f'Default {provider.title()} Account'
+
+
+def _fold_flat_dns_credentials(provider, config):
+    """Move credentials left beside `accounts` into the "default" account.
+
+    The settings page wrote its single token field flat beside `accounts`,
+    and the lookup issuance uses reads `accounts` only, so the token was
+    saved and never used. Moved once: the keys leave the top level. An
+    account "default" that has a value of its own is never overwritten; the
+    flat keys then stay where they are, unread, and are logged once.
+    """
+    keys = _DNS_FLAT_CREDENTIAL_KEYS.get(provider, _DNS_FLAT_FALLBACK_KEYS)
+    flat = {key: config[key] for key in keys if key in config}
+    if _holds_nothing(flat):
+        return False
+    accounts = config['accounts']
+    default = accounts.get('default')
+    if isinstance(default, dict) and not _holds_nothing(default):
+        if provider not in _STALE_FLAT_DNS_WARNED:
+            _STALE_FLAT_DNS_WARNED.add(provider)
+            logger.warning(
+                "DNS provider %r has credentials beside its accounts that nothing "
+                "reads; its account 'default' has its own and is left as it is",
+                provider)
+        return False
+    folded = dict(default) if isinstance(default, dict) else {}
+    folded.setdefault('name', _default_dns_account_name(provider))
+    folded.update(flat)
+    accounts['default'] = folded
+    for key in flat:
+        del config[key]
+    logger.info("DNS provider %r: moved the credentials saved beside its accounts "
+                "into its account 'default', which issuance reads", provider)
+    return True
+
+
+def _drop_dns_placeholder(provider, config, default_accounts):
+    """Remove the empty "default" account an earlier migration made."""
+    default = config['accounts'].get('default')
+    if not (isinstance(default, dict) and _holds_nothing(default)
+            and default.get('description') == _DNS_PLACEHOLDER_DESCRIPTION):
+        return False
+    del config['accounts']['default']
+    if default_accounts.get(provider) == 'default':
+        del default_accounts[provider]
+    return True
+
+
+def _name_the_default_dns_account(provider, config, default_accounts):
+    """An account "default" written with its credentials only (the setup
+    wizard, the settings page) gets the name and the default slot the
+    placeholder used to give it."""
+    default = config['accounts'].get('default')
+    if not isinstance(default, dict) or _holds_nothing(default):
+        return
+    if 'name' in default and provider in default_accounts:
+        return
+    default.setdefault('name', _default_dns_account_name(provider))
+    default_accounts.setdefault(provider, 'default')
+    logger.info("DNS provider %r: its account 'default' had no name or the provider "
+                "no default account; named it %r, default account %r",
+                provider, default['name'], default_accounts[provider])
+
+
+def _fold_legacy_dns_write(existing_dns, incoming_dns, default_accounts):
+    """Move flat credentials of a settings write into the account they address.
+
+    The DNS twin of _fold_legacy_ca_write. A client that writes the flat
+    shape (an API script, a settings page loaded before this change) onto a
+    provider that has accounts means the account issuance uses by default.
+    Merged beside `accounts`, the write was answered "saved" and never read.
+    Unlike the fold at load, this one overwrites: the write is what the
+    caller asks for now.
+    """
+    if not isinstance(incoming_dns, dict):
+        return
+    for provider, config in incoming_dns.items():
+        if not isinstance(config, dict):
+            continue
+        keys = _DNS_FLAT_CREDENTIAL_KEYS.get(provider, _DNS_FLAT_FALLBACK_KEYS)
+        flat = [key for key in keys if key in config]
+        current = (existing_dns or {}).get(provider)
+        known = current.get('accounts') if isinstance(current, dict) else None
+        if not flat or not (isinstance(known, dict) or isinstance(config.get('accounts'), dict)):
+            continue
+        if _holds_nothing({key: config[key] for key in flat}):
+            # Route53's form defaults with no key typed: nothing to apply, and
+            # folded in they would make an account with no credential.
+            for key in flat:
+                del config[key]
+            continue
+        accounts = {**(known or {}), **(config.get('accounts') or {})}
+        target = (default_accounts or {}).get(provider)
+        if target not in accounts:
+            target = 'default'
+        logger.info("Settings write for DNS provider %r used the flat shape; "
+                    "applying it to account %r", provider, target)
+        folded = config.setdefault('accounts', {}).setdefault(target, {})
+        for key in flat:
+            folded[key] = config.pop(key)
+
+
+def _tidy_dns_accounts(settings):
+    """Bring every provider with `accounts` to the shape issuance reads.
+
+    Runs at every load and changes something only once: each step removes
+    the condition that triggers it.
+    """
+    dns_providers = settings.get('dns_providers')
+    if not isinstance(dns_providers, dict):
+        return
+    default_accounts = settings.get('default_accounts')
+    if not isinstance(default_accounts, dict):
+        default_accounts = {}
+    dropped = []
+    for provider, config in list(dns_providers.items()):
+        if isinstance(config, dict) and isinstance(config.get('accounts'), dict):
+            _fold_flat_dns_credentials(provider, config)
+            if _drop_dns_placeholder(provider, config, default_accounts):
+                dropped.append(provider)
+            _name_the_default_dns_account(provider, config, default_accounts)
+            if config == {'accounts': {}}:
+                config.clear()
+        if config == {}:
+            del dns_providers[provider]
+    if dropped:
+        logger.info("Removed the empty DNS account 'default' an earlier version made "
+                    "for %d provider(s): %r", len(dropped), sorted(dropped))
+    if default_accounts or 'default_accounts' in settings:
+        settings['default_accounts'] = default_accounts
+
+
 def validate_settings_post(payload, current=None):
     """Filter a POST /api/settings payload against the writable whitelist.
 
@@ -1151,6 +1331,11 @@ class SettingsManager:
                 _fold_legacy_ca_write(
                     existing.get('ca_providers'), incoming['ca_providers'],
                     incoming.get('default_ca_accounts', existing.get('default_ca_accounts')))
+            if isinstance(incoming.get('dns_providers'), dict):
+                incoming = {**incoming, 'dns_providers': copy.deepcopy(incoming['dns_providers'])}
+                _fold_legacy_dns_write(
+                    existing.get('dns_providers'), incoming['dns_providers'],
+                    incoming.get('default_accounts', existing.get('default_accounts')))
             merged = {**existing, **incoming}
             for key, value in incoming.items():
                 if (key in _DEEP_MERGE_SETTINGS_KEYS
@@ -1442,31 +1627,17 @@ class SettingsManager:
                 'client_cert_key_size': 2048,
                 'client_cert_elliptic_curve': 'secp256r1',
                 'pfx_password': '',  # Encrypts the on-disk .pfx export; empty = disabled (#230)
-                'dns_providers': {
-                    'cloudflare': {'api_token': ''},
-                    'route53': {'access_key_id': '', 'secret_access_key': '', 'region': 'us-east-1'},
-                    'azure': {'subscription_id': '', 'resource_group': '', 'tenant_id': '', 'client_id': '', 'client_secret': ''},
-                    'google': {'project_id': '', 'service_account_key': ''},
-                    'powerdns': {'api_url': '', 'api_key': ''},
-                    'digitalocean': {'api_token': ''},
-                    'linode': {'api_key': ''},
-                    'edgedns': {'client_token': '', 'client_secret': '', 'access_token': '', 'host': ''},
-                    'gandi': {'api_token': ''},
-                    'ovh': {'endpoint': '', 'application_key': '', 'application_secret': '', 'consumer_key': ''},
-                    'namecheap': {'username': '', 'api_key': ''},
-                    'arvancloud': {'api_key': ''},
-                    'infomaniak': {'api_token': ''},
-                    'acme-dns': {'api_url': '', 'username': '', 'password': '', 'subdomain': ''},
-                    'duckdns': {'api_token': ''},
-                    'hetzner-cloud': {'api_token': ''}
-                },
+                # No provider until one is configured. Sixteen empty ones used
+                # to be listed here, and the migration made each an account
+                # with no credentials (audit P05).
+                'dns_providers': {},
                 'certificate_storage': default_settings['certificate_storage'],
                 'oidc': default_settings['oidc'],
             }
 
             if not self.settings_file.exists():
                 # First time setup - create with full template for web UI
-                logger.info("Creating initial settings file with full provider template for first-time setup")
+                logger.info("Creating initial settings file for first-time setup")
                 self.save_settings(first_time_template)
                 return self._apply_managed(copy.deepcopy(first_time_template))
 
@@ -1607,12 +1778,12 @@ class SettingsManager:
                     settings['dns_providers'] = {}
                     was_migrated = True
 
-                dns_providers_before = {
-                    provider: dict(config) if isinstance(config, dict) else config
-                    for provider, config in settings.get('dns_providers', {}).items()
-                }
+                # Deep: the migration also changes accounts inside a provider,
+                # and the default account of each.
+                dns_before = copy.deepcopy(
+                    (settings.get('dns_providers', {}), settings.get('default_accounts')))
                 settings = self.migrate_dns_providers_to_multi_account(settings)
-                if settings.get('dns_providers', {}) != dns_providers_before:
+                if (settings.get('dns_providers', {}), settings.get('default_accounts')) != dns_before:
                     was_migrated = True
 
                 # Before anyone can rename a webhook or a deploy target, give
@@ -2028,33 +2199,7 @@ class SettingsManager:
         try:
             dns_providers = settings.get('dns_providers', {})
 
-            # Define credential keys for each provider (same as used later)
-            old_config_keys = {
-                'cloudflare': ['api_token'],
-                'route53': ['access_key_id', 'secret_access_key', 'region',
-                            'auth_mode', 'assume_role_arn'],
-                'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
-                'google': ['project_id', 'service_account_key'],
-                'powerdns': ['api_url', 'api_key'],
-                'digitalocean': ['api_token'],
-                'linode': ['api_key'],
-                'gandi': ['api_token'],
-                'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
-                'namecheap': ['username', 'api_key'],
-                'rfc2136': ['nameserver', 'tsig_key', 'tsig_secret', 'api_key'],
-                'vultr': ['api_key'],
-                'hetzner': ['api_token'],
-                'hetzner-cloud': ['api_token'],
-                'porkbun': ['api_key', 'secret_key'],
-                'godaddy': ['api_key', 'secret'],
-                'he-ddns': ['username', 'password'],
-                'arvancloud': ['api_key'],
-                'infomaniak': ['api_token'],
-                'acme-dns': ['api_url', 'username', 'password', 'subdomain'],
-                'duckdns': ['api_token'],
-                'edgedns': ['client_token', 'client_secret', 'access_token', 'host'],
-                'custom-script': ['auth_hook', 'cleanup_hook']
-            }
+            old_config_keys = _DNS_FLAT_CREDENTIAL_KEYS
 
             # Check if migration is needed
             needs_migration = False
@@ -2068,6 +2213,7 @@ class SettingsManager:
                             break
 
             if not needs_migration:
+                _tidy_dns_accounts(settings)
                 return settings
 
             logger.info("Migrating DNS providers to multi-account format")
@@ -2131,6 +2277,7 @@ class SettingsManager:
                         # Use 'default' as the default account ID
                         settings['default_accounts'][provider_name] = 'default'
 
+            _tidy_dns_accounts(settings)
             logger.info("DNS provider migration completed successfully")
             return settings
 

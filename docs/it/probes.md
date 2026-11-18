@@ -1,6 +1,6 @@
 # Probe di Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM a2a255458b3ae83f -->
+<!-- CERTMATE-TRANSLATED-FROM 711dc606f0c87d6a -->
 
 Le probe verificano che i tuoi certificati siano raggiungibili sulla rete eseguendo un TLS handshake in tempo reale con il server deployato.
 
@@ -49,6 +49,8 @@ Quando la probe backend indica che il server non è raggiungibile **e** il proto
 Interroga l'host che il backend ha sondato (`probe_host`): il `deployment_host` se è impostato, l'indirizzo di un certificato IP, altrimenti il nome del certificato. Se il backend non risponde affatto, interroga dove il certificato è servito: il suo indirizzo per un certificato IP, altrimenti il suo nome.
 
 Per i protocolli `TLS` e `SMTP STARTTLS`, la probe browser viene **ignorata** perché i browser non sono in grado di eseguire connessioni TLS grezze o SMTP. Lo stato browser mostra "Non verificato".
+
+Quando il browser ci prova e la sua richiesta fallisce, lo stato browser mostra "Connessione non riuscita" (o "Non raggiungibile" dopo il timeout di 10 secondi). Una richiesta `no-cors` segnala allo stesso modo un nome che non si risolve, una connessione rifiutata e un certificato di cui il browser non si fida, quindi il chip non dice altro. Solo un risultato raggiungibile viene comunicato al server.
 
 ### Cache
 

@@ -294,7 +294,10 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                     )
                 return {'error': 'Manual deploy hook run failed'}, 500
 
-            if ctx.audit:
+            # A run that ran nothing (deploy hooks off, or no hook or target
+            # for this certificate) is not a deploy: it used to be written to
+            # Activity as a failed one. The answer below says why nothing ran.
+            if ctx.audit and summary.get('total'):
                 actx = audit_context_from_request()
                 ctx.audit.log_operation(
                     operation='deploy', resource_type='certificate',

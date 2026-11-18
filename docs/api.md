@@ -297,6 +297,7 @@ rather than written by hand:
     "renew_at": "2026-11-03T08:41:10Z",
     "explanation_url": null
   },
+  "last_renewal_attempt": null,
   "acme_profile": null,
   "acme_profile_withdrawn_at": null,
   "ip_address": null,
@@ -398,6 +399,32 @@ The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the
 CA attached to the window, when it gave one; only `https` URLs are kept. Since
 API contract **2.40** the window postpones a renewal as well as bringing one
 forward, within the floor above. Available since API contract **2.23**.
+
+##### Did the last renewal fail?
+
+`last_renewal_attempt` is the last renewal of this certificate that failed,
+whoever asked for it: a `POST /api/certificates/{domain}/renew`, its background
+job, or the renewal sweep. It is kept beside the certificate, so it is there
+after a reload and for a failure nobody watched.
+
+<!-- illustration: one field of a certificate's answer, with an elided error -->
+```json
+"last_renewal_attempt": {
+  "attempted_at": "2026-11-18T09:12:40Z",
+  "outcome": "failed",
+  "error": "Certificate renewal failed: ... DNS problem: NXDOMAIN looking up TXT for _acme-challenge.app.example.com",
+  "hint": "The CA could not verify the DNS TXT record: check that it was created in the name's zone and has had time to propagate. The previous certificate is still in place."
+}
+```
+
+`outcome` is `failed`, the only outcome kept. `error` is what the renewal raised,
+certbot's output included, up to 2000 characters. `hint` is the one the renewal
+job gives for the same error (`GET /api/certificates/jobs/<job_id>`), and always ends with
+"The previous certificate is still in place.": a failed renewal leaves the served
+certificate as it was. The field is `null` when no renewal has failed, after a
+renewal that happened, and once a reissue or an upload has replaced the
+certificate it was about. A domain busy with another operation is not a failed
+renewal and leaves nothing. Since API contract **2.70**.
 
 ##### Deprecated fields
 
@@ -2550,7 +2577,7 @@ scoped key sees only the domains its scope covers.
 }
 ```
 
-`summary.tracked` (since **2.70**) is how many registrable domains are
+`summary.tracked` (since **2.71**) is how many registrable domains are
 tracked, within the caller's scope: those of the certificates CertMate holds,
 of the inventory when `include_inventory` is on (the default), and the
 `extra_domains`. A scan looks them up only when registration checks are
@@ -2618,7 +2645,7 @@ answer opens on what is wrong; a scoped key sees only its own names.
 }
 ```
 
-`summary.tracked` (since **2.70**) is how many names domain health tracks,
+`summary.tracked` (since **2.71**) is how many names domain health tracks,
 within the caller's scope: the names of the certificates CertMate manages, in
 its settings or on disk (a managed certificate for an IP address is left out),
 the inventory's names when `domain_health.include_inventory` is on (the
@@ -2774,12 +2801,18 @@ ignored: pressing the button is the decision to deploy now.
 
 It answers **200 even when `ok` is false**, so the summary can be read: deploy
 hooks disabled, or nothing configured for this domain, come back as `ok: false`
-with an `error` that says which. Non-2xx is reserved for a bad domain path
+and `total: 0` with an `error` that says which. A run with `total: 0` ran
+nothing and writes no `deploy` entry to the audit log; a run that ran something
+writes one, `success` or `failure`. Non-2xx is reserved for a bad domain path
 (`400`), a certificate that does not exist (`404 CERTIFICATE_NOT_FOUND`), a
 deploy manager that is not running (`503`) and an unexpected failure (`500`).
-Each `results[]` entry is one hook or target run (`hook_name`, `exit_code`,
-`success`, `stdout`, `stderr`, ...), the same record `GET /api/deploy/history`
-keeps.
+Each `results[]` entry is one hook or target run. A shell hook's entry carries
+`hook_name`, `exit_code`, `success`, `stdout`, `stderr`, `error`, ..., the same
+record `GET /api/deploy/history` keeps. A typed target's entry carries `target`,
+`type`, `success`, `status_code` and `message`, which holds the reason a failed
+target gives. A certificate issued from a CSR has no key for a target that
+publishes one: its entry has `target` and `type` set to `null` and a `message`
+that says so.
 
 #### Check what a domain is actually serving
 
@@ -3054,10 +3087,14 @@ also enables local authentication, and the response says so with
 needed (on an instance already closed it answers `401`).
 
 Until setup is complete, the anonymous admin is also refused, with the same
-`409 SETUP_BOOTSTRAP_ONLY`, anything that outlives setup or carries private
-keys away: deploy-hook changes, tests and runs, certificate and key downloads,
-and backup creation and download. Restoring and uploading a backup stay
-allowed, since that is how an instance is recovered onto a fresh host.
+`409 SETUP_BOOTSTRAP_ONLY`, every write except the two the first-run screen
+makes (creating the first admin, and `POST /api/auth/config`), and the reads
+that carry private keys away: certificate downloads, client certificate key and
+PFX downloads, and backup downloads. Restoring and uploading a backup are
+refused too: a restore in that window planted a deploy hook and an admin API
+key that outlived setup. To recover onto a fresh host, create the first admin
+and sign in first, or start the instance with `API_BEARER_TOKEN` set
+([backup](./backup.md)).
 
 #### Revoke an API key
 

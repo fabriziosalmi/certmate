@@ -27,7 +27,8 @@ from flask_restx import Api, Namespace
 
 from modules.api.models import create_api_models
 from modules.api.resources import create_api_resources
-from modules.api.resources_lifecycle import _PREVIOUS_KEPT, _certbot_hint, _creation_failure
+from modules.api.resources_lifecycle import _certbot_hint, _creation_failure
+from modules.core.failure_hints import PREVIOUS_KEPT as _PREVIOUS_KEPT
 from tests.test_a_failed_job_says_what_to_check import CA_CLOSED
 from tests.test_async_issuance import _build_app, _exec, _passthrough_decorator, _wait_terminal
 
