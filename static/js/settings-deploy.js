@@ -215,7 +215,9 @@
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
                 }
                 addDebugLog('Testing hook: ' + hookLabel, 'info');
-                CertMate.toast('Testing hook: ' + hookLabel + '...', 'info');
+                // The result takes the place of this toast (P34).
+                var toastKey = 'hook-test:' + hook.id;
+                CertMate.toast('Testing hook: ' + hookLabel + '...', 'info', undefined, { key: toastKey });
                 fetch('/api/deploy/test/' + hook.id, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -226,16 +228,16 @@
                     .then(function (d) {
                         if (d.success) {
                             addDebugLog('Hook "' + hookLabel + '" test passed (exit ' + d.exit_code + ')', 'info');
-                            CertMate.toast('Hook test passed (exit ' + d.exit_code + ')', 'success');
+                            CertMate.toast('Hook test passed (exit ' + d.exit_code + ')', 'success', undefined, { key: toastKey });
                         } else {
                             var detail = d.error || 'exit ' + d.exit_code;
                             addDebugLog('Hook "' + hookLabel + '" test failed: ' + detail, 'error');
-                            CertMate.toast('Hook test failed: ' + detail, 'error');
+                            CertMate.toast('Hook test failed: ' + detail, 'error', undefined, { key: toastKey });
                         }
                     })
                     .catch(function (err) {
                         addDebugLog('Test request failed for hook "' + hookLabel + '": ' + (err && err.message || err), 'error');
-                        CertMate.toast('Test request failed', 'error');
+                        CertMate.toast('Test request failed', 'error', undefined, { key: toastKey });
                     })
                     .then(function () {
                         if (btn) {

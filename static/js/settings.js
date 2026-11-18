@@ -2288,6 +2288,9 @@
             });
         }
 
+        // A result belongs to the account it was checked for.
+        showCATestResult(null);
+
         // Update hint text based on selected CA
         var hintElement = document.getElementById('ca-test-hint');
         if (hintElement) {
@@ -2532,6 +2535,23 @@
     // Test CA Provider
     // =============================================
 
+    // The result of "Check configuration", written in the dialog as well as
+    // in a toast: it was only a toast, and once that went the dialog said
+    // nothing about the check (P34). `ok` null clears it.
+    function showCATestResult(ok, text) {
+        var el = document.getElementById('ca-test-result');
+        if (!el) return;
+        el.classList.remove('text-success-fg', 'text-danger-fg');
+        if (ok === null) {
+            el.textContent = '';
+            el.classList.add('hidden');
+            return;
+        }
+        el.textContent = text;
+        el.classList.add(ok ? 'text-success-fg' : 'text-danger-fg');
+        el.classList.remove('hidden');
+    }
+
     function testCAProvider() {
         var caProvider = editingCAProvider;
         var config = {};
@@ -2645,6 +2665,7 @@
         var originalText = testButton.innerHTML;
         testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
         testButton.disabled = true;
+        showCATestResult(null);
 
         fetch('/api/settings/test-ca-provider', {
             method: 'POST',
@@ -2660,15 +2681,18 @@
                 return response.json().then(function (result) {
                     if (response.ok && result.success) {
                         showMessage('CA connection test successful! ' + result.message, 'success');
+                        showCATestResult(true, 'Check passed: ' + result.message);
                     } else {
                         var errorMsg = result.message || result.error || 'Unknown error occurred';
                         showMessage('CA connection test failed: ' + errorMsg, 'error');
+                        showCATestResult(false, 'Check failed: ' + errorMsg);
                     }
                 });
             })
             .catch(function (error) {
                 console.error('Error testing CA provider:', error);
                 showMessage('Error testing CA provider connection. Please check your network connection.', 'error');
+                showCATestResult(false, 'Check failed: the request did not reach CertMate. Please check your network connection.');
             })
             .then(function () {
                 // finally block equivalent - restore button state
@@ -3495,7 +3519,7 @@
                         roleControl =
                             '<select data-action="change-role" data-username="' + escapeHtml(username) + '" data-current="' + escapeHtml(userInfo.role || '') + '"' +
                             ' class="text-xs px-2 py-0.5 rounded-full border-0 cursor-pointer ' + roleColor + ' focus:ring-2 focus:ring-blue-500 outline-none"' +
-                            ' title="Change role">' + roleOptions + '</select>';
+                            ' title="Change role" aria-label="Role of ' + escapeHtml(username) + '">' + roleOptions + '</select>';
                     }
 
                     var emailHtml = userInfo.email ? '<span class="mr-3"><i class="fas fa-envelope mr-1"></i>' + escapeHtml(userInfo.email) + '</span>' : '';
@@ -3508,59 +3532,67 @@
                           '<i class="fas fa-id-badge mr-1"></i>SSO</span>'
                         : '';
 
+                    // Each button is named for what it does and to whom: the
+                    // glyph alone was its name, and every row had the same four
+                    // (P16). The title stays for the pointer.
+                    var who = escapeHtml(username);
+                    var rowButton = 'type="button" class="p-2 inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-9 sm:min-h-9 rounded ';
+
                     // Disable/enable toggle — hidden for the sole admin (cannot
                     // be locked out).
                     var toggleBtn = isSoleAdmin ? '' :
-                        '<button data-action="toggle-user" data-username="' + escapeHtml(username) + '" data-enable="' + (userInfo.enabled === false) + '"' +
-                        ' class="p-2 text-muted hover:text-gray-700 dark:hover:text-gray-200"' +
-                        ' title="' + (userInfo.enabled !== false ? 'Disable user' : 'Enable user') + '">' +
-                        '<i class="fas fa-' + (userInfo.enabled !== false ? 'ban' : 'check') + '"></i>' +
+                        '<button ' + rowButton + 'text-muted hover:text-gray-700 dark:hover:text-gray-200" data-action="toggle-user" data-username="' + who + '" data-enable="' + (userInfo.enabled === false) + '"' +
+                        ' title="' + (userInfo.enabled !== false ? 'Disable user' : 'Enable user') + '"' +
+                        ' aria-label="' + (userInfo.enabled !== false ? 'Disable ' : 'Enable ') + who + '">' +
+                        '<i class="fas fa-' + (userInfo.enabled !== false ? 'ban' : 'check') + '" aria-hidden="true"></i>' +
                         '</button>';
 
                     // Password reset — not applicable to SSO accounts (no local
                     // password to set).
                     var resetBtn = isSso ? '' :
-                        '<button data-action="reset-password" data-username="' + escapeHtml(username) + '"' +
-                        ' class="p-2 text-muted hover:text-gray-700 dark:hover:text-gray-200"' +
-                        ' title="Reset password">' +
-                        '<i class="fas fa-key"></i>' +
+                        '<button ' + rowButton + 'text-muted hover:text-gray-700 dark:hover:text-gray-200" data-action="reset-password" data-username="' + who + '"' +
+                        ' title="Reset password" aria-label="Reset password of ' + who + '">' +
+                        '<i class="fas fa-key" aria-hidden="true"></i>' +
                         '</button>';
 
                     // Email — what an SSO login links an existing account by.
                     var emailBtn =
-                        '<button data-action="edit-email" data-username="' + escapeHtml(username) + '"' +
+                        '<button ' + rowButton + 'text-muted hover:text-gray-700 dark:hover:text-gray-200" data-action="edit-email" data-username="' + who + '"' +
                         ' data-email="' + escapeHtml(userInfo.email || '') + '"' +
-                        ' class="p-2 text-muted hover:text-gray-700 dark:hover:text-gray-200"' +
-                        ' title="' + (userInfo.email ? 'Change email' : 'Set email') + '">' +
-                        '<i class="fas fa-envelope"></i>' +
+                        ' title="' + (userInfo.email ? 'Change email' : 'Set email') + '"' +
+                        ' aria-label="' + (userInfo.email ? 'Change email of ' : 'Set email of ') + who + '">' +
+                        '<i class="fas fa-envelope" aria-hidden="true"></i>' +
                         '</button>';
 
                     // Delete — hidden for the sole admin.
                     var deleteBtn = isSoleAdmin ? '' :
-                        '<button data-action="delete-user" data-username="' + escapeHtml(username) + '"' +
-                        ' class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"' +
-                        ' title="Delete user">' +
-                        '<i class="fas fa-trash"></i>' +
+                        '<button ' + rowButton + 'text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" data-action="delete-user" data-username="' + who + '"' +
+                        ' title="Delete user" aria-label="Delete ' + who + '">' +
+                        '<i class="fas fa-trash" aria-hidden="true"></i>' +
                         '</button>';
 
+                    // The row wraps: on a phone the actions take a line of
+                    // their own under the user instead of running past the
+                    // edge of the list (P12).
                     html +=
-                        '<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">' +
-                        '<div class="flex items-center space-x-3">' +
-                        '<i class="fas fa-user-circle text-2xl text-gray-400 dark:text-gray-500"></i>' +
-                        '<div>' +
-                        '<div class="flex items-center space-x-2">' +
-                        '<span class="font-medium text-foreground">' + escapeHtml(username) + '</span>' +
+                        '<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">' +
+                        '<div class="flex items-center space-x-3 min-w-0">' +
+                        '<i class="fas fa-user-circle text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>' +
+                        '<div class="min-w-0">' +
+                        '<div class="flex flex-wrap items-center gap-2">' +
+                        '<span class="font-medium text-foreground break-words">' + escapeHtml(username) + '</span>' +
                         roleControl +
                         ssoBadge +
-                        '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '"></i>' +
+                        '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '" aria-hidden="true"></i>' +
+                        '<span class="sr-only">' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '</span>' +
                         '</div>' +
-                        '<div class="text-xs text-muted">' +
+                        '<div class="text-xs text-muted break-words">' +
                         emailHtml +
-                        '<span><i class="fas fa-clock mr-1"></i>Last login: ' + escapeHtml(lastLogin) + '</span>' +
+                        '<span><i class="fas fa-clock mr-1" aria-hidden="true"></i>Last login: ' + escapeHtml(lastLogin) + '</span>' +
                         '</div>' +
                         '</div>' +
                         '</div>' +
-                        '<div class="flex items-center space-x-2">' +
+                        '<div class="flex items-center justify-end gap-1 w-full sm:w-auto">' +
                         toggleBtn +
                         emailBtn +
                         resetBtn +

@@ -1219,7 +1219,7 @@
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? (external ? actionBtn('replace', cert.domain, 'green', 'Replace certificate', 'fa-file-arrow-up') : actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt')) : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
-                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-external="' + (external ? '1' : '0') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu" aria-expanded="false"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
+                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-external="' + (external ? '1' : '0') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" class="inline-flex items-center justify-center min-w-8 min-h-8 p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu" aria-expanded="false"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
                     </div>
                 </td>
             </tr>`;
@@ -1459,7 +1459,7 @@
             : empty;
         return '<div class="flex items-center justify-between mb-3">' +
             '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Notes &amp; tags</h4>' +
-            (canEdit ? '<button type="button" data-labels-edit="' + escapeHtml(cert.domain) + '" class="text-xs text-info-fg hover:underline">Edit</button>' : '') +
+            (canEdit ? '<button type="button" data-labels-edit="' + escapeHtml(cert.domain) + '" aria-label="Edit notes and tags" class="-my-2 -mr-2 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-8 md:min-h-8 px-2 rounded-lg text-xs text-info-fg hover:underline">Edit</button>' : '') +
             '</div>' + body;
     }
 
@@ -3525,9 +3525,16 @@
             '</div></div>';
     }
 
+    // The control in the detail panel that opened the Replace form: Cancel
+    // gives focus back to it rather than to the page body (P14).
+    var _replaceOpener = null;
+
     function openReplaceCertificate(domain) {
         var section = document.getElementById('certReplaceSection');
         if (!section || document.getElementById('detailDomain').textContent !== domain) return;
+        var active = document.activeElement;
+        var panel = document.getElementById('certDetailPanel');
+        _replaceOpener = (active && panel && panel.contains(active) && !section.contains(active)) ? active : null;
         section.classList.remove('hidden');
         if (section.scrollIntoView) section.scrollIntoView({block: 'nearest'});
         var first = document.getElementById('replaceCertificateFile');
@@ -3536,7 +3543,15 @@
 
     function closeReplaceCertificate() {
         var section = document.getElementById('certReplaceSection');
-        if (section) section.classList.add('hidden');
+        if (!section) return;
+        var hadFocus = section.contains(document.activeElement);
+        section.classList.add('hidden');
+        if (hadFocus) {
+            var back = (_replaceOpener && _replaceOpener.isConnected && _replaceOpener.getClientRects().length)
+                ? _replaceOpener : document.querySelector('#certDetailPanel [data-detail-close]');
+            if (back) back.focus();
+        }
+        _replaceOpener = null;
     }
 
     var isReplacingCert = false;
@@ -4350,6 +4365,13 @@
     // keeps (P38, P37). The separate red row this used to leave sat at the top
     // of the table with no expiry, provider or CA, read as a second
     // certificate that had failed, and was gone after a reload.
+    // The key of a job's progress toast ("Issuing certificate for ...",
+    // "Renewing ..."): the job's result takes its place, and a job that ends
+    // well takes it away, so the two never stand side by side (P34).
+    function jobToastKey(jobId) {
+        return 'job:' + jobId;
+    }
+
     function adoptRenewalJob(job, domain, force) {
         var jobId = job.job_id;
         pendingJobs[jobId] = {
@@ -4361,7 +4383,7 @@
             domainsDisplay: job.domain || domain
         };
         showMessage((force ? 'Force renewing ' : 'Renewing ') + (job.domain || domain) +
-                    '\u2026 this continues in the background.', 'info');
+                    '\u2026 this continues in the background.', 'info', { key: jobToastKey(jobId) });
         pollCertJob(jobId, job.status_url || ('/api/certificates/jobs/' + jobId));
     }
 
@@ -4385,7 +4407,7 @@
         updateAccountSelection();
         if (typeof closeCertDrawer === 'function') { closeCertDrawer(); }
         showMessage((isReissue ? 'Reissuing certificate for ' : 'Issuing certificate for ') +
-                    domainsDisplay + '…', 'info');
+                    domainsDisplay + '…', 'info', { key: jobToastKey(jobId) });
         renderPendingRows();
         pollCertJob(jobId, job.status_url || ('/api/certificates/jobs/' + jobId));
     }
@@ -4453,6 +4475,7 @@
                 if (!pendingJobs[jobId]) return;   // dismissed during the request
                 var status = jobRec && jobRec.status;
                 if (status === 'succeeded') {
+                    CertMate.dismissToast(jobToastKey(jobId));
                     var doneDomain = pendingJobs[jobId].domain;
                     delete pendingJobs[jobId];
                     delete pendingPollTimers[jobId];
@@ -4481,7 +4504,7 @@
                             : 'Certificate issuance failed for ') +
                         failedDomain + ': ' +
                         failureCause(pendingJobs[jobId].error) +
-                        (failedHint ? ' ' + failedHint : ''), 'error');
+                        (failedHint ? ' ' + failedHint : ''), 'error', { key: jobToastKey(jobId) });
                     if (failedKind === 'renew') {
                         // The certificate is still there and still served: the
                         // failure goes on its own row and in its detail panel,
@@ -4494,6 +4517,7 @@
                     }
                 } else if (status === '__gone__') {
                     // Job evicted/unknown — drop the optimistic row and resync.
+                    CertMate.dismissToast(jobToastKey(jobId));
                     delete pendingJobs[jobId];
                     delete pendingPollTimers[jobId];
                     loadCertificates();

@@ -37,8 +37,9 @@ def _poll(answers):
     if not node:
         pytest.skip('node is not available')
     # The functions pollCertJob calls at module level (failureCause moved there
-    # when the detail panel came to share it, P37).
-    helpers = ''.join(_function(name) for name in ('pollDelay', 'failureCause')
+    # when the detail panel came to share it, P37; jobToastKey names the job's
+    # progress toast, which its result replaces, P34).
+    helpers = ''.join(_function(name) for name in ('pollDelay', 'failureCause', 'jobToastKey')
                       if f'function {name}(' in DASHBOARD)
     script = (
         "var answers = " + json.dumps(answers) + ", asked = 0, delays = [], timers = [];\n"
@@ -48,6 +49,7 @@ def _poll(answers):
         "function loadCertificates() { reloads++; return Promise.resolve(); }\n"
         "function renderPendingRows() { renders++; } function refreshOpenDetail() {}\n"
         "function showMessage(text, kind) { messages.push([kind, text]); }\n"
+        "var CertMate = {dismissToast: function () {}};\n"
         "function fetch() { var a = answers[Math.min(asked++, answers.length - 1)];\n"
         "  if (a === 'network') return Promise.reject(new Error('offline'));\n"
         "  if (a === 404) return Promise.resolve({status: 404});\n"

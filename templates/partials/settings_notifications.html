@@ -13,7 +13,7 @@
                     <p class="text-sm text-muted">Send alerts for certificate events</p>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable notifications">
+                    <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable notifications" aria-label="Enable notifications">
                     <div class="w-11 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
                 </label>
             </div>
@@ -75,7 +75,7 @@
                         <div class="flex items-center gap-3">
                             <button type="button" @click="sendDigest()" x-show="config.digest_enabled !== false && config.channels.smtp.enabled" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"><i class="fas fa-paper-plane mr-1"></i>Send now</button>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="config.digest_enabled" class="sr-only peer" :disabled="!config.channels.smtp.enabled" title="Enable weekly digest">
+                                <input type="checkbox" x-model="config.digest_enabled" class="sr-only peer" :disabled="!config.channels.smtp.enabled" title="Enable weekly digest" aria-label="Enable weekly digest">
                                 <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
                             </label>
                         </div>
