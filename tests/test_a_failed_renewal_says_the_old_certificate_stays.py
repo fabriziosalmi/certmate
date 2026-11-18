@@ -18,11 +18,18 @@ fallback; the synchronous 422 keeps it, so its `hint` stays a string. The
 toast leads with the error's cause either way (tests/
 test_ui_a_failed_job_toast_leads_with_the_cause.py).
 """
-import pytest
+from pathlib import Path
+from unittest.mock import MagicMock
 
+import pytest
+from flask import Flask, request
+from flask_restx import Api, Namespace
+
+from modules.api.models import create_api_models
+from modules.api.resources import create_api_resources
 from modules.api.resources_lifecycle import _PREVIOUS_KEPT, _certbot_hint, _creation_failure
 from tests.test_a_failed_job_says_what_to_check import CA_CLOSED
-from tests.test_async_issuance import _build_app, _exec, _wait_terminal
+from tests.test_async_issuance import _build_app, _exec, _passthrough_decorator, _wait_terminal
 
 pytestmark = [pytest.mark.unit]
 
@@ -71,6 +78,39 @@ def _create(tmp_path, side_effect, asynchronous):
     return 200, client.get(answer.get_json()['status_url']).get_json()
 
 
+def _reissue_job(tmp_path, side_effect, challenge):
+    """An async reissue whose certbot run raises *side_effect*: the job record."""
+    ex = _exec()
+    auth = MagicMock()
+    auth.require_role = MagicMock(side_effect=_passthrough_decorator)
+    auth.user_can_access_domain.return_value = True
+    settings = MagicMock()
+    settings.load_settings.return_value = {'challenge_type': challenge}
+    service = MagicMock()
+    service.issue_reissue.side_effect = side_effect
+    managers = {'auth': auth, 'settings': settings, 'certificates': MagicMock(cert_dir=Path(tmp_path)),
+                'file_ops': MagicMock(cert_dir=Path(tmp_path)), 'cache': MagicMock(), 'dns': MagicMock(),
+                'audit': None, 'cert_executor': ex, 'cert_service': service}
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    api = Api(app, prefix='/api')
+    resources = create_api_resources(api, create_api_models(api), managers)
+    ns = Namespace('certificates', description='certs')
+    api.add_namespace(ns)
+    ns.add_resource(resources['CertificateReissue'], '/<string:domain>/reissue')
+    ns.add_resource(resources['CertificateJob'], '/jobs/<string:job_id>')
+
+    @app.before_request
+    def _attach_user():
+        request.current_user = {'username': 'op', 'role': 'operator', 'allowed_domains': None}
+
+    client = app.test_client()
+    accepted = client.post('/api/certificates/x.example.com/reissue', json={'async': True})
+    assert accepted.status_code == 202, accepted.get_json()
+    _wait_terminal(ex, accepted.get_json()['job_id'])
+    return client.get(accepted.get_json()['status_url']).get_json()
+
+
 def test_a_failed_async_renewal_says_what_to_check_and_that_the_old_certificate_stays(tmp_path):
     job = _renew_job(tmp_path, RuntimeError(CA_CLOSED))
     assert job['status'] == 'failed'
@@ -101,6 +141,18 @@ def test_a_renewal_no_rule_knows_names_no_cause_and_keeps_the_error(tmp_path):
     job = _renew_job(tmp_path, RuntimeError('Renewal failed: something no rule knows'))
     assert job['error_code'] == 'RENEWAL_FAILED'
     assert job['hint'] == _PREVIOUS_KEPT
+    assert 'something no rule knows' in job['error']
+
+
+@pytest.mark.parametrize('challenge', ['dns-01', 'http-01'])
+def test_an_async_reissue_no_rule_knows_only_says_the_old_certificate_stays(tmp_path, challenge):
+    """No guessed cause on a reissue either: without fallback=False the hint
+    would tell the user to check DNS credentials or port 80."""
+    job = _reissue_job(tmp_path, RuntimeError('something no rule knows'), challenge)
+    assert job['status'] == 'failed', job
+    assert job['error_code'] == 'CERTIFICATE_REISSUE_FAILED', job
+    assert job['hint'] == _PREVIOUS_KEPT, job['hint']
+    assert 'dns' not in job['hint'].lower() and 'port 80' not in job['hint'], job['hint']
     assert 'something no rule knows' in job['error']
 
 

@@ -4,7 +4,7 @@ the hint follows it.
 UX perception audit, 2026-11-18: the toast read `hint || error`. A renewal or
 a reissue whose error no rule knows has the hint "The previous certificate is
 still in place.", so its toast said that and nothing about why it failed. The
-toast now says the first sentence of the error, then the hint. The server side
+toast now says the error's cause line, then the hint. The server side
 is tests/test_a_failed_renewal_says_the_old_certificate_stays.py; here the job
 answers are given in the browser (page.route), as in
 tests/test_ui_a_failed_job_shows_what_to_check.py.
@@ -81,3 +81,22 @@ def test_a_known_cause_shows_the_cause_and_then_the_hint(page):
     assert error in toast, toast
     assert 'Re-add it in Settings' in toast, toast
     assert toast.index(error) < toast.index('Re-add it in Settings'), toast
+
+
+def test_certbots_unexpected_error_shows_the_line_that_names_the_cause(page):
+    """certbot's first line only announces the cause and ends on a colon; the
+    toast shows the line after it."""
+    error = ('An unexpected error occurred:\nCannot issue for "x.local": Domain name does not end '
+             'with a valid public suffix (TLD)')
+    toast = _toast_after_failure(page, 'create', error, None)
+    assert 'Domain name does not end with a valid public suffix' in toast, toast
+
+
+def test_a_refusal_keeps_its_remedy_sentence(page):
+    """The cause is not cut at its first sentence: the wildcard refusal's second
+    sentence is what to do."""
+    error = ('Certificate creation failed: HTTP-01 challenge does not support wildcard domains. '
+             'Use DNS-01 instead.')
+    toast = _toast_after_failure(page, 'create', error, None)
+    assert 'Certificate issuance failed for' in toast, toast
+    assert 'does not support wildcard domains. Use DNS-01 instead.' in toast, toast

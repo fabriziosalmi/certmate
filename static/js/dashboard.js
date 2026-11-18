@@ -4063,15 +4063,25 @@
 
     function pollCertJob(jobId, statusUrl) {
         // The cause a failed job's error names, short enough for a toast: the
-        // first line, without the "Certificate ... failed:" prefix the toast
-        // already says, cut at its first sentence and at 160 characters. certbot's
-        // "An unexpected error occurred:" line ends on a colon, read as a stop.
+        // first non-empty line, without the "Certificate ... failed:" prefix
+        // the toast already says, kept whole up to 200 characters and cut on
+        // a word beyond. A first line that ends on a colon only announces the
+        // cause, so the next line is the one shown.
         function failureCause(error) {
             var text = String(error || '').replace(/^\s*Certificate (creation|reissue|renewal|issuance) failed:\s*/i, '');
-            text = (text.split('\n')[0] || '').trim();
-            var sentence = text.search(/[.!?](\s|$)/);
-            if (sentence !== -1) text = text.slice(0, sentence + 1);
-            if (text.length > 160) text = text.slice(0, 159).trim() + '\u2026';
+            var lines = text.split('\n').map(function (line) { return line.trim(); })
+                .filter(function (line) { return line; });
+            text = lines[0] || '';
+            // certbot's "An unexpected error occurred:" names the cause on
+            // the next line.
+            if (/:$/.test(text) && lines[1]) text = lines[1];
+            // The whole line, not its first sentence: a refusal's second
+            // sentence is often the remedy ("Use DNS-01 instead.").
+            if (text.length > 200) {
+                var cut = text.slice(0, 199);
+                var space = cut.lastIndexOf(' ');
+                text = (space > 0 ? cut.slice(0, space) : cut).replace(/[\s.,;:]+$/, '') + '\u2026';
+            }
             text = text.replace(/:$/, '');
             if (text && !/[.!?\u2026]$/.test(text)) text += '.';
             return text || 'The job failed without a message.';
