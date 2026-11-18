@@ -208,25 +208,30 @@
             var safeEmail = escapeHtml(cert.email || '-');
             var safeUsage = escapeHtml(cert.cert_usage);
             var safeId = escapeHtml(cert.identifier);
+            var statusPill = cert.revoked
+                ? '<span class="px-2 py-1 bg-danger-surface text-danger-strong rounded text-xs font-medium">Revoked</span>'
+                : '<span class="px-2 py-1 bg-success-surface text-success-strong rounded text-xs font-medium">Active</span>';
 
             // A native row, so a screen reader walks the list as a table (P13):
             // the name is the button that opens the detail dialog, and a click
             // anywhere else on the row opens it too, for the mouse. The action
             // buttons stopPropagation so they don't also open it.
+            //
+            // Below md the row is the name and the expiry, with the status
+            // under the name: Status and Actions were past the right edge of
+            // a phone, in a scroll box that shows no scrollbar (P10). Renew
+            // and Revoke are in the detail dialog the name opens.
             return '<tr data-cc-id="' + safeId + '" class="' + healthClass + ' cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors">' +
-                '<td class="px-6 py-4 text-sm font-medium text-foreground cm-mono">' +
-                    '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="text-left hover:underline" aria-label="View details for ' + safeCN + '">' + safeCN + '</button>' +
+                '<td class="px-4 md:px-6 py-4 text-sm font-medium text-foreground cm-mono">' +
+                    '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="text-left break-all md:break-normal hover:underline" aria-label="View details for ' + safeCN + '">' + safeCN + '</button>' +
+                    '<div class="md:hidden mt-2 font-sans">' + statusPill + '</div>' +
                 '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
                 '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium whitespace-nowrap">' + safeUsage + '</span></td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell whitespace-nowrap">' + CertMate.formatDate(createdDate) + '</td>' +
-                '<td class="px-6 py-4 text-sm whitespace-nowrap ' + (isExpiringSoon ? 'text-warning-fg font-semibold' : 'text-muted') + '">' + CertMate.formatDate(expiresDate) + '</td>' +
-                '<td class="px-6 py-4 text-sm">' +
-                    (cert.revoked
-                        ? '<span class="px-2 py-1 bg-danger-surface text-danger-strong rounded text-xs font-medium">Revoked</span>'
-                        : '<span class="px-2 py-1 bg-success-surface text-success-strong rounded text-xs font-medium">Active</span>') +
-                '</td>' +
-                '<td class="px-6 py-4 text-sm text-right">' +
+                '<td class="px-4 md:px-6 py-4 text-sm whitespace-nowrap ' + (isExpiringSoon ? 'text-warning-fg font-semibold' : 'text-muted') + '">' + CertMate.formatDate(expiresDate) + '</td>' +
+                '<td class="px-6 py-4 text-sm hidden md:table-cell">' + statusPill + '</td>' +
+                '<td class="px-6 py-4 text-sm text-right hidden md:table-cell">' +
                     '<div class="flex items-center justify-end gap-1">' +
                         '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-hover" title="Details" aria-label="Details ' + safeCN + '"><i class="fas fa-eye" aria-hidden="true"></i></button>' +
                         (!cert.revoked ? '<button type="button" data-cc-action="revoke" data-id="' + safeId + '" class="p-1.5 text-muted hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-hover" title="Revoke" aria-label="Revoke ' + safeCN + '"><i class="fas fa-ban" aria-hidden="true"></i></button>' : '') +
@@ -560,6 +565,8 @@
 
         var titleEl = document.getElementById('certModalTitle');
         if (titleEl) titleEl.textContent = cert.common_name || 'Certificate Details';
+        var revokeEl = document.getElementById('certModalRevoke');
+        if (revokeEl) revokeEl.classList.toggle('hidden', !!cert.revoked);
         document.getElementById('certModal').classList.remove('hidden');
         if (CertMate.lockScroll) CertMate.lockScroll();
     }
@@ -572,6 +579,9 @@
         if (CertMate.unlockScroll) CertMate.unlockScroll();
     };
     document.addEventListener('keydown', function(e) {
+        // A question asked from the dialog (Revoke) owns the Escape that
+        // dismisses it; the dialog under it stays open.
+        if (document.querySelector('[data-cm-overlay]')) return;
         if (e.key === 'Escape' && !document.getElementById('certModal').classList.contains('hidden')) {
             window.closeCertModal();
         }
@@ -606,7 +616,10 @@
             .catch(function() { CertMate.toast('Download failed', 'error'); });
     };
 
-    function ccRevokeCert(id) {
+    // `done` runs after a revoke or renew the server accepted: the detail
+    // dialog passes its own close, so it does not stay open on a certificate
+    // it no longer describes.
+    function ccRevokeCert(id, done) {
         CertMate.confirm('Are you sure you want to revoke this certificate?', 'Revoke Certificate').then(function(confirmed) {
             if (!confirmed) return;
             fetch('/api/client-certs/' + id + '/revoke', {
@@ -617,6 +630,7 @@
                 return response.json().catch(function() { return {}; }).then(function(body) {
                     if (response.ok) {
                         CertMate.toast('Certificate revoked', 'success');
+                        if (done) done();
                         ccLoadCertificates();
                         ccLoadStatistics();
                     } else {
@@ -629,7 +643,7 @@
         });
     }
 
-    function ccRenewCert(id) {
+    function ccRenewCert(id, done) {
         fetch('/api/client-certs/' + id + '/renew', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -637,6 +651,7 @@
             return response.json().catch(function() { return {}; }).then(function(body) {
                 if (response.ok) {
                     CertMate.toast('Certificate renewed!', 'success');
+                    if (done) done();
                     ccLoadCertificates();
                     ccLoadStatistics();
                 } else {
@@ -662,6 +677,13 @@
         'ccToggleCsrBlock', 'closeCertModal', 'downloadCertFile'
     ]);
     CertMate.actions({
+        // The detail dialog's own Renew and Revoke, for the certificate it shows.
+        ccRenewShownCert: function () {
+            if (currentCertId) ccRenewCert(currentCertId, window.closeCertModal);
+        },
+        ccRevokeShownCert: function () {
+            if (currentCertId) ccRevokeCert(currentCertId, window.closeCertModal);
+        },
         ccChangePageSize: function (select) {
             var size = Number(select.value);
             if ([25, 50, 100].indexOf(size) === -1) return;
