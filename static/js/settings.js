@@ -3792,6 +3792,12 @@
                 addDebugLog('Settings form submitted', 'info');
                 saveSettings();
             });
+            // One form holds the DNS, CA, General and Storage tabs. A field
+            // out of its limits on a tab that is not showing blocked the save
+            // with no word: the browser cannot show its message on a hidden
+            // field, so there was no request and no toast. The first invalid
+            // field of a press of Save is brought into view and named.
+            form.addEventListener('invalid', onSettingsFieldInvalid, true);
         }
 
         // Users and backups load when their panel is first shown. They waited
@@ -3880,6 +3886,60 @@
     window.deleteUser = deleteUser;
     window.clearDeploymentCache = clearDeploymentCache;
     window.refreshCacheStats = refreshCacheStats;
+
+    // The form's `invalid` event, in the capture phase: the browser fires it
+    // once for each invalid field when Save is pressed, and the first one of
+    // that press is the one shown, in a toast naming the field and its tab.
+    // Whether the browser can show its own message is decided by the field,
+    // not its panel: a field on the showing tab can still be hidden, inside
+    // a provider block that is not selected. A field that can be shown keeps
+    // the browser's bubble. A hidden one gets preventDefault (otherwise the
+    // browser only logs that it cannot focus it); if its tab is hidden, the
+    // tab is opened the way the side menu opens one (the URL fragment, read
+    // by settingsTabs) and the field is focused once it shows.
+    var settingsInvalidShown = false;
+    function settingsFieldHidden(el) {
+        return el.offsetParent === null || el.getClientRects().length === 0;
+    }
+    function onSettingsFieldInvalid(event) {
+        var field = event.target;
+        if (settingsInvalidShown) {
+            event.preventDefault();
+            return;
+        }
+        settingsInvalidShown = true;
+        setTimeout(function () { settingsInvalidShown = false; }, 0);
+
+        var panel = field.closest('[id^="settings-panel-"]');
+        var tabId = panel ? panel.id.replace('settings-panel-', '') : '';
+        var tabButton = tabId ? document.getElementById('settings-tab-' + tabId) : null;
+        var tabLabel = (tabButton && tabButton.getAttribute('aria-label')) || tabId;
+        var label = field.id ? document.querySelector('label[for="' + field.id + '"]') : null;
+        var name = (label && label.textContent.trim()) || field.name || field.id;
+        // The limits are the reason only when the value is outside them; a
+        // step mismatch (7.5 in a whole-days field) keeps the browser's text.
+        var why = field.validationMessage;
+        if ((field.validity.rangeUnderflow || field.validity.rangeOverflow)
+                && field.min !== '' && field.max !== '') {
+            why = 'It must be between ' + field.min + ' and ' + field.max + '.';
+        }
+        var where = tabLabel ? tabLabel + ' tab, ' : '';
+        showMessage(where + name + ': ' + why + ' Nothing was saved.', 'error');
+
+        if (!settingsFieldHidden(field)) return;
+        event.preventDefault();
+        if (panel && settingsFieldHidden(panel)) {
+            location.hash = tabId;
+            var tries = 0;
+            (function focusWhenShown() {
+                if (!settingsFieldHidden(field)) {
+                    field.focus();
+                } else if (tries++ < 40) {
+                    setTimeout(focusWhenShown, 25);
+                }
+            })();
+        }
+    }
 
     // WAI-ARIA tabs: Left/Right/Home/End move between the settings tabs and
     // activate the focused one (automatic activation). Wired from settings.html
