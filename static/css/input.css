@@ -179,6 +179,21 @@ button:not(.btn):focus-visible,
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ── Settings save bar ───────────────────────────────────────── */
+/* Sticky on the form's own child, so it sticks for the whole form; below md
+   it sits on top of the fixed bottom nav (#bottomTabBar: h-14, a 1 px top
+   border and the safe-area padding). */
+.settings-save-bar {
+  position: sticky;
+  z-index: 10;
+  bottom: calc(57px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 768px) {
+  .settings-save-bar {
+    bottom: 0;
+  }
+}
+
 /* ── Page entry animation ────────────────────────────────────── */
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(6px); }
