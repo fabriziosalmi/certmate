@@ -36,13 +36,17 @@ def _poll(answers):
     node = shutil.which('node')
     if not node:
         pytest.skip('node is not available')
-    helpers = _function('pollDelay') if 'function pollDelay(' in DASHBOARD else ''
+    # The functions pollCertJob calls at module level (failureCause moved there
+    # when the detail panel came to share it, P37).
+    helpers = ''.join(_function(name) for name in ('pollDelay', 'failureCause')
+                      if f'function {name}(' in DASHBOARD)
     script = (
         "var answers = " + json.dumps(answers) + ", asked = 0, delays = [], timers = [];\n"
         "var pendingJobs = {j: {domain: 'slow.example.com', kind: 'create', state: 'running'}};\n"
         "var pendingPollTimers = {}, API_HEADERS = {}, messages = [], reloads = 0, renders = 0;\n"
         "function setTimeout(fn, ms) { delays.push(ms); timers.push(fn); return timers.length; }\n"
-        "function loadCertificates() { reloads++; } function renderPendingRows() { renders++; }\n"
+        "function loadCertificates() { reloads++; return Promise.resolve(); }\n"
+        "function renderPendingRows() { renders++; } function refreshOpenDetail() {}\n"
         "function showMessage(text, kind) { messages.push([kind, text]); }\n"
         "function fetch() { var a = answers[Math.min(asked++, answers.length - 1)];\n"
         "  if (a === 'network') return Promise.reject(new Error('offline'));\n"
