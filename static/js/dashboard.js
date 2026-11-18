@@ -4073,8 +4073,14 @@
                 .filter(function (line) { return line; });
             text = lines[0] || '';
             // certbot's "An unexpected error occurred:" names the cause on
-            // the next line.
-            if (/:$/.test(text) && lines[1]) text = lines[1];
+            // the next line. CertMate's own "certbot exited ... without
+            // reporting an error. The last it printed:" states the cause
+            // before its colon: keep that sentence, drop the announcement.
+            if (/:$/.test(text)) {
+                var stated = text.match(/^(.*[.!?])\s+[^.!?]*:$/);
+                if (stated) text = stated[1];
+                else if (lines[1]) text = lines[1];
+            }
             // The whole line, not its first sentence: a refusal's second
             // sentence is often the remedy ("Use DNS-01 instead.").
             if (text.length > 200) {

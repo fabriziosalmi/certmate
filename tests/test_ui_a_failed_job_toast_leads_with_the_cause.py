@@ -100,3 +100,18 @@ def test_a_refusal_keeps_its_remedy_sentence(page):
     toast = _toast_after_failure(page, 'create', error, None)
     assert 'Certificate issuance failed for' in toast, toast
     assert 'does not support wildcard domains. Use DNS-01 instead.' in toast, toast
+
+
+@pytest.mark.parametrize('first', [
+    'certbot exited with code 1 without reporting an error. The last it printed:',
+    'certbot was killed by SIGKILL before it reported an error. The last it printed:',
+])
+def test_certmates_own_exit_line_is_the_cause_not_the_line_after_it(page, first):
+    """CertMate's own line for a silent certbot (modules/core/certificates.py)
+    ends on a colon too, but it states the cause before it: the toast keeps
+    that sentence and not certbot's progress line that follows."""
+    error = 'Certificate creation failed: ' + first + '\nRequesting a certificate for x.example.com'
+    toast = _toast_after_failure(page, 'create', error, None)
+    assert first.split('. ')[0] + '.' in toast, toast
+    assert 'Requesting a certificate' not in toast, toast
+    assert 'The last it printed' not in toast, toast
