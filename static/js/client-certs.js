@@ -223,7 +223,7 @@
             // and Revoke are in the detail dialog the name opens.
             return '<tr data-cc-id="' + safeId + '" class="' + healthClass + ' cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors">' +
                 '<td class="px-4 md:px-6 py-4 text-sm font-medium text-foreground cm-mono">' +
-                    '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="text-left break-all md:break-normal hover:underline" aria-label="View details for ' + safeCN + '">' + safeCN + '</button>' +
+                    '<button type="button" data-cc-action="view" data-id="' + safeId + '" class="text-left break-all md:break-normal hover:underline" aria-label="View details for ' + safeCN + '">' + safeCN + '</button>' +
                     '<div class="md:hidden mt-2 font-sans">' + statusPill + '</div>' +
                 '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
@@ -246,6 +246,7 @@
                 e.stopPropagation();  // don't also trigger the row-open handler
                 var id = btn.dataset.id;
                 switch (btn.dataset.ccAction) {
+                    case 'view':
                     case 'details': ccShowCertDetails(id); break;
                     case 'revoke': ccRevokeCert(id); break;
                     case 'renew': ccRenewCert(id); break;
