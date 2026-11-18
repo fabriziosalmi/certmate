@@ -18,6 +18,26 @@
             .replace(/'/g, '&#39;');
     };
 
+    // What a CA account still lacks before it can issue, as keys of
+    // CA_ACCOUNT_NEEDS: [] when it can. The global contact email stands in
+    // for an account's own, as it does when CertMate issues.
+    CM.CA_ACCOUNT_NEEDS = {
+        acme_url: {noun: 'ACME directory URL', phrase: 'an ACME directory URL'},
+        eab: {noun: 'EAB credentials', phrase: 'EAB credentials'},
+        email: {noun: 'contact email', phrase: 'a contact email'}
+    };
+    CM.caAccountMissing = function(provider, account, settings) {
+        account = account || {};
+        var missing = [];
+        var acme = provider !== 'letsencrypt' && provider !== 'letsencrypt_staging';
+        if (acme && (provider === 'private_ca' || provider === 'digicert' || provider === 'sectigo') &&
+                !account.acme_url) missing.push('acme_url');
+        if (acme && provider !== 'private_ca' && !((account.eab_kid || account.eab_key_id) &&
+                (account.eab_hmac || account.eab_hmac_key))) missing.push('eab');
+        if (!(account.email || (settings && settings.email))) missing.push('email');
+        return missing;
+    };
+
     CM.configuredCAProviders = function(settings, usableOnly) {
         var providers = (settings && settings.ca_providers) || {};
         var configured = Object.keys(providers).filter(function (id) {
@@ -25,12 +45,7 @@
             if (usableOnly) {
                 var accounts = config.accounts ? Object.values(config.accounts) : [config];
                 return accounts.some(function (account) {
-                    var email = account.email || (settings && settings.email);
-                    if (id === 'letsencrypt' || id === 'letsencrypt_staging') return Boolean(email);
-                    if (id === 'private_ca') return Boolean(account.acme_url && email);
-                    return Boolean((account.eab_kid || account.eab_key_id) &&
-                        (account.eab_hmac || account.eab_hmac_key) && email &&
-                        ((id !== 'digicert' && id !== 'sectigo') || account.acme_url));
+                    return CM.caAccountMissing(id, account, settings).length === 0;
                 });
             }
             return Boolean(config.enabled || config.email || config.acme_url || config.eab_kid ||

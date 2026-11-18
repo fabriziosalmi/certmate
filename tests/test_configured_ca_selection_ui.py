@@ -45,12 +45,12 @@ eval(fs.readFileSync(process.argv[2], 'utf8'));
 window.loadCAProviders().then(() => {
     const ca = elements.ca_provider_select;
     if (ca.options.map(o => o.value).join(',') !== ',letsencrypt,sectigo') throw Error('Unconfigured CA offered');
-    if (ca.options[0].textContent !== "Global default: Let's Encrypt — le@example.com")
+    if (ca.options[0].textContent !== "Global default: Let's Encrypt — Default account (le@example.com)")
         throw Error('Global default CA account not identified');
     if (!prevalidated.hidden || !prevalidated.disabled) throw Error('Default LE offers Sectigo challenge');
     ca.value = 'sectigo'; window.updateCAProviderInfo();
     if (elements.ca_account_id.options.map(o => o.value).join(',') !== ',scm,bertrand' ||
-        elements.ca_account_id.options[0].textContent !== 'Default for Sectigo: Bertrand')
+        elements.ca_account_id.options[0].textContent !== 'Default for Sectigo: Bertrand (b@example.com)')
         throw Error('Sectigo default and accounts missing');
     ca.value = 'letsencrypt'; window.updateCAProviderInfo();
     if (elements.ca_account_id.options.length !== 2 || elements.ca_account_id.options[1].value !== 'default')
@@ -61,7 +61,7 @@ window.loadCAProviders().then(() => {
 }).then(() => {
     if (elements.ca_provider_select.value !== '' ||
         elements.ca_account_id.options.map(o => o.value).join(',') !== ',scm,bertrand' ||
-        elements.ca_provider_select.options[0].textContent !== 'Global default: Sectigo — Bertrand')
+        elements.ca_provider_select.options[0].textContent !== 'Global default: Sectigo — Bertrand (b@example.com)')
         throw Error('Default CA account not offered');
     if (prevalidated.hidden || prevalidated.disabled) throw Error('Default Sectigo challenge unavailable');
     elements.challenge_type_select.value = 'prevalidated';

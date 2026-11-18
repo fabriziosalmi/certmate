@@ -2335,6 +2335,7 @@
         var list = document.getElementById('configured-ca-list');
         var types = document.getElementById('add-ca-type');
         list.replaceChildren();
+        var allUsable = true;
         configuredCAProviders.forEach(function (provider) {
             var config = ((currentSettings.ca_providers || {})[provider]) || {};
             var accounts = config.accounts || {default: config};
@@ -2348,6 +2349,24 @@
                 name.textContent = (option ? option.textContent : provider) + ' - ' +
                     (account.name || (accountId === 'default' ? 'Default account' : accountId));
                 row.appendChild(name);
+                // Listed is not usable: an account the create form would
+                // refuse says what it lacks, and opens to add it.
+                var missing = CertMate.caAccountMissing(provider, account, currentSettings);
+                if (missing.length) {
+                    allUsable = false;
+                    var lacks = document.createElement('span');
+                    lacks.className = 'text-xs font-medium text-warning-fg';
+                    lacks.textContent = 'No ' + missing.map(function (key) {
+                        return CertMate.CA_ACCOUNT_NEEDS[key].noun;
+                    }).join(' or ') + ': cannot issue';
+                    row.appendChild(lacks);
+                    var complete = document.createElement('button');
+                    complete.type = 'button';
+                    complete.textContent = missing.length === 1 && missing[0] === 'email' ? 'Add email' : 'Complete account';
+                    complete.className = 'text-xs px-2 py-1 rounded bg-warning-surface text-warning-fg hover:bg-hover';
+                    complete.addEventListener('click', function () { openCAAccountModal(provider, accountId); });
+                    row.appendChild(complete);
+                }
                 var selectedAccount = ((currentSettings.default_ca_accounts || {})[provider]) ||
                     (accounts.default ? 'default' : Object.keys(accounts)[0]);
                 var perCA = selectedAccount === accountId;
@@ -2393,6 +2412,13 @@
                 list.appendChild(row);
             });
         });
+        // The heading's green check only over accounts that can all issue.
+        var status = document.querySelector('[data-ca-accounts-status]');
+        if (status) {
+            status.className = allUsable
+                ? 'fas fa-fw fa-check-circle mr-2 text-green-500'
+                : 'fas fa-fw fa-exclamation-triangle mr-2 text-warning-fg';
+        }
     }
 
     function currentCAAccountConfig() {
