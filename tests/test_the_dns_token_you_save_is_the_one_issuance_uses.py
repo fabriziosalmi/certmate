@@ -198,6 +198,22 @@ def test_a_flat_settings_write_reaches_the_account_issuance_uses(tmp_path):
     assert DNSManager(manager).get_dns_provider_account_config('cloudflare')[0]['api_token'] == TOKEN
 
 
+@pytest.mark.parametrize('default_account', [None, 'prod'])
+def test_a_flat_write_of_route53_form_defaults_makes_no_account(tmp_path, default_account):
+    """A settings tab opened before the upgrade sends Route53's mode, region
+    and an empty role ARN on every save. Folded in, they made an account
+    "default" with no credential, or reset the default account's region."""
+    prod = {'name': 'Prod', 'access_key_id': 'AKIA' + 'Q' * 16, 'secret_access_key': 'S' * 40,
+            'region': 'eu-west-1'}
+    on_disk = _upgraded({'route53': {'accounts': {'prod': dict(prod)}}},
+                        {'route53': default_account} if default_account else {})
+    manager, _ = _manager(tmp_path, on_disk)
+    assert manager.atomic_update({'dns_providers': {'route53': {
+        'auth_mode': 'access_keys', 'region': 'us-east-1', 'assume_role_arn': ''}}})
+    route53 = manager.load_settings(use_cache=False)['dns_providers']['route53']
+    assert route53 == {'accounts': {'prod': prod}}
+
+
 def test_a_single_account_config_with_a_credential_still_becomes_default(tmp_path):
     """CONTROL: the original migration is unchanged for a real credential."""
     on_disk = _upgraded({'cloudflare': {'api_token': TOKEN}})

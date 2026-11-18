@@ -840,6 +840,12 @@ def _fold_legacy_dns_write(existing_dns, incoming_dns, default_accounts):
         known = current.get('accounts') if isinstance(current, dict) else None
         if not flat or not (isinstance(known, dict) or isinstance(config.get('accounts'), dict)):
             continue
+        if _holds_nothing({key: config[key] for key in flat}):
+            # Route53's form defaults with no key typed: nothing to apply, and
+            # folded in they would make an account with no credential.
+            for key in flat:
+                del config[key]
+            continue
         accounts = {**(known or {}), **(config.get('accounts') or {})}
         target = (default_accounts or {}).get(provider)
         if target not in accounts:
