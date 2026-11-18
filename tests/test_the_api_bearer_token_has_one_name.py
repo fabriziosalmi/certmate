@@ -19,7 +19,7 @@ PARTIALS = REPO / 'templates' / 'partials'
 NAME = 'API Bearer Token'
 OTHER_NAMES = ('legacy API token', 'API bearer token', 'API Bearer token', 'global bearer token',
                'legacy bearer token', 'legacy token', 'Bearer token for API', 'API auth token',
-               'containing the bearer token')
+               'containing the bearer token', 'for the API token')
 
 
 class _Field(HTMLParser):
@@ -131,4 +131,14 @@ def test_the_log_does_not_send_anyone_to_rotate_the_token_where_it_cannot_be():
     settings = (REPO / 'modules' / 'core' / 'settings.py').read_text(encoding='utf-8')
     assert 'API Keys UI' not in settings
     assert 'to rotate it, set API_BEARER_TOKEN' in settings
+
+
+@pytest.mark.parametrize('lang', ['de', 'es', 'fr', 'it'])
+def test_each_translation_of_the_docker_page_names_the_token_as_often_as_the_english(lang):
+    """A translation that kept its own word for the token ("das API-Token",
+    "le jeton API") next to an English page that says API Bearer Token is
+    the same split name in another language."""
+    english = (REPO / 'docs' / 'docker.md').read_text(encoding='utf-8').count(NAME)
+    translated = (REPO / 'docs' / lang / 'docker.md').read_text(encoding='utf-8').count(NAME)
+    assert english and translated == english, (lang, english, translated)
 

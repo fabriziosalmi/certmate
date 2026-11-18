@@ -1514,15 +1514,18 @@ class AuthManager:
             source = ('API_BEARER_TOKEN_FILE'
                       if os.getenv('API_BEARER_TOKEN_FILE')
                       else 'API_BEARER_TOKEN')
+            # Startup reconciles right after this (factory: reconcile_bearer_
+            # token_from_env), so the supplied token is the one in force: say
+            # that, not that requests will 401, and do not send anyone to the
+            # API Keys page, where this token cannot be changed.
             logger.warning(
                 "The %s supplied does not match the stored "
-                "api_bearer_token_hash. That hash is bound to SECRET_KEY "
-                "(HMAC-SHA256), so the usual cause is a SECRET_KEY different "
-                "from the one in effect when the token was hashed — typically "
-                "after restoring a backup onto a new host. API requests will "
-                "401 until this is resolved. Fix: provide the original "
-                "SECRET_KEY (SECRET_KEY or SECRET_KEY_FILE), or reset the "
-                "bearer token via the API Keys UI / a fresh settings save.",
+                "api_bearer_token_hash: the API Bearer Token was rotated, or "
+                "SECRET_KEY changed since it was hashed (for example a backup "
+                "restored onto a new host; the hash is HMAC-SHA256 bound to "
+                "SECRET_KEY). The supplied token replaces the stored one at "
+                "this startup. If SECRET_KEY changed, other values bound to it "
+                "may need attention too.",
                 source)
         except Exception as e:
             logger.debug(f"bearer-token staleness check skipped: {e}")

@@ -243,7 +243,7 @@ sudo loginctl enable-linger "$USER"
 
 Rootful instead: put the file in `/etc/containers/systemd/`, create the secrets as root, then run `sudo systemctl daemon-reload && sudo systemctl start certmate`.
 
-Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the API token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
+Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the API Bearer Token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
 
 Checked on Fedora 44 with Podman 5.8, rootful and rootless: the service starts healthy, the token authorises the API, and it comes back after a reboot (rootless through lingering).
 

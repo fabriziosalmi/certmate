@@ -1,6 +1,6 @@
 # Construction et déploiement Docker
 
-<!-- CERTMATE-TRANSLATED-FROM dc4d39e1c9e32663 -->
+<!-- CERTMATE-TRANSLATED-FROM 1d0fb81230b2d424 -->
 
 Ce guide couvre la construction, le déploiement et l'exécution de CertMate dans Docker — incluant le support multi-plateforme pour ARM et AMD64.
 
@@ -188,7 +188,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative : chemin vers un fichier contenant la clé secrète
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
-      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative : chemin vers un fichier contenant le token bearer
+      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative : chemin vers un fichier contenant l'API Bearer Token
       - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
@@ -246,7 +246,7 @@ sudo loginctl enable-linger "$USER"
 
 En rootful à la place : placez le fichier dans `/etc/containers/systemd/`, créez les secrets en root, puis exécutez `sudo systemctl daemon-reload && sudo systemctl start certmate`.
 
-Ouvrez `http://127.0.0.1:8000`. La première page crée le compte administrateur et demande le jeton API : `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
+Ouvrez `http://127.0.0.1:8000`. La première page crée le compte administrateur et demande l'API Bearer Token : `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
 
 Vérifié sur Fedora 44 avec Podman 5.8, en rootful et en rootless : le service démarre sain, le jeton autorise l'API, et il revient après un redémarrage (en rootless grâce au lingering).
 

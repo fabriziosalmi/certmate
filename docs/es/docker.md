@@ -1,6 +1,6 @@
 # Construcción y despliegue con Docker
 
-<!-- CERTMATE-TRANSLATED-FROM dc4d39e1c9e32663 -->
+<!-- CERTMATE-TRANSLATED-FROM 1d0fb81230b2d424 -->
 
 Esta guía cubre la construcción, el despliegue y la ejecución de CertMate en Docker — incluyendo soporte multiplataforma para ARM y AMD64.
 
@@ -246,7 +246,7 @@ sudo loginctl enable-linger "$USER"
 
 En rootful, en cambio: coloca el archivo en `/etc/containers/systemd/`, crea los secretos como root y luego ejecuta `sudo systemctl daemon-reload && sudo systemctl start certmate`.
 
-Abre `http://127.0.0.1:8000`. La primera página crea la cuenta de administrador y pide el token de la API: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
+Abre `http://127.0.0.1:8000`. La primera página crea la cuenta de administrador y pide el API Bearer Token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
 
 Verificado en Fedora 44 con Podman 5.8, rootful y rootless: el servicio arranca sano, el token autoriza la API y vuelve tras un reinicio (en rootless mediante lingering).
 
