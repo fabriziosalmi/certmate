@@ -39,7 +39,10 @@
         account = account || {};
         var missing = [];
         var acme = provider !== 'letsencrypt' && provider !== 'letsencrypt_staging';
-        if (acme && (provider === 'private_ca' || provider === 'digicert' || provider === 'sectigo') &&
+        // The directory URL is a gap only where the server has no pinned one
+        // (ca_manager.get_acme_server_url: private_ca and requires_acme_url).
+        // DigiCert's is pinned; an account may override it.
+        if (acme && (provider === 'private_ca' || provider === 'sectigo') &&
                 !account.acme_url) missing.push('acme_url');
         if (acme && provider !== 'private_ca' && !(CM.caAccountHas(account, 'eab_kid', 'eab_key_id') &&
                 CM.caAccountHas(account, 'eab_hmac', 'eab_hmac_key'))) missing.push('eab');

@@ -121,8 +121,8 @@ REFERENCE_ACCOUNTS = {
                 'eab_key_id_file': '/run/secrets/gts-kid', 'eab_hmac_key_file': '********'},
     }},
 }
-EMPTY_DIGICERT = {'digicert': {'accounts': {'dc': {'name': 'dc-empty'}}}}
-NEEDS_ALL = ("DigiCert needs an ACME directory URL, EAB credentials and a contact email: "
+EMPTY_SECTIGO = {'sectigo': {'accounts': {'sc': {'name': 'sc-empty'}}}}
+NEEDS_ALL = ("Sectigo needs an ACME directory URL, EAB credentials and a contact email: "
              "add them in Settings > CA")
 
 
@@ -134,7 +134,7 @@ def stub_settings(browser_page):
                 route.continue_()
                 return
             body = route.fetch().json()
-            body.update({'email': '', 'default_ca': 'digicert', 'default_ca_accounts': {},
+            body.update({'email': '', 'default_ca': 'sectigo', 'default_ca_accounts': {},
                          'ca_providers': ca_providers})
             route.fulfill(status=200, content_type='application/json', body=json.dumps(body))
         browser_page.route('**/api/web/settings', settings)
@@ -160,29 +160,29 @@ def _create_form(page):
 
 @pytest.mark.parametrize('name', ['zs-prod', 'gts-prod'])
 def test_an_account_whose_eab_credentials_are_given_by_reference_can_issue(stub_settings, name):
-    page = stub_settings({**REFERENCE_ACCOUNTS, **EMPTY_DIGICERT})
+    page = stub_settings({**REFERENCE_ACCOUNTS, **EMPTY_SECTIGO})
     row = _ca_row(page, name)
     text = row.inner_text()
     assert 'cannot issue' not in text, text
     assert row.get_by_role('button', name='Complete account').count() == 0, text
     # The counter-case on the same page: the empty account still says so.
-    empty = page.locator('#configured-ca-list > div').filter(has_text='dc-empty').first
+    empty = page.locator('#configured-ca-list > div').filter(has_text='sc-empty').first
     assert 'cannot issue' in empty.inner_text(), empty.inner_text()
 
 
 def test_the_create_form_offers_the_accounts_given_by_reference(stub_settings):
-    page = stub_settings({**REFERENCE_ACCOUNTS, **EMPTY_DIGICERT})
+    page = stub_settings({**REFERENCE_ACCOUNTS, **EMPTY_SECTIGO})
     _create_form(page)
     page.wait_for_function(
         "() => document.getElementById('ca_provider_select').options.length > 1", timeout=5000)
     offered = page.eval_on_selector('#ca_provider_select', 'e => Array.from(e.options).map(o => o.value)')
     assert 'zerossl' in offered and 'google' in offered, offered
-    assert 'digicert' not in offered, offered
+    assert 'sectigo' not in offered, offered
 
 
 def test_an_account_that_lacks_several_things_names_them_in_one_list(stub_settings):
-    page = stub_settings(EMPTY_DIGICERT)
-    row = _ca_row(page, 'dc-empty')
+    page = stub_settings(EMPTY_SECTIGO)
+    row = _ca_row(page, 'sc-empty')
     assert 'No ACME directory URL, EAB credentials or contact email: cannot issue' in row.inner_text(), (
         row.inner_text())
     assert row.get_by_role('button', name='Complete account').count() == 1
@@ -190,3 +190,24 @@ def test_an_account_that_lacks_several_things_names_them_in_one_list(stub_settin
     info = page.locator('#ca-provider-info')
     info.wait_for(state='visible', timeout=5000)
     assert NEEDS_ALL in info.inner_text(), info.inner_text()
+
+
+DIGICERT_PINNED = {'digicert': {'accounts': {'dc': {
+    'name': 'dc-prod', 'email': 'ops@example.com',
+    'eab_kid_env': 'DC_KID', 'eab_hmac_env': '********'}}}}
+
+
+def test_a_digicert_account_without_a_directory_url_can_issue(stub_settings):
+    """DigiCert's directory is pinned (ca_manager.get_acme_server_url): an
+    account needs EAB and an email, not a URL of its own."""
+    page = stub_settings(DIGICERT_PINNED)
+    row = _ca_row(page, 'dc-prod')
+    text = row.inner_text()
+    assert 'cannot issue' not in text and 'No ACME directory URL' not in text, text
+    assert row.get_by_role('button', name='Complete account').count() == 0, text
+    _create_form(page)
+    page.wait_for_function(
+        "() => Array.from(document.getElementById('ca_provider_select').options).some(o => o.value)",
+        timeout=5000)
+    offered = page.eval_on_selector('#ca_provider_select', 'e => Array.from(e.options).map(o => o.value)')
+    assert 'digicert' in offered, offered

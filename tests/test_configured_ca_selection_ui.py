@@ -143,6 +143,13 @@ check('file', CM.caAccountMissing('google', {...email, eab_key_id_file: '/run/se
     eab_hmac_key_file: '********'}), []);
 check('half', CM.caAccountMissing('zerossl', {...email, eab_kid_env: 'ZS_KID'}), ['eab']);
 check('none', CM.caAccountMissing('zerossl', email), ['eab']);
+// The directory URL is required only where the server has no pinned one to fall back
+// on (ca_manager.get_acme_server_url: private_ca and requires_acme_url, i.e. Sectigo).
+// DigiCert's is pinned and an account may override it, so its absence is not a gap.
+const eab = {eab_kid_env: 'KID', eab_hmac_env: '********'};
+check('digicert pinned url', CM.caAccountMissing('digicert', {...email, ...eab}), []);
+check('sectigo needs url', CM.caAccountMissing('sectigo', {...email, ...eab}), ['acme_url']);
+check('private_ca needs url', CM.caAccountMissing('private_ca', email), ['acme_url']);
 const settings = {email: '', default_ca: 'zerossl', ca_providers: {zerossl: {accounts: {zs: {name: 'zs-prod',
     ...email, eab_kid_env: 'ZS_KID', eab_hmac_env: '********'}}}}};
 check('offered', CM.configuredCAProviders(settings, true), ['zerossl']);
