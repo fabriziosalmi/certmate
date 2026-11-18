@@ -191,6 +191,29 @@
         return html;
     }
 
+    function issuerText(r) {
+        return r.issuer_cn || r.issuer || '—';
+    }
+
+    // Below md the row is the subject cell alone, and this is what the other
+    // columns say, under the subject: the expiry with its date, the issuer,
+    // the source and the actions. The seven columns were 911 px wide on a
+    // 390 px phone, so all a person saw was the names (P11).
+    function phoneSummary(r) {
+        var date = (r.not_after || '').slice(0, 10);
+        var actions = actionsCell(r);
+        return '<div class="md:hidden mt-1 space-y-1">'
+            + '<div class="flex flex-wrap items-center gap-x-2 gap-y-1">'
+                + statusBadge(r.expiry_status, r.days_until_expiry)
+                + (date ? '<span class="text-xs text-muted">' + escapeHtml(date) + '</span>' : '')
+                + sourceBadge(r.source, r.managed)
+                + revocationBadge(r.revocation)
+            + '</div>'
+            + '<div class="text-xs text-muted break-words">' + escapeHtml(issuerText(r)) + '</div>'
+            + (actions ? '<div class="pt-1">' + actions + '</div>' : '')
+            + '</div>';
+    }
+
     function passesFilters(r) {
         var group = el('invGroup').value;
         var source = el('invSource').value;
@@ -295,14 +318,14 @@
         }
         body.innerHTML = rows.map(function (r) {
             return '<tr class="hover:bg-hover">'
-                + '<td class="px-4 py-2">' + subjectCell(r) + '</td>'
-                + '<td class="px-4 py-2 text-xs text-muted">' + escapeHtml(r.issuer_cn || r.issuer || '—') + '</td>'
-                + '<td class="px-4 py-2">' + statusBadge(r.expiry_status, r.days_until_expiry)
+                + '<td class="px-4 py-2">' + subjectCell(r) + phoneSummary(r) + '</td>'
+                + '<td class="px-4 py-2 text-xs text-muted hidden md:table-cell">' + escapeHtml(issuerText(r)) + '</td>'
+                + '<td class="px-4 py-2 hidden md:table-cell">' + statusBadge(r.expiry_status, r.days_until_expiry)
                     + '<div>' + revocationBadge(r.revocation) + '</div></td>'
-                + '<td class="px-4 py-2 text-xs">' + keyLabel(r.key) + '</td>'
-                + '<td class="px-4 py-2">' + sourceBadge(r.source, r.managed) + '</td>'
-                + '<td class="px-4 py-2">' + endpointsCell(r) + '</td>'
-                + '<td class="px-4 py-2 text-right">' + actionsCell(r) + '</td>'
+                + '<td class="px-4 py-2 text-xs hidden md:table-cell">' + keyLabel(r.key) + '</td>'
+                + '<td class="px-4 py-2 hidden md:table-cell">' + sourceBadge(r.source, r.managed) + '</td>'
+                + '<td class="px-4 py-2 hidden md:table-cell">' + endpointsCell(r) + '</td>'
+                + '<td class="px-4 py-2 text-right hidden md:table-cell">' + actionsCell(r) + '</td>'
                 + '</tr>';
         }).join('');
     }
