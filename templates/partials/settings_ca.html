@@ -9,7 +9,7 @@
                         <input type="hidden" id="default-ca" name="default_ca" value="letsencrypt">
                         <div class="border border-border rounded-lg overflow-hidden">
                             <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30">
-                                <span class="font-medium text-foreground text-sm"><i class="fas fa-check-circle mr-2 text-green-500"></i>Configured CA accounts</span>
+                                <span class="font-medium text-foreground text-sm"><i data-ca-accounts-status class="fas fa-fw fa-check-circle mr-2 text-green-500 invisible" aria-hidden="true"></i>Configured CA accounts</span>
                                 <button type="button" data-click="openCAAccountModal" class="text-xs px-3 py-1.5 bg-primary text-white rounded hover:bg-secondary transition"><i class="fas fa-plus mr-1"></i>Add CA Account</button>
                             </div>
                             <div id="configured-ca-list" class="space-y-2 p-4" aria-label="Configured CA accounts"></div>
