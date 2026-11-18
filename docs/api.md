@@ -3032,10 +3032,14 @@ also enables local authentication, and the response says so with
 needed (on an instance already closed it answers `401`).
 
 Until setup is complete, the anonymous admin is also refused, with the same
-`409 SETUP_BOOTSTRAP_ONLY`, anything that outlives setup or carries private
-keys away: deploy-hook changes, tests and runs, certificate and key downloads,
-and backup creation and download. Restoring and uploading a backup stay
-allowed, since that is how an instance is recovered onto a fresh host.
+`409 SETUP_BOOTSTRAP_ONLY`, every write except the two the first-run screen
+makes (creating the first admin, and `POST /api/auth/config`), and the reads
+that carry private keys away: certificate downloads, client certificate key and
+PFX downloads, and backup downloads. Restoring and uploading a backup are
+refused too: a restore in that window planted a deploy hook and an admin API
+key that outlived setup. To recover onto a fresh host, create the first admin
+and sign in first, or start the instance with `API_BEARER_TOKEN` set
+([backup](./backup.md)).
 
 #### Revoke an API key
 

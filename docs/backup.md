@@ -116,7 +116,7 @@ curl -H "Authorization: Bearer your_token" \
 ```
 
 Archives are named `backup_<YYYYmmdd_HHMMSS_ffffff>_<reason>.zip` (UTC), or
-`.zip.enc` when `CERTMATE_BACKUP_PASSPHRASE` is set. The list comes back oldest
+`.zip.enc` when `CERTMATE_BACKUP_PASSPHRASE` is set. The list comes back newest
 first. The answers and the other routes (restore, upload, delete) are in the
 [API reference](./api.md#backups).
 
