@@ -100,6 +100,34 @@ def test_the_empty_accounts_an_earlier_version_made_are_removed_once(tmp_path, c
     _second_load_changes_nothing(manager, settings_file, caplog)
 
 
+def test_an_earlier_first_run_file_not_yet_migrated_ends_with_no_account(tmp_path, caplog):
+    """The first-run settings of an earlier version, flat and empty, as a file
+    that was never loaded again before the upgrade."""
+    on_disk = _upgraded({'cloudflare': {'api_token': ''},
+                         'route53': {'access_key_id': '', 'secret_access_key': '', 'region': 'us-east-1'}})
+    manager, settings_file = _manager(tmp_path, on_disk)
+    settings = manager.load_settings()
+    assert settings['dns_providers'] == {}
+    assert settings['default_accounts'] == {}
+    _second_load_changes_nothing(manager, settings_file, caplog)
+
+
+def test_a_change_inside_an_account_alone_is_written_to_the_file(tmp_path):
+    """The load compares a deep copy: a change made only inside an account
+    (here its name) went unnoticed by the shallow copy and was not saved,
+    so it was made again at every load."""
+    manager, settings_file = _manager(tmp_path)
+    manager.load_settings()
+    manager.load_settings()            # nothing left for any other migration
+    document = json.loads(settings_file.read_text())
+    document['dns_providers'] = {'cloudflare': {'accounts': {'default': {'api_token': TOKEN}}}}
+    document['default_accounts'] = {'cloudflare': 'default'}
+    settings_file.write_text(json.dumps(document))
+    manager.load_settings(use_cache=False)
+    on_file = json.loads(settings_file.read_text())
+    assert on_file['dns_providers']['cloudflare']['accounts']['default']['name'] == 'Default Cloudflare Account'
+
+
 def test_an_empty_account_someone_added_is_not_the_migration_s_to_remove(tmp_path):
     """Only the placeholder the migration made, by its description, goes."""
     on_disk = _upgraded({'cloudflare': {'accounts': {'staging': {'name': 'Staging', 'api_token': ''}}}})

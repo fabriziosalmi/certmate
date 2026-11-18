@@ -2240,14 +2240,6 @@ class SettingsManager:
                     else:
                         remaining_config[key] = value
 
-                # The first-run settings carried every provider with its
-                # credentials empty. Wrapped, each became an account with
-                # nothing in it, shown as "Default ... Account, No
-                # credentials" next to the token field it hid (audit P05).
-                if _holds_nothing(old_config):
-                    dns_providers[provider_name] = remaining_config
-                    continue
-
                 # Create new multi-account structure
                 new_config = {
                     'accounts': {
