@@ -93,6 +93,10 @@ def _open_detail(page):
     page.wait_for_function("() => { const c = document.getElementById('certDetailCard');"
                            " return c && !c.classList.contains('opacity-0'); }", timeout=5000)
     page.wait_for_selector('#certLabelsSection [data-labels-edit]', timeout=10000)
+    # Measure after the card's scale-in: during it every box is 95% of its
+    # size (44 px read 41.8 about one run in two).
+    page.wait_for_function("() => document.getElementById('certDetailCard').getAnimations().length === 0",
+                           timeout=5000)
 
 
 @pytest.mark.parametrize('size,minimum', SIZES)

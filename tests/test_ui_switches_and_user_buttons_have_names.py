@@ -41,6 +41,9 @@ USERS = {'users': {
     'admin': {'role': 'admin', 'enabled': True, 'email': '', 'last_login': '2026-11-18T09:00:00Z'},
     'operator-maria': {'role': 'operator', 'enabled': True, 'email': 'maria.rossi@example.test',
                        'last_login': None},
+    # An SSO username is often an address: no hyphen or space to break on.
+    'giovanni.bianchi@example.com': {'role': 'viewer', 'enabled': True, 'email': '',
+                                     'last_login': None},
 }}
 HOOK = {'id': 'h1', 'name': 'reload-lb', 'command': 'systemctl reload nginx', 'enabled': True,
         'timeout': 30, 'on_events': ['created', 'renewed']}
@@ -158,3 +161,25 @@ def test_on_a_phone_every_user_action_is_inside_the_list(open_settings):
     past = [b for b in box['buttons'] if b['right'] > box['right'] + 0.5 or b['left'] < box['left'] - 0.5]
     assert past == [], box
     assert box['badgeRight'] <= box['panelRight'] + 0.5, box
+
+
+def test_on_a_phone_a_long_username_wraps_inside_its_row(open_settings):
+    """An address as username has no hyphen to break on: break-words did not
+    let it shrink, and it ran past the list (cut, with the list's sideways
+    scroll gone)."""
+    page = open_settings(width=360, height=740)
+    page.goto(f'{BASE_URL}/settings#users', wait_until='networkidle')
+    page.wait_for_function(LOADED, timeout=10000)
+    box = page.evaluate("""() => {
+        const list = document.getElementById('userList');
+        const r = list.getBoundingClientRect();
+        const names = Array.from(list.querySelectorAll('span.font-medium')).map(s => {
+            const b = s.getBoundingClientRect();
+            return {name: s.innerText, right: b.right};
+        });
+        return {right: r.right, client: list.clientWidth, scroll: list.scrollWidth, names};
+    }""")
+    long_name = [n for n in box['names'] if n['name'].startswith('giovanni')]
+    assert long_name, box
+    assert box['scroll'] <= box['client'], box
+    assert [n for n in box['names'] if n['right'] > box['right'] + 0.5] == [], box

@@ -1731,6 +1731,7 @@
         // to the close button and is restored to the triggering row on close.
         _lastDetailFocus = document.activeElement;
         clearTimeout(_detailHideTimer);
+        panel.removeAttribute('data-closing');
         overlay.classList.remove('hidden');
         panel.classList.remove('hidden');
         panel.classList.add('flex');
@@ -1764,6 +1765,9 @@
         var content = document.getElementById('certDetailContent');
         var card = document.getElementById('certDetailCard');
         if (card) card.classList.add('opacity-0', 'scale-95');
+        // Not a focus trap from here on: a Tab during the 200 ms fade pulled
+        // focus back into the panel that was going away.
+        panel.setAttribute('data-closing', '');
         // One pending hide at a time: a second close inside the fade (Escape,
         // then the backdrop) would otherwise leave a timer nobody remembers.
         clearTimeout(_detailHideTimer);
@@ -1787,6 +1791,10 @@
     document.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;
         if (CertMate.anyDialogOpen && CertMate.anyDialogOpen()) return;
+        // The shortcuts overlay owns its Escape (shortcuts.js prevents the
+        // default when it closes it); either listener may run first.
+        var shortcuts = document.getElementById('shortcutOverlay');
+        if (e.defaultPrevented || (shortcuts && !shortcuts.classList.contains('hidden'))) return;
         closeCertDetail();
     });
 

@@ -136,11 +136,13 @@
         // The box is role="alert", so it is read out when it appears; the
         // password field says it is wrong and points at the box for as long
         // as the box is shown, and no longer.
-        function showError(message) {
+        function showError(message, aboutThePassword) {
             const errorDiv = document.getElementById('errorMessage');
             const passwordField = document.getElementById('password');
             errorDiv.textContent = message;
             errorDiv.classList.remove('hidden');
+            // A single sign-on failure is not about the password typed here.
+            if (aboutThePassword === false) return;
             passwordField.setAttribute('aria-invalid', 'true');
             passwordField.setAttribute('aria-describedby', 'errorMessage');
         }
@@ -302,11 +304,11 @@
                         'the cached document — try again. If it keeps ' +
                         'failing, check id_token_signing_alg_values_supported ' +
                         'at the identity provider. The server log names both ' +
-                        'the algorithm and the advertised list.');
+                        'the algorithm and the advertised list.', false);
                     return;
                 }
                 var label = err.replace(/^oidc_/, '').replace(/_/g, ' ');
-                showError('Single sign-on failed: ' + label);
+                showError('Single sign-on failed: ' + label, false);
             } catch (e) { /* no-op */ }
         })();
     </script>

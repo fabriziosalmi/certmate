@@ -684,7 +684,8 @@
 
     function openFocusTraps() {
         return Array.prototype.filter.call(document.querySelectorAll('[data-focus-trap]'), function (el) {
-            return !el.classList.contains('hidden') && !el.hasAttribute('inert') && el.getClientRects().length > 0;
+            return !el.classList.contains('hidden') && !el.hasAttribute('inert') &&
+                !el.hasAttribute('data-closing') && el.getClientRects().length > 0;
         });
     }
 

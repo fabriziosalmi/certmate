@@ -141,3 +141,13 @@ def test_the_new_user_username_field_does_not_capitalise_or_correct_what_is_type
     page.goto(f'{BASE_URL}/settings#users', wait_until='networkidle')
     attrs = page.evaluate(USERNAME_ATTRS, '#newUserUsername')
     assert attrs == {'autocapitalize': 'none', 'autocorrect': 'off', 'spellcheck': False}, attrs
+
+
+def test_a_single_sign_on_failure_is_announced_without_marking_the_password(anonymous):
+    """A single sign-on failure has nothing to do with the password field."""
+    page = anonymous
+    page.goto(f'{BASE_URL}/login?error=oidc_state_mismatch', wait_until='networkidle')
+    page.wait_for_selector('#errorMessage:not(.hidden)', timeout=5000)
+    assert 'Single sign-on failed' in page.inner_text('#errorMessage')
+    assert page.get_attribute('#password', 'aria-invalid') is None
+    assert page.get_attribute('#password', 'aria-describedby') is None

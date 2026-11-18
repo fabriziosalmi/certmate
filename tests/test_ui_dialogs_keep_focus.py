@@ -164,3 +164,32 @@ def test_the_keyboard_shortcuts_overlay_is_a_dialog_that_keeps_and_returns_focus
     page.keyboard.press('Escape')
     page.wait_for_selector('#shortcutOverlay.hidden', state='attached', timeout=5000)
     assert opener.evaluate('el => el === document.activeElement'), page.evaluate(WHERE, 'body')
+
+
+def test_escape_on_the_shortcuts_overlay_over_the_detail_closes_only_the_overlay(page):
+    """One Escape closed both, and focus went back to the detail's close
+    button as it hid: it ended on the page body."""
+    opener = _open_detail_by_keyboard(page, DOMAIN)
+    page.keyboard.press('?')
+    page.wait_for_selector('#shortcutOverlay:not(.hidden)', timeout=5000)
+    page.keyboard.press('Escape')
+    page.wait_for_selector('#shortcutOverlay.hidden', state='attached', timeout=5000)
+    page.wait_for_timeout(400)
+    assert not page.evaluate("() => document.getElementById('certDetailPanel').classList.contains('hidden')")
+    assert page.evaluate(WHERE, '#certDetailPanel') == 'inside', page.evaluate(WHERE, 'body')
+    page.keyboard.press('Escape')
+    page.wait_for_function("() => document.getElementById('certDetailPanel').classList.contains('hidden')",
+                           timeout=5000)
+    assert opener.evaluate('el => el === document.activeElement'), page.evaluate(WHERE, 'body')
+
+
+def test_a_tab_right_after_escape_does_not_pull_focus_into_the_closing_detail(page):
+    """The panel fades for 200 ms before it hides; the trap still counted it
+    open, took focus back in, and focus was lost when it hid."""
+    _open_detail_by_keyboard(page, DOMAIN)
+    page.keyboard.press('Escape')
+    page.keyboard.press('Tab')
+    page.wait_for_function("() => document.getElementById('certDetailPanel').classList.contains('hidden')",
+                           timeout=5000)
+    where = page.evaluate(WHERE, '#certDetailPanel')
+    assert where != 'inside' and not where.startswith('BODY') and where != 'none', where

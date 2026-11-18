@@ -3580,7 +3580,7 @@
                         '<i class="fas fa-user-circle text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>' +
                         '<div class="min-w-0">' +
                         '<div class="flex flex-wrap items-center gap-2">' +
-                        '<span class="font-medium text-foreground break-words">' + escapeHtml(username) + '</span>' +
+                        '<span class="font-medium text-foreground min-w-0 [overflow-wrap:anywhere]">' + escapeHtml(username) + '</span>' +
                         roleControl +
                         ssoBadge +
                         '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '" aria-hidden="true"></i>' +
