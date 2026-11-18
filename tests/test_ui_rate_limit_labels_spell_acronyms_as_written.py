@@ -65,7 +65,8 @@ def test_the_known_limits_are_labelled_as_written(page):
 def test_a_key_not_in_the_table_falls_back_to_the_generated_label(page):
     """No known key in the defaults: every label comes from the fallback,
     and an inherited name such as "constructor" is not looked up on the
-    prototype (it would render the source of Object, not a label)."""
+    prototype (with a plain index lookup that row gets an empty label and
+    no aria-label)."""
     def answer(route):
         route.fulfill(status=200, content_type='application/json', body=json.dumps({
             'enabled': True, 'defaults': {'zone_transfer': 5, 'constructor': 7, 'to_string': 9},
