@@ -1932,7 +1932,7 @@
             function backupRow(backup) {
                 var metadata = backup.metadata || {};
                 var createdDate = CertMate.formatDateTime(metadata.created || metadata.timestamp);
-                var sizeMB = Math.round((metadata.size || 0) / (1024 * 1024) * 10) / 10;
+                var size = CertMate.formatBytes(metadata.size);
                 var reason = metadata.backup_reason || metadata.reason || 'manual';
                 var domains = metadata.total_domains || (metadata.domains && metadata.domains.length) || 0;
                 var safeFilename = escapeHtml(backup.filename);
@@ -1977,7 +1977,7 @@
                         '<div class="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted mt-0.5">' +
                             '<span>' + escapeHtml(createdDate) + '</span>' +
                             '<span aria-hidden="true">·</span>' +
-                            '<span>' + sizeMB + ' MB</span>' +
+                            '<span>' + size + '</span>' +
                             '<span aria-hidden="true">·</span>' +
                             '<span>' + domains + ' domains</span>' +
                             '<span aria-hidden="true">·</span>' +
