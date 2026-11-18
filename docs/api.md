@@ -2544,10 +2544,17 @@ scoped key sees only the domains its scope covers.
   "summary": {
     "total": 1,
     "by_status": {"ok": 1, "not_published": 0, "not_registered": 0, "unavailable": 0},
-    "expiry": {"expired": 0, "30": 0, "60": 1, "90": 1}
+    "expiry": {"expired": 0, "30": 0, "60": 1, "90": 1},
+    "tracked": 1
   }
 }
 ```
+
+`summary.tracked` (since **2.70**) is how many registrable domains the next
+scan checks, within the caller's scope: those of the certificates CertMate
+holds, of the inventory when `include_inventory` is on, and the
+`extra_domains`. With no row, `tracked` above 0 means no scan has checked them
+yet, and 0 means there is nothing to check.
 
 `status` is `ok`, `not_published` (the registry does not publish an expiry —
 `.de`, `.eu`), `not_registered` or `unavailable`; only `ok` carries a date and a
@@ -2603,9 +2610,14 @@ answer opens on what is wrong; a scoped key sees only its own names.
       "first_seen": "2026-09-01T06:30:09Z"
     }
   ],
-  "summary": {"total": 1, "by_status": {"failing": 1, "warning": 0, "unknown": 0, "ok": 0}}
+  "summary": {"total": 1, "by_status": {"failing": 1, "warning": 0, "unknown": 0, "ok": 0},
+              "tracked": 1}
 }
 ```
+
+`summary.tracked` (since **2.70**) is how many names the next scan checks,
+within the caller's scope, read from the same sources as the registrations;
+0 with no row means there is nothing to check.
 
 Every check reports one of four statuses, and `unknown` is the one to read
 carefully: it means the check could not be completed, and it is **not** a pass.

@@ -15,6 +15,12 @@ A check that is off is now one line saying so, with a way to turn it on for an
 admin. A check that is on says what it has, and its empty state is a sentence
 outside the scrolled table.
 
+That sentence promised that the next scan would check the names even when
+there was nothing to check: on, with an empty inventory, no certificate and no
+extra domain, a scan answered tracked 0 and the page still said so. The
+answers now carry summary.tracked, and with 0 the sentence says there is
+nothing to check and where the names come from.
+
 The checks' state is the instance's own (GET /api/inventory/config), set here
 and put back after; the inventory and the checks' answers are given in the
 browser (page.route).
@@ -44,6 +50,7 @@ CHECKS = ('domain_registration', 'domain_health')
 PANELS = {'domain_registration': 'registrationsPanel', 'domain_health': 'domainHealthPanel'}
 EMPTY = {'domain_registration': 'No domain registrations checked yet',
          'domain_health': 'No names checked yet'}
+NOTHING = 'Nothing to check'
 
 
 def _record(index):
@@ -55,9 +62,15 @@ def _record(index):
 
 INVENTORY = {'certificates': [_record(i) for i in range(3)],
              'summary': {'total': 3, 'issued': 0, 'discovered': 3, 'expiry': {'expired': 0, '7': 0, '30': 0, '90': 3}}}
+# No row yet, and names for the next scan to check.
 NOTHING_YET = {
-    '/api/inventory/domains': {'domains': [], 'summary': {'expiry': {}, 'by_status': {}}},
-    '/api/inventory/health': {'names': [], 'summary': {'total': 0, 'by_status': {}}},
+    '/api/inventory/domains': {'domains': [], 'summary': {'expiry': {}, 'by_status': {}, 'tracked': 2}},
+    '/api/inventory/health': {'names': [], 'summary': {'total': 0, 'by_status': {}, 'tracked': 3}},
+}
+# No row, and nothing for any scan to check.
+NOTHING_TO_CHECK = {
+    '/api/inventory/domains': {'domains': [], 'summary': {'expiry': {}, 'by_status': {}, 'tracked': 0}},
+    '/api/inventory/health': {'names': [], 'summary': {'total': 0, 'by_status': {}, 'tracked': 0}},
 }
 
 
@@ -89,7 +102,7 @@ def checks(ui_session_cookie):
 def open_inventory(browser_page, ui_session_cookie):
     contexts = []
 
-    def run(width, height, phone=False):
+    def run(width, height, phone=False, answers=NOTHING_YET):
         context = browser_page.context.browser.new_context(
             viewport={'width': width, 'height': height}, is_mobile=phone, has_touch=phone)
         contexts.append(context)
@@ -102,8 +115,8 @@ def open_inventory(browser_page, ui_session_cookie):
                 return route.continue_()
             if path == '/api/inventory':
                 return route.fulfill(status=200, content_type='application/json', body=json.dumps(INVENTORY))
-            if path in NOTHING_YET:
-                return route.fulfill(status=200, content_type='application/json', body=json.dumps(NOTHING_YET[path]))
+            if path in answers:
+                return route.fulfill(status=200, content_type='application/json', body=json.dumps(answers[path]))
             return route.continue_()
 
         page.route('**/api/**', answer)
@@ -129,10 +142,12 @@ def test_with_the_checks_off_the_certificate_list_starts_above_the_fold(checks, 
         assert 'off' in page.locator(f'#{panel}').inner_text().lower(), f'{name} does not say it is off'
 
 
+@pytest.mark.parametrize('answers', ['not checked yet', 'nothing to check'])
 @pytest.mark.parametrize('name', CHECKS)
-def test_a_check_that_is_on_and_found_nothing_says_so_whole_on_a_phone(checks, open_inventory, name):
+def test_a_check_that_is_on_and_found_nothing_says_so_whole_on_a_phone(checks, open_inventory, name, answers):
     checks(**{name: True})
-    page = open_inventory(390, 844, phone=True)
+    nothing = answers == 'nothing to check'
+    page = open_inventory(390, 844, phone=True, answers=NOTHING_TO_CHECK if nothing else NOTHING_YET)
     cut = page.evaluate("""([panel, text]) => {
         const node = [...document.querySelectorAll('#' + panel + ' *')].find(e =>
             e.checkVisibility() && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.includes(text)));
@@ -148,8 +163,27 @@ def test_a_check_that_is_on_and_found_nothing_says_so_whole_on_a_phone(checks, o
         return lines.filter(l => l.left < 0 || l.right > width
                 || clips.some(c => l.left < c.left - 0.5 || l.right > c.right + 0.5))
             .map(l => [Math.round(l.left), Math.round(l.right)]);
-    }""", [PANELS[name], EMPTY[name]])
+    }""", [PANELS[name], NOTHING if nothing else EMPTY[name]])
     assert cut == [], f'{name}: the empty-state sentence is cut on a 390 px phone (lines [left, right]): {cut}'
+
+
+@pytest.mark.parametrize('name', CHECKS)
+def test_a_check_with_nothing_to_track_does_not_promise_a_scan(checks, open_inventory, name):
+    """summary.tracked 0: no scan will check anything, and the sentence says so."""
+    checks(**{name: True})
+    page = open_inventory(1280, 800, answers=NOTHING_TO_CHECK)
+    text = page.locator(f'#{PANELS[name]}').inner_text()
+    assert NOTHING in text and 'next scan' not in text, f'{name}: {text!r}'
+    assert 'extra domains in the Discovery configuration' in text, f'{name} does not say where names come from: {text!r}'
+
+
+@pytest.mark.parametrize('name', CHECKS)
+def test_a_check_with_names_to_track_says_the_next_scan_checks_them(checks, open_inventory, name):
+    """The control: with names to track and no row, the sentence is the one it was."""
+    checks(**{name: True})
+    page = open_inventory(1280, 800)
+    text = page.locator(f'#{PANELS[name]}').inner_text()
+    assert EMPTY[name] in text and 'the next scan checks them' in text and NOTHING not in text, f'{name}: {text!r}'
 
 
 def test_an_admin_turns_a_check_on_from_its_line_and_the_section_opens(checks, open_inventory):

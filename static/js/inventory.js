@@ -473,6 +473,17 @@
         note.classList.toggle('text-muted', !failed);
     }
 
+    // Where both checks take their names from, for the sentence that says
+    // there is nothing to check.
+    var CHECK_SOURCES = 'The check takes them from the certificates CertMate holds, '
+        + 'from the inventory when it is included, and from the extra domains in the Discovery configuration.';
+
+    // With no row: a scan that has names to check has not run yet, or there
+    // is nothing for any scan to check (summary.tracked is 0).
+    function emptyCheckSentence(tracked, notYet, nothing) {
+        return tracked === 0 ? nothing + ' ' + CHECK_SOURCES : notYet;
+    }
+
     function loadRegistrations() {
         if (!checkOn('registrationsPanel')) { return; }
         fetch('/api/inventory/domains', { headers: API_HEADERS, credentials: 'same-origin' })
@@ -487,7 +498,9 @@
                 setCount('regNotPublished', (s.by_status || {}).not_published);
                 el('regCount').textContent = rows.length ? rows.length + ' domains' : '';
                 if (!rows.length) {
-                    fillCheck('registrations', '', 'No domain registrations checked yet: the next scan checks them.');
+                    fillCheck('registrations', '', emptyCheckSentence(s.tracked,
+                        'No domain registrations checked yet: the next scan checks them.',
+                        'Nothing to check: there is no domain to track.'));
                     return;
                 }
                 fillCheck('registrations', rows.map(function (r) {
@@ -528,14 +541,17 @@
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (data) {
                 var rows = data.names || [];
-                var by = (data.summary || {}).by_status || {};
+                var summary = data.summary || {};
+                var by = summary.by_status || {};
                 setCount('healthFailing', by.failing);
                 setCount('healthWarning', by.warning);
                 setCount('healthUnknown', by.unknown);
                 setCount('healthOk', by.ok);
                 el('healthCount').textContent = rows.length ? rows.length + ' names' : '';
                 if (!rows.length) {
-                    fillCheck('domainHealth', '', 'No names checked yet: the next scan checks them.');
+                    fillCheck('domainHealth', '', emptyCheckSentence(summary.tracked,
+                        'No names checked yet: the next scan checks them.',
+                        'Nothing to check: there is no name to track.'));
                     return;
                 }
                 fillCheck('domainHealth', rows.map(function (r) {

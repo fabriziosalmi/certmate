@@ -639,6 +639,32 @@ def test_domains_endpoint_filters_by_scope(tmp_path, monkeypatch):
     assert [d['domain'] for d in seen['domains']] == ['tenant-a.example']
     everything = client.get('/api/inventory/domains', headers=admin).get_json()
     assert [d['domain'] for d in everything['domains']] == ['tenant-a.example', 'tenant-b.example']
+    # What the next scan checks is counted within the scope too. Set on the
+    # manager: the configuration refuses a name under no public suffix.
+    container.managers['domain_registration'].tracked_domains = lambda: [
+        'tenant-a.example', 'tenant-b.example']
+    assert client.get('/api/inventory/domains', headers=scoped).get_json()['summary']['tracked'] == 1
+    assert client.get('/api/inventory/domains', headers=admin).get_json()['summary']['tracked'] == 2
+
+
+def test_the_domains_answer_counts_the_domains_the_next_scan_checks(real_app):
+    """With no row, summary.tracked tells "not checked yet" from "nothing to check".
+
+    UX perception audit, 2026-11-18 (P50 review): with registrations on and
+    nothing to track (no certificate, an empty inventory, no extra domain) a
+    scan answered tracked 0, and the page still said the next scan would check
+    them. The page reads this count to say there is nothing to check.
+    """
+    application, _ = real_app
+    client = application.test_client()
+    nothing = client.get('/api/inventory/domains').get_json()
+    assert (nothing['domains'], nothing['summary']['tracked']) == ([], 0)
+    saved = client.post('/api/inventory/config', json={'domain_registration': {
+        'enabled': True, 'extra_domains': ['brand.it', 'www.example.com']}})
+    assert saved.status_code == 200, saved.get_json()
+    pending = client.get('/api/inventory/domains').get_json()
+    # Registrable domains: www.example.com is checked as example.com.
+    assert (pending['domains'], pending['summary']['tracked']) == ([], 2)
 
 
 def test_config_round_trips_the_registration_section(real_app):

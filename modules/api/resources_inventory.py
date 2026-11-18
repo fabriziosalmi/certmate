@@ -151,15 +151,31 @@ def _scan_domain_health(health, result):
         result['domain_health'] = {'error': 'domain health check failed'}
 
 
+def _name_in_scope(ctx, name):
+    return is_record_in_scope(ctx, {'subject_cn': name, 'san_dns': []})
+
+
+def _tracked_in_scope(ctx, names):
+    """How many of *names*, the ones the next scan checks, the caller's scope covers.
+
+    With no row to show, this is what tells "not checked yet" (a scan will)
+    from "nothing to check" (no certificate and no extra domain names one).
+    """
+    return sum(1 for name in names if _name_in_scope(ctx, name))
+
+
 def _registrations_response(ctx):
     """GET /api/inventory/domains: registrations the caller's scope covers."""
     inventory = ctx.managers.get('cert_inventory')
     if inventory is None:
         return {'error': 'Certificate inventory not available',
                 'code': 'INVENTORY_UNAVAILABLE'}, 503
-    records = [r for r in inventory.list_registrations()
-               if is_record_in_scope(ctx, {'subject_cn': r['domain'], 'san_dns': []})]
-    return build_registrations_view(records)
+    records = [r for r in inventory.list_registrations() if _name_in_scope(ctx, r['domain'])]
+    view = build_registrations_view(records)
+    registration = ctx.managers.get('domain_registration')
+    view['summary']['tracked'] = _tracked_in_scope(
+        ctx, registration.tracked_domains() if registration is not None else [])
+    return view
 
 
 def _health_response(ctx):
@@ -168,10 +184,11 @@ def _health_response(ctx):
     if inventory is None:
         return {'error': 'Certificate inventory not available',
                 'code': 'INVENTORY_UNAVAILABLE'}, 503
-    records = [r for r in inventory.list_domain_health()
-               if is_record_in_scope(ctx, {'subject_cn': r['name'], 'san_dns': []})]
+    records = [r for r in inventory.list_domain_health() if _name_in_scope(ctx, r['name'])]
+    health = ctx.managers.get('domain_health')
     summary = {'total': len(records),
-               'by_status': {'failing': 0, 'warning': 0, 'unknown': 0, 'ok': 0}}
+               'by_status': {'failing': 0, 'warning': 0, 'unknown': 0, 'ok': 0},
+               'tracked': _tracked_in_scope(ctx, health.tracked_names() if health is not None else {})}
     for record in records:
         status = record.get('status') or 'unknown'
         summary['by_status'][status] = summary['by_status'].get(status, 0) + 1
