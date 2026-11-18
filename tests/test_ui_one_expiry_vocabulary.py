@@ -378,9 +378,12 @@ def test_an_overdue_certificate_whose_renewal_is_still_ahead_says_no_since(page)
     assert title.startswith('Overdue:'), title
     assert 'since' not in title, title
     assert 'renewal set for ' + renews in title, title
-    # CONTROL: past renewal dates still say since, with the state's word.
-    assert 'renewal overdue since' in (_chip(page, 'payments.example.test').get_attribute('title') or '')
-    assert 'renewal due since' in (_chip(page, 'ops-api.example.test').get_attribute('title') or '')
+    # CONTROL: a past renewal date still says since. renews_at is when the
+    # renewal fell due, so both states say "due since"; the state word leads.
+    overdue = _chip(page, 'payments.example.test').get_attribute('title') or ''
+    due = _chip(page, 'ops-api.example.test').get_attribute('title') or ''
+    assert overdue.startswith('Overdue: renewal due since'), overdue
+    assert due.startswith('Due: renewal due since'), due
 
 
 def test_the_bell_badge_is_readable_as_soon_as_it_shows(page):
@@ -390,4 +393,37 @@ def test_the_bell_badge_is_readable_as_soon_as_it_shows(page):
     page.wait_for_selector('#notifBadge:not(.hidden)', timeout=3000)
     ratio = _contrast(page, '#notifBadge')
     assert ratio >= 4.5, ratio
+
+
+def test_no_line_says_overdue_since_the_date_the_renewal_fell_due(page):
+    """renews_at is when the renewal fell due; the certificate became Overdue
+    later (min(7 days, a sixth of its life) left). "Renewal overdue since
+    <renews_at>" named the wrong instant for weeks, while the chip was amber."""
+    _dashboard(page)
+    titles = page.eval_on_selector_all(
+        'tr[data-row-domain] td:nth-child(2) span', 'els => els.map(e => e.title || "")')
+    assert not [t for t in titles if 'overdue since' in t.lower()], titles
+    _open_detail(page, 'payments.example.test')
+    detail = page.inner_text('#certDetailContent')
+    assert 'overdue since' not in detail.lower(), detail
+    assert 'Renewal due since' in detail, detail
+
+
+def test_a_certificate_without_its_key_shows_no_renewal_rule(page):
+    """A keyless certificate cannot be renewed, only reissued: its banner said
+    "Renews <date> (...)" right above "No private key anywhere"."""
+    keyless = dict(_cert('nokey.example.test', 90 * DAY, 60 * DAY),
+                   private_key_present=False, private_key_state='missing', reissue_required=True)
+    page.unroute('**/api/certificates')
+    page.route('**/api/certificates', lambda route: _json(route, [*CERTS, keyless])
+               if route.request.method == 'GET' else route.continue_())
+    _dashboard(page)
+    _open_detail(page, 'nokey.example.test')
+    detail = page.inner_text('#certDetailContent')
+    assert 'No private key anywhere' in detail, detail
+    assert page.locator('#certDetailContent [data-renewal-rule]').count() == 0, detail
+    # CONTROL: a certificate with its key keeps the rule line.
+    _close_detail(page)
+    _open_detail(page, 'site3.example.test')
+    assert page.locator('#certDetailContent [data-renewal-rule]').count() == 1
 

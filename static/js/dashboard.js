@@ -270,7 +270,7 @@
         // renews_at, and "due since <a future date>" was false.
         var when;
         if (cert.needs_renewal && new Date(cert.renews_at) <= new Date()) {
-            when = (late ? 'renewal overdue since ' : 'renewal due since ') + date;
+            when = 'renewal due since ' + date;
         } else if (late) {
             var expires = cert.expires_at || cert.expiry_date;
             when = (expires ? 'expires ' + CertMate.formatDate(new Date(expires)) + ', ' : '') +
@@ -986,13 +986,13 @@
     // the lifetime and the CA's window. Shown as it is, never recomputed here.
     //
     // A past date says since when the renewal is due (UX perception audit,
-    // 2026-11-18, P37), in the words of the row's chip (P25): "Renewal due
-    // since" in amber while it is Due, "Renewal overdue since" in red once it
-    // is Overdue (or the certificate has expired). Both name the instant the
-    // sweep was to renew it. "The next renewal run renews it" is said only
+    // 2026-11-18, P37): "Renewal due since <renews_at>", amber while the
+    // certificate is Due, red once it is Overdue or expired. renews_at is when
+    // the renewal fell due, not when the certificate became Overdue (that is
+    // later, at min(7 days, a sixth of its life) left), so the date never says
+    // "overdue since"; the chip and the line below say which state it is in. "The next renewal run renews it" is said only
     // while no renewal of this certificate has failed: after a failure the
     // next run meets the same cause, and the banner says it.
-    var RENEWAL_OVERDUE_SINCE = 'Renewal overdue since';
     var RENEWAL_DUE_SINCE = 'Renewal due since';
 
     function renewsAtHtml(cert) {
@@ -1001,7 +1001,7 @@
         if (!due) return '<span>' + escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>';
         var late = isOverdue(cert) || hasExpired(cert);
         var tone = late ? 'text-danger-fg' : 'text-warning-fg';
-        return '<span class="' + tone + '">' + (late ? RENEWAL_OVERDUE_SINCE : RENEWAL_DUE_SINCE) + ' ' +
+        return '<span class="' + tone + '">' + RENEWAL_DUE_SINCE + ' ' +
             escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
             (lastRenewalFailure(cert) ? '' : '<div class="text-xs ' + tone + '">' + (late ? 'Overdue' : 'Due') +
                 ': the next renewal run renews it</div>');
@@ -1786,7 +1786,7 @@
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
                 (issuedLine ? '<div class="text-sm ' + statusClass + ' opacity-80" data-issued-line>' + issuedLine + '</div>' : '') +
-                (ruleLine && !isExpired ? '<div class="text-xs ' + statusClass + ' mt-1" data-renewal-rule>' + escapeHtml(ruleLine) + '</div>' : '') +
+                (ruleLine && !isExpired && !keylessDetail ? '<div class="text-xs ' + statusClass + ' mt-1" data-renewal-rule>' + escapeHtml(ruleLine) + '</div>' : '') +
                 (keylessDetail ? '<div class="text-sm ' + statusClass + ' mt-1">' + LOST_KEY_TITLE + ' Use Edit &amp; Reissue, or Reissue all on the dashboard.</div>' : '') +
                 (external ? '<div class="text-sm ' + statusClass + ' mt-1">Not renewed by CertMate: upload its replacement before it expires.</div>' : '') +
                 '</div>' +
