@@ -17,7 +17,10 @@
 
     var ROLE_LEVELS = { viewer: 0, operator: 1, admin: 2 };
     var records = [];
-    var currentRole = 'viewer';
+    // The session's role as the page was served (inventory.html), so the first
+    // list already has the buttons it will keep: drawn without them and again
+    // with them once /api/auth/me answered, the columns moved under the eye.
+    var currentRole = ((document.getElementById('inventoryApp') || {}).dataset || {}).role || 'viewer';
 
     function el(id) { return document.getElementById(id); }
 
@@ -305,6 +308,7 @@
     function render() {
         var body = el('inventoryBody');
         var rows = applySort(records.filter(passesFilters));
+        el('inventoryHead').classList.remove('invisible');
         el('invCount').textContent = rows.length + ' of ' + records.length
             + (hiddenSuperseded ? ' · ' + hiddenSuperseded + ' superseded hidden' : '');
         if (!rows.length) {
@@ -686,6 +690,7 @@
         fetch('/api/auth/me', { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
+                var served = currentRole;
                 currentRole = (me && (me.role || (me.user && me.user.role))) || 'viewer';
                 // The template already drew both for an admin (inventory.html);
                 // this is the check, and it hides as well as shows.
@@ -693,8 +698,9 @@
                 el('configPanel').classList.toggle('hidden', !admin);
                 el('scanNowBtn').classList.toggle('hidden', !admin);
                 if (admin) { loadConfig(); }
-                // Re-render so operator+ get the Adopt buttons now the role is known.
-                if (records.length) { render(); }
+                // Re-render only when the answer differs from the role the page
+                // was served with: the Adopt and Forget buttons follow it.
+                if (records.length && currentRole !== served) { render(); }
             })
             .catch(function () { /* stay read-only */ });
     }

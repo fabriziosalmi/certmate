@@ -2,7 +2,7 @@
 {% block title %}CertMate - Inventory{% endblock %}
 {% block content %}
 {% set inventory_admin = (current_user or {}).get('role') == 'admin' %}
-<div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="inventoryApp">
+<div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="inventoryApp" data-role="{{ (current_user or {}).get('role') or 'viewer' }}">
 
     <!-- Header -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4">
@@ -262,10 +262,14 @@
 
         <!-- `relative`: the "Actions" header is sr-only, which is position:absolute,
              and without a positioned ancestor here it escaped the scroll box and
-             made the whole page 590 px wide on a 390 px phone. -->
+             made the whole page 590 px wide on a 390 px phone.
+             The header is `invisible` until render() draws the first list, as
+             on the dashboard's lists: the columns are sized for the loading
+             row first and for the certificates after, and with the domain
+             checks folded the list is on screen while that happens. -->
         <div class="relative overflow-x-auto">
             <table class="w-full text-sm">
-                <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
+                <thead id="inventoryHead" class="invisible bg-surface-2 text-muted text-xs uppercase tracking-wide">
                     <tr>
                         <th id="inv-sort-th-subject" scope="col" aria-sort="none" class="text-left font-medium px-4 py-2">
                             <button type="button" data-click="InventoryPage.sortBy" data-args='["subject"]' class="inline-flex items-center uppercase tracking-wide font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Subject / SAN <i class="fas fa-sort ml-1 text-gray-400" id="inv-sort-icon-subject" aria-hidden="true"></i></button>
