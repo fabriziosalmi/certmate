@@ -202,26 +202,46 @@ def test_the_client_certificate_section_matches_the_form():
     assert '/api/client-certs/ca' in section
 
 
-def test_the_bulk_csv_needs_only_the_common_name_as_help_says():
-    """Help listed email and organization as columns the file takes, as the
-    form's hint does; the importer refuses only a file without common_name, and
-    at most 100 rows (modules/api/client_certificates.py)."""
+def _bulk_columns():
+    """The columns the bulk importer reads, and the one it refuses a file
+    without (modules/api/client_certificates.py)."""
     api = (REPO / 'modules' / 'api' / 'client_certificates.py').read_text(encoding='utf-8')
-    assert "'common_name' not in headers" in api and 'max_batch = 100' in api
-    assert "'email' not in headers" not in api and "'organization' not in headers" not in api
+    read = set(re.findall(r"cert_data\.get\('(\w+)'", api))
+    required = set(re.findall(r"'(\w+)' not in headers", api))
+    limit = int(re.search(r'max_batch = (\d+)', api).group(1))
+    return read, required, limit
+
+
+def test_the_bulk_csv_hint_and_help_name_every_column_the_importer_reads():
+    """Help and the form's hint listed email and organization as if required,
+    and left out organizational_unit and days_valid."""
+    read, required, limit = _bulk_columns()
+    assert required == {'common_name'} and {'common_name', 'email', 'days_valid'} <= read, (read, required)
+    form = (REPO / 'templates' / 'partials' / '_client_create.html').read_text(encoding='utf-8')
+    hint = re.search(r'columns: ([^<]+)\n', form).group(1)
+    named = dict(re.findall(r'(\w+)( \(optional\))?(?:,|$)', hint.strip()))
+    assert set(named) == read, (sorted(named), sorted(read))
+    assert {c for c, optional in named.items() if not optional} == required, hint
+    assert f'at most {limit} rows' in form
     section = _text(_section('client-certificates'))
+    for column in read:
+        assert column in section, f'Help does not name the CSV column {column}'
     assert 'common_name column, the only one required' in section, section
-    assert 'up to 100 rows' in section, section
+    assert f'up to {limit} rows' in section, section
 
 
-def test_help_says_json_opens_in_a_tab_not_that_it_downloads():
-    """The inventory's JSON link opens the report in a new tab (target=_blank);
-    only CSV is a download."""
+def test_the_csv_downloads_and_the_json_opens_as_help_says(app_client):
+    """Help said CSV and JSON both download; only the CSV is an attachment,
+    and the JSON link opens in a tab (templates/inventory.html)."""
+    csv = app_client.get('/api/inventory/crypto-report?format=csv')
+    assert csv.status_code == 200 and 'attachment' in csv.headers.get('Content-Disposition', '')
+    js = app_client.get('/api/inventory/crypto-report')
+    assert js.status_code == 200 and 'attachment' not in js.headers.get('Content-Disposition', '')
     inventory = (REPO / 'templates' / 'inventory.html').read_text(encoding='utf-8')
     json_link = re.search(r'<a href="/api/inventory/crypto-report"([^>]*)>', inventory).group(1)
-    assert 'target="_blank"' in json_link and 'download' not in json_link
+    assert 'target="_blank"' in json_link
     text = _text(HELP)
-    assert 'JSON opens it in a new tab' in text, text[:200]
+    assert 'CSV downloads the table of certificates' in text and 'JSON opens the whole report in a new tab' in text
     assert 'JSON download' not in text
 
 
