@@ -233,7 +233,7 @@ def test_the_dashboard_a_row_its_dialog_and_the_buttons_a_script_built(page):
     # A literal argument in the template: each status chip passes its own.
     pressed = ("() => Array.from(document.querySelectorAll('[data-status-chip]'))"
                ".filter(c => c.getAttribute('aria-pressed') === 'true').map(c => c.getAttribute('data-status-chip'))")
-    for status in ('expiring', 'valid', 'all'):
+    for status in ('due', 'valid', 'all'):
         page.click(f'[data-status-chip="{status}"]')
         assert page.evaluate(pressed) == [status]
     assert page.locator('tr[data-row-domain]:visible').count() == 2

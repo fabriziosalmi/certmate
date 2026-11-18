@@ -106,13 +106,37 @@
 
     // Status filter chips (redesign phase 5) — replaced the #statusFilter select.
     // The clicked chip becomes aria-pressed; the rest reset.
-    function setStatusFilter(value) {
+    //
+    // The choice is kept in the URL (?status=, P73): it was in memory only, so a
+    // reload, or a link sent to a colleague, came back to All.
+    var STATUS_FILTERS = ['all', 'valid', 'overdue', 'due', 'expired'];
+
+    function markStatusChips(value) {
         currentStatusFilter = value;
-        certificatePage = 1;
         document.querySelectorAll('[data-status-chip]').forEach(function (chip) {
             chip.setAttribute('aria-pressed', chip.getAttribute('data-status-chip') === value ? 'true' : 'false');
         });
+    }
+
+    function setStatusFilter(value) {
+        if (STATUS_FILTERS.indexOf(value) === -1) value = 'all';
+        markStatusChips(value);
+        certificatePage = 1;
+        try {
+            var params = new URLSearchParams(window.location.search);
+            if (value === 'all') params.delete('status'); else params.set('status', value);
+            var qs = params.toString();
+            history.replaceState(history.state, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+        } catch (e) { /* no URL to keep it in */ }
         filterCertificates();
+    }
+
+    // The filter the URL asks for, before the list is first drawn.
+    function statusFilterFromQuery() {
+        try {
+            var value = new URLSearchParams(window.location.search).get('status');
+            if (value && STATUS_FILTERS.indexOf(value) !== -1) markStatusChips(value);
+        } catch (e) { /* old browser, keep All */ }
     }
 
     function queueBrowserDeploymentReport(domain, result) {
@@ -188,6 +212,67 @@
         return lifeKnown(cert) && !hasExpired(cert) && cert.days_until_expiry <= 30;
     }
 
+    // The two states of a renewal, named as renewal_policy and the notifications
+    // name them (UX perception audit, 2026-11-18, P25): Overdue (red) once the
+    // server says critical, Due (amber) from the instant it renews at until then.
+    // They shared one amber "Expiring" chip, and the detail, the bell and the
+    // notifications page each had a third name for it. The fallback for an
+    // answer without expiry_status is the old 7 days.
+    function isOverdue(cert) {
+        if (cert.expiry_status) return cert.expiry_status === 'critical';
+        return isExpiring(cert) && cert.days_until_expiry <= 7;
+    }
+
+    function isDue(cert) {
+        return isExpiring(cert) && !isOverdue(cert);
+    }
+
+    // A span in whole days, or in hours when it is not whole days: "6-day"
+    // and "6 days", "160-hour" and "80 hours".
+    function spanText(seconds, plural) {
+        var days = seconds / 86400;
+        var whole = days >= 1 && Math.abs(days - Math.round(days)) < 0.05;
+        var n = whole ? Math.round(days) : Math.max(1, Math.round(seconds / 3600));
+        var unit = whole ? 'day' : 'hour';
+        return plural ? n + ' ' + unit + (n === 1 ? '' : 's') : n + '-' + unit;
+    }
+
+    // When the renewal is due, against the certificate's lifetime (P23): a
+    // 90-day certificate and a 6-day one with four days left are Overdue and
+    // Valid, which looked arbitrary with nothing on screen to say why. Read
+    // from the instants the server sent (`renews_at`, `not_before`, the
+    // expiry), never a rule of its own. '' when they are not all there.
+    function renewalRuleText(cert) {
+        var expires = cert.expires_at || cert.expiry_date;
+        if (!cert.renews_at || !cert.not_before || !expires) return '';
+        var end = new Date(expires).getTime();
+        var start = new Date(cert.not_before).getTime();
+        var renews = new Date(cert.renews_at).getTime();
+        if (isNaN(end) || isNaN(start) || isNaN(renews) || end <= start) return '';
+        var lifetime = (end - start) / 1000;
+        var margin = Math.max(0, (end - renews) / 1000);
+        var share = Math.abs(margin - lifetime / 2) < 3600 ? 'half of its'
+            : Math.abs(margin - lifetime / 3) < 3600 ? 'a third of its' : 'in a';
+        return spanText(margin, true) + ' before expiry, ' + share + ' ' + spanText(lifetime) + ' lifetime';
+    }
+
+    // When it renews and why then: "renews Nov 19, 2026 (3 days before expiry,
+    // half of its 6-day lifetime)". '' for a certificate nothing here renews
+    // (it has no `renews_at`).
+    function renewalReason(cert) {
+        if (!cert.renews_at) return '';
+        var rule = renewalRuleText(cert);
+        var date = CertMate.formatDate(new Date(cert.renews_at));
+        var when = isExpiring(cert) || hasExpired(cert) ? 'renewal due since ' + date : 'renews ' + date;
+        return when + (rule ? ' (' + rule + ')' : '') + (isOverdue(cert) ? ', and not renewed yet' : '');
+    }
+
+    // The status chip's title: the state, and the date and rule behind it.
+    function statusReason(cert, statusText) {
+        var reason = renewalReason(cert);
+        return reason ? statusText + ': ' + reason + '.' : '';
+    }
+
     // Valid: it exists, has its key, its life is known, and it is neither
     // expired nor due for renewal. The counter and the Valid filter both ask
     // here, so they agree with each other and with the row's badge. Both used
@@ -224,7 +309,8 @@
         var total = certificates.length;
         var valid = certificates.filter(isValid).length;
         var keyless = certificates.filter(lostItsKey).length;
-        var expiring = certificates.filter(function (cert) { return cert.exists && isExpiring(cert); }).length;
+        var overdue = certificates.filter(function (cert) { return cert.exists && isOverdue(cert); }).length;
+        var due = certificates.filter(function (cert) { return cert.exists && isDue(cert); }).length;
         var expired = certificates.filter(function (cert) { return cert.exists && hasExpired(cert); }).length;
 
         var statsContainer = document.getElementById('statsCards');
@@ -235,7 +321,11 @@
         // number draws the eye the moment the dashboard loads. The old layout
         // pushed the label and icon to opposite corners (justify-between) with
         // no link between the three elements; this groups them and adds meaning.
-        function statCard(label, value, state, iconClass, valueId, subtitle) {
+        //
+        // A tile with a `filter` is a button that presses that status chip
+        // (P73): the number and the rows the click shows are one count. The
+        // "No key" tile has no chip of its own and stays a plain segment.
+        function statCard(label, value, state, iconClass, valueId, subtitle, filter) {
             var valColor = ({
                 headline: 'text-foreground',
                 neutral:  'text-muted',
@@ -247,38 +337,49 @@
             // Compact KPI segment: number + label on ONE line ("7 TOTAL"), sized
             // to the toggle's height. State shows in the number colour; the old
             // subtitle becomes a hover title since there's no room to print it.
-            return '<div class="flex items-baseline gap-1.5 px-2.5 py-3"' + (subtitle ? ' title="' + CertMate.escapeHtml(subtitle) + '"' : '') + '>' +
+            var tag = filter ? 'button' : 'div';
+            return '<' + tag + (filter ? ' type="button" data-click="setStatusFilter" data-args=\'["' + filter + '"]\'' : '') +
+                ' class="flex items-baseline gap-1.5 px-2.5 py-3' + (filter ? ' text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary' : '') + '"' +
+                (subtitle ? ' title="' + CertMate.escapeHtml(subtitle) + '"' : '') + '>' +
                 '<span class="text-lg font-bold leading-none tabular-nums ' + valColor + '"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</span>' +
                 '<span class="text-[10px] font-medium text-muted uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</span>' +
-                '</div>';
+                '</' + tag + '>';
         }
 
         // The third tile surfaces the MOST urgent lifecycle state. It becomes a
         // red "Expired" tile when any cert has lapsed (expired was computed but
-        // never shown — those certs were invisible on the dashboard), an amber
-        // "Expiring" tile once a renewal is due, else a calm neutral one.
+        // never shown — those certs were invisible on the dashboard), a red
+        // "Overdue" tile once a renewal is overdue and an amber "Due" one once
+        // it is due, else a calm neutral one. Its title counts both renewal
+        // states, in the words the notifications page uses (P25).
+        var renewals = [];
+        if (overdue > 0) renewals.push(overdue + ' overdue');
+        if (due > 0) renewals.push(due + ' due');
+        renewals = renewals.join(' · ');
         var attn;
         if (expired > 0) {
             attn = ['Expired', expired, 'danger', 'fa-circle-xmark text-danger-fg',
-                    expiring > 0 ? ('renew now · ' + expiring + ' expiring') : 'renew now'];
+                    renewals ? ('renew now · ' + renewals) : 'renew now', 'expired'];
         } else if (keyless > 0) {
-            attn = ['No key', keyless, 'warn', 'fa-key text-warning-fg', 'reissue needed'];
-        } else if (expiring > 0) {
-            attn = ['Expiring', expiring, 'warn', 'fa-triangle-exclamation text-warning-fg', 'renewal due'];
+            attn = ['No key', keyless, 'warn', 'fa-key text-warning-fg', 'reissue needed', null];
+        } else if (overdue > 0) {
+            attn = ['Overdue', overdue, 'danger', 'fa-circle-exclamation text-danger-fg', renewals, 'overdue'];
+        } else if (due > 0) {
+            attn = ['Due', due, 'warn', 'fa-triangle-exclamation text-warning-fg', renewals, 'due'];
         } else {
-            attn = ['Expiring', 0, 'neutral', 'fa-triangle-exclamation text-muted', 'none expiring'];
+            attn = ['Due', 0, 'neutral', 'fa-triangle-exclamation text-muted', 'no renewal due', 'due'];
         }
 
         // Deployed counter removed by request — per-row deployment status still
         // shows in the table's Deployment column.
         statsContainer.innerHTML = [
-            statCard('Total', total, 'headline', 'fa-certificate text-blue-500 dark:text-blue-400', null, total === 1 ? 'certificate' : 'certificates'),
-            statCard('Valid', valid, valid > 0 ? 'good' : 'neutral', 'fa-circle-check ' + (valid > 0 ? 'text-success-fg' : 'text-muted'), null, valid + ' of ' + total + ' healthy'),
-            statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4])
+            statCard('Total', total, 'headline', 'fa-certificate text-blue-500 dark:text-blue-400', null, total === 1 ? 'certificate' : 'certificates', 'all'),
+            statCard('Valid', valid, valid > 0 ? 'good' : 'neutral', 'fa-circle-check ' + (valid > 0 ? 'text-success-fg' : 'text-muted'), null, valid + ' of ' + total + ' healthy', 'valid'),
+            statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4], attn[5])
         ].join('');
 
         // Keep the status-filter chip counts in sync with the strip (phase 5).
-        var chipCounts = { all: total, valid: valid, expiring: expiring, expired: expired };
+        var chipCounts = { all: total, valid: valid, overdue: overdue, due: due, expired: expired };
         Object.keys(chipCounts).forEach(function (k) {
             var c = document.querySelector('[data-status-count="' + k + '"]');
             if (c) { c.textContent = chipCounts[k]; }
@@ -485,18 +586,19 @@
             // Free-text search lives in the ⌘K palette.
             var matchesStatus = true;
             if (statusFilter !== 'all') {
-                var isExpired = cert.exists && hasExpired(cert);
-                var isExpiringSoon = cert.exists && isExpiring(cert);
-
+                // The same predicates the counters count with (updateStats).
                 switch (statusFilter) {
                     case 'valid':
                         matchesStatus = isValid(cert);
                         break;
-                    case 'expiring':
-                        matchesStatus = isExpiringSoon;
+                    case 'overdue':
+                        matchesStatus = cert.exists && isOverdue(cert);
+                        break;
+                    case 'due':
+                        matchesStatus = cert.exists && isDue(cert);
                         break;
                     case 'expired':
-                        matchesStatus = isExpired;
+                        matchesStatus = cert.exists && hasExpired(cert);
                         break;
                 }
             }
@@ -598,7 +700,8 @@
         var field = currentSort.field;
         var dir = currentSort.dir === 'asc' ? 1 : -1;
         return certs.slice().sort(function (a, b) {
-            if (field === 'domain') return dir * a.domain.localeCompare(b.domain);
+            // numeric (P73): site2 before site10, as a person counts.
+            if (field === 'domain') return dir * a.domain.localeCompare(b.domain, undefined, { numeric: true });
             if (field === 'status') return dir * (remaining(a) - remaining(b));
             if (field === 'expiry') return dir * (remaining(a) - remaining(b));
             if (field === 'provider') {
@@ -868,20 +971,26 @@
     // When the sweep renews it (#393): the one instant the server decided, after the threshold,
     // the lifetime and the CA's window. Shown as it is, never recomputed here.
     //
-    // A past date says how long the renewal is overdue (UX perception audit,
-    // 2026-11-18, P37). The word is kept here, once, while the vocabulary for
-    // late renewals is still being decided. "The next renewal run renews it"
-    // is said only while no renewal of this certificate has failed: after a
-    // failure the next run meets the same cause, and the banner says it.
+    // A past date says since when the renewal is due (UX perception audit,
+    // 2026-11-18, P37), in the words of the row's chip (P25): "Renewal due
+    // since" in amber while it is Due, "Renewal overdue since" in red once it
+    // is Overdue (or the certificate has expired). Both name the instant the
+    // sweep was to renew it. "The next renewal run renews it" is said only
+    // while no renewal of this certificate has failed: after a failure the
+    // next run meets the same cause, and the banner says it.
     var RENEWAL_OVERDUE_SINCE = 'Renewal overdue since';
+    var RENEWAL_DUE_SINCE = 'Renewal due since';
 
     function renewsAtHtml(cert) {
         if (!cert.renews_at) return '<span class="text-muted">\u2014</span>';
         var due = cert.needs_renewal && new Date(cert.renews_at) <= new Date();
         if (!due) return '<span>' + escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>';
-        return '<span class="text-warning-fg">' + RENEWAL_OVERDUE_SINCE + ' ' +
+        var late = isOverdue(cert) || hasExpired(cert);
+        var tone = late ? 'text-danger-fg' : 'text-warning-fg';
+        return '<span class="' + tone + '">' + (late ? RENEWAL_OVERDUE_SINCE : RENEWAL_DUE_SINCE) + ' ' +
             escapeHtml(CertMate.formatDateTime(cert.renews_at)) + '</span>' +
-            (lastRenewalFailure(cert) ? '' : '<div class="text-xs text-warning-fg">Due: the next renewal run renews it</div>');
+            (lastRenewalFailure(cert) ? '' : '<div class="text-xs ' + tone + '">' + (late ? 'Overdue' : 'Due') +
+                ': the next renewal run renews it</div>');
     }
 
     // The last renewal of this certificate that failed, as the server keeps it
@@ -1102,6 +1211,7 @@
             var daysKnown = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
             var isExpired = hasExpired(cert);
             var isExpiringSoon = !isExpired && isExpiring(cert);
+            var isOverdueRow = isExpiringSoon && isOverdue(cert);
             var statusClass, statusIcon, statusText, healthClass;
             var keylessRow = lostItsKey(cert);
             if (keylessRow) {
@@ -1112,8 +1222,11 @@
                 healthClass = isExpired ? 'health-expired' : 'health-warning';
             } else if (isExpired) {
                 statusClass = 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
+            } else if (isOverdueRow) {
+                // Overdue is red and Due amber (P25): they shared the amber "Expiring".
+                statusClass = 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'; statusIcon = 'fa-circle-exclamation'; statusText = 'Overdue'; healthClass = 'health-expired';
             } else if (isExpiringSoon) {
-                statusClass = 'bg-yellow-500/10 text-warning-fg ring-1 ring-inset ring-yellow-500/20'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring'; healthClass = 'health-warning';
+                statusClass = 'bg-yellow-500/10 text-warning-fg ring-1 ring-inset ring-yellow-500/20'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Due'; healthClass = 'health-warning';
             } else {
                 statusClass = 'bg-green-500/10 text-success-fg ring-1 ring-inset ring-green-500/20'; statusIcon = 'fa-check-circle'; statusText = 'Valid'; healthClass = 'health-valid';
             }
@@ -1124,7 +1237,12 @@
             // absolute date drops to a smaller secondary line. Status colour is
             // carried onto the counter itself — green for healthy so the colour
             // encodes the state, not just the expired/expiring alarm cases.
-            var daysClass = isExpired ? 'text-danger-fg' : isExpiringSoon ? 'text-warning-fg' : 'text-success-fg';
+            var daysClass = (isExpired || isOverdueRow) ? 'text-danger-fg' : isExpiringSoon ? 'text-warning-fg' : 'text-success-fg';
+            // Why this state, with this many days left (P23): the date the
+            // renewal is due and how it sits in the lifetime, on hover.
+            var statusTitle = keylessRow ? LOST_KEY_TITLE
+                : external ? statusText + ': not renewed by CertMate, replace it before ' + expiryStr + '.'
+                : statusReason(cert, statusText);
             // One sentence, one implementation (#938). This used to compute it
             // here from `days_until_expiry`, and the "less than a day ago" case
             // it carried could never fire: a day count is -1 for anything
@@ -1189,7 +1307,7 @@
                 : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileCaLine}${mobileDeploymentLine}</div>`);
-            var lockColor = isExpired ? 'text-red-400' : (isExpiringSoon || keylessRow) ? 'text-yellow-400' : 'text-green-500';
+            var lockColor = (isExpired || isOverdueRow) ? 'text-red-400' : (isExpiringSoon || keylessRow) ? 'text-yellow-400' : 'text-green-500';
             // An expired cert is no longer trusted; a closed padlock (the
             // "secure connection" glyph) is a visual paradox there. Show an
             // open padlock for expired so the icon matches the state.
@@ -1210,7 +1328,7 @@
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${keylessRow ? LOST_KEY_TITLE : ''}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span>${renewalFailedChip}</td>
+                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${statusTitle}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span>${renewalFailedChip}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${external ? 'Replace by ' + expiryStr : expiryStr}</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
@@ -1583,13 +1701,26 @@
             var daysKnown2 = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
             var isExpired = hasExpired(cert);
             var isExpiringSoon = !isExpired && isExpiring(cert);
+            var isOverdueDetail = isExpiringSoon && isOverdue(cert);
             var expiryDate = new Date(cert.expiry_date);
             var statusClass, statusText;
             var keylessDetail = lostItsKey(cert);
+            // The row chip's words (P25): Overdue in red, Due in amber.
             if (keylessDetail) { statusClass = isExpired ? 'text-danger-fg' : 'text-warning-fg'; statusText = 'Needs reissue'; }
             else if (isExpired) { statusClass = 'text-danger-fg'; statusText = 'Expired'; }
-            else if (isExpiringSoon) { statusClass = 'text-warning-fg'; statusText = 'Expiring Soon'; }
+            else if (isOverdueDetail) { statusClass = 'text-danger-fg'; statusText = 'Overdue'; }
+            else if (isExpiringSoon) { statusClass = 'text-warning-fg'; statusText = 'Due'; }
             else { statusClass = 'text-success-fg'; statusText = 'Valid'; }
+            // When it was issued and how long it lives (P23): what decides
+            // whether four days left is Valid or Overdue.
+            var issuedAt = cert.not_before ? new Date(cert.not_before) : null;
+            // expires_at carries its Z; expiry_date is read as local time.
+            var lifeSeconds = issuedAt ? (new Date(cert.expires_at || cert.expiry_date).getTime() - issuedAt.getTime()) / 1000 : NaN;
+            var issuedLine = (issuedAt && !isNaN(issuedAt.getTime()) && lifeSeconds > 0)
+                ? 'Issued ' + CertMate.formatDate(issuedAt) + ' \u00b7 ' + spanText(lifeSeconds) + ' lifetime'
+                : '';
+            var ruleLine = renewalReason(cert);
+            if (ruleLine) ruleLine = ruleLine.charAt(0).toUpperCase() + ruleLine.slice(1) + '.';
 
             // One sentence, one implementation (#938). This used to compute it
             // here from `days_until_expiry`, and the "less than a day ago" case
@@ -1597,8 +1728,8 @@
             // expired within 24 hours, never 0.
             var daysText = CertMate.lifetimePhrase(cert);
             var expiryStr = CertMate.formatDate(expiryDate);
-            var bannerBg = isExpired ? 'bg-danger-surface' : (isExpiringSoon || keylessDetail) ? 'bg-warning-surface' : 'bg-success-surface';
-            var bannerIcon = keylessDetail ? 'fa-key' : isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
+            var bannerBg = (isExpired || isOverdueDetail) ? 'bg-danger-surface' : (isExpiringSoon || keylessDetail) ? 'bg-warning-surface' : 'bg-success-surface';
+            var bannerIcon = keylessDetail ? 'fa-key' : isExpired ? 'fa-circle-xmark' : isOverdueDetail ? 'fa-circle-exclamation' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
             var autoOn = cert.auto_renew !== false;
 
             // Quick-action button: its icon and its word (`label`, a part of
@@ -1640,6 +1771,8 @@
                 '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
+                (issuedLine ? '<div class="text-sm ' + statusClass + ' opacity-80" data-issued-line>' + issuedLine + '</div>' : '') +
+                (ruleLine && !isExpired ? '<div class="text-xs ' + statusClass + ' mt-1" data-renewal-rule>' + escapeHtml(ruleLine) + '</div>' : '') +
                 (keylessDetail ? '<div class="text-sm ' + statusClass + ' mt-1">' + LOST_KEY_TITLE + ' Use Edit &amp; Reissue, or Reissue all on the dashboard.</div>' : '') +
                 (external ? '<div class="text-sm ' + statusClass + ' mt-1">Not renewed by CertMate: upload its replacement before it expires.</div>' : '') +
                 '</div>' +
@@ -2391,6 +2524,9 @@
             allCertificates = certificates;
             listingLoaded = true;
             updateStats(certificates);
+            // The bell counts from this list, as it is drawn (P53): it used to
+            // fetch the same list again four seconds after the page loaded.
+            if (typeof window._updateNotifBadge === 'function') window._updateNotifBadge(certificates);
             renderTagFilterBar();
             filterCertificates();
             renderKeylessBanner(certificates);
@@ -4975,6 +5111,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         var pageSize = document.getElementById('certificatePageSize');
         if (pageSize) pageSize.value = String(certificatePageSize);
+        // Before the first draw, so the list opens on the filter in the URL.
+        statusFilterFromQuery();
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.

@@ -675,19 +675,27 @@
                              light mode, under AA's 4.5. The same holds for the client chips. -->
                         <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter certificates by status">
                             <button type="button" data-status-chip="all" aria-pressed="true" data-click="setStatusFilter" data-args='["all"]'
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">
+                                    class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">
                                 All <span class="inline-block min-w-[4ch] text-[10px] tabular-nums" data-status-count="all"></span>
                             </button>
                             <button type="button" data-status-chip="valid" aria-pressed="false" data-click="setStatusFilter" data-args='["valid"]'
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-green-500/15 aria-pressed:text-success-strong aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">
+                                    class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-green-500/15 aria-pressed:text-success-strong aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">
                                 Valid <span class="inline-block min-w-[4ch] text-[10px] tabular-nums" data-status-count="valid"></span>
                             </button>
-                            <button type="button" data-status-chip="expiring" aria-pressed="false" data-click="setStatusFilter" data-args='["expiring"]'
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-yellow-500/15 aria-pressed:text-warning-strong aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-yellow-500/30">
-                                Expiring <span class="inline-block min-w-[4ch] text-[10px] tabular-nums" data-status-count="expiring"></span>
+                            <!-- The two renewal states (UX perception audit, P25), in the
+                                 words of the row chips, the detail and the notifications. -->
+                            <button type="button" data-status-chip="overdue" aria-pressed="false" data-click="setStatusFilter" data-args='["overdue"]'
+                                    title="Renewal overdue: no more than 7 days or a sixth of its lifetime, whichever is shorter, is left, and it is not renewed yet"
+                                    class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">
+                                Overdue <span class="inline-block min-w-[4ch] text-[10px] tabular-nums" data-status-count="overdue"></span>
+                            </button>
+                            <button type="button" data-status-chip="due" aria-pressed="false" data-click="setStatusFilter" data-args='["due"]'
+                                    title="Renewal due: past the date the renewal run renews it at"
+                                    class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-yellow-500/15 aria-pressed:text-warning-strong aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-yellow-500/30">
+                                Due <span class="inline-block min-w-[4ch] text-[10px] tabular-nums" data-status-count="due"></span>
                             </button>
                             <button type="button" data-status-chip="expired" aria-pressed="false" data-click="setStatusFilter" data-args='["expired"]'
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">
+                                    class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">
                                 Expired <span class="inline-block min-w-[4ch] text-[10px] tabular-nums" data-status-count="expired"></span>
                             </button>
                         </div>

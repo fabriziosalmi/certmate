@@ -255,9 +255,13 @@ the date, key size numerically, endpoints by how many there are, and a
 certificate with nothing in that column (no issuer, no key) goes to the bottom
 either way. Until you click one, the list keeps the order the API returns. A
 certificate seen on several endpoints shows the first and `+N`; hover it to list
-every one. Summary cards give an **expiry forecast** (expired / within 7 / 30 / 90
-days) across *everything*, not just issued certs, plus a count of certificates
-a verified answer says are **revoked**. Each row shows its revocation answer
+every one. Summary cards count *everything*, not just issued certs: managed and
+discovered, **expired**, **renewal overdue**, **renewal due** and **valid**, by
+the same renewal rule as the row badges and the expiry filter (hover a card for
+the rule), plus the certificates a verified answer says are **revoked**. Each card
+is a button: it sets the filters to what it counts, so the list shows as many
+rows as the card says. The API's `summary.expiry` still carries the calendar
+forecast (expired / within 7 / 30 / 90 days). Each row shows its revocation answer
 under the expiry badge; a certificate that could not be checked says so in grey
 and gives the reason on hover, rather than looking fine.
 
