@@ -31,14 +31,18 @@ const classes = () => {
   return {add(n) { values.add(n); }, remove(n) { values.delete(n); }, contains(n) { return values.has(n); }};
 };
 const listeners = {};
-const input = {value: '', focus() {}, addEventListener(type, fn) { listeners['input:' + type] = fn; }};
+const input = {value: '', focus() {}, setAttribute() {}, removeAttribute() {},
+               addEventListener(type, fn) { listeners['input:' + type] = fn; }};
 const results = {innerHTML: '', style: {}, querySelectorAll() { return []; }};
 const overlay = {addEventListener() {}};
-const byId = {cmdPaletteInput: input, cmdPaletteResults: results, cmdPaletteOverlay: overlay};
+const cancel = {addEventListener() {}};
+const status = {textContent: ''};
+const byId = {cmdPaletteInput: input, cmdPaletteResults: results, cmdPaletteOverlay: overlay,
+              cmdPaletteCancel: cancel, cmdPaletteStatus: status};
 global.document = {
   body: {appendChild() {}},
   activeElement: null,
-  createElement() { return {classList: classes(), set innerHTML(v) {}}; },
+  createElement() { return {classList: classes(), set innerHTML(v) {}, addEventListener() {}}; },
   getElementById(id) { return byId[id] || null; },
   querySelectorAll() { return []; },
   addEventListener(type, fn) { listeners['doc:' + type] = fn; },
