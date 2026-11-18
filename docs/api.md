@@ -297,6 +297,7 @@ rather than written by hand:
     "renew_at": "2026-11-03T08:41:10Z",
     "explanation_url": null
   },
+  "last_renewal_attempt": null,
   "acme_profile": null,
   "acme_profile_withdrawn_at": null,
   "ip_address": null,
@@ -398,6 +399,32 @@ The timestamps are RFC 3339 UTC with a `Z`. `explanation_url` is the page the
 CA attached to the window, when it gave one; only `https` URLs are kept. Since
 API contract **2.40** the window postpones a renewal as well as bringing one
 forward, within the floor above. Available since API contract **2.23**.
+
+##### Did the last renewal fail?
+
+`last_renewal_attempt` is the last renewal of this certificate that failed,
+whoever asked for it: a `POST /api/certificates/{domain}/renew`, its background
+job, or the renewal sweep. It is kept beside the certificate, so it is there
+after a reload and for a failure nobody watched.
+
+<!-- illustration: one field of a certificate's answer, with an elided error -->
+```json
+"last_renewal_attempt": {
+  "attempted_at": "2026-11-18T09:12:40Z",
+  "outcome": "failed",
+  "error": "Certificate renewal failed: ... DNS problem: NXDOMAIN looking up TXT for _acme-challenge.app.example.com",
+  "hint": "The CA could not verify the DNS TXT record: check that it was created in the name's zone and has had time to propagate. The previous certificate is still in place."
+}
+```
+
+`outcome` is `failed`, the only outcome kept. `error` is what the renewal raised,
+certbot's output included, up to 2000 characters. `hint` is the one the renewal
+job gives for the same error (`GET /api/certificates/jobs/<job_id>`), and always ends with
+"The previous certificate is still in place.": a failed renewal leaves the served
+certificate as it was. The field is `null` when no renewal has failed, after a
+renewal that happened, and once a reissue or an upload has replaced the
+certificate it was about. A domain busy with another operation is not a failed
+renewal and leaves nothing. Since API contract **2.70**.
 
 ##### Deprecated fields
 

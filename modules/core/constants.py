@@ -802,6 +802,13 @@ METADATA_SCHEMA_VERSION = 1
 #                                   CERTIFICATE_CREATION_FAILED keeps a string
 #                                   hint, so no response field is retyped. A
 #                                   new case of existing fields, as 2.67.
+#                                   2.70, MINOR: a certificate's answer carries
+#                                   last_renewal_attempt (attempted_at, outcome
+#                                   'failed', error, hint): the last renewal of
+#                                   that certificate that failed, by request,
+#                                   job or sweep, until a renewal happens or
+#                                   the certificate is replaced. Null
+#                                   otherwise. A new field.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -827,7 +834,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.69'
+API_CONTRACT_VERSION = '2.70'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

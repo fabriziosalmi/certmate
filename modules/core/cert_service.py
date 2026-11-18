@@ -1481,10 +1481,15 @@ class CertificateService:
             # publishing `certificate_failed` for either would page someone
             # for a queue. Only what the CA or the configuration refused,
             # and what broke inside CertMate, is an event.
-            from .certificates import DomainOperationInProgress, ReissueRequired
+            from .certificates import DomainOperationInProgress, ExternalCertificate, ReissueRequired
             if not isinstance(e, (DomainOperationInProgress, FileNotFoundError)):
                 self._publish('certificate_failed',
                               {'domain': domain, 'error': str(e)})
+            # Kept on the certificate, so the dashboard still says it after a
+            # reload (P37). An external certificate was refused, not renewed.
+            if not isinstance(e, (DomainOperationInProgress, FileNotFoundError,
+                                  ExternalCertificate)):
+                self._certs.record_renewal_failure(domain, e)
             # The metric follows the sweep's rule: a certificate that needs a
             # reissue did not fail to renew, renewal was never the remedy.
             if not isinstance(e, (DomainOperationInProgress, FileNotFoundError,
@@ -1497,6 +1502,7 @@ class CertificateService:
         # replaced, so deploy hooks must not fire. Default True keeps the
         # behaviour for older manager results without the flag.
         if bool(result.get('renewed', True)):
+            self._certs.forget_renewal_failure(domain)
             self._publish('certificate_renewed', {'domain': domain})
             self._record_renewal(domain, True, started)
         # The renew answer has always carried `duration`, and create's has a value for it; only

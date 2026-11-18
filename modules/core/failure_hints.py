@@ -3,7 +3,7 @@ renewal or reissue carries.
 
 Moved here from `modules/api/resources_lifecycle.py` (UX perception audit,
 2026-11-18, P37), unchanged: a failed renewal is now kept beside the
-certificate with its hint (`CertificateManager._record_renewal_failure`), and
+certificate with its hint (`CertificateManager.record_renewal_failure`), and
 the nightly sweep, which never passes through the API, has to say the same
 thing the renewal job's toast says. The API module imports them back.
 """
