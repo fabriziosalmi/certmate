@@ -8,6 +8,12 @@ scroll box with no visible scrollbar, and a tap on the row did nothing. Below
 md the row now carries them under the subject, and the other columns start
 at md.
 
+Measured at both phone widths the finding names, 390 and 360 px. At 360 the
+line of names under the subject was capped at 320 px (max-w-xs), so a
+certificate with three or more names set the one column left at 352 px in a
+328 px box: the list scrolled sideways again and the names were cut at the
+edge of the box, with no ellipsis on screen.
+
 The inventory is answered in the browser (page.route), so the instance's own
 inventory, whatever the modules before this one left in it, does not matter.
 """
@@ -42,15 +48,22 @@ MANAGED = {
     'issuer_cn': 'Another Example Server CA', 'expiry_status': 'ok', 'days_until_expiry': 80,
     'not_after': '2027-02-06T10:00:00Z', 'key': {'type': 'RSA', 'size': 2048}, 'source': 'issued',
     'managed': True, 'group': 'issued', 'endpoints': []}
-INVENTORY = {'certificates': [DISCOVERED, MANAGED],
-             'summary': {'total': 2, 'issued': 1, 'discovered': 1,
-                         'expiry': {'expired': 0, '7': 1, '30': 0, '90': 1}}}
+# Four names: the line under the subject reads three of them and "+1".
+MANY_NAMES = {
+    'fingerprint': 'cc' * 32, 'subject_cn': 'edge.example.test',
+    'san_dns': ['api.example.test', 'www.api.example.test', 'eu.api.example.test', 'us.api.example.test'],
+    'issuer_cn': 'Example Issuing CA R11', 'expiry_status': 'ok', 'days_until_expiry': 60,
+    'not_after': '2027-01-17T10:00:00Z', 'key': {'type': 'EC', 'curve': 'P-256'}, 'source': 'probed',
+    'managed': False, 'group': 'discovered', 'endpoints': [{'host': 'eu.api.example.test', 'port': 443}]}
+INVENTORY = {'certificates': [DISCOVERED, MANAGED, MANY_NAMES],
+             'summary': {'total': 3, 'issued': 1, 'discovered': 2,
+                         'expiry': {'expired': 0, '7': 1, '30': 0, '90': 2}}}
 
 
-@pytest.fixture
-def phone(browser_page, ui_session_cookie):
+@pytest.fixture(params=[390, 360], ids=['390px', '360px'])
+def phone(request, browser_page, ui_session_cookie):
     context = browser_page.context.browser.new_context(
-        viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
+        viewport={'width': request.param, 'height': 844}, is_mobile=True, has_touch=True)
     context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
     page = context.new_page()
 
@@ -73,7 +86,7 @@ def phone(browser_page, ui_session_cookie):
 # whether it lies inside the screen from left to right.
 ON_SCREEN = """([row, text]) => {
     const width = document.documentElement.clientWidth;
-    const tr = [...document.querySelectorAll('#inventoryBody tr')].find(t => t.innerText.includes(row));
+    const tr = [...document.querySelectorAll('#inventoryBody tr')].find(t => t.innerText.startsWith(row));
     const found = [...tr.querySelectorAll('*')].filter(e =>
         [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.includes(text)));
     return found.map(e => { const b = e.getBoundingClientRect();
@@ -86,6 +99,22 @@ def test_the_inventory_list_does_not_scroll_sideways_on_a_phone(phone):
     sizes = phone.evaluate("""() => { const box = document.getElementById('inventoryBody').closest('.overflow-x-auto');
         return [box.scrollWidth, box.clientWidth]; }""")
     assert sizes[0] <= sizes[1], f'the inventory list scrolls sideways on a phone [content, box]: {sizes}'
+
+
+def test_a_long_line_of_names_ends_inside_the_list_with_an_ellipsis(phone):
+    """The names under the subject end inside the list's box, which clips them with no ellipsis
+    of its own; what does not fit in the line is cut with an ellipsis."""
+    line = phone.evaluate("""() => {
+        const box = document.getElementById('inventoryBody').closest('.overflow-x-auto');
+        const edge = Math.round(box.getBoundingClientRect().right);
+        const tr = [...document.querySelectorAll('#inventoryBody tr')].find(t => t.innerText.startsWith('edge.example.test'));
+        const div = [...tr.querySelectorAll('div')].find(d => d.textContent.startsWith('api.example.test, www.'));
+        const b = div.getBoundingClientRect();
+        return {right: Math.round(b.right), edge, cut: div.scrollWidth > div.clientWidth,
+                ellipsis: getComputedStyle(div).textOverflow};
+    }""")
+    assert line['right'] <= line['edge'], f'the line of names ends past the edge of the list: {line}'
+    assert not line['cut'] or line['ellipsis'] == 'ellipsis', f'the line of names is cut with no ellipsis: {line}'
 
 
 @pytest.mark.parametrize('row, texts', [

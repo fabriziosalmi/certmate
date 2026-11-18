@@ -145,7 +145,11 @@
                 + 'title="A newer certificate replaced it: every endpoint it was seen on now serves another, or CertMate renewed it">superseded</span>';
         }
         s += '</div>';
-        if (sans) { s += '<div class="text-xs text-muted truncate max-w-xs">' + escapeHtml(sans) + escapeHtml(extra) + '</div>'; }
+        // Below md the subject is the only column: the names fill the cell
+        // and take no width of their own (w-0 min-w-full), so a long list of
+        // them is cut with an ellipsis instead of widening the table past a
+        // 360 px screen.
+        if (sans) { s += '<div class="text-xs text-muted truncate max-w-xs max-md:w-0 max-md:min-w-full">' + escapeHtml(sans) + escapeHtml(extra) + '</div>'; }
         return s;
     }
 
