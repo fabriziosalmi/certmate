@@ -188,21 +188,24 @@
                                     API Bearer Token
                                 </label>
                                 <div class="flex items-center space-x-2">
-                                    <input type="password" id="api_bearer_token" name="api_bearer_token" 
-                                           placeholder="Enter a secure token for API authentication"
+                                    <!-- Read-only and without a name: the bulk save refuses it (UX audit P04). -->
+                                    <input type="password" id="api_bearer_token" readonly
+                                           aria-describedby="api_bearer_token_help"
+                                           placeholder="Not set"
                                            class="flex-1 min-w-0 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
                                     <button type="button" data-click="toggleTokenVisibility" id="tokenToggleBtn"
                                             aria-label="Show token" aria-pressed="false" aria-controls="api_bearer_token"
                                             class="px-3 py-2 text-muted hover:text-gray-700 dark:hover:text-gray-200">
                                         <i class="fas fa-eye" id="tokenToggleIcon" aria-hidden="true"></i>
                                     </button>
-                                    <button type="button" data-click="generateToken"
-                                            class="px-3 py-2 border border-primary text-primary rounded-md hover:bg-primary hover:text-white text-sm transition-colors">
-                                        <i class="fas fa-random mr-1"></i> Generate
-                                    </button>
                                 </div>
-                                <p class="mt-1 text-xs text-muted">
-                                    Token used for API authentication. Required for API access after initial setup.
+                                <p id="api_bearer_token_help" class="mt-1 text-xs text-muted">
+                                    This token has full admin access. It cannot be changed here.
+                                    To rotate it, set <code class="text-xs">API_BEARER_TOKEN</code>
+                                    (or <code class="text-xs">API_BEARER_TOKEN_FILE</code>, the path of a file that holds it)
+                                    to a new random token of at least 32 characters, for example from <code class="text-xs">openssl rand -hex 32</code>,
+                                    and restart CertMate: the old token then stops working.
+                                    For scripts and agents, create a scoped key in <a href="#apikeys" class="text-primary hover:underline">Settings → API Keys</a> instead.
                                 </p>
                             </div>
                         </div>

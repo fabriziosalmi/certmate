@@ -152,8 +152,8 @@ only if it must run deploy hooks, list DNS accounts, delete certificates, or rea
 ## Audit attribution
 
 So the audit trail can tell an agent's actions apart from a human operator's,
-give the MCP server a **dedicated, agent-flagged API key** rather than the legacy
-global bearer token:
+give the MCP server a **dedicated, agent-flagged API key** rather than the
+API Bearer Token:
 
 1. In CertMate, go to **Settings → API Keys**, create a key, and tick **AI agent
    key** (or send `"is_agent": true` to `POST /api/keys`). Give it the least role it needs,
@@ -165,7 +165,7 @@ Every certificate action the agent then takes is recorded with
 `actor.kind="agent"`, the key's stable id, and the per-process
 `X-CertMate-Agent-Session` the server sends — so you can later show exactly which
 certificate changes an AI agent made, under which identity, and grouped by run.
-The legacy global bearer token collapses every caller to `api_user` with no key
+The API Bearer Token collapses every caller to `api_user` with no key
 id and is recorded as `api_token`, not `agent`. The agent-session header is an
 informational claim and never by itself promotes a caller to `agent`.
 

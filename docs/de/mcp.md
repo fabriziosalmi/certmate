@@ -1,6 +1,6 @@
 # CertMate Model Context Protocol (MCP) Server
 
-<!-- CERTMATE-TRANSLATED-FROM 395373cede92672b -->
+<!-- CERTMATE-TRANSLATED-FROM 7597770c164960c7 -->
 
 CertMate enthält einen integrierten Model Context Protocol (MCP) Server, der in Node.js geschrieben ist. Dadurch können agentische KI-Assistenten (wie Claude oder Gemini) Zertifikatsstatus prüfen, Erneuerungen auslösen, Diagnosen anfordern und direkt mit der CertMate API interagieren.
 
@@ -137,11 +137,11 @@ Da die Bedingungen im Prompt liegen, können Sie die Richtlinie (Schwellenwert, 
 
 ## Audit-Zuordnung
 
-Damit das Auditprotokoll die Aktionen eines Agenten von denen eines menschlichen Operators unterscheiden kann, geben Sie dem MCP Server einen **dedizierten, als Agent markierten API-Schlüssel** anstelle des veralteten globalen Bearer-Tokens:
+Damit das Auditprotokoll die Aktionen eines Agenten von denen eines menschlichen Operators unterscheiden kann, geben Sie dem MCP Server einen **dedizierten, als Agent markierten API-Schlüssel** anstelle des API Bearer Token:
 
 1. Gehen Sie in CertMate zu **Einstellungen → API-Schlüssel**, erstellen Sie einen Schlüssel und aktivieren Sie **KI-Agent-Schlüssel** (oder senden Sie `"is_agent": true` an `POST /api/keys`). Geben Sie ihm die minimal benötigte Rolle, und beschränken Sie einen `viewer`- oder `operator`-Schlüssel mit `allowed_domains`. Ein `admin`-Schlüssel kann nicht auf Domains beschränkt werden: Der Server lehnt ihn mit einem 400 ab.
 2. Setzen Sie diesen Schlüssel als `CERTMATE_TOKEN` für den MCP Server.
 
-Jede Zertifikatsaktion, die der Agent daraufhin durchführt, wird mit `actor.kind="agent"`, der stabilen ID des Schlüssels und der prozessgebundenen `X-CertMate-Agent-Session`, die der Server sendet, aufgezeichnet — sodass Sie später genau nachvollziehen können, welche Zertifikatsänderungen ein KI-Agent vorgenommen hat, unter welcher Identität und gruppiert nach Lauf. Der veraltete globale Bearer-Token fasst jeden Aufrufer als `api_user` ohne Schlüssel-ID zusammen und wird als `api_token`, nicht als `agent`, erfasst. Der Agent-Session-Header ist eine informative Angabe und befördert einen Aufrufer niemals allein in den Status `agent`.
+Jede Zertifikatsaktion, die der Agent daraufhin durchführt, wird mit `actor.kind="agent"`, der stabilen ID des Schlüssels und der prozessgebundenen `X-CertMate-Agent-Session`, die der Server sendet, aufgezeichnet — sodass Sie später genau nachvollziehen können, welche Zertifikatsänderungen ein KI-Agent vorgenommen hat, unter welcher Identität und gruppiert nach Lauf. Der API Bearer Token fasst jeden Aufrufer als `api_user` ohne Schlüssel-ID zusammen und wird als `api_token`, nicht als `agent`, erfasst. Der Agent-Session-Header ist eine informative Angabe und befördert einen Aufrufer niemals allein in den Status `agent`.
 
 Die resultierenden Einträge sind Teil der manipulationssicheren Audit-Kette; siehe [Audit-Protokollierung](./api.md#audit-protokollierung) und [compliance.md](./compliance.md).

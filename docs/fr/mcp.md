@@ -1,6 +1,6 @@
 # Serveur MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 395373cede92672b -->
+<!-- CERTMATE-TRANSLATED-FROM 7597770c164960c7 -->
 
 CertMate inclut un serveur MCP (Model Context Protocol) intégré écrit en Node.js. Cela permet aux assistants IA agentiques (tels que Claude ou Gemini) d'inspecter les statuts des certificats, de déclencher des renouvellements, de demander des diagnostics et d'interagir directement avec l'API CertMate.
 
@@ -154,8 +154,8 @@ seulement s'il doit exécuter des deploy hooks, lister les comptes DNS, supprime
 ## Attribution d'audit
 
 Pour que la piste d'audit puisse distinguer les actions d'un agent de celles d'un opérateur humain,
-donnez au serveur MCP une **clé API dédiée, marquée comme agent**, plutôt que le token Bearer
-global legacy :
+donnez au serveur MCP une **clé API dédiée, marquée comme agent**, plutôt que
+l'API Bearer Token :
 
 1. Dans CertMate, allez dans **Paramètres → Clés API**, créez une clé et cochez **Clé d'agent
    IA** (ou envoyez `"is_agent": true` à `POST /api/keys`). Donnez-lui le rôle le plus bas dont elle a besoin,
@@ -167,7 +167,7 @@ Chaque action sur un certificat que l'agent effectue ensuite est enregistrée av
 `actor.kind="agent"`, l'ID stable de la clé, et le `X-CertMate-Agent-Session`
 par processus que le serveur envoie — vous pouvez ainsi montrer plus tard exactement quelles
 modifications de certificat un agent IA a effectuées, sous quelle identité, et groupées par exécution.
-Le token Bearer global legacy réduit chaque appelant à `api_user` sans ID de
+L'API Bearer Token réduit chaque appelant à `api_user` sans ID de
 clé et est enregistré comme `api_token`, pas `agent`. L'en-tête de session d'agent est une
 déclaration informative et ne promeut jamais, à lui seul, un appelant au rang d'`agent`.
 
