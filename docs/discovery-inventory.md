@@ -660,12 +660,14 @@ subject/SAN falls within their `allowed_domains`.
 observed for it. The certificate itself is not touched — CertMate only forgets
 that it saw it — so this is how you clean up after a mistaken scan, a
 decommissioned host, or a name that was never yours. The **Forget** button on
-each inventory row does the same thing.
+each discovered row does the same thing. A managed row has no Forget button:
+the certificates CertMate holds are recorded at startup and on each issuance or
+renewal, and by a scan only where discovery finds one served, so a forgotten one
+could leave the Managed count short until then.
 
-It forgets an observation; it is not a blocklist. If the domain is still in the
-discovery configuration the certificate will be recorded again on the next
-sweep, so remove it from **Discovery configuration** first when the intent is
-"stop looking at this".
+It forgets an observation; it is not a blocklist. A later discovery sweep or
+CT-log poll that finds the certificate again records it again, so change
+**Discovery configuration** first when the intent is "stop looking at this".
 
 ---
 

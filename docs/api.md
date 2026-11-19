@@ -2487,8 +2487,12 @@ status means and how the answer is verified:
 
 **Endpoint**: `DELETE /api/inventory/<fingerprint>` — operator
 
-Removes a discovered record. Managed certificates are not deleted this way;
-this only forgets something discovery found.
+Removes an inventory record and the endpoints observed for it. The certificate
+itself is not touched. A discovery sweep or CT-log poll that finds it again
+records it again. The UI offers this for discovered records only: the
+certificates CertMate holds are recorded at startup and on each issuance or
+renewal, and by a scan only where discovery finds one served, so a managed
+record removed here could leave the Managed count short until then.
 
 #### Adoption plan
 

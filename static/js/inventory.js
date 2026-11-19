@@ -190,9 +190,12 @@
                 + 'title="Take over issuance/renewal of this certificate">'
                 + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
         }
-        // Forget removes the inventory row (#634). Offered for managed records
-        // too: the certificate itself is untouched, so the only consequence is
-        // that CertMate stops listing this observation.
+        // Forget removes the inventory row (#634), and only a discovered one.
+        // A managed record is a certificate CertMate holds (#1505): recorded at
+        // startup and on each issuance or renewal, and by a scan only where
+        // discovery finds it served, so a forgotten one left Managed one short
+        // of the certificates until the next restart (P48).
+        if (r.managed) { return html; }
         html += '<button type="button" data-fp="' + fp + '" '
             + 'data-click="InventoryPage.forgetFromEl" data-pass="el" '
             + 'class="ml-1 px-2 py-1 text-xs bg-surface-2 text-muted rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
@@ -389,23 +392,29 @@
         // Removing an inventory row is not the same as stopping discovery, and
         // the difference is the whole of #634: say it in the confirmation so an
         // operator does not delete the same row after every scan.
+        //
+        // Asked in the page's own dialog, not window.confirm (P48). Only a
+        // discovered row has Forget, and what brings one back is a sweep or a
+        // CT-log poll that finds it again, whatever made it look there: an
+        // endpoint, a watched domain, or the managed names it includes.
         var name = label || fingerprint;
-        if (!window.confirm(
-            'Remove "' + name + '" from the inventory?\n\n'
-            + 'The certificate itself is not touched — CertMate only forgets '
-            + 'that it observed it.\n\n'
-            + 'If this domain is still in the discovery configuration it will '
-            + 'be recorded again on the next scan. Remove it there first to '
-            + 'stop looking at it.')) { return; }
-
-        fetch('/api/inventory/' + encodeURIComponent(fingerprint),
-            { method: 'DELETE', headers: API_HEADERS, credentials: 'same-origin' })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-            .then(function (res) {
-                if (res.ok) { load(); }
-                else { window.alert('Could not remove it: ' + (res.j.error || 'unknown error')); }
-            })
-            .catch(function (err) { window.alert('Could not remove it (' + err + ').'); });
+        CertMate.confirm(
+            'Remove "' + name + '" from the inventory? The certificate itself is not touched: '
+            + 'CertMate only forgets that it saw it. A later discovery sweep or CT-log poll that '
+            + 'finds it again records it again; to stop that, first change the Discovery '
+            + 'configuration so it no longer looks there.',
+            'Forget certificate', { confirmText: 'Forget' }
+        ).then(function (confirmed) {
+            if (!confirmed) { return; }
+            fetch('/api/inventory/' + encodeURIComponent(fingerprint),
+                { method: 'DELETE', headers: API_HEADERS, credentials: 'same-origin' })
+                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (res) {
+                    if (res.ok) { load(); }
+                    else { CertMate.toast('Could not remove it: ' + (res.j.error || 'unknown error'), 'error'); }
+                })
+                .catch(function (err) { CertMate.toast('Could not remove it (' + err + ').', 'error'); });
+        });
     }
 
     // A card's filter: its group and expiry, nothing else.

@@ -204,6 +204,15 @@
                 '<i class="fas fa-times" aria-hidden="true"></i></button>' +
             '</div>';
 
+        // A link the message points to (options.link = {href, text}), e.g.
+        // the CRL after a revoke (P45). Same-origin paths only.
+        var link = opts.link && typeof opts.link.href === 'string' && opts.link.href.charAt(0) === '/'
+            && opts.link.href.charAt(1) !== '/' ? opts.link : null;
+        var linkRowHtml = link
+            ? '<div class="pl-7 text-xs"><a class="font-medium underline" href="' + CM.escapeHtml(link.href) + '">'
+                + CM.escapeHtml(link.text || link.href) + '</a></div>'
+            : '';
+
         var reportRowHtml = canReport
             ? '<div class="pl-7 flex justify-start">' +
                   '<button data-action="report" class="text-xs font-medium underline opacity-80 hover:opacity-100 disabled:opacity-40 disabled:no-underline disabled:cursor-wait">' +
@@ -216,7 +225,7 @@
             ? '<div class="toast-progress" style="--toast-duration:' + duration + 'ms"></div>'
             : '';
 
-        toast.innerHTML = headerHtml + reportRowHtml + progressHtml;
+        toast.innerHTML = headerHtml + linkRowHtml + reportRowHtml + progressHtml;
 
         container.appendChild(toast);
 

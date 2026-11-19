@@ -14,6 +14,14 @@
 {% block content %}
 <div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="reportRoot">
 
+    <!-- The way back to Inventory, which opens this page in a tab of its own.
+         Not printed: `nav` is in the print rule above. -->
+    <nav class="flex items-center text-sm mb-3" aria-label="Breadcrumb">
+        <a href="/inventory" class="text-muted hover:text-foreground transition-colors">Inventory</a>
+        <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2" aria-hidden="true"></i>
+        <span class="text-foreground font-medium">Crypto readiness report</span>
+    </nav>
+
     <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
         <div>
             <h1 class="text-xl font-semibold text-foreground">Cryptographic Readiness Report</h1>
@@ -26,10 +34,15 @@
         </div>
     </div>
 
+    <!-- Server certificates only: the inventory holds what CertMate manages,
+         what discovery probed on TLS endpoints and what the CT log showed.
+         Client certificates are kept apart and were never counted here, while
+         this sentence said "every certificate" (P44). -->
     <p class="text-xs text-muted mb-4">
-        Inventory of every managed and discovered certificate by public-key and
-        signature algorithm, classified for crypto-agility planning. Informational
-        only — this does not change certificate issuance.
+        Inventory of every managed and discovered server certificate by public-key
+        and signature algorithm, classified for crypto-agility planning. Client
+        certificates are not in this report. Informational only: this does not
+        change certificate issuance.
     </p>
 
     <!-- The report body is drawn in one go from one response, and stays
@@ -38,7 +51,12 @@
          and the breakdowns filled in. -->
     <div id="reportBody" class="invisible">
     <!-- Summary -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" id="reportSummary"></div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="reportSummary"></div>
+
+    <!-- What each class present means: the API's note for it (NIST IR 8547
+         dates for RSA, ECDSA and EdDSA). The API sent it with every asset and
+         the page showed none of it, so "acceptable" had no meaning (P44). -->
+    <dl class="text-xs mb-6 space-y-1" id="reportClasses"></dl>
 
     <!-- Breakdown tables -->
     <div class="grid md:grid-cols-2 gap-6 mb-6">
@@ -81,17 +99,42 @@
         });
     };
     function el(id) { return document.getElementById(id); }
+    // The colours Inventory gives the same numbers (inventory.html,
+    // data-nonzero; #939). Acceptable is the normal state of an RSA or ECDSA
+    // estate and is not coloured: in amber, 14 ordinary P-256 certificates
+    // read as 14 warnings next to an Inventory that showed them neutral (P44).
     var CLASS_COLOR = {
         weak: 'text-danger-fg',
-        acceptable: 'text-warning-fg',
+        acceptable: 'text-foreground',
         modern: 'text-success-fg',
         pqc: 'text-indigo-600 dark:text-indigo-400',
         unknown: 'text-muted'
     };
-    function card(label, value, cls) {
+    // The order the classes are explained in: worst first.
+    var CLASS_ORDER = ['weak', 'unknown', 'acceptable', 'modern', 'pqc'];
+    // A count earns its colour only when it is not zero: "Weak 0" is not an
+    // alarm and "Modern 0" is not good news.
+    function card(label, value, earned) {
+        var cls = (value && earned) ? earned : 'text-foreground';
         return '<div class="bg-surface border border-border rounded-lg px-4 py-3">'
             + '<div class="text-xs text-muted">' + esc(label) + '</div>'
-            + '<div class="text-2xl font-semibold ' + (cls || 'text-foreground') + '">' + esc(value) + '</div></div>';
+            + '<div class="text-2xl font-semibold ' + cls + '">' + esc(value) + '</div></div>';
+    }
+    // One line per class the report holds, with the note the API gives it.
+    function classNotes(assets, counts) {
+        var notes = {};
+        assets.forEach(function (a) {
+            if (a.classification && a.deprecation && !notes[a.classification]) { notes[a.classification] = a.deprecation; }
+        });
+        return CLASS_ORDER.filter(function (k) { return counts[k] && notes[k]; }).map(function (k) {
+            return '<div class="flex flex-wrap gap-x-2"><dt class="font-medium ' + CLASS_COLOR[k] + '">'
+                + esc(k) + ' (' + esc(counts[k]) + ')</dt><dd class="text-muted">' + esc(notes[k]) + '</dd></div>';
+        }).join('');
+    }
+    function meta(rep) {
+        var when = (window.CertMate && CertMate.formatDateTime) ? CertMate.formatDateTime(rep.generated_at) : '';
+        var count = (rep.total || 0) + ' server certificate' + (rep.total === 1 ? '' : 's');
+        return (when ? 'Generated ' + when + ' · ' : '') + count;
     }
     function kvRows(obj) {
         var keys = Object.keys(obj || {});
@@ -104,12 +147,12 @@
     fetch('/api/inventory/crypto-report', { headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' })
         .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
         .then(function (rep) {
-            el('reportMeta').textContent = 'Generated ' + (rep.generated_at || '') + ' · ' + rep.total + ' certificates';
+            el('reportMeta').textContent = meta(rep);
             var c = rep.by_classification || {};
             el('reportSummary').innerHTML =
                 card('Total', rep.total || 0)
                 + card('Weak', c.weak || 0, CLASS_COLOR.weak)
-                + card('Acceptable', c.acceptable || 0, CLASS_COLOR.acceptable)
+                + card('Acceptable', c.acceptable || 0)
                 + card('Modern', c.modern || 0, CLASS_COLOR.modern)
                 + card('Quantum-vulnerable', rep.quantum_vulnerable || 0, 'text-warning-fg')
                 + (rep.quantum_vulnerability_unknown
@@ -117,6 +160,7 @@
             el('byKey').innerHTML = kvRows(rep.by_key_algorithm);
             el('bySig').innerHTML = kvRows(rep.by_signature_algorithm);
             var assets = rep.assets || [];
+            el('reportClasses').innerHTML = classNotes(assets, c);
             el('reportAssets').innerHTML = assets.length ? assets.map(function (a) {
                 var key = (a.key_algorithm || '?') + (a.key_curve ? ' ' + a.key_curve : (a.key_size ? ' ' + a.key_size : ''));
                 return '<tr class="border-t border-border">'
