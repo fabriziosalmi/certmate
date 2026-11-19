@@ -594,7 +594,8 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             # first-run wizard says so rather than "saved".
             return jsonify({'message': 'Settings updated',
                             'not_in_effect': settings_not_in_effect(
-                                settings_manager, managers.get('dns'), filtered)})
+                                settings_manager, managers.get('dns'), filtered,
+                                ca_manager=managers.get('ca'))})
         except Exception as e:
             logger.error(f"Failed to update settings: {e}")
             return jsonify({'error': 'Failed to update settings'}), 500

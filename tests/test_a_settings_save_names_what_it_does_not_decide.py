@@ -100,3 +100,35 @@ def test_a_plain_save_has_nothing_out_of_effect(tmp_path, monkeypatch):
     """CONTROL: no environment, no configuration file, no reference."""
     manager = _manager(tmp_path, monkeypatch)
     assert _save(manager) == []
+
+
+# --- review round 3 ----------------------------------------------------------
+
+def test_an_email_the_default_ca_account_has_its_own_of_is_named(tmp_path, monkeypatch):
+    """Issuance takes the default CA account's email before the contact email."""
+    manager = _manager(tmp_path, monkeypatch)
+    assert manager.atomic_update({'ca_providers': {'letsencrypt': {'accounts': {'default': {
+        'email': 'ca-account@example.org'}}}}})
+    assert _save(manager, {'email': 'typed@example.org'}) == [
+        {'setting': 'email', 'by': 'ca_providers.letsencrypt.accounts.default.email'}]
+
+
+def test_an_email_for_a_default_ca_that_is_not_configured_is_named(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    assert manager.atomic_update({'default_ca': 'zerossl'})
+    assert _save(manager, {'email': 'typed@example.org'}) == [{'setting': 'email', 'by': 'default_ca'}]
+
+
+def test_a_token_whose_account_reads_an_unreadable_file_names_it_unreadable(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    assert manager.atomic_update({'dns_providers': {'cloudflare': {'accounts': {'default': {
+        'api_token_file': str(tmp_path / 'no-such-token')}}}}})
+    assert _save(manager) == [{'setting': TOKEN_SETTING, 'by': 'api_token_file', 'readable': False}]
+
+
+def test_route53_keys_under_an_iam_role_are_named_by_the_mode(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    assert manager.atomic_update({'dns_providers': {'route53': {'accounts': {'default': {'auth_mode': 'iam_role'}}}}})
+    found = _save(manager, {'dns_providers': {'route53': {'accounts': {'default': {
+        'access_key_id': 'AKIAEXAMPLE', 'secret_access_key': TYPED}}}}})
+    assert {entry['by'] for entry in found} == {'auth_mode'} and len(found) == 2

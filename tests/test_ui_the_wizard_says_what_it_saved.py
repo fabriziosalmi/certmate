@@ -135,8 +135,23 @@ def test_an_email_the_environment_pins_is_the_one_step_three_shows(page):
      'Cloudflare API Token: CLOUDFLARE_TOKEN on this instance replaces what you entered.'),
     ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'api_token_env'},
      'Cloudflare API Token: the account default takes it from api_token_env, not from what you entered.'),
+    ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'api_token_file', 'readable': False},
+     'Cloudflare API Token: not used. The account default reads it from api_token_file, which cannot be read; '
+     'issuance fails until it can.'),
+    ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'CERTMATE_CONFIG_FILE'},
+     'Cloudflare API Token: not saved. The configuration file named by CERTMATE_CONFIG_FILE declares the account '
+     'default, and the account as it declares it is what issuance uses.'),
     ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'another setting'},
-     'Cloudflare API Token: another setting decides the value in use, not what you entered.'),
+     'Cloudflare API Token: what you entered is not the value in use.'),
+    # A value this page does not know claims nothing and shows no raw name.
+    ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'some_future_source'},
+     'Cloudflare API Token: what you entered is not the value in use.'),
+    ({'setting': 'email', 'by': 'ca_providers.letsencrypt.accounts.default.email'},
+     "Email: the Let's Encrypt account default in Settings, CA has an email of its own, and certificates use it, "
+     'not the address you entered.'),
+    ({'setting': 'email', 'by': 'default_ca'},
+     'Email: the default certificate authority is not configured in Settings, CA, so no certificate uses the '
+     'address you entered yet.'),
 ])
 def test_credentials_something_else_decides_are_said_so(page, entry, says):
     _wizard(page, not_in_effect=[entry])
@@ -147,7 +162,21 @@ def test_credentials_something_else_decides_are_said_so(page, entry, says):
     assert 'Settings saved, not all in effect' in page.inner_text('#wizardBody')
     note = page.inner_text('[data-not-in-effect]')
     assert says in note, note
-    assert 'not-a-real-token' not in note
+    assert 'not-a-real-token' not in note and 'some_future_source' not in note
+
+
+def test_keys_an_iam_role_hides_are_not_sent(page):
+    """Typed, then hidden by switching to an IAM role: not saved unused."""
+    stored = _wizard(page)
+    page.click('[data-provider="route53"]')
+    page.fill('#wiz_access_key_id', 'AKIAEXAMPLEKEY')
+    page.fill('#wiz_secret_access_key', 'typed-secret-key')
+    page.select_option('#wiz_auth_mode', 'iam_role')
+    page.click('#wizNext2')
+    page.wait_for_selector('#wizFinish', timeout=10000)
+    account = stored['dns_providers']['route53']['accounts']['default']
+    assert account['auth_mode'] == 'iam_role'
+    assert 'access_key_id' not in account and 'secret_access_key' not in account, account
 
 
 def test_a_refused_save_stays_on_step_two(page):

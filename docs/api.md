@@ -444,11 +444,12 @@ characters kept), shows went wrong. The first that matches, in this order:
 | `ca_failure` | When the error says |
 | --- | --- |
 | `null` | The CA's directory could not be reached (urllib3's own words), or nothing shows the CA answered: a renewal with no certbot lineage, a certificate that already exists, a DNS provider refusing CertMate's credentials. |
-| `rate_limit` | A rate limit: `rateLimited`, "too many certificates", "too many failed authorizations", "too many new orders", and the like. |
+| `rate_limit` | A rate limit: `rateLimited`, Let's Encrypt's "too many certificates", "too many failed authorizations", "too many new orders", "too many new registrations", or its rate-limits page. |
+| `other` | The CA's own fault, not a refusal, checked next: `serverInternal`, `badNonce`, "service is down for maintenance", "had an internal error", also inside "Error creating new order :: ...". |
 | `account` | The account or its registration was refused: "unable to register an account", `invalidContact`, `unsupportedContact`, `invalidEmail`, "invalid email address", `accountDoesNotExist`, `externalAccountRequired`. |
 | `order` | The order was refused at new-order or at finalize: "Error creating new order", "Error finalizing order", "forbidden by policy", `rejectedIdentifier`, `caa` or a CAA record, `badCSR`. |
 | `validation` | A challenge failed at the CA: "Some challenges have failed", "DNS problem", "Invalid response from", the `unauthorized`, `connection`, `dns` and `incorrectResponse` problem types. |
-| `other` | Any other ACME problem document (`urn:ietf:params:acme:error:`), such as `serverInternal`. |
+| `other` | Last: any other ACME problem document (`urn:ietf:params:acme:error:`). |
 
 A record kept before the field is classified from the error it kept. Since
 API contract **2.72**.
@@ -2436,16 +2437,20 @@ Since API contract **2.72** the answer to `POST /api/settings` carries
 `not_in_effect`. For the contact `email` and for every field written into a
 DNS provider's account (in the `accounts` shape or the flat one, and the
 legacy `cloudflare_token`), the save reads the value in effect back the way
-issuance reads it, with references resolved and the environment and the
-configuration file applied, and compares it with the value written. Each that
-differs is an entry `{"setting", "by"}`: `setting` is the dotted path written,
-`by` what decides the value in use. No credential value is returned or logged.
+issuance reads it and compares it with the value written: the email the way
+issuance picks it (the default CA's account email first, then the contact
+email, the environment applied), the DNS fields with references resolved and
+the environment and the configuration file applied. Each that differs is an
+entry `{"setting", "by"}`: `setting` is the dotted path written, `by` what
+decides the value in use. No credential value is returned or logged.
 
 | `by` | What happens to the value written |
 | --- | --- |
 | `LETSENCRYPT_EMAIL`, `CLOUDFLARE_TOKEN` | Kept in the file, and replaced by the environment variable whenever the settings are read. |
-| `CERTMATE_CONFIG_FILE` | Not saved: the configuration file declares that account, and its fields are the ones used. |
-| `<field>_env`, `<field>_file` | Kept, but the account takes the field from that reference, which comes first. |
+| `ca_providers.<ca>.accounts.<id>.email` | Kept, but the default CA's account has an email of its own, which issuance uses. |
+| `default_ca` | Kept, but the default CA is not configured, so issuance refuses until it is. |
+| `CERTMATE_CONFIG_FILE` | Not saved: the configuration file declares that account, and the account as it declares it is what issuance uses. |
+| `<field>_env`, `<field>_file` | Kept, but the account takes the field from that reference, which comes first. With `"readable": false` the reference cannot be read, and issuance with that account fails until it can. |
 | `auth_mode` | A Route 53 account in IAM role mode does not use access keys. |
 | `another setting` | The value in use is another, and what decides it cannot be named. |
 

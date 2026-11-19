@@ -508,10 +508,14 @@
             providerDef.fields.forEach(function(f) {
                 var el = document.getElementById('wiz_' + f.key);
                 var val = el ? el.value.trim() : '';
-                var missing = !val && !f.optional && !(state.provider === 'route53' &&
+                // Hidden by the chosen mode (Route 53 with an IAM role): not
+                // sent, so keys typed before switching are not saved unused.
+                var hidden = state.provider === 'route53' &&
                         (f.key === 'access_key_id' || f.key === 'secret_access_key') &&
-                        document.getElementById('wiz_auth_mode').value === 'iam_role');
+                        document.getElementById('wiz_auth_mode').value === 'iam_role';
+                var missing = !val && !f.optional && !hidden;
                 if (el) markRequired(el, f.label, missing);
+                if (hidden) return;
                 if (missing) {
                     valid = false;
                     firstMissing = firstMissing || el;
@@ -711,28 +715,60 @@
         return found ? found.label : field;
     }
 
+    var CA_LABELS = {
+        letsencrypt: "Let's Encrypt", letsencrypt_staging: "Let's Encrypt (Staging)", zerossl: 'ZeroSSL',
+        google: 'Google Trust Services', actalis: 'Actalis', digicert: 'DigiCert', sectigo: 'Sectigo',
+        sslcom: 'SSL.com', private_ca: 'Private CA'
+    };
+
+    function emailSentence(by) {
+        if (by === 'LETSENCRYPT_EMAIL') {
+            return 'Email: LETSENCRYPT_EMAIL on this instance replaces ' + state.email.trim() + ', the address you entered.';
+        }
+        var account = by.match(/^ca_providers\.([^.]+)\.accounts\.([^.]+)\.email$/);
+        if (account) {
+            return 'Email: the ' + (CA_LABELS[account[1]] || account[1]) + ' account ' + account[2] +
+                ' in Settings, CA has an email of its own, and certificates use it, not the address you entered.';
+        }
+        if (by === 'default_ca') {
+            return 'Email: the default certificate authority is not configured in Settings, CA, so no certificate ' +
+                'uses the address you entered yet.';
+        }
+        return 'Email: the address you entered is not the one in use.';
+    }
+
+    // Every value `by` can take says something true (P19, review): what
+    // decides the value, never a claim that is not known, never a raw name
+    // alone. A value this page does not know says only that what was
+    // entered is not in use.
     function notInEffectSentence(entry) {
         var setting = String(entry.setting || '');
         var by = String(entry.by || '');
-        if (setting === 'email') {
-            return by === 'LETSENCRYPT_EMAIL'
-                ? 'Email: LETSENCRYPT_EMAIL on this instance replaces ' + state.email.trim() + ', the address you entered.'
-                : 'Email: another setting decides the address in use, not the one you entered.';
-        }
-        var dns = setting.match(/^dns_providers\.([^.]+)\.accounts\.([^.]+)\.([^.]+)$/);
-        if (!dns) return setting + ': ' + by + ' decides the value in use, not the one you entered.';
-        var what = providerLabel(dns[1]) + ' ' + fieldLabel(dns[1], dns[3]);
+        if (setting === 'email') return emailSentence(by);
+        var dns = setting.match(/^dns_providers\.([^.]+)\.accounts\.([^.]+)\.([^.]+)$/) ||
+            setting.match(/^dns_providers\.([^.]+)()\.([^.]+)$/);
+        var provider = dns ? dns[1] : (setting === 'cloudflare_token' ? 'cloudflare' : '');
+        var field = dns ? dns[3] : (setting === 'cloudflare_token' ? 'api_token' : '');
+        var what = provider ? providerLabel(provider) + ' ' + fieldLabel(provider, field) : 'A value you entered';
+        var account = dns && dns[2] ? 'the account ' + dns[2] : 'its account';
         if (by === 'CERTMATE_CONFIG_FILE') {
-            return what + ': not saved. The configuration file named by CERTMATE_CONFIG_FILE declares the account ' +
-                dns[2] + ', and its value is the one used.';
+            return what + ': not saved. The configuration file named by CERTMATE_CONFIG_FILE declares ' + account +
+                ', and the account as it declares it is what issuance uses.';
         }
         if (/_(env|file)$/.test(by)) {
-            return what + ': the account ' + dns[2] + ' takes it from ' + by + ', not from what you entered.';
+            if (entry.readable === false) {
+                return what + ': not used. ' + account.charAt(0).toUpperCase() + account.slice(1) + ' reads it from ' +
+                    by + ', which cannot be read; issuance fails until it can.';
+            }
+            return what + ': ' + account + ' takes it from ' + by + ', not from what you entered.';
         }
-        if (by === 'another setting') {
-            return what + ': another setting decides the value in use, not what you entered.';
+        if (by === 'CLOUDFLARE_TOKEN') {
+            return what + ': CLOUDFLARE_TOKEN on this instance replaces what you entered.';
         }
-        return what + ': ' + by + ' on this instance replaces what you entered.';
+        if (by === 'auth_mode') {
+            return what + ': not used, since ' + account + ' authenticates with an IAM role.';
+        }
+        return what + ': what you entered is not the value in use.';
     }
 
     function notInEffectHtml() {

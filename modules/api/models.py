@@ -297,7 +297,8 @@ def create_api_models(api):
             description=(
                 "What the CA's answer, in the whole error, shows went wrong: validation (a challenge "
                 'failed), rate_limit, account (registration or account refused), order (new-order or '
-                'finalize refused: policy, CAA, identifier, CSR), other (any other ACME problem), or null '
+                'finalize refused: policy, CAA, identifier, CSR), other (the CA\'s own fault, such as '
+                'serverInternal, or any other ACME problem), or null '
                 'when the CA was not reached or it cannot be told. Since API contract 2.72.')),
     })
 

@@ -16,8 +16,10 @@ answers did not carry:
 * what the CA's answer says went wrong (`ca_failure`), on a failed job and on
   a certificate's last failed renewal, read from the whole error: validation,
   rate_limit, account, order, other, or null when the CA was not reached or
-  it cannot be told. The texts below are certbot's and Let's Encrypt's
-  wording for each case;
+  it cannot be told. Four failures are CAPTURED from real certbot 5.8.0 runs
+  against Let's Encrypt staging (HTTP-01 and DNS-01 validation, a policy
+  refusal, a refused email); the other texts are WRITTEN OUT from certbot's
+  and Let's Encrypt's wording, and say so;
 * `staging` on a certificate: before 2.12.0 Let's Encrypt staging was
   recorded as `ca_provider` "letsencrypt" with a staging flag, and such a
   lineage still renews from staging.
@@ -224,25 +226,85 @@ def test_a_keyless_reissue_job_names_the_ca_its_reissue_goes_to():
 
 # --- what the CA's answer says went wrong -----------------------------------
 
-CLASSIFIED = [
-    ('Certificate creation failed: Some challenges have failed.\nDetail: DNS problem: NXDOMAIN looking up TXT '
-     'for _acme-challenge.x.example.com - check that a DNS record exists for this domain', 'validation'),
+# CAPTURED: certbot 5.8.0's own stdout and stderr, from real runs against Let's
+# Encrypt staging in review (2026-11-19), with the local log path replaced. The
+# message is built from them by CertificateManager._certbot_failure, as
+# issuance builds it.
+_LOG = '/var/lib/certmate/logs/letsencrypt.log'
+_TAIL = (f'Ask for help or search for solutions at https://community.letsencrypt.org. See the logfile {_LOG} '
+         'or re-run Certbot with -v for more details.\n')
+CAPTURED = {
+    'http01': ('Requesting a certificate for certmate-review-898eafda09.com\n\n'
+               'Certbot failed to authenticate some domains (authenticator: webroot). The Certificate Authority '
+               'reported these problems:\n  Identifier: certmate-review-898eafda09.com\n  Type:   dns\n'
+               '  Detail: DNS problem: NXDOMAIN looking up A for certmate-review-898eafda09.com - check that a DNS '
+               'record exists for this domain; DNS problem: NXDOMAIN looking up AAAA for '
+               'certmate-review-898eafda09.com - check that a DNS record exists for this domain\n\n'
+               'Hint: The Certificate Authority failed to download the temporary challenge files created by '
+               'Certbot. Ensure that the listed identifiers serve their content from the provided '
+               '--webroot-path/-w and that files created there can be downloaded from the internet.\n\n',
+               f'Saving debug log to {_LOG}\nSome challenges have failed.\n' + _TAIL, 'validation'),
+    'dns01': ('Requesting a certificate for certmate-review-898eafda09.com\n\n'
+              'Certbot failed to authenticate some domains (authenticator: manual). The Certificate Authority '
+              'reported these problems:\n  Identifier: certmate-review-898eafda09.com\n  Type:   dns\n'
+              '  Detail: DNS problem: NXDOMAIN looking up TXT for _acme-challenge.certmate-review-898eafda09.com '
+              '- check that a DNS record exists for this domain\n\n'
+              'Hint: The Certificate Authority failed to verify the DNS TXT records created by the '
+              '--manual-auth-hook. Ensure that this hook is functioning correctly and that it waits a sufficient '
+              'duration of time for DNS propagation. Refer to "certbot --help manual" and the Certbot User '
+              'Guide.\n\n',
+              f'Saving debug log to {_LOG}\nSome challenges have failed.\n' + _TAIL, 'validation'),
+    'policy': ('Requesting a certificate for x.example.com\n',
+               f'Saving debug log to {_LOG}\nAn unexpected error occurred:\nError creating new order :: Cannot '
+               'issue for "x.example.com": The ACME server refuses to issue a certificate for this domain name, '
+               'because it is forbidden by policy\n' + _TAIL, 'order'),
+    # Staging refuses the same address: not a case for staging.
+    'email': ('',
+              f'Saving debug log to {_LOG}\nUnable to register an account with ACME server. The ACME server '
+              'believes ops@example.org is an invalid email address. Please ensure it is a valid email and '
+              'attempt registration again.\n' + _TAIL, 'account'),
+}
+
+
+def _as_issuance_says(name, prefix='Certificate creation failed'):
+    from types import SimpleNamespace
+
+    from modules.core.certificates import CertificateManager
+    stdout, stderr, _ = CAPTURED[name]
+    manager = CertificateManager.__new__(CertificateManager)
+    return manager._certbot_failure(prefix, 'x.example.com',
+                                    SimpleNamespace(stdout=stdout, stderr=stderr, returncode=1))
+
+
+@pytest.mark.parametrize('name', sorted(CAPTURED))
+@pytest.mark.parametrize('prefix', ['Certificate creation failed', 'Renewal failed'])
+def test_a_captured_certbot_failure_is_classified_by_what_the_ca_answered(name, prefix):
+    from modules.core.failure_hints import ca_failure
+    assert ca_failure(_as_issuance_says(name, prefix)) == CAPTURED[name][2]
+
+
+# WRITTEN OUT: Let's Encrypt's and certbot's wording for cases not captured.
+WRITTEN = [
     ('Invalid response from http://x.example.com/.well-known/acme-challenge/abc: 404', 'validation'),
     ('Error creating new order :: too many failed authorizations (5) for "x.example.com" in the last 1h0m0s, '
      'retry after 2026-11-19 10:00:00 UTC', 'rate_limit'),
     ('urn:ietf:params:acme:error:rateLimited :: too many certificates (5) already issued for this exact set '
      'of identifiers in the last 168h0m0s', 'rate_limit'),
-    # Staging refuses the same address: not a case for staging.
+    ('An unexpected error occurred:\nError creating new account :: too many new registrations (10) from this '
+     'IP address in the last 3h0m0s, retry after 2026-11-19 12:00:00 UTC: see '
+     'https://letsencrypt.org/docs/rate-limits/#new-registrations-per-ip-address', 'rate_limit'),
     ('Unable to register an account with ACME server. Error returned by the ACME server: '
      'urn:ietf:params:acme:error:invalidContact :: Error validating contact(s) :: contact email has '
      'forbidden domain "example.com"', 'account'),
-    # Refusals of the order itself, at new-order and at finalize, with no URN in the text.
-    ('An unexpected error occurred:\nError creating new order :: Cannot issue for "x.example.com": The ACME '
-     'server refuses to issue a certificate for this domain name, because it is forbidden by policy', 'order'),
     ('An unexpected error occurred:\nError finalizing order :: Rechecking CAA for "x.example.com" and 1 more '
      'identifiers failed. Refer to sub-problems for more information', 'order'),
+    # The CA's own fault, not a refusal, even at new-order.
     ('An unexpected error occurred:\nurn:ietf:params:acme:error:serverInternal :: The server experienced an '
      'internal error :: Error retrieving account', 'other'),
+    ('An unexpected error occurred:\nError creating new order :: urn:ietf:params:acme:error:serverInternal :: '
+     'The server experienced an internal error', 'other'),
+    ('An unexpected error occurred:\nThe service is down for maintenance or had an internal error. Check '
+     'https://letsencrypt.status.io/ for more details.', 'other'),
     # Never reached the CA.
     ('Renewal failed: No certificate found with name x.example.com (expected '
      '/etc/letsencrypt/renewal/x.example.com.conf).', None),
@@ -255,15 +317,15 @@ CLASSIFIED = [
 ]
 
 
-@pytest.mark.parametrize('error, kind', CLASSIFIED)
+@pytest.mark.parametrize('error, kind', WRITTEN)
 def test_a_failure_is_classified_by_what_the_ca_answered(error, kind):
     from modules.core.failure_hints import ca_failure
     assert ca_failure(error) == kind
 
 
-VALIDATION = CLASSIFIED[0][0]
-NO_LINEAGE = CLASSIFIED[8][0]
-ACCOUNT = CLASSIFIED[4][0]
+VALIDATION = 'Certificate creation failed: ' + CAPTURED['dns01'][0]
+NO_LINEAGE = WRITTEN[9][0]
+ACCOUNT = 'Certificate creation failed: ' + CAPTURED['email'][1]
 
 
 @pytest.mark.parametrize('error, kind', [(VALIDATION, 'validation'), (ACCOUNT, 'account'), (NO_LINEAGE, None)])

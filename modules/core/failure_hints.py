@@ -109,6 +109,16 @@ _ORDER_REFUSED_MARKERS = (
 _ACCOUNT_MARKERS = (*_ACCOUNT_REFUSED_MARKERS, 'acme:error:accountdoesnotexist',
                     'acme:error:externalaccountrequired')
 
+# The CA answered with a fault of its own, not a refusal: a server error, a
+# nonce to retry with, maintenance. Checked before the order markers, because
+# certbot prefixes a server error at new-order with "Error creating new order".
+_CA_SERVER_MARKERS = (
+    'acme:error:serverinternal',
+    'acme:error:badnonce',
+    'service is down for maintenance',
+    'had an internal error',
+)
+
 CA_FAILURE_VALIDATION = 'validation'
 CA_FAILURE_RATE_LIMIT = 'rate_limit'
 CA_FAILURE_ACCOUNT = 'account'
@@ -125,7 +135,13 @@ def ca_failure(error_msg: str | None) -> str | None:
       nothing in the error shows the CA answered (no certbot lineage to renew,
       a certificate that already exists, a DNS provider refusing CertMate's
       credentials before any challenge).
-    * "rate_limit": `is_acme_rate_limit` (rateLimited, "too many ...").
+    * "rate_limit": `is_acme_rate_limit` (the rateLimited problem type, Let's
+      Encrypt's "too many certificates", "too many failed authorizations",
+      "too many new orders", "too many new registrations", its rate-limits
+      page).
+    * "other", first: the CA's own fault, not a refusal (serverInternal,
+      badNonce, "service is down for maintenance", "had an internal error"),
+      even inside "Error creating new order :: ...".
     * "account": the account registration or the account was refused
       (unable to register an account, invalidContact, unsupportedContact,
       invalidEmail, "invalid email address", accountDoesNotExist,
@@ -149,6 +165,8 @@ def ca_failure(error_msg: str | None) -> str | None:
         return None
     if is_acme_rate_limit(error_msg):
         return CA_FAILURE_RATE_LIMIT
+    if any(marker in lowered for marker in _CA_SERVER_MARKERS):
+        return CA_FAILURE_OTHER
     if any(marker in lowered for marker in _ACCOUNT_MARKERS):
         return CA_FAILURE_ACCOUNT
     if any(marker in lowered for marker in _ORDER_REFUSED_MARKERS):

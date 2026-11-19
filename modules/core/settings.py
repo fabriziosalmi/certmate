@@ -2466,21 +2466,56 @@ def _digest(value) -> bytes:
 _IAM_UNUSED_KEYS = frozenset({'access_key_id', 'secret_access_key'})
 
 
+def _unreadable_reference(raw_account, field):
+    """The reference of *raw_account* that cannot be read, preferring *field*'s, or None.
+
+    `resolve_field` reads ``<field>_file`` first, then ``<field>_env``; one
+    that cannot be read makes the whole account unusable for issuance.
+    """
+    from .secret_refs import SecretReferenceError, resolve_field
+    bases = [field, *sorted({key[:-len(suffix)] for key in raw_account
+                             for suffix in ('_file', '_env') if key.endswith(suffix)} - {field})]
+    for base in bases:
+        try:
+            resolve_field(raw_account, base)
+        except SecretReferenceError:
+            return next(base + suffix for suffix in ('_file', '_env')
+                        if isinstance(raw_account.get(base + suffix), str) and raw_account[base + suffix].strip())
+    return None
+
+
 def _what_decides(settings_manager, raw_account, provider, used, field, effective):
-    """By what, by name, a DNS account field is not the value written."""
+    """By what, by name, a DNS account field is not the value written: ``{'by'[, 'readable']}``."""
     if ('dns_providers', provider, 'accounts', used) in settings_manager.managed_account_paths:
-        return managed_configuration.CONFIG_FILE_ENV
+        return {'by': managed_configuration.CONFIG_FILE_ENV}
+    if effective is None:
+        broken = _unreadable_reference(raw_account, field)
+        if broken:
+            return {'by': broken, 'readable': False}
     for variable, path, normalised in _ENV_OVERLAYS:
         wanted = os.getenv(variable)
         if (wanted and path == ('dns_providers', provider, 'accounts', used, field)
                 and effective is not None and _digest(normalised(wanted)) == _digest(effective)):
-            return variable
-    for suffix in ('_env', '_file'):
-        if (raw_account or {}).get(field + suffix):
-            return field + suffix
-    if provider == 'route53' and field in _IAM_UNUSED_KEYS and (raw_account or {}).get('auth_mode') == 'iam_role':
-        return 'auth_mode'
-    return 'another setting'
+            return {'by': variable}
+    for suffix in ('_file', '_env'):
+        if raw_account.get(field + suffix):
+            return {'by': field + suffix}
+    if provider == 'route53' and field in _IAM_UNUSED_KEYS and raw_account.get('auth_mode') == 'iam_role':
+        return {'by': 'auth_mode'}
+    return {'by': 'another setting'}
+
+
+def _raw_account(loaded, provider, account_id, used):
+    """The account as saved (references unresolved): the one used, else the one written to."""
+    provider_config = (loaded.get('dns_providers') or {}).get(provider) or {}
+    if not isinstance(provider_config, dict):
+        return {}
+    accounts = provider_config.get('accounts')
+    if not isinstance(accounts, dict):
+        return provider_config
+    wanted = used or account_id or (loaded.get('default_accounts') or {}).get(provider) or 'default'
+    account = accounts.get(wanted)
+    return account if isinstance(account, dict) else {}
 
 
 def _dns_fields_not_in_effect(settings_manager, dns_manager, loaded, provider, account_id, prefix, fields):
@@ -2491,9 +2526,7 @@ def _dns_fields_not_in_effect(settings_manager, dns_manager, loaded, provider, a
     applied. Compared by digest; no value is returned or logged.
     """
     config, used = dns_manager.get_dns_provider_account_config(provider, account_id=account_id)
-    provider_config = (loaded.get('dns_providers') or {}).get(provider) or {}
-    accounts = provider_config.get('accounts') if isinstance(provider_config, dict) else None
-    raw_account = (accounts or {}).get(used) if isinstance(accounts, dict) else provider_config
+    raw_account = _raw_account(loaded, provider, account_id, used)
     found = []
     for field, value in fields.items():
         if not isinstance(value, str) or not value.strip() or field.endswith(('_env', '_file')):
@@ -2503,35 +2536,62 @@ def _dns_fields_not_in_effect(settings_manager, dns_manager, loaded, provider, a
             continue
         setting = prefix if prefix == 'cloudflare_token' else f'{prefix}.{field}'
         found.append({'setting': setting,
-                      'by': _what_decides(settings_manager, raw_account if isinstance(raw_account, dict) else {},
-                                          provider, used, field, effective)})
+                      **_what_decides(settings_manager, raw_account, provider, used, field, effective)})
     return found
 
 
-def settings_not_in_effect(settings_manager, dns_manager, written: dict) -> list:
+def _email_not_in_effect(settings_manager, ca_manager, loaded, email):
+    """The contact email, read back the way issuance picks it, or None when it is in effect.
+
+    Issuance (`CertificateService.resolve_ca_email`) takes the email of the
+    default CA's account when it has one, the contact email otherwise.
+    """
+    from .ca_manager import CAManager, resolve_ca_account
+    default_ca = loaded.get('default_ca') or 'letsencrypt'
+    try:
+        account, used = resolve_ca_account(ca_manager or CAManager(settings_manager), default_ca,
+                                           settings=loaded)
+    except ValueError:
+        # Issuance refuses a default CA that is not configured.
+        return {'setting': 'email', 'by': 'default_ca'}
+    own = str((account or {}).get('email') or '').strip().lower()
+    effective = own or str(loaded.get('email') or '').strip().lower()
+    if _digest(email.strip().lower()) == _digest(effective):
+        return None
+    if own:
+        return {'setting': 'email', 'by': f'ca_providers.{default_ca}.accounts.{used or "default"}.email'}
+    pinned = os.getenv('LETSENCRYPT_EMAIL')
+    if pinned and _digest(pinned.strip().lower()) == _digest(effective):
+        return {'setting': 'email', 'by': 'LETSENCRYPT_EMAIL'}
+    return {'setting': 'email', 'by': 'another setting'}
+
+
+def settings_not_in_effect(settings_manager, dns_manager, written: dict, ca_manager=None) -> list:
     """What a settings write set that CertMate does not use, after the write.
 
     For the contact email and for every field written into a DNS provider's
     account (and the legacy `cloudflare_token`), the value in effect is
-    read back the way issuance reads it and compared with the value written.
-    Each that differs is ``{'setting': <dotted path>, 'by': <what decides>}``:
-    LETSENCRYPT_EMAIL, CLOUDFLARE_TOKEN, CERTMATE_CONFIG_FILE, the reference
-    field (``api_token_env``, ``api_token_file``), ``auth_mode``, or "another
-    setting" when it cannot be named. Names only: no value is returned or
-    logged. Empty when every such value written is the one in effect (UX
-    perception audit, 2026-11-18, P19: the wizard said "saved" over them).
-    Other settings are not checked.
+    read back the way issuance reads it and compared with the value written:
+    the email through the default CA's account (`resolve_ca_account`, as
+    `CertificateService.resolve_ca_email` does), the DNS fields through
+    `DNSManager.get_dns_provider_account_config`. Each that differs is
+    ``{'setting': <dotted path>, 'by': <what decides>}``, with
+    ``'readable': False`` when ``by`` is a reference that cannot be read.
+    ``by`` is LETSENCRYPT_EMAIL, CLOUDFLARE_TOKEN, CERTMATE_CONFIG_FILE, the
+    default CA account's email path, ``default_ca`` (not configured), a
+    reference field (``api_token_file``, ``api_token_env``), ``auth_mode``, or
+    "another setting" when it cannot be named. No credential value is
+    returned or logged. Empty when every such value written is the one in
+    effect (UX perception audit, 2026-11-18, P19). Other settings are not
+    checked.
     """
     loaded = settings_manager.load_settings() or {}
     found = []
     email = written.get('email')
     if isinstance(email, str) and email.strip():
-        effective = str(loaded.get('email') or '').strip().lower()
-        if _digest(email.strip().lower()) != _digest(effective):
-            pinned = os.getenv('LETSENCRYPT_EMAIL')
-            by = ('LETSENCRYPT_EMAIL' if pinned and _digest(pinned.strip().lower()) == _digest(effective)
-                  else 'another setting')
-            found.append({'setting': 'email', 'by': by})
+        entry = _email_not_in_effect(settings_manager, ca_manager, loaded, email)
+        if entry:
+            found.append(entry)
     if dns_manager is None:
         return found
     for provider, entry in (written.get('dns_providers') or {}).items():
