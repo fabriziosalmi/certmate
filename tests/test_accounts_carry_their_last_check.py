@@ -178,7 +178,8 @@ def test_a_token_given_by_reference_is_read_as_issuance_reads_it(instance, tmp_p
         check = client.post('/api/dns/cloudflare/accounts/prod/check').get_json()['last_check']
     get.assert_not_called()
     assert check['outcome'] == 'failed'
-    assert check['reason'].startswith(f'api_token names {secret}, which could not be read'), check
+    # The cause first, then the path: the 200-character bound cuts the path (review R2).
+    assert check['reason'] == f'api_token could not be read (No such file or directory): {secret}', check
 
 
 def test_the_reason_is_one_bounded_line_without_the_credential(instance):

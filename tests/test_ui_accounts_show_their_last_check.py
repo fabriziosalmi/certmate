@@ -153,9 +153,23 @@ def _fill_cloudflare_modal(page):
     page.fill('#modal-api_token', TOKEN)
 
 
-def _dialog(page):
+def _dialog(page, sent=None):
+    """The page's own confirm dialog. When it does not come, say what the
+    page did instead, so a failure names its cause rather than a timeout."""
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
     dialog = page.get_by_role('alertdialog')
-    dialog.wait_for(state='visible', timeout=10000)
+    try:
+        dialog.wait_for(state='visible', timeout=10000)
+    except PlaywrightTimeout as exc:
+        state = page.evaluate("""() => ({
+            url: location.href,
+            addModalOpen: !document.getElementById('addAccountModal').classList.contains('hidden'),
+            fields: Array.from(document.querySelectorAll('#addAccountModal input'))
+                .map(i => i.id + '=' + (i.value ? 'set' : 'empty')),
+            toasts: (document.getElementById('cm-toasts') || {innerText: ''}).innerText,
+            overlays: document.querySelectorAll('[role=alertdialog], [role=dialog]').length,
+        })""")
+        raise AssertionError(f'no confirm dialog within 10 s; requests answered by the test: {sent}; page: {state}') from exc
     return dialog
 
 
@@ -177,7 +191,7 @@ def test_a_dns_save_whose_check_fails_asks_and_cancel_saves_nothing(page):
     _fill_cloudflare_modal(page)
 
     page.click('#addAccountModal [data-click="saveAccount"]')
-    dialog = _dialog(page)
+    dialog = _dialog(page, sent)
     assert dialog.inner_text().count('The check failed: ' + REFUSED + '. Save anyway?') == 1, dialog.inner_text()
     dialog.get_by_role('button', name='Cancel').click()
     dialog.wait_for(state='detached', timeout=5000)
@@ -186,7 +200,7 @@ def test_a_dns_save_whose_check_fails_asks_and_cancel_saves_nothing(page):
     assert _stored(page, 'cloudflare', CF) == []
 
     page.click('#addAccountModal [data-click="saveAccount"]')
-    _dialog(page).get_by_role('button', name='Save anyway').click()
+    _dialog(page, sent).get_by_role('button', name='Save anyway').click()
     page.wait_for_selector('#addAccountModal', state='hidden', timeout=5000)
     assert sent[-1].endswith('check=1&save_anyway=1'), sent
     assert 'saved; its check failed: ' + REFUSED in page.locator('#cm-toasts').inner_text()

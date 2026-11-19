@@ -243,17 +243,34 @@ def _resolved(managers, kind, provider, config) -> dict:
 _UNREADABLE = (SecretReferenceError, ValueError, OSError)
 
 
+def _reference_error(exc):
+    """The SecretReferenceError behind *exc*, or None. get_eab_credentials
+    raises a ValueError from it, so a CA's missing, empty and unset EAB
+    references would otherwise all look alike."""
+    seen = 0
+    while exc is not None and seen < 5:
+        if isinstance(exc, SecretReferenceError):
+            return exc
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+    return None
+
+
 def _unreadable_marker(exc) -> str:
     """What failed, so a result kept for a broken reference reads back while it
     is broken the same way, and no longer once it resolves or breaks otherwise."""
-    if isinstance(exc, SecretReferenceError):
-        return f'{exc.field}|{exc.reference}|{exc.reason}'
+    reference = _reference_error(exc)
+    if reference is not None:
+        return f'{reference.field}|{reference.reference}|{reference.reason}'
     return type(exc).__name__
 
 
 def unreadable_reason(exc) -> str:
-    if isinstance(exc, SecretReferenceError):
-        return f'{exc.field} names {exc.reference}, which {exc.reason}'
+    """The cause first, then the file or the variable, so the bound on the
+    reason cuts a long path and never the cause."""
+    reference = _reference_error(exc)
+    if reference is not None:
+        return f'{reference.field} {reference.reason}: {reference.reference}'
     return f"The account's credentials could not be read ({type(exc).__name__})"
 
 
@@ -429,10 +446,10 @@ def check_ca_account(ca_manager, provider, config, instance_email='') -> dict:
     try:
         eab = ca_manager.get_eab_credentials(provider, config)
         url = ca_manager.get_acme_server_url(provider, account_config=config)
-    except UnicodeDecodeError as exc:
-        return _result(FAILED, unreadable_reason(exc))
     except (ValueError, OSError) as exc:
-        return _result(FAILED, str(exc) if isinstance(exc, ValueError) else unreadable_reason(exc))
+        unreadable = (isinstance(exc, (UnicodeDecodeError, OSError))
+                      or _reference_error(exc) is not None)
+        return _result(FAILED, unreadable_reason(exc) if unreadable else str(exc))
     secrets_ = [value for value in eab if value]
     bundle = None
     if provider == 'private_ca' and config.get('ca_cert'):

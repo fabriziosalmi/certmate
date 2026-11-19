@@ -349,6 +349,8 @@ def test_a_failed_check_on_an_unset_variable_reads_back_until_it_is_set(instance
 
 
 def test_a_reference_that_breaks_another_way_reads_never(instance, tmp_path):
+    """A control: it passes on the code before round 2 too, where no failed
+    check on a reference was kept at all."""
     client, _ = instance
     secret = tmp_path / 'cf-token'
     _create_cf(client, {'api_token_file': str(secret)})
@@ -398,3 +400,48 @@ def test_an_eab_file_that_is_not_text_is_a_failed_ca_check(instance, tmp_path):
     assert check == {**check, 'outcome': 'failed',
                      'reason': "The account's credentials could not be read (UnicodeDecodeError)"}
     assert _ca_checks(client)[('zerossl', 'zs')] == check
+
+
+# ------------------------------------------------------------- R1, R2 (round 3)
+
+def _zerossl_with_hmac_file(managers, path):
+    def put(settings):
+        settings.setdefault('ca_providers', {})['zerossl'] = {'accounts': {'zs': {
+            'email': 'ops@example.com', 'eab_kid': 'kid-0123456789', 'eab_hmac_file': str(path)}}}
+    assert managers['settings'].update(put, 'test')
+
+
+def test_a_ca_eab_file_that_goes_from_missing_to_empty_reads_never(instance, tmp_path):
+    """get_eab_credentials wraps the reference error in a ValueError; the key
+    is made from the reference error underneath, so a missing file and an
+    empty one are not the same failure (review R1)."""
+    client, managers = instance
+    hmac_file = tmp_path / 'eab-hmac'
+    _zerossl_with_hmac_file(managers, hmac_file)
+    with mock.patch('requests.get') as get:
+        check = client.post('/api/web/settings/ca-providers/zerossl/accounts/zs/check').get_json()['last_check']
+    get.assert_not_called()
+    assert check['outcome'] == 'failed'
+    assert _ca_checks(client)[('zerossl', 'zs')] == check
+
+    hmac_file.write_text('', encoding='utf-8')
+    assert _ca_checks(client)[('zerossl', 'zs')]['outcome'] == 'never'
+    assert check['reason'] == f'eab_hmac could not be read (No such file or directory): {hmac_file}'
+    with mock.patch('requests.get') as get:
+        again = client.post('/api/web/settings/ca-providers/zerossl/accounts/zs/check').get_json()['last_check']
+    assert again['reason'] == f'eab_hmac is empty: {hmac_file}'
+    assert _ca_checks(client)[('zerossl', 'zs')] == again
+
+
+def test_a_long_path_is_cut_never_the_cause(instance, tmp_path):
+    client, _ = instance
+    deep = tmp_path / ('d' * 120) / ('e' * 120)
+    deep.mkdir(parents=True)
+    secret = deep / 'cf-token'
+    assert len(str(secret)) >= 250
+    _create_cf(client, {'api_token_file': str(secret)})
+    check = _cf_check(client)
+    assert check['outcome'] == 'failed'
+    assert len(check['reason']) <= 200
+    assert check['reason'].startswith('api_token could not be read (No such file or directory): '), check
+    assert check['reason'].endswith('...')
