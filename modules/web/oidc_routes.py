@@ -280,7 +280,7 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
         if not ok:
             refusal = {'error': err or 'invalid OIDC settings'}
             # The setting the refusal is about, so the settings page marks
-            # that field (#1511, P61; API contract 2.72).
+            # that field (#1511, P61; API contract 2.73).
             if field:
                 refusal['field'] = field
             return jsonify(refusal), 400

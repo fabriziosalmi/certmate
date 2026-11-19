@@ -4,7 +4,7 @@ The settings page used to guess the field from words in the message: a key
 id "ipv6-lab" that already existed marked the names field, because the text
 carried "ipv6"; an SSO issuer refused for being a link-local address carried
 no "issuer_url" at all, so nothing was named or marked. The server knows the
-field it refused, so it says so in `field` (API contract 2.72), and the page
+field it refused, so it says so in `field` (API contract 2.73), and the page
 marks that field and no other.
 """
 import pytest

@@ -818,7 +818,24 @@ METADATA_SCHEMA_VERSION = 1
 #                                   when those checks are enabled. With no row
 #                                   it tells "not checked yet" from "nothing
 #                                   to check". A new field.
-#                                   2.72, MINOR: a refusal of POST
+#                                   2.72, MINOR: the audit log (GET
+#                                   /api/activity) records client certificates
+#                                   created, renewed and revoked, and every
+#                                   server or client certificate download from
+#                                   the API and the dashboard, one entry per
+#                                   request with details.key_included. A hook
+#                                   test's `test` entry has the outcome as its
+#                                   status. A refused POST /api/deploy/config
+#                                   names the blocked sequence and, when the
+#                                   refusal is a hook's, carries its hook_id
+#                                   and field. A client-certificate revoke
+#                                   reason over 200 characters, with a line
+#                                   break, or not text is a 400 (a new code for
+#                                   a new condition), and so is a client-cert
+#                                   batch whose headers or rows are not a list
+#                                   of names and a list of lists of cells.
+#                                   New entries, new fields.
+#                                   2.73, MINOR: a refusal of POST
 #                                   /api/acme/eab-keys, PATCH /api/acme/server
 #                                   and POST /api/auth/oidc/settings carries
 #                                   `field`, the request field it is about,
@@ -861,7 +878,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.72'
+API_CONTRACT_VERSION = '2.73'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

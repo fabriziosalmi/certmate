@@ -13,7 +13,7 @@
     }
 
     // The fields a refusal can be about, by the `field` the server names
-    // (API contract 2.72): the toast leads with its label and the field is marked.
+    // (API contract 2.73): the toast leads with its label and the field is marked.
     var KEY_FIELDS = {
         allowed_identifiers: { label: 'Names and addresses it may order', id: 'acmeKeyNames' },
         kid: { label: 'Key identifier', id: 'acmeKeyKid' },

@@ -119,7 +119,8 @@ def test_a_long_line_of_names_ends_inside_the_list_with_an_ellipsis(phone):
 
 @pytest.mark.parametrize('row, texts', [
     ('shop.example.test', ['5d', 'Example Issuing CA R11', 'probed', 'Adopt', 'Forget']),
-    ('api.example.test', ['80d', 'Another Example Server CA', 'issued', 'Forget']),
+    # A managed row has no Forget since P48 (test_ui_inventory.py says why).
+    ('api.example.test', ['80d', 'Another Example Server CA', 'issued']),
 ])
 def test_a_row_shows_its_expiry_issuer_source_and_actions_on_screen(phone, row, texts):
     for text in texts:
@@ -130,10 +131,10 @@ def test_a_row_shows_its_expiry_issuer_source_and_actions_on_screen(phone, row, 
 
 
 def test_a_rows_actions_answer_a_tap_on_a_phone(phone):
-    """The control: the buttons on screen are the working ones."""
-    asked = []
-    phone.on('dialog', lambda dialog: (asked.append(dialog.message), dialog.dismiss()))
+    """The control: the buttons on screen are the working ones. Forget asks in
+    the page's own dialog since P48, not in a native one."""
     row = phone.locator('#inventoryBody tr', has_text='shop.example.test')
     row.get_by_role('button', name='Forget').locator('visible=true').tap()
-    phone.wait_for_timeout(300)
-    assert asked and 'shop.example.test' in asked[0], asked
+    asked = phone.get_by_role('alertdialog')
+    asked.wait_for()
+    assert 'shop.example.test' in asked.inner_text(), asked.inner_text()

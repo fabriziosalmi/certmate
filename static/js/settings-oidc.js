@@ -39,7 +39,7 @@
     }
 
     // The fields a refused save can be about, by the `field` the server names
-    // (API contract 2.72). role_mappings has no single field to mark: the
+    // (API contract 2.73). role_mappings has no single field to mark: the
     // page drops the empty rows that the server would refuse.
     var OIDC_FIELDS = {
         enabled: { label: 'Enable OIDC/SSO', id: 'oidc-enabled' },

@@ -35,10 +35,45 @@
             // the bindings are skipped entirely until showExecutionDetail()
             // sets it from a row click.
             selectedExecution: null,
+            // What the server runs and records of each hook, by id: its name
+            // (in the run record and the audit entry), command and timeout.
+            // Test runs the hook the server has: on a hook it does not have it
+            // answered a 404 that blamed sync or the safety check (#1511, P40),
+            // and on an edited one it would run the saved fields, not the ones
+            // on screen. So Test waits for the save.
+            savedHooks: {},
+            // The hook and field the last refused save named, so the field is
+            // marked (aria-invalid) instead of left for the operator to find.
+            refused: null,
 
+            _rememberSaved: function (config) {
+                var saved = {};
+                var hooks = (config.global_hooks || []).slice();
+                Object.keys(config.domain_hooks || {}).forEach(function (domain) {
+                    hooks = hooks.concat(config.domain_hooks[domain] || []);
+                });
+                var self = this;
+                hooks.forEach(function (hook) { saved[hook.id] = self._runsAs(hook); });
+                this.savedHooks = saved;
+            },
+
+            _runsAs: function (hook) {
+                return JSON.stringify([hook.name, hook.command, hook.timeout]);
+            },
+
+            isSaved: function (hook) {
+                return Object.prototype.hasOwnProperty.call(this.savedHooks, hook.id)
+                    && this.savedHooks[hook.id] === this._runsAs(hook);
+            },
+
+            refusedField: function (hook, field) {
+                return !!this.refused && this.refused.hook_id === hook.id && this.refused.field === field;
+            },
+
+            // Resolves true when the configuration was read and is on screen.
             loadConfig: function () {
                 var self = this;
-                fetch('/api/deploy/config', { credentials: 'same-origin' })
+                return fetch('/api/deploy/config', { credentials: 'same-origin' })
                     .then(function (r) {
                         return r.json().then(function (data) {
                             return { ok: r.ok, body: data };
@@ -49,23 +84,43 @@
                             self.config.enabled = res.body.enabled || false;
                             self.config.global_hooks = res.body.global_hooks || [];
                             self.config.domain_hooks = res.body.domain_hooks || {};
+                            self._rememberSaved(self.config);
                             addDebugLog('Loaded deploy config: '
                                 + (self.config.global_hooks.length) + ' global hooks, '
                                 + Object.keys(self.config.domain_hooks).length + ' domain section(s)',
                                 'info');
-                        } else {
-                            addDebugLog('Failed to load deploy config: '
-                                + ((res.body && res.body.error) || 'HTTP ' + (res.ok ? 'OK' : 'error')),
-                                'error');
+                            return true;
                         }
+                        addDebugLog('Failed to load deploy config: '
+                            + ((res.body && res.body.error) || 'HTTP ' + (res.ok ? 'OK' : 'error')),
+                            'error');
+                        return false;
                     })
                     .catch(function (err) {
                         addDebugLog('Deploy config request failed: ' + (err && err.message || err), 'error');
+                        return false;
                     });
+            },
+
+            // True while a save is on its way: the hook fields are read-only
+            // and clicks on the hook editor are held (held() below), because
+            // the save reads the configuration back into the fields and an
+            // edit made meanwhile would be overwritten (#1511 review).
+            saving: false,
+
+            held: function (event) {
+                if (!this.saving) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
             },
 
             saveConfig: function () {
                 var self = this;
+                if (self.saving) return;
+                self.saving = true;
+                // Kept for when the read-back fails: then the page compares
+                // with what it sent, and says it could not read the result.
+                var sent = JSON.parse(JSON.stringify(self.config));
                 addDebugLog('Saving deploy config…', 'info');
                 fetch('/api/deploy/config', {
                     method: 'POST',
@@ -85,18 +140,33 @@
                     })
                     .then(function (res) {
                         if (res.ok) {
+                            // Read back what the server kept, into the fields
+                            // and the snapshot Test compares with: it is not
+                            // always what was sent (a timeout is held to
+                            // 1..300 s, an empty one becomes 30), and the run
+                            // uses the saved value.
+                            self.refused = null;
                             addDebugLog('Deploy settings saved', 'info');
                             CertMate.toast('Deploy settings saved', 'success');
-                        } else {
-                            var msg = (res.body && res.body.error) || 'unknown error';
-                            addDebugLog('Deploy settings save failed: ' + msg, 'error');
-                            CertMate.toast('Save failed: ' + msg, 'error');
+                            return self.loadConfig().then(function (read) {
+                                if (read) return;
+                                self._rememberSaved(sent);
+                                CertMate.toast('Deploy settings saved, but the page could not read them back: '
+                                    + 'if the server adjusted a value (a timeout is held to 1-300 s), the page '
+                                    + 'does not show it. Reload the page to see what was saved.', 'warning');
+                            });
                         }
+                        var msg = (res.body && res.body.error) || 'unknown error';
+                        self.refused = (res.body && res.body.hook_id)
+                            ? { hook_id: res.body.hook_id, field: res.body.field } : null;
+                        addDebugLog('Deploy settings save failed: ' + msg, 'error');
+                        CertMate.toast('Save failed: ' + msg, 'error');
                     })
                     .catch(function (err) {
                         addDebugLog('Deploy settings save request failed: ' + (err && err.message || err), 'error');
                         CertMate.toast('Failed to save', 'error');
-                    });
+                    })
+                    .then(function () { self.saving = false; });
             },
 
             _generateId: function () {

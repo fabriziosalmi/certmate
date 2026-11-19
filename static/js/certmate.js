@@ -204,6 +204,20 @@
                 '<i class="fas fa-times" aria-hidden="true"></i></button>' +
             '</div>';
 
+        // A link the message points to (options.link = {href, text}), e.g.
+        // the CRL after a revoke (P45). Same-origin only, decided by the URL
+        // the browser would follow ('/\\host' and '//host' leave the origin).
+        var link = null;
+        if (opts.link && typeof opts.link.href === 'string') {
+            try {
+                if (new URL(opts.link.href, window.location.href).origin === window.location.origin) link = opts.link;
+            } catch (e) { link = null; }
+        }
+        var linkRowHtml = link
+            ? '<div class="pl-7 text-xs"><a class="font-medium underline" href="' + CM.escapeHtml(link.href) + '">'
+                + CM.escapeHtml(link.text || link.href) + '</a></div>'
+            : '';
+
         var reportRowHtml = canReport
             ? '<div class="pl-7 flex justify-start">' +
                   '<button data-action="report" class="text-xs font-medium underline opacity-80 hover:opacity-100 disabled:opacity-40 disabled:no-underline disabled:cursor-wait">' +
@@ -216,7 +230,7 @@
             ? '<div class="toast-progress" style="--toast-duration:' + duration + 'ms"></div>'
             : '';
 
-        toast.innerHTML = headerHtml + reportRowHtml + progressHtml;
+        toast.innerHTML = headerHtml + linkRowHtml + reportRowHtml + progressHtml;
 
         container.appendChild(toast);
 
@@ -528,7 +542,7 @@
 
     // ── A refused field, by its label ────────────────────────────
     // A refusal of a settings write carries `field`, the request field it is
-    // about (API contract 2.72). Given that and the fields a form holds, as
+    // about (API contract 2.73). Given that and the fields a form holds, as
     // { issuer_url: { label: 'Issuer URL', id: 'input-id' } }, the field is
     // marked aria-invalid, outlined and focused until it is edited, and the
     // message comes back led by the field's label, the server's text after it
