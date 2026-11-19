@@ -22,6 +22,14 @@
  *                         "Applies immediately" on screen; it is never an
  *                         unsaved change, even inside a scope.
  *
+ * While a save is on its way its section takes no edits: its text fields are
+ * read-only and its boxes, radios, lists and chips refuse a change, the
+ * section and its Save are aria-busy and "Saving…" stands beside the Save,
+ * focus stays where it was, and all of it is released once the save has
+ * settled (success or failure) and the read some sections make after it is
+ * done. An edit typed then would be sent by no one and, where the section
+ * reads itself back, overwritten.
+ *
  * Edits inside a dialog and in search boxes are not settings and are ignored.
  * Leaving the page with a changed scope asks first (beforeunload), and while
  * a scope is changed its Save buttons carry "Unsaved changes" beside them,
@@ -73,7 +81,10 @@
     }
 
     function differs(el, entry) {
-        if (!el.isConnected) return true;
+        // A control removed by an edit (a deleted webhook) is a change until
+        // the section is saved; one its section redrew after a save (the SSO
+        // form is rebuilt by its read) is not.
+        if (!el.isConnected) return !entry.afterSave;
         return entry.value === UNKNOWN || current(el) !== entry.value;
     }
 
@@ -122,10 +133,112 @@
             var then = sent ? sent.get(el) : null;
             if (sent && !then) return;                   // first edited after the request went
             if (!then || entry.edits === then.edits) originals.delete(el);
-            else originals.set(el, { value: then.value, scope: entry.scope, edits: entry.edits });
+            else originals.set(el, { value: then.value, scope: entry.scope, edits: entry.edits, afterSave: true });
         });
         recount();
     }
+
+    // ── A section takes no edits while its save is on its way ──────────
+    var locks = [];              // {scope, button, fields, inflight, cap}
+
+    function lockFor(el) {
+        if (!el || !el.closest || el.closest('[data-applies-now]')) return null;
+        for (var i = 0; i < locks.length; i++) {
+            var inner = scopeOf(el);
+            if (inner && locks[i].scope.contains(el) && covers(locks[i].scope, inner)) return locks[i];
+        }
+        return null;
+    }
+
+    function lock(scope, button) {
+        for (var i = 0; i < locks.length; i++) {
+            if (locks[i].scope === scope) return locks[i];
+        }
+        var held = { scope: scope, button: button, fields: [], inflight: 0, cap: null };
+        scope.querySelectorAll('input, textarea').forEach(function (el) {
+            if (['checkbox', 'radio', 'hidden', 'button', 'submit', 'reset'].indexOf(el.type) !== -1) return;
+            if (!counts(el) || !covers(scope, scopeOf(el))) return;
+            held.fields.push({ el: el, readOnly: el.readOnly });
+            el.readOnly = true;
+        });
+        scope.setAttribute('aria-busy', 'true');
+        if (button) button.setAttribute('aria-busy', 'true');
+        locks.push(held);
+        held.cap = setTimeout(function () { release(held); }, 20000);
+        showMarkers();
+        whenQuiet(held);
+        return held;
+    }
+
+    function release(held) {
+        var at = locks.indexOf(held);
+        if (at === -1) return;
+        locks.splice(at, 1);
+        clearTimeout(held.cap);
+        held.fields.forEach(function (field) { field.el.readOnly = field.readOnly; });
+        held.scope.removeAttribute('aria-busy');
+        if (held.button) held.button.removeAttribute('aria-busy');
+        recount();
+    }
+
+    // Released once nothing the page asked for since the lock is still on its
+    // way, and the page has had its turn with the last answer: a click that
+    // sent nothing is released at once, a save that reads its section back
+    // after it is released when that read has been applied.
+    function whenQuiet(held) {
+        setTimeout(function () {
+            if (held.inflight === 0) release(held);
+        }, 0);
+    }
+
+    function follow(answer, held) {
+        if (!held.length) return answer;
+        held.forEach(function (h) { h.inflight++; });
+        var done = false;
+        function finish() {
+            if (done) return;
+            done = true;
+            held.forEach(function (h) { h.inflight--; whenQuiet(h); });
+        }
+        return answer.then(function (response) {
+            var reading = false;
+            ['json', 'text', 'blob', 'arrayBuffer', 'formData'].forEach(function (name) {
+                var read = response[name];
+                if (typeof read !== 'function') return;
+                response[name] = function () {
+                    reading = true;
+                    return read.apply(response, arguments).then(function (value) {
+                        finish();
+                        return value;
+                    }, function (error) {
+                        finish();
+                        throw error;
+                    });
+                };
+            });
+            setTimeout(function () { if (!reading) finish(); }, 0);
+            return response;
+        }, function (error) {
+            finish();
+            throw error;
+        });
+    }
+
+    // A change to a held section is refused where it would happen: a box, a
+    // radio or a chip is not toggled, a list does not open. Text fields are
+    // read-only, which leaves the focus where it is.
+    function refuse(event) {
+        var el = event.target;
+        if (!isField(el) || !lockFor(el)) return;
+        if (event.type === 'click' && el.type !== 'checkbox' && el.type !== 'radio') return;
+        if (event.type !== 'click' && el.tagName !== 'SELECT') return;
+        if (event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Escape')) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+    document.addEventListener('click', refuse, true);
+    document.addEventListener('mousedown', refuse, true);
+    document.addEventListener('keydown', refuse, true);
 
     function recount() {
         changed.clear();
@@ -148,15 +261,16 @@
             if (!scope) return;
             var marker = button.previousElementSibling;
             var has = marker && marker.hasAttribute('data-unsaved-marker');
-            var show = changed.has(scope);
+            var saving = locks.some(function (h) { return h.scope === scope; });
+            var show = saving || changed.has(scope);
             if (!has) {
                 if (!show) return;
                 marker = document.createElement('span');
                 marker.setAttribute('data-unsaved-marker', '');
                 marker.className = 'self-center mr-3 text-xs font-medium text-warning-fg';
-                marker.textContent = 'Unsaved changes';
                 button.parentNode.insertBefore(marker, button);
             }
+            marker.textContent = saving ? 'Saving…' : 'Unsaved changes';
             marker.hidden = !show;
         });
     }
@@ -217,11 +331,16 @@
             return;
         }
         pending = { scope: scope, at: Date.now(), claimed: false };
+        // A submit button is held at the submit, once the browser's own
+        // checks have passed: a read-only field is not checked at all, so
+        // holding it at the click would let an invalid value through.
+        if (!(control.type === 'submit' && control.form)) lock(scope, control);
     }, true);
 
     document.addEventListener('submit', function (event) {
         if (event.target.hasAttribute && event.target.hasAttribute('data-unsaved-scope')) {
             pending = { scope: event.target, at: Date.now(), claimed: false };
+            lock(event.target, event.target.querySelector('[data-saves]'));
         }
     }, true);
 
@@ -235,8 +354,9 @@
             asked = pending;
             asked.claimed = true;
             asked.sent = snapshot(asked.scope);
+            lock(asked.scope, null);
         }
-        var answer = realFetch.apply(this, arguments);
+        var answer = follow(realFetch.apply(this, arguments), locks.slice());
         if (!asked) return answer;
         return answer.then(function (response) {
             if (pending === asked) pending = null;

@@ -527,15 +527,124 @@ def test_a_field_clicked_before_the_page_loaded_is_not_an_edit(page):
         'a click is no edit, and the value the page loaded is where the field starts'
 
 
-def test_an_edit_made_while_the_save_is_on_its_way_stays_unsaved(page):
-    sent = _notifications(page, [])
+# ── Third review round: a section takes no edits while its save is on its way
+
+def _main_form_answered_in_the_browser(page):
+    """The main form needs a CA email to save; the settings it reads carry one
+    and its save is answered here, so the instance is not written."""
+    def handle(route):
+        if route.request.method == 'GET':
+            answer = route.fetch()
+            settings = answer.json()
+            settings['email'] = settings.get('email') or 'ops@example.test'
+            return route.fulfill(response=answer, body=json.dumps(settings))
+        return route.fulfill(status=200, content_type='application/json', body=json.dumps({'message': 'saved'}))
+    page.route('**/api/web/settings', handle)
+
+
+def _open_general(page):
+    _main_form_answered_in_the_browser(page)
+    _slow(page, '/api/web/settings', 'POST', 2500)
+    _open(page, 'general')
+    page.wait_for_function("() => document.querySelector('#renewal_threshold_days').value !== ''")
+
+
+def _open_acme(page):
+    _answer_json(page, '**/api/acme/server', ACME_OFF, method='GET')
+    _answer_json(page, '**/api/acme/server', ACME_OFF, method='PATCH')
+    _slow(page, '/api/acme/server', 'PATCH', 2500)
+    _open(page, 'acme')
+
+
+def _open_oidc(page):
+    _answer_json(page, '**/api/auth/oidc/settings', {'message': 'OIDC settings updated'}, method='POST')
+    _slow(page, '/api/auth/oidc/settings', 'POST', 2500)
+    _open(page, 'oidc')
+
+
+def _open_notifications(page):
+    _notifications(page, [])
     _slow(page, '/api/notifications/config', 'POST', 2500)
     page.reload(wait_until='networkidle')
     page.locator('button:has-text("Email (SMTP)")').click()
-    page.fill('input[aria-label="SMTP username"]', 'u')
+
+
+def _open_deploy(page):
+    config = {'enabled': True, 'global_hooks': [], 'domain_hooks': {}, 'targets': []}
+    _answer_json(page, '**/api/deploy/config', config, method='GET')
+    _answer_json(page, '**/api/deploy/config', {'message': 'saved'}, method='POST')
+    _slow(page, '/api/deploy/config', 'POST', 2500)
+    _open(page, 'deploy')
+
+
+SAVING = {
+    'general': (_open_general, '#settingsForm', '#saveBtn', '#renewal_threshold_days', 'text'),
+    'acme': (_open_acme, '[data-unsaved-scope="ACME server"]', '#acmeSave', '#acmeValidity', 'text'),
+    'oidc': (_open_oidc, '#settings-panel-oidc', '#settings-panel-oidc button[data-saves]', '#oidc-issuer-url', 'text'),
+    'notifications': (_open_notifications, '#settings-panel-notifications',
+                      '#settings-panel-notifications button[data-saves]', 'input[aria-label="SMTP username"]', 'text'),
+    'deploy': (_open_deploy, '#settings-panel-deploy', '#settings-panel-deploy button[data-saves]:has-text("Deploy")',
+               'input[aria-label="Enable deploy hooks"]', 'checkbox'),
+}
+
+
+def _try_to_change(page, field, kind):
+    if kind == 'text':
+        page.focus(field)
+        page.keyboard.type('77')
+    else:
+        page.locator(f'label:has({field})').click()
+
+
+@pytest.mark.parametrize('section', list(SAVING))
+def test_a_section_takes_no_edits_while_its_save_is_on_its_way(page, section):
+    open_section, scope, save, field, kind = SAVING[section]
+    open_section(page)
+    page.wait_for_selector(field, state='attached')
+    if kind == 'text':
+        page.fill(field, '42')
+    page.locator(save).click()
+    busy = page.locator(scope).first
+    assert busy.get_attribute('aria-busy') == 'true', 'the section says it is busy while its save is on its way'
+    assert 'Saving' in page.locator(save).locator('xpath=..').inner_text()
+    before = page.input_value(field) if kind == 'text' else page.is_checked(field)
+    _try_to_change(page, field, kind)
+    after = page.input_value(field) if kind == 'text' else page.is_checked(field)
+    assert after == before, f'{section}: an edit was taken while the save was on its way'
+    if kind == 'text':
+        assert page.evaluate(f"() => document.activeElement === document.querySelector('{field}')"), \
+            'focus stays where the user put it'
+    page.wait_for_function(f"() => !document.querySelector('{scope}').hasAttribute('aria-busy')", timeout=15000)
+    if kind == 'text':
+        page.fill(field, '43')
+        assert page.input_value(field) == '43', 'the field takes edits again once the save has settled'
+    else:
+        was = page.is_checked(field)
+        page.locator(f'label:has({field})').click()
+        assert page.is_checked(field) != was
+
+
+def test_an_event_chip_takes_no_click_while_the_save_is_on_its_way(page):
+    _open_notifications(page)
     page.locator('#settings-panel-notifications button[data-saves]').click()
-    page.fill('input[aria-label="SMTP username"]', 'changed-user')
-    page.wait_for_timeout(3500)
-    assert sent and sent[-1]['channels']['smtp']['username'] == 'u', sent
-    assert 'notifications' in page.evaluate('() => window.CertMate.unsavedSettings()'), \
-        'the save carried "u"; "changed-user" was typed after it went and is not saved'
+    _click_chip(page, 'certificate_expiring')
+    assert _selected(page) == EVENTS
+    page.wait_for_function("() => !document.querySelector('#settings-panel-notifications').hasAttribute('aria-busy')",
+                           timeout=15000)
+    _click_chip(page, 'certificate_expiring')
+    assert 'certificate_expiring' not in _selected(page)
+
+
+def test_a_saved_sso_form_rebuilt_by_its_reload_reads_saved(page):
+    """The SSO form is redrawn by the read after a save: its old controls are
+    gone, and that is not a change."""
+    _open_oidc(page)
+    page.wait_for_selector('#oidc-issuer-url', state='visible')
+    page.fill('#oidc-issuer-url', 'https://idp.example.test/realms/main')
+    page.locator('#settings-panel-oidc button[data-saves]').click()
+    page.focus('#oidc-issuer-url')
+    page.keyboard.type('/x')
+    page.wait_for_timeout(4500)
+    assert page.evaluate('() => window.CertMate.unsavedSettings()') == []
+    markers = page.locator('#settings-panel-oidc [data-unsaved-marker]')
+    assert all(not markers.nth(i).is_visible() for i in range(markers.count()))
