@@ -14,9 +14,14 @@
  *                         right after a click on it marks its scope saved.
  *                         Submitting a form that is a scope does the same.
  *   [data-discards]       a Cancel that throws the scope's changes away.
+ *   [data-applies-now]    a control that writes as it changes, and says
+ *                         "Applies immediately" on screen; it is never an
+ *                         unsaved change, even inside a scope.
  *
  * Edits inside a dialog and in search boxes are not settings and are ignored.
- * Leaving the page with a changed scope asks first (beforeunload).
+ * Leaving the page with a changed scope asks first (beforeunload), and while
+ * a scope is changed its Save buttons carry "Unsaved changes" beside them,
+ * so a switch that waits for Save says so before anyone leaves (UX audit P28).
  */
 (function () {
     'use strict';
@@ -33,13 +38,39 @@
         if (!target || !target.closest) return false;
         if (target.closest('[role=dialog], [data-modal-root], [aria-modal=true]')) return false;
         if (target.type === 'search' || target.type === 'file') return false;
+        if (target.closest('[data-applies-now]')) return false;
         return true;
+    }
+
+    // "Unsaved changes" beside each Save button whose scope holds a change.
+    // The marker is made the first time it is needed and hidden after, so
+    // nothing moves while the page loads.
+    function showMarkers() {
+        document.querySelectorAll('[data-saves]').forEach(function (button) {
+            var scope = scopeOf(button);
+            if (!scope) return;
+            var marker = button.previousElementSibling;
+            var has = marker && marker.hasAttribute('data-unsaved-marker');
+            var show = changed.has(scope);
+            if (!has) {
+                if (!show) return;
+                marker = document.createElement('span');
+                marker.setAttribute('data-unsaved-marker', '');
+                marker.className = 'self-center mr-3 text-xs font-medium text-warning-fg';
+                marker.textContent = 'Unsaved changes';
+                button.parentNode.insertBefore(marker, button);
+            }
+            marker.hidden = !show;
+        });
     }
 
     function markChanged(event) {
         if (!event.isTrusted || !counts(event.target)) return;
         var scope = scopeOf(event.target);
-        if (scope) changed.add(scope);
+        if (scope) {
+            changed.add(scope);
+            showMarkers();
+        }
     }
 
     document.addEventListener('input', markChanged, true);
@@ -52,6 +83,7 @@
         if (!scope) return;
         if (control.hasAttribute('data-discards')) {
             changed.delete(scope);
+            showMarkers();
             return;
         }
         pending = { scope: scope, at: Date.now() };
@@ -78,6 +110,7 @@
                     if (asked.scope.contains(scope)) changed.delete(scope);
                 });
                 pending = null;
+                showMarkers();
             }
             return response;
         });

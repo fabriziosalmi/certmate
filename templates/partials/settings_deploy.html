@@ -333,6 +333,8 @@
                             A target hands the certificate to a service after issuance or renewal. A <strong>webhook target</strong>
                             sends it to an HTTPS endpoint you name, and sends the private key too <em>only</em> if you put a key
                             variable in the payload and confirm the destination. Each confirmation is in the audit log.
+                            The switch on a target <span class="font-medium text-label">applies immediately</span>; an edited
+                            target is saved by its own Save target, not by Save Deploy Settings.
                             The threat model and every field are in
                             <a href="https://github.com/fabriziosalmi/certmate/blob/main/docs/deploy-hooks.md#webhook-target-deliver-the-certificate-and-optionally-the-key"
                                target="_blank" rel="noopener" class="text-primary underline">docs/deploy-hooks.md</a>.
@@ -368,7 +370,7 @@
                                 </div>
                                 <template x-if="isWebhook(target)">
                                     <div class="flex items-center gap-2 shrink-0">
-                                        <label class="relative inline-flex items-center cursor-pointer">
+                                        <label class="relative inline-flex items-center cursor-pointer" data-applies-now>
                                             <input type="checkbox" :checked="target.enabled" @change="toggleEnabled(target)" class="sr-only peer"
                                                    :aria-label="'Enable target ' + (target.name || target.id)">
                                             <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>

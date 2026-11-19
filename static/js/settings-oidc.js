@@ -38,6 +38,14 @@
             .filter(function (t) { return t.length > 0; });
     }
 
+    // The fields a refused save can be about, by the key the server names.
+    var OIDC_FIELDS = [
+        { match: /\bissuer_url\b/, key: 'issuer_url', label: 'Issuer URL', id: 'oidc-issuer-url' },
+        { match: /\bclient_id\b/, key: 'client_id', label: 'Client ID', id: 'oidc-client-id' },
+        { match: /\bdefault_role\b/, key: 'default_role', label: 'Default role', id: 'oidc-default-role' },
+        { match: /\bscopes\b/, key: 'scopes', label: 'Scopes', id: 'oidc-scopes' }
+    ];
+
     function oidcSettings() {
         return {
             loading: true,
@@ -138,7 +146,11 @@
                     .then(function (res) {
                         self.saving = false;
                         if (!res.ok) {
-                            showMessage('Save failed: ' + (res.data && res.data.error ? res.data.error : 'unknown'), 'error');
+                            // The server names a field by its API key; the
+                            // toast says the label, and the field is marked
+                            // and focused (UX audit P61).
+                            var error = res.data && res.data.error ? res.data.error : 'unknown';
+                            showMessage('Save failed: ' + CertMate.markFieldError(error, OIDC_FIELDS), 'error');
                             return;
                         }
                         showMessage('SSO settings saved', 'success');

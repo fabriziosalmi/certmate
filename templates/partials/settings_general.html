@@ -55,7 +55,7 @@
                                  deployments. This control shipped missing, so
                                  the only way to turn it on was to edit
                                  settings.json by hand. -->
-                            <div>
+                            <div data-applies-now>
                                 <label class="flex items-center">
                                     <input type="checkbox" id="update_check_enabled"
                                            name="update_check_enabled"
@@ -63,6 +63,7 @@
                                     <span class="ml-2 text-sm text-label">Check GitHub for new CertMate releases</span>
                                 </label>
                                 <p class="mt-1 text-xs text-muted">
+                                    <span class="font-medium text-label">Applies immediately</span>, not with the Save button below.
                                     Off by default. When on, this instance contacts
                                     api.github.com once a day and the footer says when a
                                     newer release exists. A check that cannot reach GitHub

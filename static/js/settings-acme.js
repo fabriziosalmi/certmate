@@ -18,6 +18,10 @@
             saving: false,
             server: { enabled: false, allow_http: false, eab_required: true, validity_days: 45,
                       allowed_identifiers: [], directory_url: '', eab_keys: [] },
+            // What the server has, as the last read or save left it: the badge
+            // and the directory URL follow it, not the ticked box, because
+            // nothing is served until Save (UX audit P27).
+            savedEnabled: false,
             openNames: '',
             accounts: [],
             newKey: { kid: '', names: '', note: '' },
@@ -44,13 +48,21 @@
             isClient: function (id) { return this.client === id; },
             pickClient: function (id) { this.client = id; },
 
-            load: function () {
+            // keepOptions: a refresh after a key or an account changed keeps
+            // the options as edited; only the first read fills them in.
+            load: function (keepOptions) {
                 var self = this;
-                self.loading = true;
+                if (!keepOptions) self.loading = true;
                 Promise.all([CertMate.api('GET', '/api/acme/server'), CertMate.api('GET', '/api/acme/accounts')])
                     .then(function (answers) {
-                        self.server = answers[0];
-                        self.openNames = self.joined(answers[0].allowed_identifiers);
+                        self.savedEnabled = answers[0].enabled === true;
+                        if (keepOptions) {
+                            self.server.eab_keys = answers[0].eab_keys;
+                            self.server.directory_url = answers[0].directory_url;
+                        } else {
+                            self.server = answers[0];
+                            self.openNames = self.joined(answers[0].allowed_identifiers);
+                        }
                         self.accounts = answers[1].accounts;
                     })
                     .catch(function (error) { CertMate.toast(error.message || 'Could not load the ACME server', 'error'); })
@@ -69,6 +81,7 @@
                 })
                     .then(function (view) {
                         self.server = view;
+                        self.savedEnabled = view.enabled === true;
                         self.openNames = self.joined(view.allowed_identifiers);
                         CertMate.toast('ACME server saved', 'success');
                     })
@@ -85,9 +98,18 @@
                         self.created = created;
                         self.client = 'certbot';
                         self.newKey = { kid: '', names: '', note: '' };
-                        self.load();
+                        self.load(true);
                     })
-                    .catch(function (error) { CertMate.toast(error.message || 'Could not create the key', 'error'); });
+                    .catch(function (error) {
+                        // The server names the field by its API key; say the
+                        // label, and mark and focus the field (UX audit P61).
+                        CertMate.toast(CertMate.markFieldError(error.message || 'Could not create the key', [
+                            { match: /allowed[_ ]identifier|is not a DNS name|is not an IPv4|IPv6|allows every address/i,
+                              key: 'allowed_identifiers', label: 'Names and addresses it may order', id: 'acmeKeyNames' },
+                            { match: /^kid\b|EAB key called/, key: 'kid', label: 'Key identifier', id: 'acmeKeyKid' },
+                            { match: /^note\b/, key: 'note', label: 'Note', id: 'acmeKeyNote' }
+                        ]), 'error');
+                    });
             },
 
             copy: function (text) {
@@ -107,7 +129,7 @@
                     .then(function (yes) {
                         if (!yes) return;
                         CertMate.api('DELETE', '/api/acme/eab-keys/' + encodeURIComponent(kid))
-                            .then(function () { CertMate.toast('EAB key disabled', 'success'); self.load(); })
+                            .then(function () { CertMate.toast('EAB key disabled', 'success'); self.load(true); })
                             .catch(function (error) { CertMate.toast(error.message || 'Could not disable', 'error'); });
                     });
             },
@@ -119,7 +141,7 @@
                     .then(function (yes) {
                         if (!yes) return;
                         CertMate.api('POST', '/api/acme/accounts/' + encodeURIComponent(account.id) + '/deactivate')
-                            .then(function () { CertMate.toast('Account deactivated', 'success'); self.load(); })
+                            .then(function () { CertMate.toast('Account deactivated', 'success'); self.load(true); })
                             .catch(function (error) { CertMate.toast(error.message || 'Could not deactivate', 'error'); });
                     });
             }
