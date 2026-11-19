@@ -2955,7 +2955,8 @@ requested, since checking it would take a write. Any other provider answers
 `not_checkable`: no call is made and nothing passes. The call waits 5 seconds
 for a connection and 10 seconds for the answer, and the reason names the one
 that ran out. A check that cannot run (no answer, a refused connection, a
-reference that cannot be read) is a `failed` check, with that as its reason.
+reference that cannot be read, a referenced file that is not text) is a
+`failed` check, with that as its reason.
 The reason is the provider's own error on one line, at most 200 characters,
 with no credential in it. An account that does not exist is a `404` with
 `code: DNS_ACCOUNT_NOT_FOUND`.
@@ -2981,8 +2982,14 @@ deleting the account deletes it. A result belongs to the credentials it
 checked, as issuance would read them now: it is kept under an HMAC, made with
 the instance secret, of the account's fields (all but `name` and
 `description`) with every referenced file and variable read. When any of them
-changes, or a reference can no longer be read, the account reads `never` again
-(`not_checkable` for a provider with no check). A Route53 account in
+changes the account reads `never` again (`not_checkable` for a provider with no
+check). A check that failed because a reference could not be read (a missing
+file, an unset variable, a file that is not text) is kept under the account's
+fields and what failed: it reads back while the reference fails the same way,
+and `never` once it resolves or fails another way. The instance secret is
+`SECRET_KEY_FILE`, `SECRET_KEY` or the generated `.secret_key` in the data
+directory: changing it makes every account read `never` until it is checked
+again. A Route53 account in
 `iam_role` mode uses the host's AWS identity, which is not part of that key: its
 pass says that a change to that identity is not seen until the next check.
 

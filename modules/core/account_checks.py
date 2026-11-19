@@ -184,16 +184,16 @@ class AccountCheckStore:
     def last(self, kind, provider, account_id, key) -> dict:
         """The account's last check, as `{outcome, at, reason}`.
 
-        `never` when nothing was recorded for these credentials (*key* None:
-        they cannot be resolved now), `not_checkable` for a DNS provider no
-        check exists for.
+        `never` when nothing was recorded for these credentials (see
+        credentials_key), `not_checkable` for a DNS provider no check exists
+        for.
         """
         data, corrupt = self._read()
         if corrupt:
             logger.warning("The account check results could not be read; every account reads "
                            "never checked until the next check")
         entry = ((data.get(kind) or {}).get(provider) or {}).get(account_id)
-        if key and isinstance(entry, dict) and hmac.compare_digest(str(entry.get('fingerprint')), key):
+        if isinstance(entry, dict) and hmac.compare_digest(str(entry.get('fingerprint')), key):
             return {'outcome': entry.get('outcome'), 'at': entry.get('at'), 'reason': entry.get('reason')}
         if kind == 'dns' and provider not in CHECKABLE_DNS_PROVIDERS:
             return {'outcome': NOT_CHECKABLE, 'at': None, 'reason': None}
@@ -236,13 +236,35 @@ def _resolved(managers, kind, provider, config) -> dict:
             '_email': config.get('email') or _instance_email(managers)}
 
 
+# What reading an account's credentials can raise: a reference that yields
+# nothing (SecretReferenceError), a file that is not text (UnicodeDecodeError,
+# a ValueError), an unusable EAB (ValueError), a path that cannot be read
+# (OSError). Every one is a failed check, never a 500.
+_UNREADABLE = (SecretReferenceError, ValueError, OSError)
+
+
+def _unreadable_marker(exc) -> str:
+    """What failed, so a result kept for a broken reference reads back while it
+    is broken the same way, and no longer once it resolves or breaks otherwise."""
+    if isinstance(exc, SecretReferenceError):
+        return f'{exc.field}|{exc.reference}|{exc.reason}'
+    return type(exc).__name__
+
+
+def unreadable_reason(exc) -> str:
+    if isinstance(exc, SecretReferenceError):
+        return f'{exc.field} names {exc.reference}, which {exc.reason}'
+    return f"The account's credentials could not be read ({type(exc).__name__})"
+
+
 def credentials_key(managers, kind, provider, config):
-    """An HMAC, with the instance secret, of the resolved credentials; None
-    when they cannot be resolved (a missing file, an unset variable)."""
+    """An HMAC, with the instance secret, of the credentials as issuance
+    resolves them. When they cannot be resolved, of the stored fields and
+    what failed instead."""
     try:
         resolved = _resolved(managers, kind, provider, config)
-    except (SecretReferenceError, ValueError):
-        return None
+    except _UNREADABLE as exc:
+        resolved = {**config, '_unreadable': _unreadable_marker(exc)}
     text = json.dumps({key: value for key, value in resolved.items() if key not in _LABELS},
                       sort_keys=True, default=str)
     auth = managers.get('auth')
@@ -340,8 +362,8 @@ def check_dns_account(dns_manager, provider, config) -> dict:
         return _result(FAILED, message)
     try:
         resolved = dns_manager.resolve_account_config(provider, config)
-    except SecretReferenceError as exc:
-        return _result(FAILED, f'{exc.field} names {exc.reference}, which {exc.reason}')
+    except _UNREADABLE as exc:
+        return _result(FAILED, unreadable_reason(exc))
     if provider == 'cloudflare':
         outcome, reason = _check_cloudflare(resolved.get('api_token'))
     else:
@@ -407,8 +429,10 @@ def check_ca_account(ca_manager, provider, config, instance_email='') -> dict:
     try:
         eab = ca_manager.get_eab_credentials(provider, config)
         url = ca_manager.get_acme_server_url(provider, account_config=config)
-    except ValueError as exc:
-        return _result(FAILED, str(exc))
+    except UnicodeDecodeError as exc:
+        return _result(FAILED, unreadable_reason(exc))
+    except (ValueError, OSError) as exc:
+        return _result(FAILED, str(exc) if isinstance(exc, ValueError) else unreadable_reason(exc))
     secrets_ = [value for value in eab if value]
     bundle = None
     if provider == 'private_ca' and config.get('ca_cert'):

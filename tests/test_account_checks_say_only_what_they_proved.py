@@ -314,3 +314,87 @@ def test_forgetting_through_a_test_double_writes_nothing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     account_checks.forget_account(mock.MagicMock(), 'dns', 'cloudflare', 'prod')
     assert list(tmp_path.iterdir()) == []
+
+
+# ------------------------------------------------------------- N1, N2 (round 2)
+
+def _cf_check(client, account_id='prod'):
+    with mock.patch('requests.get') as get:
+        check = client.post(f'/api/dns/cloudflare/accounts/{account_id}/check')
+    get.assert_not_called()
+    assert check.status_code == 200, check.get_data(as_text=True)[:200]
+    return check.get_json()['last_check']
+
+
+def test_a_failed_check_on_a_missing_file_reads_back_until_the_file_is_there(instance, tmp_path):
+    client, _ = instance
+    secret = tmp_path / 'cf-token'
+    _create_cf(client, {'api_token_file': str(secret)})
+    check = _cf_check(client)
+    assert check['outcome'] == 'failed'
+    assert _listed(client)['last_check'] == check
+    secret.write_text(TOKEN, encoding='utf-8')
+    assert _listed(client)['last_check']['outcome'] == 'never'
+
+
+def test_a_failed_check_on_an_unset_variable_reads_back_until_it_is_set(instance, monkeypatch):
+    client, _ = instance
+    monkeypatch.delenv('B17_UNSET_TOKEN', raising=False)
+    _create_cf(client, {'api_token_env': 'B17_UNSET_TOKEN'})
+    check = _cf_check(client)
+    assert check['outcome'] == 'failed'
+    assert _listed(client)['last_check'] == check
+    monkeypatch.setenv('B17_UNSET_TOKEN', TOKEN)
+    assert _listed(client)['last_check']['outcome'] == 'never'
+
+
+def test_a_reference_that_breaks_another_way_reads_never(instance, tmp_path):
+    client, _ = instance
+    secret = tmp_path / 'cf-token'
+    _create_cf(client, {'api_token_file': str(secret)})
+    assert _cf_check(client)['outcome'] == 'failed'
+    secret.write_text('   \n', encoding='utf-8')      # now there, and empty
+    assert _listed(client)['last_check']['outcome'] == 'never'
+
+
+def test_save_anyway_on_a_missing_file_keeps_the_failure_on_the_card(instance, tmp_path):
+    client, _ = instance
+    with mock.patch('requests.get') as get:
+        saved = client.post('/api/dns/cloudflare/accounts?check=1&save_anyway=1', json={
+            'account_id': 'prod', 'config': {'name': 'Prod', 'api_token_file': str(tmp_path / 'absent')}})
+    get.assert_not_called()
+    assert saved.status_code == 200, saved.get_json()
+    assert saved.get_json()['last_check']['outcome'] == 'failed'
+    assert _listed(client)['last_check']['outcome'] == 'failed'
+
+
+def test_a_token_file_that_is_not_text_is_a_failed_check_not_a_500(instance, tmp_path):
+    client, _ = instance
+    secret = tmp_path / 'cf-token'
+    secret.write_bytes(b'\xff\xfe\x00\x81' * 10)
+    _create_cf(client, {'api_token_file': str(secret)})
+    assert client.get('/api/dns/accounts').status_code == 200
+    check = _cf_check(client)
+    assert check['outcome'] == 'failed'
+    assert check['reason'] == "The account's credentials could not be read (UnicodeDecodeError)"
+    assert _listed(client)['last_check'] == check
+
+
+def test_an_eab_file_that_is_not_text_is_a_failed_ca_check(instance, tmp_path):
+    client, managers = instance
+    hmac_file = tmp_path / 'eab-hmac'
+    hmac_file.write_bytes(b'\xff\xfe\x00\x81' * 10)
+
+    def put(settings):
+        settings.setdefault('ca_providers', {})['zerossl'] = {'accounts': {'zs': {
+            'email': 'ops@example.com', 'eab_kid': 'kid-0123456789', 'eab_hmac_file': str(hmac_file)}}}
+    assert managers['settings'].update(put, 'test')
+    assert client.get('/api/web/settings/ca-account-checks').status_code == 200
+    with mock.patch('requests.get') as get:
+        answer = client.post('/api/web/settings/ca-providers/zerossl/accounts/zs/check')
+    get.assert_not_called()
+    assert answer.status_code == 200, answer.get_data(as_text=True)[:200]
+    check = answer.get_json()['last_check']
+    assert check == {**check, 'outcome': 'failed',
+                     'reason': "The account's credentials could not be read (UnicodeDecodeError)"}
+    assert _ca_checks(client)[('zerossl', 'zs')] == check
