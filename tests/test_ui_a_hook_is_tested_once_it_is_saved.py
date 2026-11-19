@@ -150,7 +150,8 @@ def test_while_a_save_is_on_its_way_the_hook_fields_take_no_edits(deploy_tab):
     save = panel.locator('#deploy-hooks-save')
     save.click()
     expect(save).to_have_attribute('aria-busy', 'true')
-    expect(save).to_contain_text('Saving')
+    # "Saving…" stands beside the Save, as on every section (settings-unsaved.js).
+    expect(save.locator('xpath=..')).to_contain_text('Saving')
     expect(name).to_have_js_property('readOnly', True)
     assert save.evaluate('el => el === document.activeElement'), 'focus moved off the Save button'
     name.click()
@@ -163,7 +164,8 @@ def test_while_a_save_is_on_its_way_the_hook_fields_take_no_edits(deploy_tab):
     assert len(held) == 1
     with page.expect_response(lambda r: r.url.endswith('/api/deploy/config') and r.request.method == 'GET'):
         held[0].continue_()
-    expect(save).to_have_attribute('aria-busy', 'false')
+    expect(save).not_to_have_attribute('aria-busy', 'true')
+    expect(save.locator('xpath=..')).not_to_contain_text('Saving')
     expect(name).to_have_js_property('readOnly', False)
     expect(name).to_have_value('first name')
     expect(test).to_be_enabled()

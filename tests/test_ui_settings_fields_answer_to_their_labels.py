@@ -25,7 +25,7 @@ def _open(page, tab):
 
 
 @pytest.mark.parametrize("tab, label, model", [
-    ("oidc", "Client ID", "cfg.client_id"),
+    ("oidc", "Client ID (required when SSO is enabled)", "cfg.client_id"),
     ("oidc", "Post-logout redirect URI (optional)", "cfg.post_logout_redirect_uri"),
     ("apikeys", "Key Name", "newKey.name"),
 ])

@@ -696,11 +696,12 @@
             <!-- Save button -->
             <div class="mt-6 flex justify-end">
                 {# While the save is on its way the hook fields take no edits (the
-                   save reads them back): the button says so, and keeps focus. #}
+                   save reads them back) and the button keeps focus. "Saving…"
+                   beside it and aria-busy come from settings-unsaved.js, as on
+                   every other section. #}
                 <button type="button" @click="saveConfig()" data-saves id="deploy-hooks-save"
-                        :aria-busy="saving ? 'true' : 'false'"
                         class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary transition text-sm">
-                    <i class="fas mr-2" :class="saving ? 'fa-spinner fa-spin' : 'fa-save'" aria-hidden="true"></i><span x-text="saving ? 'Saving…' : 'Save Deploy Settings'">Save Deploy Settings</span>
+                    <i class="fas mr-2" :class="saving ? 'fa-spinner fa-spin' : 'fa-save'" aria-hidden="true"></i>Save Deploy Settings
                 </button>
             </div>
 
