@@ -121,6 +121,16 @@ OCSP). Each of them says so in its entry.
 Authorization: Bearer YOUR_TOKEN
 ```
 
+The token is either an API key, created in **Settings → API Keys** or with
+`POST /api/keys`, with its own role, expiry and domain scope, or the
+**API Bearer Token**, the one token set by `API_BEARER_TOKEN` (or
+`API_BEARER_TOKEN_FILE`, which takes precedence). The API Bearer Token has full
+admin access and cannot be changed from the web interface: its settings save
+refuses `api_bearer_token`. To rotate it, set the variable to a new random
+token of at least 32 characters and restart: at startup
+the new token replaces the stored one, and the old one stops working. Give
+scripts and agents a scoped API key instead.
+
 ### Example Request
 
 ```bash
@@ -3439,11 +3449,11 @@ tail -f logs/audit/certificate_audit.log
 ```
 
 - **`actor.kind`** — `user` (a human session / OIDC login), `api_token` (an API
-  key or the legacy global bearer token), `agent` (an API key explicitly flagged
+  key or the API Bearer Token), `agent` (an API key explicitly flagged
   as an AI/MCP agent — see below), `scheduler` (an unattended renewal job), or
   `system`. It is derived **only from the authenticated identity**.
 - **`actor.id` / `token_prefix`** — the stable API key id and token prefix behind
-  the action (absent for the legacy global bearer token, which cannot be told
+  the action (absent for the API Bearer Token, which cannot be told
   apart per-caller — prefer scoped keys).
 - **`actor.agent_session` / `agent_id`** — the values of the client-supplied
   `X-CertMate-Agent-Session` / `X-CertMate-Agent-Id` headers (the MCP server

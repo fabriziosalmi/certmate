@@ -2065,8 +2065,8 @@ class SettingsManager:
                             settings.pop('api_bearer_token')
                             logger.warning(
                                 "Hashed api_bearer_token and removed plaintext from settings.json. "
-                                "The token still authenticates via its hash; rotate it via the API Keys UI "
-                                "if you no longer have a copy."
+                                "The token still authenticates via its hash; to rotate it, set API_BEARER_TOKEN "
+                                "(or API_BEARER_TOKEN_FILE) and restart."
                             )
 
                 # Validate dns_provider against supported set.

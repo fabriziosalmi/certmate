@@ -1,6 +1,6 @@
 # Docker Build & Deployment
 
-<!-- CERTMATE-TRANSLATED-FROM a2ddb147c72573c7 -->
+<!-- CERTMATE-TRANSLATED-FROM 1d0fb81230b2d424 -->
 
 Diese Anleitung beschreibt das Erstellen, Deployen und Ausführen von CertMate in Docker — einschließlich Multi-Plattform-Unterstützung für ARM und AMD64.
 
@@ -151,8 +151,8 @@ docker run -d --name certmate \
 |----------|--------------|--------------|
 | `SECRET_KEY` | Nein | Flask-Secret-Key für Sessions (wird automatisch generiert, wenn nicht gesetzt) |
 | `SECRET_KEY_FILE` | Nein | Pfad zu einer Datei mit dem Flask-Secret-Key (hat Vorrang vor `SECRET_KEY`). Ist die Variable gesetzt und kann die Datei nicht gelesen werden oder ist sie leer, verweigert CertMate den Start: Ein Secret, dessen Einbindung fehlgeschlagen ist, ist ein Konfigurationsfehler, und stattdessen einen Schlüssel zu erzeugen, würde bei jedem Neustart jeden Benutzer abmelden, mit Sitzungen, die von einem Schlüssel signiert sind, den Sie nicht gewählt haben. |
-| `API_BEARER_TOKEN` | Nein (automatisch generiert) | API-Authentifizierungs-Token. Wird automatisch generiert, wenn nicht gesetzt, aber setzen Sie es, bevor Sie eine noch nicht eingerichtete Instanz im Netzwerk verfügbar machen; wenn gesetzt, fügen Sie es einmal im Erststart-Bildschirm ein, um den Admin zu erstellen. **Dieser Wert ist maßgeblich:** Weicht er vom bereits gespeicherten Token ab, wird das gespeicherte beim Start ersetzt und funktioniert nicht mehr. Dadurch wird das Hinzufügen oder Rotieren der Variable bei einer bestehenden Installation wirksam — zuvor verwendete die Durchsetzung diesen Wert, während die Authentifizierung noch das alte Token prüfte, und der Erststart-Bildschirm verlangte ein Token, das er dann ablehnte |
-| `API_BEARER_TOKEN_FILE` | Nein | Pfad zu einer Datei mit dem API-Bearer-Token (hat Vorrang vor `API_BEARER_TOKEN`) |
+| `API_BEARER_TOKEN` | Nein (automatisch generiert) | Das API Bearer Token mit vollem Admin-Zugriff. Wird automatisch generiert, wenn nicht gesetzt, aber setzen Sie es, bevor Sie eine noch nicht eingerichtete Instanz im Netzwerk verfügbar machen; wenn gesetzt, fügen Sie es einmal im Erststart-Bildschirm ein, um den Admin zu erstellen. **Dieser Wert ist maßgeblich:** Weicht er vom bereits gespeicherten Token ab, wird das gespeicherte beim Start ersetzt und funktioniert nicht mehr. Dadurch wird das Hinzufügen oder Rotieren der Variable bei einer bestehenden Installation wirksam — zuvor verwendete die Durchsetzung diesen Wert, während die Authentifizierung noch das alte Token prüfte, und der Erststart-Bildschirm verlangte ein Token, das er dann ablehnte |
+| `API_BEARER_TOKEN_FILE` | Nein | Pfad zu einer Datei mit dem API Bearer Token (hat Vorrang vor `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | Nein | `INFO` (Standard), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **Setzen Sie sie, wenn Sie automatische Backups wollen, aus denen Sie wiederherstellen können** | Verschlüsselt einheitliche Backups im Ruhezustand (`.zip.enc`, PBKDF2-SHA256 + Fernet) und macht automatische Backups erst *vollständig* — mit ihr können sie diese Instanz wiederherstellen, ohne sie bleiben ihre Zugangsdaten maskiert und sie können es nicht. Dieselbe Passphrase wird zur Wiederherstellung benötigt, und CertMate speichert sie nie für Sie. Bewahren Sie sie an einem anderen Ort auf als auf dem Rechner, der die Backups enthält |
 | `CERTMATE_RESTORE_MAX_BYTES` | Nein | Die Höchstmenge, die eine Backup-Wiederherstellung insgesamt schreiben darf, in Byte (Standard 2 GiB). Eine Wiederherstellung, die mehr schreiben würde, stoppt und meldet, dass sie nicht abgeschlossen wurde; siehe [Backup](../backup.md#restoring) |
@@ -188,7 +188,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
-      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
+      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the API Bearer Token
       - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
@@ -246,7 +246,7 @@ sudo loginctl enable-linger "$USER"
 
 Stattdessen rootful: Legen Sie die Datei nach `/etc/containers/systemd/`, erstellen Sie die Secrets als root und führen Sie dann `sudo systemctl daemon-reload && sudo systemctl start certmate` aus.
 
-Öffnen Sie `http://127.0.0.1:8000`. Die erste Seite legt das Administratorkonto an und verlangt das API-Token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
+Öffnen Sie `http://127.0.0.1:8000`. Die erste Seite legt das Administratorkonto an und verlangt das API Bearer Token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
 
 Verifiziert auf Fedora 44 mit Podman 5.8, rootful und rootless: Der Dienst startet gesund, das Token autorisiert die API, und er kommt nach einem Neustart zurück (rootless über Lingering).
 

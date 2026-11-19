@@ -665,9 +665,10 @@ def initialize_managers(container: AppContainer, app):
     dns_manager = DNSManager(settings_manager)
     auth_manager = AuthManager(settings_manager)
     auth_manager.set_hmac_key(app.secret_key)
-    # Diagnose a SECRET_KEY that changed under a restore: the stored bearer
-    # token hash is HMAC'd with SECRET_KEY, so a mismatch here means the
-    # operator's token will 401 with no other explanation. Read-only warning.
+    # Name the cause when the supplied API Bearer Token does not verify
+    # against the stored hash (a rotation, or a SECRET_KEY that changed under
+    # a restore: the hash is HMAC'd with SECRET_KEY). Read-only warning; the
+    # reconciliation below stores the supplied token and says whether it could.
     auth_manager.warn_if_bearer_token_hash_is_stale()
     # Let SettingsManager hash the legacy api_bearer_token on save using the
     # same HMAC scheme as scoped API keys.
