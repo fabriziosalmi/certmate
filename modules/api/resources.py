@@ -229,6 +229,8 @@ def create_api_resources(api, models, managers):
     dns_ns.add_resource(settings_resources['DNSAccounts'], '/<string:provider>/accounts', endpoint='dns_accounts_provider')
     dns_ns.add_resource(settings_resources['DNSAccounts'], '/accounts', endpoint='dns_accounts_global')
     dns_ns.add_resource(settings_resources['DNSAccountDetail'], '/<string:provider>/accounts/<string:account_id>')
+    dns_ns.add_resource(settings_resources['DNSAccountCheck'],
+                        '/<string:provider>/accounts/<string:account_id>/check')
     dns_ns.add_resource(settings_resources['DNSProviderAvailability'], '/providers')
 
     # Administration of the ACME server (#476). The protocol itself is

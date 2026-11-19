@@ -214,7 +214,20 @@ GENERAL_LIMIT = 10
 #                             catches what it foresees itself; this handler is
 #                             for the rest, and lists every value written as
 #                             unchecked, which is true.
-TOTAL_LIMIT = 419
+# 419 -> 420 on 2026-11-19, for a credential check that could not run answering
+# that it failed (UX perception audit P39, review of #1511 B17). It logs the
+# class and returns:
+#
+#   modules/core/account_checks.py  run_check. The check endpoints and every
+#                             save asked with ?check=1 go through it. A value
+#                             a check did not foresee (an assume_role_arn of
+#                             123 raised AttributeError in _aws_storage_auth)
+#                             turned the answer into a 500, while the API and
+#                             the commit say a check that cannot run is a
+#                             failed check. Each check catches what it
+#                             foresees in its own words; this handler is for
+#                             the rest, and answers the class only.
+TOTAL_LIMIT = 420
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is

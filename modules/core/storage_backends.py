@@ -131,11 +131,17 @@ def _aws_storage_auth(config, backend_name):
     return mode, key, secret, role_arn
 
 
-def _aws_storage_client(service, region, mode, key, secret, role_arn='', endpoint_url=None):
-    """Create an AWS client, refreshing STS credentials for an assumed role."""
+def _aws_storage_client(service, region, mode, key, secret, role_arn='', endpoint_url=None,
+                        client_config=None):
+    """Create an AWS client, refreshing STS credentials for an assumed role.
+
+    *client_config* (a botocore Config) reaches every client made here, the
+    STS one included: the credential check gives it its timeouts."""
     import boto3
 
-    options = {'region_name': region}
+    options: dict = {'region_name': region}
+    if client_config is not None:
+        options['config'] = client_config
     if mode == 'access_keys':
         options.update(aws_access_key_id=key, aws_secret_access_key=secret)
     service_options = {'endpoint_url': endpoint_url} if service == 's3' else {}
@@ -162,7 +168,8 @@ def _aws_storage_client(service, region, mode, key, secret, role_arn='', endpoin
         metadata=refresh(), refresh_using=refresh, method='sts-assume-role')
     session.set_config_variable('region', region)
     return boto3.Session(botocore_session=session).client(
-        service, region_name=region, **service_options)
+        service, region_name=region, **service_options,
+        **({'config': client_config} if client_config is not None else {}))
 
 
 def _is_transient(exc):

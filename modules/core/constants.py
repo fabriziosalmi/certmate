@@ -867,6 +867,24 @@ METADATA_SCHEMA_VERSION = 1
 #                                   (also a pre-2.12.0 letsencrypt record with
 #                                   the staging flag). POST /api/settings
 #                                   answers not_in_effect. New fields.
+#                                   2.75, MINOR: POST /api/dns/<provider>/
+#                                   accounts/<account_id>/check checks a DNS
+#                                   account's credentials with one read-only
+#                                   call to its provider (Cloudflare, Route53;
+#                                   any other answers not_checkable) and keeps
+#                                   the result (P39). Every entry of GET
+#                                   /api/dns/accounts carries last_check
+#                                   (outcome passed, failed, not_checkable or
+#                                   never; at; reason). POST /api/dns/accounts,
+#                                   /api/dns/<provider>/accounts and PUT
+#                                   /api/dns/<provider>/accounts/<account_id>
+#                                   take the optional query parameters check
+#                                   and save_anyway: with check, a failed check
+#                                   answers 422 ACCOUNT_CHECK_FAILED and saves
+#                                   nothing unless save_anyway is given, and a
+#                                   save answers with last_check. Without check
+#                                   a save is unchanged. A new endpoint, a new
+#                                   field, new optional parameters.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -892,7 +910,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.74'
+API_CONTRACT_VERSION = '2.75'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.74",
+ "contract_version": "2.75",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -2252,6 +2252,18 @@
     "[].description": [
      "str"
     ],
+    "[].last_check": [
+     "dict"
+    ],
+    "[].last_check.at": [
+     "null"
+    ],
+    "[].last_check.outcome": [
+     "str"
+    ],
+    "[].last_check.reason": [
+     "null"
+    ],
     "[].name": [
      "str"
     ],
@@ -2277,6 +2289,18 @@
     "[].description": [
      "str"
     ],
+    "[].last_check": [
+     "dict"
+    ],
+    "[].last_check.at": [
+     "null"
+    ],
+    "[].last_check.outcome": [
+     "str"
+    ],
+    "[].last_check.reason": [
+     "null"
+    ],
     "[].name": [
      "str"
     ],
@@ -2301,6 +2325,18 @@
     ],
     "[].description": [
      "str"
+    ],
+    "[].last_check": [
+     "dict"
+    ],
+    "[].last_check.at": [
+     "null"
+    ],
+    "[].last_check.outcome": [
+     "str"
+    ],
+    "[].last_check.reason": [
+     "null"
     ],
     "[].name": [
      "str"
@@ -3793,6 +3829,34 @@
      "dict"
     ],
     "<stream>": [
+     "str"
+    ]
+   }
+  },
+  "GET /api/web/settings/ca-account-checks": {
+   "200": {
+    ".": [
+     "list"
+    ],
+    "[]": [
+     "dict"
+    ],
+    "[].account_id": [
+     "str"
+    ],
+    "[].last_check": [
+     "dict"
+    ],
+    "[].last_check.at": [
+     "null"
+    ],
+    "[].last_check.outcome": [
+     "str"
+    ],
+    "[].last_check.reason": [
+     "null"
+    ],
+    "[].provider": [
      "str"
     ]
    }
@@ -5537,6 +5601,65 @@
     "error": [
      "str"
     ]
+   },
+   "422": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ],
+    "last_check": [
+     "dict"
+    ],
+    "last_check.at": [
+     "str"
+    ],
+    "last_check.outcome": [
+     "str"
+    ],
+    "last_check.reason": [
+     "str"
+    ]
+   }
+  },
+  "POST /api/dns/<X>/accounts/<X>/check": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "account_id": [
+     "str"
+    ],
+    "last_check": [
+     "dict"
+    ],
+    "last_check.at": [
+     "str"
+    ],
+    "last_check.outcome": [
+     "str"
+    ],
+    "last_check.reason": [
+     "str"
+    ],
+    "provider": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "code": [
+     "str"
+    ],
+    "error": [
+     "str"
+    ]
    }
   },
   "POST /api/dns/accounts": {
@@ -6256,6 +6379,39 @@
     ]
    }
   },
+  "POST /api/web/settings/ca-providers/<X>/accounts/<X>/check": {
+   "200": {
+    ".": [
+     "dict"
+    ],
+    "account_id": [
+     "str"
+    ],
+    "last_check": [
+     "dict"
+    ],
+    "last_check.at": [
+     "str"
+    ],
+    "last_check.outcome": [
+     "str"
+    ],
+    "last_check.reason": [
+     "str"
+    ],
+    "provider": [
+     "str"
+    ]
+   },
+   "404": {
+    ".": [
+     "dict"
+    ],
+    "error": [
+     "str"
+    ]
+   }
+  },
   "PUT /api/certificates/<X>/auto-renew": {
    "200": {
     ".": [
@@ -6336,6 +6492,18 @@
    "200": {
     ".": [
      "dict"
+    ],
+    "last_check": [
+     "dict"
+    ],
+    "last_check.at": [
+     "str"
+    ],
+    "last_check.outcome": [
+     "str"
+    ],
+    "last_check.reason": [
+     "str"
     ],
     "message": [
      "str"

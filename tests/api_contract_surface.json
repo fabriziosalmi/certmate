@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.74",
+  "contract_version": "2.75",
   "surface": [
     "DELETE /api/acme/eab-keys/<X>",
     "DELETE /api/backups/delete/<X>/<X>",
@@ -103,6 +103,7 @@
     "POST /api/digest/send",
     "POST /api/dns-providers/accounts",
     "POST /api/dns/<X>/accounts",
+    "POST /api/dns/<X>/accounts/<X>/check",
     "POST /api/dns/accounts",
     "POST /api/inventory/<X>/adopt",
     "POST /api/inventory/config",

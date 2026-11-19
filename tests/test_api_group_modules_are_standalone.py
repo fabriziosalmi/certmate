@@ -311,9 +311,10 @@ def test_the_settings_group_builds_from_a_minimal_context(api):
                            audit=MagicMock(), managers={})
     resources = create_settings_resources(api, models, ctx)
 
+    # DNSAccountCheck: POST /api/dns/<provider>/accounts/<account_id>/check (#1511, P39).
     assert set(resources) == {
         'Settings', 'DNSProviders', 'DNSAccounts', 'DNSAccountDetail',
-        'DNSProviderAvailability'}
+        'DNSProviderAvailability', 'DNSAccountCheck'}
     for name, cls in resources.items():
         assert issubclass(cls, Resource), f'{name} is not a Resource'
 
