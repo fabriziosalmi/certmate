@@ -3068,11 +3068,13 @@ that ran out. A check that cannot run (no answer, a refused connection, a
 reference that cannot be read, a referenced file that is not text) is a
 `failed` check, with that as its reason.
 The reason is the provider's own error on one line, at most 200 characters,
-with no credential in it. The text of an exception CertMate caught never goes
-in it: settings refused before any call (Route53 settings, a CA or ACME
-directory URL CertMate refuses) give a fixed sentence and the refusal is
-written to the server log, and an AWS client error that is not an answer is
-named by its class. An account that does not exist is a `404` with
+with no credential in it. A reason is never the message of an exception
+CertMate caught: settings refused before any call (a Cloudflare account
+without its token, Route53 settings, a CA or ACME directory URL CertMate
+refuses) give a fixed sentence, the Route53 and CA refusals are written to the
+server log as warnings, an AWS error that is not an answer from AWS is named
+by its class, and an answer from AWS gives the code and message of that
+answer. An account that does not exist is a `404` with
 `code: DNS_ACCOUNT_NOT_FOUND`.
 
 <!-- response: POST /api/dns/<provider>/accounts/<account_id>/check 200 -->
