@@ -382,6 +382,19 @@ def test_a_token_file_that_is_not_text_is_a_failed_check_not_a_500(instance, tmp
     assert _listed(client)['last_check'] == check
 
 
+def test_an_error_reading_credentials_that_names_no_reference_is_a_failed_check_by_its_class(instance):
+    """Since #1528 every reference that does not resolve is a
+    SecretReferenceError with its own reason; any other OSError or ValueError
+    on the way is still a failed check, named by its class, never a 500."""
+    client, _ = instance
+    _create_cf(client, {'api_token': 'a-token-for-the-test'})
+    with mock.patch('modules.core.dns_providers.DNSManager.resolve_account_config',
+                    side_effect=OSError('the disk went away')):
+        check = _cf_check(client)
+    assert check['outcome'] == 'failed'
+    assert check['reason'] == "The account's credentials could not be read (OSError)"
+
+
 def test_an_eab_file_that_is_not_text_is_a_failed_ca_check(instance, tmp_path):
     client, managers = instance
     hmac_file = tmp_path / 'eab-hmac'
