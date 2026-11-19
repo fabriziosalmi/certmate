@@ -59,8 +59,8 @@ PASSED = 'passed'
 # call: fixed sentences, true for every refusal they stand for; the refusal
 # itself goes to the server log.
 _ROUTE53_RULES = ('The Route53 settings of this account are not usable: auth_mode is access_keys '
-                  '(with access_key_id and secret_access_key) or iam_role, and assume_role_arn, '
-                  'when given, is an IAM role ARN')
+                  '(with access_key_id and secret_access_key) or iam_role, an assume_role_arn is '
+                  'an IAM role ARN, all as text')
 _CA_SETTINGS_REFUSED = ("The account's CA settings cannot be used (its CA, or its ACME directory "
                         'URL); the server log says which')
 FAILED = 'failed'
@@ -351,9 +351,10 @@ def _check_route53(config):
     from .storage_backends import _aws_storage_auth, _aws_storage_client
     try:
         mode, key, secret, role_arn = _aws_storage_auth(config, 'Route53 DNS')
-    except ValueError as exc:
+    except (ValueError, TypeError, AttributeError) as exc:
         # The answer states the rules, not the exception's text, which stays
-        # in the log (CodeQL py/stack-trace-exposure).
+        # in the log (CodeQL py/stack-trace-exposure). TypeError and
+        # AttributeError: a value that is not text (an assume_role_arn of 123).
         logger.warning("Route53 account settings refused: %s", scrub_log_value(exc))
         return FAILED, _ROUTE53_RULES
     try:
@@ -525,9 +526,18 @@ _RESOURCE_TYPES = {'dns': 'dns_provider', 'ca': 'ca_provider'}
 
 
 def run_check(managers, kind, provider, config) -> dict:
-    if kind == 'dns':
-        return check_dns_account(managers['dns'], provider, config)
-    return check_ca_account(_ca_manager(managers), provider, config, _instance_email(managers))
+    """A check that could not run is a failed check, never a 500: what each
+    check foresees it answers in its own words, and anything else is caught
+    here, logged with its class and answered by its class only."""
+    try:
+        if kind == 'dns':
+            return check_dns_account(managers['dns'], provider, config)
+        return check_ca_account(_ca_manager(managers), provider, config, _instance_email(managers))
+    except Exception as exc:  # the answer of a check: logged with its class, answered by it
+        logger.warning("Credential check of %s account of provider %r could not run: %s (%s)",
+                       kind, scrub_log_value(provider), type(exc).__name__, scrub_log_value(exc))
+        return _result(FAILED, f'The check could not run ({type(exc).__name__}); '
+                       'the server log has the error')
 
 
 def _stored(kind, managers, provider, account_id):

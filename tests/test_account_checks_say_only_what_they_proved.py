@@ -471,6 +471,9 @@ def test_a_route53_account_whose_settings_are_refused_is_told_the_rules_not_the_
     assert outcome == account_checks.FAILED
     assert reason == account_checks._ROUTE53_RULES
     assert 'no-such-mode' not in reason
+    # Answered whole: a reason is cut at 200 characters.
+    assert len(account_checks._ROUTE53_RULES) <= 200
+    assert len(account_checks._CA_SETTINGS_REFUSED) <= 200
 
 
 def test_aws_that_cannot_be_asked_is_named_by_the_error_class_only():
@@ -524,3 +527,31 @@ def test_a_cloudflare_account_without_a_token_is_refused_by_name_before_any_call
     assert answer.status_code == 422, answer.get_json()
     assert answer.get_json()['last_check']['reason'] == \
         'Missing required credential field(s) for cloudflare: api_token'
+
+
+@pytest.mark.parametrize('config', [
+    {'auth_mode': 'iam_role', 'assume_role_arn': 123},
+    {'access_key_id': 'AKIAEXAMPLE', 'secret_access_key': 'x' * 40, 'assume_role_arn': 123},
+    {'access_key_id': 12345678, 'secret_access_key': 'x' * 40},
+])
+def test_a_route53_value_that_is_not_text_is_refused_in_fixed_words_not_a_500(instance, config):
+    client, _ = instance
+    from modules.core import account_checks
+    with mock.patch('boto3.client') as aws:
+        answer = client.post('/api/dns/route53/accounts?check=1', json={
+            'account_id': 'odd', 'config': {'name': 'Odd', **config}})
+    aws.assert_not_called()
+    assert answer.status_code == 422, answer.get_data(as_text=True)[:200]
+    assert answer.get_json()['last_check']['reason'] == account_checks._ROUTE53_RULES
+
+
+def test_a_check_that_fails_in_a_way_it_did_not_foresee_is_a_failed_check_named_by_class(instance, caplog):
+    client, _ = instance
+    _create_cf(client, {'api_token': 'a-token-for-the-test'})
+    with mock.patch('modules.core.account_checks._check_cloudflare', side_effect=KeyError('surprise')), \
+            caplog.at_level('WARNING'):
+        check = _cf_check(client)
+    assert check['outcome'] == 'failed'
+    assert check['reason'] == 'The check could not run (KeyError); the server log has the error'
+    assert any('could not run: KeyError' in r.getMessage() and 'surprise' in r.getMessage()
+               for r in caplog.records)
