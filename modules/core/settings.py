@@ -4,6 +4,7 @@ Handles loading/saving settings, migrations, and configuration management
 """
 
 import copy
+import hashlib
 import os
 import re
 import secrets
@@ -1306,28 +1307,10 @@ class SettingsManager:
             mutator(settings)
             return self.save_settings(settings, reason)
 
-    def overridden_in(self, incoming: dict) -> list:
-        """What *incoming* sets that something outside the file decides instead.
-
-        A value of an environment overlay that differs from the environment's
-        (LETSENCRYPT_EMAIL, CLOUDFLARE_TOKEN: kept in the file, and replaced
-        whenever the settings are read), and an account the configuration
-        file declares (never written). Each as ``{'setting': <dotted path>,
-        'by': <variable>}``, names only, never a value (UX perception audit,
-        2026-11-18, P19: the wizard said "saved" over both).
-        """
-        found = []
-        for variable, path, normalised in _ENV_OVERLAYS:
-            wanted = os.getenv(variable)
-            value = _value_at(incoming, path)
-            if not wanted or value is _ABSENT:
-                continue
-            if (normalised(value) if isinstance(value, str) else value) != normalised(wanted):
-                found.append({'setting': '.'.join(path), 'by': variable})
-        for path in (self._managed.account_paths if self._managed else ()):
-            if _value_at(incoming, path) is not _ABSENT:
-                found.append({'setting': '.'.join(path), 'by': managed_configuration.CONFIG_FILE_ENV})
-        return found
+    @property
+    def managed_account_paths(self) -> tuple:
+        """The accounts CERTMATE_CONFIG_FILE declares, as paths in the settings (#1317)."""
+        return self._managed.account_paths if self._managed else ()
 
     def atomic_update(self, incoming: dict, protected_keys=('users', 'api_keys', 'local_auth_enabled')) -> bool:
         """Thread-safe read-merge-write for settings.
@@ -2475,27 +2458,98 @@ class SettingsManager:
         return settings.get('dns_provider', 'cloudflare')
 
 
-def settings_not_in_effect(settings_manager, dns_manager, written: dict) -> list:
-    """What a settings write set that CertMate will not use, after the write.
+def _digest(value) -> bytes:
+    """A digest to compare a written value with the one in effect, in memory only."""
+    return hashlib.sha256(str(value).encode('utf-8')).digest()
 
-    `SettingsManager.overridden_in`, and a DNS account written that is not the
-    one its provider issues with by default: issuance takes
-    ``default_accounts[provider]`` when that account has credentials, so
-    credentials typed into another account are kept and not used. Each entry
-    is ``{'setting', 'by'}``; the second kind also names ``account``, the one
-    used (None when no account of the provider can issue).
+
+_IAM_UNUSED_KEYS = frozenset({'access_key_id', 'secret_access_key'})
+
+
+def _what_decides(settings_manager, raw_account, provider, used, field, effective):
+    """By what, by name, a DNS account field is not the value written."""
+    if ('dns_providers', provider, 'accounts', used) in settings_manager.managed_account_paths:
+        return managed_configuration.CONFIG_FILE_ENV
+    for variable, path, normalised in _ENV_OVERLAYS:
+        wanted = os.getenv(variable)
+        if (wanted and path == ('dns_providers', provider, 'accounts', used, field)
+                and effective is not None and _digest(normalised(wanted)) == _digest(effective)):
+            return variable
+    for suffix in ('_env', '_file'):
+        if (raw_account or {}).get(field + suffix):
+            return field + suffix
+    if provider == 'route53' and field in _IAM_UNUSED_KEYS and (raw_account or {}).get('auth_mode') == 'iam_role':
+        return 'auth_mode'
+    return 'another setting'
+
+
+def _dns_fields_not_in_effect(settings_manager, dns_manager, loaded, provider, account_id, prefix, fields):
+    """The fields of one written DNS account whose value in effect is another.
+
+    In effect is what issuance reads: `get_dns_provider_account_config`, with
+    references resolved and the environment and the configuration file
+    applied. Compared by digest; no value is returned or logged.
     """
-    found = settings_manager.overridden_in(written)
-    named = {entry['setting'] for entry in found}
+    config, used = dns_manager.get_dns_provider_account_config(provider, account_id=account_id)
+    provider_config = (loaded.get('dns_providers') or {}).get(provider) or {}
+    accounts = provider_config.get('accounts') if isinstance(provider_config, dict) else None
+    raw_account = (accounts or {}).get(used) if isinstance(accounts, dict) else provider_config
+    found = []
+    for field, value in fields.items():
+        if not isinstance(value, str) or not value.strip() or field.endswith(('_env', '_file')):
+            continue
+        effective = (config or {}).get(field)
+        if effective is not None and _digest(value) == _digest(effective):
+            continue
+        setting = prefix if prefix == 'cloudflare_token' else f'{prefix}.{field}'
+        found.append({'setting': setting,
+                      'by': _what_decides(settings_manager, raw_account if isinstance(raw_account, dict) else {},
+                                          provider, used, field, effective)})
+    return found
+
+
+def settings_not_in_effect(settings_manager, dns_manager, written: dict) -> list:
+    """What a settings write set that CertMate does not use, after the write.
+
+    For the contact email and for every field written into a DNS provider's
+    account (and the legacy `cloudflare_token`), the value in effect is
+    read back the way issuance reads it and compared with the value written.
+    Each that differs is ``{'setting': <dotted path>, 'by': <what decides>}``:
+    LETSENCRYPT_EMAIL, CLOUDFLARE_TOKEN, CERTMATE_CONFIG_FILE, the reference
+    field (``api_token_env``, ``api_token_file``), ``auth_mode``, or "another
+    setting" when it cannot be named. Names only: no value is returned or
+    logged. Empty when every such value written is the one in effect (UX
+    perception audit, 2026-11-18, P19: the wizard said "saved" over them).
+    Other settings are not checked.
+    """
+    loaded = settings_manager.load_settings() or {}
+    found = []
+    email = written.get('email')
+    if isinstance(email, str) and email.strip():
+        effective = str(loaded.get('email') or '').strip().lower()
+        if _digest(email.strip().lower()) != _digest(effective):
+            pinned = os.getenv('LETSENCRYPT_EMAIL')
+            by = ('LETSENCRYPT_EMAIL' if pinned and _digest(pinned.strip().lower()) == _digest(effective)
+                  else 'another setting')
+            found.append({'setting': 'email', 'by': by})
+    if dns_manager is None:
+        return found
     for provider, entry in (written.get('dns_providers') or {}).items():
-        accounts = entry.get('accounts') if isinstance(entry, dict) else None
-        if dns_manager is None or not isinstance(accounts, dict) or not accounts:
+        if not isinstance(entry, dict):
             continue
-        used = dns_manager.default_account_id(provider)
-        if used in accounts:
-            continue
-        for account_id in accounts:
-            setting = f'dns_providers.{provider}.accounts.{account_id}'
-            if setting not in named:
-                found.append({'setting': setting, 'by': f'default_accounts.{provider}', 'account': used})
+        for account_id, fields in (entry.get('accounts') or {}).items():
+            if isinstance(fields, dict):
+                found.extend(_dns_fields_not_in_effect(
+                    settings_manager, dns_manager, loaded, provider, account_id,
+                    f'dns_providers.{provider}.accounts.{account_id}', fields))
+        flat = {key: value for key, value in entry.items() if key != 'accounts'}
+        if flat:
+            # A flat write lands in the account issuance takes by default.
+            found.extend(_dns_fields_not_in_effect(
+                settings_manager, dns_manager, loaded, provider, None, f'dns_providers.{provider}', flat))
+    legacy = written.get('cloudflare_token')
+    if isinstance(legacy, str) and legacy.strip():
+        # Nothing reads this key: the token used is the default account's.
+        found.extend(_dns_fields_not_in_effect(
+            settings_manager, dns_manager, loaded, 'cloudflare', None, 'cloudflare_token', {'api_token': legacy}))
     return found

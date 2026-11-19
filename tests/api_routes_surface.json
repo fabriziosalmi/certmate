@@ -991,8 +991,8 @@
     "[].last_renewal_attempt.attempted_at": [
      "str"
     ],
-    "[].last_renewal_attempt.ca_refused": [
-     "bool"
+    "[].last_renewal_attempt.ca_failure": [
+     "str"
     ],
     "[].last_renewal_attempt.error": [
      "str"
@@ -1462,11 +1462,11 @@
     "jobs[]": [
      "dict"
     ],
+    "jobs[].ca_failure": [
+     "null"
+    ],
     "jobs[].ca_provider": [
      "str"
-    ],
-    "jobs[].ca_refused": [
-     "null"
     ],
     "jobs[].domain": [
      "str"
@@ -1508,11 +1508,11 @@
     ".": [
      "dict"
     ],
+    "ca_failure": [
+     "null"
+    ],
     "ca_provider": [
      "str"
-    ],
-    "ca_refused": [
-     "bool"
     ],
     "domain": [
      "str"

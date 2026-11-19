@@ -1,20 +1,23 @@
-"""A create or reissue job names the CA its request went to and says whether
-the CA refused it, and a certificate says whether CertMate renews it from a
-staging directory.
+"""A create or reissue job names the CA its request went to and what the CA's
+answer says went wrong, and a certificate says whether CertMate renews it from
+a staging directory.
 
 UX perception audit, 2026-11-18 (P22): a newcomer's first certificate goes to
 production Let's Encrypt, and when it fails nothing says that a test mode
 exists. The dashboard now suggests "Test with staging first" when production
-Let's Encrypt answered and refused, and at no other time. To tell which
-failures those are it needs facts the answers did not carry:
+Let's Encrypt failed a validation or hit a rate limit, what staging helps with,
+and at no other time. To tell which failures those are it needs facts the
+answers did not carry:
 
 * the CA a job's request went to (`ca_provider`): the one it named; when it
   named none, a create takes the instance default and a reissue the CA the
   certificate records, or the default when none is recorded. A keyless
   reissue is a reissue. Null for a renewal job;
-* whether the CA answered and refused (`ca_refused`), on a failed job and on
-  a certificate's last failed renewal: a renewal with no certbot lineage, or
-  a create for a domain that already has a certificate, never reached it;
+* what the CA's answer says went wrong (`ca_failure`), on a failed job and on
+  a certificate's last failed renewal, read from the whole error: validation,
+  rate_limit, account, order, other, or null when the CA was not reached or
+  it cannot be told. The texts below are certbot's and Let's Encrypt's
+  wording for each case;
 * `staging` on a certificate: before 2.12.0 Let's Encrypt staging was
   recorded as `ca_provider` "letsencrypt" with a staging flag, and such a
   lineage still renews from staging.
@@ -219,47 +222,52 @@ def test_a_keyless_reissue_job_names_the_ca_its_reissue_goes_to():
         executor.shutdown()
 
 
-# --- did the CA answer and refuse? -----------------------------------------
+# --- what the CA's answer says went wrong -----------------------------------
 
-REFUSED = [
-    'Certificate creation failed: Some challenges have failed.\n'
-    'Detail: DNS problem: NXDOMAIN looking up TXT for _acme-challenge.x.example.com',
-    'urn:ietf:params:acme:error:dns :: DNS problem: SERVFAIL',
-    'urn:ietf:params:acme:error:rateLimited :: too many failed authorizations recently',
-    'Unable to register an account with ACME server. Error returned by the ACME server: '
-    'urn:ietf:params:acme:error:invalidContact',
-    'Invalid response from http://x.example.com/.well-known/acme-challenge/abc: 404',
+CLASSIFIED = [
+    ('Certificate creation failed: Some challenges have failed.\nDetail: DNS problem: NXDOMAIN looking up TXT '
+     'for _acme-challenge.x.example.com - check that a DNS record exists for this domain', 'validation'),
+    ('Invalid response from http://x.example.com/.well-known/acme-challenge/abc: 404', 'validation'),
+    ('Error creating new order :: too many failed authorizations (5) for "x.example.com" in the last 1h0m0s, '
+     'retry after 2026-11-19 10:00:00 UTC', 'rate_limit'),
+    ('urn:ietf:params:acme:error:rateLimited :: too many certificates (5) already issued for this exact set '
+     'of identifiers in the last 168h0m0s', 'rate_limit'),
+    # Staging refuses the same address: not a case for staging.
+    ('Unable to register an account with ACME server. Error returned by the ACME server: '
+     'urn:ietf:params:acme:error:invalidContact :: Error validating contact(s) :: contact email has '
+     'forbidden domain "example.com"', 'account'),
+    # Refusals of the order itself, at new-order and at finalize, with no URN in the text.
+    ('An unexpected error occurred:\nError creating new order :: Cannot issue for "x.example.com": The ACME '
+     'server refuses to issue a certificate for this domain name, because it is forbidden by policy', 'order'),
+    ('An unexpected error occurred:\nError finalizing order :: Rechecking CAA for "x.example.com" and 1 more '
+     'identifiers failed. Refer to sub-problems for more information', 'order'),
+    ('An unexpected error occurred:\nurn:ietf:params:acme:error:serverInternal :: The server experienced an '
+     'internal error :: Error retrieving account', 'other'),
+    # Never reached the CA.
+    ('Renewal failed: No certificate found with name x.example.com (expected '
+     '/etc/letsencrypt/renewal/x.example.com.conf).', None),
+    ('Certificate for x.example.com already exists. Use renew to replace it, or reissue to change it.', None),
+    ("requests.exceptions.ConnectionError: HTTPSConnectionPool(host='acme-v02.api.letsencrypt.org', "
+     "port=443): Max retries exceeded with url: /directory (Caused by NewConnectionError(...))", None),
+    ('Error determining zone_id: 9109 Invalid access token. Please confirm that you have supplied valid '
+     'Cloudflare API credentials.', None),
+    ('', None),
 ]
-NOT_REACHED = [
-    # The renewal of a certificate certbot has no lineage for.
-    'Renewal failed: No certificate found with name x.example.com (expected '
-    '/etc/letsencrypt/renewal/x.example.com.conf).',
-    # A create for a domain that already has a certificate.
-    'Certificate for x.example.com already exists. Use renew to replace it, or reissue to change it.',
-    # The CA's directory could not be reached.
-    "requests.exceptions.ConnectionError: HTTPSConnectionPool(host='acme-v02.api.letsencrypt.org', "
-    "port=443): Max retries exceeded with url: /directory (Caused by NewConnectionError(...))",
-    # The DNS provider refused CertMate's credentials before any challenge.
-    'Error determining zone_id: 9109 Invalid access token. Please confirm that you have supplied valid '
-    'Cloudflare API credentials.',
-    '',
-]
 
 
-@pytest.mark.parametrize('error', REFUSED)
-def test_a_refusal_in_the_ca_s_own_words_is_a_refusal_by_the_ca(error):
-    from modules.core.failure_hints import ca_refused
-    assert ca_refused(error) is True
+@pytest.mark.parametrize('error, kind', CLASSIFIED)
+def test_a_failure_is_classified_by_what_the_ca_answered(error, kind):
+    from modules.core.failure_hints import ca_failure
+    assert ca_failure(error) == kind
 
 
-@pytest.mark.parametrize('error', NOT_REACHED)
-def test_a_failure_that_never_reached_the_ca_is_not_a_refusal_by_the_ca(error):
-    from modules.core.failure_hints import ca_refused
-    assert ca_refused(error) is False
+VALIDATION = CLASSIFIED[0][0]
+NO_LINEAGE = CLASSIFIED[8][0]
+ACCOUNT = CLASSIFIED[4][0]
 
 
-@pytest.mark.parametrize('error, refused', [(REFUSED[0], True), (NOT_REACHED[0], False), (NOT_REACHED[1], False)])
-def test_a_failed_job_says_whether_the_ca_refused(error, refused):
+@pytest.mark.parametrize('error, kind', [(VALIDATION, 'validation'), (ACCOUNT, 'account'), (NO_LINEAGE, None)])
+def test_a_failed_job_says_what_the_ca_answered(error, kind):
     ex = IssuanceExecutor(app=None)
 
     def fail():
@@ -268,13 +276,24 @@ def test_a_failed_job_says_whether_the_ca_refused(error, refused):
     deadline = time.time() + 5
     while ex.get(job_id)['status'] != 'failed' and time.time() < deadline:
         time.sleep(0.01)
-    assert ex.get(job_id)['ca_refused'] is refused
+    assert ex.get(job_id)['ca_failure'] == kind
 
 
-@pytest.mark.parametrize('error, refused', [(REFUSED[0], True), (NOT_REACHED[0], False)])
-def test_a_failed_renewal_on_the_certificate_says_whether_the_ca_refused(tmp_path, error, refused):
+@pytest.mark.parametrize('error, kind', [(VALIDATION, 'validation'), (NO_LINEAGE, None)])
+def test_a_failed_renewal_on_the_certificate_says_what_the_ca_answered(tmp_path, error, kind):
     manager = _manager(tmp_path, {'ca_provider': 'letsencrypt'})
     manager.record_renewal_failure('x.example.com', RuntimeError(error))
     attempt = manager.get_certificate_info('x.example.com', use_cache=False)['last_renewal_attempt']
     assert attempt['outcome'] == 'failed'
-    assert attempt['ca_refused'] is refused
+    assert attempt['ca_failure'] == kind
+
+
+def test_a_long_error_is_classified_from_all_of_it_not_from_what_is_kept(tmp_path):
+    """The record keeps 2000 characters; the cause can come after them."""
+    error = 'certbot output line\n' * 120 + VALIDATION
+    assert len(error) > 2100 and 'challenges have failed' not in error[:2000].lower()
+    manager = _manager(tmp_path, {'ca_provider': 'letsencrypt'})
+    manager.record_renewal_failure('x.example.com', RuntimeError(error))
+    attempt = manager.get_certificate_info('x.example.com', use_cache=False)['last_renewal_attempt']
+    assert len(attempt['error']) == 2000
+    assert attempt['ca_failure'] == 'validation'

@@ -1061,18 +1061,22 @@
         return text || 'The job failed without a message.';
     }
 
-    // A refusal by production Let's Encrypt, whose limits count failed
-    // attempts, says that staging exists and how to use it (UX perception
-    // audit, 2026-11-18, P22). Only when the CA answered and refused
-    // (`ca_refused`, failure_hints.ca_refused: a failed challenge, an ACME
-    // problem, a rate limit, a refused account): a failure that never reached
-    // the CA (no certbot lineage, a certificate that already exists, a DNS
-    // provider refusing CertMate's credentials) is not helped by staging.
-    // Production is "letsencrypt" without the staging flag: before 2.12.0 Let's
-    // Encrypt staging was recorded as "letsencrypt" with it, and still renews
-    // from staging. No recorded CA is not known to be production.
-    function refusedByProductionLetsEncrypt(caProvider, staging, caRefused) {
-        return caRefused === true && caProvider === 'letsencrypt' && staging !== true;
+    // A failed validation or a rate limit at production Let's Encrypt says
+    // that staging exists and how to use it (UX perception audit, 2026-11-18,
+    // P22): what staging helps with is repeating validation attempts without
+    // spending production's limits. From `ca_failure` (failure_hints.ca_failure,
+    // read from the whole error): "validation" or "rate_limit". Not "account"
+    // (staging refuses the same email), "order" (the same policy and CAA),
+    // "other", or null (the CA was not reached: no certbot lineage, a
+    // certificate that already exists, a DNS provider refusing CertMate's
+    // credentials, an unreachable directory). Production is "letsencrypt"
+    // without the staging flag: before 2.12.0 Let's Encrypt staging was
+    // recorded as "letsencrypt" with it, and still renews from staging. No
+    // recorded CA is not known to be production.
+    var STAGING_HELPS_WITH = ['validation', 'rate_limit'];
+
+    function stagingWouldHelp(caProvider, staging, caFailure) {
+        return STAGING_HELPS_WITH.indexOf(caFailure) !== -1 && caProvider === 'letsencrypt' && staging !== true;
     }
 
     var STAGING_HINT_SHORT = 'Test with staging first';
@@ -1088,7 +1092,8 @@
         var what = isIp ? 'address' : 'domain';
         if (!roleAtLeast('operator')) {
             return escapeHtml(STAGING_HINT_SHORT + ': an operator can request a certificate for this ' + what +
-                ' from Let\'s Encrypt (Staging). ' + STAGING_LIMITS);
+                ' from Let\'s Encrypt (Staging), once Settings, CA has an account for it. ' +
+                STAGING_LIMITS);
         }
         var example = 'staging.' + String(host || '').replace(/^\*\./, '');
         return escapeHtml(STAGING_HINT_SHORT + ': request a certificate for this ' + what + ' with ') +
@@ -1117,7 +1122,7 @@
             '<div class="font-semibold">Last renewal failed' + (when ? ' ' + escapeHtml(when) : '') + '</div>' +
             '<div class="[overflow-wrap:anywhere]" title="' + escapeHtml(failed.error || '') + '">' + escapeHtml(failureCause(failed.error)) + '</div>' +
             (failed.hint ? '<div class="mt-1 text-label break-words">' + escapeHtml(failed.hint) + '</div>' : '') +
-            (refusedByProductionLetsEncrypt(cert.ca_provider, cert.staging, failed.ca_refused)
+            (stagingWouldHelp(cert.ca_provider, cert.staging, failed.ca_failure)
                 ? stagingHintHtml(cert.host || cert.domain, !!cert.ip_address) : '') +
             '<a href="/activity" class="text-xs text-info-fg hover:underline">See it in the Activity log</a>' +
             '</div>';
@@ -1358,7 +1363,7 @@
                 : false;
             // The how is in the detail panel; the row says only that staging is there.
             var stagingHint = renewalFailed &&
-                    refusedByProductionLetsEncrypt(cert.ca_provider, cert.staging, renewalFailed.ca_refused)
+                    stagingWouldHelp(cert.ca_provider, cert.staging, renewalFailed.ca_failure)
                 ? rowRaw('<div class="mt-1 text-xs text-label" data-staging-hint>' + STAGING_HINT_SHORT +
                     (roleAtLeast('operator') ? ': its details say how' : ': its details say more') + '</div>')
                 : false;
@@ -4540,7 +4545,7 @@
             (job.hint ? '<div class="mt-1 text-xs text-label break-words" data-failure-hint>' + escapeHtml(job.hint) + '</div>' : '') +
             // The CA the request went to, as the job says (the request may
             // have named none and taken the default).
-            (refusedByProductionLetsEncrypt(job.jobCaProvider || job.caProvider, false, job.caRefused)
+            (stagingWouldHelp(job.jobCaProvider || job.caProvider, false, job.caFailure)
                 ? stagingHintHtml(job.domain, !!ipAddressOf(job.domain || ''), 'text-xs') : '') +
             '</div></div></td>' +
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
@@ -4726,7 +4731,7 @@
                     // output stays in the row.
                     pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
                     pendingJobs[jobId].jobCaProvider = (jobRec && jobRec.ca_provider) || '';
-                    pendingJobs[jobId].caRefused = !!(jobRec && jobRec.ca_refused === true);
+                    pendingJobs[jobId].caFailure = (jobRec && jobRec.ca_failure) || null;
                     delete pendingPollTimers[jobId];
                     var failedKind = pendingJobs[jobId].kind || (jobRec && jobRec.operation);
                     var failedHint = pendingJobs[jobId].hint;

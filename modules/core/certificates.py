@@ -38,7 +38,7 @@ from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStr
                              manual_hook_arguments, plugin_install_hint)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs)
-from .failure_hints import ca_refused, renewal_failure
+from .failure_hints import ca_failure, renewal_failure
 from .inventory_sources import collect_domain_sources
 from . import acme_profiles, renewal_policy
 from .domain_entries import entry_auto_renew, entry_domain, entry_external
@@ -5448,6 +5448,7 @@ class CertificateManager:
                 'outcome': 'failed',
                 'error': message[:_RENEWAL_ERROR_KEPT],
                 'hint': renewal_failure(message, self._renewal_challenge_type(domain))['hint'],
+                'ca_failure': ca_failure(message),
                 'cert_sha256': _held_fingerprint(directory / 'cert.pem'),
             }
             self._atomic_json_write(directory / LAST_RENEWAL_ATTEMPT_FILE, record)
@@ -5504,8 +5505,11 @@ class CertificateManager:
         if record.get('cert_sha256') != cert.fingerprint(hashes.SHA256()).hex():
             return None
         attempt = {key: record.get(key) for key in LAST_RENEWAL_ATTEMPT_FIELDS}
-        # From the stored error, so a record kept before the field has it too.
-        attempt['ca_refused'] = ca_refused(attempt.get('error'))
+        # Classified from the whole error when it was recorded (the record keeps
+        # only its first 2000 characters); a record from before the field is
+        # classified from what it kept.
+        attempt['ca_failure'] = (record['ca_failure'] if 'ca_failure' in record
+                                 else ca_failure(attempt.get('error')))
         return attempt
 
     def _renewal_info_for(self, domain, cert, settings):

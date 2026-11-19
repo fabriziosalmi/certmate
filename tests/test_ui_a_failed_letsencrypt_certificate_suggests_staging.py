@@ -8,10 +8,12 @@ the way says a test mode exists. Decided: no wizard change and no new default,
 only a hint on a failed certificate whose CA is production Let's Encrypt, on
 the failed row and in the detail panel's last renewal.
 
-Only when the CA answered and refused (`ca_refused`: a failed challenge, an
-ACME problem, a rate limit): a renewal with no certbot lineage, or a create for
-a domain that already has a certificate, never reached the CA, and staging
-cannot help there. Production Let's Encrypt is `ca_provider` "letsencrypt"
+Only for a failed validation or a rate limit (`ca_failure` "validation" or
+"rate_limit"), what staging helps with: repeating validation attempts without
+spending production's limits. Not for a refused account email or a refused
+order (staging refuses the same), nor for a failure that never reached the CA
+(a renewal with no certbot lineage, a create for a domain that already has a
+certificate). Production Let's Encrypt is `ca_provider` "letsencrypt"
 without `staging`: a certificate from before 2.12.0 records Let's Encrypt
 staging as "letsencrypt" with that flag, and one with no recorded CA is not
 known to be either. A failed create names the CA it went to in its job
@@ -55,9 +57,9 @@ def _stamp(delta):
     return (datetime.datetime.now(datetime.UTC) + delta).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-def _attempt(error=ERROR, ca_refused=True):
+def _attempt(error=ERROR, ca_failure='validation'):
     return {'attempted_at': _stamp(-datetime.timedelta(minutes=2)), 'outcome': 'failed',
-            'error': error, 'hint': 'The previous certificate is still in place.', 'ca_refused': ca_refused}
+            'error': error, 'hint': 'The previous certificate is still in place.', 'ca_failure': ca_failure}
 
 
 FAILED = _attempt()
@@ -106,7 +108,7 @@ def _serve(page, certs, job=None, role=None):
         page.route('**/api/certificates/jobs/c1', lambda route: _json(route, {
             'job_id': 'c1', 'domain': NEW, 'operation': 'create', 'status': 'failed',
             'error': 'Certificate creation failed: urn:ietf:params:acme:error:dns', 'error_code':
-            'CERTIFICATE_CREATION_FAILED', 'hint': None, 'ca_refused': True, **job}))
+            'CERTIFICATE_CREATION_FAILED', 'hint': None, 'ca_failure': 'validation', **job}))
 
 
 def _open(page, certs, job=None, role=None):
@@ -167,9 +169,16 @@ def test_a_failed_renewal_elsewhere_than_production_letsencrypt_says_nothing_of_
     assert detail.locator('[data-staging-hint]').count() == 0
 
 
-def test_a_renewal_that_never_reached_the_ca_says_nothing_of_staging(page):
-    """No certbot lineage to renew: staging cannot help."""
-    _open(page, [_cert('letsencrypt', attempt=_attempt(NO_LINEAGE, ca_refused=False))])
+@pytest.mark.parametrize('error, kind', [
+    # No certbot lineage to renew: the CA was not reached.
+    (NO_LINEAGE, None),
+    # Staging refuses the same address and the same order.
+    ('urn:ietf:params:acme:error:invalidContact :: contact email has forbidden domain', 'account'),
+    ('Error creating new order :: ... because it is forbidden by policy', 'order'),
+    ('urn:ietf:params:acme:error:serverInternal :: The server experienced an internal error', 'other'),
+])
+def test_a_renewal_failure_staging_cannot_help_with_says_nothing_of_staging(page, error, kind):
+    _open(page, [_cert('letsencrypt', attempt=_attempt(error, ca_failure=kind))])
     page.wait_for_selector(f'{ROW} [data-renewal-failed]', timeout=5000)
     assert page.locator(f'{ROW} [data-staging-hint]').count() == 0
     assert _detail(page).locator('[data-staging-hint]').count() == 0
@@ -194,14 +203,15 @@ def test_a_failed_create_that_production_letsencrypt_refused_suggests_staging_an
 
 
 def test_a_create_for_a_domain_that_already_has_a_certificate_says_nothing_of_staging(page):
-    _open(page, [], job={'ca_provider': 'letsencrypt', 'error': ALREADY_EXISTS, 'ca_refused': False})
+    _open(page, [], job={'ca_provider': 'letsencrypt', 'error': ALREADY_EXISTS, 'ca_failure': None})
     _failed_create_row(page)
     assert page.locator(f'{PENDING} [data-staging-hint]').count() == 0
 
 
 @pytest.mark.parametrize('job', [{'ca_provider': 'letsencrypt_staging'}, {'ca_provider': 'zerossl'},
                                  # A job from before 2.72 does not say.
-                                 {'ca_refused': None}])
+                                 {'ca_failure': None},
+                                 {'ca_failure': 'account'}, {'ca_failure': 'order'}])
 def test_a_failed_create_elsewhere_says_nothing_of_staging(page, job):
     _open(page, [], job=job)
     _failed_create_row(page)
@@ -221,5 +231,14 @@ def test_a_viewer_is_told_only_that_an_operator_can(page):
     _open(page, [_cert('letsencrypt')], role='viewer')
     assert 'its details say more' in page.inner_text(f'{ROW} [data-staging-hint]')
     text = _detail(page).locator('[data-staging-hint]').inner_text()
+    # True whether or not a staging CA account exists yet.
     assert 'an operator can request a certificate' in text, text
-    assert 'Name' not in text and 'Add CA Account' not in text and 'Settings' not in text, text
+    assert 'once Settings, CA has an account for it' in text, text
+    assert 'Name' not in text and 'Add CA Account' not in text, text
+    assert page.locator('#certDetailContent [data-staging-hint] a').count() == 0
+
+
+def test_a_rate_limit_at_production_letsencrypt_suggests_staging(page):
+    _open(page, [_cert('letsencrypt', attempt=_attempt(
+        'Error creating new order :: too many failed authorizations (5) for "x"', ca_failure='rate_limit'))])
+    assert 'Test with staging first' in _detail(page).locator('[data-staging-hint]').inner_text()

@@ -824,7 +824,9 @@ METADATA_SCHEMA_VERSION = 1
 #                                   to (named; else for a create the default,
 #                                   for a reissue the recorded CA or the
 #                                   default); null for a renewal. A failed job
-#                                   and last_renewal_attempt carry ca_refused.
+#                                   and last_renewal_attempt carry ca_failure
+#                                   (validation, rate_limit, account, order,
+#                                   other, or null).
 #                                   A certificate's answer carries staging,
 #                                   true when its recorded CA is a staging one
 #                                   (also a pre-2.12.0 letsencrypt record with

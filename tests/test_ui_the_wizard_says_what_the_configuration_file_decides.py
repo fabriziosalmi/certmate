@@ -75,7 +75,7 @@ def test_a_declared_account_is_said_not_saved_on_step_three(declared, instance, 
         text = _step_three(page, base)
         assert 'Settings saved, not all in effect' in text, text
         note = page.inner_text('[data-not-in-effect]')
-        assert 'Cloudflare credentials: not saved' in note and 'CERTMATE_CONFIG_FILE' in note, note
+        assert 'Cloudflare API Token: not saved' in note and 'CERTMATE_CONFIG_FILE' in note, note
         assert TYPED not in text and 'from-the-environment' not in text
     finally:
         page.close()

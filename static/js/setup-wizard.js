@@ -705,27 +705,34 @@
 
     // One sentence per value the save set that is not the one in effect, as
     // the save's answer names them: by what, never with a value.
+    // The label the credential form gives a field, or the field's own name.
+    function fieldLabel(provider, field) {
+        var found = ((PROVIDERS[provider] || {}).fields || []).filter(function (f) { return f.key === field; })[0];
+        return found ? found.label : field;
+    }
+
     function notInEffectSentence(entry) {
         var setting = String(entry.setting || '');
         var by = String(entry.by || '');
-        var dns = setting.match(/^dns_providers\.([^.]+)\.accounts\.([^.]+)/);
-        var provider = dns ? providerLabel(dns[1]) : '';
-        if (setting === 'email' && by === 'LETSENCRYPT_EMAIL') {
-            return 'Email: LETSENCRYPT_EMAIL on this instance replaces ' + state.email.trim() + ', the address you entered.';
+        if (setting === 'email') {
+            return by === 'LETSENCRYPT_EMAIL'
+                ? 'Email: LETSENCRYPT_EMAIL on this instance replaces ' + state.email.trim() + ', the address you entered.'
+                : 'Email: another setting decides the address in use, not the one you entered.';
         }
-        if (dns && by === 'CERTMATE_CONFIG_FILE') {
-            return provider + ' credentials: not saved. The configuration file named by CERTMATE_CONFIG_FILE ' +
-                'declares the account ' + dns[2] + ', and its credentials are the ones used.';
+        var dns = setting.match(/^dns_providers\.([^.]+)\.accounts\.([^.]+)\.([^.]+)$/);
+        if (!dns) return setting + ': ' + by + ' decides the value in use, not the one you entered.';
+        var what = providerLabel(dns[1]) + ' ' + fieldLabel(dns[1], dns[3]);
+        if (by === 'CERTMATE_CONFIG_FILE') {
+            return what + ': not saved. The configuration file named by CERTMATE_CONFIG_FILE declares the account ' +
+                dns[2] + ', and its value is the one used.';
         }
-        if (dns && by === 'CLOUDFLARE_TOKEN') {
-            return provider + ' API token: CLOUDFLARE_TOKEN on this instance replaces the token you entered.';
+        if (/_(env|file)$/.test(by)) {
+            return what + ': the account ' + dns[2] + ' takes it from ' + by + ', not from what you entered.';
         }
-        if (dns && by.indexOf('default_accounts.') === 0) {
-            return provider + ' credentials: saved in the account ' + dns[2] + ', but certificates use ' +
-                (entry.account ? 'the account ' + entry.account : 'no account of ' + provider) +
-                ' unless they name another.';
+        if (by === 'another setting') {
+            return what + ': another setting decides the value in use, not what you entered.';
         }
-        return setting + ': ' + by + ' decides it instead.';
+        return what + ': ' + by + ' on this instance replaces what you entered.';
     }
 
     function notInEffectHtml() {

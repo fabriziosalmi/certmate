@@ -252,14 +252,6 @@ class DNSManager:
                 exc.reason)
             return None, None
 
-    def default_account_id(self, provider, settings=None):
-        """The account *provider* issues with when a request names none, or None.
-
-        The lookup issuance uses, without resolving any secret reference.
-        """
-        _, used_account_id = self._locate_account_config(provider, settings=settings)
-        return used_account_id
-
     def _locate_account_config(self, provider, account_id=None, settings=None):
         """Find the stored account configuration, exactly as written.
 

@@ -132,9 +132,11 @@ def test_an_email_the_environment_pins_is_the_one_step_three_shows(page):
 
 @pytest.mark.parametrize('entry, says', [
     ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'CLOUDFLARE_TOKEN'},
-     'Cloudflare API token: CLOUDFLARE_TOKEN on this instance replaces the token you entered.'),
-    ({'setting': 'dns_providers.cloudflare.accounts.default', 'by': 'default_accounts.cloudflare', 'account': 'prod'},
-     'Cloudflare credentials: saved in the account default, but certificates use the account prod'),
+     'Cloudflare API Token: CLOUDFLARE_TOKEN on this instance replaces what you entered.'),
+    ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'api_token_env'},
+     'Cloudflare API Token: the account default takes it from api_token_env, not from what you entered.'),
+    ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'another setting'},
+     'Cloudflare API Token: another setting decides the value in use, not what you entered.'),
 ])
 def test_credentials_something_else_decides_are_said_so(page, entry, says):
     _wizard(page, not_in_effect=[entry])

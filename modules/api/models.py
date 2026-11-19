@@ -292,9 +292,13 @@ def create_api_models(api):
             description=(
                 'What to check, the hint the renewal job gives for the same error, ending with '
                 '"The previous certificate is still in place."')),
-        'ca_refused': fields.Boolean(description=(
-            'True when the error shows the CA answered and refused: a failed challenge, an ACME problem, '
-            'a rate limit or a refused account registration. Read from error. Since API contract 2.72.')),
+        'ca_failure': fields.String(
+            enum=['validation', 'rate_limit', 'account', 'order', 'other'],
+            description=(
+                "What the CA's answer, in the whole error, shows went wrong: validation (a challenge "
+                'failed), rate_limit, account (registration or account refused), order (new-order or '
+                'finalize refused: policy, CAA, identifier, CSR), other (any other ACME problem), or null '
+                'when the CA was not reached or it cannot be told. Since API contract 2.72.')),
     })
 
     certificate_model = api.model('Certificate', {

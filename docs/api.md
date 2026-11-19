@@ -425,7 +425,7 @@ after a reload and for a failure nobody watched.
   "outcome": "failed",
   "error": "Certificate renewal failed: ... DNS problem: NXDOMAIN looking up TXT for _acme-challenge.app.example.com",
   "hint": "The CA could not verify the DNS TXT record: check that it was created in the name's zone and has had time to propagate. The previous certificate is still in place.",
-  "ca_refused": true
+  "ca_failure": "validation"
 }
 ```
 
@@ -438,13 +438,20 @@ renewal that happened, and once a reissue or an upload has replaced the
 certificate it was about. A domain busy with another operation is not a failed
 renewal and leaves nothing. Since API contract **2.70**.
 
-`ca_refused` is `true` when `error` shows that the CA answered and refused: a
-failed challenge, an ACME problem document, a rate limit, or a refused account
-registration. It is `false` for a failure that never reached the CA, such as a
-renewal with no certbot lineage, a DNS provider refusing CertMate's
-credentials, or a CA directory that could not be reached. It is read from
-`error`, so a record kept before the field has it too. Since API contract
-**2.72**.
+`ca_failure` says what the CA's answer, in the whole error (not only the 2000
+characters kept), shows went wrong. The first that matches, in this order:
+
+| `ca_failure` | When the error says |
+| --- | --- |
+| `null` | The CA's directory could not be reached (urllib3's own words), or nothing shows the CA answered: a renewal with no certbot lineage, a certificate that already exists, a DNS provider refusing CertMate's credentials. |
+| `rate_limit` | A rate limit: `rateLimited`, "too many certificates", "too many failed authorizations", "too many new orders", and the like. |
+| `account` | The account or its registration was refused: "unable to register an account", `invalidContact`, `unsupportedContact`, `invalidEmail`, "invalid email address", `accountDoesNotExist`, `externalAccountRequired`. |
+| `order` | The order was refused at new-order or at finalize: "Error creating new order", "Error finalizing order", "forbidden by policy", `rejectedIdentifier`, `caa` or a CAA record, `badCSR`. |
+| `validation` | A challenge failed at the CA: "Some challenges have failed", "DNS problem", "Invalid response from", the `unauthorized`, `connection`, `dns` and `incorrectResponse` problem types. |
+| `other` | Any other ACME problem document (`urn:ietf:params:acme:error:`), such as `serverInternal`. |
+
+A record kept before the field is classified from the error it kept. Since
+API contract **2.72**.
 
 ##### Is it a staging certificate?
 
@@ -1860,9 +1867,10 @@ the CA its request went to: the one it named; when it named none, for a create
 the instance's default CA, for a reissue the CA the certificate records, or the
 default when it records none. A renewal job carries `null`; the CA a renewal
 goes to is the certificate's `ca_provider`, which is `null` when none was
-recorded. A job that failed carries `ca_refused`, as a certificate's
-`last_renewal_attempt` does; `null` while it runs and after it succeeds. Since
-API contract **2.72**.
+recorded. A job that failed carries `ca_failure`, classified from its whole
+error as a certificate's `last_renewal_attempt` is; `null` while it runs, after
+it succeeds, and for a domain busy with another operation. Since API contract
+**2.72**.
 
 **Errors**: 400 validation or configuration (the body names the problem),
 403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a
@@ -2425,17 +2433,26 @@ provider is in [sso.md](./sso.md).
 #### What a settings save does not decide
 
 Since API contract **2.72** the answer to `POST /api/settings` carries
-`not_in_effect`: what the save set that something else decides instead, by
-name and never with a value. Each entry is `{"setting", "by"}`, with `setting`
-a dotted path into the settings:
+`not_in_effect`. For the contact `email` and for every field written into a
+DNS provider's account (in the `accounts` shape or the flat one, and the
+legacy `cloudflare_token`), the save reads the value in effect back the way
+issuance reads it, with references resolved and the environment and the
+configuration file applied, and compares it with the value written. Each that
+differs is an entry `{"setting", "by"}`: `setting` is the dotted path written,
+`by` what decides the value in use. No credential value is returned or logged.
 
 | `by` | What happens to the value written |
 | --- | --- |
 | `LETSENCRYPT_EMAIL`, `CLOUDFLARE_TOKEN` | Kept in the file, and replaced by the environment variable whenever the settings are read. |
 | `CERTMATE_CONFIG_FILE` | Not saved: the configuration file declares that account, and its fields are the ones used. |
-| `default_accounts.<provider>` | Saved, but the provider issues with another account by default, named in `account` (`null` when none of its accounts can issue). |
+| `<field>_env`, `<field>_file` | Kept, but the account takes the field from that reference, which comes first. |
+| `auth_mode` | A Route 53 account in IAM role mode does not use access keys. |
+| `another setting` | The value in use is another, and what decides it cannot be named. |
 
-The list is empty when everything written is in effect.
+A value written into an account other than the provider's default is in effect
+for the certificates that name that account, and is not listed. The list is
+empty when every email and DNS account value written is the one in effect;
+other settings are not checked.
 
 #### SSO settings
 

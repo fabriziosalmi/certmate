@@ -18,7 +18,7 @@ import uuid
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
-from .failure_hints import ca_refused
+from .failure_hints import ca_failure
 from .utils import utc_now_iso
 from .certificates import DomainOperationInProgress
 
@@ -104,8 +104,8 @@ class IssuanceExecutor:
         by production Let's Encrypt). The CA the request named; when it named
         none, for a create the instance default, for a reissue the CA the
         certificate records, or the instance default when it records none.
-        None for a renewal. A failed job also says whether the CA answered
-        and refused (`ca_refused`, from failure_hints.ca_refused).
+        None for a renewal. A failed job also says what the CA's answer, in
+        its whole error, says went wrong (`ca_failure`, failure_hints.ca_failure).
 
         Raises `IssuanceQueueFull` when the backlog is already at the limit,
         which the API turns into a 429. The check and the registration happen
@@ -136,7 +136,7 @@ class IssuanceExecutor:
                 'error_code': None,
                 'hint': None,
                 'ca_provider': ca_provider,
-                'ca_refused': None,
+                'ca_failure': None,
             }
             self._evict_locked()
         try:
@@ -233,7 +233,7 @@ class IssuanceExecutor:
                       error_code=('DOMAIN_OPERATION_IN_PROGRESS' if busy
                                   else explained.get('code')),
                       hint=explained.get('hint'),
-                      ca_refused=not busy and ca_refused(str(e)))
+                      ca_failure=None if busy else ca_failure(str(e)))
         finally:
             if ctx is not None:
                 ctx.pop()
