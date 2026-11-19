@@ -61,6 +61,12 @@ def deploy_tab(browser_page, ui_session_cookie):
         yield page, panel
     finally:
         context.close()
+        # gunicorn closes an idle keep-alive connection after about 2 s, and
+        # the test kept this one idle longer: the restore then went out on a
+        # dead connection (RemoteDisconnected on CI, #1528), the hooks the test
+        # saved stayed, and a later guard saw them appear on /settings#deploy.
+        # Closing the pool sends the restore on a fresh connection.
+        session.close()
         restored = session.post(f'{BASE_URL}/api/deploy/config', json=original,
                                 headers=dict(e2e_auth_headers(), Origin=BASE_URL), timeout=10)
         assert restored.status_code == 200, f'could not restore the deploy config: {restored.text[:200]}'
