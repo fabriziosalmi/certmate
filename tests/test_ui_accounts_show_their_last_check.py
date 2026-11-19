@@ -38,7 +38,10 @@ CF = 'ui-b17-cf'
 DO = 'ui-b17-do'
 CA = 'ui-b17-corp'
 TOKEN = 'Tk' + 'b17Q' * 10
-REFUSED = 'Cloudflare answered HTTP 401: Invalid API Token (code 1000)'
+REFUSED = 'Cloudflare answered HTTP 403: Invalid access token (code 9109)'
+PROVED = ('the token can read zones; permission to change DNS records is tested when a '
+          'certificate is requested')
+CA_SAID = 'The CA checks the account only when it registers'
 UNREACHABLE_CA = 'https://127.0.0.1:1/directory'
 NO_CA = 'Could not connect to 127.0.0.1 (ConnectionError)'
 
@@ -103,9 +106,9 @@ def test_a_provider_with_no_check_says_not_checkable_yet(page):
     assert card.locator('[data-last-check]').inner_text() == 'Not checkable yet'
 
 
-def test_check_credentials_shows_the_refusal_on_the_card_and_only_a_pass_is_green(page):
+def test_check_credentials_shows_the_refusal_and_a_pass_says_what_it_proved(page):
     _add(page, 'cloudflare', CF, {'api_token': TOKEN})
-    answers = [_check('failed', REFUSED), _check('passed')]
+    answers = [_check('failed', REFUSED), _check('passed', PROVED)]
     asked = []
 
     def check(route):
@@ -125,7 +128,7 @@ def test_check_credentials_shows_the_refusal_on_the_card_and_only_a_pass_is_gree
     assert text.startswith('Last check failed ') and text.endswith(': ' + REFUSED), text
     assert 'text-danger-fg' in line.get_attribute('class')
     toasts = page.locator('#cm-toasts').inner_text()
-    assert 'Invalid API Token' in toasts, toasts
+    assert 'Invalid access token' in toasts, toasts
     assert 'text-success-fg' not in (page.locator('#cloudflare-status').get_attribute('class') or '')
 
     page.locator(f'#cloudflare-accounts-list > div:has-text("ID: {CF}")').get_by_role(
@@ -133,9 +136,13 @@ def test_check_credentials_shows_the_refusal_on_the_card_and_only_a_pass_is_gree
     page.wait_for_function(
         "() => (document.querySelector('#cloudflare-accounts-list [data-last-check]') || {dataset: {}})"
         ".dataset.lastCheck === 'passed'", timeout=5000)
-    assert page.locator(f'#cloudflare-accounts-list > div:has-text("ID: {CF}") [data-last-check]').inner_text() \
-        .startswith('Last check passed ')
-    assert 'text-success-fg' in (page.locator('#cloudflare-status').get_attribute('class') or '')
+    passed = page.locator(f'#cloudflare-accounts-list > div:has-text("ID: {CF}") [data-last-check]')
+    text = passed.inner_text()
+    # What the check proved is on the card, not only in the API (review F6).
+    assert text.startswith('Last check passed ') and text.endswith(': ' + PROVED), text
+    assert 'text-success-fg' in passed.get_attribute('class')
+    # The tile has no room for that sentence, so a pass does not turn it green.
+    assert 'text-success-fg' not in (page.locator('#cloudflare-status').get_attribute('class') or '')
     assert asked == ['POST', 'POST']
 
 
@@ -234,3 +241,28 @@ def test_a_record_that_cannot_be_read_is_not_called_never_checked(page):
         assert lines.nth(i).inner_text() == 'Last check not known: CertMate could not be asked'
     heading = page.locator('[data-ca-accounts-status]').get_attribute('class') or ''
     assert 'fa-check-circle' not in heading, heading
+
+
+def test_a_ca_whose_directory_answers_reads_reachable_never_green(page):
+    """A CA check proves the directory answers, not the account (review F2)."""
+    page.route('**/api/web/settings/ca-providers/letsencrypt/accounts/default/check',
+               lambda route: route.fulfill(status=200, content_type='application/json', body=json.dumps(
+                   {'provider': 'letsencrypt', 'account_id': 'default',
+                    'last_check': _check('reachable', CA_SAID)})))
+    page.goto(f'{BASE_URL}/settings#ca', wait_until='networkidle')
+    row = page.locator('#configured-ca-list > div').filter(has_text="Let's Encrypt").first
+    row.wait_for(state='visible', timeout=10000)
+    row.get_by_role('button', name='Check credentials').click()
+    page.wait_for_function(
+        "() => (document.querySelector('#configured-ca-list [data-last-check]') || {dataset: {}})"
+        ".dataset.lastCheck === 'reachable'", timeout=5000)
+    line = page.locator('#configured-ca-list > div').filter(has_text="Let's Encrypt").first.locator(
+        '[data-last-check]')
+    text = line.inner_text()
+    assert text.startswith('Directory answered ') and text.endswith('. ' + CA_SAID + '.'), text
+    assert 'passed' not in text
+    assert 'text-success-fg' not in line.get_attribute('class')
+    heading = page.locator('[data-ca-accounts-status]').get_attribute('class') or ''
+    assert 'fa-check-circle' not in heading and 'text-green-500' not in heading, heading
+    assert 'Invalid' not in page.locator('#cm-toasts').inner_text()
+    assert 'Directory answered' in page.locator('#cm-toasts').inner_text()

@@ -607,6 +607,8 @@ class DNSManager:
                 return False
             if saved:
                 logger.info(f"Deleted DNS account '{account_id}' for provider '{provider}'")
+                from .account_checks import forget_account
+                forget_account(self.settings_manager, 'dns', provider, account_id)
             return saved
 
         except Exception as e:

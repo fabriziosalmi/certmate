@@ -5,42 +5,45 @@ that Cloudflare refuses read "Configured", and a private CA that did not answer
 was saved with a green "CA account saved" (UX audit P39). Saving proves the
 form was filled in, nothing more.
 
-A check here is one read-only call that only correct credentials pass:
+A check is one read-only call, and it says no more than that call proved:
 
-  cloudflare  GET https://api.cloudflare.com/client/v4/user/tokens/verify
-  route53     ListHostedZones with MaxItems 1
-  a CA        GET of the ACME directory issuance uses (the CA's own, or the
-              account's acme_url for a private CA, Sectigo or DigiCert)
+  cloudflare  GET https://api.cloudflare.com/client/v4/zones?per_page=1. It
+              passes when the token reads at least one zone, which works for
+              user and account-owned tokens alike. Permission to change DNS
+              records is not tested: that would take a write.
+  route53     ListHostedZones with MaxItems 1, with the same limit.
+  a CA        GET of the ACME directory issuance uses, following redirects
+              over https as the ACME client does. The outcome is `reachable`,
+              never `passed`: without registering an account nothing tells a
+              good EAB key from a bad one.
 
-Every other DNS provider is "not checkable": no call is made and nothing
-passes. A CA check cannot test an EAB key without registering an account, so a
-CA pass means the directory answered and the account has what issuance reads,
-and says so in its reason.
+Every other DNS provider is "not checkable": no call, never a pass.
 
 The credentials are the ones issuance uses: references (`api_token_file`,
 `eab_hmac_env`) are read by the resolvers issuance calls
-(DNSManager.resolve_account_config, CAManager.get_eab_credentials), never by a
-second copy.
+(DNSManager.resolve_account_config, CAManager.get_eab_credentials), and a CA
+account without an email uses the instance's, as issuance does.
 
 The result is kept per account in `account_checks.json` beside settings.json,
-written only by a check the server ran. It is not in settings.json, so no
-settings write (the settings endpoints, an account save, a restore) can put a
-"passed" there. It carries a fingerprint of the account as checked: once the
-account changes, the stored result no longer describes it and the account reads
-"never checked" again.
+written only by a check the server ran, so no settings write can put a "passed"
+there. It is keyed by an HMAC, with the instance secret, of the credentials as
+resolved when the check ran: a changed token, file or variable no longer
+matches, and the account reads "never" again. An identity CertMate does not
+hold (Route53 in iam_role mode) cannot be keyed; its pass says so.
 """
 from __future__ import annotations
 
-import hashlib
+import hmac
 import json
 import logging
 import os
+import secrets
 import tempfile
 import threading
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -51,27 +54,35 @@ logger = logging.getLogger(__name__)
 
 PASSED = 'passed'
 FAILED = 'failed'
+REACHABLE = 'reachable'
 NOT_CHECKABLE = 'not_checkable'
 NEVER = 'never'
 
 CHECKABLE_DNS_PROVIDERS = frozenset({'cloudflare', 'route53'})
-CLOUDFLARE_VERIFY_URL = 'https://api.cloudflare.com/client/v4/user/tokens/verify'
-# (connect, read) in seconds: a host that does not answer costs five.
-TIMEOUT = (5, 10)
+CLOUDFLARE_ZONES_URL = 'https://api.cloudflare.com/client/v4/zones'
+CONNECT_TIMEOUT = 5
+READ_TIMEOUT = 10
+TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
+MAX_REDIRECTS = 5
 REASON_LIMIT = 200
+_TESTED_LATER = 'permission to change DNS records is tested when a certificate is requested'
 # Labels. Renaming an account does not change what was checked.
 _LABELS = frozenset({'name', 'description'})
 _EAB_FIELDS = ('eab_kid', 'eab_key_id', 'eab_hmac', 'eab_hmac_key')
+_REDIRECTS = frozenset({301, 302, 303, 307, 308})
 
 _stores: dict[str, AccountCheckStore] = {}
 _stores_lock = threading.Lock()
+# Only when no instance secret is at hand (a manager graph built without auth):
+# a record keyed with it does not outlive the process, which is never a false pass.
+_PROCESS_KEY = secrets.token_bytes(32)
 
 
 def _now() -> str:
     return datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-def bounded_reason(text, secrets=()) -> str:
+def bounded_reason(text, secrets_=()) -> str:
     """*text* on one line, at most REASON_LIMIT characters, with no secret in it.
 
     The reason comes from the provider (its own message) and is stored and
@@ -79,7 +90,7 @@ def bounded_reason(text, secrets=()) -> str:
     the page: every credential value checked is replaced before anything else.
     """
     line = str(text)
-    for secret in secrets:
+    for secret in secrets_:
         if isinstance(secret, str) and len(secret) >= 4:
             line = line.replace(secret, '********')
     line = ' '.join(line.split())
@@ -89,17 +100,18 @@ def bounded_reason(text, secrets=()) -> str:
     return line
 
 
-def _result(outcome, reason, secrets=()) -> dict:
+def _result(outcome, reason, secrets_=()) -> dict:
     return {'outcome': outcome, 'at': _now(),
-            'reason': bounded_reason(reason, secrets) if reason else None}
+            'reason': bounded_reason(reason, secrets_) if reason else None}
 
 
-def fingerprint(config) -> str:
-    """What the stored result is about: the account as saved, labels aside."""
-    shaped = {key: value for key, value in (config or {}).items() if key not in _LABELS}
-    return hashlib.sha256(
-        json.dumps(shaped, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+def _timeout_reason(exc, host) -> str:
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return f'{host} did not answer within {CONNECT_TIMEOUT} seconds'
+    return f'{host} did not finish its answer within {READ_TIMEOUT} seconds'
 
+
+# ------------------------------------------------------------------ store
 
 class AccountCheckStore:
     """The last check of each account, in one JSON file written 0600."""
@@ -108,16 +120,15 @@ class AccountCheckStore:
         self.path = Path(path)
         self._lock = threading.Lock()
 
-    def _read(self) -> dict:
+    def _read(self) -> tuple[dict, bool]:
+        """`(data, corrupt)`."""
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
         except FileNotFoundError:
-            return {}
-        except (OSError, ValueError) as exc:
-            logger.warning("The account check results could not be read (%s); "
-                           "every account reads never checked", type(exc).__name__)
-            return {}
-        return data if isinstance(data, dict) else {}
+            return {}, False
+        except (OSError, ValueError):
+            return {}, True
+        return (data, False) if isinstance(data, dict) else ({}, True)
 
     def _write(self, data) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,29 +142,59 @@ class AccountCheckStore:
             Path(name).unlink(missing_ok=True)
             raise
 
-    def record(self, kind, provider, account_id, config, result) -> None:
-        """Keep *result*, a check the server ran on *config*."""
-        entry = {'outcome': result['outcome'], 'at': result['at'],
-                 'reason': result.get('reason'), 'fingerprint': fingerprint(config)}
+    def _change(self, change) -> None:
+        """Read, *change*, write, under the lock. A file that cannot be read is
+        kept aside first, so the write does not replace every other result."""
         with self._lock:
-            data = self._read()
-            data.setdefault(kind, {}).setdefault(provider, {})[account_id] = entry
+            data, corrupt = self._read()
+            if corrupt:
+                aside = self.path.with_name(
+                    f"{self.path.name}.corrupt-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}")
+                try:
+                    os.replace(self.path, aside)
+                    logger.error("The account check results could not be read; the file was "
+                                 "kept as %s and a new one started", aside.name)
+                except OSError as exc:
+                    logger.error("The account check results could not be read nor kept aside (%s); "
+                                 "nothing was written", type(exc).__name__)
+                    return
+            change(data)
             try:
                 self._write(data)
             except OSError as exc:
-                logger.error("The result of an account check could not be saved (%s)",
-                             type(exc).__name__)
+                logger.error("The account check results could not be saved (%s)", type(exc).__name__)
 
-    def last(self, kind, provider, account_id, config) -> dict:
+    def record(self, kind, provider, account_id, key, result) -> None:
+        """Keep *result*, a check the server ran on the credentials *key* names."""
+        entry = {'outcome': result['outcome'], 'at': result['at'],
+                 'reason': result.get('reason'), 'fingerprint': key}
+        self._change(lambda data: data.setdefault(kind, {}).setdefault(provider, {}).__setitem__(
+            account_id, entry))
+
+    def forget(self, kind, provider, account_id) -> None:
+        if not self.path.exists():
+            return
+
+        def drop(data):
+            accounts = (data.get(kind) or {}).get(provider)
+            if isinstance(accounts, dict):
+                accounts.pop(account_id, None)
+        self._change(drop)
+
+    def last(self, kind, provider, account_id, key) -> dict:
         """The account's last check, as `{outcome, at, reason}`.
 
-        `never` when nothing was recorded for the account as it is now, and
-        `not_checkable` for a DNS provider no check exists for.
+        `never` when nothing was recorded for these credentials (*key* None:
+        they cannot be resolved now), `not_checkable` for a DNS provider no
+        check exists for.
         """
-        entry = (((self._read().get(kind) or {}).get(provider) or {}).get(account_id))
-        if isinstance(entry, dict) and entry.get('fingerprint') == fingerprint(config):
-            return {'outcome': entry.get('outcome'), 'at': entry.get('at'),
-                    'reason': entry.get('reason')}
+        data, corrupt = self._read()
+        if corrupt:
+            logger.warning("The account check results could not be read; every account reads "
+                           "never checked until the next check")
+        entry = ((data.get(kind) or {}).get(provider) or {}).get(account_id)
+        if key and isinstance(entry, dict) and hmac.compare_digest(str(entry.get('fingerprint')), key):
+            return {'outcome': entry.get('outcome'), 'at': entry.get('at'), 'reason': entry.get('reason')}
         if kind == 'dns' and provider not in CHECKABLE_DNS_PROVIDERS:
             return {'outcome': NOT_CHECKABLE, 'at': None, 'reason': None}
         return {'outcome': NEVER, 'at': None, 'reason': None}
@@ -166,6 +207,48 @@ def store_for(settings_manager) -> AccountCheckStore:
         if path not in _stores:
             _stores[path] = AccountCheckStore(path)
         return _stores[path]
+
+
+def forget_account(settings_manager, kind, provider, account_id) -> None:
+    """Drop a deleted account's record. A manager whose settings file is not a
+    path (a test double) has no store."""
+    if isinstance(getattr(settings_manager, 'settings_file', None), (str, os.PathLike)):
+        store_for(settings_manager).forget(kind, provider, account_id)
+
+
+# -------------------------------------------------------------- the key
+
+def _ca_manager(managers):
+    from .ca_manager import CAManager
+    return managers.get('ca') or CAManager(managers['settings'])
+
+
+def _instance_email(managers) -> str:
+    return str((managers['settings'].load_settings() or {}).get('email') or '')
+
+
+def _resolved(managers, kind, provider, config) -> dict:
+    """The credentials as issuance would use them. Raises if they cannot be read."""
+    if kind == 'dns':
+        return managers['dns'].resolve_account_config(provider, config)
+    eab = _ca_manager(managers).get_eab_credentials(provider, config)
+    return {**config, '_eab': list(eab),
+            '_email': config.get('email') or _instance_email(managers)}
+
+
+def credentials_key(managers, kind, provider, config):
+    """An HMAC, with the instance secret, of the resolved credentials; None
+    when they cannot be resolved (a missing file, an unset variable)."""
+    try:
+        resolved = _resolved(managers, kind, provider, config)
+    except (SecretReferenceError, ValueError):
+        return None
+    text = json.dumps({key: value for key, value in resolved.items() if key not in _LABELS},
+                      sort_keys=True, default=str)
+    auth = managers.get('auth')
+    if auth is not None and hasattr(auth, 'hash_api_token'):
+        return auth.hash_api_token(text)
+    return 'hmac-sha256:' + hmac.new(_PROCESS_KEY, text.encode('utf-8'), 'sha256').hexdigest()
 
 
 # --------------------------------------------------------------------- DNS
@@ -188,13 +271,15 @@ def _cloudflare_errors(body) -> str:
 
 
 def _check_cloudflare(token):
+    host = 'api.cloudflare.com'
     try:
-        response = requests.get(CLOUDFLARE_VERIFY_URL, headers={'Authorization': f'Bearer {token}'},
+        response = requests.get(CLOUDFLARE_ZONES_URL, params={'per_page': 1},
+                                headers={'Authorization': f'Bearer {token}'},
                                 timeout=TIMEOUT, allow_redirects=False)
-    except requests.Timeout:
-        return FAILED, f'api.cloudflare.com did not answer within {TIMEOUT[1]} seconds'
+    except requests.Timeout as exc:
+        return FAILED, _timeout_reason(exc, host)
     except requests.ConnectionError as exc:
-        return FAILED, f'Could not connect to api.cloudflare.com ({type(exc).__name__})'
+        return FAILED, f'Could not connect to {host} ({type(exc).__name__})'
     except (requests.RequestException, UnicodeError) as exc:
         # The class only: an InvalidHeader's text quotes the header, token and all.
         return FAILED, f'The request to Cloudflare was not sent ({type(exc).__name__})'
@@ -202,12 +287,11 @@ def _check_cloudflare(token):
         body = response.json()
     except ValueError:
         body = {}
-    result = body.get('result') if isinstance(body, dict) else None
-    status = result.get('status') if isinstance(result, dict) else None
-    if response.status_code == 200 and body.get('success') is True and status == 'active':
-        return PASSED, 'Cloudflare says the token is active'
-    if response.status_code == 200 and status:
-        return FAILED, f'Cloudflare says the token is {status}'
+    zones = body.get('result') if isinstance(body, dict) else None
+    if response.status_code == 200 and body.get('success') is True and isinstance(zones, list):
+        if zones:
+            return PASSED, f'the token can read zones; {_TESTED_LATER}'
+        return FAILED, 'Cloudflare accepted the token, but it reaches no zone'
     said = _cloudflare_errors(body)
     return FAILED, f'Cloudflare answered HTTP {response.status_code}' + (f': {said}' if said else '')
 
@@ -223,7 +307,7 @@ def _check_route53(config):
         from botocore.exceptions import BotoCoreError, ClientError
     except ImportError:
         return FAILED, 'boto3 is not installed here; Route53 issuance needs it too'
-    timeouts = Config(connect_timeout=TIMEOUT[0], read_timeout=TIMEOUT[1],
+    timeouts = Config(connect_timeout=CONNECT_TIMEOUT, read_timeout=READ_TIMEOUT,
                       retries={'max_attempts': 1})
     try:
         client = _aws_storage_client('route53', config.get('region') or 'us-east-1', mode,
@@ -234,7 +318,11 @@ def _check_route53(config):
         return FAILED, f"AWS answered {error.get('Code') or 'an error'}: {error.get('Message') or ''}"
     except BotoCoreError as exc:
         return FAILED, f'{type(exc).__name__}: {exc}'
-    return PASSED, 'Route53 listed the hosted zones'
+    if mode == 'iam_role':
+        # Not part of the record's key: CertMate does not hold that identity.
+        return PASSED, (f"this host's AWS identity can list hosted zones; {_TESTED_LATER}. "
+                        "A change to that identity is not seen until the next check")
+    return PASSED, f'the keys can list hosted zones; {_TESTED_LATER}'
 
 
 def _secret_values(provider, config) -> list:
@@ -263,18 +351,37 @@ def check_dns_account(dns_manager, provider, config) -> dict:
 
 # ---------------------------------------------------------------------- CA
 
-def _fetch_directory(url, verify):
+def _get_once(url, verify):
+    """One GET, no redirect followed: `(response, None)` or `(None, reason)`."""
     host = urlparse(url).hostname or url
     try:
-        response = requests.get(url, timeout=TIMEOUT, verify=verify, allow_redirects=False)
-    except requests.Timeout:
-        return FAILED, f'{host} did not answer within {TIMEOUT[1]} seconds'
+        return requests.get(url, timeout=TIMEOUT, verify=verify, allow_redirects=False), None
+    except requests.Timeout as exc:
+        return None, _timeout_reason(exc, host)
     except requests.exceptions.SSLError:
-        return FAILED, f'The TLS certificate of {host} could not be verified (SSLError)'
+        return None, f'The TLS certificate of {host} could not be verified (SSLError)'
     except requests.ConnectionError as exc:
-        return FAILED, f'Could not connect to {host} ({type(exc).__name__})'
+        return None, f'Could not connect to {host} ({type(exc).__name__})'
     except requests.RequestException as exc:
-        return FAILED, f'The request to {host} was not sent ({type(exc).__name__})'
+        return None, f'The request to {host} was not sent ({type(exc).__name__})'
+
+
+def _fetch_directory(url, verify):
+    """GET the directory, following redirects over https only, as the ACME
+    client follows them, at most MAX_REDIRECTS times."""
+    for hop in range(MAX_REDIRECTS + 1):
+        host = urlparse(url).hostname or url
+        response, refused = _get_once(url, verify)
+        if refused:
+            return FAILED, refused
+        location = (getattr(response, 'headers', None) or {}).get('Location')
+        if response.status_code not in _REDIRECTS or not location:
+            break
+        if hop == MAX_REDIRECTS:
+            return FAILED, f'{host} redirected more than {MAX_REDIRECTS} times'
+        url = urljoin(url, location)
+        if urlparse(url).scheme.lower() != 'https':
+            return FAILED, f'{host} redirected to a URL that is not https, which is not followed'
     if response.status_code != 200:
         return FAILED, f'{host} answered HTTP {response.status_code}'
     try:
@@ -283,13 +390,17 @@ def _fetch_directory(url, verify):
         directory = None
     if not isinstance(directory, dict) or 'newAccount' not in directory:
         return FAILED, f'{host} answered, but not with an ACME directory'
-    return PASSED, f'The ACME directory at {host} answered'
+    return REACHABLE, None
 
 
-def check_ca_account(ca_manager, provider, config) -> dict:
-    """Check the CA account *config* of *provider*, saved or about to be."""
-    if not str(config.get('email') or '').strip():
-        return _result(FAILED, 'The account has no email address, which the CA needs to register it')
+def check_ca_account(ca_manager, provider, config, instance_email='') -> dict:
+    """Check the CA account *config* of *provider*, saved or about to be.
+
+    `reachable` at best: the directory answered and the account has what
+    issuance reads. The CA checks the account and its EAB key only when it
+    registers, which a read-only check cannot do."""
+    if not str(config.get('email') or instance_email or '').strip():
+        return _result(FAILED, 'Neither the account nor the instance has an email address, which the CA needs')
     valid, message = ca_manager.validate_ca_configuration(provider, config)
     if not valid:
         return _result(FAILED, message)
@@ -298,7 +409,7 @@ def check_ca_account(ca_manager, provider, config) -> dict:
         url = ca_manager.get_acme_server_url(provider, account_config=config)
     except ValueError as exc:
         return _result(FAILED, str(exc))
-    secrets = [value for value in eab if value]
+    secrets_ = [value for value in eab if value]
     bundle = None
     if provider == 'private_ca' and config.get('ca_cert'):
         bundle = ca_manager.create_ca_trust_bundle(provider, config)
@@ -309,9 +420,10 @@ def check_ca_account(ca_manager, provider, config) -> dict:
     finally:
         if bundle:
             Path(bundle).unlink(missing_ok=True)
-    if outcome == PASSED and secrets:
-        reason += '. The CA checks the EAB key only when an account registers'
-    return _result(outcome, reason, secrets)
+    if outcome == REACHABLE:
+        reason = ('The CA checks the account and its EAB key only when it registers' if secrets_
+                  else 'The CA checks the account only when it registers')
+    return _result(outcome, reason, secrets_)
 
 
 def _ca_accounts(settings) -> dict:
@@ -340,14 +452,13 @@ def stored_ca_account(settings, provider, account_id):
 
 # -------------------------------------------------------------- HTTP glue
 
-_RUNS = {'dns': lambda managers, provider, config: check_dns_account(managers['dns'], provider, config),
-         'ca': lambda managers, provider, config: check_ca_account(_ca_manager(managers), provider, config)}
 _RESOURCE_TYPES = {'dns': 'dns_provider', 'ca': 'ca_provider'}
 
 
-def _ca_manager(managers):
-    from .ca_manager import CAManager
-    return managers.get('ca') or CAManager(managers['settings'])
+def run_check(managers, kind, provider, config) -> dict:
+    if kind == 'dns':
+        return check_dns_account(managers['dns'], provider, config)
+    return check_ca_account(_ca_manager(managers), provider, config, _instance_email(managers))
 
 
 def _stored(kind, managers, provider, account_id):
@@ -370,18 +481,25 @@ def _audit(managers, kind, provider, account_id, result) -> None:
     audit.log_operation(
         operation='check_account', resource_type=_RESOURCE_TYPES[kind],
         resource_id=f'{provider}:{account_id}',
-        status='success' if result['outcome'] == PASSED else 'failure',
+        status='success' if result['outcome'] in (PASSED, REACHABLE) else 'failure',
         details={'outcome': result['outcome']}, user=user.get('username'),
         ip_address=request.remote_addr)
 
 
-def run_and_keep(managers, kind, provider, account_id, config) -> dict:
-    """Check the saved account *config*, keep the result, audit and log it."""
-    result = _RUNS[kind](managers, provider, config)
-    store_for(managers['settings']).record(kind, provider, account_id, config, result)
+def keep(managers, kind, provider, account_id, config, result) -> None:
+    """Keep *result*, a check of the saved account *config*; audit and log it."""
+    store_for(managers['settings']).record(
+        kind, provider, account_id, credentials_key(managers, kind, provider, config), result)
     _audit(managers, kind, provider, account_id, result)
+    # Never the reason: it is the provider's text.
     logger.info("Credential check of %s account %r of provider %r ended %s",
                 kind, account_id, provider, result['outcome'])
+
+
+def run_and_keep(managers, kind, provider, account_id, config) -> dict:
+    """Check the saved account *config* and keep the result."""
+    result = run_check(managers, kind, provider, config)
+    keep(managers, kind, provider, account_id, config, result)
     return result
 
 
@@ -390,8 +508,10 @@ def answer_with_last_checks(managers, accounts) -> list:
     store = store_for(managers['settings'])
     for account in accounts if isinstance(accounts, list) else []:
         if isinstance(account, dict) and account.get('provider') and account.get('account_id'):
-            config = managers['dns'].stored_account(account['provider'], account['account_id']) or {}
-            account['last_check'] = store.last('dns', account['provider'], account['account_id'], config)
+            provider, account_id = account['provider'], account['account_id']
+            config = managers['dns'].stored_account(provider, account_id) or {}
+            account['last_check'] = store.last(
+                'dns', provider, account_id, credentials_key(managers, 'dns', provider, config))
     return accounts
 
 
@@ -401,33 +521,56 @@ def ca_last_checks(managers) -> list:
     listed = []
     for provider, accounts in sorted(_ca_accounts(managers['settings'].load_settings() or {}).items()):
         for account_id, config in accounts.items():
+            key = credentials_key(managers, 'ca', provider, config)
             listed.append({'provider': provider, 'account_id': account_id,
-                           'last_check': store.last('ca', provider, account_id, config)})
+                           'last_check': store.last('ca', provider, account_id, key)})
     return listed
 
 
+def check_before_save(managers, kind, provider, config):
+    """For a save asked with `?check=1`: `(result, refusal)`, or `(None, None)`
+    when the request asks for no check.
+
+    The refusal is the 422 ACCOUNT_CHECK_FAILED answer for a failed check,
+    unless `save_anyway=1` is asked too. A check that could not run (no
+    answer, a refused connection) is a failed check. Call it after every
+    refusal of the save's own, so nothing goes out for a save that would be
+    refused anyway."""
+    from flask import jsonify, make_response
+    if not _wants('check'):
+        return None, None
+    result = run_check(managers, kind, provider, config)
+    if result['outcome'] == FAILED and not _wants('save_anyway'):
+        return result, make_response(jsonify({
+            'error': f"The check failed: {result['reason']}",
+            'code': 'ACCOUNT_CHECK_FAILED', 'last_check': result}), 422)
+    return result, None
+
+
+def keep_after_save(managers, kind, provider, account_id, result) -> None:
+    """Keep *result* for the account as saved, read back."""
+    if result is None:
+        return
+    saved = _stored(kind, managers, provider, account_id)
+    if saved is not None:
+        keep(managers, kind, provider, account_id, saved, result)
+
+
 def checks_before_save(kind, managers_of, target_of):
-    """Decorator: a save asked with `?check=1` runs the check first.
+    """Decorator for the DNS account saves: `?check=1` checks first.
 
-    A failed check answers 422 ACCOUNT_CHECK_FAILED, with the result in
-    `last_check`, and saves nothing, unless `save_anyway=1` is asked too: then
-    the account is saved and the failed result kept. A check that could not
-    run (no answer, refused connection) is a failed check. A provider with no
-    check saves without asking and keeps "not checkable". The kept result is
-    the account as saved, read back after the save; the answer carries it.
-
-    Without `check`, a save is what it was, and a stored result stays only
-    while the account is unchanged (see `fingerprint`).
-
-    *target_of(request, kwargs, managers)* gives `(provider, account_id,
-    config)`, the account the view is about to save, or None to leave the
-    request to the view (which answers its own 400). A decorator, like
-    refuses_a_taken_account, so the budgeted route closures gain no branch.
+    See check_before_save. Without `check`, a save is what it was, and a
+    stored result applies only while the credentials are unchanged (see
+    credentials_key). *target_of(request, kwargs, managers)* gives
+    `(provider, account_id, config)`, the account the view is about to save,
+    or None to leave the request to the view (which answers its own 400). A
+    decorator, like refuses_a_taken_account, so the budgeted route closures
+    gain no branch.
     """
     def decorator(view):
         @wraps(view)
         def guarded(*args, **kwargs):
-            from flask import jsonify, make_response, request
+            from flask import make_response, request
             if request.method not in ('POST', 'PUT') or not _wants('check'):
                 return view(*args, **kwargs)
             managers = managers_of()
@@ -435,20 +578,16 @@ def checks_before_save(kind, managers_of, target_of):
             if target is None:
                 return view(*args, **kwargs)
             provider, account_id, config = target
-            result = _RUNS[kind](managers, provider, config)
-            if result['outcome'] == FAILED and not _wants('save_anyway'):
-                return make_response(jsonify({
-                    'error': f"The check failed: {result['reason']}",
-                    'code': 'ACCOUNT_CHECK_FAILED', 'last_check': result}), 422)
+            result, refusal = check_before_save(managers, kind, provider, config)
+            if refusal is not None:
+                return refusal
             response = make_response(view(*args, **kwargs))
-            saved = _stored(kind, managers, provider, account_id) if response.status_code < 300 else None
-            body = response.get_json(silent=True) if saved is not None else None
-            if saved is not None:
-                store_for(managers['settings']).record(kind, provider, account_id, saved, result)
-                _audit(managers, kind, provider, account_id, result)
-            if isinstance(body, dict):
-                body['last_check'] = result
-                response.set_data(json.dumps(body))
+            if response.status_code < 300:
+                keep_after_save(managers, kind, provider, account_id, result)
+                body = response.get_json(silent=True)
+                if isinstance(body, dict):
+                    body['last_check'] = result
+                    response.set_data(json.dumps(body))
             return response
         return guarded
     return decorator
@@ -477,22 +616,3 @@ def dns_update_target(request, kwargs, managers):
     merged.update({key: value for key, value in data.items()
                    if key != 'set_as_default' and value != '********'})
     return provider, account_id, merged
-
-
-def ca_save_target(request, kwargs, managers):
-    from .settings import _strip_masked_values
-    from .utils import validate_email
-    raw = request.get_json(silent=True)
-    provider, account_id = kwargs.get('provider'), kwargs.get('account_id')
-    if not isinstance(raw, dict) or not provider or not account_id:
-        return None
-    ca_manager = _ca_manager(managers)
-    existing = stored_ca_account(managers['settings'].load_settings() or {}, provider, account_id) or {}
-    config = {**existing, **_strip_masked_values(raw)}
-    # What the save route refuses with a 400 is left to it: a check would only
-    # repeat the refusal as a failed check the operator could save anyway.
-    if (provider not in ca_manager.ca_providers or not config.get('email')
-            or not validate_email(config['email'])[0]
-            or not ca_manager.validate_ca_configuration(provider, config)[0]):
-        return None
-    return provider, account_id, config

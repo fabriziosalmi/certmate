@@ -73,7 +73,8 @@ global.fetch = (url, options) => {
 };
 eval(fs.readFileSync(process.argv[1], 'utf8'));
 window.saveEditAccount();
-if (sent.url !== '/api/dns/route53/accounts/prod' || sent.body.assume_role_arn !== '')
+// The edit saves with ?check=1: the server checks the account before it saves it (#1511, P39).
+if (sent.url !== '/api/dns/route53/accounts/prod?check=1' || sent.body.assume_role_arn !== '')
     throw Error('Cleared role ARN was not submitted');
 """
     result = subprocess.run([node, '-e', script, str(settings_js)],

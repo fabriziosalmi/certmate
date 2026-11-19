@@ -72,11 +72,12 @@ def test_settings_says_the_account_cannot_issue_and_offers_to_add_the_email(brow
 
 
 def test_with_an_email_the_account_does_not_say_it_cannot_issue(browser_page, settings_api):
-    """And the heading's green check waits for a check that passed (P39): an
-    account that can issue but was never checked is not drawn green. The
-    check's answer is given by the test: the real one calls Let's Encrypt."""
+    """And the heading is not green (P39): a CA check proves that the
+    directory answers, not that the account works, so nothing turns it green.
+    The check's answer is given by the test: the real one calls Let's Encrypt."""
     assert settings_api(TEST_EMAIL).ok
-    passed = {'outcome': 'passed', 'at': '2026-11-19T01:12:00Z', 'reason': 'The ACME directory answered'}
+    reachable = {'outcome': 'reachable', 'at': '2026-11-19T01:12:00Z',
+                 'reason': 'The CA checks the account only when it registers'}
     try:
         row = _ca_tab(browser_page)
         text = row.inner_text()
@@ -87,11 +88,12 @@ def test_with_an_email_the_account_does_not_say_it_cannot_issue(browser_page, se
         assert 'fa-check-circle' not in (heading.get_attribute('class') or '')
         browser_page.route('**/api/web/settings/ca-providers/letsencrypt/accounts/default/check',
                            lambda route: route.fulfill(status=200, content_type='application/json', body=json.dumps(
-                               {'provider': 'letsencrypt', 'account_id': 'default', 'last_check': passed})))
+                               {'provider': 'letsencrypt', 'account_id': 'default', 'last_check': reachable})))
         row.get_by_role('button', name='Check credentials').click()
         browser_page.wait_for_function(
-            "() => document.querySelector('[data-ca-accounts-status]').classList.contains('fa-check-circle')",
-            timeout=5000)
+            "() => (document.querySelector('#configured-ca-list [data-last-check]') || {dataset: {}})"
+            ".dataset.lastCheck === 'reachable'", timeout=5000)
+        assert 'fa-check-circle' not in (heading.get_attribute('class') or '')
     finally:
         browser_page.unroute_all(behavior='ignoreErrors')
         assert settings_api('').ok

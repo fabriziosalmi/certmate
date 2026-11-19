@@ -702,13 +702,11 @@
                 var providerData = dnsProviders[provider];
                 if (providerData && providerData.configured) {
                     statusEl.textContent = 'Configured';
-                    // Green only when every account it counts passed its
-                    // last check: "Configured" says the credentials are
-                    // there, not that the provider takes them (P39).
-                    var allPassed = providerData.accounts.every(function (account) {
-                        return !account.hasCredentials || lastCheckOutcome(account.lastCheck) === 'passed';
-                    });
-                    statusEl.className = 'text-xs mt-1 whitespace-nowrap ' + (allPassed ? 'text-success-fg' : 'text-label');
+                    // Not green (P39): "Configured" says the credentials are
+                    // there. Even a passed check proves only that they read
+                    // zones, and the tile has no room to say so; the account
+                    // card says it beside its green.
+                    statusEl.className = 'text-xs text-label mt-1 whitespace-nowrap';
 
                     // The accounts that can issue, not every account on file.
                     if (accountsEl && countEl) {
@@ -757,8 +755,11 @@
     function lastCheckText(check) {
         var outcome = lastCheckOutcome(check);
         var when = check && check.at ? ' ' + CertMate.formatDateTime(check.at) : '';
-        if (outcome === 'passed') return 'Last check passed' + when;
+        // A pass says what it proved, on the card (review F6).
+        if (outcome === 'passed') return 'Last check passed' + when + (check.reason ? ': ' + check.reason : '');
         if (outcome === 'failed') return 'Last check failed' + when + (check.reason ? ': ' + check.reason : '');
+        // A CA's directory answered: that says nothing about the account (review F2).
+        if (outcome === 'reachable') return 'Directory answered' + when + (check.reason ? '. ' + check.reason + '.' : '.');
         if (outcome === 'not_checkable') return 'Not checkable yet';
         // The record could not be read: not "never", which may be untrue.
         if (outcome === 'unknown') return 'Last check not known: CertMate could not be asked';
@@ -769,6 +770,7 @@
         var outcome = lastCheckOutcome(check);
         if (outcome === 'passed') return 'text-success-fg';
         if (outcome === 'failed') return 'text-danger-fg';
+        if (outcome === 'reachable') return 'text-label';
         return 'text-muted';
     }
 
@@ -807,7 +809,10 @@
     // What a save says about the check it ran.
     function savedWithCheckMessage(what, check) {
         var outcome = lastCheckOutcome(check);
-        if (outcome === 'passed') return { text: what + ' saved; its check passed', type: 'success' };
+        if (outcome === 'passed') return { text: what + ' saved; its check passed: ' + check.reason, type: 'success' };
+        if (outcome === 'reachable') {
+            return { text: what + ' saved; its directory answered. ' + check.reason + '.', type: 'info' };
+        }
         if (outcome === 'failed') return { text: what + ' saved; its check failed: ' + check.reason, type: 'warning' };
         if (outcome === 'not_checkable') return { text: what + ' saved; it cannot be checked yet', type: 'success' };
         return { text: what + ' saved', type: 'success' };
@@ -2417,7 +2422,6 @@
         var types = document.getElementById('add-ca-type');
         list.replaceChildren();
         var allUsable = true;
-        var allPassed = true;
         configuredCAProviders.forEach(function (provider) {
             var config = ((currentSettings.ca_providers || {})[provider]) || {};
             var accounts = config.accounts || {default: config};
@@ -2436,7 +2440,6 @@
                 var missing = CertMate.caAccountMissing(provider, account, currentSettings);
                 var check = caAccountChecks === null ? { outcome: 'unknown' }
                     : ((caAccountChecks[provider] || {})[accountId] || null);
-                if (lastCheckOutcome(check) !== 'passed') allPassed = false;
                 var checkLine = lastCheckElement(check);
                 checkLine.classList.remove('mt-1');
                 checkLine.classList.add('w-full', 'order-last');
@@ -2508,9 +2511,9 @@
                 list.appendChild(row);
             });
         });
-        // The heading's green check only over accounts that can all issue
-        // and whose last checks all passed (P39); a warning when one cannot
-        // issue or its last check failed; otherwise no colour at all.
+        // The heading is never green (P39): a CA check proves that the
+        // directory answers, not that an account works. A warning when an
+        // account cannot issue or its last check failed; otherwise no colour.
         var anyFailed = configuredCAProviders.some(function (provider) {
             return Object.keys((caAccountChecks || {})[provider] || {}).some(function (id) {
                 return lastCheckOutcome(caAccountChecks[provider][id]) === 'failed';
@@ -2518,11 +2521,9 @@
         });
         var status = document.querySelector('[data-ca-accounts-status]');
         if (status) {
-            status.className = (allUsable && allPassed)
-                ? 'fas fa-fw fa-check-circle mr-2 text-green-500'
-                : (!allUsable || anyFailed)
-                    ? 'fas fa-fw fa-exclamation-triangle mr-2 text-warning-fg'
-                    : 'fas fa-fw fa-info-circle mr-2 text-muted';
+            status.className = (!allUsable || anyFailed)
+                ? 'fas fa-fw fa-exclamation-triangle mr-2 text-warning-fg'
+                : 'fas fa-fw fa-info-circle mr-2 text-muted';
         }
     }
 

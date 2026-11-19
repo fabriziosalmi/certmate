@@ -255,6 +255,7 @@ def _delete_ca_account(managers, settings_manager, audit_logger, settings,
                           'failure', error='settings write failed')
         return jsonify({'error': 'Failed to delete CA account'}), 500
     _audit_ca_account(audit_logger, 'delete_ca_account', provider, account_id, 'success')
+    account_checks.forget_account(settings_manager, 'ca', provider, account_id)
     return jsonify({'message': 'CA account deleted'})
 
 
@@ -275,7 +276,7 @@ def _email_or_refuse(email):
     return email.strip()
 
 
-def _save_ca_account(settings_manager, audit_logger, accounts,
+def _save_ca_account(managers, settings_manager, audit_logger, accounts,
                      ca_manager, provider, account_id):
     from modules.core.settings import _strip_masked_values
 
@@ -304,6 +305,11 @@ def _save_ca_account(settings_manager, audit_logger, accounts,
     valid, reason = ca_manager.validate_ca_configuration(provider, config)
     if not valid:
         return jsonify({'error': reason}), 400
+    # `?check=1` (#1511, P39): after every refusal above, so nothing goes out
+    # for a save that would be refused anyway.
+    checked, refusal = account_checks.check_before_save(managers, 'ca', provider, config)
+    if refusal is not None:
+        return refusal
 
     def save_account(s):
         _as_accounts(s, provider)[account_id] = config
@@ -315,7 +321,8 @@ def _save_ca_account(settings_manager, audit_logger, accounts,
         return jsonify({'error': 'Failed to save CA account'}), 500
     _audit_ca_account(audit_logger, operation, provider, account_id, 'success',
                       fields=submitted)
-    return jsonify({'message': 'CA account saved'})
+    account_checks.keep_after_save(managers, 'ca', provider, account_id, checked)
+    return jsonify({'message': 'CA account saved', **({'last_check': checked} if checked else {})})
 
 
 def _ca_provider_account(managers, settings_manager, audit_logger, provider, account_id):
@@ -331,7 +338,7 @@ def _ca_provider_account(managers, settings_manager, audit_logger, provider, acc
     if request.method == 'DELETE':
         return _delete_ca_account(managers, settings_manager, audit_logger,
                                   settings, accounts, provider, account_id)
-    return _save_ca_account(settings_manager, audit_logger, accounts,
+    return _save_ca_account(managers, settings_manager, audit_logger, accounts,
                             ca_manager, provider, account_id)
 
 
@@ -419,7 +426,6 @@ def _register_ca_account_route(app, auth_manager, managers, settings_manager, au
     @app.route('/api/web/settings/ca-providers/<string:provider>/accounts/<string:account_id>',
                methods=['POST', 'DELETE'])
     @auth_manager.require_role('admin')
-    @account_checks.checks_before_save('ca', lambda: managers, account_checks.ca_save_target)
     def ca_provider_account(provider, account_id):
         return _ca_provider_account(managers, settings_manager, audit_logger,
                                     provider, account_id)

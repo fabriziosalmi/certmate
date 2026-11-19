@@ -2937,23 +2937,28 @@ those certificates to another account, or delete them, first.
 
 #### Check an account's credentials
 
-**Endpoint**: `POST /api/dns/<provider>/accounts/<account_id>/check` — admin, since API contract **2.72**
+**Endpoint**: `POST /api/dns/<provider>/accounts/<account_id>/check` (admin, since API contract **2.72**)
 
 Makes one read-only call to the provider with the account's saved credentials
 and keeps the result. A credential given by reference (`api_token_file`,
 `api_token_env`) is read as issuance reads it. Two providers are checked:
 
-- **Cloudflare**: `GET https://api.cloudflare.com/client/v4/user/tokens/verify`.
-  It passes when Cloudflare says the token is `active`.
+- **Cloudflare**: `GET https://api.cloudflare.com/client/v4/zones?per_page=1`,
+  which user and account-owned tokens can both call. It passes when the token
+  reads at least one zone; a token that reaches no zone fails.
 - **Route53**: `ListHostedZones` with `MaxItems` 1, with the account's keys or,
   in `iam_role` mode, the host's AWS credential chain and `assume_role_arn`.
 
-Any other provider answers `not_checkable`: no call is made and nothing passes.
-The call has a 5 second connect and 10 second read timeout. A check that cannot
-run (no answer, a refused connection, a reference that cannot be read) is a
-`failed` check, with that as its reason. The reason is the provider's own error
-on one line, at most 200 characters, with no credential in it. An account that
-does not exist is a `404` with `code: DNS_ACCOUNT_NOT_FOUND`.
+A pass proves that the credentials can read zones, and says so in its
+`reason`: permission to change DNS records is tested when a certificate is
+requested, since checking it would take a write. Any other provider answers
+`not_checkable`: no call is made and nothing passes. The call waits 5 seconds
+for a connection and 10 seconds for the answer, and the reason names the one
+that ran out. A check that cannot run (no answer, a refused connection, a
+reference that cannot be read) is a `failed` check, with that as its reason.
+The reason is the provider's own error on one line, at most 200 characters,
+with no credential in it. An account that does not exist is a `404` with
+`code: DNS_ACCOUNT_NOT_FOUND`.
 
 <!-- response: POST /api/dns/<provider>/accounts/<account_id>/check 200 -->
 ```json
@@ -2963,7 +2968,7 @@ does not exist is a `404` with `code: DNS_ACCOUNT_NOT_FOUND`.
   "last_check": {
     "outcome": "failed",
     "at": "2026-11-19T01:12:00Z",
-    "reason": "Cloudflare answered HTTP 401: Invalid API Token (code 1000)"
+    "reason": "Cloudflare answered HTTP 403: Invalid access token (code 9109)"
   }
 }
 ```
@@ -2971,29 +2976,38 @@ does not exist is a `404` with `code: DNS_ACCOUNT_NOT_FOUND`.
 `GET /api/dns/accounts` gives each account its `last_check`: `outcome` is
 `passed`, `failed`, `not_checkable` or `never`, with `at` and `reason` null when
 the account was never checked. Only a check the server ran records a result,
-and it is kept apart from the settings, so no settings save can write one. A
-result belongs to the credentials it checked: once the account changes (any
-field but `name` and `description`), it reads `never` again, or `not_checkable`
-for a provider with no check.
+and it is kept apart from the settings, so no settings save can write one, and
+deleting the account deletes it. A result belongs to the credentials it
+checked, as issuance would read them now: it is kept under an HMAC, made with
+the instance secret, of the account's fields (all but `name` and
+`description`) with every referenced file and variable read. When any of them
+changes, or a reference can no longer be read, the account reads `never` again
+(`not_checkable` for a provider with no check). A Route53 account in
+`iam_role` mode uses the host's AWS identity, which is not part of that key: its
+pass says that a change to that identity is not seen until the next check.
 
-A create or an update can check first: `POST /api/dns/accounts`, `POST
-/api/dns/<provider>/accounts` and `PUT /api/dns/<provider>/accounts/<account_id>`
-take `?check=1`. The check runs on the account as it would be saved. When it
-fails the answer is a `422` with `code: ACCOUNT_CHECK_FAILED` and the result in
-`last_check`, and nothing is saved; `?check=1&save_anyway=1` saves the account
-anyway and keeps the failed result. A provider with no check saves and keeps
-`not_checkable`. The answer of a save made with `check` carries `last_check`.
-Without `check` a save is what it was before 2.72.
+A create or an update can check first: `POST /api/dns/accounts`,
+`POST /api/dns/<provider>/accounts` and
+`PUT /api/dns/<provider>/accounts/<account_id>` take `?check=1`, and so do the
+deprecated `POST /api/dns-providers/accounts` and the dashboard's own create
+route. The check runs on the account as it would be
+saved. When it fails the answer is a `422` with `code: ACCOUNT_CHECK_FAILED`
+and the result in `last_check`, and nothing is saved;
+`?check=1&save_anyway=1` saves the account anyway and keeps the failed result.
+A provider with no check saves and keeps `not_checkable`. The answer of a save
+made with `check` carries `last_check`. Without `check` a save is what it was
+before 2.72.
 
-The dashboard's CA accounts work the same way, through its own routes:
+The dashboard's CA accounts have their own routes:
 `POST /api/web/settings/ca-providers/<provider>/accounts/<account_id>/check`
-fetches the ACME directory issuance uses (the CA's own, or the account's
-`acme_url`) after the checks issuance makes on the account,
-`GET /api/web/settings/ca-account-checks` lists every CA account's
-`last_check`, and the account save route takes `check` and `save_anyway` as
-above. A CA check cannot test an EAB key without registering an
-account, so for a CA with EAB a pass says the directory answered and the key is
-present; the reason says so.
+checks a saved CA account, `GET /api/web/settings/ca-account-checks` lists
+every CA account's `last_check`, and the account save route takes `check` and
+`save_anyway` as above, after every refusal of its own. A CA check makes the
+checks issuance makes on the account (an email, its own or the instance's;
+EAB; the directory URL; the trust bundle) and fetches the ACME directory,
+following up to 5 redirects, each over https. Its best outcome is `reachable`,
+never `passed`: the CA checks the account and its EAB key only when it
+registers, and the reason says so.
 
 #### Provider configuration
 

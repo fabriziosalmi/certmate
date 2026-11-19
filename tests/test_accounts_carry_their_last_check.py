@@ -7,7 +7,7 @@ configuration" and was saved with a green "CA account saved". Nothing in the
 product could check a DNS account: POST /api/web/certificates/test-provider is
 an offline shape check no page calls.
 
-Now one read-only call checks an account (Cloudflare GET /user/tokens/verify,
+Now one read-only call checks an account (Cloudflare GET /zones?per_page=1,
 Route53 ListHostedZones with MaxItems 1, a CA's ACME directory), the server
 keeps the result per account, and a save asked with `?check=1` refuses a
 failed check unless `save_anyway=1` is asked too. Every other DNS provider is
@@ -45,10 +45,14 @@ class _Answer:
         return self._body
 
 
-REFUSED = _Answer(401, {'success': False, 'errors': [{'code': 1000, 'message': 'Invalid API Token'}],
+# The shape measured against the real endpoint with an invalid 40-character token.
+REFUSED = _Answer(403, {'success': False, 'errors': [{'code': 9109, 'message': 'Invalid access token'}],
                         'messages': [], 'result': None})
 ACTIVE = _Answer(200, {'success': True, 'errors': [], 'messages': [],
-                       'result': {'id': 'x', 'status': 'active'}})
+                       'result': [{'id': 'z1', 'name': 'example.com'}]})
+REFUSED_REASON = 'Cloudflare answered HTTP 403: Invalid access token (code 9109)'
+DNS_PASS = ('the token can read zones; permission to change DNS records is tested when a '
+            'certificate is requested')
 DIRECTORY = _Answer(200, {'newAccount': 'https://ca.example/new-acct', 'newNonce': 'https://ca.example/nonce'})
 
 
@@ -87,11 +91,11 @@ def test_a_cloudflare_token_cloudflare_refuses_is_a_failed_check_with_its_reason
     assert answer.status_code == 200, answer.get_json()
     check = answer.get_json()['last_check']
     assert check['outcome'] == 'failed'
-    assert check['reason'] == 'Cloudflare answered HTTP 401: Invalid API Token (code 1000)'
+    assert check['reason'] == REFUSED_REASON
     assert check['at'].endswith('Z')
     # One read-only call, to the fixed URL, with a short timeout and no redirect.
     get.assert_called_once_with(
-        'https://api.cloudflare.com/client/v4/user/tokens/verify',
+        'https://api.cloudflare.com/client/v4/zones', params={'per_page': 1},
         headers={'Authorization': f'Bearer {TOKEN}'}, timeout=(5, 10), allow_redirects=False)
     assert _listed(client)['last_check'] == check
 
@@ -102,6 +106,7 @@ def test_an_active_cloudflare_token_passes(instance):
     with mock.patch('requests.get', return_value=ACTIVE):
         check = client.post('/api/dns/cloudflare/accounts/prod/check').get_json()['last_check']
     assert check['outcome'] == 'passed', check
+    assert check['reason'] == DNS_PASS
     assert _listed(client)['last_check']['outcome'] == 'passed'
 
 
@@ -190,7 +195,8 @@ def test_the_reason_is_one_bounded_line_without_the_credential(instance):
 
 
 @pytest.mark.parametrize('error, said', [
-    (requests.exceptions.ConnectTimeout(), 'api.cloudflare.com did not answer within 10 seconds'),
+    (requests.exceptions.ConnectTimeout(), 'api.cloudflare.com did not answer within 5 seconds'),
+    (requests.exceptions.ReadTimeout(), 'api.cloudflare.com did not finish its answer within 10 seconds'),
     (requests.exceptions.ConnectionError(), 'Could not connect to api.cloudflare.com (ConnectionError)'),
 ])
 def test_a_check_that_cannot_run_is_a_failed_check(instance, error, said):
@@ -225,7 +231,7 @@ def test_a_save_whose_check_fails_saves_nothing(instance):
     assert answer.status_code == 422
     body = answer.get_json()
     assert body['code'] == 'ACCOUNT_CHECK_FAILED'
-    assert body['error'] == 'The check failed: Cloudflare answered HTTP 401: Invalid API Token (code 1000)'
+    assert body['error'] == 'The check failed: ' + REFUSED_REASON
     assert body['last_check']['outcome'] == 'failed'
     assert managers['dns'].stored_account('cloudflare', 'prod') is None
 
@@ -238,7 +244,7 @@ def test_save_anyway_saves_the_account_and_keeps_the_failed_check(instance):
     assert answer.get_json()['last_check']['outcome'] == 'failed'
     assert managers['dns'].stored_account('cloudflare', 'prod')['api_token'] == TOKEN
     listed = _listed(client)['last_check']
-    assert listed['outcome'] == 'failed' and 'Invalid API Token' in listed['reason']
+    assert listed['outcome'] == 'failed' and listed['reason'] == REFUSED_REASON
 
 
 def test_a_save_whose_check_passes_keeps_the_pass(instance):
@@ -341,16 +347,31 @@ def test_a_ca_save_whose_check_fails_asks_and_save_anyway_keeps_the_failure(inst
     assert _ca_checks(client)[('private_ca', 'corp')]['outcome'] == 'failed'
 
 
-def test_a_ca_account_the_form_refuses_is_refused_before_any_check(instance):
+@pytest.mark.parametrize('path, body, status', [
+    ('private_ca/accounts/corp?create=1', {'acme_url': UNREACHABLE_CA}, 400),            # no email
+    ('private_ca/accounts/corp?create=1', {'email': 'ops@example.com', 'acme_url': UNREACHABLE_CA,
+                                           'surprise': 'x'}, 400),                        # unknown field
+    ('private_ca/accounts/-bad?create=1', {'email': 'ops@example.com', 'acme_url': UNREACHABLE_CA}, 400),
+    ('private_ca/accounts/taken?create=1', {'email': 'ops@example.com', 'acme_url': UNREACHABLE_CA}, 409),
+    ('private_ca/accounts/corp?create=1', {'email': 'ops@example.com', 'acme_url': UNREACHABLE_CA,
+                                           'acme_profile': 'not a profile!'}, 400),
+    ('no_such_ca/accounts/corp?create=1', {'email': 'ops@example.com'}, 400),
+])
+def test_a_ca_account_the_save_refuses_is_refused_before_any_check(instance, path, body, status):
+    """Every refusal the save would give comes before the outbound call (review F9)."""
     client, _ = instance
-    with mock.patch('requests.get') as get:
-        answer = client.post('/api/web/settings/ca-providers/private_ca/accounts/corp?create=1&check=1',
-                             json={'acme_url': UNREACHABLE_CA})
+    def put(settings):
+        settings.setdefault('ca_providers', {})['private_ca'] = {'accounts': {'taken': {
+            'email': 'ops@example.com', 'acme_url': UNREACHABLE_CA}}}
+    assert instance[1]['settings'].update(put, 'test')
+    with mock.patch('requests.get') as get, mock.patch('requests.Session.get') as session_get:
+        answer = client.post(f'/api/web/settings/ca-providers/{path}&check=1', json=body)
     get.assert_not_called()
-    assert answer.status_code == 400
+    session_get.assert_not_called()
+    assert answer.status_code == status, answer.get_json()
 
 
-def test_a_lets_encrypt_account_passes_when_its_directory_answers(instance):
+def test_a_lets_encrypt_account_whose_directory_answers_is_reachable_not_passed(instance):
     client, _ = instance
     saved = client.post('/api/web/settings/ca-providers/letsencrypt/accounts/ops?create=1',
                         json={'email': 'ops@example.com'})
@@ -358,7 +379,9 @@ def test_a_lets_encrypt_account_passes_when_its_directory_answers(instance):
     assert _ca_checks(client)[('letsencrypt', 'ops')]['outcome'] == 'never'
     with mock.patch('requests.get', return_value=DIRECTORY) as get:
         check = client.post('/api/web/settings/ca-providers/letsencrypt/accounts/ops/check').get_json()['last_check']
-    assert check['outcome'] == 'passed', check
+    # The directory answering proves nothing about the account (review F2).
+    assert check['outcome'] == 'reachable', check
+    assert check['reason'] == 'The CA checks the account only when it registers'
     assert get.call_args.args == (LE_DIRECTORY,)
     assert get.call_args.kwargs['timeout'] == (5, 10) and get.call_args.kwargs['allow_redirects'] is False
 
@@ -374,8 +397,8 @@ def test_an_eab_given_by_reference_is_read_as_issuance_reads_it(instance, monkey
     assert managers['settings'].update(put, 'test')
     with mock.patch('requests.get', return_value=DIRECTORY):
         check = client.post('/api/web/settings/ca-providers/zerossl/accounts/zs/check').get_json()['last_check']
-    assert check['outcome'] == 'passed', check
-    assert check['reason'].endswith('The CA checks the EAB key only when an account registers')
+    assert check['outcome'] == 'reachable', check
+    assert check['reason'] == 'The CA checks the account and its EAB key only when it registers'
     assert 'h' * 43 not in check['reason']
 
 
