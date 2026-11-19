@@ -14,7 +14,7 @@
                     <p class="font-medium text-foreground">Enable Deploy Hooks</p>
                     <p class="text-sm text-muted">Run shell commands, and deliver to deploy targets, after certificate issuance or renewal</p>
                 </div>
-                <label class="relative inline-flex items-center cursor-pointer">
+                <label class="relative inline-flex items-center cursor-pointer" @click.capture="held($event)">
                     <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable deploy hooks" aria-label="Enable deploy hooks">
                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-500 peer-checked:bg-primary"></div>
                 </label>
@@ -62,7 +62,7 @@
                 </div>
 
                 <!-- Global Hooks -->
-                <div class="border border-border rounded-lg overflow-hidden">
+                <div class="border border-border rounded-lg overflow-hidden" @click.capture="held($event)" :aria-busy="saving ? 'true' : 'false'">
                     <button type="button" @click="showGlobal = !showGlobal"
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
@@ -81,7 +81,7 @@
                                             <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook" :aria-label="'Enable hook ' + (hook.name || hook.id)">
                                             <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                         </label>
-                                        <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name"
+                                        <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name" :readonly="saving"
                                                class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                     </div>
                                     <div class="flex items-center gap-2 ml-3">
@@ -94,13 +94,13 @@
                                     </div>
                                 </div>
                                 <p x-show="!isSaved(hook)" class="text-xs text-muted mb-2">Save the hook first: Test runs the hook as it is saved.</p>
-                                <textarea aria-label="Hook command" x-model="hook.command" placeholder="e.g. systemctl reload nginx" rows="2"
+                                <textarea aria-label="Hook command" x-model="hook.command" :readonly="saving" placeholder="e.g. systemctl reload nginx" rows="2"
                                           :aria-invalid="refusedField(hook, 'command') ? 'true' : null"
                                           class="w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary aria-[invalid=true]:border-red-500 aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red-500 mb-2"></textarea>
                                 <div class="flex items-center gap-4 text-xs">
                                     <label class="flex items-center gap-1 text-muted">
                                         <span>Timeout:</span>
-                                        <input type="number" x-model.number="hook.timeout" min="1" max="300"
+                                        <input type="number" x-model.number="hook.timeout" min="1" max="300" :readonly="saving"
                                                class="w-16 border border-border bg-input text-foreground rounded px-2 py-1 text-xs" title="Timeout in seconds">
                                         <span>s</span>
                                     </label>
@@ -137,17 +137,17 @@
                                         <div class="flex flex-wrap items-center gap-2 text-xs">
                                             <label class="flex items-center gap-1 text-muted">
                                                 <span>From</span>
-                                                <input type="time" x-model="hook.window.start" aria-label="Maintenance window start"
+                                                <input type="time" x-model="hook.window.start" aria-label="Maintenance window start" :readonly="saving"
                                                        class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
                                             </label>
                                             <label class="flex items-center gap-1 text-muted">
                                                 <span>to</span>
-                                                <input type="time" x-model="hook.window.end" aria-label="Maintenance window end"
+                                                <input type="time" x-model="hook.window.end" aria-label="Maintenance window end" :readonly="saving"
                                                        class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
                                             </label>
                                             <label class="flex items-center gap-1 text-muted">
                                                 <span>Timezone</span>
-                                                <input type="text" x-model="hook.window.timezone" placeholder="Europe/Rome"
+                                                <input type="text" x-model="hook.window.timezone" placeholder="Europe/Rome" :readonly="saving"
                                                        aria-label="Maintenance window timezone"
                                                        class="w-40 border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
                                             </label>
@@ -180,7 +180,7 @@
                 </div>
 
                 <!-- Domain-Specific Hooks -->
-                <div class="border border-border rounded-lg overflow-hidden">
+                <div class="border border-border rounded-lg overflow-hidden" @click.capture="held($event)" @keydown.enter.capture="held($event)" :aria-busy="saving ? 'true' : 'false'">
                     <button type="button" @click="showDomain = !showDomain"
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
@@ -209,7 +209,7 @@
                                                     <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook" :aria-label="'Enable hook ' + (hook.name || hook.id)">
                                                     <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                                 </label>
-                                                <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name"
+                                                <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name" :readonly="saving"
                                                        class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                             </div>
                                             <div class="flex items-center gap-2 ml-3">
@@ -222,13 +222,13 @@
                                             </div>
                                         </div>
                                         <p x-show="!isSaved(hook)" class="text-xs text-muted mb-2">Save the hook first: Test runs the hook as it is saved.</p>
-                                        <textarea aria-label="Hook command" x-model="hook.command" placeholder="e.g. /opt/scripts/deploy.sh" rows="2"
+                                        <textarea aria-label="Hook command" x-model="hook.command" :readonly="saving" placeholder="e.g. /opt/scripts/deploy.sh" rows="2"
                                                   :aria-invalid="refusedField(hook, 'command') ? 'true' : null"
                                                   class="w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary aria-[invalid=true]:border-red-500 aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red-500 mb-2"></textarea>
                                         <div class="flex items-center gap-4 text-xs">
                                             <label class="flex items-center gap-1 text-muted">
                                                 <span>Timeout:</span>
-                                                <input type="number" x-model.number="hook.timeout" min="1" max="300"
+                                                <input type="number" x-model.number="hook.timeout" min="1" max="300" :readonly="saving"
                                                        class="w-16 border border-border bg-input text-foreground rounded px-2 py-1 text-xs" title="Timeout in seconds">
                                                 <span>s</span>
                                             </label>
@@ -265,17 +265,17 @@
                                                 <div class="flex flex-wrap items-center gap-2 text-xs">
                                                     <label class="flex items-center gap-1 text-muted">
                                                         <span>From</span>
-                                                        <input type="time" x-model="hook.window.start" aria-label="Maintenance window start"
+                                                        <input type="time" x-model="hook.window.start" aria-label="Maintenance window start" :readonly="saving"
                                                                class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
                                                     </label>
                                                     <label class="flex items-center gap-1 text-muted">
                                                         <span>to</span>
-                                                        <input type="time" x-model="hook.window.end" aria-label="Maintenance window end"
+                                                        <input type="time" x-model="hook.window.end" aria-label="Maintenance window end" :readonly="saving"
                                                                class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
                                                     </label>
                                                     <label class="flex items-center gap-1 text-muted">
                                                         <span>Timezone</span>
-                                                        <input type="text" x-model="hook.window.timezone" placeholder="Europe/Rome"
+                                                        <input type="text" x-model="hook.window.timezone" placeholder="Europe/Rome" :readonly="saving"
                                                                aria-label="Maintenance window timezone"
                                                                class="w-40 border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
                                                     </label>
@@ -308,7 +308,7 @@
                         </template>
                         <!-- Add domain section -->
                         <div class="flex gap-2">
-                            <input aria-label="Domain to add hooks for" type="text" x-model="newDomain" placeholder="example.com"
+                            <input aria-label="Domain to add hooks for" type="text" x-model="newDomain" placeholder="example.com" :readonly="saving"
                                    class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
                                    @keydown.enter="addDomainSection()">
                             <button type="button" @click="addDomainSection()"
@@ -693,9 +693,12 @@
 
             <!-- Save button -->
             <div class="mt-6 flex justify-end">
-                <button type="button" @click="saveConfig()" data-saves
+                {# While the save is on its way the hook fields take no edits (the
+                   save reads them back): the button says so, and keeps focus. #}
+                <button type="button" @click="saveConfig()" data-saves id="deploy-hooks-save"
+                        :aria-busy="saving ? 'true' : 'false'"
                         class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary transition text-sm">
-                    <i class="fas fa-save mr-2"></i>Save Deploy Settings
+                    <i class="fas mr-2" :class="saving ? 'fa-spinner fa-spin' : 'fa-save'" aria-hidden="true"></i><span x-text="saving ? 'Saving…' : 'Save Deploy Settings'">Save Deploy Settings</span>
                 </button>
             </div>
 

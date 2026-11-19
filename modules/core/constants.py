@@ -831,7 +831,10 @@ METADATA_SCHEMA_VERSION = 1
 #                                   and field. A client-certificate revoke
 #                                   reason over 200 characters, with a line
 #                                   break, or not text is a 400 (a new code for
-#                                   a new condition). New entries, new fields.
+#                                   a new condition), and so is a client-cert
+#                                   batch whose headers or rows are not a list
+#                                   of names and a list of lists of cells.
+#                                   New entries, new fields.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the

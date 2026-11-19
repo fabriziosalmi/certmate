@@ -344,7 +344,12 @@ def _record(audit_logger, operation, identifier, ok, *, error=None, common_name=
     if not audit_logger:
         return
     status = 'success' if ok else 'failure'
-    error = None if ok else (str(error)[:500] if error else 'refused')
+    error = None if ok else (_bounded(error, 500) if error else 'refused')
+    if not ok:
+        # A refused create names it by what the request sent, which nothing
+        # has checked: bounded like a revoke reason, so a refusal cannot put a
+        # 20,000-character name, or a line break, into the hash chain.
+        identifier, common_name = _bounded(identifier), _bounded(common_name)
     if operation == 'create':
         audit_logger.log_certificate_created(
             identifier, common_name or '', usage or '', resource_type='client_certificate',
@@ -357,6 +362,33 @@ def _record(audit_logger, operation, identifier, ok, *, error=None, common_name=
         audit_logger.log_certificate_revoked(
             identifier, reason or 'unspecified', resource_type='client_certificate',
             status=status, error=error, common_name=common_name)
+
+
+AUDITED_TEXT_MAX = 200
+
+
+def _bounded(value, limit=AUDITED_TEXT_MAX):
+    """*value* as one printable line of at most *limit* characters, for an
+    audit entry: a control character is written as its escape, and a longer
+    value is cut with a marker saying how long it was. None stays None."""
+    if value is None:
+        return None
+    text = ''.join(ch if ch.isprintable() else repr(ch)[1:-1] for ch in str(value))
+    if len(text) > limit:
+        return f'{text[:limit]}... [cut, {len(text)} characters]'
+    return text
+
+
+def _batch_table(data):
+    """The batch's header names and rows, or an abort(400). The batch is a
+    list of header names and a list of rows of cells: "rows": "xyz" made
+    three certificates, x, y and z, and "rows": 9 was a 500."""
+    headers, rows = data.get('headers', []), data.get('rows', [])
+    if not isinstance(headers, list) or not all(isinstance(h, str) for h in headers):
+        abort(400, "headers must be a list of column names")
+    if not isinstance(rows, list) or not all(isinstance(r, list) for r in rows):
+        abort(400, "rows must be a list of rows, each a list of cells")
+    return headers, rows
 
 
 def _common_name_of(client_cert_manager, identifier):
@@ -794,8 +826,7 @@ def create_client_certificate_resources(api, managers):
                 if not data or 'rows' not in data:
                     abort(400, "CSV rows required")
 
-                rows = data.get('rows', [])
-                headers = data.get('headers', [])
+                headers, rows = _batch_table(data)
 
                 # Limit batch size to prevent resource exhaustion
                 max_batch = 100

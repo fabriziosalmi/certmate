@@ -136,6 +136,55 @@ def test_a_batch_row_that_cannot_be_read_is_recorded_by_its_row(instance):
         ('batch row 3', 'Certificate creation failed')], failed
 
 
+def _chain_lines(instance):
+    """The audit hash chain's lines, as bytes."""
+    import modules.factory as factory
+    data_dir = Path(factory.__file__).resolve().parent.parent.parent
+    return [line for path in data_dir.rglob('certificate_audit.chain.jsonl')
+            for line in path.read_bytes().splitlines()]
+
+
+def test_a_refused_name_cannot_grow_the_permanent_chain(instance):
+    """A refused batch row wrote the request's name whole, twice, into the
+    hash chain: a 20,000-character name made a 40,561-byte line that no one
+    can take back out. (A single create refuses a name over 64 characters
+    before it reaches a certificate, and writes nothing.)"""
+    single = instance.post('/api/client-certs/create', json={'common_name': 'x' * 20000})
+    assert single.status_code == 400
+    instance.post('/api/client-certs/batch', json={'headers': ['common_name'], 'rows': [['x' * 20000]]})
+    failed = [e for e in _entries(instance, operation='create', resource_type='client_certificate')
+              if e['status'] == 'failure']
+    assert len(failed) == 1, failed
+    assert len(failed[0]['resource_id']) <= 250, len(failed[0]['resource_id'])
+    assert len(failed[0]['details']['common_name']) <= 250
+    assert '20000 characters' in failed[0]['details']['common_name'], 'the cut is not marked'
+    assert max(len(line) for line in _chain_lines(instance)) < 2000
+
+
+def test_a_refused_name_with_a_line_break_is_kept_on_one_line(instance):
+    instance.post('/api/client-certs/create', json={'common_name': 'evil\nname\x1b[31m'})
+    entries = [e for e in _entries(instance, operation='create', resource_type='client_certificate')
+               if e['status'] == 'failure']
+    assert len(entries) == 1, entries
+    name = entries[0]['details']['common_name']
+    assert '\n' not in name and '\x1b' not in name, repr(name)
+    assert name == 'evil\\nname\\x1b[31m', repr(name)
+
+
+@pytest.mark.parametrize('body', [
+    {'headers': ['common_name'], 'rows': 'xyz'},
+    {'headers': ['common_name'], 'rows': 9},
+    {'headers': ['common_name'], 'rows': [{'common_name': 'a'}]},
+    {'headers': 'common_name', 'rows': [['a']]},
+])
+def test_a_batch_that_is_not_a_table_is_refused_and_creates_nothing(instance, body):
+    """"rows": "xyz" created three certificates, x, y and z; "rows": 9 was a
+    500. The batch is a list of header names and a list of rows of cells."""
+    answer = instance.post('/api/client-certs/batch', json=body)
+    assert answer.status_code == 400, answer.get_data(as_text=True)
+    assert instance.get('/api/client-certs').get_json()['total'] == 0
+
+
 @pytest.mark.parametrize('reason, refused', [
     ('x' * 201, 'longer than 200'),
     ('first line\nsecond line', 'one line'),

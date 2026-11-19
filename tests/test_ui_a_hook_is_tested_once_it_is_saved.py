@@ -134,6 +134,61 @@ def test_a_saved_hook_whose_name_or_timeout_changed_waits_for_the_save_too(deplo
     expect(test).to_be_disabled()
 
 
+def test_while_a_save_is_on_its_way_the_hook_fields_take_no_edits(deploy_tab):
+    """The save reads the configuration back into the fields. An edit typed
+    while the POST was on its way was overwritten by that read-back, and Test
+    was then offered for the old name: so the fields hold still until the
+    save settles."""
+    page, panel = deploy_tab
+    card, command, test = _new_hook(panel)
+    name = card.locator('input[aria-label="Hook name"]')
+    name.fill('first name')
+    command.fill('echo ok')
+    held = []
+    page.route('**/api/deploy/config', lambda route: held.append(route)
+               if route.request.method == 'POST' else route.continue_())
+    save = panel.locator('#deploy-hooks-save')
+    save.click()
+    expect(save).to_have_attribute('aria-busy', 'true')
+    expect(save).to_contain_text('Saving')
+    expect(name).to_have_js_property('readOnly', True)
+    assert save.evaluate('el => el === document.activeElement'), 'focus moved off the Save button'
+    name.click()
+    page.keyboard.type(' second')
+    assert name.input_value() == 'first name', 'an edit was taken while the save was on its way'
+    hooks = panel.locator('textarea[aria-label="Hook command"]')
+    before = hooks.count()
+    panel.get_by_role('button', name='Add Global Hook').click()
+    assert hooks.count() == before, 'a hook was added while the save was on its way'
+    assert len(held) == 1
+    with page.expect_response(lambda r: r.url.endswith('/api/deploy/config') and r.request.method == 'GET'):
+        held[0].continue_()
+    expect(save).to_have_attribute('aria-busy', 'false')
+    expect(name).to_have_js_property('readOnly', False)
+    expect(name).to_have_value('first name')
+    expect(test).to_be_enabled()
+    page.unroute('**/api/deploy/config')
+
+
+def test_a_save_whose_values_cannot_be_read_back_says_so_and_keeps_what_was_sent(deploy_tab):
+    page, panel = deploy_tab
+    card, command, test = _new_hook(panel)
+    card.locator('input[aria-label="Hook name"]').fill('b12 hook')
+    command.fill('echo ok')
+
+    def answer(route):
+        if route.request.method == 'GET':
+            return route.fulfill(status=503, content_type='application/json',
+                                 body='{"error": "Deploy manager not available"}')
+        return route.continue_()
+
+    page.route('**/api/deploy/config', answer)
+    assert _save(page, panel).status == 200
+    expect(page.locator('#cm-toasts').get_by_text('could not read them back')).to_be_visible()
+    expect(test).to_be_enabled()
+    page.unroute('**/api/deploy/config')
+
+
 @pytest.mark.parametrize('typed, saved', [('500', '300'), ('0', '1'), ('', '30')])
 def test_after_a_save_the_fields_show_what_the_server_saved(deploy_tab, typed, saved):
     """The server limits the timeout to 1..300 and takes 30 for an empty one.

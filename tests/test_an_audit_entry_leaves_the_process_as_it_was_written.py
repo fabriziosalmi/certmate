@@ -85,7 +85,7 @@ def test_the_compliance_page_gives_the_size_a_download_line_measures(tmp_path, m
     low, high = int(stated.group(1)), int(stated.group(2))
     assert not re.search(r'per audited operation, of \d+ to \d+ bytes', text), (
         'the page claims one size for every operation')
-    for larger in ('reason', 'batch download', 'API key'):
+    for larger in ('reason', 'batch download', 'API key', 'client-certificate download'):
         assert larger in text, f'the page does not say a {larger} makes a line larger'
 
     root = tmp_path / 'certmate' / 'modules' / 'core'

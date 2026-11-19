@@ -1451,7 +1451,10 @@ curl http://localhost:8000/api/client-certs/stats \
 
 **Endpoint**: `POST /api/client-certs/batch`
 
-Create multiple certificates from CSV data in single request.
+Create multiple certificates from CSV data in single request. `headers` is a list of
+column names and `rows` a list of rows, each a list of cells; since API contract
+**2.72** anything else is a `400` and nothing is created (a string for `rows` used to
+make one certificate per character).
 
 **Request**:
 <!-- request: POST /api/client-certs/batch -->
@@ -3426,8 +3429,12 @@ Since API contract **2.72** it also records:
   client_certificate`, `details.common_name`), including an attempt the
   certificate manager refuses (`status: failure`, with its reason). A renewal
   names the certificate it issued (`details.new_identifier`). A batch writes
-  one `create` per row; a row with no common name is named by its row
-  (`batch row 3`). A request refused before it reaches a certificate (an
+  one `create` per row; a row with no common name, or one that cannot be
+  read, is named by its row (`batch row 3`). A refused create names what the
+  request sent as one printable line of at most 200 characters, a control
+  character written as its escape and a longer name cut with a marker
+  (`... [cut, 20000 characters]`), so a refusal cannot grow the chain without
+  bound. A request refused before it reaches a certificate (an
   invalid identifier or reason, a certificate that does not exist) writes
   nothing.
 - **Every server or client certificate download from the API and the

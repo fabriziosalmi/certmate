@@ -1,6 +1,6 @@
 # Cumplimiento normativo y pista de auditoría
 
-<!-- CERTMATE-TRANSLATED-FROM e932e97ad3f8846f -->
+<!-- CERTMATE-TRANSLATED-FROM ae7a0a33343d52fd -->
 
 Esta página relaciona la pista de auditoría de CertMate con los regímenes por los que los operadores preguntan
 con mayor frecuencia — el AI Act de la UE, NIS2 y la ISO/IEC 42001 — cuando permiten que un agente IA/MCP
@@ -148,9 +148,10 @@ gestione certificados de forma programada.
 ## Retención: archivar parte de la cadena
 
 La cadena crece una línea por cada operación auditada. La línea de una descarga de
-certificado mide unos 530 a 650 bytes: 539 y 550 con el API Bearer Token, 632 y 643 con
-una clave de API llamada deploy-bot. Una línea es mayor con un nombre de certificado o de
-clave más largo, un motivo de revocación (hasta 200 caracteres), un mensaje de error o la
+certificado de servidor mide unos 530 a 650 bytes: 539 y 550 con el API Bearer Token, 632 y 643 con
+una clave de API llamada deploy-bot. Una línea es mayor para la descarga de un certificado de
+cliente, que también nombra el nombre común (576 y 577 bytes con el API Bearer Token, 669 y
+670 con deploy-bot), y con un nombre de certificado o de clave más largo, un motivo de revocación (hasta 200 caracteres), un mensaje de error o la
 lista de dominios de una descarga por lotes: la revocación de un certificado de cliente
 con esa clave midió 652 bytes. Las emisiones y renovaciones añaden poco, pero cada descarga de un
 certificado es una línea: una automatización que descarga un certificado cada 5 minutos

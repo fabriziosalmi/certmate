@@ -1,6 +1,6 @@
 # Conformité et piste d'audit
 
-<!-- CERTMATE-TRANSLATED-FROM e932e97ad3f8846f -->
+<!-- CERTMATE-TRANSLATED-FROM ae7a0a33343d52fd -->
 
 Cette page fait le lien entre la piste d'audit de CertMate et les régimes sur lesquels les opérateurs
 s'interrogent le plus souvent — l'AI Act européen, NIS2 et l'ISO/IEC 42001 — lorsqu'ils laissent un agent IA/MCP
@@ -148,9 +148,10 @@ gérer des certificats selon un calendrier.
 ## Rétention : archiver une partie de la chaîne
 
 La chaîne grandit d'une ligne par opération auditée. La ligne d'un téléchargement de
-certificat mesure environ 530 à 650 octets : 539 et 550 avec l'API Bearer Token, 632 et 643
-avec une clé d'API nommée deploy-bot. Une ligne est plus grande avec un nom de certificat
-ou de clé plus long, un motif de révocation (jusqu'à 200 caractères), un message d'erreur
+certificat serveur mesure environ 530 à 650 octets : 539 et 550 avec l'API Bearer Token, 632 et 643
+avec une clé d'API nommée deploy-bot. Une ligne est plus grande pour le téléchargement d'un
+certificat client, qui nomme aussi le nom commun (576 et 577 octets avec l'API Bearer Token,
+669 et 670 avec deploy-bot), et avec un nom de certificat ou de clé plus long, un motif de révocation (jusqu'à 200 caractères), un message d'erreur
 ou la liste des domaines d'un téléchargement par lot : la révocation d'un certificat client
 avec cette clé a mesuré 652 octets. Les émissions et les renouvellements ajoutent peu, mais chaque
 téléchargement de certificat est une ligne : une automatisation qui récupère un certificat
