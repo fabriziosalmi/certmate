@@ -4,7 +4,10 @@
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div class="bg-surface shadow-card rounded-xl overflow-hidden">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
-                <div class="flex items-center justify-between">
+                <!-- Below sm the header stacks: breadcrumb, a full-width search,
+                     then the selects (#1511, P30). Side by side they wrapped
+                     raggedly next to the breadcrumb on a phone. -->
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
                         <a href="/" aria-label="Home" class="-m-2 md:m-0 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-6 md:min-h-6 text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
@@ -13,7 +16,7 @@
                     <div class="flex items-center gap-2 flex-wrap">
                         <input type="search" id="filterSearch" aria-label="Search activity log"
                                placeholder="Search domain, resource, user…"
-                               class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-56">
+                               class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input placeholder-gray-400 focus:ring-2 focus:ring-primary w-full sm:w-56">
                         <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                             <option value="">All time</option>
                             <option value="today">Today</option>
@@ -28,6 +31,7 @@
                             <option value="deploy">Deployed</option>
                             <option value="revoke">Revoked</option>
                             <option value="download">Downloaded</option>
+                            <option value="denied">Refused</option>
                             <option value="api_request">API requests only</option>
                         </select>
                         <button type="button" data-click="loadActivity" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
@@ -121,7 +125,48 @@
             failure:             { icon: 'fa-exclamation-circle', color: 'text-red-500',   bg: 'bg-danger-surface' }
         };
 
+        // A hook's Test button runs it once against test.example.com with
+        // CERTMATE_DRY_RUN=1 and records it as a deploy_hook run with
+        // details.dry_run. It is a test of the hook, not a deploy of a
+        // certificate: it reads as one, in neutral colours (#1511, P41).
+        function isDryRun(entry) {
+            return entry.operation === 'deploy_hook' && !!(entry.details && entry.details.dry_run === true);
+        }
+
+        function dryRunOutcome(entry) {
+            return entry.status === 'failure' ? 'failed' : 'passed';
+        }
+
+        // What a row is about, as a type label and a name. A client
+        // certificate is named by its common name (its identifier carries a
+        // random suffix, and is in the detail dialog); a hook test by the hook.
+        function resourceOf(entry) {
+            var details = entry.details || {};
+            if (isDryRun(entry)) {
+                return { label: 'Deploy hook', name: details.hook_name || details.hook_id || 'unnamed' };
+            }
+            if (entry.resource_type === 'client_certificate') {
+                return { label: 'Client certificate', name: details.common_name || entry.resource_id || '' };
+            }
+            // Humanize resource_type (raw snake_case otherwise) and drop a
+            // resource_id that merely repeats the type ("settings: settings").
+            var label = String(entry.resource_type || '')
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+            var showId = entry.resource_id && entry.resource_id !== entry.resource_type;
+            return { label: label, name: showId ? entry.resource_id : '' };
+        }
+
+        // A refusal (status denied: a role or a key's scope said no) did not
+        // happen. It reads as refused, never as the operation it refused
+        // ("Downloaded" for a viewer refused the key, #1511 review).
+        function isRefusal(entry) {
+            return entry.status === 'denied';
+        }
+
         function getOpStyle(entry) {
+            if (isDryRun(entry)) return opIcons.test;
+            if (isRefusal(entry)) return { icon: 'fa-hand', color: 'text-amber-500', bg: 'bg-warning-surface' };
             if (entry.status === 'failure') return opIcons.failure;
             return opIcons[entry.operation] || { icon: 'fa-circle', color: 'text-gray-400', bg: 'bg-surface-2' };
         }
@@ -170,6 +215,8 @@
         }
 
         function opLabel(entry) {
+            if (isDryRun(entry)) return 'Hook test';
+            if (isRefusal(entry)) return 'Refused: ' + String(entry.operation || '').replace(/_/g, ' ');
             var labels = {
                 create: 'Created',
                 renew: 'Renewed',
@@ -343,16 +390,23 @@
                     // the Load-more button. Hide it once we're at the
                     // hard ceiling.
                     var hasMore = rawCount >= currentLimit && currentLimit < ACTIVITY_MAX_LIMIT;
-                    if (opFilter) {
+                    if (opFilter === 'denied') {
+                        // Refusals have a filter of their own, and only it
+                        // shows them: a refused download is not a download.
+                        entries = entries.filter(function(e) { return e.status === 'denied'; });
+                    } else if (opFilter) {
                         // Match the operation FAMILY, not just the exact value:
                         // "Created" must catch create_account and batch_create,
                         // "Updated" must catch update_config/update_account, etc.
                         // The '_' boundary keeps "renew" from matching
                         // set_auto_renew (toggling auto-renew is not a renewal).
+                        // A refusal (status denied) is left out of every
+                        // operation family: "Downloaded" lists what was handed
+                        // over, and "Refused" lists what was not.
                         entries = entries.filter(function(e) {
-                            return e.operation === opFilter
+                            return e.status !== 'denied' && (e.operation === opFilter
                                 || e.operation.indexOf(opFilter + '_') === 0
-                                || e.operation === 'batch_' + opFilter;
+                                || e.operation === 'batch_' + opFilter);
                         });
                     } else {
                         // Default view hides api_request entries: those are
@@ -399,61 +453,80 @@
                 var style = getOpStyle(entry);
                 var details = entry.details || {};
                 var detailParts = [];
-                if (details.common_name) detailParts.push('CN: ' + details.common_name);
+                var dryRun = isDryRun(entry);
+                if (details.common_name && entry.resource_type !== 'client_certificate') detailParts.push('CN: ' + details.common_name);
                 if (details.usage) detailParts.push(details.usage);
-                if (details.file_type) detailParts.push('.' + details.file_type);
+                if (details.file_type) detailParts.push(details.file_type);
+                // Every download says whether it carried the private key (P24).
+                if (details.key_included === true) detailParts.push('with the private key');
+                if (details.key_included === false) detailParts.push('no private key');
                 if (details.reason) detailParts.push('Reason: ' + details.reason);
                 if (details.method) detailParts.push(details.method);
                 if (details.status_code) detailParts.push('HTTP ' + details.status_code);
+                if (dryRun && entry.resource_id) detailParts.push('Run against ' + entry.resource_id);
                 var detailStr = detailParts.length > 0 ? detailParts.join(' · ') : '';
+                var resource = resourceOf(entry);
+                var when = formatTime(entry.timestamp);
+                var whenTitle = escapeHtml(absoluteTime(entry.timestamp));
+                var who = escapeHtml(entry.user || 'system');
 
                 // Every row opens the detail modal (openDetail) regardless of
                 // resource type — the modal carries the cert deep-link, the
                 // command output, and the raw entry, so no row is a dead end.
                 // role=button + tabindex make it keyboard-operable; the
                 // aria-label gives screen readers a one-line summary
-                // ("Renewed — certificate foo.example.com, 2h ago. Activate for details.").
+                // ("Renewed — Certificate foo.example.com, 2h ago. Activate for details.").
                 var ariaLabel = opLabel(entry) +
-                    (entry.status === 'failure' ? ' (failed)' : '') +
-                    ' — ' + (entry.resource_type || '') +
-                    (entry.resource_id ? ' ' + entry.resource_id : '') +
-                    ', ' + formatTime(entry.timestamp) + '. Activate for details.';
+                    (dryRun ? ' (dry run, ' + dryRunOutcome(entry) + ')' : (entry.status === 'failure' ? ' (failed)' : '')) +
+                    ' — ' + resource.label + (resource.name ? ' ' + resource.name : '') +
+                    ', ' + when + '. Activate for details.';
 
-                // Humanize resource_type (raw snake_case otherwise) and drop a
-                // resource_id that merely repeats the type ("settings: settings").
-                var rTypeLabel = String(entry.resource_type || '')
-                    .replace(/_/g, ' ')
-                    .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
-                var showResourceId = entry.resource_id && entry.resource_id !== entry.resource_type;
-                var resourceHtml = escapeHtml(rTypeLabel) +
-                    (showResourceId ? ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' : '');
+                // The name breaks anywhere, so it starts on the label's line
+                // and fills both lines: breaking only at the space put a long
+                // name on a line of its own and took three.
+                var resourceHtml = escapeHtml(resource.label) +
+                    (resource.name ? ': <strong class="break-all">' + escapeHtml(resource.name) + '</strong>' : '');
 
+                // A dry run's outcome is said in words on a neutral badge: it
+                // is not a failed deploy, and red would say it is.
+                var badge = dryRun
+                    ? '<span class="px-1.5 py-0.5 text-xs font-medium bg-surface-2 text-muted rounded">Dry run, ' + dryRunOutcome(entry) + '</span>'
+                    : (isRefusal(entry) ? '<span class="px-1.5 py-0.5 text-xs font-medium bg-warning-surface text-warning-fg rounded">REFUSED</span>'
+                    : (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-xs font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : ''));
+
+                // Below sm the right-hand column and the chevron are left out:
+                // who and when go under the name, which takes the width and
+                // wraps to two lines. At 360 px that column left the name 106 px,
+                // and every row read "Certificate: sit…" (#1511, P30). A name
+                // longer than two lines ends in an ellipsis; it is whole in the
+                // row's title and in the detail dialog, with the exact moment.
                 return '<li role="article">' +
                     '<div role="button" tabindex="0" data-entry-index="' + idx + '" aria-label="' + escapeHtml(ariaLabel) + '"' +
-                        ' class="flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
+                        ' class="flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
                         '<div class="flex-shrink-0 mt-0.5">' +
                             '<div class="w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center">' +
                                 '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
                             '</div>' +
                         '</div>' +
                         '<div class="flex-1 min-w-0">' +
-                            '<div class="flex items-center gap-2">' +
+                            '<div class="flex items-center gap-2 flex-wrap">' +
                                 '<span class="text-sm font-medium text-foreground">' + escapeHtml(opLabel(entry)) + '</span>' +
-                                (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : '') +
+                                badge +
                             '</div>' +
-                            '<p class="text-sm text-muted truncate">' + resourceHtml + '</p>' +
+                            '<p class="text-sm text-muted line-clamp-2 [overflow-wrap:anywhere]" title="' + escapeHtml(resource.label + (resource.name ? ': ' + resource.name : '')) + '">' + resourceHtml + '</p>' +
+                            '<p class="sm:hidden text-xs text-muted mt-0.5"><span>' + who + '</span><span aria-hidden="true"> · </span><span title="' + whenTitle + '">' + escapeHtml(when) + '</span></p>' +
                             (detailStr ? '<p class="text-xs text-muted mt-0.5 truncate">' + escapeHtml(detailStr) + '</p>' : '') +
-                            (entry.error ? '<p class="text-xs text-danger-fg mt-0.5 truncate"><i class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
+                            (entry.error ? '<p class="text-xs ' + (dryRun ? 'text-muted' : 'text-danger-fg') + ' mt-0.5 truncate"><i class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
                         '</div>' +
-                        '<div class="flex-shrink-0 text-right">' +
-                            '<div class="text-xs text-muted" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
-                            '<div class="text-[10px] text-muted mt-0.5">' + escapeHtml(compactTime(entry.timestamp)) + '</div>' +
-                            '<div class="text-[10px] text-muted mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
+                        '<div class="hidden sm:block flex-shrink-0 text-right">' +
+                            '<div class="text-xs text-muted" title="' + whenTitle + '">' + escapeHtml(when) + '</div>' +
+                            '<div class="text-xs text-muted mt-0.5">' + escapeHtml(compactTime(entry.timestamp)) + '</div>' +
+                            '<div class="text-xs text-muted mt-1">' + who + '</div>' +
                         '</div>' +
                         // The chevron is the row's last item, centred: inside the
                         // column above it took a line of its own and made every
                         // row 108 px tall instead of 84.
-                        '<i class="fas fa-chevron-right self-center text-[10px] text-gray-300 dark:text-gray-600" aria-hidden="true"></i>' +
+                        '<span class="hidden sm:flex self-center" aria-hidden="true"><i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600"></i></span>' +
                     '</div>' +
                 '</li>';
             }).join('');
@@ -502,7 +575,8 @@
             var iconEl = document.getElementById('activityDetailIcon');
             iconEl.className = 'w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center flex-shrink-0';
             iconEl.innerHTML = '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>';
-            document.getElementById('activityDetailTitle').textContent = opLabel(entry) + (entry.status === 'failure' ? ' (failed)' : '');
+            document.getElementById('activityDetailTitle').textContent = opLabel(entry) +
+                (isDryRun(entry) ? ' (dry run, ' + dryRunOutcome(entry) + ')' : (entry.status === 'failure' ? ' (failed)' : ''));
             document.getElementById('activityDetailSub').textContent = (entry.resource_type || '') + (entry.resource_id ? ' · ' + entry.resource_id : '');
 
             var body = '<div>' +
@@ -517,9 +591,16 @@
                 kvRow('Sequence', (entry.seq !== undefined && entry.seq !== null) ? '#' + entry.seq : '') +
             '</div>';
 
-            if (entry.error) {
+            if (entry.error && isDryRun(entry)) {
+                // Why a hook test did not pass, in the same neutral colours as
+                // its row: it is a test result, not a failed deploy.
+                body += '<div class="rounded-lg bg-surface-2 border border-border p-3">' +
+                    '<div class="text-xs uppercase tracking-wide text-muted mb-1">Why the test did not pass</div>' +
+                    '<div class="text-sm text-foreground break-words">' + escapeHtml(entry.error) + '</div>' +
+                '</div>';
+            } else if (entry.error) {
                 body += '<div class="rounded-lg bg-danger-surface border border-danger-line p-3">' +
-                    '<div class="text-[10px] uppercase tracking-wide text-danger-fg mb-1">Error</div>' +
+                    '<div class="text-xs uppercase tracking-wide text-danger-fg mb-1">Error</div>' +
                     '<div class="text-sm text-danger-fg break-words">' + escapeHtml(entry.error) + '</div>' +
                 '</div>';
             }
@@ -530,10 +611,10 @@
                 out += '<div class="text-xs"><span class="text-muted">Exit code:</span> <span class="font-mono">' + escapeHtml(String(details.exit_code)) + '</span></div>';
             }
             if (details.stderr) {
-                out += '<div><div class="text-[10px] uppercase tracking-wide text-muted mb-1">stderr</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stderr) + '</pre></div>';
+                out += '<div><div class="text-xs uppercase tracking-wide text-muted mb-1">stderr</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stderr) + '</pre></div>';
             }
             if (details.stdout) {
-                out += '<div><div class="text-[10px] uppercase tracking-wide text-muted mb-1">stdout</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stdout) + '</pre></div>';
+                out += '<div><div class="text-xs uppercase tracking-wide text-muted mb-1">stdout</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stdout) + '</pre></div>';
             }
             if (out) body += '<div class="space-y-2">' + out + '</div>';
 
@@ -542,7 +623,7 @@
             var rest = {};
             Object.keys(details).forEach(function(k) { if (!shown[k]) rest[k] = details[k]; });
             if (Object.keys(rest).length) {
-                body += '<div><div class="text-[10px] uppercase tracking-wide text-muted mb-1">Details</div>' +
+                body += '<div><div class="text-xs uppercase tracking-wide text-muted mb-1">Details</div>' +
                     '<pre class="font-mono text-xs bg-surface-2 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(JSON.stringify(rest, null, 2)) + '</pre></div>';
             }
 
@@ -551,14 +632,18 @@
             // Contextual actions.
             var btnCls = 'inline-flex items-center px-3 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition';
             var actions = '';
-            if (entry.resource_type === 'certificate' && entry.resource_id) {
+            // Not for a hook test: test.example.com is not a certificate here.
+            if (entry.resource_type === 'certificate' && entry.resource_id && !isDryRun(entry)) {
                 actions += '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + btnCls + '"><i class="fas fa-arrow-up-right-from-square mr-1.5 text-[10px]"></i>View certificate</a>';
             }
             if (entry.user) {
                 actions += '<button type="button" data-detail-filter="user" data-value="' + escapeHtml(entry.user) + '" class="' + btnCls + '"><i class="fas fa-user mr-1.5 text-[10px]"></i>Filter by user</button>';
             }
             if (entry.operation) {
-                actions += '<button type="button" data-detail-filter="op" data-value="' + escapeHtml(entry.operation) + '" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Filter by operation</button>';
+                // A refusal's own list is "Refused": the operation's leaves it out.
+                actions += isRefusal(entry)
+                    ? '<button type="button" data-detail-filter="op" data-value="denied" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Show refusals</button>'
+                    : '<button type="button" data-detail-filter="op" data-value="' + escapeHtml(entry.operation) + '" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Filter by operation</button>';
             }
             actions += '<button type="button" data-detail-copy class="' + btnCls + '"><i class="fas fa-copy mr-1.5 text-[10px]"></i>Copy JSON</button>';
             var actionsEl = document.getElementById('activityDetailActions');
