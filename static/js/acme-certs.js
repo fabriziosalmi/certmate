@@ -14,6 +14,16 @@
         return counts;
     }
 
+    // What the empty view says about the server, from GET /api/acme/server:
+    // off, on but unable to enrol anyone because every account needs an EAB
+    // key and none is active, or on.
+    function serverState(server) {
+        if (!server || !server.enabled) return 'off';
+        var active = (server.eab_keys || []).some(function (key) { return !key.disabled; });
+        if (server.eab_required && !active) return 'no-key';
+        return 'on';
+    }
+
     function acmeCertificates() {
         return {
             loading: false,
@@ -24,6 +34,8 @@
             // filled in by a request of its own and is not reactive, so a getter
             // over it answered "not an admin" once and never again.
             isAdmin: false,
+            // 'off', 'no-key', 'on', or null when it is not known.
+            serverState: null,
 
             init: function () {
                 var self = this;
@@ -52,13 +64,22 @@
             load: function () {
                 var self = this;
                 self.loading = true;
-                CertMate.refreshRole().then(function () { self.isAdmin = CertMate.roleAtLeast('admin'); });
-                CertMate.api('GET', '/api/acme/certificates')
+                // The server's state, for the empty view (P72). Only an admin can
+                // read it; it is asked for with the list so the sentence is drawn
+                // once, and a refusal leaves it unknown rather than failing the list.
+                var state = CertMate.refreshRole().then(function () {
+                    self.isAdmin = CertMate.roleAtLeast('admin');
+                    if (!self.isAdmin) return null;
+                    return CertMate.api('GET', '/api/acme/server').then(serverState, function () { return null; });
+                });
+                var list = CertMate.api('GET', '/api/acme/certificates')
                     .then(function (answer) {
                         self.certificates = answer.certificates;
                         self.$store.certs.acme = counted(answer.certificates);
                     })
-                    .catch(function (error) { CertMate.toast(error.message || 'Could not load the ACME certificates', 'error'); })
+                    .catch(function (error) { CertMate.toast(error.message || 'Could not load the ACME certificates', 'error'); });
+                Promise.all([state.catch(function () { return null; }), list])
+                    .then(function (answers) { self.serverState = answers[0]; })
                     .then(function () { self.loading = false; self.loaded = true; });
             },
 
