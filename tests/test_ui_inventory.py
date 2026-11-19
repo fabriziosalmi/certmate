@@ -150,3 +150,38 @@ def test_a_managed_certificate_cannot_be_forgotten_and_a_discovered_one_is_asked
     dialog.get_by_role('button', name='Forget').click()
     page.wait_for_timeout(500)
     assert deleted == [_DISCOVERED['fingerprint']]
+
+
+def test_a_row_is_drawn_once_with_its_buttons_when_the_certificate_list_answers_late(browser_page):
+    # Whether a managed row offers Forget depends on /api/certificates. Drawn
+    # before that list answered, the row of a deleted certificate gained Forget
+    # afterwards and every column after it moved (the movement guard measured
+    # 11 elements on CI). The list is held here until the inventory is in.
+    page = browser_page
+    held, released = [], []
+    answer = json.dumps([{'domain': 'held.example.test', 'exists': True}])
+
+    def hold(route):
+        if route.request.method != 'GET':
+            route.continue_()
+        elif released:
+            route.fulfill(status=200, content_type='application/json', body=answer)
+        else:
+            held.append(route)
+    _inventory_answered(page, [])
+    page.unroute('**/api/certificates')
+    page.route('**/api/certificates', hold)
+    page.goto(f"{BASE_URL}/inventory", wait_until='domcontentloaded')
+    page.wait_for_timeout(1500)
+    gone = page.locator('#inventoryBody tr', has_text='gone.example.test')
+    before = gone.locator('button:has-text("Forget")').count() if gone.count() else None
+    assert held, 'the page did not ask for the certificate list'
+    released.append(True)
+    for route in held:
+        route.fulfill(status=200, content_type='application/json', body=answer)
+    page.wait_for_selector('#inventoryBody tr:has-text("gone.example.test")')
+    page.wait_for_timeout(300)
+    after = gone.locator('button:has-text("Forget")').count()
+    assert after >= 1
+    assert before in (None, after), \
+        f'the row was drawn with {before} Forget buttons and redrawn with {after}'
