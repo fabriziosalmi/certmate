@@ -35,6 +35,34 @@
             // the bindings are skipped entirely until showExecutionDetail()
             // sets it from a row click.
             selectedExecution: null,
+            // The command of each hook as the server has it, by id. Test runs
+            // the hook the server has: on a hook it does not have it answered
+            // a 404 that blamed sync or the safety check (#1511, P40), and on
+            // an edited one it would test the old command. So Test waits for
+            // the save.
+            savedCommands: {},
+            // The hook and field the last refused save named, so the field is
+            // marked (aria-invalid) instead of left for the operator to find.
+            refused: null,
+
+            _rememberSaved: function (config) {
+                var saved = {};
+                var hooks = (config.global_hooks || []).slice();
+                Object.keys(config.domain_hooks || {}).forEach(function (domain) {
+                    hooks = hooks.concat(config.domain_hooks[domain] || []);
+                });
+                hooks.forEach(function (hook) { saved[hook.id] = hook.command; });
+                this.savedCommands = saved;
+            },
+
+            isSaved: function (hook) {
+                return Object.prototype.hasOwnProperty.call(this.savedCommands, hook.id)
+                    && this.savedCommands[hook.id] === hook.command;
+            },
+
+            refusedField: function (hook, field) {
+                return !!this.refused && this.refused.hook_id === hook.id && this.refused.field === field;
+            },
 
             loadConfig: function () {
                 var self = this;
@@ -49,6 +77,7 @@
                             self.config.enabled = res.body.enabled || false;
                             self.config.global_hooks = res.body.global_hooks || [];
                             self.config.domain_hooks = res.body.domain_hooks || {};
+                            self._rememberSaved(self.config);
                             addDebugLog('Loaded deploy config: '
                                 + (self.config.global_hooks.length) + ' global hooks, '
                                 + Object.keys(self.config.domain_hooks).length + ' domain section(s)',
@@ -67,6 +96,8 @@
             saveConfig: function () {
                 var self = this;
                 addDebugLog('Saving deploy config…', 'info');
+                // What is sent is what the server keeps when it answers 200.
+                var sent = JSON.parse(JSON.stringify(self.config));
                 fetch('/api/deploy/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -85,10 +116,14 @@
                     })
                     .then(function (res) {
                         if (res.ok) {
+                            self._rememberSaved(sent);
+                            self.refused = null;
                             addDebugLog('Deploy settings saved', 'info');
                             CertMate.toast('Deploy settings saved', 'success');
                         } else {
                             var msg = (res.body && res.body.error) || 'unknown error';
+                            self.refused = (res.body && res.body.hook_id)
+                                ? { hook_id: res.body.hook_id, field: res.body.field } : null;
                             addDebugLog('Deploy settings save failed: ' + msg, 'error');
                             CertMate.toast('Save failed: ' + msg, 'error');
                         }

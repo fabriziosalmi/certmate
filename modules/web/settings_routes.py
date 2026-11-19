@@ -365,6 +365,14 @@ def _stamp_key_delivery_consent(deploy_manager, audit_logger, data):
     return dict(data, targets=targets), None
 
 
+def _test_failure(result):
+    """Why a hook test failed, in a line: the run's own error, or that the
+    hook is not in settings."""
+    if result.get('reason') == 'hook_missing_from_config':
+        return 'the hook is not in settings: save it, then test it'
+    return str(result.get('error') or 'the test did not pass')[:500]
+
+
 def _save_deploy_config(deploy_manager, audit_logger):
     """POST /api/deploy/config: confirm key delivery, validate, save, audit."""
     data, err = _stamp_key_delivery_consent(deploy_manager, audit_logger, request.json or {})
@@ -386,8 +394,13 @@ def _save_deploy_config(deploy_manager, audit_logger):
             )
         return jsonify({'message': 'Deploy configuration saved'})
     # Surface the specific reason (issue #102) so users see *why*
-    # a hook was rejected rather than a generic save failure.
-    return jsonify({'error': err or 'Invalid configuration or save failed'}), 400
+    # a hook was rejected rather than a generic save failure, and which hook
+    # and field it was, so the page can mark the field (#1511, P40).
+    refusal = {'error': err or 'Invalid configuration or save failed'}
+    refused = deploy_manager.refused_hook(data)
+    if refused:
+        refusal.update(refused)
+    return jsonify(refusal), 400
 
 
 def _register_target_preview_route(app, auth_manager, deploy_manager):
@@ -1072,13 +1085,18 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 # We audit the *attempt* (success or failure of the dry-run)
                 # because the test path executes the hook command end-to-end
                 # against a test domain — admins need a trail of who poked
-                # what, even on a successful no-op test.
+                # what, even on a successful no-op test. The status is the
+                # outcome: it was `success` for a test that exited 1 and for a
+                # hook that was not in settings at all (#1511, P41).
+                passed = bool(result.get('success'))
                 audit_logger.log_deploy_hook_changed(
                     scope=domain,
                     hook_id=hook_id,
                     operation='test',
                     user=actor.get('username'),
                     ip_address=request.remote_addr,
+                    status='success' if passed else 'failure',
+                    error=None if passed else _test_failure(result),
                 )
             # A hook that does not exist is a 404. A hook that ran is a 200 whether it passed or
             # not: the run record carries `success` and `error`, and its `error` key is there

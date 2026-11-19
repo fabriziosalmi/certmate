@@ -36,6 +36,27 @@ _PRIVATE_KEY_FILES = frozenset({'privkey.pem', 'combined.pem', 'cert.pfx'})
 _PUBLIC_DOWNLOAD_FILES = frozenset({'cert.pem', 'chain.pem', 'fullchain.pem'})
 
 
+def record_download(ctx: ApiContext, domain, file_type, private_key):
+    """One Activity entry per download that was handed over, saying who took
+    which form and whether it carried the private key (#1511, P24). Only
+    refusals were recorded before, so "who pulled the key" had no answer.
+    Called just before the answer is returned: a request refused or failed
+    above it is not a download."""
+    if ctx.audit:
+        user = getattr(request, 'current_user', None) or {}
+        ctx.audit.log_certificate_downloaded(
+            domain, file_type, private_key,
+            user=user.get('username'), ip_address=request.remote_addr)
+
+
+def _record_zip_download(ctx: ApiContext, domain, include_private, zipped):
+    """The ZIP's entry. Whether it carried the key is read from what the
+    archive holds, not from what was asked for: a certificate issued from a
+    CSR has no key here (#599)."""
+    record_download(ctx, domain, 'zip' if include_private else 'zip (public files only)',
+                    any(name in _PRIVATE_KEY_FILES for name in zipped))
+
+
 def create_download_resources(api, models, ctx: ApiContext,
                               privkey_to_pkcs1) -> dict:
     """Build the certificate-download resources against *ctx*.
@@ -186,6 +207,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                                              '(the key type may not support it).'
                                 }, 422
 
+                        record_download(ctx, domain, 'json', True)
                         return jsonify(payload)
                     except FileNotFoundError:
                         return {'error': f'Required cert file not found for domain {domain}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
@@ -208,6 +230,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                             privkey = (cert_dir / 'privkey.pem').read_text(encoding='utf-8')
                             combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
 
+                            record_download(ctx, domain, requested_file, True)
                             return send_file(
                                 combined_data,
                                 as_attachment=True,
@@ -246,6 +269,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                                 'error': 'Could not convert the private key to PKCS#1 '
                                          '(the key type may not support it).'
                             }, 422
+                        record_download(ctx, domain, 'privkey.pem (PKCS#1)', True)
                         return send_file(
                             io.BytesIO(pkcs1_pem),
                             as_attachment=True,
@@ -257,6 +281,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                         'application/x-pkcs12' if requested_file.endswith('.pfx')
                         else 'application/x-pem-file'
                     )
+                    record_download(ctx, domain, requested_file, requested_file in _PRIVATE_KEY_FILES)
                     return send_file(
                         file_path,
                         as_attachment=True,
@@ -285,11 +310,15 @@ def create_download_resources(api, models, ctx: ApiContext,
                 # Create temporary ZIP file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
                     tmp_path = tmp_file.name
+                    zipped = []
                     with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                         for cert_file in files_to_zip:
                             file_path = cert_dir / cert_file
                             if file_path.exists():
                                 zipf.write(file_path, cert_file)
+                                zipped.append(cert_file)
+
+                    _record_zip_download(ctx, domain, include_private, zipped)
 
                     @after_this_request
                     def remove_file(response):
@@ -380,6 +409,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                         fullchain = (cert_dir / 'fullchain.pem').read_text(encoding='utf-8')
                         privkey = (cert_dir / 'privkey.pem').read_text(encoding='utf-8')
                         combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
+                        record_download(ctx, domain, requested_file, True)
                         return send_file(
                             combined_data,
                             as_attachment=True,
@@ -393,6 +423,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                 if not file_path.exists():
                     return {'error': f'File {requested_file} not found for domain {domain}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
 
+                record_download(ctx, domain, requested_file, requested_file in _PRIVATE_KEY_FILES)
                 return send_file(
                     file_path,
                     as_attachment=True,

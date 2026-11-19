@@ -2728,8 +2728,12 @@ does not make an instance into a source of traffic.
 Reads and writes the `deploy_hooks` block: the hooks that run after an
 issuance or a renewal, and the targets they deliver to. This is the only way
 to change that block; the bulk settings endpoint refuses `deploy_hooks`. A
-rejected configuration is answered `400` with the reason. Every save is
-audited, without the hook commands themselves. What the block holds and how
+rejected configuration is answered `400` with the reason. Since API contract
+**2.72** a command refused by the guard names what it found (`';'`, `'&&'`,
+`'$('`, `a line break`...), and when a hook in the configuration is invalid
+the answer also carries `hook_id` and `field` (`hook`, `name`, `command`,
+`timeout` or `window`) for the first such hook, so a client can point at the
+field. Every save is audited, without the hook commands themselves. What the block holds and how
 hooks run: [deploy-hooks.md](./deploy-hooks.md).
 
 #### Deploy-hook history
@@ -2771,6 +2775,12 @@ record, with `success`, `exit_code`, `stdout`, `stderr` and `error` (null on a p
 A hook that is not in the configuration is a **404**, with `reason:
 "hook_missing_from_config"`. Before API contract **2.37** every answer was a 404, the
 run record included.
+
+Each test writes a `test` entry on `deploy_hook` to the audit log, and since API
+contract **2.72** its `status` is the outcome: `failure`, with the error, for a run
+that did not pass and for a hook that is not in the configuration. Before, every
+test read `success`. A hook that ran also has its run's own `deploy_hook` entry,
+with `details.dry_run: true`.
 
 #### Run a certificate's deploy hooks now
 
@@ -3404,6 +3414,28 @@ recorded to an audit log. This includes the security-relevant lifecycle paths �
 successful and failed create, renew, reissue, deploy, and auto-renew toggles,
 plus **unattended (scheduler-driven) renewals** — each attributed to the actor
 that performed it and the trigger that caused it.
+
+Since API contract **2.72** it also records:
+
+- **Client certificates created, renewed and revoked** (`resource_type:
+  client_certificate`, `details.common_name`), including an attempt the
+  certificate manager refuses (`status: failure`, with its reason). A batch
+  writes one `create` per certificate. A request refused before it reaches a
+  certificate (an invalid identifier, a certificate that does not exist) writes
+  nothing.
+- **Every certificate download that is handed over**, server (`certificate`)
+  or client (`client_certificate`): one `download` entry per request, so a ZIP
+  of four files is one entry, with `details.file_type` and `details.private_key`
+  saying whether what was handed over carried the private key. A batch download
+  from the dashboard is one `batch_download` entry naming the certificates in
+  it (`details.domains`); it never carries a key. A server-certificate
+  download refused for the caller's role or scope is a `denied` entry, as
+  before; a request answered with an error writes no `download` entry.
+
+Downloads add to the log's size: an automation that pulls a certificate on a
+schedule writes an entry on every pull. The `.log` file rotates (10 MB × 5 by
+default, `CERTMATE_AUDIT_LOG_MAX_BYTES` and `CERTMATE_AUDIT_LOG_BACKUP_COUNT`);
+the hash chain below grows until it is pruned.
 
 ### Log format
 

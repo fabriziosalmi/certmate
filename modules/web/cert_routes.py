@@ -55,6 +55,20 @@ def preview_certificate_import_web():
         return jsonify({'error': INVALID_IMPORT_BUNDLE}), 400
 
 
+def _record_batch_download(audit_logger, included, user):
+    """One Activity entry for a batch download request, naming the
+    certificates the archive holds (#1511, P24). It never holds a key: the
+    batch is fullchain.pem only, by design."""
+    if not audit_logger:
+        return
+    audit_logger.log_operation(
+        operation='batch_download', resource_type='certificates',
+        resource_id=', '.join(included) or 'none', status='success',
+        details={'domains': included, 'count': len(included),
+                 'file_type': 'zip of fullchain.pem', 'private_key': False},
+        user=user.get('username'), ip_address=request.remote_addr)
+
+
 def _refusal(error):
     """The answer to an issuing request this caller, or this certificate, does
     not allow: a domain outside the key's scope, an external certificate, or a
@@ -191,6 +205,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             user = getattr(request, 'current_user', None) or {}
             scope = user.get('allowed_domains')
 
+            included = []
             with zipfile.ZipFile(temp_zip.name, 'w') as zf:
                 for domain in domains:
                     cert_dir, error = _sanitize_domain(domain, file_ops.cert_dir)
@@ -218,6 +233,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                     cert_path = cert_dir / 'fullchain.pem'
                     if cert_path.exists():
                         zf.write(str(cert_path), arcname=f"{cert_dir.name}.crt")
+                        included.append(cert_dir.name)
+
+            _record_batch_download(audit_logger, included, user)
 
             @after_this_request
             def cleanup(response):
