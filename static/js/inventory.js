@@ -70,16 +70,19 @@
         return (ROLE_LEVELS[currentRole] || 0) >= (ROLE_LEVELS[name] || 0);
     }
 
+    // The pill's colour is the renewal state, in the dashboard's words on
+    // hover (P25): Overdue red, Due amber, Valid green.
     function statusBadge(status, days) {
         var map = {
-            expired: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Expired'],
-            critical: ['bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300', days + 'd'],
-            warning: ['bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', days + 'd'],
-            ok: ['bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', days + 'd'],
-            unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', '—']
+            expired: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Expired', 'Expired'],
+            critical: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', days + 'd', 'Renewal overdue'],
+            warning: ['bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', days + 'd', 'Renewal due'],
+            ok: ['bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', days + 'd', 'Valid: renewal not due yet'],
+            unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', '—', '']
         };
         var m = map[status] || map.unknown;
-        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' + m[0] + '">' + escapeHtml(m[1]) + '</span>';
+        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' + m[0] + '"'
+            + (m[2] ? ' title="' + escapeHtml(m[2]) + '"' : '') + '>' + escapeHtml(m[1]) + '</span>';
     }
 
     // Only a verified answer is shown as good or revoked; everything else is
@@ -221,11 +224,22 @@
             + '</div>';
     }
 
-    function passesFilters(r) {
-        var group = el('invGroup').value;
-        var source = el('invSource').value;
-        var expiry = el('invExpiry').value;
-        var q = el('invSearch').value.trim().toLowerCase();
+    // The filters as the controls hold them.
+    function currentFilters() {
+        return {
+            group: el('invGroup').value,
+            source: el('invSource').value,
+            expiry: el('invExpiry').value,
+            q: el('invSearch').value.trim().toLowerCase()
+        };
+    }
+
+    // One test for the list and for the summary cards (P09): a card counts the
+    // records that pass the filter it applies when clicked, so its number and
+    // the rows it shows cannot disagree.
+    function passesFilters(r, f) {
+        f = f || currentFilters();
+        var group = f.group, source = f.source, expiry = f.expiry, q = f.q;
         if (group && r.group !== group) { return false; }
         if (source && r.source !== source) { return false; }
         if (expiry === 'revoked') {
@@ -311,7 +325,7 @@
 
     function render() {
         var body = el('inventoryBody');
-        var rows = applySort(records.filter(passesFilters));
+        var rows = applySort(records.filter(function (r) { return passesFilters(r); }));
         el('inventoryHead').classList.remove('invisible');
         el('invCount').textContent = rows.length + ' of ' + records.length
             + (hiddenSuperseded ? ' · ' + hiddenSuperseded + ' superseded hidden' : '');
@@ -394,17 +408,49 @@
             .catch(function (err) { window.alert('Could not remove it (' + err + ').'); });
     }
 
-    function setSummary(s) {
-        s = s || {};
-        var ex = s.expiry || {};
-        setCount('sumTotal', s.total);
-        setCount('sumIssued', s.issued);
-        setCount('sumDiscovered', s.discovered);
-        setCount('sumExpired', ex.expired);
-        setCount('sum7', ex['7']);
-        setCount('sum30', ex['30']);
-        setCount('sum90', ex['90']);
-        setCount('sumRevoked', (s.revocation || {}).revoked);
+    // A card's filter: its group and expiry, nothing else.
+    function cardFilters(card) {
+        return {
+            group: card.getAttribute('data-card-group') || '',
+            source: '',
+            expiry: card.getAttribute('data-card-expiry') || '',
+            q: ''
+        };
+    }
+
+    function cardCount(card) {
+        var f = cardFilters(card);
+        return records.filter(function (r) { return passesFilters(r, f); }).length;
+    }
+
+    // Every card is counted from the list the page holds, with the filter its
+    // click applies. They were the API summary's calendar buckets (expired,
+    // within 7 / 30 / 90 days), which the pills and the filter do not use.
+    function setSummary() {
+        var count = {};
+        document.querySelectorAll('#summaryCards [data-card-expiry]').forEach(function (card) {
+            var value = card.querySelector('[id]');
+            if (value) { count[value.id] = cardCount(card); }
+        });
+        setCount('sumTotal', count.sumTotal);
+        setCount('sumIssued', count.sumIssued);
+        setCount('sumDiscovered', count.sumDiscovered);
+        setCount('sumExpired', count.sumExpired);
+        setCount('sumOverdue', count.sumOverdue);
+        setCount('sumDue', count.sumDue);
+        setCount('sumValid', count.sumValid);
+        setCount('sumRevoked', count.sumRevoked);
+    }
+
+    // A click on a card shows what it counts: its filter, and the others cleared.
+    function showCard(card) {
+        if (!card) { return; }
+        var f = cardFilters(card);
+        el('invGroup').value = f.group;
+        el('invSource').value = f.source;
+        el('invExpiry').value = f.expiry;
+        el('invSearch').value = f.q;
+        render();
     }
 
     function load() {
@@ -416,7 +462,7 @@
             .then(function (data) {
                 records = data.certificates || [];
                 hiddenSuperseded = showSuperseded() ? 0 : ((data.summary || {}).superseded || 0);
-                setSummary(data.summary);
+                setSummary();
                 render();
             })
             .catch(function (err) {
@@ -763,7 +809,7 @@
 
     window.InventoryPage = {
         load: load, render: render, saveConfig: saveConfig, toggleSuperseded: toggleSuperseded,
-        sortBy: sortBy, openConfig: openConfig,
+        sortBy: sortBy, openConfig: openConfig, showCard: showCard,
         runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl,
         forget: forget, forgetFromEl: forgetFromEl
     };
@@ -779,7 +825,7 @@
     // `data-input`): see CertMate.actions in certmate.js.
     CertMate.globalActions([
         'InventoryPage.adoptFromEl', 'InventoryPage.forgetFromEl', 'InventoryPage.load', 'InventoryPage.openConfig',
-        'InventoryPage.render', 'InventoryPage.runScan', 'InventoryPage.saveConfig',
+        'InventoryPage.render', 'InventoryPage.runScan', 'InventoryPage.saveConfig', 'InventoryPage.showCard',
         'InventoryPage.sortBy', 'InventoryPage.toggleSuperseded'
     ]);
 }());

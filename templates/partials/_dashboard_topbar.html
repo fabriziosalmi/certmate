@@ -143,9 +143,17 @@ document.addEventListener('alpine:init', function () {
          width equally — a summary bar across the row rather than a short chip
          with dead space beside it. The child variant sets that on the segments
          without touching the two places that generate them (updateStats and
-         the static markup below), which would otherwise have to agree. -->
+         the static markup below), which would otherwise have to agree.
+
+         The server segments are buttons once updateStats() draws them (P73:
+         a click presses that status chip), so its variants are on any child
+         (`[&>*]`), not only on a div.
+
+         A zero is muted on every strip (P65): the client and ACME counters
+         were red and green at zero while the server ones were muted. A dash
+         until loaded is muted too. -->
     <div x-show="$store.certs.view === 'server'" id="statsCards"
-         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start xl:min-w-0 xl:[&>div]:flex-initial xl:[&>div]:min-w-0 [&>div>span:last-child]:truncate"
+         class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>*]:flex-1 [&>*]:justify-center sm:w-auto sm:[&>*]:flex-none sm:[&>*]:justify-start xl:min-w-0 xl:[&>*]:flex-initial xl:[&>*]:min-w-0 [&>*>span:last-child]:truncate"
          aria-label="Certificate counts">
         <!-- Placeholder until updateStats() writes the counts: the same three
              segments with the same text, transparent over the shimmer, so it is
@@ -155,14 +163,14 @@ document.addEventListener('alpine:init', function () {
              which is what wrapped the bar onto two lines while the list loaded. -->
         <div class="flex items-baseline gap-1.5 px-2.5 py-3" aria-hidden="true"><span class="skeleton text-transparent text-lg font-bold leading-none tabular-nums">00</span><span class="skeleton text-transparent text-[10px] font-medium uppercase tracking-wider">Total</span></div>
         <div class="flex items-baseline gap-1.5 px-2.5 py-3" aria-hidden="true"><span class="skeleton text-transparent text-lg font-bold leading-none tabular-nums">00</span><span class="skeleton text-transparent text-[10px] font-medium uppercase tracking-wider">Valid</span></div>
-        <div class="flex items-baseline gap-1.5 px-2.5 py-3" aria-hidden="true"><span class="skeleton text-transparent text-lg font-bold leading-none tabular-nums">0</span><span class="skeleton text-transparent text-[10px] font-medium uppercase tracking-wider">Expiring</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3" aria-hidden="true"><span class="skeleton text-transparent text-lg font-bold leading-none tabular-nums">0</span><span class="skeleton text-transparent text-[10px] font-medium uppercase tracking-wider">Due</span></div>
     </div>
     <div x-show="$store.certs.view === 'client'" id="clientStatsCards"
          class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start xl:min-w-0 xl:[&>div]:flex-initial xl:[&>div]:min-w-0 [&>div>span:last-child]:truncate"
          aria-label="Client certificate counts">
         <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" id="totalCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
-        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" id="activeCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Active</span></div>
-        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" id="revokedCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-muted" id="activeCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Active</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-muted" id="revokedCount">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
     </div>
     <!-- The ACME view has counters too, so the cluster keeps its shape on all
          three views (#1423). Filled from the store by acmeCertificates(). Three,
@@ -173,7 +181,7 @@ document.addEventListener('alpine:init', function () {
          class="flex w-full items-stretch rounded-xl border border-border bg-surface divide-x divide-border overflow-hidden [&>div]:flex-1 [&>div]:justify-center sm:w-auto sm:[&>div]:flex-none sm:[&>div]:justify-start xl:min-w-0 xl:[&>div]:flex-initial xl:[&>div]:min-w-0 [&>div>span:last-child]:truncate"
          aria-label="ACME certificate counts">
         <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-foreground" x-text="$store.certs.acme.total">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Total</span></div>
-        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-success-fg" x-text="$store.certs.acme.valid">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Valid</span></div>
-        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums text-danger-fg" x-text="$store.certs.acme.revoked">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums" :class="$store.certs.acme.valid > 0 ? 'text-success-fg' : 'text-muted'" x-text="$store.certs.acme.valid">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Valid</span></div>
+        <div class="flex items-baseline gap-1.5 px-2.5 py-3"><span class="text-lg font-bold leading-none tabular-nums" :class="$store.certs.acme.revoked > 0 ? 'text-danger-fg' : 'text-muted'" x-text="$store.certs.acme.revoked">&ndash;</span><span class="text-[10px] font-medium text-muted uppercase tracking-wider">Revoked</span></div>
     </div>
 </div>

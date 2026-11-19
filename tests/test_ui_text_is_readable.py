@@ -174,7 +174,7 @@ def test_muted_text_is_readable_in_light_mode(open_page, path):
     assert low == [], f'{path}, light: muted text ({colour}) under {AA}:1: {low[:8]}'
 
 
-CHIPS = [('/', [f'[data-status-chip="{k}"]' for k in ('all', 'valid', 'expiring', 'expired')]),
+CHIPS = [('/', [f'[data-status-chip="{k}"]' for k in ('all', 'valid', 'overdue', 'due', 'expired')]),
          ('/#client', [f'[data-cc-status-chip="{k}"]' for k in ('', 'active', 'revoked')])]
 
 

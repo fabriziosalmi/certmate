@@ -123,7 +123,7 @@
                          (non-snoozed) certificate warnings. -->
                     <a href="/notifications" {% if request.path == '/notifications' %}aria-current="page"{% endif %} id="notifBtn" class="px-2 py-2 rounded-md border-b-2 hover:bg-hover relative {% if request.path == '/notifications' %}text-primary border-primary{% else %}text-muted border-transparent{% endif %}" title="Notifications" aria-label="Notifications">
                         <i class="fas fa-bell"></i>
-                        <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
+                        <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">0</span>
                     </a>
                     <!-- Theme is auto (follows OS) by default; override lives in
                          Settings → General → Appearance. No top-bar toggle. -->
@@ -296,16 +296,23 @@
     })();
     window.CertMateNotif = CertMateNotif;
 
+    // The count the page opened with is shown still; only a count that grows
+    // while the page is open pulses (P53: it pulsed from its first paint).
+    var _notifBadgeCount = null;
     function _updateNotifBadge(certs) {
         var badge = document.getElementById('notifBadge');
         if (!badge) return;
         var active = CertMateNotif.deriveWarnings(certs).filter(function(w) {
             return !CertMateNotif.isSnoozed(w.domain);
         });
+        var grew = _notifBadgeCount !== null && active.length > _notifBadgeCount;
+        _notifBadgeCount = active.length;
+        badge.classList.toggle('badge-pulse', grew);
         if (active.length === 0) { badge.classList.add('hidden'); return; }
         badge.textContent = active.length > 9 ? '9+' : active.length;
         badge.classList.remove('hidden');
     }
+    window._updateNotifBadge = _updateNotifBadge;
     function checkNotifications() {
         // Fetch fresh each time. The certificate list is intentionally NOT
         // cached in web storage — that would be clear-text storage of sensitive
@@ -316,8 +323,13 @@
             .then(function(certs) { _updateNotifBadge(certs); })
             .catch(function() {});
     }
-    // Check on load (with cache, staggered after auth) and refresh every 5 min
-    setTimeout(checkNotifications, 4000);
+    // At once (P53): a timer of four seconds put the badge up after the
+    // dashboard had drawn its list and the reader had looked. The dashboard
+    // counts it from the list it loads (dashboard.js), so it does not fetch
+    // the list a second time here. Then every 5 minutes.
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!document.getElementById('certificatesList')) checkNotifications();
+    });
     setInterval(function() { checkNotifications(true); }, 300000);
     // Re-sync when returning to the tab — a snooze set on the notifications
     // page should shrink the badge as soon as you switch back.
