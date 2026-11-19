@@ -236,10 +236,12 @@ def _resolved(managers, kind, provider, config) -> dict:
             '_email': config.get('email') or _instance_email(managers)}
 
 
-# What reading an account's credentials can raise: a reference that yields
-# nothing (SecretReferenceError), a file that is not text (UnicodeDecodeError,
-# a ValueError), an unusable EAB (ValueError), a path that cannot be read
-# (OSError). Every one is a failed check, never a 500.
+# What reading an account's credentials can raise: a reference that does not
+# resolve (SecretReferenceError, which secret_refs raises for a missing, empty,
+# oversized, non-text or non-regular file and an unset variable), an unusable
+# EAB (ValueError, raised from the SecretReferenceError when there is one), and
+# ValueError or OSError from anything else on the way. Every one is a failed
+# check, never a 500.
 _UNREADABLE = (SecretReferenceError, ValueError, OSError)
 
 
@@ -266,11 +268,11 @@ def _unreadable_marker(exc) -> str:
 
 
 def unreadable_reason(exc) -> str:
-    """The cause first, then the file or the variable, so the bound on the
-    reason cuts a long path and never the cause."""
+    """The cause first, then the file or the variable in brackets, so the
+    bound on the reason cuts a long path and never the cause."""
     reference = _reference_error(exc)
     if reference is not None:
-        return f'{reference.field} {reference.reason}: {reference.reference}'
+        return f'{reference.field} {reference.reason} ({reference.reference})'
     return f"The account's credentials could not be read ({type(exc).__name__})"
 
 

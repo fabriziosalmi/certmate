@@ -179,7 +179,7 @@ def test_a_token_given_by_reference_is_read_as_issuance_reads_it(instance, tmp_p
     get.assert_not_called()
     assert check['outcome'] == 'failed'
     # The cause first, then the path: the 200-character bound cuts the path (review R2).
-    assert check['reason'] == f'api_token could not be read (No such file or directory): {secret}', check
+    assert check['reason'] == f'api_token could not be read: it does not exist ({secret})', check
 
 
 def test_the_reason_is_one_bounded_line_without_the_credential(instance):

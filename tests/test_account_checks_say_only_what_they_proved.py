@@ -378,7 +378,7 @@ def test_a_token_file_that_is_not_text_is_a_failed_check_not_a_500(instance, tmp
     assert client.get('/api/dns/accounts').status_code == 200
     check = _cf_check(client)
     assert check['outcome'] == 'failed'
-    assert check['reason'] == "The account's credentials could not be read (UnicodeDecodeError)"
+    assert check['reason'] == f'api_token is not UTF-8 text ({secret})'
     assert _listed(client)['last_check'] == check
 
 
@@ -398,7 +398,7 @@ def test_an_eab_file_that_is_not_text_is_a_failed_ca_check(instance, tmp_path):
     assert answer.status_code == 200, answer.get_data(as_text=True)[:200]
     check = answer.get_json()['last_check']
     assert check == {**check, 'outcome': 'failed',
-                     'reason': "The account's credentials could not be read (UnicodeDecodeError)"}
+                     'reason': f'eab_hmac is not UTF-8 text ({hmac_file})'}
     assert _ca_checks(client)[('zerossl', 'zs')] == check
 
 
@@ -426,10 +426,10 @@ def test_a_ca_eab_file_that_goes_from_missing_to_empty_reads_never(instance, tmp
 
     hmac_file.write_text('', encoding='utf-8')
     assert _ca_checks(client)[('zerossl', 'zs')]['outcome'] == 'never'
-    assert check['reason'] == f'eab_hmac could not be read (No such file or directory): {hmac_file}'
+    assert check['reason'] == f'eab_hmac could not be read: it does not exist ({hmac_file})'
     with mock.patch('requests.get') as get:
         again = client.post('/api/web/settings/ca-providers/zerossl/accounts/zs/check').get_json()['last_check']
-    assert again['reason'] == f'eab_hmac is empty: {hmac_file}'
+    assert again['reason'] == f'eab_hmac is empty ({hmac_file})'
     assert _ca_checks(client)[('zerossl', 'zs')] == again
 
 
@@ -443,5 +443,5 @@ def test_a_long_path_is_cut_never_the_cause(instance, tmp_path):
     check = _cf_check(client)
     assert check['outcome'] == 'failed'
     assert len(check['reason']) <= 200
-    assert check['reason'].startswith('api_token could not be read (No such file or directory): '), check
+    assert check['reason'].startswith('api_token could not be read: it does not exist ('), check
     assert check['reason'].endswith('...')
