@@ -285,6 +285,7 @@ rather than written by hand:
   "alias_dns_provider": null,
   "san_domains": ["www.example.com"],
   "ca_provider": "letsencrypt",
+  "staging": false,
   "ca_account_id": "default",
   "imported_at": null,
   "external": false,
@@ -435,6 +436,15 @@ certificate as it was. The field is `null` when no renewal has failed, after a
 renewal that happened, and once a reissue or an upload has replaced the
 certificate it was about. A domain busy with another operation is not a failed
 renewal and leaves nothing. Since API contract **2.70**.
+
+##### Is it a staging certificate?
+
+`staging` is `true` when the certificate comes from a CA's staging directory,
+whose certificates browsers do not trust: `ca_provider` is `letsencrypt_staging`,
+or the certificate was recorded with the staging flag. Before 2.12.0 a Let's
+Encrypt staging certificate was recorded as `ca_provider` `letsencrypt` with that
+flag, and it still renews from staging, so `ca_provider` alone does not tell it
+from production. Since API contract **2.72**.
 
 ##### Deprecated fields
 
@@ -1832,6 +1842,10 @@ already could, instead of a generic DNS or port-80 guess: read `error`. The
 synchronous 422 `CERTIFICATE_CREATION_FAILED` is unchanged and keeps that
 generic hint, a string. `hint` is also `null` while the job runs and after it
 succeeds.
+
+A create or reissue job carries `ca_provider`, the CA its request went to: the
+one it named, or the instance's default CA when it named none. A renewal job
+carries `null`: its certificate names its CA. Since API contract **2.72**.
 
 **Errors**: 400 validation or configuration (the body names the problem),
 403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a

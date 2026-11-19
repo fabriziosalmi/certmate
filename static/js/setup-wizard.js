@@ -141,7 +141,21 @@
         } catch (e) { /* fetch unavailable — localStorage skip still applies */ }
     }
 
+    // The admin email typed on the setup page, handed over in this tab's
+    // sessionStorage (templates/setup.html, UX audit P58), to start the
+    // contact email with. Kept until the wizard saves or is dismissed.
+    var SETUP_EMAIL_KEY = 'certmate_setup_email';
+
+    function setupEmail() {
+        try { return window.sessionStorage.getItem(SETUP_EMAIL_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    function forgetSetupEmail() {
+        try { window.sessionStorage.removeItem(SETUP_EMAIL_KEY); } catch (e) { /* storage unavailable: nothing was kept */ }
+    }
+
     function dismissWizard() {
+        forgetSetupEmail();
         rememberSkip();
         persistDismissal();
         closeWizard();
@@ -154,6 +168,9 @@
         fetch('/api/web/settings?t=' + t, { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
+                // Only while the settings hold no email: one already saved is
+                // not replaced by a click on Next.
+                if (data && !data.email && !state.email) state.email = setupEmail();
                 if (data && data.certmate_recovery_suggested) {
                     showRecoveryPrompt();
                 } else if (data && data.setup_completed === false && !data.wizard_dismissed && !wizardSkipped()) {
@@ -298,11 +315,12 @@
         for (var i = 1; i <= 3; i++) {
             var cls = i === state.step
                 ? 'w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold'
+                // A step behind is done, not checked: no status colour (P19).
                 : i < state.step
-                    ? 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm'
+                    ? 'w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm'
                     : 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-muted flex items-center justify-center text-sm';
             html += '<div class="' + cls + '">' + (i < state.step ? '<i class="fas fa-check text-xs"></i>' : i) + '</div>';
-            if (i < 3) html += '<div class="w-6 h-0.5 ' + (i < state.step ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600') + '"></div>';
+            if (i < 3) html += '<div class="w-6 h-0.5 ' + (i < state.step ? 'bg-primary/40' : 'bg-gray-200 dark:bg-gray-600') + '"></div>';
         }
         el.innerHTML = html;
     }
@@ -627,8 +645,14 @@
             return r.json();
         })
         .then(function() {
-            state.step = 3;
-            renderStep();
+            forgetSetupEmail();
+            // Step 3 lists what the instance now holds, read back: the
+            // environment can override a saved value (LETSENCRYPT_EMAIL).
+            return readBackSettings().then(function (saved) {
+                state.step = 3;
+                state.saved = saved;
+                renderStep();
+            });
         })
         .catch(function(err) {
             console.error('Setup wizard save error:', err);
@@ -640,28 +664,68 @@
         });
     }
 
+    // The settings as the instance holds them after the save, or null when
+    // they could not be read. Never rejects.
+    function readBackSettings() {
+        return fetch('/api/web/settings?t=' + new Date().getTime(), { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; });
+    }
+
+    function providerLabel(key) {
+        return PROVIDERS[key] ? PROVIDERS[key].label : key;
+    }
+
+    function savedRow(icon, label, value, note) {
+        return '<div class="flex items-start"><i class="fas ' + icon + ' text-muted mr-2 w-4 mt-0.5" aria-hidden="true"></i>' +
+            '<span class="text-label">' + label + ': <strong>' + escapeHtml(value) + '</strong>' +
+            (note ? '<span class="block text-xs text-muted">' + escapeHtml(note) + '</span>' : '') + '</span></div>';
+    }
+
+    // What was saved, as the instance now holds it (UX perception audit,
+    // 2026-11-18, P19). No success claim and no status colour: the wizard
+    // checks nothing with the CA or the DNS provider, it only saves. Step 3
+    // is reached only once the save answered OK.
+    function savedSettingsHtml(saved) {
+        if (!saved) {
+            return '<p class="text-sm text-muted">They could not be read back to list here: Advanced Settings shows them.</p>';
+        }
+        var email = saved.email || '';
+        var typed = (state.email || '').trim().toLowerCase();
+        // The only override of the saved email is LETSENCRYPT_EMAIL, applied
+        // whenever the settings are read (modules/core/settings.py).
+        var pinned = email && typed && email.toLowerCase() !== typed
+            ? 'LETSENCRYPT_EMAIL on this instance overrides ' + state.email.trim() + ', the address you entered.'
+            : '';
+        return '<div class="bg-surface-2 rounded-lg p-4 text-left text-sm space-y-2">' +
+            savedRow('fa-envelope', 'Email', email || 'none', pinned) +
+            (saved.challenge_type === 'http-01'
+                ? savedRow('fa-globe', 'Validation', 'HTTP-01, on port 80')
+                : savedRow('fa-globe-americas', 'DNS Provider', providerLabel(saved.dns_provider || '') || 'none')) +
+            savedRow('fa-sync-alt', 'Auto-renewal', saved.auto_renew === false ? 'Disabled' : 'Enabled') +
+        '</div>';
+    }
+
     function renderStep3() {
         var body = document.getElementById('wizardBody');
+        var saved = state.saved;
+        var dns = saved ? saved.challenge_type !== 'http-01' && saved.dns_provider : state.challenge !== 'http-01' && state.provider;
+        var unchecked = 'CertMate has not checked them with your certificate authority' +
+            (dns ? ' or with ' + escapeHtml(providerLabel(dns)) : '') + '. Requesting a certificate is what tests them.';
         body.innerHTML =
             '<div class="text-center">' +
-                '<div class="w-20 h-20 bg-success-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-check-circle text-green-500 text-4xl"></i>' +
+                '<div class="w-20 h-20 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-4">' +
+                    '<i class="fas fa-save text-muted text-4xl" aria-hidden="true"></i>' +
                 '</div>' +
-                '<h3 class="text-xl font-bold text-foreground mb-2">You\'re All Set!</h3>' +
-                '<p class="text-sm text-muted mb-4">CertMate is configured and ready to manage your certificates.</p>' +
-                '<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-left text-sm space-y-2">' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Email: <strong>' + escapeHtml(state.email) + '</strong></span></div>' +
-                    (state.challenge === 'http-01'
-                        ? '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Validation: <strong>HTTP-01, on port 80</strong></span></div>'
-                        : '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>') +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Auto-renewal: <strong>Enabled</strong></span></div>' +
-                '</div>' +
+                '<h3 class="text-xl font-bold text-foreground mb-2">Settings saved</h3>' +
+                '<p class="text-sm text-muted mb-4">' + unchecked + '</p>' +
+                savedSettingsHtml(saved) +
             '</div>';
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<a href="/settings" class="text-sm text-muted hover:text-gray-700 dark:hover:text-gray-200">Advanced Settings</a>' +
-            '<button type="button" id="wizFinish" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition"><i class="fas fa-certificate mr-1"></i> Create Your First Certificate</button>';
+            '<button type="button" id="wizFinish" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition"><i class="fas fa-certificate mr-1"></i> Create a Certificate</button>';
 
         document.getElementById('wizFinish').addEventListener('click', function() {
             closeWizard();

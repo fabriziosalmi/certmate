@@ -2755,6 +2755,11 @@ class CertificateManager:
         # without these the edit form would silently reset a non-default CA
         # or challenge type back to the global defaults.
         ca_provider = metadata.get('ca_provider')
+        # From a staging directory, which browsers do not trust. Before 2.12.0
+        # Let's Encrypt staging was ca_provider "letsencrypt" with this flag,
+        # and such a lineage still renews from staging (UX audit P22: only a
+        # production failure suggests testing with staging).
+        staging = metadata.get('staging') is True or ca_provider == 'letsencrypt_staging'
         challenge_type = metadata.get('challenge_type')
         account_id = metadata.get('account_id')
         if settings is None:
@@ -2855,6 +2860,7 @@ class CertificateManager:
                 'alias_dns_provider': alias_dns_provider,
                 'san_domains': san_domains,
                 'ca_provider': ca_provider,
+                'staging': staging,
                 'ca_account_id': metadata.get('ca_account_id'),
                 'imported_at': metadata.get('imported_at'),
                 'external': external,
@@ -2918,6 +2924,7 @@ class CertificateManager:
             'alias_dns_provider': alias_dns_provider,
             'san_domains': san_domains,
             'ca_provider': ca_provider,
+            'staging': staging,
             'ca_account_id': metadata.get('ca_account_id'),
             'imported_at': metadata.get('imported_at'),
             'external': external,

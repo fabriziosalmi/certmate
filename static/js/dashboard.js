@@ -1061,6 +1061,29 @@
         return text || 'The job failed without a message.';
     }
 
+    // A failure at production Let's Encrypt, whose limits count failed
+    // attempts, says that staging exists and how to use it (UX perception
+    // audit, 2026-11-18, P22). Production is "letsencrypt" without the staging
+    // flag: before 2.12.0 Let's Encrypt staging was recorded as "letsencrypt"
+    // with it, and still renews from staging. No recorded CA is not known to
+    // be production. The create form offers a CA only once Settings, CA has
+    // an account for it that can issue (CertMate.configuredCAProviders).
+    function wentToProductionLetsEncrypt(caProvider, staging) {
+        return caProvider === 'letsencrypt' && staging !== true;
+    }
+
+    var STAGING_HINT_SHORT = 'Test with staging first';
+    var STAGING_HINT_HTML = STAGING_HINT_SHORT + ': request a certificate for this domain with ' +
+        '<span class="font-medium">Let\'s Encrypt (Staging)</span> as its Certificate Authority; if the domain ' +
+        'already has a certificate, give the new one a Name of its own. If the list does not offer it, add it in ' +
+        '<a href="/settings#ca" class="text-info-fg hover:underline">Settings, CA</a> with Add CA Account. ' +
+        'Staging certificates are not trusted by browsers, and its rate limits are separate from production\'s.';
+
+    function stagingHintHtml(extraClass) {
+        return '<div class="mt-1 text-label break-words ' + (extraClass || '') + '" data-staging-hint>' +
+            STAGING_HINT_HTML + '</div>';
+    }
+
     // The banner's account of the last failed renewal: when, why, what to
     // check, and where the run is recorded.
     function lastRenewalFailureHtml(cert) {
@@ -1071,6 +1094,7 @@
             '<div class="font-semibold">Last renewal failed' + (when ? ' ' + escapeHtml(when) : '') + '</div>' +
             '<div class="[overflow-wrap:anywhere]" title="' + escapeHtml(failed.error || '') + '">' + escapeHtml(failureCause(failed.error)) + '</div>' +
             (failed.hint ? '<div class="mt-1 text-label break-words">' + escapeHtml(failed.hint) + '</div>' : '') +
+            (wentToProductionLetsEncrypt(cert.ca_provider, cert.staging) ? stagingHintHtml() : '') +
             '<a href="/activity" class="text-xs text-info-fg hover:underline">See it in the Activity log</a>' +
             '</div>';
     }
@@ -1308,6 +1332,11 @@
             var renewalFailedHint = renewalFailed
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-start text-xs text-danger-fg min-w-0" data-renewal-failed><i class="fas fa-circle-exclamation mr-1 mt-0.5 shrink-0" aria-hidden="true"></i><span class="min-w-0 [overflow-wrap:anywhere] md:truncate" title="${(renewalFailed.error || '') + (renewalFailed.hint ? '\n\n' + renewalFailed.hint : '')}">Renewal failed: ${failureCause(renewalFailed.error)}</span></div>`)
                 : false;
+            // The how is in the detail panel; the row says only that staging is there.
+            var stagingHint = renewalFailed && wentToProductionLetsEncrypt(cert.ca_provider, cert.staging)
+                ? rowRaw('<div class="mt-1 text-xs text-label" data-staging-hint>' + STAGING_HINT_SHORT +
+                    ': its details say how</div>')
+                : false;
             var renewalFailedChip = renewalFailed
                 ? rowRaw('<div class="mt-1"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-circle-exclamation mr-1" aria-hidden="true"></i>Renewal failed</span></div>')
                 : false;
@@ -1350,6 +1379,7 @@
                             ${ipHint}
                             ${aliasHint}
                             ${renewalFailedHint}
+                            ${stagingHint}
                             ${tagHint}
                             ${mobileMeta}
                         </div>
@@ -4481,6 +4511,9 @@
             '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="' + domain + '">' + domain + '</div>' +
             '<div class="mt-1 text-xs text-danger-fg break-words" title="' + errTitle + '">' + errText + '</div>' +
             (job.hint ? '<div class="mt-1 text-xs text-label break-words" data-failure-hint>' + escapeHtml(job.hint) + '</div>' : '') +
+            // The CA the request went to, as the job says (the request may
+            // have named none and taken the default).
+            (wentToProductionLetsEncrypt(job.jobCaProvider || job.caProvider) ? stagingHintHtml('text-xs') : '') +
             '</div></div></td>' +
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
@@ -4664,6 +4697,7 @@
                     // hid why it failed (UX audit, 2026-11-18). certbot's full
                     // output stays in the row.
                     pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
+                    pendingJobs[jobId].jobCaProvider = (jobRec && jobRec.ca_provider) || '';
                     delete pendingPollTimers[jobId];
                     var failedKind = pendingJobs[jobId].kind || (jobRec && jobRec.operation);
                     var failedHint = pendingJobs[jobId].hint;

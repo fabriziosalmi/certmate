@@ -436,6 +436,10 @@ def create_api_models(api):
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
         'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
         'ca_provider': fields.String(description='CA used at issuance, or selected for the next renewal of an imported certificate (from metadata)'),
+        'staging': fields.Boolean(description=(
+            "True when the certificate comes from a CA's staging directory, whose certificates browsers "
+            'do not trust: ca_provider letsencrypt_staging, or a certificate recorded with the staging flag '
+            '(before 2.12.0, Let\'s Encrypt staging was ca_provider letsencrypt with it). Since API contract 2.72.')),
         'ca_account_id': fields.String(description=(
             'CA account used at issuance, or selected for renewal of an imported certificate')),
         'imported_at': fields.String(description=(

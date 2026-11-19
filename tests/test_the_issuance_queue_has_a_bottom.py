@@ -215,7 +215,7 @@ def test_an_accepted_submission_still_answers_202():
     from modules.api import resources_lifecycle
 
     class _Executor:
-        def submit(self, kind, domain, fn, explain=None):
+        def submit(self, kind, domain, fn, explain=None, ca_provider=None):
             return 'abc123'
 
     class _Ctx:

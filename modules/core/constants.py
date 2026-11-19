@@ -818,6 +818,15 @@ METADATA_SCHEMA_VERSION = 1
 #                                   when those checks are enabled. With no row
 #                                   it tells "not checked yet" from "nothing
 #                                   to check". A new field.
+#                                   2.72, MINOR: a create or reissue job
+#                                   (GET jobs/<id>, GET jobs) carries
+#                                   ca_provider, the CA its request resolved
+#                                   to, the instance default when it named
+#                                   none; null for a renewal. A certificate's
+#                                   answer carries staging, true when it comes
+#                                   from a staging directory (also a pre-2.12.0
+#                                   letsencrypt record with the staging flag).
+#                                   New fields.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -843,7 +852,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.71'
+API_CONTRACT_VERSION = '2.72'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

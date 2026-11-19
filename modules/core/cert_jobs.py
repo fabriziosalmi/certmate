@@ -87,7 +87,7 @@ class IssuanceExecutor:
         self._jobs = OrderedDict()  # job_id -> record (insertion-ordered for eviction)
         self._lock = threading.Lock()
 
-    def submit(self, kind, domain, fn, explain=None):
+    def submit(self, kind, domain, fn, explain=None, ca_provider=None):
         """Register a job and run *fn* (a zero-arg callable performing the
         blocking issuance) on the pool. Returns the job_id immediately.
 
@@ -96,6 +96,12 @@ class IssuanceExecutor:
         so a job that failed says what to check too. The dashboard always
         issues through a job, so without it the hint was never shown (UX
         audit, 2026-11-17).
+
+        *ca_provider* is the CA a create or reissue request resolved to,
+        the instance default when it named none, kept on the record so a
+        failure can be told apart by CA (UX audit P22: only a failure at
+        production Let's Encrypt suggests testing with staging). None for a
+        renewal, whose certificate names its CA.
 
         Raises `IssuanceQueueFull` when the backlog is already at the limit,
         which the API turns into a 429. The check and the registration happen
@@ -125,6 +131,7 @@ class IssuanceExecutor:
                 'error': None,
                 'error_code': None,
                 'hint': None,
+                'ca_provider': ca_provider,
             }
             self._evict_locked()
         try:

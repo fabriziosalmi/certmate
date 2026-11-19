@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.71",
+ "contract_version": "2.72",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -1063,6 +1063,9 @@
     "[].seconds_left": [
      "int"
     ],
+    "[].staging": [
+     "bool"
+    ],
     "[].storage_warning": [
      "null"
     ],
@@ -1231,6 +1234,9 @@
     ],
     "seconds_left": [
      "int"
+    ],
+    "staging": [
+     "bool"
     ],
     "storage_warning": [
      "null"
@@ -1453,6 +1459,9 @@
     "jobs[]": [
      "dict"
     ],
+    "jobs[].ca_provider": [
+     "str"
+    ],
     "jobs[].domain": [
      "str"
     ],
@@ -1492,6 +1501,9 @@
    "200": {
     ".": [
      "dict"
+    ],
+    "ca_provider": [
+     "str"
     ],
     "domain": [
      "str"
