@@ -1,6 +1,6 @@
 # Theme-Migration — Entkopplung von Hell/Dunkel über CSS-Variable-Tokens
 
-<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
+<!-- CERTMATE-TRANSLATED-FROM ab5adb762dd4c43e -->
 
 Status: **ausgeliefert** (Phasen 0–5 in v2.9.0, Phasen 6–9 danach; Phase 10 geplant) · Verantwortlicher: Fabrizio · Erstellt: 2026-05-25
 
@@ -96,7 +96,8 @@ Einige Überreste (`dark:text-gray-400{%`, `dark:text-gray-300'`) sind Klassenat
 ### Phase 1 — Pilot: Shell + Primitive
 - [x] `base.html` (Nav/Header/Footer/Tab-Leiste) auf Tokens migrieren. 19 Paare zusammengefasst; Token-Werte stimmen exakt mit den Originalen überein.
 - [x] `login.html` auf Tokens migrieren. 12 Paare zusammengefasst.
-- [ ] `.btn` / `.form-*`-Komponentenklassen übernehmen (zurückgestellt — der Pilot verwendete nur Tokens; die Login-Inputs unterscheiden sich in der Größe von `.form-input`, daher ist die Komponentenübernahme ein eigener Schritt).
+- [x] `.btn`-Komponentenklassen übernehmen: später erledigt, für die gefüllten Buttons der App (#1511, siehe Phase 9).
+- [ ] `.form-*`-Komponentenklassen übernehmen (zurückgestellt: der Pilot verwendete nur Tokens; die Login-Inputs unterscheiden sich in der Größe von `.form-input`, daher ist die Komponentenübernahme ein eigener Schritt).
 - [x] Hell/Dunkel-Parität validieren. Live in Docker verifiziert (base.html + login.html, beide Themes) — Pilot akzeptiert.
 
 #### Offene Designentscheidungen (durch den Pilot aufgedeckt)
@@ -158,11 +159,19 @@ Einige Überreste (`dark:text-gray-400{%`, `dark:text-gray-300'`) sind Klassenat
 - [x] Einen thema-bewussten `accent`-Token hinzugefügt (blue-600 → blue-400 im Dunkelmodus), sodass
   `.nav-active` die Blaufarbe nicht mehr fest kodiert; das ist der On-Surface-Akzent, den #254
   vermisste.
-- Nicht erledigt (by design): Übernahme von `.btn`/`.form-*` an den Verwendungsstellen (die Inline-
-  Verwendungsstellen sind bereits tokenisiert; das Erzwingen der Komponenten würde die Button-Größe
-  ohne Entkopplungsgewinn ändern). `.btn-danger` (solide Aktionsrot) und die
-  `.badge-*`-Statusvarianten bleiben buchstäblich. Die `@apply`-Schicht bleibt außerhalb
-  des `--check`-Gates — eine künftige Codemod-Erweiterung könnte sie scannen.
+- In dieser Phase nicht erledigt: Übernahme von `.btn`/`.form-*` an den Verwendungsstellen
+  (die Inline-Verwendungsstellen waren bereits tokenisiert; das Erzwingen der Komponenten
+  hätte die Button-Größe ohne Entkopplungsgewinn geändert). `.btn` wurde später aus einem
+  anderen Grund übernommen (#1511, UX-Audit P42): die gefüllten Buttons waren 28 bis 50 px
+  hoch, in drei Blautönen, einem Indigo, einem Grün, einem Bernstein und einem Fast-Schwarz, neben dem Rot einer Löschung. Die gefüllten Buttons der App (abgesehen vom Schalter der
+  Debug-Konsole in den Einstellungen) sind jetzt `.btn` mit `.btn-primary`, `.btn-danger`,
+  `.btn-warning` (Bernstein, nur für das Migrieren von Zertifikaten) oder `.btn-secondary`,
+  36 px hoch, und `.btn-sm` (28 px) in dichten Werkzeugleisten; die Anmelde- und
+  Erstadmin-Seiten behalten ihre eigenen. `.form-*` ist noch nicht übernommen. `.btn-danger`
+  und `.btn-warning` behalten buchstäbliche Farben, und die `.badge-*`-Varianten haben keine
+  Verwendungsstelle: die Status-Pille der Server-, Client- und Inventarlisten ist
+  `CertMate.statusBadge` in `static/js/certmate.js`. Die `@apply`-Schicht bleibt außerhalb
+  des `--check`-Gates; eine künftige Codemod-Erweiterung könnte sie scannen.
 
 ### Phase 10 — Farb-Tail-Zerlegung (geplant, schrittweise)
 Die Entkopplung hinterließ **565 `dark:`-Utilities**, die der Codemod nicht zusammenfassen kann: Sie

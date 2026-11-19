@@ -1,6 +1,6 @@
 # Migración de tema — desacoplamiento claro/oscuro mediante tokens de variables CSS
 
-<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
+<!-- CERTMATE-TRANSLATED-FROM ab5adb762dd4c43e -->
 
 Estado: **entregado** (Fases 0–5 en v2.9.0, Fases 6–9 después; Fase 10 planificada) · Propietario: Fabrizio · Creado: 2026-05-25
 
@@ -89,7 +89,8 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
 ### Fase 1 — Piloto: shell + primitivas
 - [x] Migrar `base.html` (nav/header/footer/barra de pestañas) a tokens. 19 pares reducidos; los valores de los tokens coinciden exactamente con los originales.
 - [x] Migrar `login.html` a tokens. 12 pares reducidos.
-- [ ] Adoptar las clases de componentes `.btn` / `.form-*` (aplazado — el piloto usó solo tokens; los inputs de inicio de sesión difieren en tamaño de `.form-input`, por lo que la adopción de componentes es un paso separado).
+- [x] Adoptar las clases de componentes `.btn`: hecho más tarde, para los botones rellenos de la app (#1511, ver Fase 9).
+- [ ] Adoptar las clases de componentes `.form-*` (aplazado: el piloto usó solo tokens; los inputs de inicio de sesión difieren en tamaño de `.form-input`, por lo que la adopción de componentes es un paso separado).
 - [x] Validar la paridad claro/oscuro. Verificado en vivo en Docker (base.html + login.html, ambos temas) — piloto aceptado.
 
 #### Decisiones de diseño abiertas (surgidas del piloto)
@@ -151,11 +152,19 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
 - [x] Añadido un token `accent` sensible al tema (blue-600 → blue-400 en oscuro) para que
   `.nav-active` no codifique el azul de forma fija; este es el acento de superficie que
   faltaba en #254.
-- No hecho (por diseño): adopción de `.btn`/`.form-*` en los sitios de llamada (los sitios
-  de llamada inline ya están tokenizados; forzar los componentes cambiaría el tamaño de los
-  botones sin ninguna ganancia de desacoplamiento). `.btn-danger` (rojo de acción sólido) y
-  las variantes `.badge-*` de estado permanecen literales. La capa `@apply` queda fuera de
-  la puerta `--check` — una mejora futura del codemod podría escanearla.
+- No hecho en esta fase: adopción de `.btn`/`.form-*` en los sitios de llamada (los sitios
+  de llamada inline ya estaban tokenizados; forzar los componentes habría cambiado el tamaño
+  de los botones sin ninguna ganancia de desacoplamiento). `.btn` se adoptó más tarde por otra
+  razón (#1511, auditoría UX P42): los botones rellenos medían de 28 a 50 px de alto, en tres azules, un índigo, un verde, un ámbar y un casi negro, además del rojo de un borrado.
+  Los botones rellenos de la app (salvo el interruptor de la consola de depuración de los
+  ajustes) son ahora `.btn` con `.btn-primary`, `.btn-danger`, `.btn-warning` (ámbar, solo
+  para migrar certificados) o `.btn-secondary`, de 36 px de alto, y `.btn-sm` (28 px) en las
+  barras de herramientas densas; las páginas de inicio de sesión y del primer administrador
+  conservan los suyos. `.form-*` aún no se ha adoptado. `.btn-danger` y `.btn-warning`
+  mantienen colores literales, y las variantes `.badge-*` no tienen sitio de llamada: la
+  píldora de estado de las listas de servidor, cliente e inventario es
+  `CertMate.statusBadge` en `static/js/certmate.js`. La capa `@apply` queda fuera de la
+  puerta `--check`; una mejora futura del codemod podría escanearla.
 
 ### Fase 10 — Descomposición de colas de color (planificada, gradual)
 El desacoplamiento dejó **565 utilitarios `dark:`** que el codemod no puede colapsar: no

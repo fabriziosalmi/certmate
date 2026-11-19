@@ -131,3 +131,21 @@ def test_the_three_status_lists_draw_their_badge_with_one_helper():
     # The client status was a square chip, the shape of the usage tag beside it.
     client = (REPO / 'static' / 'js' / 'client-certs.js').read_text(encoding='utf-8')
     assert 'rounded text-xs font-medium">Active' not in client
+
+
+# A Cancel or Close beside a 36 px primary was its old 28 to 32 px self, with
+# other corners: the row read as two buttons from two systems.
+BESIDE_A_PRIMARY = [
+    ('static/js/dashboard.js', "CertMate.does('click', 'closeReplaceCertificate', [])"),
+    ('templates/partials/settings_probe.html', '@click="cancelEdit()" data-discards'),
+    ('static/js/report-issue.js', 'data-action="close"'),
+]
+
+
+@pytest.mark.parametrize('path, marker', BESIDE_A_PRIMARY)
+def test_the_cancel_beside_a_primary_is_a_secondary_button(path, marker):
+    text = (REPO / path).read_text(encoding='utf-8')
+    at = text.index(marker)
+    tag = text[at:at + 400]
+    classes = CLASS.search(tag).group(1)
+    assert classes.split()[:2] == ['btn', 'btn-secondary'], (path, classes)

@@ -174,7 +174,7 @@
                     '<a target="_blank" rel="noopener" href="' + CM.escapeHtml(issueUrl) + '" class="text-info-fg hover:underline text-sm">Open GitHub issue form &nearr;</a>' +
                     '<div class="flex gap-2">' +
                         '<button data-action="copy" class="btn btn-primary">Copy markdown</button>' +
-                        '<button data-action="close" class="px-4 py-2 rounded-lg text-sm font-medium bg-surface-2 text-label hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>' +
+                        '<button data-action="close" class="btn btn-secondary">Close</button>' +
                     '</div>' +
                 '</div>' +
             '</div>';

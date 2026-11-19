@@ -130,15 +130,24 @@ CLIENTS = [
 ]
 
 
-def _record(name, lifetime, left):
-    not_after = _now() + left
-    return {'fingerprint': name, 'subject_cn': name, 'san_dns': [name], 'issuer_cn': 'Test CA',
-            'not_before': (not_after - lifetime).isoformat() + 'Z', 'not_after': not_after.isoformat() + 'Z',
-            'managed': False, 'source': 'probed', 'endpoints': [], 'key': {'type': 'EC', 'curve': 'P-256'}}
+def _record(name, lifetime, left, revocation=None):
+    record = {'fingerprint': name, 'subject_cn': name, 'san_dns': [name], 'issuer_cn': 'Test CA',
+              'managed': False, 'source': 'probed', 'endpoints': [], 'key': {'type': 'EC', 'curve': 'P-256'}}
+    if left is not None:
+        not_after = _now() + left
+        record.update(not_before=(not_after - lifetime).isoformat() + 'Z', not_after=not_after.isoformat() + 'Z')
+    if revocation:
+        record['revocation'] = dict({'checked_at': '2026-11-19T10:00:00Z', 'method': 'ocsp'}, status=revocation)
+    return record
 
 
-INVENTORY = [_record('fine.example.test', 90 * DAY, 60 * DAY), _record('due.example.test', 90 * DAY, 20 * DAY),
-             _record('overdue.example.test', 90 * DAY, 3 * DAY), _record('gone.example.test', 90 * DAY, -2 * DAY)]
+# Each of the five answers modules/core/revocation.py gives, and one record
+# with no expiry date at all.
+INVENTORY = [_record('fine.example.test', 90 * DAY, 60 * DAY, 'good'),
+             _record('due.example.test', 90 * DAY, 20 * DAY, 'unknown'),
+             _record('overdue.example.test', 90 * DAY, 3 * DAY, 'unavailable'),
+             _record('gone.example.test', 90 * DAY, -2 * DAY, 'revoked'),
+             _record('nodate.example.test', 90 * DAY, None, 'not_applicable')]
 
 
 def _json(route, body):
@@ -259,15 +268,77 @@ def test_migrate_certificates_asks_in_its_own_dialog_before_it_copies(page):
     dialog = page.locator('#storageMigrationModal[role=dialog]')
     dialog.wait_for(state='visible')
     text = ' '.join(dialog.inner_text().split())
-    # What the server does (StorageBackendMigrate, migrate_certificates): every
-    # certificate of the source is written into the target, over one of the
-    # same name; the source is not touched; settings are not saved.
-    for words in ('Copies every certificate', 'overwriting a certificate with the same name',
+    # What the server does (StorageBackendMigrate, migrate_certificates): each
+    # certificate of the source is written into the target, file by file on
+    # the local filesystem, Azure Key Vault and Infisical (a target file the
+    # source lacks stays), whole on AWS, Vault and S3; it goes on after a
+    # failure and counts it; the source is not touched; nothing is saved.
+    for words in ('Copies each certificate', 'its files are written over those of a certificate with the same name',
+                  'a file the source does not have stays as it was',
+                  'AWS Secrets Manager, HashiCorp Vault and S3 replace the certificate whole',
+                  'A certificate that cannot be copied is counted as failed',
                   'The source keeps its copies', 'Nothing in Settings changes'):
         assert words in text, (words, text)
     dialog.locator('button:has-text("Cancel")').click()
     dialog.wait_for(state='detached')
     assert sent == [], sent
+
+
+def _migration_dialog(page, source):
+    page.click('button:has-text("Migrate Certificates")')
+    dialog = page.locator('#storageMigrationModal[role=dialog]')
+    dialog.wait_for(state='visible')
+    page.select_option('#storageMigSource', source)
+    return dialog
+
+
+def test_the_backend_in_use_is_not_offered_as_a_migration_onto_itself(page):
+    """Picking the saved backend as the source while Settings still shows it
+    unchanged copied every certificate onto itself and reported it migrated."""
+    sent = []
+    page.route('**/api/storage/migrate', lambda route: (sent.append(route.request.url), _json(route, {}))[1])
+    _open(page, '/settings#storage')
+    page.wait_for_function("() => document.getElementById('storage-backend').value === 'local_filesystem'")
+    dialog = _migration_dialog(page, 'local_filesystem')
+    same = dialog.locator('#storageMigSame')
+    start = dialog.locator('#storageMigStartBtn')
+    assert same.is_visible(), dialog.inner_text()
+    assert 'is the backend in use' in same.inner_text() and 'nothing to copy' in same.inner_text(), same.inner_text()
+    assert start.is_disabled()
+    # No source chosen yet: the note goes, the button is back.
+    page.select_option('#storageMigSource', '')
+    assert not same.is_visible() and start.is_enabled()
+    dialog.locator('button:has-text("Cancel")').click()
+    dialog.wait_for(state='detached')
+    # CONTROL: the same backend with another directory in the form is a real migration.
+    page.fill('#storage-cert-dir', '/tmp/elsewhere-b18')
+    dialog = _migration_dialog(page, 'local_filesystem')
+    assert not dialog.locator('#storageMigSame').is_visible()
+    assert dialog.locator('#storageMigStartBtn').is_enabled()
+    dialog.locator('button:has-text("Cancel")').click()
+    assert sent == [], sent
+
+
+def test_the_add_account_buttons_stay_on_one_line_on_a_phone(browser_page, ui_session_cookie):
+    """At 390 px "Add Account" and "Add CA Account" wrapped onto two lines, 54 px tall."""
+    context = browser_page.context.browser.new_context(viewport={'width': 390, 'height': 844})
+    context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
+    phone = context.new_page()
+    try:
+        heights = {}
+        phone.goto(BASE_URL + '/settings#dns', wait_until='networkidle')
+        phone.click('label:has(input[name="dns_provider"][value="cloudflare"])')
+        button = phone.locator('#cloudflare-add-account')
+        button.wait_for(state='visible')
+        heights['Add Account'] = button.bounding_box()['height']
+        phone.goto(BASE_URL + '/settings#ca', wait_until='networkidle')
+        phone.reload(wait_until='networkidle')
+        button = phone.locator('button:has-text("Add CA Account")')
+        button.wait_for(state='visible')
+        heights['Add CA Account'] = button.bounding_box()['height']
+        assert heights == {'Add Account': 36, 'Add CA Account': 36}, heights
+    finally:
+        context.close()
 
 
 def _account_buttons(page, path, row):
@@ -331,16 +402,21 @@ def _badges(page):
     _open(page, '/inventory')
     page.wait_for_selector('#inventoryBody tr td >> text=fine.example.test')
     inventory = page.locator('#inventoryBody tr > td:nth-child(3) > span:first-child').evaluate_all(BADGE)
-    return server, client, usage, inventory
+    revocation = page.locator('#inventoryBody tr > td:nth-child(3) > div > span').evaluate_all(BADGE)
+    return server, client, usage, inventory, revocation
 
 
 def test_every_status_badge_is_one_pill_with_an_icon_and_a_tag_stays_square(page):
-    server, client, usage, inventory = _badges(page)
-    # The labels, and so the states, are what they were.
+    server, client, usage, inventory, revocation = _badges(page)
+    # The labels, and so the states, are what they were; a record with no
+    # expiry date says so in a word (it was a minus icon and a dash).
     assert sorted(b['text'] for b in server) == ['Due', 'Expired', 'Overdue', 'Valid'], server
     assert sorted(b['text'] for b in client) == ['Active', 'Revoked'], client
-    assert [b['text'] for b in inventory][-1] == 'Expired' and len(inventory) == 4, inventory
-    odd = [b for b in server + client + inventory
+    assert [b['text'] for b in inventory][3:] == ['Expired', 'Unknown'], inventory
+    # The revocation answer under the expiry is the same pill, in the same cell.
+    assert sorted(b['text'] for b in revocation) == ['Not revoked', 'Revocation unknown', 'Revocation unverified',
+                                                      'Revoked', 'Self-signed'], revocation
+    odd = [b for b in server + client + inventory + revocation
            if (b['radius'], b['h'], b['fs'], b['icon']) != ('9999px', 20, '12px', True)]
     assert odd == [], odd
     # A category tag is a square chip, never the status pill's shape.
@@ -348,12 +424,13 @@ def test_every_status_badge_is_one_pill_with_an_icon_and_a_tag_stays_square(page
 
 
 def test_a_good_badge_is_the_same_green_on_the_three_lists(page):
-    server, client, _usage, inventory = _badges(page)
+    server, client, _usage, inventory, revocation = _badges(page)
     server = {b['text']: b for b in server}
     client = {b['text']: b for b in client}
-    # The inventory rows come in the order of INVENTORY: 60, 20, 3 days, gone.
-    ok, due, overdue, gone = inventory
-    good = [server['Valid'], client['Active'], ok]
+    revocation = {b['text']: b for b in revocation}
+    # The inventory rows come in the order of INVENTORY: 60, 20, 3 days, gone, no date.
+    ok, due, overdue, gone, nodate = inventory
+    good = [server['Valid'], client['Active'], ok, revocation['Not revoked']]
     looks = {(b['bg'], b['color'], b['ring']) for b in good}
     assert len(looks) == 1, good
     # And each state keeps its colour: the inventory pills read like the server ones.
@@ -361,6 +438,11 @@ def test_a_good_badge_is_the_same_green_on_the_three_lists(page):
     assert overdue['color'] == gone['color'] == server['Overdue']['color'] == server['Expired']['color'], \
         (overdue, gone, server)
     assert client['Revoked']['color'] == server['Expired']['color'], (client['Revoked'], server['Expired'])
+    assert revocation['Revoked']['color'] == server['Expired']['color'], revocation['Revoked']
+    # Not known is neither good nor bad: the neutral grey of the other unknowns.
+    neutral = {(b['bg'], b['color']) for b in (nodate, revocation['Revocation unknown'],
+                                                revocation['Revocation unverified'], revocation['Self-signed'])}
+    assert len(neutral) == 1 and nodate['color'] not in (ok['color'], due['color'], gone['color']), neutral
 
 
 # --- P69: decorative icons are muted ------------------------------------------

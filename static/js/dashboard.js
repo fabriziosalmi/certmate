@@ -3750,7 +3750,7 @@
             '<input id="replaceAllowEarlierExpiry" type="checkbox" class="rounded border-border text-primary focus:ring-primary">' +
             'Accept a certificate that expires before this one</label>' +
             '<div class="flex justify-end gap-2">' +
-            '<button type="button"' + CertMate.does('click', 'closeReplaceCertificate', []) + 'class="px-3 py-1.5 text-sm rounded-lg border border-border text-label hover:bg-hover">Cancel</button>' +
+            '<button type="button"' + CertMate.does('click', 'closeReplaceCertificate', []) + 'class="btn btn-secondary">Cancel</button>' +
             '<button type="button" id="replaceCertificateSubmit"' + CertMate.does('click', 'submitReplaceCertificate', [cert.domain]) + 'class="btn btn-primary">Replace certificate</button>' +
             '</div></div>';
     }

@@ -99,7 +99,8 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 ### Phase 1 — Pilot: shell + primitives
 - [x] Migrate `base.html` (nav/header/footer/tab bar) to tokens. 19 pairs collapsed; token values match originals exactly.
 - [x] Migrate `login.html` to tokens. 12 pairs collapsed.
-- [ ] Adopt `.btn` / `.form-*` component classes (deferred — pilot used tokens only; the login inputs differ in sizing from `.form-input`, so component adoption is its own step).
+- [x] Adopt the `.btn` component classes: done later, for the app's filled buttons (#1511, see Phase 9).
+- [ ] Adopt the `.form-*` component classes (deferred: the pilot used tokens only; the login inputs differ in sizing from `.form-input`, so component adoption is its own step).
 - [x] Validate light/dark parity. Verified live in Docker (base.html + login.html, both themes) — pilot accepted.
 
 #### Open design decisions (surfaced by the pilot)
@@ -161,11 +162,19 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 - [x] Added a theme-aware `accent` token (blue-600 → blue-400 on dark) so
   `.nav-active` no longer hard-codes blue; this is the on-surface accent #254
   lacked.
-- Not done (by design): call-site adoption of `.btn`/`.form-*` (the inline
-  call sites are already tokenised; forcing the components would change button
-  sizing for zero decoupling gain). `.btn-danger` (solid action red) and the
-  `.badge-*` status variants stay literal. The `@apply` layer remains outside
-  the `--check` gate — a future codemod enhancement could scan it.
+- Not done in this phase: call-site adoption of `.btn`/`.form-*` (the inline
+  call sites were already tokenised; forcing the components would have changed
+  button sizing for no decoupling gain). `.btn` was adopted later for another
+  reason (#1511, UX audit P42): the filled buttons were 28 to 50 px tall, in three blues, an indigo,
+  a green, an amber and a near-black besides the red of a deletion. The app's filled buttons (the settings debug-console toggle aside)
+  are now `.btn` with `.btn-primary`, `.btn-danger`, `.btn-warning` (amber, only
+  for migrating certificates) or `.btn-secondary`, 36 px tall, and `.btn-sm`
+  (28 px) in dense toolbars; the sign-in and first-admin pages keep their own.
+  `.form-*` is still not adopted. `.btn-danger` and `.btn-warning` keep literal
+  colours, and the `.badge-*` variants have no call site: the status pill of the
+  server, client and inventory lists is `CertMate.statusBadge` in
+  `static/js/certmate.js`. The `@apply` layer remains outside the `--check`
+  gate; a future codemod enhancement could scan it.
 
 ### Phase 10 — Color-tail decomposition (planned, gradual)
 The decoupling left **565 `dark:` utilities** the codemod can't collapse: they
