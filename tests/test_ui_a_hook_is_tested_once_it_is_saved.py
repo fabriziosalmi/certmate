@@ -111,3 +111,24 @@ def test_a_refused_save_names_the_character_and_marks_the_command(deploy_tab):
     command.fill('echo fine')
     assert _save(page, panel).status == 200
     expect(command).not_to_have_attribute('aria-invalid', 'true')
+
+
+def test_a_saved_hook_whose_name_or_timeout_changed_waits_for_the_save_too(deploy_tab):
+    """The run uses the saved name (it is in the run record and the audit
+    entry) and the saved timeout, not the ones on screen."""
+    page, panel = deploy_tab
+    card, command, test = _new_hook(panel)
+    name = card.locator('input[aria-label="Hook name"]')
+    timeout = card.locator('input[title="Timeout in seconds"]')
+    name.fill('b12 hook')
+    command.fill('echo ok')
+    assert _save(page, panel).status == 200
+    expect(test).to_be_enabled()
+
+    name.fill('b12 hook renamed')
+    expect(test).to_be_disabled()
+    name.fill('b12 hook')
+    expect(test).to_be_enabled()
+
+    timeout.fill('7')
+    expect(test).to_be_disabled()

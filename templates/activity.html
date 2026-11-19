@@ -31,6 +31,7 @@
                             <option value="deploy">Deployed</option>
                             <option value="revoke">Revoked</option>
                             <option value="download">Downloaded</option>
+                            <option value="denied">Refused</option>
                             <option value="api_request">API requests only</option>
                         </select>
                         <button type="button" data-click="loadActivity" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
@@ -156,8 +157,16 @@
             return { label: label, name: showId ? entry.resource_id : '' };
         }
 
+        // A refusal (status denied: a role or a key's scope said no) did not
+        // happen. It reads as refused, never as the operation it refused
+        // ("Downloaded" for a viewer refused the key, #1511 review).
+        function isRefusal(entry) {
+            return entry.status === 'denied';
+        }
+
         function getOpStyle(entry) {
             if (isDryRun(entry)) return opIcons.test;
+            if (isRefusal(entry)) return { icon: 'fa-hand', color: 'text-amber-500', bg: 'bg-warning-surface' };
             if (entry.status === 'failure') return opIcons.failure;
             return opIcons[entry.operation] || { icon: 'fa-circle', color: 'text-gray-400', bg: 'bg-surface-2' };
         }
@@ -207,6 +216,7 @@
 
         function opLabel(entry) {
             if (isDryRun(entry)) return 'Hook test';
+            if (isRefusal(entry)) return 'Refused: ' + String(entry.operation || '').replace(/_/g, ' ');
             var labels = {
                 create: 'Created',
                 renew: 'Renewed',
@@ -380,16 +390,23 @@
                     // the Load-more button. Hide it once we're at the
                     // hard ceiling.
                     var hasMore = rawCount >= currentLimit && currentLimit < ACTIVITY_MAX_LIMIT;
-                    if (opFilter) {
+                    if (opFilter === 'denied') {
+                        // Refusals have a filter of their own, and only it
+                        // shows them: a refused download is not a download.
+                        entries = entries.filter(function(e) { return e.status === 'denied'; });
+                    } else if (opFilter) {
                         // Match the operation FAMILY, not just the exact value:
                         // "Created" must catch create_account and batch_create,
                         // "Updated" must catch update_config/update_account, etc.
                         // The '_' boundary keeps "renew" from matching
                         // set_auto_renew (toggling auto-renew is not a renewal).
+                        // A refusal (status denied) is left out of every
+                        // operation family: "Downloaded" lists what was handed
+                        // over, and "Refused" lists what was not.
                         entries = entries.filter(function(e) {
-                            return e.operation === opFilter
+                            return e.status !== 'denied' && (e.operation === opFilter
                                 || e.operation.indexOf(opFilter + '_') === 0
-                                || e.operation === 'batch_' + opFilter;
+                                || e.operation === 'batch_' + opFilter);
                         });
                     } else {
                         // Default view hides api_request entries: those are
@@ -441,8 +458,8 @@
                 if (details.usage) detailParts.push(details.usage);
                 if (details.file_type) detailParts.push(details.file_type);
                 // Every download says whether it carried the private key (P24).
-                if (details.private_key === true) detailParts.push('with the private key');
-                if (details.private_key === false) detailParts.push('no private key');
+                if (details.key_included === true) detailParts.push('with the private key');
+                if (details.key_included === false) detailParts.push('no private key');
                 if (details.reason) detailParts.push('Reason: ' + details.reason);
                 if (details.method) detailParts.push(details.method);
                 if (details.status_code) detailParts.push('HTTP ' + details.status_code);
@@ -474,7 +491,8 @@
                 // is not a failed deploy, and red would say it is.
                 var badge = dryRun
                     ? '<span class="px-1.5 py-0.5 text-xs font-medium bg-surface-2 text-muted rounded">Dry run, ' + dryRunOutcome(entry) + '</span>'
-                    : (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-xs font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : '');
+                    : (isRefusal(entry) ? '<span class="px-1.5 py-0.5 text-xs font-medium bg-warning-surface text-warning-fg rounded">REFUSED</span>'
+                    : (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-xs font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : ''));
 
                 // Below sm the right-hand column and the chevron are left out:
                 // who and when go under the name, which takes the width and
@@ -573,7 +591,14 @@
                 kvRow('Sequence', (entry.seq !== undefined && entry.seq !== null) ? '#' + entry.seq : '') +
             '</div>';
 
-            if (entry.error) {
+            if (entry.error && isDryRun(entry)) {
+                // Why a hook test did not pass, in the same neutral colours as
+                // its row: it is a test result, not a failed deploy.
+                body += '<div class="rounded-lg bg-surface-2 border border-border p-3">' +
+                    '<div class="text-xs uppercase tracking-wide text-muted mb-1">Why the test did not pass</div>' +
+                    '<div class="text-sm text-foreground break-words">' + escapeHtml(entry.error) + '</div>' +
+                '</div>';
+            } else if (entry.error) {
                 body += '<div class="rounded-lg bg-danger-surface border border-danger-line p-3">' +
                     '<div class="text-xs uppercase tracking-wide text-danger-fg mb-1">Error</div>' +
                     '<div class="text-sm text-danger-fg break-words">' + escapeHtml(entry.error) + '</div>' +
@@ -615,7 +640,10 @@
                 actions += '<button type="button" data-detail-filter="user" data-value="' + escapeHtml(entry.user) + '" class="' + btnCls + '"><i class="fas fa-user mr-1.5 text-[10px]"></i>Filter by user</button>';
             }
             if (entry.operation) {
-                actions += '<button type="button" data-detail-filter="op" data-value="' + escapeHtml(entry.operation) + '" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Filter by operation</button>';
+                // A refusal's own list is "Refused": the operation's leaves it out.
+                actions += isRefusal(entry)
+                    ? '<button type="button" data-detail-filter="op" data-value="denied" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Show refusals</button>'
+                    : '<button type="button" data-detail-filter="op" data-value="' + escapeHtml(entry.operation) + '" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Filter by operation</button>';
             }
             actions += '<button type="button" data-detail-copy class="' + btnCls + '"><i class="fas fa-copy mr-1.5 text-[10px]"></i>Copy JSON</button>';
             var actionsEl = document.getElementById('activityDetailActions');

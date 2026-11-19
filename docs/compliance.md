@@ -145,9 +145,12 @@ operate certificates on a schedule.
 
 ## Retention: archiving part of the chain
 
-The chain grows by one line per audited operation — of the order of hundreds of
-kilobytes per year on a busy instance — so most operators never need this. It
-exists for the case where a retention policy requires older records to leave the
+The chain grows by one line per audited operation, of 450 to 650 bytes: a
+certificate download measured 539 and 550 bytes by the API Bearer Token, and 632 and 643
+by an API key. Issuances and renewals add little, but every certificate download
+is a line: an automation that pulls a certificate every 5 minutes adds about
+105,000 lines, 55 to 70 MB, a year. This exists for an instance polled like that,
+and for the case where a retention policy requires older records to leave the
 machine.
 
 There is no automatic pruning, and there is no API endpoint for it. Deleting

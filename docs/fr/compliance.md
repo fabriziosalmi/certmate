@@ -1,6 +1,6 @@
 # Conformité et piste d'audit
 
-<!-- CERTMATE-TRANSLATED-FROM 0ddda303c6fe494a -->
+<!-- CERTMATE-TRANSLATED-FROM b89f10e32ef8ae02 -->
 
 Cette page fait le lien entre la piste d'audit de CertMate et les régimes sur lesquels les opérateurs
 s'interrogent le plus souvent — l'AI Act européen, NIS2 et l'ISO/IEC 42001 — lorsqu'ils laissent un agent IA/MCP
@@ -147,10 +147,13 @@ gérer des certificats selon un calendrier.
 
 ## Rétention : archiver une partie de la chaîne
 
-La chaîne grandit d'une ligne par opération auditée — de l'ordre de quelques centaines de
-kilo-octets par an sur une instance chargée — donc la plupart des opérateurs n'en ont jamais besoin. Cette fonction
-existe pour le cas où une politique de rétention exige que les enregistrements anciens quittent la
-machine.
+La chaîne grandit d'une ligne par opération auditée, de 450 à 650 octets : un
+téléchargement de certificat a mesuré 539 et 550 octets avec l'API Bearer Token, et 632 et 643
+avec une clé d'API. Les émissions et les renouvellements ajoutent peu, mais chaque
+téléchargement de certificat est une ligne : une automatisation qui récupère un certificat
+toutes les 5 minutes ajoute environ 105 000 lignes, de 55 à 70 Mo par an. Cette fonction
+existe pour une instance interrogée ainsi, et pour le cas où une politique de rétention
+exige que les enregistrements anciens quittent la machine.
 
 Il n'y a pas d'élagage automatique, ni d'endpoint d'API pour cela. Supprimer
 l'historique d'audit est exactement ce que voudrait faire quelqu'un qui vient de compromettre un compte

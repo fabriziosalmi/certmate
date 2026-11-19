@@ -1308,6 +1308,10 @@ curl http://localhost:8000/api/client-certs/user-example.com-3f9c2a71/download/c
 **Endpoint**: `POST /api/client-certs/<identifier>/revoke`
 
 Revoke a certificate with optional reason (free text; `unspecified` when none is given).
+Since API contract **2.72** the reason is held to one line of printable text of at most
+200 characters, because it is kept in the certificate's record and in the audit hash
+chain: a longer one, one with a line break or one that is not text is a `400`, and
+nothing is revoked.
 The answer is a message; the revocation is in the certificate's record (`revoked`,
 `revoked_at`, `reason_revoked` in `GET /api/client-certs/<identifier>`), in the CRL, which
 is regenerated, and in what the OCSP responder answers. A certificate that does not
@@ -2730,10 +2734,11 @@ issuance or a renewal, and the targets they deliver to. This is the only way
 to change that block; the bulk settings endpoint refuses `deploy_hooks`. A
 rejected configuration is answered `400` with the reason. Since API contract
 **2.72** a command refused by the guard names what it found (`';'`, `'&&'`,
-`'$('`, `a line break`...), and when a hook in the configuration is invalid
-the answer also carries `hook_id` and `field` (`hook`, `name`, `command`,
-`timeout` or `window`) for the first such hook, so a client can point at the
-field. Every save is audited, without the hook commands themselves. What the block holds and how
+`'$('`, `a line break`...; a control character inside it is written as an
+escape, such as `\n`), and when the refusal is a hook's the answer also
+carries that hook's `hook_id` and the `field` at fault (`hook`, `name`,
+`command`, `timeout` or `window`), so a client can point at the field. A
+refusal of something else, such as `enabled`, carries neither. Every save is audited, without the hook commands themselves. What the block holds and how
 hooks run: [deploy-hooks.md](./deploy-hooks.md).
 
 #### Deploy-hook history
@@ -3419,23 +3424,31 @@ Since API contract **2.72** it also records:
 
 - **Client certificates created, renewed and revoked** (`resource_type:
   client_certificate`, `details.common_name`), including an attempt the
-  certificate manager refuses (`status: failure`, with its reason). A batch
-  writes one `create` per certificate. A request refused before it reaches a
-  certificate (an invalid identifier, a certificate that does not exist) writes
+  certificate manager refuses (`status: failure`, with its reason). A renewal
+  names the certificate it issued (`details.new_identifier`). A batch writes
+  one `create` per row; a row with no common name is named by its row
+  (`batch row 3`). A request refused before it reaches a certificate (an
+  invalid identifier or reason, a certificate that does not exist) writes
   nothing.
-- **Every certificate download that is handed over**, server (`certificate`)
-  or client (`client_certificate`): one `download` entry per request, so a ZIP
-  of four files is one entry, with `details.file_type` and `details.private_key`
-  saying whether what was handed over carried the private key. A batch download
-  from the dashboard is one `batch_download` entry naming the certificates in
-  it (`details.domains`); it never carries a key. A server-certificate
-  download refused for the caller's role or scope is a `denied` entry, as
-  before; a request answered with an error writes no `download` entry.
+- **Every server or client certificate download from the API and the
+  dashboard** that is handed over, server (`certificate`) or client
+  (`client_certificate`, with `details.common_name`): one `download` entry per
+  request, so a ZIP of four files is one entry, with `details.file_type` and
+  `details.key_included` saying whether what was handed over carried the
+  private key. A batch download from the dashboard is one `batch_download`
+  entry naming the certificates in it (`details.domains`, and how many in
+  `details.count`); it never carries a key. A server-certificate download
+  refused for the caller's role or scope is a `denied` entry, as before; a
+  request answered with an error writes no `download` entry. The ACME
+  server's certificate URL, which an ACME client reads once its order is
+  issued, writes none.
 
 Downloads add to the log's size: an automation that pulls a certificate on a
-schedule writes an entry on every pull. The `.log` file rotates (10 MB × 5 by
-default, `CERTMATE_AUDIT_LOG_MAX_BYTES` and `CERTMATE_AUDIT_LOG_BACKUP_COUNT`);
-the hash chain below grows until it is pruned.
+schedule writes an entry on every pull, about 105,000 a year at one every 5
+minutes. The `.log` file rotates (10 MB × 5 by default,
+`CERTMATE_AUDIT_LOG_MAX_BYTES` and `CERTMATE_AUDIT_LOG_BACKUP_COUNT`); the
+hash chain below grows until part of it is archived (see
+[Retention](./compliance.md#retention-archiving-part-of-the-chain)).
 
 ### Log format
 

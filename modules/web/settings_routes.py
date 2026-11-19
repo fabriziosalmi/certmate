@@ -397,7 +397,7 @@ def _save_deploy_config(deploy_manager, audit_logger):
     # a hook was rejected rather than a generic save failure, and which hook
     # and field it was, so the page can mark the field (#1511, P40).
     refusal = {'error': err or 'Invalid configuration or save failed'}
-    refused = deploy_manager.refused_hook(data)
+    refused = deploy_manager.refused_hook(data, err)
     if refused:
         refusal.update(refused)
     return jsonify(refusal), 400

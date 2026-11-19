@@ -778,14 +778,21 @@ class AuditLogger:
         status: str = 'success',
         error: str | None = None,
         common_name: str | None = None,
+        new_identifier: str | None = None,
     ) -> None:
-        """Log certificate renewal."""
+        """Log certificate renewal. A renewed client certificate is a new
+        one, with its own identifier: ``new_identifier`` names it."""
+        details: dict[str, Any] = {}
+        if common_name:
+            details['common_name'] = common_name
+        if new_identifier:
+            details['new_identifier'] = new_identifier
         self.log_operation(
             operation='renew',
             resource_type=resource_type,
             resource_id=identifier,
             status=status,
-            details={'common_name': common_name} if common_name else None,
+            details=details or None,
             user=user,
             ip_address=ip_address,
             error=error,
@@ -795,21 +802,25 @@ class AuditLogger:
         self,
         identifier: str,
         file_type: str,
-        private_key: bool,
+        key_included: bool,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
         resource_type: str = 'certificate',
+        common_name: str | None = None,
     ) -> None:
         """Log one certificate download: one request, one entry, whatever
-        the number of files in it. ``private_key`` says whether what was
+        the number of files in it. ``key_included`` says whether what was
         handed over carried the private key, which is the question an
         operator asks of this entry."""
+        details: dict[str, Any] = {'file_type': file_type, 'key_included': bool(key_included)}
+        if common_name:
+            details['common_name'] = common_name
         self.log_operation(
             operation='download',
             resource_type=resource_type,
             resource_id=identifier,
             status='success',
-            details={'file_type': file_type, 'private_key': bool(private_key)},
+            details=details,
             user=user,
             ip_address=ip_address
         )

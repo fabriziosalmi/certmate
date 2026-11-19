@@ -62,9 +62,16 @@ ENTRIES = [
     _entry(operation='revoke', resource_type='client_certificate', resource_id='laptop-anna-1a2b3c4d',
            user='bob', details={'reason': 'keyCompromise', 'common_name': 'laptop-anna'}),
     _entry(operation='download', resource_type='certificate', resource_id='payments.example.com',
-           user='carol', details={'file_type': 'zip', 'private_key': True}),
+           user='carol', details={'file_type': 'zip', 'key_included': True}),
     _entry(operation='download', resource_type='client_certificate', resource_id='laptop-anna-1a2b3c4d',
-           user='dave', details={'file_type': 'crt', 'private_key': False}),
+           user='dave', details={'file_type': 'crt', 'key_included': False}),
+    # Refusals: a viewer asking for the key, a scoped key outside its domains.
+    _entry(operation='download', resource_type='certificate', resource_id='payments.example.com',
+           user='eve', status='denied',
+           details={'reason': 'viewer cannot download private-key material (default ZIP)'}),
+    _entry(operation='batch_download', resource_type='certificate', resource_id='other.example.com',
+           user='frank', status='denied',
+           details={'reason': 'domain outside scoped key allowed_domains'}),
 ]
 
 
@@ -120,6 +127,9 @@ def test_a_hook_test_does_not_offer_a_certificate_that_is_not_there(activity):
     assert actions.get_by_text('View certificate').count() == 0, (
         'the detail of a hook test links to test.example.com, which is not a certificate')
     assert 'dry run' in activity.locator('#activityDetailTitle').inner_text().lower()
+    body = activity.locator('#activityDetailBody')
+    assert 'exit code 1' in body.inner_text(), 'the dialog does not say why the test failed'
+    assert body.locator('.bg-danger-surface').count() == 0, 'the dialog of a dry run shows a red error box'
     activity.keyboard.press('Escape')
 
 
@@ -131,7 +141,25 @@ def test_the_revoked_filter_shows_the_client_certificate_by_its_name_and_who(act
     assert 'bob' in text, text
 
 
+def test_a_refused_download_reads_as_refused_not_as_a_download(activity):
+    for who in ('eve', 'frank'):
+        row = activity.locator('#activityList [data-entry-index]', has_text=who)
+        text = row.inner_text()
+        assert 'Refused' in text, text
+        assert 'Downloaded' not in text and 'Batch downloaded' not in text, text
+        assert 'REFUSED' in text, text
+
+
+def test_the_refused_filter_shows_the_refusals_and_only_them(activity):
+    activity.select_option('#filterOp', 'denied')
+    rows = activity.locator('#activityList [data-entry-index]')
+    expect(rows).to_have_count(2)
+    text = rows.all_inner_texts()
+    assert any('eve' in t for t in text) and any('frank' in t for t in text), text
+
+
 def test_the_downloaded_filter_says_who_took_what_and_whether_it_carried_the_key(activity):
+    """Downloads only: a refusal is not a download, and has its own filter."""
     activity.select_option('#filterOp', 'download')
     expect(activity.locator('#activityList [data-entry-index]')).to_have_count(2)
     server = _row(activity, 'payments.example.com').inner_text()

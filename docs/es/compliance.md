@@ -1,6 +1,6 @@
 # Cumplimiento normativo y pista de auditoría
 
-<!-- CERTMATE-TRANSLATED-FROM 0ddda303c6fe494a -->
+<!-- CERTMATE-TRANSLATED-FROM b89f10e32ef8ae02 -->
 
 Esta página relaciona la pista de auditoría de CertMate con los regímenes por los que los operadores preguntan
 con mayor frecuencia — el AI Act de la UE, NIS2 y la ISO/IEC 42001 — cuando permiten que un agente IA/MCP
@@ -147,10 +147,13 @@ gestione certificados de forma programada.
 
 ## Retención: archivar parte de la cadena
 
-La cadena crece una línea por cada operación auditada — del orden de cientos de
-kilobytes al año en una instancia con mucha actividad — así que la mayoría de los operadores nunca necesitarán esto. Existe
-para el caso en que una política de retención exige que los registros más antiguos salgan de la
-máquina.
+La cadena crece una línea por cada operación auditada, de 450 a 650 bytes: una
+descarga de certificado midió 539 y 550 bytes con el API Bearer Token, y 632 y 643 con una
+clave de API. Las emisiones y renovaciones añaden poco, pero cada descarga de un
+certificado es una línea: una automatización que descarga un certificado cada 5 minutos
+añade unas 105.000 líneas, de 55 a 70 MB al año. Esto existe para una instancia consultada
+así, y para el caso en que una política de retención exige que los registros más antiguos
+salgan de la máquina.
 
 No hay poda automática, ni hay ningún endpoint de API para ello. Borrar
 el historial de auditoría es exactamente lo que querría hacer alguien que acaba de comprometer una cuenta de

@@ -1387,7 +1387,10 @@ class DeployManager:
             sequence = found.group(0).strip()
             if sequence.lstrip('|').lstrip().startswith('.'):
                 sequence = '.'
-            named = 'a line break' if sequence == '' else f"'{sequence}'"
+            # A control character inside it (`>` line break `/`) is shown as
+            # an escape: sent raw, it broke the toast and the log line.
+            shown = ''.join(ch if ch.isprintable() else repr(ch)[1:-1] for ch in sequence)
+            named = 'a line break' if sequence == '' else f"'{shown}'"
             return False, f"contains dangerous shell metacharacters ({named})"
 
         # Block access to CertMate's own sensitive files.
@@ -1406,11 +1409,13 @@ class DeployManager:
         field, error = self._check_hook(hook)
         return field is None, error
 
-    def refused_hook(self, config):
-        """The first hook *config* refuses and the field at fault, as
-        {'hook_id', 'field'}, or None. Same order as _validate_deploy_config,
-        so it is the hook its error names (#1511, P40): the page marks that
-        field instead of leaving the operator to find it."""
+    def refused_hook(self, config, error):
+        """The hook whose refusal *error* (save_config's) reports, and the
+        field at fault, as {'hook_id', 'field'}; None when the error is not a
+        hook's (#1511, P40): the page marks that field instead of leaving the
+        operator to find it. Same order as _validate_deploy_config, and only a
+        hook whose own reason is in *error*, so a refusal about `enabled`
+        points at no hook."""
         if not isinstance(config, dict):
             return None
         hooks = list(config.get('global_hooks') or [])
@@ -1419,8 +1424,8 @@ class DeployManager:
             for listed in domain_hooks.values():
                 hooks.extend(listed if isinstance(listed, list) else [])
         for hook in hooks:
-            field, _error = self._check_hook(copy.deepcopy(hook))
-            if field is not None:
+            field, reason = self._check_hook(copy.deepcopy(hook))
+            if field is not None and reason and reason in (error or ''):
                 return {'hook_id': hook.get('id') if isinstance(hook, dict) else None,
                         'field': field}
         return None

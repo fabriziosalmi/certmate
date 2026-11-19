@@ -131,3 +131,27 @@ def test_the_refusal_reads_the_same_in_the_log():
     assert safe is False
     message = f"Deploy hook 'reload' command rejected: {reason}"
     assert sanitize_text(message) == message
+
+
+@pytest.mark.parametrize('command, shown', [
+    ('cat x >\n/etc/passwd', r"'>\n/'"),
+    ('cat x >\t/etc/passwd', r"'>\t/'"),
+])
+def test_a_control_character_in_what_is_named_is_shown_not_sent(client, command, shown):
+    """The named sequence goes into a toast and a log line: a raw line break
+    in it would break both."""
+    body = _save(client, command).get_json()
+    assert shown in body['error'], body['error']
+    assert '\n' not in body['error'] and '\t' not in body['error']
+
+
+def test_a_refusal_that_is_not_a_hook_names_no_hook(client):
+    """`enabled` is checked before the hooks: the answer must not point at a
+    hook while its error is about something else."""
+    hooks = [{'id': 'bad', 'name': 'bad', 'command': 'echo a; echo b', 'enabled': True}]
+    answer = client.post('/api/deploy/config', json={
+        'enabled': 'yes', 'global_hooks': hooks, 'domain_hooks': {}})
+    assert answer.status_code == 400
+    body = answer.get_json()
+    assert 'enabled' in body['error'], body
+    assert 'hook_id' not in body, body

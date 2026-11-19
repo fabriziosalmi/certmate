@@ -35,12 +35,13 @@
             // the bindings are skipped entirely until showExecutionDetail()
             // sets it from a row click.
             selectedExecution: null,
-            // The command of each hook as the server has it, by id. Test runs
-            // the hook the server has: on a hook it does not have it answered
-            // a 404 that blamed sync or the safety check (#1511, P40), and on
-            // an edited one it would test the old command. So Test waits for
-            // the save.
-            savedCommands: {},
+            // What the server runs and records of each hook, by id: its name
+            // (in the run record and the audit entry), command and timeout.
+            // Test runs the hook the server has: on a hook it does not have it
+            // answered a 404 that blamed sync or the safety check (#1511, P40),
+            // and on an edited one it would run the saved fields, not the ones
+            // on screen. So Test waits for the save.
+            savedHooks: {},
             // The hook and field the last refused save named, so the field is
             // marked (aria-invalid) instead of left for the operator to find.
             refused: null,
@@ -51,13 +52,18 @@
                 Object.keys(config.domain_hooks || {}).forEach(function (domain) {
                     hooks = hooks.concat(config.domain_hooks[domain] || []);
                 });
-                hooks.forEach(function (hook) { saved[hook.id] = hook.command; });
-                this.savedCommands = saved;
+                var self = this;
+                hooks.forEach(function (hook) { saved[hook.id] = self._runsAs(hook); });
+                this.savedHooks = saved;
+            },
+
+            _runsAs: function (hook) {
+                return JSON.stringify([hook.name, hook.command, hook.timeout]);
             },
 
             isSaved: function (hook) {
-                return Object.prototype.hasOwnProperty.call(this.savedCommands, hook.id)
-                    && this.savedCommands[hook.id] === hook.command;
+                return Object.prototype.hasOwnProperty.call(this.savedHooks, hook.id)
+                    && this.savedHooks[hook.id] === this._runsAs(hook);
             },
 
             refusedField: function (hook, field) {

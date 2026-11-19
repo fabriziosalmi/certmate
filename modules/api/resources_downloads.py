@@ -36,7 +36,7 @@ _PRIVATE_KEY_FILES = frozenset({'privkey.pem', 'combined.pem', 'cert.pfx'})
 _PUBLIC_DOWNLOAD_FILES = frozenset({'cert.pem', 'chain.pem', 'fullchain.pem'})
 
 
-def record_download(ctx: ApiContext, domain, file_type, private_key):
+def record_download(ctx: ApiContext, domain, file_type, key_included):
     """One Activity entry per download that was handed over, saying who took
     which form and whether it carried the private key (#1511, P24). Only
     refusals were recorded before, so "who pulled the key" had no answer.
@@ -45,7 +45,7 @@ def record_download(ctx: ApiContext, domain, file_type, private_key):
     if ctx.audit:
         user = getattr(request, 'current_user', None) or {}
         ctx.audit.log_certificate_downloaded(
-            domain, file_type, private_key,
+            domain, file_type, key_included,
             user=user.get('username'), ip_address=request.remote_addr)
 
 

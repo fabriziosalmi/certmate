@@ -65,7 +65,7 @@ def _record_batch_download(audit_logger, included, user):
         operation='batch_download', resource_type='certificates',
         resource_id=', '.join(included) or 'none', status='success',
         details={'domains': included, 'count': len(included),
-                 'file_type': 'zip of fullchain.pem', 'private_key': False},
+                 'file_type': 'zip of fullchain.pem', 'key_included': False},
         user=user.get('username'), ip_address=request.remote_addr)
 
 

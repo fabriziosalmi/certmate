@@ -332,7 +332,7 @@ def _build_ca_cert_resource(client_cert_manager):
 
 
 def _record(audit_logger, operation, identifier, ok, *, error=None, common_name=None,
-            usage=None, reason=None):
+            usage=None, reason=None, new_identifier=None):
     """Write the Activity entry for a client certificate created, renewed or revoked.
 
     None of these were recorded (#1511, P24): only the scheduler's renewals
@@ -352,7 +352,7 @@ def _record(audit_logger, operation, identifier, ok, *, error=None, common_name=
     elif operation == 'renew':
         audit_logger.log_certificate_renewed(
             identifier, resource_type='client_certificate', status=status, error=error,
-            common_name=common_name)
+            common_name=common_name, new_identifier=new_identifier)
     else:
         audit_logger.log_certificate_revoked(
             identifier, reason or 'unspecified', resource_type='client_certificate',
@@ -363,12 +363,38 @@ def _common_name_of(client_cert_manager, identifier):
     return (client_cert_manager.get_certificate_metadata(identifier) or {}).get('common_name')
 
 
-def _record_download(audit_logger, identifier, file_type, private_key):
+def _record_download(audit_logger, client_cert_manager, identifier, file_type, key_included):
     """One entry per client-certificate download, saying whether it carried
-    the key (#1511, P24)."""
+    the key (#1511, P24), and naming the certificate by its common name as
+    the other client-certificate entries do."""
     if audit_logger:
         audit_logger.log_certificate_downloaded(
-            identifier, file_type, private_key, resource_type='client_certificate')
+            identifier, file_type, key_included, resource_type='client_certificate',
+            common_name=_common_name_of(client_cert_manager, identifier))
+
+
+# A revocation reason goes into the certificate's record and, through the
+# audit entry, into the hash chain, which nothing can take back out: it is
+# held to one line of printable text of a bounded length (#1511 review).
+REVOKE_REASON_MAX = 200
+
+
+def _revoke_reason(data):
+    """The reason a revoke request gives, or an abort(400) saying what is wrong
+    with it. Absent or blank is `unspecified`, as before."""
+    reason = data.get('reason')
+    if reason is None:
+        return 'unspecified'
+    if not isinstance(reason, str):
+        abort(400, "reason must be text")
+    reason = reason.strip()
+    if not reason:
+        return 'unspecified'
+    if len(reason) > REVOKE_REASON_MAX:
+        abort(400, f"reason is longer than {REVOKE_REASON_MAX} characters")
+    if any(not ch.isprintable() for ch in reason):
+        abort(400, "reason must be one line of printable text")
+    return reason
 
 
 def _require_certificate(client_cert_manager, identifier):
@@ -616,7 +642,7 @@ def create_client_certificate_resources(api, managers):
                     pfx_bytes = client_cert_manager.build_pfx(identifier, password.encode())
                     if not pfx_bytes:
                         abort(404, f"Client certificate not found: {identifier}")
-                    _record_download(audit_logger, identifier, file_type, True)
+                    _record_download(audit_logger, client_cert_manager, identifier, file_type, True)
                     return send_file(
                         BytesIO(pfx_bytes),
                         mimetype='application/x-pkcs12',
@@ -632,7 +658,7 @@ def create_client_certificate_resources(api, managers):
 
                 if not file_content:
                     abort(404, f"File not found: {identifier}.{file_type}")
-                _record_download(audit_logger, identifier, file_type,
+                _record_download(audit_logger, client_cert_manager, identifier, file_type,
                                  file_type in self._PRIVATE_FILE_TYPES)
 
                 # Return file
@@ -666,7 +692,7 @@ def create_client_certificate_resources(api, managers):
                     abort(400, "Invalid certificate identifier")
                 _require_certificate(client_cert_manager, identifier)
                 data = request.get_json() or {}
-                reason = data.get('reason', 'unspecified')
+                reason = _revoke_reason(data)
 
                 # Revoke certificate
                 success, error = client_cert_manager.revoke_certificate(
@@ -718,7 +744,8 @@ def create_client_certificate_resources(api, managers):
                     identifier
                 )
                 _record(audit_logger, 'renew', identifier, success, error=error,
-                        common_name=_common_name_of(client_cert_manager, identifier))
+                        common_name=_common_name_of(client_cert_manager, identifier),
+                        new_identifier=(cert_data or {}).get('identifier'))
 
                 if not success:
                     abort(400, error)
@@ -823,8 +850,10 @@ def create_client_certificate_resources(api, managers):
                             **_client_cert_key_shape({}, batch_settings, True),
                         )
 
+                        # A row with no common name still names itself, by its row.
                         _record(audit_logger, 'create',
-                                (cert_info or {}).get('identifier') or cert_data.get('common_name', ''),
+                                (cert_info or {}).get('identifier') or cert_data.get('common_name')
+                                or f'batch row {idx + 2}',
                                 success, error=error, common_name=cert_data.get('common_name', ''),
                                 usage=cert_data.get('cert_usage', 'api-mtls'))
                         if success:

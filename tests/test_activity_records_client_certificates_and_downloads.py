@@ -82,6 +82,8 @@ def test_creating_revoking_and_renewing_a_client_certificate_each_leave_an_entry
         # Who: the API Bearer Token, attributed as such, not "system".
         assert entry['actor']['kind'] == 'api_token', entry
     assert by_operation['revoke']['details'].get('reason') == 'keyCompromise'
+    # A renewal is a new certificate with its own identifier: the entry names it.
+    assert by_operation['renew']['details'].get('new_identifier') == renewed.get_json()['identifier']
     # Exactly one entry per action.
     assert sorted(e['operation'] for e in mine) == ['create', 'renew', 'revoke'], mine
 
@@ -111,6 +113,41 @@ def test_a_batch_records_each_client_certificate_it_creates(instance):
     assert made <= created, f'created {sorted(made)}, recorded {sorted(created)}'
 
 
+def test_a_batch_row_with_no_name_is_recorded_by_its_row(instance):
+    answer = instance.post('/api/client-certs/batch', json={
+        'headers': ['common_name'], 'rows': [['batch-ok'], ['']]})
+    assert answer.status_code == 201, answer.get_data(as_text=True)
+    assert answer.get_json()['failed'] == 1
+    failed = [e for e in _entries(instance, operation='create', resource_type='client_certificate')
+              if e['status'] == 'failure']
+    assert [e['resource_id'] for e in failed] == ['batch row 3'], failed
+
+
+@pytest.mark.parametrize('reason, refused', [
+    ('x' * 201, 'longer than 200'),
+    ('first line\nsecond line', 'one line'),
+    (42, 'must be text'),
+])
+def test_a_revocation_reason_that_cannot_be_kept_is_refused(instance, reason, refused):
+    """The reason goes into the certificate's record and into the hash chain,
+    which nothing takes back out."""
+    identifier = _client_certificate(instance)
+    answer = instance.post(f'/api/client-certs/{identifier}/revoke', json={'reason': reason})
+    assert answer.status_code == 400, answer.get_data(as_text=True)
+    assert refused in answer.get_json()['error'], answer.get_json()
+    assert instance.get(f'/api/client-certs/{identifier}').get_json()['revoked'] is False
+    assert not _entries(instance, operation='revoke', resource_type='client_certificate')
+
+
+def test_a_revocation_reason_of_200_characters_is_kept(instance):
+    """CONTROL: the limit is a limit, not a refusal of every reason."""
+    identifier = _client_certificate(instance)
+    answer = instance.post(f'/api/client-certs/{identifier}/revoke', json={'reason': 'y' * 200})
+    assert answer.status_code == 200, answer.get_data(as_text=True)
+    revokes = _entries(instance, operation='revoke', resource_type='client_certificate')
+    assert revokes[0]['details']['reason'] == 'y' * 200
+
+
 @pytest.mark.parametrize('file_type, carries_key', [
     ('crt', False), ('csr', False), ('key', True),
 ])
@@ -123,8 +160,9 @@ def test_every_client_certificate_download_says_whether_it_carried_the_key(insta
                  if e['resource_id'] == identifier]
     assert len(downloads) == 1, downloads
     assert downloads[0]['status'] == 'success'
-    assert downloads[0]['details']['private_key'] is carries_key, downloads[0]
+    assert downloads[0]['details']['key_included'] is carries_key, downloads[0]
     assert downloads[0]['details']['file_type'] == file_type
+    assert downloads[0]['details'].get('common_name') == 'laptop-anna', downloads[0]
     assert downloads[0]['actor']['kind'] == 'api_token'
 
 
@@ -147,7 +185,7 @@ def test_every_server_certificate_download_is_one_entry_saying_whether_it_carrie
                  if e['status'] == 'success']
     assert len(downloads) == 1, f'one request, {len(downloads)} entries: {downloads}'
     assert downloads[0]['resource_type'] == 'certificate'
-    assert downloads[0]['details']['private_key'] is carries_key, downloads[0]
+    assert downloads[0]['details']['key_included'] is carries_key, downloads[0]
     assert downloads[0]['actor']['kind'] == 'api_token'
 
 
@@ -167,4 +205,4 @@ def test_a_batch_download_is_one_entry_naming_the_certificates_in_it(instance):
     assert len(batches) == 1, batches
     assert batches[0]['status'] == 'success'
     assert batches[0]['details']['domains'] == [DOMAIN], batches[0]
-    assert batches[0]['details']['private_key'] is False
+    assert batches[0]['details']['key_included'] is False
