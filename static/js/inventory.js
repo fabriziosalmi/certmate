@@ -385,7 +385,7 @@
                     { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
                     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
                     .then(function (res) {
-                        if (res.ok) { load(); }
+                        if (res.ok) { load(true); }
                         else { window.alert('Adoption failed: ' + (res.j.error || 'unknown error')); }
                     });
             })
@@ -397,10 +397,11 @@
         // the difference is the whole of #634: say it in the confirmation so an
         // operator does not delete the same row after every scan.
         //
-        // Asked in the page's own dialog, not window.confirm (P48). Only a
-        // discovered row has Forget, and what brings one back is a sweep or a
-        // CT-log poll that finds it again, whatever made it look there: an
-        // endpoint, a watched domain, or the managed names it includes.
+        // Asked in the page's own dialog, not window.confirm (P48). Forget is on
+        // discovered rows and on managed rows whose certificate CertMate no
+        // longer holds; what brings one back is a sweep or a CT-log poll that
+        // finds it again, whatever made it look there: an endpoint, a watched
+        // domain, or the managed names it includes.
         var name = label || fingerprint;
         CertMate.confirm(
             'Remove "' + name + '" from the inventory? The certificate itself is not touched: '
@@ -467,11 +468,15 @@
     }
 
     // The domains CertMate holds a certificate for, as {domain: true}, or null
-    // while unknown (not loaded, or the request failed).
+    // while unknown (the request failed).
     var heldDomains = null;
+    // The request for them, which always settles (a failure leaves null).
+    // Fetched when the page opens and again after an action that can change
+    // what CertMate holds (adopt, scan); the Superseded toggle reuses it.
+    var heldRequest = null;
 
     function loadHeldDomains() {
-        fetch('/api/certificates', { headers: API_HEADERS, credentials: 'same-origin' })
+        return fetch('/api/certificates', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
             .then(function (list) {
                 var held = {};
@@ -479,18 +484,23 @@
                     if (c && c.exists && c.domain) held[c.domain] = true;
                 });
                 heldDomains = held;
-                render();
             })
-            .catch(function () { /* unknown: managed rows keep no Forget */ });
+            .catch(function () { heldDomains = null; /* unknown: managed rows keep no Forget */ });
     }
 
-    function load() {
-        loadHeldDomains();
+    function load(refreshHeld) {
         // Superseded certificates are left out by the server unless asked for, so the summary cards
         // describe what the list shows; the API itself returns them, marked, by default.
         var url = '/api/inventory' + (showSuperseded() ? '' : '?include_superseded=false');
-        fetch(url, { headers: API_HEADERS, credentials: 'same-origin' })
+        var inventory = fetch(url, { headers: API_HEADERS, credentials: 'same-origin' });
+        if (!heldRequest || refreshHeld === true) { heldRequest = loadHeldDomains(); }
+        var held = heldRequest;
+        // The rows are drawn once, when both answers are in: drawn before the
+        // certificate list, a managed row whose certificate was deleted gained
+        // its Forget button afterwards and every column after it moved.
+        inventory
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (data) { return held.then(function () { return data; }); })
             .then(function (data) {
                 records = data.certificates || [];
                 hiddenSuperseded = showSuperseded() ? 0 : ((data.summary || {}).superseded || 0);
@@ -771,7 +781,7 @@
                                      function () { return { ok: r.ok, status: r.status, body: {} }; });
             })
             .then(function (res) {
-                if (res.ok) { load(); loadRegistrations(); loadDomainHealth(); return; }
+                if (res.ok) { load(true); loadRegistrations(); loadDomainHealth(); return; }
                 if (!msg) { return; }
                 msg.textContent = res.status === 409
                     ? (res.body.error || 'A scan is already running.')
