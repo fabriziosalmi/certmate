@@ -252,21 +252,6 @@ class DNSManager:
                 exc.reason)
             return None, None
 
-    def reference_problem(self, provider, account_id=None, settings=None):
-        """Why the account's references do not resolve, in words with no value, or None.
-
-        "its api_token_file is not UTF-8 text": what an issuance refusal says
-        when the account is configured and a reference is broken, rather than
-        "not configured" with the reason in the log only (review of P19).
-        """
-        config, _ = self._locate_account_config(provider, account_id=account_id, settings=settings)
-        try:
-            resolve(config or {})
-        except SecretReferenceError as exc:
-            suffix = '_file' if (config or {}).get(exc.field + '_file') == exc.reference else '_env'
-            return f'its {exc.field}{suffix} {exc.reason}'
-        return None
-
     def _locate_account_config(self, provider, account_id=None, settings=None):
         """Find the stored account configuration, exactly as written.
 

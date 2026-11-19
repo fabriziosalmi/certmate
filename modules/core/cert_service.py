@@ -608,10 +608,7 @@ class CertificateService:
                 prepared['dns_provider'], account_id, settings)
             if (not dns_config or (account_id and used_account != account_id)
                     or not self._certs.dns_manager._account_has_credentials(prepared['dns_provider'], dns_config)):
-                problem = None if dns_config else self._certs.dns_manager.reference_problem(
-                    prepared['dns_provider'], account_id, settings)
-                raise ValueError(f'Selected DNS provider account cannot be used: {problem}' if problem
-                                 else 'Selected DNS provider account is not configured')
+                raise ValueError('Selected DNS provider account is not configured')
             prepared['account_id'] = used_account
             if prepared['domain_alias']:
                 alias_provider = prepared['alias_dns_provider'] or prepared['dns_provider']

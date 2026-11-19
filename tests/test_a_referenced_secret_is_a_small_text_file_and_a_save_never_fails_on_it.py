@@ -191,39 +191,3 @@ def test_an_email_read_back_that_fails_is_logged_by_its_class(tmp_path, monkeypa
     assert found == [{'setting': 'email', 'by': 'unchecked'}]
     assert 'Could not check the contact email written: TypeError' in caplog.text
     assert 'typed@example.org' not in caplog.text
-
-
-# --- an issuance refusal names the broken reference ------------------------------
-
-def test_the_account_s_broken_reference_is_named_without_its_path_or_a_value(tmp_path, monkeypatch):
-    manager = _manager(tmp_path, monkeypatch)
-    binary = tmp_path / 'cf-token'
-    binary.write_bytes(b'\xff\xfe\x00binary')
-    assert manager.atomic_update({'dns_providers': {'cloudflare': {'accounts': {'default': {
-        'api_token_file': str(binary)}}}}})
-    assert DNSManager(manager).reference_problem('cloudflare') == 'its api_token_file is not UTF-8 text'
-
-
-def test_an_account_without_a_broken_reference_has_no_problem(tmp_path, monkeypatch):
-    """CONTROL: a configured literal token, and no account at all."""
-    manager = _manager(tmp_path, monkeypatch)
-    assert manager.atomic_update({'dns_providers': {'cloudflare': {'accounts': {'default': {
-        'api_token': 'literal-token-0123456789'}}}}})
-    assert DNSManager(manager).reference_problem('cloudflare') is None
-    assert DNSManager(manager).reference_problem('digitalocean') is None
-
-
-def test_a_create_refused_for_a_broken_reference_says_so_not_not_configured(instance):
-    client, headers, _container, tmp = instance
-    binary = tmp / 'cf-token'
-    binary.write_bytes(b'\xff\xfe\x00binary')
-    saved = client.post('/api/settings', headers=headers, json={
-        'email': 'ops@example.org', 'challenge_type': 'dns-01', 'dns_provider': 'cloudflare',
-        'dns_providers': {'cloudflare': {'accounts': {'default': {'api_token_file': str(binary)}}}}})
-    assert saved.status_code == 200, saved.get_json()
-    answer = client.post('/api/certificates/create', headers=headers,
-                         json={'domain': 'broken-ref.example.com', 'dns_provider': 'cloudflare'})
-    error = json.dumps(answer.get_json())
-    assert answer.status_code >= 400, error
-    assert 'cannot be used: its api_token_file is not UTF-8 text' in error, error
-    assert 'not configured' not in error and str(binary) not in error, error
