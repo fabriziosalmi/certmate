@@ -651,7 +651,7 @@
         .then(function(answer) {
             // What the save set that something else decides instead: an
             // environment variable, the configuration file, another default
-            // account (API contract 2.72).
+            // account (API contract 2.74).
             state.notInEffect = (answer && Array.isArray(answer.not_in_effect)) ? answer.not_in_effect : [];
             forgetSetupEmail();
             // Step 3 lists what the instance now holds, read back: the

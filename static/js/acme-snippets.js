@@ -33,7 +33,10 @@
         var kid = input.kid;
         var hmac = input.hmac;
         var name = sampleName(input.patterns);
-        var email = input.email || 'ops@example.internal';
+        // A placeholder that cannot pass for an address (P72): the fallback
+        // was ops@example.internal, which looks real and was copied and run
+        // with the rest of the command.
+        var email = input.email || '<YOUR-EMAIL>';
         return {
             certbot: [
                 'certbot certonly --standalone \\',

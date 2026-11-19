@@ -61,7 +61,7 @@ class TestSettingsSave:
             },
         })
         assert r.status_code == 200, r.text
-        # Since API contract 2.72 the answer names what the save wrote that
+        # Since API contract 2.74 the answer names what the save wrote that
         # is not in effect; everything here is.
         assert r.json() == {"message": "Settings updated", "not_in_effect": []}
 

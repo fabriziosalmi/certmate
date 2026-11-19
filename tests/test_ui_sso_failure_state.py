@@ -58,7 +58,7 @@ def test_a_failed_load_hides_the_form_and_explains_why(browser_page):
     _intercept.update(status=500, body='{"error":"boom"}')
     panel = _open_sso_tab(browser_page)
 
-    assert panel.locator("button:has-text('Save SSO settings')").count() == 0, \
+    assert panel.locator("button:has-text('Save SSO Settings')").count() == 0, \
         "the Save button is live on blank defaults — one click wipes the SSO config"
     assert panel.locator("text=Could not load the SSO configuration").count() == 1
     assert panel.locator("button:has-text('Retry')").count() == 1
@@ -69,7 +69,7 @@ def test_a_permission_error_is_reported_the_same_way(browser_page):
     _intercept.update(status=403, body='{"error":"admin required"}')
     panel = _open_sso_tab(browser_page)
 
-    assert panel.locator("button:has-text('Save SSO settings')").count() == 0
+    assert panel.locator("button:has-text('Save SSO Settings')").count() == 0
     assert panel.locator("text=Could not load the SSO configuration").count() == 1
 
 
@@ -78,5 +78,5 @@ def test_a_successful_load_still_renders_the_form(browser_page):
     _intercept.update(status=None, body=None)
     panel = _open_sso_tab(browser_page)
 
-    assert panel.locator("button:has-text('Save SSO settings')").count() == 1
+    assert panel.locator("button:has-text('Save SSO Settings')").count() == 1
     assert panel.locator("text=Could not load the SSO configuration").count() == 0

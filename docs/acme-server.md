@@ -238,20 +238,20 @@ The settings page fills these in when it creates a key. With placeholders:
 certbot certonly --standalone \
   --server https://<host>/acme/directory \
   --eab-kid <kid> --eab-hmac-key <hmac> \
-  --email ops@example.internal --agree-tos \
+  --email <YOUR-EMAIL> --agree-tos \
   -d host.lab.internal
 ```
 
 ```bash
 lego run --server https://<host>/acme/directory \
   --eab --eab.kid <kid> --eab.hmac <hmac> \
-  --email ops@example.internal --accept-tos \
+  --email <YOUR-EMAIL> --accept-tos \
   --domains host.lab.internal --http
 ```
 
 ```bash
 acme.sh --register-account --server https://<host>/acme/directory \
-  --eab-kid <kid> --eab-hmac-key <hmac> -m ops@example.internal
+  --eab-kid <kid> --eab-hmac-key <hmac> -m <YOUR-EMAIL>
 acme.sh --issue --standalone --server https://<host>/acme/directory -d host.lab.internal
 ```
 
@@ -271,7 +271,7 @@ metadata:
 spec:
   acme:
     server: https://<host>/acme/directory
-    email: ops@example.internal
+    email: <YOUR-EMAIL>
     privateKeySecretRef:
       name: certmate-acme-account
     externalAccountBinding:

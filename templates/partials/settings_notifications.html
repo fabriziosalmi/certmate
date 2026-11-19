@@ -25,15 +25,18 @@
                     <div class="flex flex-wrap gap-2">
                         <template x-for="evt in notifiableEvents">
                             <label class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer border transition"
-                                   :class="config.events.includes(evt) ? 'bg-primary/10 border-primary text-primary' : 'bg-surface-2 border-border text-muted'">
+                                   :class="isEventSent(evt) ? 'bg-primary/10 border-primary text-primary' : 'bg-surface-2 border-border text-muted'">
                                 <input type="checkbox" class="sr-only" :value="evt"
-                                       :checked="config.events.includes(evt)"
-                                       @change="toggleEvent(evt)">
+                                       :checked="isEventSent(evt)"
+                                       @change="toggleEvent(evt, $event)">
                                 <span x-text="evt.replace('certificate_','').replace('domain_expiring','domain expiring').replace('_',' ')"></span>
                             </label>
                         </template>
                     </div>
-                    <p class="mt-2 text-xs text-muted">Failures are always sent and are not listed here: a certificate that did not issue or renew, and a deploy hook that did not succeed.</p>
+                    <!-- An empty list means every event (modules/core/notifier.py),
+                         so it is drawn with every chip selected and says so. -->
+                    <p class="mt-2 text-xs text-label" x-text="eventsSummary">All events are sent.</p>
+                    <p class="mt-1 text-xs text-muted">Failures are always sent and are not listed here: a certificate that did not issue or renew, and a deploy hook that did not succeed.</p>
                 </div>
 
                 <!-- SMTP -->

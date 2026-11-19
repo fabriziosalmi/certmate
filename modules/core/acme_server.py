@@ -120,11 +120,19 @@ MIN_EAB_KEY_BYTES = 16
 class AcmeAdminError(Exception):
     """A refusal of the admin API, with the HTTP status it answers with."""
 
-    def __init__(self, message, status=400, code='ACME_ADMIN_INVALID'):
+    def __init__(self, message, status=400, code='ACME_ADMIN_INVALID', field=None):
         super().__init__(message)
         self.message = message
         self.status = status
         self.code = code
+        # The request field the refusal is about, when it is about one: the
+        # settings page marks that field rather than guessing it from words
+        # in the message (#1511, P61).
+        self.field = field
+
+    def about(self, field):
+        """This refusal, said to be about *field*."""
+        return AcmeAdminError(self.message, self.status, self.code, field)
 
 
 def name_pattern(value):
@@ -265,13 +273,17 @@ class AcmeServer:
             if name in INT_OPTIONS:
                 low, high = INT_OPTIONS[name]
                 if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
-                    raise AcmeAdminError(f'{name} must be a whole number from {low} to {high}')
+                    raise AcmeAdminError(f'{name} must be a whole number from {low} to {high}', field=name)
             elif name in LIST_OPTIONS:
                 if not isinstance(value, list) or len(value) > MAX_PATTERNS:
-                    raise AcmeAdminError(f'{name} must be a list of at most {MAX_PATTERNS} names or addresses')
-                changes[name] = list(dict.fromkeys(identifier_pattern(item) for item in value))
+                    raise AcmeAdminError(f'{name} must be a list of at most {MAX_PATTERNS} names or addresses',
+                                         field=name)
+                try:
+                    changes[name] = list(dict.fromkeys(identifier_pattern(item) for item in value))
+                except AcmeAdminError as error:
+                    raise error.about(name) from error
             elif not isinstance(value, bool):
-                raise AcmeAdminError(f'{name} must be true or false')
+                raise AcmeAdminError(f'{name} must be true or false', field=name)
         self._write(lambda config: config.update(changes))
         return self.admin_view()
 
@@ -279,15 +291,19 @@ class AcmeServer:
         """A new EAB key. The returned entry carries hmac_key, which is never shown again."""
         kid = kid or f'eab-{b64.b64encode(os.urandom(9)).decode()}'
         if not isinstance(kid, str) or not KID_RE.match(kid):
-            raise AcmeAdminError('kid must be 1 to 64 letters, digits, "-" or "_"')
+            raise AcmeAdminError('kid must be 1 to 64 letters, digits, "-" or "_"', field='kid')
         if not isinstance(allowed_identifiers, list) or not allowed_identifiers:
             raise AcmeAdminError('allowed_identifiers must list the names and addresses this key may order '
-                                 'certificates for, such as "*.lab.internal" or "10.20.0.0/16"')
+                                 'certificates for, such as "*.lab.internal" or "10.20.0.0/16"',
+                                 field='allowed_identifiers')
         if len(allowed_identifiers) > MAX_PATTERNS:
-            raise AcmeAdminError(f'At most {MAX_PATTERNS} allowed identifiers per key')
-        patterns = list(dict.fromkeys(identifier_pattern(value) for value in allowed_identifiers))
+            raise AcmeAdminError(f'At most {MAX_PATTERNS} allowed identifiers per key', field='allowed_identifiers')
+        try:
+            patterns = list(dict.fromkeys(identifier_pattern(value) for value in allowed_identifiers))
+        except AcmeAdminError as error:
+            raise error.about('allowed_identifiers') from error
         if not isinstance(note, str) or len(note) > MAX_NOTE_LENGTH:
-            raise AcmeAdminError(f'note must be text of at most {MAX_NOTE_LENGTH} characters')
+            raise AcmeAdminError(f'note must be text of at most {MAX_NOTE_LENGTH} characters', field='note')
         entry = {
             'kid': kid,
             'hmac_key': b64.b64encode(os.urandom(32)).decode('ascii'),
@@ -300,7 +316,8 @@ class AcmeServer:
         def add(config):
             if any(isinstance(e, dict) and e.get('kid') == kid for e in config['eab_keys']):
                 raise AcmeAdminError(f'An EAB key called {kid!r} exists already; keys are never reused, '
-                                     'so the accounts each one enrolled stay attributable', 409, 'ACME_EAB_KEY_EXISTS')
+                                     'so the accounts each one enrolled stay attributable', 409, 'ACME_EAB_KEY_EXISTS',
+                                     field='kid')
             config['eab_keys'].append(entry)
         self._write(add)
         return dict(self._public_eab(entry, {}), hmac_key=entry['hmac_key'])

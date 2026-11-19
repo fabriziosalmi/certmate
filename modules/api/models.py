@@ -299,7 +299,7 @@ def create_api_models(api):
                 'failed), rate_limit, account (registration or account refused), order (new-order or '
                 'finalize refused: policy, CAA, identifier, CSR), other (the CA\'s own fault, such as '
                 'serverInternal, or any other ACME problem), or null '
-                'when the CA was not reached or it cannot be told. Since API contract 2.72.')),
+                'when the CA was not reached or it cannot be told. Since API contract 2.74.')),
     })
 
     certificate_model = api.model('Certificate', {
@@ -448,7 +448,7 @@ def create_api_models(api):
             'True when the CA CertMate records for the certificate is a staging one, whose certificates '
             'browsers do not trust: ca_provider letsencrypt_staging, or a certificate recorded with the '
             'staging flag (before 2.12.0, Let\'s Encrypt staging was ca_provider letsencrypt with it). For an '
-            'imported certificate it is about the CA it renews from. Since API contract 2.72.')),
+            'imported certificate it is about the CA it renews from. Since API contract 2.74.')),
         'ca_account_id': fields.String(description=(
             'CA account used at issuance, or selected for renewal of an imported certificate')),
         'imported_at': fields.String(description=(

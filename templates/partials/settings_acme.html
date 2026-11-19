@@ -9,9 +9,11 @@
                     <i class="fas fa-certificate mr-2 text-primary"></i>
                     ACME server
                 </h3>
-                <span class="text-xs px-2 py-1 rounded-full"
-                      :class="server.enabled ? 'bg-success-surface text-success-strong' : 'bg-surface-2 text-muted'"
-                      x-text="server.enabled ? 'On' : 'Off'"></span>
+                <!-- The saved state, not the ticked box: until Save, /acme/ still
+                     answers 404 (UX audit P27). -->
+                <span id="acmeState" class="text-xs px-2 py-1 rounded-full"
+                      :class="savedEnabled ? 'bg-success-surface text-success-strong' : 'bg-surface-2 text-muted'"
+                      x-text="savedEnabled ? 'On' : 'Off'">Off</span>
             </div>
             <p class="text-muted text-sm mb-6">
                 CertMate answers ACME (RFC 8555) itself, from a root of its own, so certbot, lego, acme.sh
@@ -30,12 +32,12 @@
                     <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
                         <input type="checkbox" x-model="server.enabled" id="acmeEnabled" class="mt-1 rounded border-border">
                         <span><span class="font-medium">Serve ACME</span><br>
-                            <span class="text-xs text-muted">Off, every /acme/ address answers 404.</span></span>
+                            <span class="text-xs text-muted">When off, every /acme/ address answers 404.</span></span>
                     </label>
                     <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
                         <input type="checkbox" x-model="server.eab_required" class="mt-1 rounded border-border">
                         <span><span class="font-medium">Require an EAB key</span><br>
-                            <span class="text-xs text-muted">Off, anyone who reaches /acme/ can create an account.</span></span>
+                            <span class="text-xs text-muted">When off, anyone who reaches /acme/ can create an account.</span></span>
                     </label>
                     <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
                         <input type="checkbox" x-model="server.allow_http" class="mt-1 rounded border-border">
@@ -56,13 +58,13 @@
                 </div>
                 <div class="mt-4 flex justify-end">
                     <button type="button" @click="save()" :disabled="saving" class="btn btn-primary" id="acmeSave" data-saves>
-                        <i class="fas fa-save mr-1"></i> Save
+                        <i class="fas fa-save mr-1"></i> Save ACME Settings
                     </button>
                 </div>
             </div>
 
             <!-- Where clients point -->
-            <div class="mb-6 p-4 bg-info-surface border border-info-line rounded-lg" x-show="!loading && server.enabled">
+            <div class="mb-6 p-4 bg-info-surface border border-info-line rounded-lg" x-show="!loading && savedEnabled">
                 <h4 class="text-sm font-semibold text-info-fg mb-2"><i class="fas fa-link mr-1"></i> Give clients this directory URL</h4>
                 <div class="flex items-center gap-2">
                     <code class="flex-1 px-3 py-2 bg-surface text-foreground border border-info-line rounded text-sm font-mono break-all"
@@ -91,7 +93,7 @@
                     </div>
                 </div>
                 <div class="mt-3 flex items-center gap-2">
-                    <input type="text" x-model="newKey.note" placeholder="What it is for (optional)" maxlength="200" title="Note"
+                    <input type="text" id="acmeKeyNote" x-model="newKey.note" placeholder="What it is for (optional)" maxlength="200" title="Note"
                            class="flex-1 min-w-0 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                     <button type="button" @click="createKey()" class="btn btn-primary whitespace-nowrap" id="acmeCreateKey">
                         <i class="fas fa-plus mr-1"></i> Create
@@ -138,6 +140,7 @@
                                 <button type="button" @click="copySnippet()" title="Copy the command" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
                             </div>
                             <p class="text-xs text-success-fg mt-2">
+                                Replace &lt;YOUR-EMAIL&gt; with the contact address for the ACME account.
                                 If the client host does not trust this server's TLS certificate, point it at the CA that issued it:
                                 REQUESTS_CA_BUNDLE for certbot, LEGO_CA_CERTIFICATES for lego, --ca-bundle for acme.sh, caBundle in the
                                 cert-manager issuer.

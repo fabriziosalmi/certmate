@@ -88,7 +88,7 @@ def _reissue_job(tmp_path, side_effect, challenge):
     settings = MagicMock()
     settings.load_settings.return_value = {'challenge_type': challenge}
     service = MagicMock()
-    # What prepare_reissue answers: the job records the CA it resolved (2.72).
+    # What prepare_reissue answers: the job records the CA it resolved (2.74).
     service.prepare_reissue.return_value = {'domain': 'x.example.com', 'ca_provider': 'letsencrypt'}
     service.issue_reissue.side_effect = side_effect
     managers = {'auth': auth, 'settings': settings, 'certificates': MagicMock(cert_dir=Path(tmp_path)),

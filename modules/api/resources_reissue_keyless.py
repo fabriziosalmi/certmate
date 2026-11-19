@@ -64,7 +64,7 @@ def queue_keyless_reissues(ctx, user, ip_address, audit_ctx, limit):
             continue
         try:
             # The CA the reissue goes to, recorded on its job as every
-            # reissue job's is (API contract 2.72).
+            # reissue job's is (API contract 2.74).
             job_id = ctx.cert_executor.submit(
                 'reissue', domain,
                 lambda prepared=prepared: ctx.cert_service.issue_reissue(prepared),

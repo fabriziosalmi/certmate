@@ -6,8 +6,10 @@
             <p class="text-xs text-muted">Ordered by ACME clients from this instance's own root. Newest first.</p>
         </div>
         <div class="flex items-center gap-2">
+            <!-- Wide enough for its placeholder, which was cut to "Filter by
+                 name or EAB k" at the browser's default width (P72). -->
             <input type="search" x-model="filter" placeholder="Filter by name or EAB key" aria-label="Filter ACME certificates"
-                   class="h-10 px-3 border border-border rounded-md text-sm bg-input text-foreground">
+                   class="h-10 w-56 px-3 border border-border rounded-md text-sm bg-input text-foreground">
             <button type="button" @click="load()" title="Refresh the ACME certificates" aria-label="Refresh ACME certificates" class="cm-icon-btn"><i class="fas fa-arrows-rotate" aria-hidden="true"></i></button>
         </div>
     </div>
@@ -18,8 +20,28 @@
     <template x-if="empty">
         <div class="text-center py-10 px-6 text-muted text-sm" id="acmeEmpty">
             <div class="mb-2"><i class="fas fa-certificate text-2xl" aria-hidden="true"></i></div>
-            No certificate has been issued over ACME yet. An admin turns the ACME server on and creates
-            EAB keys in <a href="/settings#acme" class="underline">Settings, ACME</a>; clients do the rest.
+            No certificate has been issued over ACME yet.
+            <!-- The state the server is in, which an admin can read (P72): the
+                 sentence was fixed, and kept asking for the server to be
+                 turned on after it was on and had keys. -->
+            <template x-if="serverState === 'off'">
+                <span>The ACME server is off: turn it on in <a href="/settings#acme" class="underline">Settings, ACME</a>.</span>
+            </template>
+            <template x-if="serverState === 'no-key'">
+                <span>The ACME server is on, requires an EAB key and has no active one: create one in
+                    <a href="/settings#acme" class="underline">Settings, ACME</a>.</span>
+            </template>
+            <template x-if="serverState === 'on'">
+                <span>The ACME server is on. Its EAB keys and options are in
+                    <a href="/settings#acme" class="underline">Settings, ACME</a>.</span>
+            </template>
+            <!-- State unknown: not an admin, or its answer did not come. -->
+            <template x-if="!serverState && isAdmin">
+                <span>The ACME server and its EAB keys are in <a href="/settings#acme" class="underline">Settings, ACME</a>.</span>
+            </template>
+            <template x-if="!serverState && !isAdmin">
+                <span>An admin manages the ACME server and its EAB keys in Settings, ACME.</span>
+            </template>
         </div>
     </template>
 

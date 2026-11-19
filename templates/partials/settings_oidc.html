@@ -51,7 +51,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label class="flex items-center space-x-2">
-                                <input type="checkbox" x-model="cfg.enabled"
+                                <input type="checkbox" id="oidc-enabled" x-model="cfg.enabled"
                                        class="h-4 w-4 text-primary focus:ring-primary border-border rounded">
                                 <span class="text-sm font-medium text-label">Enable OIDC/SSO</span>
                             </label>
@@ -71,14 +71,14 @@
                     <!-- Endpoint + credentials -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label for="oidc-issuer-url" class="block text-xs text-muted mb-1">Issuer URL</label>
+                            <label for="oidc-issuer-url" class="block text-xs text-muted mb-1">Issuer URL (required when SSO is enabled)</label>
                             <input id="oidc-issuer-url" type="url" x-model="cfg.issuer_url"
                                    placeholder="https://idp.example.com/realms/main"
                                    class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                             <p class="mt-1 text-xs text-muted">Base URL of the IdP; discovery doc is fetched from <code class="font-mono">{issuer}/.well-known/openid-configuration</code>.</p>
                         </div>
                         <div>
-                            <label for="oidc-client-id" class="block text-xs text-muted mb-1">Client ID</label>
+                            <label for="oidc-client-id" class="block text-xs text-muted mb-1">Client ID (required when SSO is enabled)</label>
                             <input id="oidc-client-id" type="text" x-model="cfg.client_id"
                                    class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                         </div>
@@ -238,7 +238,7 @@
                         <button type="button" @click="save()" :disabled="saving" data-saves
                                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-md disabled:opacity-50">
                             <i class="fas mr-1" :class="saving ? 'fa-spinner fa-spin' : 'fa-save'"></i>
-                            Save SSO settings
+                            Save SSO Settings
                         </button>
                     </div>
                 </div>

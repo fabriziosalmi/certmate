@@ -507,17 +507,29 @@
                 });
             },
 
-            toggleEnabled: function (target) {
+            // The switch says "Applies immediately". When the write does not
+            // happen it goes back to what the target still is, and a re-read
+            // shows what the server holds (#1511, P28).
+            toggleEnabled: function (target, event) {
                 var self = this;
+                var box = event && event.target;
+                function putBack() {
+                    if (box) box.checked = !!target.enabled;
+                }
                 this._write(function (list) {
                     return list.map(function (t) {
                         return t && t.id === target.id ? Object.assign({}, t, { enabled: !t.enabled }) : t;
                     });
                 }).then(function (res) {
-                    if (!res.ok) CertMate.toast((res.body && res.body.error) || 'Could not change the target', 'error');
+                    if (!res.ok) {
+                        putBack();
+                        CertMate.toast((res.body && res.body.error) || 'Could not change the target', 'error');
+                    }
                     return self.load();
                 }).catch(function () {
+                    putBack();
                     CertMate.toast('Could not change the target', 'error');
+                    return self.load();
                 });
             },
 

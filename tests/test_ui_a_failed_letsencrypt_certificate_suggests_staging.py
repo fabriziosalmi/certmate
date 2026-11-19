@@ -209,7 +209,7 @@ def test_a_create_for_a_domain_that_already_has_a_certificate_says_nothing_of_st
 
 
 @pytest.mark.parametrize('job', [{'ca_provider': 'letsencrypt_staging'}, {'ca_provider': 'zerossl'},
-                                 # A job from before 2.72 does not say.
+                                 # A job from before 2.74 does not say.
                                  {'ca_failure': None},
                                  {'ca_failure': 'account'}, {'ca_failure': 'order'}])
 def test_a_failed_create_elsewhere_says_nothing_of_staging(page, job):

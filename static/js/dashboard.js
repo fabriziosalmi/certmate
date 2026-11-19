@@ -4495,7 +4495,7 @@
     // The CA a pending create or reissue went to, as the real row names it
     // (P38: a failed create with Private CA chosen showed "—"): the one the
     // request named, or once the job has ended, the one its job says it
-    // resolved to (API contract 2.72). This page does not guess the default.
+    // resolved to (API contract 2.74). This page does not guess the default.
     function pendingCaLabel(job) {
         var ca = job.caProvider || job.jobCaProvider;
         return ca ? caDisplayName(ca) : '—';

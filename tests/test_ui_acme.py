@@ -106,3 +106,45 @@ def test_the_acme_view_says_where_to_start_when_nothing_was_issued(browser_page)
     page.reload(wait_until='networkidle')
     page.wait_for_selector('#acmeEmpty', state='visible')
     assert page.locator('#acmeEmpty a[href="/settings#acme"]').count() == 1
+
+
+# UX perception audit, 2026-11-18 (P72): the empty view said "An admin turns
+# the ACME server on and creates EAB keys" after both were done. It now says
+# the state the server is in, read from /api/acme/server.
+_KEY = dict(CREATED, hmac_key=None)
+
+
+@pytest.mark.parametrize('server, says, never', [
+    (dict(SERVER, enabled=False), 'The ACME server is off', 'is on'),
+    (dict(SERVER, eab_keys=[]), 'requires an EAB key and has no active one', 'is off'),
+    (dict(SERVER, eab_keys=[dict(_KEY, disabled=True)]), 'requires an EAB key and has no active one', 'is off'),
+    (dict(SERVER, eab_keys=[_KEY]), 'The ACME server is on', 'turn'),
+    (dict(SERVER, eab_required=False), 'The ACME server is on', 'turn'),
+])
+def test_the_empty_acme_view_says_the_state_the_server_is_in(browser_page, server, says, never):
+    page = browser_page
+    _answer(page, '**/api/acme/certificates', {'certificates': []})
+    _answer(page, '**/api/acme/server', server)
+    page.goto(f'{BASE_URL}/#acme', wait_until='networkidle')
+    page.reload(wait_until='networkidle')
+    page.wait_for_selector('#acmeEmpty', state='visible')
+    text = page.inner_text('#acmeEmpty')
+    assert says in text, text
+    assert never not in text.lower(), text
+    assert page.locator('#acmeEmpty a[href="/settings#acme"]').count() == 1
+
+
+def test_the_acme_filter_shows_its_whole_placeholder(browser_page):
+    page = browser_page
+    _answer(page, '**/api/acme/certificates', {'certificates': CERTIFICATES})
+    page.goto(f'{BASE_URL}/#acme', wait_until='networkidle')
+    page.reload(wait_until='networkidle')
+    page.wait_for_selector('#acmeCertTable tbody tr')
+    room, needed = page.eval_on_selector('input[aria-label="Filter ACME certificates"]', """el => {
+        const style = getComputedStyle(el);
+        const ctx = document.createElement('canvas').getContext('2d');
+        ctx.font = style.font;
+        const room = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        return [room, ctx.measureText(el.placeholder).width];
+    }""")
+    assert needed <= room, f'placeholder needs {needed}px, the field has {room}px'

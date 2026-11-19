@@ -331,6 +331,104 @@ def _build_ca_cert_resource(client_cert_manager):
     return ClientCertificateAuthorityCert
 
 
+def _record(audit_logger, operation, identifier, ok, *, error=None, common_name=None,
+            usage=None, reason=None, new_identifier=None):
+    """Write the Activity entry for a client certificate created, renewed or revoked.
+
+    None of these were recorded (#1511, P24): only the scheduler's renewals
+    were, so "who revoked Anna's certificate" had no answer, while
+    docs/compliance.md says every lifecycle action is recorded with its actor.
+    The actor comes from the request, as for every audit entry written inside
+    one. A refused attempt is recorded too, as a failure with the reason.
+    """
+    if not audit_logger:
+        return
+    status = 'success' if ok else 'failure'
+    error = None if ok else (_bounded(error, 500) if error else 'refused')
+    if not ok:
+        # A refused create names it by what the request sent, which nothing
+        # has checked: bounded like a revoke reason, so a refusal cannot put a
+        # 20,000-character name, or a line break, into the hash chain.
+        identifier, common_name = _bounded(identifier), _bounded(common_name)
+    if operation == 'create':
+        audit_logger.log_certificate_created(
+            identifier, common_name or '', usage or '', resource_type='client_certificate',
+            status=status, error=error)
+    elif operation == 'renew':
+        audit_logger.log_certificate_renewed(
+            identifier, resource_type='client_certificate', status=status, error=error,
+            common_name=common_name, new_identifier=new_identifier)
+    else:
+        audit_logger.log_certificate_revoked(
+            identifier, reason or 'unspecified', resource_type='client_certificate',
+            status=status, error=error, common_name=common_name)
+
+
+AUDITED_TEXT_MAX = 200
+
+
+def _bounded(value, limit=AUDITED_TEXT_MAX):
+    """*value* as one printable line of at most *limit* characters, for an
+    audit entry: a control character is written as its escape, and a longer
+    value is cut with a marker saying how long it was. None stays None."""
+    if value is None:
+        return None
+    text = ''.join(ch if ch.isprintable() else repr(ch)[1:-1] for ch in str(value))
+    if len(text) > limit:
+        return f'{text[:limit]}... [cut, {len(text)} characters]'
+    return text
+
+
+def _batch_table(data):
+    """The batch's header names and rows, or an abort(400). The batch is a
+    list of header names and a list of rows of cells: "rows": "xyz" made
+    three certificates, x, y and z, and "rows": 9 was a 500."""
+    headers, rows = data.get('headers', []), data.get('rows', [])
+    if not isinstance(headers, list) or not all(isinstance(h, str) for h in headers):
+        abort(400, "headers must be a list of column names")
+    if not isinstance(rows, list) or not all(isinstance(r, list) for r in rows):
+        abort(400, "rows must be a list of rows, each a list of cells")
+    return headers, rows
+
+
+def _common_name_of(client_cert_manager, identifier):
+    return (client_cert_manager.get_certificate_metadata(identifier) or {}).get('common_name')
+
+
+def _record_download(audit_logger, client_cert_manager, identifier, file_type, key_included):
+    """One entry per client-certificate download, saying whether it carried
+    the key (#1511, P24), and naming the certificate by its common name as
+    the other client-certificate entries do."""
+    if audit_logger:
+        audit_logger.log_certificate_downloaded(
+            identifier, file_type, key_included, resource_type='client_certificate',
+            common_name=_common_name_of(client_cert_manager, identifier))
+
+
+# A revocation reason goes into the certificate's record and, through the
+# audit entry, into the hash chain, which nothing can take back out: it is
+# held to one line of printable text of a bounded length (#1511 review).
+REVOKE_REASON_MAX = 200
+
+
+def _revoke_reason(data):
+    """The reason a revoke request gives, or an abort(400) saying what is wrong
+    with it. Absent or blank is `unspecified`, as before."""
+    reason = data.get('reason')
+    if reason is None:
+        return 'unspecified'
+    if not isinstance(reason, str):
+        abort(400, "reason must be text")
+    reason = reason.strip()
+    if not reason:
+        return 'unspecified'
+    if len(reason) > REVOKE_REASON_MAX:
+        abort(400, f"reason is longer than {REVOKE_REASON_MAX} characters")
+    if any(not ch.isprintable() for ch in reason):
+        abort(400, "reason must be one line of printable text")
+    return reason
+
+
 def _require_certificate(client_cert_manager, identifier):
     """A 404 for a certificate that does not exist, like the detail route says.
 
@@ -421,6 +519,7 @@ def create_client_certificate_resources(api, managers):
     crl_manager = managers.get('crl')
     settings_manager = managers.get('settings')
     event_bus = managers.get('events')
+    audit_logger = managers.get('audit')
 
     if not client_cert_manager:
         logger.error("ClientCertificateManager not available")
@@ -484,6 +583,11 @@ def create_client_certificate_resources(api, managers):
                 success, error, cert_data = client_cert_manager.create_client_certificate(
                     **_client_cert_create_params(data, _settings_of(settings_manager)))
 
+                issued = (cert_data or {}).get('metadata') or {}
+                _record(audit_logger, 'create',
+                        (cert_data or {}).get('identifier') or str(data['common_name']), success,
+                        error=error, common_name=issued.get('common_name') or str(data['common_name']),
+                        usage=issued.get('cert_usage'))
                 if not success:
                     abort(400, f"Failed to create certificate: {error}")
 
@@ -570,6 +674,7 @@ def create_client_certificate_resources(api, managers):
                     pfx_bytes = client_cert_manager.build_pfx(identifier, password.encode())
                     if not pfx_bytes:
                         abort(404, f"Client certificate not found: {identifier}")
+                    _record_download(audit_logger, client_cert_manager, identifier, file_type, True)
                     return send_file(
                         BytesIO(pfx_bytes),
                         mimetype='application/x-pkcs12',
@@ -585,6 +690,8 @@ def create_client_certificate_resources(api, managers):
 
                 if not file_content:
                     abort(404, f"File not found: {identifier}.{file_type}")
+                _record_download(audit_logger, client_cert_manager, identifier, file_type,
+                                 file_type in self._PRIVATE_FILE_TYPES)
 
                 # Return file
                 return send_file(
@@ -617,13 +724,15 @@ def create_client_certificate_resources(api, managers):
                     abort(400, "Invalid certificate identifier")
                 _require_certificate(client_cert_manager, identifier)
                 data = request.get_json() or {}
-                reason = data.get('reason', 'unspecified')
+                reason = _revoke_reason(data)
 
                 # Revoke certificate
                 success, error = client_cert_manager.revoke_certificate(
                     identifier,
                     reason=reason
                 )
+                _record(audit_logger, 'revoke', identifier, success, error=error, reason=reason,
+                        common_name=_common_name_of(client_cert_manager, identifier))
 
                 if not success:
                     abort(400, error)
@@ -666,6 +775,9 @@ def create_client_certificate_resources(api, managers):
                 success, error, cert_data = client_cert_manager.renew_certificate(
                     identifier
                 )
+                _record(audit_logger, 'renew', identifier, success, error=error,
+                        common_name=_common_name_of(client_cert_manager, identifier),
+                        new_identifier=(cert_data or {}).get('identifier'))
 
                 if not success:
                     abort(400, error)
@@ -714,8 +826,7 @@ def create_client_certificate_resources(api, managers):
                 if not data or 'rows' not in data:
                     abort(400, "CSV rows required")
 
-                rows = data.get('rows', [])
-                headers = data.get('headers', [])
+                headers, rows = _batch_table(data)
 
                 # Limit batch size to prevent resource exhaustion
                 max_batch = 100
@@ -770,6 +881,12 @@ def create_client_certificate_resources(api, managers):
                             **_client_cert_key_shape({}, batch_settings, True),
                         )
 
+                        # A row with no common name still names itself, by its row.
+                        _record(audit_logger, 'create',
+                                (cert_info or {}).get('identifier') or cert_data.get('common_name')
+                                or f'batch row {idx + 2}',
+                                success, error=error, common_name=cert_data.get('common_name', ''),
+                                usage=cert_data.get('cert_usage', 'api-mtls'))
                         if success:
                             results['successful'] += 1
                             results['certificates'].append({
@@ -785,6 +902,10 @@ def create_client_certificate_resources(api, managers):
 
                     except Exception as e:
                         logger.error(f"Batch cert creation error for row {idx + 2}: {str(e)}")
+                        # Recorded as a failure named by its row: an exception
+                        # leaves no identifier to name it by.
+                        _record(audit_logger, 'create', f'batch row {idx + 2}', False,
+                                error='Certificate creation failed')
                         results['failed'] += 1
                         results['errors'].append({
                             'row': idx + 2,

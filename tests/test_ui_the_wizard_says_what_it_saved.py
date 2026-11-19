@@ -48,7 +48,7 @@ def page(browser_page, ui_session_cookie):
 def _wizard(page, save_status=200, pinned=None, not_in_effect=()):
     """The wizard on step 2. A save is kept and read back, as a server does;
     *pinned* stands for the environment overriding what was saved, and
-    *not_in_effect* for the save's answer naming it (API contract 2.72)."""
+    *not_in_effect* for the save's answer naming it (API contract 2.74)."""
     stored = {}
 
     def settings(route):

@@ -452,7 +452,7 @@ characters kept), shows went wrong. The first that matches, in this order:
 | `other` | Last: any other ACME problem document (`urn:ietf:params:acme:error:`). |
 
 A record kept before the field is classified from the error it kept. Since
-API contract **2.72**.
+API contract **2.74**.
 
 ##### Is it a staging certificate?
 
@@ -464,7 +464,7 @@ Before 2.12.0 a Let's Encrypt staging certificate was recorded as `ca_provider`
 alone does not tell it from production. For an imported certificate
 `ca_provider` is the CA it renews from and nothing records who issued it, so an
 imported staging certificate set to renew from production answers `false`.
-Since API contract **2.72**.
+Since API contract **2.74**.
 
 ##### Deprecated fields
 
@@ -1338,6 +1338,10 @@ curl http://localhost:8000/api/client-certs/user-example.com-3f9c2a71/download/c
 **Endpoint**: `POST /api/client-certs/<identifier>/revoke`
 
 Revoke a certificate with optional reason (free text; `unspecified` when none is given).
+Since API contract **2.72** the reason is held to one line of printable text of at most
+200 characters, because it is kept in the certificate's record and in the audit hash
+chain: a longer one, one with a line break or one that is not text is a `400`, and
+nothing is revoked.
 The answer is a message; the revocation is in the certificate's record (`revoked`,
 `revoked_at`, `reason_revoked` in `GET /api/client-certs/<identifier>`), in the CRL, which
 is regenerated, and in what the OCSP responder answers. A certificate that does not
@@ -1477,7 +1481,10 @@ curl http://localhost:8000/api/client-certs/stats \
 
 **Endpoint**: `POST /api/client-certs/batch`
 
-Create multiple certificates from CSV data in single request.
+Create multiple certificates from CSV data in single request. `headers` is a list of
+column names and `rows` a list of rows, each a list of cells; since API contract
+**2.72** anything else is a `400` and nothing is created (a string for `rows` used
+to make one certificate per character).
 
 **Request**:
 <!-- request: POST /api/client-certs/batch -->
@@ -1871,7 +1878,7 @@ goes to is the certificate's `ca_provider`, which is `null` when none was
 recorded. A job that failed carries `ca_failure`, classified from its whole
 error as a certificate's `last_renewal_attempt` is; `null` while it runs, after
 it succeeds, and for a domain busy with another operation. Since API contract
-**2.72**.
+**2.74**.
 
 **Errors**: 400 validation or configuration (the body names the problem),
 403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a
@@ -2162,6 +2169,15 @@ enrolled, and never with its `hmac_key`. `DELETE` disables a key: it enrols no
 one again, and the accounts it enrolled keep working. It answers with the key
 as `GET` lists it; an unknown `kid` is a `404`.
 
+Since API contract **2.73**, a refusal of `POST /api/acme/eab-keys` or
+`PATCH /api/acme/server` names the request field it is about in `field`:
+`kid` (also for the `409` of a `kid` that exists), `allowed_identifiers`
+(also when the list is empty or one of its patterns is refused) or `note` for
+a key; `validity_days` or `allowed_identifiers` for the options. An unknown
+option has no `field`, and neither has a key left without
+`allowed_identifiers` or a value of the wrong JSON type: the request
+validation refuses those first, with its own `errors` object.
+
 #### What it issued, and to whom
 
 **Endpoint**: `GET /api/acme/certificates` — viewer
@@ -2433,7 +2449,7 @@ provider is in [sso.md](./sso.md).
 
 #### What a settings save does not decide
 
-Since API contract **2.72** the answer to `POST /api/settings` carries
+Since API contract **2.74** the answer to `POST /api/settings` carries
 `not_in_effect`. For the contact `email` and for every field written into a
 DNS provider's account (in the `accounts` shape or the flat one, and the
 legacy `cloudflare_token`), the save reads the value in effect back the way
@@ -2471,6 +2487,14 @@ and a `********` value keeps the stored secret, so what `GET` returned can be
 posted back unchanged. Every write is audited. This is the only way to change
 the block: the bulk settings endpoint refuses the `oidc` key. The keys are
 listed in [sso.md](./sso.md#role-mapping-example).
+
+Since API contract **2.73**, a refused `POST` names the key it is about in
+`field`: `issuer_url`, `client_id`, `default_role`, `scopes` or
+`role_mappings` for a `400`, and `enabled` for the `409` that refuses to turn
+off the only credential. A JSON body that is a list, a string or a number is
+a `400` with no `field` (it answered `500`, or an empty list was read as `{}`
+and answered `200`, before 2.73); `null` is still read as `{}`. A settings
+write that failed has no `field` either.
 
 ### Probing a host
 
@@ -2556,8 +2580,14 @@ status means and how the answer is verified:
 
 **Endpoint**: `DELETE /api/inventory/<fingerprint>` — operator
 
-Removes a discovered record. Managed certificates are not deleted this way;
-this only forgets something discovery found.
+Removes an inventory record and the endpoints observed for it. The certificate
+itself is not touched. A discovery sweep or CT-log poll that finds it again
+records it again. The UI offers this for discovered records, and for a managed
+record only once CertMate no longer holds a certificate for its domain: the
+certificates CertMate holds are recorded at startup and on each issuance or
+renewal, and by a scan only where discovery finds one served, so a managed
+record removed while its certificate is held could leave the Managed count short
+until then.
 
 #### Adoption plan
 
@@ -2797,8 +2827,13 @@ does not make an instance into a source of traffic.
 Reads and writes the `deploy_hooks` block: the hooks that run after an
 issuance or a renewal, and the targets they deliver to. This is the only way
 to change that block; the bulk settings endpoint refuses `deploy_hooks`. A
-rejected configuration is answered `400` with the reason. Every save is
-audited, without the hook commands themselves. What the block holds and how
+rejected configuration is answered `400` with the reason. Since API contract
+**2.72** a command refused by the guard names what it found (`';'`, `'&&'`,
+`'$('`, `a line break`...; a control character inside it is written as an
+escape, such as `\n`), and when the refusal is a hook's the answer also
+carries that hook's `hook_id` and the `field` at fault (`hook`, `name`,
+`command`, `timeout` or `window`), so a client can point at the field. A
+refusal of something else, such as `enabled`, carries neither. Every save is audited, without the hook commands themselves. What the block holds and how
 hooks run: [deploy-hooks.md](./deploy-hooks.md).
 
 #### Deploy-hook history
@@ -2840,6 +2875,12 @@ record, with `success`, `exit_code`, `stdout`, `stderr` and `error` (null on a p
 A hook that is not in the configuration is a **404**, with `reason:
 "hook_missing_from_config"`. Before API contract **2.37** every answer was a 404, the
 run record included.
+
+Each test writes a `test` entry on `deploy_hook` to the audit log, and since API
+contract **2.72** its `status` is the outcome: `failure`, with the error, for a run
+that did not pass and for a hook that is not in the configuration. Before, every
+test read `success`. A hook that ran also has its run's own `deploy_hook` entry,
+with `details.dry_run: true`.
 
 #### Run a certificate's deploy hooks now
 
@@ -3473,6 +3514,40 @@ recorded to an audit log. This includes the security-relevant lifecycle paths �
 successful and failed create, renew, reissue, deploy, and auto-renew toggles,
 plus **unattended (scheduler-driven) renewals** — each attributed to the actor
 that performed it and the trigger that caused it.
+
+Since API contract **2.72** it also records:
+
+- **Client certificates created, renewed and revoked** (`resource_type:
+  client_certificate`, `details.common_name`), including an attempt the
+  certificate manager refuses (`status: failure`, with its reason). A renewal
+  names the certificate it issued (`details.new_identifier`). A batch writes
+  one `create` per row; a row with no common name, or one that cannot be
+  read, is named by its row (`batch row 3`). A refused create names what the
+  request sent as one printable line of at most 200 characters, a control
+  character written as its escape and a longer name cut with a marker
+  (`... [cut, 20000 characters]`), so a refusal cannot grow the chain without
+  bound. A request refused before it reaches a certificate (an
+  invalid identifier or reason, a certificate that does not exist) writes
+  nothing.
+- **Every server or client certificate download from the API and the
+  dashboard** that is handed over, server (`certificate`) or client
+  (`client_certificate`, with `details.common_name`): one `download` entry per
+  request, so a ZIP of four files is one entry, with `details.file_type` and
+  `details.key_included` saying whether what was handed over carried the
+  private key. A batch download from the dashboard is one `batch_download`
+  entry naming the certificates in it (`details.domains`, and how many in
+  `details.count`); it never carries a key. A server-certificate download
+  refused for the caller's role or scope is a `denied` entry, as before; a
+  request answered with an error writes no `download` entry. The ACME
+  server's certificate URL, which an ACME client reads once its order is
+  issued, writes none.
+
+Downloads add to the log's size: an automation that pulls a certificate on a
+schedule writes an entry on every pull, about 105,000 a year at one every 5
+minutes. The `.log` file rotates (10 MB × 5 by default,
+`CERTMATE_AUDIT_LOG_MAX_BYTES` and `CERTMATE_AUDIT_LOG_BACKUP_COUNT`); the
+hash chain below grows until part of it is archived (see
+[Retention](./compliance.md#retention-archiving-part-of-the-chain)).
 
 ### Log format
 

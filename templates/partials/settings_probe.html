@@ -45,7 +45,7 @@
                             <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700/30 rounded-lg px-4 py-3 border border-border">
                                 <!-- Edit mode -->
                                 <template x-if="editingDomain === cert.domain">
-                                    <div class="flex-1 flex flex-wrap items-center gap-3">
+                                    <div class="flex-1 flex flex-wrap items-center gap-3" data-unsaved-scope="probe">
                                         <span class="font-mono text-sm text-foreground font-medium" x-text="cert.domain"></span>
                                         <input type="text" x-model="editHost"
                                                aria-label="Probe host"
@@ -73,11 +73,11 @@
                                                 </template>
                                             </div>
                                         </div>
-                                         <button type="button" @click="saveEdit()"
+                                         <button type="button" @click="saveEdit()" data-saves
                                                 class="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">
-                                            <i class="fas fa-save mr-1"></i>Save
+                                            <i class="fas fa-save mr-1"></i>Save Probe
                                         </button>
-                                        <button type="button" @click="cancelEdit()"
+                                        <button type="button" @click="cancelEdit()" data-discards
                                                 class="text-xs px-3 py-1.5 bg-surface-2 text-label rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                                             Cancel
                                         </button>
