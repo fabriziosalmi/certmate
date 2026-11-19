@@ -13,7 +13,7 @@
     }
 
     // The fields a refusal can be about, by the `field` the server names
-    // (API contract 2.72): the toast says the label and the field is marked.
+    // (API contract 2.72): the toast leads with its label and the field is marked.
     var KEY_FIELDS = {
         allowed_identifiers: { label: 'Names and addresses it may order', id: 'acmeKeyNames' },
         kid: { label: 'Key identifier', id: 'acmeKeyKid' },
@@ -116,8 +116,8 @@
                         self.load(true);
                     })
                     .catch(function (error) {
-                        // The server names the field by its API key; say the
-                        // label, and mark and focus the field (UX audit P61).
+                        // The toast leads with the label of the field the
+                        // server names, which is marked and focused (UX audit P61).
                         CertMate.toast(CertMate.markFieldError(error.message || 'Could not create the key',
                             error.body && error.body.field, KEY_FIELDS), 'error');
                     });

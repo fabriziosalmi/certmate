@@ -35,8 +35,13 @@
     // and the scope it belongs to (kept, so a control removed from the page,
     // such as a deleted webhook, still counts as a change).
     var originals = new Map();
+    // What a field held just before the user last reached it (focus, a key,
+    // a press): its start once the first edit comes. Only an edit fixes it,
+    // so a field reached before the page's load filled it starts from the
+    // loaded value, not from the empty one.
+    var reached = new Map();
     var UNKNOWN = {};            // a start that cannot be known: always a change
-    var pending = null;          // {scope, at, claimed}: a save was asked for
+    var pending = null;          // {scope, at, claimed, sent}: a save was asked for
     var SAVE_WINDOW_MS = 15000;
 
     function scopeOf(el) {
@@ -72,13 +77,13 @@
         return entry.value === UNKNOWN || current(el) !== entry.value;
     }
 
-    // The value a text field or a list had before the first edit.
+    // The value a text field or a list holds as the user reaches it, kept
+    // until the first edit (see `reached`).
     function remember(event) {
         var el = event.target;
         if (!event.isTrusted || !isField(el) || el.type === 'checkbox' || el.type === 'radio') return;
         if (originals.has(el) || !counts(el)) return;
-        var scope = scopeOf(el);
-        if (scope) originals.set(el, { value: el.value, scope: scope });
+        reached.set(el, el.value);
     }
 
     function hasOwnSave(scope) {
@@ -97,9 +102,27 @@
         return scope.contains(inner) && !hasOwnSave(inner);
     }
 
-    function settle(scope) {
+    // What a save sends is what its section holds when the request goes:
+    // each edited control of the section, its value then, and how many
+    // edits it had seen.
+    function snapshot(scope) {
+        var sent = new Map();
         originals.forEach(function (entry, el) {
-            if (covers(scope, entry.scope)) originals.delete(el);
+            if (covers(scope, entry.scope)) sent.set(el, { value: current(el), edits: entry.edits });
+        });
+        return sent;
+    }
+
+    // A save that succeeded: a control not edited since its request went is
+    // saved; one edited since starts from what was sent, so it still reads
+    // unsaved while it differs from that.
+    function settle(scope, sent) {
+        originals.forEach(function (entry, el) {
+            if (!covers(scope, entry.scope)) return;
+            var then = sent ? sent.get(el) : null;
+            if (sent && !then) return;                   // first edited after the request went
+            if (!then || entry.edits === then.edits) originals.delete(el);
+            else originals.set(el, { value: then.value, scope: entry.scope, edits: entry.edits });
         });
         recount();
     }
@@ -153,12 +176,16 @@
         var el = event.target;
         var scope = scopeOf(el);
         if (!scope) return;
-        if (!originals.has(el)) {
+        var entry = originals.get(el);
+        if (!entry) {
             // A box was the other way before this change; a field reached
             // with no focus or keystroke seen first cannot be known.
-            var start = el.type === 'checkbox' ? !el.checked : UNKNOWN;
-            originals.set(el, { value: start, scope: scope });
+            var start = el.type === 'checkbox' ? !el.checked : (reached.has(el) ? reached.get(el) : UNKNOWN);
+            reached.delete(el);
+            entry = { value: start, scope: scope, edits: 0 };
+            originals.set(el, entry);
         }
+        entry.edits++;
         // Counted after the page's own handlers, which may put the control
         // back (the last event chip stays selected), and that is no change:
         // when the event bubbles up here, and once more after it in case a
@@ -171,6 +198,8 @@
     }
 
     document.addEventListener('focusin', remember, true);
+    document.addEventListener('pointerdown', remember, true);
+    document.addEventListener('keydown', remember, true);
     document.addEventListener('beforeinput', remember, true);
     document.addEventListener('input', markChanged, true);
     document.addEventListener('change', markChanged, true);
@@ -184,7 +213,7 @@
         var scope = scopeOf(control);
         if (!scope) return;
         if (control.hasAttribute('data-discards')) {
-            settle(scope);
+            settle(scope, null);
             return;
         }
         pending = { scope: scope, at: Date.now(), claimed: false };
@@ -205,12 +234,13 @@
         if (method !== 'GET' && pending && !pending.claimed && Date.now() - pending.at < SAVE_WINDOW_MS) {
             asked = pending;
             asked.claimed = true;
+            asked.sent = snapshot(asked.scope);
         }
         var answer = realFetch.apply(this, arguments);
         if (!asked) return answer;
         return answer.then(function (response) {
             if (pending === asked) pending = null;
-            if (response.ok) settle(asked.scope);
+            if (response.ok) settle(asked.scope, asked.sent);
             return response;
         }, function (error) {
             if (pending === asked) pending = null;

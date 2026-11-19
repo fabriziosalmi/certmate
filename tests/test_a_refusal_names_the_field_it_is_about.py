@@ -88,3 +88,11 @@ def test_turning_off_the_only_credential_is_about_the_enable_switch(tmp_path):
     answer = app.test_client().post('/api/auth/oidc/settings', json={**CONFIGURED_OIDC, 'enabled': False})
     assert answer.status_code == 409
     assert answer.get_json()['field'] == 'enabled'
+
+
+@pytest.mark.parametrize('body', [[1], 'x', [], 5])
+def test_an_sso_body_that_is_not_an_object_is_refused_with_no_field(client, body):
+    """[1] or "x" answered 500 (payload.items()), and [] was read as {} and saved."""
+    answer = client.post('/api/auth/oidc/settings', json=body)
+    assert answer.status_code == 400, answer.get_data(as_text=True)[:200]
+    assert 'field' not in answer.get_json()

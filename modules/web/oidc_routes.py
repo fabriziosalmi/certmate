@@ -228,7 +228,14 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
         a downstream SIEM filtering on ``resource_type='auth_config'``
         sees this mutation too.
         """
-        payload = request.json or {}
+        # A body that is not an object is refused here: a list or a string
+        # reached payload.items() below and answered 500, and an empty list
+        # was read as {} and saved (#1511).
+        payload = request.json
+        if payload is None:
+            payload = {}
+        if not isinstance(payload, dict):
+            return jsonify({'error': 'Send the SSO settings as a JSON object'}), 400
         before = oidc_manager.get_admin_config()
         # Read the unmasked on-disk secret BEFORE the update so the audit
         # log can tell a genuine rotation apart from an admin resubmitting

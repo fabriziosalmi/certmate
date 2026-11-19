@@ -824,7 +824,18 @@ METADATA_SCHEMA_VERSION = 1
 #                                   `field`, the request field it is about,
 #                                   when it is about one, so the settings page
 #                                   marks that field and does not guess it
-#                                   from the message. A new field.
+#                                   from the message. A new field. The route
+#                                   walk runs with an API token, so it cannot
+#                                   reach the SSO 409 (field `enabled`);
+#                                   tests/test_a_refusal_names_the_field_it_is_about.py
+#                                   holds it. POST /api/auth/oidc/settings
+#                                   with a JSON list, string or number is a
+#                                   400 with no field: it answered 500 (a
+#                                   server error) or, for an empty list, 200
+#                                   having saved nothing. The rule below calls
+#                                   a changed status MAJOR; counted MINOR as
+#                                   2.66 counted its fixes, since neither old
+#                                   answer did what the request asked.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the

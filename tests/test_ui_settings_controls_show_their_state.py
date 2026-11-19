@@ -194,7 +194,8 @@ def test_a_refused_sso_save_names_and_marks_the_field(page):
         panel.locator('button[data-saves]').click()
     assert answer.value.status == 400
     toast = _toast_text(page)
-    assert 'Issuer URL' in toast and 'issuer_url' not in toast, toast
+    # Led by the label; the server's message follows as it was sent.
+    assert 'Issuer URL: issuer_url is required when OIDC is enabled' in toast, toast
     page.wait_for_function("() => document.activeElement && document.activeElement.id === 'oidc-issuer-url'")
     assert page.get_attribute('#oidc-issuer-url', 'aria-invalid') == 'true'
     assert 'required' in panel.locator('label[for="oidc-issuer-url"]').inner_text()
@@ -209,7 +210,7 @@ def test_a_refused_eab_key_names_and_marks_the_field(page):
         page.click('#acmeCreateKey')
     assert answer.value.status == 400
     toast = _toast_text(page)
-    assert 'allowed_identifiers' not in toast and 'Names and addresses it may order' in toast, toast
+    assert 'Names and addresses it may order: allowed_identifiers must list' in toast, toast
     page.wait_for_function("() => document.activeElement && document.activeElement.id === 'acmeKeyNames'")
     assert page.get_attribute('#acmeKeyNames', 'aria-invalid') == 'true'
 
@@ -324,9 +325,10 @@ def test_a_stored_list_with_no_chip_says_only_failures_are_sent_and_is_kept(page
     assert _save_notifications(page, sent) == ['certificate_failed'], 'an untouched list is saved as it was'
 
 
-def _refuse_eab(page, kid, field):
-    body = {'error': f"An EAB key called '{kid}' exists already; keys are never reused, so the accounts "
-                     'each one enrolled stay attributable', 'code': 'ACME_EAB_KEY_EXISTS', 'field': field}
+def _refuse_eab(page, kid, field, message=None):
+    message = message or (f"An EAB key called '{kid}' exists already; keys are never reused, so the accounts "
+                          'each one enrolled stay attributable')
+    body = {'error': message, 'code': 'ACME_EAB_KEY_EXISTS', 'field': field}
     _answer_json(page, '**/api/acme/eab-keys', body, method='POST', status=409)
     _open(page, 'acme')
     page.wait_for_selector('#acmeKeyNames', state='visible')
@@ -336,9 +338,29 @@ def _refuse_eab(page, kid, field):
     return _toast_text(page)
 
 
-def test_the_label_never_rewrites_the_value_the_user_typed(page):
-    toast = _refuse_eab(page, 'dupkid', 'kid')
-    assert "'dupkid'" in toast, toast
+# Messages that any rewrite of the key would change: the key as a whole word
+# inside a typed value, both quote kinds in one value (Python's repr escapes
+# the single quote), and a host the server puts in the message unquoted.
+@pytest.mark.parametrize('kid, message', [
+    ('kid', "An EAB key called 'kid' exists already; keys are never reused"),
+    ('kid', 'An EAB key called \'it\\\'s "kid" kid\' exists already; keys are never reused'),
+])
+def test_the_server_message_is_shown_as_sent_after_the_label(page, kid, message):
+    toast = _refuse_eab(page, kid, 'kid', message)
+    assert 'Key identifier: ' + message in toast, toast
+
+
+def test_an_unquoted_host_in_the_message_is_shown_as_sent(page):
+    message = ('issuer_url.169.254.169.254.nip.io resolves to 169.254.169.254, a link-local or '
+               'cloud-metadata address that is never a valid endpoint')
+    _answer_json(page, '**/api/auth/oidc/settings', {'error': message, 'field': 'issuer_url'},
+                 method='POST', status=400)
+    _open(page, 'oidc')
+    page.wait_for_selector('#oidc-issuer-url', state='visible')
+    page.locator('#settings-panel-oidc button[data-saves]').click()
+    toast = _toast_text(page)
+    assert 'Issuer URL: ' + message in toast, toast
+    page.wait_for_function("() => document.activeElement && document.activeElement.id === 'oidc-issuer-url'")
 
 
 def test_the_field_marked_is_the_one_the_server_names(page):
@@ -356,7 +378,7 @@ def test_a_refused_acme_option_is_named_and_marked(page):
         page.click('#acmeSave')
     assert answer.value.status == 400
     toast = _toast_text(page)
-    assert 'Certificate validity' in toast and 'validity_days' not in toast, toast
+    assert 'Certificate validity: validity_days must be a whole number' in toast, toast
     page.wait_for_function("() => document.activeElement && document.activeElement.id === 'acmeValidity'")
     assert page.get_attribute('#acmeValidity', 'aria-invalid') == 'true'
 
@@ -462,3 +484,58 @@ def test_a_target_switch_that_could_not_be_sent_goes_back(page):
     page.locator('label:has(input[aria-label="Enable target audit target"])').click()
     page.wait_for_timeout(800)
     assert switch.is_checked(), 'nothing was saved, so the switch shows the target still on'
+
+
+# ── Second review round ──────────────────────────────────────────────
+
+SLOW_FETCH = """(() => {
+    const [path, method, ms] = %s;
+    const real = window.fetch;
+    window.fetch = function (resource, options) {
+        const url = typeof resource === 'string' ? resource : resource.url;
+        const verb = ((options && options.method) || 'GET').toUpperCase();
+        if (url.indexOf(path) !== -1 && verb === method) {
+            const self = this, args = arguments;
+            return new Promise(done => setTimeout(done, ms)).then(() => real.apply(self, args));
+        }
+        return real.apply(this, arguments);
+    };
+})()"""
+
+
+def _slow(page, path, method, ms):
+    """Hold fetch() calls to *path* with *method* for *ms* before they go out."""
+    page.add_init_script(SLOW_FETCH % json.dumps([path, method, ms]))
+
+
+def test_a_field_clicked_before_the_page_loaded_is_not_an_edit(page):
+    def stored_threshold_21(route):
+        settings = route.fetch().json()
+        settings['renewal_threshold_days'] = 21
+        return route.fulfill(status=200, content_type='application/json', body=json.dumps(settings))
+    page.route('**/api/web/settings', lambda route: stored_threshold_21(route) if route.request.method == 'GET'
+               else route.fallback())
+    _slow(page, '/api/web/settings', 'GET', 3000)
+    page.goto(f'{BASE_URL}/settings#general', wait_until='domcontentloaded')
+    page.wait_for_selector('#renewal_threshold_days', state='visible')
+    page.click('#renewal_threshold_days')
+    assert page.input_value('#renewal_threshold_days') != '21', 'the click must come before the load'
+    page.wait_for_function("() => document.querySelector('#renewal_threshold_days').value === '21'",
+                           timeout=15000)
+    page.wait_for_timeout(300)
+    assert page.evaluate('() => window.CertMate.unsavedSettings()') == [], \
+        'a click is no edit, and the value the page loaded is where the field starts'
+
+
+def test_an_edit_made_while_the_save_is_on_its_way_stays_unsaved(page):
+    sent = _notifications(page, [])
+    _slow(page, '/api/notifications/config', 'POST', 2500)
+    page.reload(wait_until='networkidle')
+    page.locator('button:has-text("Email (SMTP)")').click()
+    page.fill('input[aria-label="SMTP username"]', 'u')
+    page.locator('#settings-panel-notifications button[data-saves]').click()
+    page.fill('input[aria-label="SMTP username"]', 'changed-user')
+    page.wait_for_timeout(3500)
+    assert sent and sent[-1]['channels']['smtp']['username'] == 'u', sent
+    assert 'notifications' in page.evaluate('() => window.CertMate.unsavedSettings()'), \
+        'the save carried "u"; "changed-user" was typed after it went and is not saved'

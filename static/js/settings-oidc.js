@@ -149,9 +149,9 @@
                     .then(function (res) {
                         self.saving = false;
                         if (!res.ok) {
-                            // The server names a field by its API key; the
-                            // toast says the label, and the field is marked
-                            // and focused (UX audit P61).
+                            // The toast leads with the label of the field the
+                            // server names, which is marked and focused (UX
+                            // audit P61).
                             var error = res.data && res.data.error ? res.data.error : 'unknown';
                             showMessage('Save failed: ' + CertMate.markFieldError(error, res.data && res.data.field, OIDC_FIELDS), 'error');
                             return;

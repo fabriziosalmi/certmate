@@ -531,12 +531,10 @@
     // about (API contract 2.72). Given that and the fields a form holds, as
     // { issuer_url: { label: 'Issuer URL', id: 'input-id' } }, the field is
     // marked aria-invalid, outlined and focused until it is edited, and the
-    // message comes back saying the label: the key, where it stands as a word
-    // outside a quoted value, becomes the label, and a message that does not
-    // carry the key is led by the label. A value the user typed is quoted by
-    // the server and never rewritten. With no field, or one the form does not
-    // hold, the message comes back as it was and nothing is marked (UX audit
-    // P61): a field is never guessed from words in the text.
+    // message comes back led by the field's label, the server's text after it
+    // as it was sent (UX audit P61). With no field, or one the form does not
+    // hold, the message comes back as it was and nothing is marked: a field
+    // is never guessed from words in the text.
     CM.markFieldError = function(message, field, fields) {
         var text = String(message == null ? '' : message);
         fields = fields || {};
@@ -546,16 +544,7 @@
         });
         var known = field && Object.prototype.hasOwnProperty.call(fields, field) ? fields[field] : null;
         if (!known) return text;
-        var word = new RegExp('(^|[^\\w])' + field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?!\\w)', 'g');
-        var named = false;
-        text = text.split(/('[^']*'|"[^"]*")/).map(function(part, i) {
-            if (i % 2 === 1) return part;            // a quoted value, as typed
-            return part.replace(word, function(all, before) {
-                named = true;
-                return before + known.label;
-            });
-        }).join('');
-        if (!named) text = known.label + ': ' + text;
+        text = known.label + ': ' + text;
         var el = document.getElementById(known.id);
         if (el) {
             el.setAttribute('aria-invalid', 'true');
