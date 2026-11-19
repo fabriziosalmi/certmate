@@ -63,9 +63,12 @@ def queue_keyless_reissues(ctx, user, ip_address, audit_ctx, limit):
                             'reason': 'cannot be reissued from its recorded configuration'})
             continue
         try:
+            # The CA the reissue goes to, recorded on its job as every
+            # reissue job's is (API contract 2.72).
             job_id = ctx.cert_executor.submit(
                 'reissue', domain,
-                lambda prepared=prepared: ctx.cert_service.issue_reissue(prepared))
+                lambda prepared=prepared: ctx.cert_service.issue_reissue(prepared),
+                ca_provider=prepared['ca_provider'])
         except IssuanceQueueFull:
             remaining.extend(keyless[index:])
             break

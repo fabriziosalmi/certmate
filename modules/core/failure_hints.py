@@ -91,6 +91,27 @@ _ACCOUNT_REFUSED_HINT = ('The CA refused to register the ACME account: check the
 # than nothing.
 _NOTHING_REPORTED = 'without reporting an error'
 PREVIOUS_KEPT = 'The previous certificate is still in place.'
+# An ACME problem document, which only the CA sends (RFC 8555 section 6.7).
+_ACME_PROBLEM = 'urn:ietf:params:acme:error:'
+
+
+def ca_refused(error_msg: str | None) -> bool:
+    """Did the CA answer and refuse, in the failure's own words?
+
+    A failed challenge, an ACME problem, a rate limit or a refused account
+    registration. Not a failure that never reached the CA: no certbot lineage
+    to renew, a certificate that already exists, a DNS provider refusing
+    CertMate's credentials before any challenge, or a CA directory that could
+    not be reached. The dashboard suggests testing with staging only for the
+    first kind (UX perception audit, 2026-11-18, P22): staging cannot help
+    with the others.
+    """
+    lowered = (error_msg or '').lower()
+    if not lowered or _ca_unreachable_hint(error_msg or ''):
+        return False
+    return (is_acme_rate_limit(error_msg) or _ACME_PROBLEM in lowered
+            or any(marker in lowered for marker in _CA_REFUSED_MARKERS)
+            or any(marker in lowered for marker in _ACCOUNT_REFUSED_MARKERS))
 
 
 def certbot_hint(error_msg: str, challenge_type: str | None = None, fallback: bool = True) -> str | None:

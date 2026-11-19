@@ -1,5 +1,6 @@
-"""A certificate that failed at production Let's Encrypt suggests testing with
-staging first, and says how; no other certificate does.
+"""A certificate that production Let's Encrypt refused suggests testing with
+staging first, and says how, in what the reader's role may do; no other
+failure does.
 
 UX perception audit, 2026-11-18 (P22): a newcomer's first certificate goes to
 production Let's Encrypt, whose limits count failed attempts, and nothing on
@@ -7,12 +8,19 @@ the way says a test mode exists. Decided: no wizard change and no new default,
 only a hint on a failed certificate whose CA is production Let's Encrypt, on
 the failed row and in the detail panel's last renewal.
 
-Production Let's Encrypt is `ca_provider` "letsencrypt" without `staging`: a
-certificate from before 2.12.0 records Let's Encrypt staging as "letsencrypt"
-with that flag, and one with no recorded CA is not known to be either. A
-failed create names the CA it went to in its job, the instance default when
-the request named none (tests/test_a_job_and_a_certificate_say_which_ca_they_went_to.py).
-The answers are given in the browser (page.route), as in
+Only when the CA answered and refused (`ca_refused`: a failed challenge, an
+ACME problem, a rate limit): a renewal with no certbot lineage, or a create for
+a domain that already has a certificate, never reached the CA, and staging
+cannot help there. Production Let's Encrypt is `ca_provider` "letsencrypt"
+without `staging`: a certificate from before 2.12.0 records Let's Encrypt
+staging as "letsencrypt" with that flag, and one with no recorded CA is not
+known to be either. A failed create names the CA it went to in its job
+(tests/test_a_job_and_a_certificate_say_which_ca_they_went_to.py).
+
+An admin is told to add a staging CA account if the create form lacks one; an
+operator, who cannot, that an admin can; a viewer, who requests nothing, only
+that an operator can. A second certificate for a domain needs a Name shaped
+like a domain. The answers are given in the browser (page.route), as in
 tests/test_ui_a_failed_renewal_stays_one_row.py.
 """
 import datetime
@@ -37,14 +45,22 @@ DOMAIN = 'shop.first-run.example.test'
 NEW = 'new.first-run.example.test'
 ERROR = ("Certificate renewal failed: Some challenges have failed.\n"
          "Detail: DNS problem: NXDOMAIN looking up TXT for _acme-challenge.shop.first-run.example.test")
+# Failures that never reached the CA, as the server words them.
+NO_LINEAGE = ('Renewal failed: No certificate found with name shop.first-run.example.test (expected '
+              '/etc/letsencrypt/renewal/shop.first-run.example.test.conf).')
+ALREADY_EXISTS = 'Certificate for new.first-run.example.test already exists. Use renew to replace it.'
 
 
 def _stamp(delta):
     return (datetime.datetime.now(datetime.UTC) + delta).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-FAILED = {'attempted_at': _stamp(-datetime.timedelta(minutes=2)), 'outcome': 'failed',
-          'error': ERROR, 'hint': 'The previous certificate is still in place.'}
+def _attempt(error=ERROR, ca_refused=True):
+    return {'attempted_at': _stamp(-datetime.timedelta(minutes=2)), 'outcome': 'failed',
+            'error': error, 'hint': 'The previous certificate is still in place.', 'ca_refused': ca_refused}
+
+
+FAILED = _attempt()
 
 
 def _cert(ca_provider, staging=False, attempt=FAILED):
@@ -78,7 +94,10 @@ def _json(route, body, status=200):
     route.fulfill(status=status, content_type='application/json', body=json.dumps(body))
 
 
-def _serve(page, certs, job=None):
+def _serve(page, certs, job=None, role=None):
+    if role:
+        page.route('**/api/auth/me', lambda route: _json(
+            route, {'user': {'username': 'someone', 'role': role}, 'auth_mode': 'session'}))
     page.route('**/api/certificates', lambda route: _json(route, certs)
                if route.request.method == 'GET' else route.continue_())
     jobs = [{'job_id': 'c1', 'domain': NEW, 'operation': 'create', 'status': 'running'}] if job is not None else []
@@ -87,11 +106,11 @@ def _serve(page, certs, job=None):
         page.route('**/api/certificates/jobs/c1', lambda route: _json(route, {
             'job_id': 'c1', 'domain': NEW, 'operation': 'create', 'status': 'failed',
             'error': 'Certificate creation failed: urn:ietf:params:acme:error:dns', 'error_code':
-            'CERTIFICATE_CREATION_FAILED', 'hint': None, **job}))
+            'CERTIFICATE_CREATION_FAILED', 'hint': None, 'ca_refused': True, **job}))
 
 
-def _open(page, certs, job=None):
-    _serve(page, certs, job)
+def _open(page, certs, job=None, role=None):
+    _serve(page, certs, job, role)
     page.goto(BASE_URL, wait_until='networkidle')
     if certs:
         page.wait_for_selector(f'tr[data-row-domain="{DOMAIN}"]', state='visible')
@@ -104,9 +123,16 @@ def _detail(page):
 
 
 ROW = f'tr[data-row-domain="{DOMAIN}"]'
+PENDING = '[data-pending-job="c1"]'
 
 
-def test_a_failed_production_letsencrypt_renewal_suggests_staging_on_the_row_and_in_the_panel(page):
+def _failed_create_row(page):
+    page.wait_for_function(f"() => (document.querySelector('{PENDING}') || {{}}).innerText?.includes('Failed')",
+                           timeout=15000)
+    return page.locator(PENDING)
+
+
+def test_a_production_letsencrypt_refusal_suggests_staging_on_the_row_and_in_the_panel(page):
     _open(page, [_cert('letsencrypt')])
     assert 'Test with staging first' in page.inner_text(f'{ROW} [data-staging-hint]')
 
@@ -116,7 +142,9 @@ def test_a_failed_production_letsencrypt_renewal_suggests_staging_on_the_row_and
     assert 'Test with staging first' in text, text
     # The control it names, and what a staging certificate is.
     assert "Let's Encrypt (Staging)" in text and 'Certificate Authority' in text, text
-    assert 'not trusted by browsers' in text, text
+    assert 'not trusted by browsers, and their rate limits' in text, text
+    # The Name of a second certificate is shaped like a domain.
+    assert f'such as staging.{DOMAIN}' in text, text
     assert 'Add CA Account' in text, text
     assert hint.locator('a[href="/settings#ca"]').count() == 1
 
@@ -139,6 +167,14 @@ def test_a_failed_renewal_elsewhere_than_production_letsencrypt_says_nothing_of_
     assert detail.locator('[data-staging-hint]').count() == 0
 
 
+def test_a_renewal_that_never_reached_the_ca_says_nothing_of_staging(page):
+    """No certbot lineage to renew: staging cannot help."""
+    _open(page, [_cert('letsencrypt', attempt=_attempt(NO_LINEAGE, ca_refused=False))])
+    page.wait_for_selector(f'{ROW} [data-renewal-failed]', timeout=5000)
+    assert page.locator(f'{ROW} [data-staging-hint]').count() == 0
+    assert _detail(page).locator('[data-staging-hint]').count() == 0
+
+
 def test_a_production_letsencrypt_certificate_that_did_not_fail_says_nothing_of_staging(page):
     """CONTROL: the hint is about a failure, not about the CA."""
     _open(page, [_cert('letsencrypt', attempt=None)])
@@ -146,21 +182,44 @@ def test_a_production_letsencrypt_certificate_that_did_not_fail_says_nothing_of_
     assert _detail(page).locator('[data-staging-hint]').count() == 0
 
 
-def test_a_failed_create_that_went_to_production_letsencrypt_suggests_staging(page):
+def test_a_failed_create_that_production_letsencrypt_refused_suggests_staging_and_names_the_ca(page):
     # The request named no CA: the job says the default it went to.
     _open(page, [], job={'ca_provider': 'letsencrypt'})
-    row = '[data-pending-job="c1"]'
-    page.wait_for_selector(f'{row} [data-staging-hint]', timeout=15000)
-    text = page.inner_text(f'{row} [data-staging-hint]')
+    page.wait_for_selector(f'{PENDING} [data-staging-hint]', timeout=15000)
+    text = page.inner_text(f'{PENDING} [data-staging-hint]')
     assert 'Test with staging first' in text and 'not trusted by browsers' in text, text
+    assert f'such as staging.{NEW}' in text, text
+    # The CA column says the CA the hint is about.
+    assert "Let's Encrypt" in page.inner_text(f'{PENDING} td:nth-child(5)')
+
+
+def test_a_create_for_a_domain_that_already_has_a_certificate_says_nothing_of_staging(page):
+    _open(page, [], job={'ca_provider': 'letsencrypt', 'error': ALREADY_EXISTS, 'ca_refused': False})
+    _failed_create_row(page)
+    assert page.locator(f'{PENDING} [data-staging-hint]').count() == 0
 
 
 @pytest.mark.parametrize('job', [{'ca_provider': 'letsencrypt_staging'}, {'ca_provider': 'zerossl'},
                                  # A job from before 2.72 does not say.
-                                 {}])
+                                 {'ca_refused': None}])
 def test_a_failed_create_elsewhere_says_nothing_of_staging(page, job):
     _open(page, [], job=job)
-    row = '[data-pending-job="c1"]'
-    page.wait_for_function(f"() => (document.querySelector('{row}') || {{}}).innerText?.includes('Failed')",
-                           timeout=15000)
-    assert page.locator(f'{row} [data-staging-hint]').count() == 0
+    _failed_create_row(page)
+    assert page.locator(f'{PENDING} [data-staging-hint]').count() == 0
+
+
+def test_an_operator_is_not_told_to_add_a_ca_account(page):
+    _open(page, [_cert('letsencrypt')], role='operator')
+    text = _detail(page).locator('[data-staging-hint]').inner_text()
+    assert "Let's Encrypt (Staging)" in text and 'Certificate Authority' in text, text
+    assert 'an admin can add it in Settings, CA' in text, text
+    assert 'Add CA Account' not in text, text
+    assert page.locator('#certDetailContent [data-staging-hint] a').count() == 0
+
+
+def test_a_viewer_is_told_only_that_an_operator_can(page):
+    _open(page, [_cert('letsencrypt')], role='viewer')
+    assert 'its details say more' in page.inner_text(f'{ROW} [data-staging-hint]')
+    text = _detail(page).locator('[data-staging-hint]').inner_text()
+    assert 'an operator can request a certificate' in text, text
+    assert 'Name' not in text and 'Add CA Account' not in text and 'Settings' not in text, text

@@ -98,8 +98,9 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
             payload-style privilege escalation or RCE injection.
             """
             from ..core.settings import (
-                validate_settings_post,
                 diff_settings_keys,
+                settings_not_in_effect,
+                validate_settings_post,
             )
             try:
                 new_settings = api.payload
@@ -170,7 +171,9 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                         user=user.get('username'),
                         ip_address=request.remote_addr,
                     )
-                return {'message': 'Settings updated successfully'}, 200
+                # What it set that something else decides instead (P19).
+                return {'message': 'Settings updated successfully',
+                        'not_in_effect': settings_not_in_effect(ctx.settings, ctx.dns, filtered)}, 200
 
             except Exception as e:
                 logger.error(f"Error updating settings: {e}")

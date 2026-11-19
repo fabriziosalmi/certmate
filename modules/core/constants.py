@@ -821,12 +821,15 @@ METADATA_SCHEMA_VERSION = 1
 #                                   2.72, MINOR: a create or reissue job
 #                                   (GET jobs/<id>, GET jobs) carries
 #                                   ca_provider, the CA its request resolved
-#                                   to, the instance default when it named
-#                                   none; null for a renewal. A certificate's
-#                                   answer carries staging, true when it comes
-#                                   from a staging directory (also a pre-2.12.0
-#                                   letsencrypt record with the staging flag).
-#                                   New fields.
+#                                   to (named; else for a create the default,
+#                                   for a reissue the recorded CA or the
+#                                   default); null for a renewal. A failed job
+#                                   and last_renewal_attempt carry ca_refused.
+#                                   A certificate's answer carries staging,
+#                                   true when its recorded CA is a staging one
+#                                   (also a pre-2.12.0 letsencrypt record with
+#                                   the staging flag). POST /api/settings
+#                                   answers not_in_effect. New fields.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the

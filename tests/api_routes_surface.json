@@ -991,6 +991,9 @@
     "[].last_renewal_attempt.attempted_at": [
      "str"
     ],
+    "[].last_renewal_attempt.ca_refused": [
+     "bool"
+    ],
     "[].last_renewal_attempt.error": [
      "str"
     ],
@@ -1462,6 +1465,9 @@
     "jobs[].ca_provider": [
      "str"
     ],
+    "jobs[].ca_refused": [
+     "null"
+    ],
     "jobs[].domain": [
      "str"
     ],
@@ -1504,6 +1510,9 @@
     ],
     "ca_provider": [
      "str"
+    ],
+    "ca_refused": [
+     "bool"
     ],
     "domain": [
      "str"
@@ -6055,6 +6064,9 @@
     ],
     "message": [
      "str"
+    ],
+    "not_in_effect": [
+     "list"
     ]
    }
   },
@@ -6470,6 +6482,9 @@
   ],
   "POST /api/probe": [
    "revocation.attempts"
+  ],
+  "POST /api/settings": [
+   "not_in_effect"
   ]
  }
 }

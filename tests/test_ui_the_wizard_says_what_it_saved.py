@@ -45,9 +45,10 @@ def page(browser_page, ui_session_cookie):
     context.close()
 
 
-def _wizard(page, save_status=200, pinned=None):
+def _wizard(page, save_status=200, pinned=None, not_in_effect=()):
     """The wizard on step 2. A save is kept and read back, as a server does;
-    *pinned* stands for the environment overriding what was saved."""
+    *pinned* stands for the environment overriding what was saved, and
+    *not_in_effect* for the save's answer naming it (API contract 2.72)."""
     stored = {}
 
     def settings(route):
@@ -63,7 +64,8 @@ def _wizard(page, save_status=200, pinned=None):
                                  body=json.dumps({'error': 'Update failed'}))
         stored.update(json.loads(route.request.post_data or '{}'))
         return route.fulfill(status=200, content_type='application/json',
-                             body=json.dumps({'message': 'Settings updated'}))
+                             body=json.dumps({'message': 'Settings updated',
+                                              'not_in_effect': list(not_in_effect)}))
     page.route('**/api/web/settings*', settings)
     page.add_init_script("localStorage.removeItem('certmate_wizard_skipped')")
     page.goto(f'{BASE_URL}/', wait_until='networkidle')
@@ -119,10 +121,31 @@ def test_with_a_dns_provider_step_three_names_it_as_unchecked(page):
 
 
 def test_an_email_the_environment_pins_is_the_one_step_three_shows(page):
-    _wizard(page, pinned={'email': 'pinned@example.test'})
+    _wizard(page, pinned={'email': 'pinned@example.test'},
+            not_in_effect=[{'setting': 'email', 'by': 'LETSENCRYPT_EMAIL'}])
     text = _finish_http01(page).inner_text()
     assert 'Email: pinned@example.test' in text, text
-    assert 'LETSENCRYPT_EMAIL' in text and TYPED in text, text
+    assert 'Settings saved, not all in effect' in text, text
+    note = page.inner_text('[data-not-in-effect]')
+    assert 'LETSENCRYPT_EMAIL' in note and TYPED in note, note
+
+
+@pytest.mark.parametrize('entry, says', [
+    ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'CLOUDFLARE_TOKEN'},
+     'Cloudflare API token: CLOUDFLARE_TOKEN on this instance replaces the token you entered.'),
+    ({'setting': 'dns_providers.cloudflare.accounts.default', 'by': 'default_accounts.cloudflare', 'account': 'prod'},
+     'Cloudflare credentials: saved in the account default, but certificates use the account prod'),
+])
+def test_credentials_something_else_decides_are_said_so(page, entry, says):
+    _wizard(page, not_in_effect=[entry])
+    page.click('[data-provider="cloudflare"]')
+    page.fill('#wiz_api_token', 'not-a-real-token')
+    page.click('#wizNext2')
+    page.wait_for_selector('#wizFinish', timeout=10000)
+    assert 'Settings saved, not all in effect' in page.inner_text('#wizardBody')
+    note = page.inner_text('[data-not-in-effect]')
+    assert says in note, note
+    assert 'not-a-real-token' not in note
 
 
 def test_a_refused_save_stays_on_step_two(page):

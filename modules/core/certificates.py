@@ -38,7 +38,7 @@ from .dns_strategies import (DNSStrategyFactory, HTTP01Strategy, PrevalidatedStr
                              manual_hook_arguments, plugin_install_hint)
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs)
-from .failure_hints import renewal_failure
+from .failure_hints import ca_refused, renewal_failure
 from .inventory_sources import collect_domain_sources
 from . import acme_profiles, renewal_policy
 from .domain_entries import entry_auto_renew, entry_domain, entry_external
@@ -5503,7 +5503,10 @@ class CertificateManager:
             return None
         if record.get('cert_sha256') != cert.fingerprint(hashes.SHA256()).hex():
             return None
-        return {key: record.get(key) for key in LAST_RENEWAL_ATTEMPT_FIELDS}
+        attempt = {key: record.get(key) for key in LAST_RENEWAL_ATTEMPT_FIELDS}
+        # From the stored error, so a record kept before the field has it too.
+        attempt['ca_refused'] = ca_refused(attempt.get('error'))
+        return attempt
 
     def _renewal_info_for(self, domain, cert, settings):
         """The recorded ARI answer for *cert*, or None — never fetched here.

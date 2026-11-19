@@ -18,6 +18,7 @@ import uuid
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
+from .failure_hints import ca_refused
 from .utils import utc_now_iso
 from .certificates import DomainOperationInProgress
 
@@ -98,10 +99,13 @@ class IssuanceExecutor:
         audit, 2026-11-17).
 
         *ca_provider* is the CA a create or reissue request resolved to,
-        the instance default when it named none, kept on the record so a
-        failure can be told apart by CA (UX audit P22: only a failure at
-        production Let's Encrypt suggests testing with staging). None for a
-        renewal, whose certificate names its CA.
+        kept on the record so a failure can be told apart by CA (UX audit
+        P22: the dashboard suggests testing with staging only after a refusal
+        by production Let's Encrypt). The CA the request named; when it named
+        none, for a create the instance default, for a reissue the CA the
+        certificate records, or the instance default when it records none.
+        None for a renewal. A failed job also says whether the CA answered
+        and refused (`ca_refused`, from failure_hints.ca_refused).
 
         Raises `IssuanceQueueFull` when the backlog is already at the limit,
         which the API turns into a 429. The check and the registration happen
@@ -132,6 +136,7 @@ class IssuanceExecutor:
                 'error_code': None,
                 'hint': None,
                 'ca_provider': ca_provider,
+                'ca_refused': None,
             }
             self._evict_locked()
         try:
@@ -227,7 +232,8 @@ class IssuanceExecutor:
                       error=str(e),
                       error_code=('DOMAIN_OPERATION_IN_PROGRESS' if busy
                                   else explained.get('code')),
-                      hint=explained.get('hint'))
+                      hint=explained.get('hint'),
+                      ca_refused=not busy and ca_refused(str(e)))
         finally:
             if ctx is not None:
                 ctx.pop()

@@ -1306,6 +1306,29 @@ class SettingsManager:
             mutator(settings)
             return self.save_settings(settings, reason)
 
+    def overridden_in(self, incoming: dict) -> list:
+        """What *incoming* sets that something outside the file decides instead.
+
+        A value of an environment overlay that differs from the environment's
+        (LETSENCRYPT_EMAIL, CLOUDFLARE_TOKEN: kept in the file, and replaced
+        whenever the settings are read), and an account the configuration
+        file declares (never written). Each as ``{'setting': <dotted path>,
+        'by': <variable>}``, names only, never a value (UX perception audit,
+        2026-11-18, P19: the wizard said "saved" over both).
+        """
+        found = []
+        for variable, path, normalised in _ENV_OVERLAYS:
+            wanted = os.getenv(variable)
+            value = _value_at(incoming, path)
+            if not wanted or value is _ABSENT:
+                continue
+            if (normalised(value) if isinstance(value, str) else value) != normalised(wanted):
+                found.append({'setting': '.'.join(path), 'by': variable})
+        for path in (self._managed.account_paths if self._managed else ()):
+            if _value_at(incoming, path) is not _ABSENT:
+                found.append({'setting': '.'.join(path), 'by': managed_configuration.CONFIG_FILE_ENV})
+        return found
+
     def atomic_update(self, incoming: dict, protected_keys=('users', 'api_keys', 'local_auth_enabled')) -> bool:
         """Thread-safe read-merge-write for settings.
 
@@ -2450,3 +2473,29 @@ class SettingsManager:
 
         # Fall back to default provider
         return settings.get('dns_provider', 'cloudflare')
+
+
+def settings_not_in_effect(settings_manager, dns_manager, written: dict) -> list:
+    """What a settings write set that CertMate will not use, after the write.
+
+    `SettingsManager.overridden_in`, and a DNS account written that is not the
+    one its provider issues with by default: issuance takes
+    ``default_accounts[provider]`` when that account has credentials, so
+    credentials typed into another account are kept and not used. Each entry
+    is ``{'setting', 'by'}``; the second kind also names ``account``, the one
+    used (None when no account of the provider can issue).
+    """
+    found = settings_manager.overridden_in(written)
+    named = {entry['setting'] for entry in found}
+    for provider, entry in (written.get('dns_providers') or {}).items():
+        accounts = entry.get('accounts') if isinstance(entry, dict) else None
+        if dns_manager is None or not isinstance(accounts, dict) or not accounts:
+            continue
+        used = dns_manager.default_account_id(provider)
+        if used in accounts:
+            continue
+        for account_id in accounts:
+            setting = f'dns_providers.{provider}.accounts.{account_id}'
+            if setting not in named:
+                found.append({'setting': setting, 'by': f'default_accounts.{provider}', 'account': used})
+    return found

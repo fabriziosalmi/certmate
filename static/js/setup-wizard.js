@@ -644,7 +644,11 @@
             if (!r.ok) throw new Error('Save failed');
             return r.json();
         })
-        .then(function() {
+        .then(function(answer) {
+            // What the save set that something else decides instead: an
+            // environment variable, the configuration file, another default
+            // account (API contract 2.72).
+            state.notInEffect = (answer && Array.isArray(answer.not_in_effect)) ? answer.not_in_effect : [];
             forgetSetupEmail();
             // Step 3 lists what the instance now holds, read back: the
             // environment can override a saved value (LETSENCRYPT_EMAIL).
@@ -690,15 +694,8 @@
         if (!saved) {
             return '<p class="text-sm text-muted">They could not be read back to list here: Advanced Settings shows them.</p>';
         }
-        var email = saved.email || '';
-        var typed = (state.email || '').trim().toLowerCase();
-        // The only override of the saved email is LETSENCRYPT_EMAIL, applied
-        // whenever the settings are read (modules/core/settings.py).
-        var pinned = email && typed && email.toLowerCase() !== typed
-            ? 'LETSENCRYPT_EMAIL on this instance overrides ' + state.email.trim() + ', the address you entered.'
-            : '';
         return '<div class="bg-surface-2 rounded-lg p-4 text-left text-sm space-y-2">' +
-            savedRow('fa-envelope', 'Email', email || 'none', pinned) +
+            savedRow('fa-envelope', 'Email', saved.email || 'none') +
             (saved.challenge_type === 'http-01'
                 ? savedRow('fa-globe', 'Validation', 'HTTP-01, on port 80')
                 : savedRow('fa-globe-americas', 'DNS Provider', providerLabel(saved.dns_provider || '') || 'none')) +
@@ -706,9 +703,43 @@
         '</div>';
     }
 
+    // One sentence per value the save set that is not the one in effect, as
+    // the save's answer names them: by what, never with a value.
+    function notInEffectSentence(entry) {
+        var setting = String(entry.setting || '');
+        var by = String(entry.by || '');
+        var dns = setting.match(/^dns_providers\.([^.]+)\.accounts\.([^.]+)/);
+        var provider = dns ? providerLabel(dns[1]) : '';
+        if (setting === 'email' && by === 'LETSENCRYPT_EMAIL') {
+            return 'Email: LETSENCRYPT_EMAIL on this instance replaces ' + state.email.trim() + ', the address you entered.';
+        }
+        if (dns && by === 'CERTMATE_CONFIG_FILE') {
+            return provider + ' credentials: not saved. The configuration file named by CERTMATE_CONFIG_FILE ' +
+                'declares the account ' + dns[2] + ', and its credentials are the ones used.';
+        }
+        if (dns && by === 'CLOUDFLARE_TOKEN') {
+            return provider + ' API token: CLOUDFLARE_TOKEN on this instance replaces the token you entered.';
+        }
+        if (dns && by.indexOf('default_accounts.') === 0) {
+            return provider + ' credentials: saved in the account ' + dns[2] + ', but certificates use ' +
+                (entry.account ? 'the account ' + entry.account : 'no account of ' + provider) +
+                ' unless they name another.';
+        }
+        return setting + ': ' + by + ' decides it instead.';
+    }
+
+    function notInEffectHtml() {
+        var notes = state.notInEffect || [];
+        if (!notes.length) return '';
+        return '<ul class="mt-3 text-left text-sm text-label space-y-1 list-disc ml-5" data-not-in-effect>' +
+            notes.map(function (entry) { return '<li>' + escapeHtml(notInEffectSentence(entry)) + '</li>'; }).join('') +
+            '</ul>';
+    }
+
     function renderStep3() {
         var body = document.getElementById('wizardBody');
         var saved = state.saved;
+        var exceptions = (state.notInEffect || []).length > 0;
         var dns = saved ? saved.challenge_type !== 'http-01' && saved.dns_provider : state.challenge !== 'http-01' && state.provider;
         var unchecked = 'CertMate has not checked them with your certificate authority' +
             (dns ? ' or with ' + escapeHtml(providerLabel(dns)) : '') + '. Requesting a certificate is what tests them.';
@@ -717,9 +748,11 @@
                 '<div class="w-20 h-20 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-save text-muted text-4xl" aria-hidden="true"></i>' +
                 '</div>' +
-                '<h3 class="text-xl font-bold text-foreground mb-2">Settings saved</h3>' +
+                '<h3 class="text-xl font-bold text-foreground mb-2">' +
+                    (exceptions ? 'Settings saved, not all in effect' : 'Settings saved') + '</h3>' +
                 '<p class="text-sm text-muted mb-4">' + unchecked + '</p>' +
                 savedSettingsHtml(saved) +
+                notInEffectHtml() +
             '</div>';
 
         var footer = document.getElementById('wizardFooter');

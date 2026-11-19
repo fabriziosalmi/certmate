@@ -424,7 +424,8 @@ after a reload and for a failure nobody watched.
   "attempted_at": "2026-11-18T09:12:40Z",
   "outcome": "failed",
   "error": "Certificate renewal failed: ... DNS problem: NXDOMAIN looking up TXT for _acme-challenge.app.example.com",
-  "hint": "The CA could not verify the DNS TXT record: check that it was created in the name's zone and has had time to propagate. The previous certificate is still in place."
+  "hint": "The CA could not verify the DNS TXT record: check that it was created in the name's zone and has had time to propagate. The previous certificate is still in place.",
+  "ca_refused": true
 }
 ```
 
@@ -437,14 +438,25 @@ renewal that happened, and once a reissue or an upload has replaced the
 certificate it was about. A domain busy with another operation is not a failed
 renewal and leaves nothing. Since API contract **2.70**.
 
+`ca_refused` is `true` when `error` shows that the CA answered and refused: a
+failed challenge, an ACME problem document, a rate limit, or a refused account
+registration. It is `false` for a failure that never reached the CA, such as a
+renewal with no certbot lineage, a DNS provider refusing CertMate's
+credentials, or a CA directory that could not be reached. It is read from
+`error`, so a record kept before the field has it too. Since API contract
+**2.72**.
+
 ##### Is it a staging certificate?
 
-`staging` is `true` when the certificate comes from a CA's staging directory,
-whose certificates browsers do not trust: `ca_provider` is `letsencrypt_staging`,
-or the certificate was recorded with the staging flag. Before 2.12.0 a Let's
-Encrypt staging certificate was recorded as `ca_provider` `letsencrypt` with that
-flag, and it still renews from staging, so `ca_provider` alone does not tell it
-from production. Since API contract **2.72**.
+`staging` is `true` when what CertMate records for the certificate is a staging
+CA, whose certificates browsers do not trust: `ca_provider` is
+`letsencrypt_staging`, or the certificate was recorded with the staging flag.
+Before 2.12.0 a Let's Encrypt staging certificate was recorded as `ca_provider`
+`letsencrypt` with that flag, and it still renews from staging, so `ca_provider`
+alone does not tell it from production. For an imported certificate
+`ca_provider` is the CA it renews from and nothing records who issued it, so an
+imported staging certificate set to renew from production answers `false`.
+Since API contract **2.72**.
 
 ##### Deprecated fields
 
@@ -1843,9 +1855,14 @@ synchronous 422 `CERTIFICATE_CREATION_FAILED` is unchanged and keeps that
 generic hint, a string. `hint` is also `null` while the job runs and after it
 succeeds.
 
-A create or reissue job carries `ca_provider`, the CA its request went to: the
-one it named, or the instance's default CA when it named none. A renewal job
-carries `null`: its certificate names its CA. Since API contract **2.72**.
+A create or reissue job, a keyless reissue's included, carries `ca_provider`,
+the CA its request went to: the one it named; when it named none, for a create
+the instance's default CA, for a reissue the CA the certificate records, or the
+default when it records none. A renewal job carries `null`; the CA a renewal
+goes to is the certificate's `ca_provider`, which is `null` when none was
+recorded. A job that failed carries `ca_refused`, as a certificate's
+`last_renewal_attempt` does; `null` while it runs and after it succeeds. Since
+API contract **2.72**.
 
 **Errors**: 400 validation or configuration (the body names the problem),
 403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a
@@ -2404,6 +2421,21 @@ to register at the provider as the redirect URI. It is not rate-limited
 itself: a failed callback counts against the login limit of the caller's IP,
 so the next `GET /api/auth/oidc/login` from that IP backs off. Setting up a
 provider is in [sso.md](./sso.md).
+
+#### What a settings save does not decide
+
+Since API contract **2.72** the answer to `POST /api/settings` carries
+`not_in_effect`: what the save set that something else decides instead, by
+name and never with a value. Each entry is `{"setting", "by"}`, with `setting`
+a dotted path into the settings:
+
+| `by` | What happens to the value written |
+| --- | --- |
+| `LETSENCRYPT_EMAIL`, `CLOUDFLARE_TOKEN` | Kept in the file, and replaced by the environment variable whenever the settings are read. |
+| `CERTMATE_CONFIG_FILE` | Not saved: the configuration file declares that account, and its fields are the ones used. |
+| `default_accounts.<provider>` | Saved, but the provider issues with another account by default, named in `account` (`null` when none of its accounts can issue). |
+
+The list is empty when everything written is in effect.
 
 #### SSO settings
 

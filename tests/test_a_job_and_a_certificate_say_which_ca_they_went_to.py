@@ -1,18 +1,23 @@
-"""A create or reissue job names the CA its request went to, and a certificate
-says whether it came from a staging directory.
+"""A create or reissue job names the CA its request went to and says whether
+the CA refused it, and a certificate says whether CertMate renews it from a
+staging directory.
 
 UX perception audit, 2026-11-18 (P22): a newcomer's first certificate goes to
 production Let's Encrypt, and when it fails nothing says that a test mode
-exists. The dashboard now suggests "Test with staging first" on a failed
-certificate whose CA is production Let's Encrypt, and on no other. To tell
-which ones those are it needs two facts the answers did not carry:
+exists. The dashboard now suggests "Test with staging first" when production
+Let's Encrypt answered and refused, and at no other time. To tell which
+failures those are it needs facts the answers did not carry:
 
-* a create that names no CA takes the instance's default, which the page
-  cannot see from the job: the job now carries `ca_provider`, the CA the
-  request resolved to (null for a renewal, whose certificate names its CA);
-* a certificate issued before 2.12.0 from Let's Encrypt staging is recorded
-  as `ca_provider` "letsencrypt" with a `staging` flag, and renews from
-  staging: the certificate answer now carries `staging`.
+* the CA a job's request went to (`ca_provider`): the one it named; when it
+  named none, a create takes the instance default and a reissue the CA the
+  certificate records, or the default when none is recorded. A keyless
+  reissue is a reissue. Null for a renewal job;
+* whether the CA answered and refused (`ca_refused`), on a failed job and on
+  a certificate's last failed renewal: a renewal with no certbot lineage, or
+  a create for a domain that already has a certificate, never reached it;
+* `staging` on a certificate: before 2.12.0 Let's Encrypt staging was
+  recorded as `ca_provider` "letsencrypt" with a staging flag, and such a
+  lineage still renews from staging.
 """
 import time
 from unittest.mock import MagicMock
@@ -74,8 +79,8 @@ def test_a_renewal_job_names_no_ca():
     assert ex.get(job_id)['ca_provider'] is None
 
 
-def _info(tmp_path, metadata):
-    """The certificate answer for one self-signed certificate with *metadata*."""
+def _manager(tmp_path, metadata):
+    """A manager holding one self-signed certificate with *metadata*."""
     import datetime
     import json
 
@@ -105,8 +110,11 @@ def _info(tmp_path, metadata):
     (folder / 'metadata.json').write_text(json.dumps(metadata))
     settings = MagicMock()
     settings.load_settings.return_value = {'domains': [{'domain': domain}]}
-    manager = CertificateManager(cert_dir, settings, MagicMock(), MagicMock())
-    return manager.get_certificate_info(domain)
+    return CertificateManager(cert_dir, settings, MagicMock(), MagicMock())
+
+
+def _info(tmp_path, metadata):
+    return _manager(tmp_path, metadata).get_certificate_info('x.example.com')
 
 
 @pytest.mark.parametrize('metadata, staging', [
@@ -122,3 +130,151 @@ def test_a_certificate_says_whether_it_came_from_a_staging_directory(tmp_path, m
     info = _info(tmp_path, metadata)
     assert info['exists'] is True
     assert info['staging'] is staging
+
+
+# --- a reissue job: the CA the certificate records comes first -------------
+
+def _reissue(tmp_path, metadata, default_ca='letsencrypt', body=None):
+    """An async reissue of x.example.com that certbot refuses: the job."""
+    from flask import Flask, request
+    from flask_restx import Api, Namespace
+
+    from modules.api.models import create_api_models
+    from modules.api.resources import create_api_resources
+    from modules.core.cert_service import CertificateService
+    from modules.core.certificates import CertificateManager
+    from tests.test_async_issuance import _passthrough_decorator
+
+    settings = MagicMock()
+    settings.load_settings.return_value = {'email': 'ops@example.com', 'dns_provider': 'cloudflare',
+                                           'challenge_type': 'dns-01',
+                                           **({'default_ca': default_ca} if default_ca else {})}
+    manager = CertificateManager(cert_dir=tmp_path, settings_manager=settings,
+                                 dns_manager=MagicMock(), storage_manager=None)
+    (tmp_path / 'x.example.com').mkdir()
+    (tmp_path / 'x.example.com' / 'cert.pem').write_bytes(b'original certificate')
+    manager._load_metadata = lambda domain: {'dns_provider': 'cloudflare', 'challenge_type': 'dns-01',
+                                             'san_domains': [], **metadata}
+    manager.create_certificate = MagicMock(side_effect=RuntimeError('urn:ietf:params:acme:error:dns'))
+    auth = MagicMock()
+    auth.require_role = MagicMock(side_effect=_passthrough_decorator)
+    auth.user_can_access_domain.return_value = True
+    managers = {'auth': auth, 'settings': settings, 'certificates': manager,
+                'file_ops': MagicMock(cert_dir=tmp_path), 'cache': MagicMock(), 'dns': MagicMock(),
+                'audit': None, 'cert_executor': IssuanceExecutor(app=None),
+                'cert_service': CertificateService(manager, settings, MagicMock())}
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    api = Api(app, prefix='/api')
+    resources = create_api_resources(api, create_api_models(api), managers)
+    ns = Namespace('certificates', description='certs')
+    api.add_namespace(ns)
+    ns.add_resource(resources['CertificateReissue'], '/<string:domain>/reissue')
+    ns.add_resource(resources['CertificateJob'], '/jobs/<string:job_id>')
+
+    @app.before_request
+    def _attach_user():
+        request.current_user = {'username': 'op', 'role': 'operator', 'allowed_domains': None}
+
+    client = app.test_client()
+    accepted = client.post('/api/certificates/x.example.com/reissue', json={'async': True, **(body or {})})
+    assert accepted.status_code == 202, accepted.get_json()
+    return _finished(client, accepted.get_json()['job_id'])
+
+
+def test_a_reissue_that_names_no_ca_is_a_job_naming_the_ca_the_certificate_records(tmp_path):
+    job = _reissue(tmp_path, {'ca_provider': 'letsencrypt_staging'}, default_ca='letsencrypt')
+    assert job['status'] == 'failed'
+    assert job['ca_provider'] == 'letsencrypt_staging'
+
+
+def test_a_reissue_of_a_certificate_with_no_recorded_ca_names_the_default(tmp_path):
+    job = _reissue(tmp_path, {}, default_ca='zerossl')
+    assert job['ca_provider'] == 'zerossl'
+
+
+def test_a_reissue_that_names_a_ca_is_a_job_naming_that_ca(tmp_path):
+    job = _reissue(tmp_path, {'ca_provider': 'letsencrypt_staging'}, body={'ca_provider': 'letsencrypt'})
+    assert job['ca_provider'] == 'letsencrypt'
+
+
+# --- a keyless reissue is a reissue job too --------------------------------
+
+def test_a_keyless_reissue_job_names_the_ca_its_reissue_goes_to():
+    from tests.test_reissue_everything_that_lost_its_key import _client
+
+    service = MagicMock()
+    service.keyless_domains.return_value = ['k.example.com']
+    service.prepare_reissue.return_value = {'domain': 'k.example.com', 'ca_provider': 'zerossl'}
+    service.issue_reissue.side_effect = RuntimeError('urn:ietf:params:acme:error:dns')
+    executor = IssuanceExecutor(app=None)
+    try:
+        body = _client(service, executor).post('/api/certificates/reissue-keyless', json={}).get_json()
+        job_id = body['queued'][0]['job_id']
+        deadline = time.time() + 5
+        while executor.get(job_id)['status'] not in ('succeeded', 'failed') and time.time() < deadline:
+            time.sleep(0.01)
+        assert executor.get(job_id)['ca_provider'] == 'zerossl'
+    finally:
+        executor.shutdown()
+
+
+# --- did the CA answer and refuse? -----------------------------------------
+
+REFUSED = [
+    'Certificate creation failed: Some challenges have failed.\n'
+    'Detail: DNS problem: NXDOMAIN looking up TXT for _acme-challenge.x.example.com',
+    'urn:ietf:params:acme:error:dns :: DNS problem: SERVFAIL',
+    'urn:ietf:params:acme:error:rateLimited :: too many failed authorizations recently',
+    'Unable to register an account with ACME server. Error returned by the ACME server: '
+    'urn:ietf:params:acme:error:invalidContact',
+    'Invalid response from http://x.example.com/.well-known/acme-challenge/abc: 404',
+]
+NOT_REACHED = [
+    # The renewal of a certificate certbot has no lineage for.
+    'Renewal failed: No certificate found with name x.example.com (expected '
+    '/etc/letsencrypt/renewal/x.example.com.conf).',
+    # A create for a domain that already has a certificate.
+    'Certificate for x.example.com already exists. Use renew to replace it, or reissue to change it.',
+    # The CA's directory could not be reached.
+    "requests.exceptions.ConnectionError: HTTPSConnectionPool(host='acme-v02.api.letsencrypt.org', "
+    "port=443): Max retries exceeded with url: /directory (Caused by NewConnectionError(...))",
+    # The DNS provider refused CertMate's credentials before any challenge.
+    'Error determining zone_id: 9109 Invalid access token. Please confirm that you have supplied valid '
+    'Cloudflare API credentials.',
+    '',
+]
+
+
+@pytest.mark.parametrize('error', REFUSED)
+def test_a_refusal_in_the_ca_s_own_words_is_a_refusal_by_the_ca(error):
+    from modules.core.failure_hints import ca_refused
+    assert ca_refused(error) is True
+
+
+@pytest.mark.parametrize('error', NOT_REACHED)
+def test_a_failure_that_never_reached_the_ca_is_not_a_refusal_by_the_ca(error):
+    from modules.core.failure_hints import ca_refused
+    assert ca_refused(error) is False
+
+
+@pytest.mark.parametrize('error, refused', [(REFUSED[0], True), (NOT_REACHED[0], False), (NOT_REACHED[1], False)])
+def test_a_failed_job_says_whether_the_ca_refused(error, refused):
+    ex = IssuanceExecutor(app=None)
+
+    def fail():
+        raise RuntimeError(error)
+    job_id = ex.submit('create', 'x.example.com', fail, ca_provider='letsencrypt')
+    deadline = time.time() + 5
+    while ex.get(job_id)['status'] != 'failed' and time.time() < deadline:
+        time.sleep(0.01)
+    assert ex.get(job_id)['ca_refused'] is refused
+
+
+@pytest.mark.parametrize('error, refused', [(REFUSED[0], True), (NOT_REACHED[0], False)])
+def test_a_failed_renewal_on_the_certificate_says_whether_the_ca_refused(tmp_path, error, refused):
+    manager = _manager(tmp_path, {'ca_provider': 'letsencrypt'})
+    manager.record_renewal_failure('x.example.com', RuntimeError(error))
+    attempt = manager.get_certificate_info('x.example.com', use_cache=False)['last_renewal_attempt']
+    assert attempt['outcome'] == 'failed'
+    assert attempt['ca_refused'] is refused

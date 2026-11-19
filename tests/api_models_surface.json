@@ -1130,6 +1130,9 @@
     "attempted_at": {
      "type": "string"
     },
+    "ca_refused": {
+     "type": "boolean"
+    },
     "error": {
      "type": "string"
     },
