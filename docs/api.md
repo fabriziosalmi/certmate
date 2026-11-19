@@ -1453,8 +1453,8 @@ curl http://localhost:8000/api/client-certs/stats \
 
 Create multiple certificates from CSV data in single request. `headers` is a list of
 column names and `rows` a list of rows, each a list of cells; since API contract
-**2.72** anything else is a `400` and nothing is created (a string for `rows` used to
-make one certificate per character).
+**2.72** anything else is a `400` and nothing is created (a string for `rows` used
+to make one certificate per character).
 
 **Request**:
 <!-- request: POST /api/client-certs/batch -->
