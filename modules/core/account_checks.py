@@ -47,7 +47,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
-from .secret_refs import SecretReferenceError
+from .secret_refs import SecretReferenceError, has_value
 from .structured_logging import scrub_log_value
 from .utils import _DNS_PROVIDER_CREDENTIALS
 
@@ -390,9 +390,16 @@ def check_dns_account(dns_manager, provider, config) -> dict:
     """Check the DNS account *config* of *provider*, saved or about to be."""
     if provider not in CHECKABLE_DNS_PROVIDERS:
         return _result(NOT_CHECKABLE, f'CertMate cannot check {provider} credentials yet')
-    ok, message = dns_manager.test_provider(provider, config)
-    if not ok:
-        return _result(FAILED, message)
+    # The shape check is made here, in fixed words, not by
+    # DNSManager.test_provider, whose answers can carry a caught exception's
+    # text (CodeQL py/stack-trace-exposure). Route53's settings are checked by
+    # _check_route53 before any call.
+    if provider == 'cloudflare':
+        missing = [field for field in _DNS_PROVIDER_CREDENTIALS['cloudflare']
+                   if not has_value(config if isinstance(config, dict) else {}, field)]
+        if missing:
+            return _result(FAILED, 'Missing required credential field(s) for cloudflare: '
+                           + ', '.join(missing))
     try:
         resolved = dns_manager.resolve_account_config(provider, config)
     except _UNREADABLE as exc:

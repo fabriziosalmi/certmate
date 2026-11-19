@@ -497,3 +497,30 @@ def test_a_ca_account_whose_settings_are_refused_says_the_log_has_why_and_the_lo
     assert result['reason'] == account_checks._CA_SETTINGS_REFUSED
     assert 'must use https' not in result['reason']
     assert any('must use https' in record.getMessage() for record in caplog.records)
+
+
+def test_a_route53_role_that_is_not_a_role_arn_is_refused_in_fixed_words_before_any_call(instance):
+    """The check made its shape check through DNSManager.test_provider, which
+    answered this case with the text of the ValueError it caught."""
+    client, _ = instance
+    with mock.patch('boto3.client') as aws:
+        answer = client.post('/api/dns/route53/accounts?check=1', json={
+            'account_id': 'role', 'config': {'name': 'Role', 'auth_mode': 'iam_role',
+                                             'assume_role_arn': 'arn:aws:iam::12:user/x'}})
+    aws.assert_not_called()
+    from modules.core import account_checks
+    assert answer.status_code == 422, answer.get_json()
+    assert answer.get_json()['last_check']['reason'] == account_checks._ROUTE53_RULES
+
+
+def test_a_cloudflare_account_without_a_token_is_refused_by_name_before_any_call(instance):
+    """A control: the same words as before the shape check moved out of
+    DNSManager.test_provider, which answered this case with a fixed text too."""
+    client, _ = instance
+    with mock.patch('requests.get') as get:
+        answer = client.post('/api/dns/cloudflare/accounts?check=1', json={
+            'account_id': 'empty', 'config': {'name': 'Empty'}})
+    get.assert_not_called()
+    assert answer.status_code == 422, answer.get_json()
+    assert answer.get_json()['last_check']['reason'] == \
+        'Missing required credential field(s) for cloudflare: api_token'
