@@ -1,6 +1,6 @@
 # Compliance und Audit-Trail
 
-<!-- CERTMATE-TRANSLATED-FROM b89f10e32ef8ae02 -->
+<!-- CERTMATE-TRANSLATED-FROM e932e97ad3f8846f -->
 
 Diese Seite ordnet den Audit-Trail von CertMate den Regelwerken zu, nach denen Betreiber am häufigsten fragen — dem EU AI Act, NIS2 und ISO/IEC 42001 — wenn sie einen KI/MCP-Agenten Zertifikate nach einem Zeitplan verwalten lassen.
 
@@ -43,7 +43,7 @@ Diese Seite ordnet den Audit-Trail von CertMate den Regelwerken zu, nach denen B
 
 ## Aufbewahrung: einen Teil der Kette archivieren
 
-Die Kette wächst um eine Zeile pro auditierter Operation, mit 450 bis 650 Byte: ein Zertifikat-Download maß 539 und 550 Byte mit dem API Bearer Token und 632 und 643 mit einem API-Schlüssel. Ausstellungen und Erneuerungen fallen kaum ins Gewicht, aber jeder Zertifikat-Download ist eine Zeile: eine Automatisierung, die alle 5 Minuten ein Zertifikat abholt, fügt etwa 105.000 Zeilen, 55 bis 70 MB pro Jahr hinzu. Dies existiert für eine so abgefragte Instanz und für den Fall, dass eine Aufbewahrungsrichtlinie verlangt, dass ältere Aufzeichnungen die Maschine verlassen.
+Die Kette wächst um eine Zeile pro auditierter Operation. Eine Zeile für einen Zertifikat-Download misst etwa 530 bis 650 Byte: 539 und 550 mit dem API Bearer Token, 632 und 643 mit einem API-Schlüssel namens deploy-bot. Eine Zeile ist größer bei einem längeren Zertifikat- oder Schlüsselnamen, einem Widerrufsgrund (bis zu 200 Zeichen), einer Fehlermeldung oder der Domainliste eines Sammel-Downloads: ein Widerruf eines Client-Zertifikats mit diesem Schlüssel maß 652 Byte. Ausstellungen und Erneuerungen fallen kaum ins Gewicht, aber jeder Zertifikat-Download ist eine Zeile: eine Automatisierung, die alle 5 Minuten ein Zertifikat abholt, fügt etwa 105.000 Zeilen, 55 bis 70 MB pro Jahr hinzu. Dies existiert für eine so abgefragte Instanz und für den Fall, dass eine Aufbewahrungsrichtlinie verlangt, dass ältere Aufzeichnungen die Maschine verlassen.
 
 Es gibt kein automatisches Bereinigen und keinen API-Endpoint dafür. Audit-Historie zu löschen ist genau das, was jemand tun wollen würde, der gerade ein Administratorkonto kompromittiert hat, und ein Betreiber mit einer legitimen Aufbewahrungspflicht hat ohnehin Shell-Zugriff — er muss das Archiv ja irgendwo ablegen. Daher ist es ein einziger expliziter Befehl, ausgeführt bei gestopptem CertMate:
 

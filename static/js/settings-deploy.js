@@ -102,8 +102,6 @@
             saveConfig: function () {
                 var self = this;
                 addDebugLog('Saving deploy config…', 'info');
-                // What is sent is what the server keeps when it answers 200.
-                var sent = JSON.parse(JSON.stringify(self.config));
                 fetch('/api/deploy/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -122,7 +120,12 @@
                     })
                     .then(function (res) {
                         if (res.ok) {
-                            self._rememberSaved(sent);
+                            // Read back what the server kept, into the fields
+                            // and the snapshot Test compares with: it is not
+                            // always what was sent (a timeout is held to
+                            // 1..300 s, an empty one becomes 30), and the run
+                            // uses the saved value.
+                            self.loadConfig();
                             self.refused = null;
                             addDebugLog('Deploy settings saved', 'info');
                             CertMate.toast('Deploy settings saved', 'success');

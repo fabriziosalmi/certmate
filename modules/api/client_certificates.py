@@ -871,6 +871,10 @@ def create_client_certificate_resources(api, managers):
 
                     except Exception as e:
                         logger.error(f"Batch cert creation error for row {idx + 2}: {str(e)}")
+                        # Recorded as a failure named by its row: an exception
+                        # leaves no identifier to name it by.
+                        _record(audit_logger, 'create', f'batch row {idx + 2}', False,
+                                error='Certificate creation failed')
                         results['failed'] += 1
                         results['errors'].append({
                             'row': idx + 2,

@@ -66,23 +66,54 @@ def test_a_download_says_whether_it_carried_the_key(written):
     assert [d['details']['key_included'] for d in downloads] == [True, False]
 
 
-def test_the_size_the_compliance_page_gives_a_chain_line_is_the_size_of_one(tmp_path):
+def test_the_compliance_page_gives_the_size_a_download_line_measures(tmp_path, monkeypatch):
     """docs/compliance.md said the chain grows by "hundreds of kilobytes per
-    year on a busy instance". A download is a line now, and an automation
-    pulls on a schedule: the page has to give the size of a line, and that
-    size has to be what a line measures. Outside a request the actor is the
-    short `system` one, so this is the low end of the range."""
+    year on a busy instance", then that every line is 450 to 650 bytes; a
+    revoke measured 745. A download is a line now and an automation pulls on a
+    schedule, so the page gives the size of a download line, which is what
+    this measures through the real application, and says what makes a line
+    larger rather than claiming one range for every operation."""
     import re
+    import secrets
     from pathlib import Path
-    text = (Path(__file__).resolve().parent.parent / 'docs' / 'compliance.md').read_text(encoding='utf-8')
-    stated = re.search(r'of (\d+) to (\d+) bytes', text)
-    assert stated, 'docs/compliance.md does not give the size of a chain line'
+
+    from modules.factory import create_app
+    checkout = Path(__file__).resolve().parent.parent
+    text = (checkout / 'docs' / 'compliance.md').read_text(encoding='utf-8')
+    stated = re.search(r'download line\s+measures about (\d+) to (\d+) bytes', text)
+    assert stated, 'docs/compliance.md does not give the size of a download line'
     low, high = int(stated.group(1)), int(stated.group(2))
-    audit = AuditLogger(tmp_path)
-    audit.log_certificate_downloaded('payments.example.com', 'fullchain.pem', False,
-                                     user='api_user', ip_address='127.0.0.1')
-    line = audit.audit_chain_file.read_bytes().splitlines()[-1]
-    assert low <= len(line) + 1 <= high, (len(line) + 1, low, high)
+    assert not re.search(r'per audited operation, of \d+ to \d+ bytes', text), (
+        'the page claims one size for every operation')
+    for larger in ('reason', 'batch download', 'API key'):
+        assert larger in text, f'the page does not say a {larger} makes a line larger'
+
+    root = tmp_path / 'certmate' / 'modules' / 'core'
+    root.mkdir(parents=True)
+    (root / 'factory.py').write_text('# anchor\n')
+    for name in ('templates', 'static'):
+        (root.parent / name).symlink_to(checkout / name, target_is_directory=True)
+    monkeypatch.setattr('modules.factory.__file__', str(root / 'factory.py'))
+    token = secrets.token_urlsafe(32)
+    monkeypatch.setenv('FLASK_ENV', 'testing')
+    monkeypatch.setenv('TESTING', 'true')
+    monkeypatch.setenv('API_BEARER_TOKEN', token)
+    app, container = create_app()
+    certificate = Path(container.cert_dir) / 'payments.example.com'
+    certificate.mkdir(parents=True)
+    for name in ('cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem'):
+        (certificate / name).write_text('x\n')
+    client = app.test_client()
+    client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {token}'
+    for suffix in ('', '/fullchain', ''):
+        assert client.get(f'/api/certificates/payments.example.com/download{suffix}').status_code == 200
+    chain = next(Path(container.data_dir).rglob('certificate_audit.chain.jsonl'))
+    # The first line of a chain links to no previous hash and is shorter: it is
+    # left out, as on any instance that has run for a while.
+    sizes = [len(line) + 1 for line in chain.read_bytes().splitlines()
+             if b'"operation": "download"' in line and not line.startswith(b'{"seq": 0,')]
+    assert len(sizes) == 2, sizes
+    assert all(low <= size <= high for size in sizes), (sizes, low, high)
 
 
 def test_the_sanitiser_still_redacts_a_key_field():

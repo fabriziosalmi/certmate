@@ -123,6 +123,19 @@ def test_a_batch_row_with_no_name_is_recorded_by_its_row(instance):
     assert [e['resource_id'] for e in failed] == ['batch row 3'], failed
 
 
+def test_a_batch_row_that_cannot_be_read_is_recorded_by_its_row(instance):
+    """A row whose cell is not text throws inside the loop; the batch answers
+    "Certificate creation failed" for it, and the log says so too."""
+    answer = instance.post('/api/client-certs/batch', json={
+        'headers': ['common_name'], 'rows': [['batch-fine'], [5]]})
+    assert answer.status_code == 201, answer.get_data(as_text=True)
+    assert answer.get_json()['errors'] == [{'row': 3, 'error': 'Certificate creation failed'}]
+    failed = [e for e in _entries(instance, operation='create', resource_type='client_certificate')
+              if e['status'] == 'failure']
+    assert [(e['resource_id'], e['error']) for e in failed] == [
+        ('batch row 3', 'Certificate creation failed')], failed
+
+
 @pytest.mark.parametrize('reason, refused', [
     ('x' * 201, 'longer than 200'),
     ('first line\nsecond line', 'one line'),

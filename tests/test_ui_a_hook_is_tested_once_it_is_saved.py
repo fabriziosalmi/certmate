@@ -132,3 +132,19 @@ def test_a_saved_hook_whose_name_or_timeout_changed_waits_for_the_save_too(deplo
 
     timeout.fill('7')
     expect(test).to_be_disabled()
+
+
+@pytest.mark.parametrize('typed, saved', [('500', '300'), ('0', '1'), ('', '30')])
+def test_after_a_save_the_fields_show_what_the_server_saved(deploy_tab, typed, saved):
+    """The server limits the timeout to 1..300 and takes 30 for an empty one.
+    The page remembered what it sent, so Test was offered while the field
+    said 500 and the run would use 300."""
+    page, panel = deploy_tab
+    card, command, test = _new_hook(panel)
+    timeout = card.locator('input[title="Timeout in seconds"]')
+    card.locator('input[aria-label="Hook name"]').fill('b12 hook')
+    command.fill('echo ok')
+    timeout.fill(typed)
+    assert _save(page, panel).status == 200
+    expect(timeout).to_have_value(saved)
+    expect(test).to_be_enabled()
