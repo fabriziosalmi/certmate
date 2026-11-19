@@ -99,7 +99,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
             """
             from ..core.settings import (
                 diff_settings_keys,
-                settings_not_in_effect,
+                not_in_effect_after_write,
                 validate_settings_post,
             )
             try:
@@ -173,7 +173,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                     )
                 # What it set that something else decides instead (P19).
                 return {'message': 'Settings updated successfully',
-                        'not_in_effect': settings_not_in_effect(
+                        'not_in_effect': not_in_effect_after_write(
                             ctx.settings, ctx.dns, filtered,
                             ca_manager=ctx.managers.get('ca'))}, 200
 

@@ -726,7 +726,7 @@
     var PROBLEM_WORDS = {
         missing: 'does not exist', not_a_file: 'is not a regular file', too_large: 'is larger than 64 KiB',
         not_text: 'is not UTF-8 text', empty: 'is empty', unreadable: 'cannot be read',
-        unset: 'names an environment variable that is not set'
+        unset: 'names an environment variable that is not set or is empty'
     };
 
     function emailSentence(by, entry) {

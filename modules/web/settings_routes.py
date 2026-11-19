@@ -516,7 +516,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         try:
             from modules.core.settings import (
                 diff_settings_keys,
-                settings_not_in_effect,
+                not_in_effect_after_write,
                 validate_settings_post,
             )
             data = request.json or {}
@@ -593,7 +593,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             # What it set that something else decides instead (P19): the
             # first-run wizard says so rather than "saved".
             return jsonify({'message': 'Settings updated',
-                            'not_in_effect': settings_not_in_effect(
+                            'not_in_effect': not_in_effect_after_write(
                                 settings_manager, managers.get('dns'), filtered,
                                 ca_manager=managers.get('ca'))})
         except Exception as e:

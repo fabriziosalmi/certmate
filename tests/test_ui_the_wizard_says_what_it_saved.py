@@ -141,6 +141,10 @@ def test_an_email_the_environment_pins_is_the_one_step_three_shows(page):
     ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'api_token_file', 'problem': 'empty'},
      'Cloudflare API Token: not used. The account default reads it from api_token_file, which is empty; '
      'issuance with this account fails until that is fixed.'),
+    # Raised for a variable that is set but empty, too.
+    ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'api_token_env', 'problem': 'unset'},
+     'Cloudflare API Token: not used. The account default reads it from api_token_env, which names an environment '
+     'variable that is not set or is empty; issuance with this account fails until that is fixed.'),
     # Another field's reference: the token is not read from it.
     ({'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'zone_id_file', 'problem': 'missing',
       'reference_of': 'zone_id'},

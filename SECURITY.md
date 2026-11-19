@@ -144,11 +144,14 @@ Details worth knowing before relying on it:
   `kubectl create secret --from-file` both produce files ending in a newline.
 - A reference that resolves to nothing is **refused**, not treated as empty. A
   missing mount fails issuance with a log line naming the field and the path,
-  rather than sending a blank token to the DNS provider.
+  rather than sending a blank token to the DNS provider. For a DNS account the
+  refusal itself names the reference and what is wrong with it ("cannot be
+  used: its api_token_file is not UTF-8 text"), without the path or a value.
 - A `_file` reference is read only from a regular file of at most 64 KiB that
   holds UTF-8 text. A missing file, a directory, a FIFO or a device, a larger
   file, a file that is not text and an empty one are each refused with that
-  reason, the same way; a FIFO or a device is refused without being read.
+  reason, the same way; a FIFO or a device is refused without being read. A
+  file over 64 KiB, which was read before this limit, is now refused.
 
 This does not encrypt anything and is not a substitute for protecting the data
 volume. What it does is let the highest-value secrets live wherever the

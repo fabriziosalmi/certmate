@@ -2614,21 +2614,41 @@ def settings_not_in_effect(settings_manager, dns_manager, written: dict, ca_mana
     """
     loaded = settings_manager.load_settings() or {}
     found = []
-    email = written.get('email')
-    if isinstance(email, str) and email.strip():
+    if _written_email(written):
         try:
-            entry = _email_not_in_effect(settings_manager, ca_manager, loaded, email)
-        except _READ_BACK_ERRORS:
+            entry = _email_not_in_effect(settings_manager, ca_manager, loaded, written['email'])
+        except _READ_BACK_ERRORS as error:
+            logger.warning("Could not check the contact email written: %s", error.__class__.__name__)
             entry = {'setting': 'email', 'by': 'unchecked'}
         if entry:
             found.append(entry)
     if dns_manager is None:
         return found
+    for provider, account_id, prefix, fields in _dns_targets(written):
+        try:
+            found.extend(_dns_fields_not_in_effect(
+                settings_manager, dns_manager, loaded, provider, account_id, prefix, fields))
+        except _READ_BACK_ERRORS as error:
+            logger.warning("Could not check the %s account written to %s: %s",
+                           provider, prefix, error.__class__.__name__)
+            found.extend(_unchecked(prefix, fields))
+    return found
+
+
+def _written_email(written):
+    email = written.get('email')
+    return isinstance(email, str) and bool(email.strip())
+
+
+def _dns_targets(written):
+    """Each DNS account a write sets: ``(provider, account_id or None, prefix, fields)``."""
     targets = []
-    for provider, entry in (written.get('dns_providers') or {}).items():
+    providers = written.get('dns_providers')
+    for provider, entry in (providers.items() if isinstance(providers, dict) else ()):
         if not isinstance(entry, dict):
             continue
-        for account_id, fields in (entry.get('accounts') or {}).items():
+        accounts = entry.get('accounts')
+        for account_id, fields in (accounts.items() if isinstance(accounts, dict) else ()):
             if isinstance(fields, dict):
                 targets.append((provider, account_id, f'dns_providers.{provider}.accounts.{account_id}', fields))
         flat = {key: value for key, value in entry.items() if key != 'accounts'}
@@ -2639,12 +2659,23 @@ def settings_not_in_effect(settings_manager, dns_manager, written: dict, ca_mana
     if isinstance(legacy, str) and legacy.strip():
         # Nothing reads this key: the token used is the default account's.
         targets.append(('cloudflare', None, 'cloudflare_token', {'api_token': legacy}))
-    for provider, account_id, prefix, fields in targets:
-        try:
-            found.extend(_dns_fields_not_in_effect(
-                settings_manager, dns_manager, loaded, provider, account_id, prefix, fields))
-        except _READ_BACK_ERRORS as error:
-            logger.warning("Could not check the %s account written to %s: %s",
-                           provider, prefix, error.__class__.__name__)
-            found.extend(_unchecked(prefix, fields))
-    return found
+    return targets
+
+
+def not_in_effect_after_write(settings_manager, dns_manager, written: dict, ca_manager=None) -> list:
+    """`settings_not_in_effect`, for a save that has been written: never raises.
+
+    The settings routes answer with this after the write succeeded. An error
+    of any kind here would turn that answer into a 500 that says the save
+    failed (review of UX audit P19, measured with a reference that was not
+    UTF-8). So whatever it meets is logged by class, and every value written
+    is listed as unchecked: what the answer then says is true.
+    """
+    try:
+        return settings_not_in_effect(settings_manager, dns_manager, written, ca_manager=ca_manager)
+    except Exception as error:  # see the docstring; counted in check_exception_budget
+        logger.warning("Could not check the settings written: %s", error.__class__.__name__)
+        unchecked = [{'setting': 'email', 'by': 'unchecked'}] if _written_email(written) else []
+        for _, _, prefix, fields in _dns_targets(written):
+            unchecked.extend(_unchecked(prefix, fields))
+        return unchecked

@@ -3086,7 +3086,9 @@ class CertificateManager:
                 )
 
                 if not dns_config:
-                    raise ValueError(f"DNS provider '{dns_provider}' account '{account_id or 'default'}' not configured")
+                    problem = self.dns_manager.reference_problem(dns_provider, account_id)
+                    raise ValueError(f"DNS provider '{dns_provider}' account '{account_id or 'default'}' "
+                                     + (f"cannot be used: {problem}" if problem else "not configured"))
 
                 logger.info(f"Using DNS provider: {dns_provider} with account: {used_account_id}")
 
@@ -4400,9 +4402,11 @@ class CertificateManager:
             # so renewal fails fast with a clear message instead of
             # letting certbot fail opaquely (which surfaced as a 500 with
             # no hint about the missing account).
+            problem = self.dns_manager.reference_problem(dns_provider, metadata.get('account_id'), settings)
             raise RuntimeError(
                 f"Cannot renew {domain}: DNS provider '{dns_provider}' "
-                f"account '{metadata.get('account_id') or 'default'}' is not configured"
+                f"account '{metadata.get('account_id') or 'default'}' "
+                + (f"cannot be used: {problem}" if problem else "is not configured")
             )
         acme_dns_alias = self._acme_dns_native_alias(dns_provider, dns_config)
         if acme_dns_alias:

@@ -152,3 +152,78 @@ def test_a_read_back_that_fails_answers_success_with_the_value_unchecked(instanc
     assert answer.status_code == 200, answer.get_json()
     assert answer.get_json()['not_in_effect'] == [
         {'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'unchecked'}]
+
+
+# --- review round 5 ------------------------------------------------------------
+
+@pytest.mark.parametrize('route', ['/api/web/settings', '/api/settings'])
+def test_any_error_in_the_read_back_answers_success_with_every_value_unchecked(instance, monkeypatch, route):
+    """A class the read-back does not foresee still cannot fail a written save."""
+    client, headers, _container, tmp = instance
+    import modules.core.settings as settings_module
+
+    def fails(*args, **kwargs):
+        raise RuntimeError('a defect nobody foresaw')
+    monkeypatch.setattr(settings_module, 'settings_not_in_effect', fails)
+    answer = client.post(route, headers=headers, json=WIZARD)
+    assert answer.status_code == 200, answer.get_json()
+    assert answer.get_json()['not_in_effect'] == [
+        {'setting': 'email', 'by': 'unchecked'},
+        {'setting': 'dns_providers.cloudflare.accounts.default.api_token', 'by': 'unchecked'}]
+    assert json.loads((tmp / 'data' / 'settings.json').read_text())['email'] == 'ops@example.org'
+
+
+def test_an_email_read_back_that_fails_is_logged_by_its_class(tmp_path, monkeypatch, caplog):
+    import logging
+
+    import modules.core.ca_manager as ca_module
+    from modules.core.settings import settings_not_in_effect
+
+    manager = _manager(tmp_path, monkeypatch)
+
+    def fails(*args, **kwargs):
+        raise TypeError('a defect in the email read-back')
+    monkeypatch.setattr(ca_module, 'resolve_ca_account', fails)
+    written = {'email': 'typed@example.org'}
+    assert manager.atomic_update(dict(written))
+    with caplog.at_level(logging.WARNING, logger='modules.core.settings'):
+        found = settings_not_in_effect(manager, DNSManager(manager), written)
+    assert found == [{'setting': 'email', 'by': 'unchecked'}]
+    assert 'Could not check the contact email written: TypeError' in caplog.text
+    assert 'typed@example.org' not in caplog.text
+
+
+# --- an issuance refusal names the broken reference ------------------------------
+
+def test_the_account_s_broken_reference_is_named_without_its_path_or_a_value(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    binary = tmp_path / 'cf-token'
+    binary.write_bytes(b'\xff\xfe\x00binary')
+    assert manager.atomic_update({'dns_providers': {'cloudflare': {'accounts': {'default': {
+        'api_token_file': str(binary)}}}}})
+    assert DNSManager(manager).reference_problem('cloudflare') == 'its api_token_file is not UTF-8 text'
+
+
+def test_an_account_without_a_broken_reference_has_no_problem(tmp_path, monkeypatch):
+    """CONTROL: a configured literal token, and no account at all."""
+    manager = _manager(tmp_path, monkeypatch)
+    assert manager.atomic_update({'dns_providers': {'cloudflare': {'accounts': {'default': {
+        'api_token': 'literal-token-0123456789'}}}}})
+    assert DNSManager(manager).reference_problem('cloudflare') is None
+    assert DNSManager(manager).reference_problem('digitalocean') is None
+
+
+def test_a_create_refused_for_a_broken_reference_says_so_not_not_configured(instance):
+    client, headers, _container, tmp = instance
+    binary = tmp / 'cf-token'
+    binary.write_bytes(b'\xff\xfe\x00binary')
+    saved = client.post('/api/settings', headers=headers, json={
+        'email': 'ops@example.org', 'challenge_type': 'dns-01', 'dns_provider': 'cloudflare',
+        'dns_providers': {'cloudflare': {'accounts': {'default': {'api_token_file': str(binary)}}}}})
+    assert saved.status_code == 200, saved.get_json()
+    answer = client.post('/api/certificates/create', headers=headers,
+                         json={'domain': 'broken-ref.example.com', 'dns_provider': 'cloudflare'})
+    error = json.dumps(answer.get_json())
+    assert answer.status_code >= 400, error
+    assert 'cannot be used: its api_token_file is not UTF-8 text' in error, error
+    assert 'not configured' not in error and str(binary) not in error, error

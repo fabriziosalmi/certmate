@@ -2450,10 +2450,10 @@ decides the value in use. No credential value is returned or logged.
 | `ca_providers.<ca>.accounts.<id>.email` | Kept, but the default CA's account has an email of its own, which issuance uses. |
 | `default_ca` | Kept, but the default CA, named in `ca`, is not configured, so requests that take the default CA are refused until it is. A request that names another CA is not affected. |
 | `CERTMATE_CONFIG_FILE` | Not saved: the configuration file declares that account, and the account as it declares it is what issuance uses. |
-| `<field>_env`, `<field>_file` | Kept, but the account takes the field from that reference, which comes first. With `problem`, the reference does not resolve and issuance with that account fails until it does: `missing`, `not_a_file`, `too_large` (over 64 KiB), `not_text` (not UTF-8), `empty`, `unreadable`, or `unset` (the variable). With `reference_of` as well, the reference belongs to that other field: the account cannot be used, and the field written is not read from it. |
+| `<field>_env`, `<field>_file` | Kept, but the account takes the field from that reference, which comes first. With `problem`, the reference does not resolve and issuance with that account fails until it does: `missing`, `not_a_file`, `too_large` (over 64 KiB), `not_text` (not UTF-8), `empty`, `unreadable`, or `unset` (the variable is not set, or is empty). With `reference_of` as well, the reference belongs to that other field: the account cannot be used, and the field written is not read from it. |
 | `auth_mode` | A Route 53 account in IAM role mode does not use access keys. |
 | `another setting` | The value in use is another, and what decides it cannot be named. |
-| `unchecked` | The read-back could not check the value. It never fails the save: the settings were written and the answer is 200. |
+| `unchecked` | The read-back could not check the value. After a save that was written, any error in the read-back is logged by its class and lists every value written as `unchecked`; the answer is still 200. |
 
 A value written into an account other than the provider's default is in effect
 for the certificates that name that account, and is not listed. The list is
