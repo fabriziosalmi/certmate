@@ -301,3 +301,164 @@ def test_every_save_button_names_what_it_saves(page):
     bare = [text for text in labels if not re.match(r'^Save \S', text)]
     assert not bare, f'Save buttons that do not say what they save: {bare}'
     assert 'Save Settings' not in labels, 'the main Save saves DNS, General and Storage, and says so'
+
+
+# ── Review round: what the first fix still got wrong ─────────────────
+
+def test_a_stored_entry_without_a_chip_is_not_counted_as_a_selected_one(page):
+    """certificate_failed had a chip before #943. Deselecting the one chip of
+    a list that also holds it would leave the failures only, silently."""
+    sent = _notifications(page, ['certificate_created', 'certificate_failed'])
+    assert _selected(page) == ['certificate_created']
+    _click_chip(page, 'certificate_created')
+    assert _selected(page) == ['certificate_created']
+    assert 'certificate_created' in _save_notifications(page, sent)
+
+
+def test_a_stored_list_with_no_chip_says_only_failures_are_sent_and_is_kept(page):
+    sent = _notifications(page, ['certificate_failed'])
+    panel = page.locator('#settings-panel-notifications')
+    assert _selected(page) == []
+    assert panel.get_by_text('No event is selected: only failures are sent.').is_visible()
+    assert not panel.get_by_text('All events are sent').is_visible()
+    assert _save_notifications(page, sent) == ['certificate_failed'], 'an untouched list is saved as it was'
+
+
+def _refuse_eab(page, kid, field):
+    body = {'error': f"An EAB key called '{kid}' exists already; keys are never reused, so the accounts "
+                     'each one enrolled stay attributable', 'code': 'ACME_EAB_KEY_EXISTS', 'field': field}
+    _answer_json(page, '**/api/acme/eab-keys', body, method='POST', status=409)
+    _open(page, 'acme')
+    page.wait_for_selector('#acmeKeyNames', state='visible')
+    page.fill('#acmeKeyNames', '*.lab.internal')
+    page.fill('#acmeKeyKid', kid)
+    page.click('#acmeCreateKey')
+    return _toast_text(page)
+
+
+def test_the_label_never_rewrites_the_value_the_user_typed(page):
+    toast = _refuse_eab(page, 'dupkid', 'kid')
+    assert "'dupkid'" in toast, toast
+
+
+def test_the_field_marked_is_the_one_the_server_names(page):
+    _refuse_eab(page, 'ipv6-lab', 'kid')
+    page.wait_for_function("() => document.activeElement && document.activeElement.id === 'acmeKeyKid'")
+    assert page.get_attribute('#acmeKeyKid', 'aria-invalid') == 'true'
+    assert page.get_attribute('#acmeKeyNames', 'aria-invalid') is None
+
+
+def test_a_refused_acme_option_is_named_and_marked(page):
+    _open(page, 'acme')
+    page.wait_for_selector('#acmeValidity', state='visible')
+    page.fill('#acmeValidity', '0')
+    with page.expect_response(lambda r: r.url.endswith('/api/acme/server') and r.request.method == 'PATCH') as answer:
+        page.click('#acmeSave')
+    assert answer.value.status == 400
+    toast = _toast_text(page)
+    assert 'Certificate validity' in toast and 'validity_days' not in toast, toast
+    page.wait_for_function("() => document.activeElement && document.activeElement.id === 'acmeValidity'")
+    assert page.get_attribute('#acmeValidity', 'aria-invalid') == 'true'
+
+
+def test_a_link_local_issuer_is_named_and_marked(page):
+    _open(page, 'oidc')
+    page.wait_for_selector('#oidc-issuer-url', state='visible')
+    panel = page.locator('#settings-panel-oidc')
+    panel.locator('label:has-text("Enable OIDC/SSO") input[type=checkbox]').check()
+    page.fill('#oidc-issuer-url', 'https://169.254.169.254/realm')
+    page.fill('#oidc-client-id', 'certmate')
+    saved = lambda r: r.url.endswith('/api/auth/oidc/settings') and r.request.method == 'POST'  # noqa: E731
+    with page.expect_response(saved) as answer:
+        panel.locator('button[data-saves]').click()
+    assert answer.value.status == 400
+    assert 'Issuer URL' in _toast_text(page)
+    page.wait_for_function("() => document.activeElement && document.activeElement.id === 'oidc-issuer-url'")
+    assert page.get_attribute('#oidc-issuer-url', 'aria-invalid') == 'true'
+
+
+def _deploy_with_a_target(page):
+    target = {'id': 'audit-target', 'name': 'audit target', 'type': 'webhook', 'enabled': True,
+              'events': {'created': True, 'renewed': True},
+              'config': {'url': 'https://hooks.example.test/certmate', 'method': 'POST'}}
+    config = {'enabled': True, 'global_hooks': [], 'domain_hooks': {}, 'targets': [target]}
+    _answer_json(page, '**/api/deploy/config', config, method='GET')
+    _open(page, 'deploy')
+    page.locator('#deploy-targets > button').click()
+    page.wait_for_selector('input[aria-label="Enable target audit target"]', state='attached')
+
+
+def test_save_deploy_settings_leaves_an_unsaved_target_unsaved(page):
+    _deploy_with_a_target(page)
+    _answer_json(page, '**/api/deploy/config', {'message': 'saved'}, method='POST')
+    page.locator('button[aria-label="Edit target audit target"]').click()
+    page.fill('#webhook-target-editor input[aria-label="Target name"]', 'renamed target')
+    assert 'deploy target' in page.evaluate('() => window.CertMate.unsavedSettings()')
+    with page.expect_response(lambda r: r.url.endswith('/api/deploy/config') and r.request.method == 'POST'):
+        page.locator('#settings-panel-deploy button[data-saves]:has-text("Save Deploy Settings")').click()
+    page.wait_for_timeout(300)
+    assert 'deploy target' in page.evaluate('() => window.CertMate.unsavedSettings()')
+    assert page.locator('#webhook-target-editor').get_by_text('Unsaved changes').is_visible()
+
+
+def test_a_refused_save_is_not_cleared_by_a_later_write(page):
+    _answer_json(page, '**/api/notifications/config', {'error': 'refused'}, method='POST', status=400)
+    _answer_json(page, '**/api/web/update-check', {'enabled': True}, method='POST')
+    _open(page, 'notifications')
+    page.locator('label:has(input[aria-label="Enable notifications"])').click()
+    with page.expect_response(lambda r: r.url.endswith('/api/notifications/config') and r.request.method == 'POST'):
+        page.locator('#settings-panel-notifications button[data-saves]').click()
+    page.click('#settings-tab-general')
+    page.wait_for_selector('#update_check_enabled', state='visible')
+    with page.expect_response(lambda r: r.url.endswith('/api/web/update-check') and r.request.method == 'POST'):
+        page.click('#update_check_enabled')
+    page.wait_for_timeout(300)
+    assert 'notifications' in page.evaluate('() => window.CertMate.unsavedSettings()'), \
+        'the refused save saved nothing, and a later write elsewhere does not change that'
+
+
+def test_an_edited_probe_shows_unsaved_until_save_probe(page):
+    cert = {'domain': 'probe.example.test', 'deployment_host': 'probe.example.test',
+            'deployment_port': 443, 'deployment_protocol': 'https-tls'}
+    _answer_json(page, '**/api/certificates', [cert], method='GET')
+    _answer_json(page, '**/api/certificates/probe.example.test', cert, method='PATCH')
+    _open(page, 'probe')
+    page.locator('button[title="Edit probe"]').click()
+    page.fill('input[aria-label="Probe host"]', 'other.example.test')
+    save = page.locator('button:has-text("Save Probe")')
+    assert save.locator('xpath=..').get_by_text('Unsaved changes').is_visible()
+    with page.expect_response(lambda r: r.request.method == 'PATCH'):
+        save.click()
+    page.wait_for_timeout(300)
+    assert page.evaluate('() => window.CertMate.unsavedSettings()') == []
+
+
+@pytest.mark.parametrize('tab, control', [
+    ('general', '#auto_renew'),
+    ('notifications', '#settings-panel-notifications label:has(input[value="certificate_renewed"])'),
+])
+def test_a_change_undone_is_not_unsaved(page, tab, control):
+    if tab == 'notifications':
+        _notifications(page, [])
+    else:
+        _open(page, tab)
+    page.wait_for_selector(control, state='visible')
+    page.locator(control).click()
+    page.wait_for_timeout(100)
+    assert page.evaluate('() => window.CertMate.unsavedSettings()') != []
+    page.locator(control).click()
+    page.wait_for_timeout(100)
+    assert page.evaluate('() => window.CertMate.unsavedSettings()') == []
+    markers = page.locator('[data-unsaved-marker]')
+    assert all(not markers.nth(i).is_visible() for i in range(markers.count()))
+
+
+def test_a_target_switch_that_could_not_be_sent_goes_back(page):
+    _deploy_with_a_target(page)
+    page.route('**/api/deploy/config',
+               lambda route: route.abort('failed') if route.request.method == 'POST' else route.fallback())
+    switch = page.locator('input[aria-label="Enable target audit target"]')
+    assert switch.is_checked()
+    page.locator('label:has(input[aria-label="Enable target audit target"])').click()
+    page.wait_for_timeout(800)
+    assert switch.is_checked(), 'nothing was saved, so the switch shows the target still on'

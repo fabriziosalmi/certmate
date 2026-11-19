@@ -266,11 +266,17 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
                         'caller as admin — including the private-key download. '
                         'Enable local authentication with an admin user, or '
                         'set API_BEARER_TOKEN, before disabling SSO.',
+                'field': 'enabled',
             }), 409
 
-        ok, err = oidc_manager.update_config(payload)
+        ok, err, field = oidc_manager.update_config_naming_the_field(payload)
         if not ok:
-            return jsonify({'error': err or 'invalid OIDC settings'}), 400
+            refusal = {'error': err or 'invalid OIDC settings'}
+            # The setting the refusal is about, so the settings page marks
+            # that field (#1511, P61; API contract 2.72).
+            if field:
+                refusal['field'] = field
+            return jsonify(refusal), 400
         after = oidc_manager.get_admin_config()
         if audit_logger:
             try:

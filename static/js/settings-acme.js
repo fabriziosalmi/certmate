@@ -12,6 +12,18 @@
             .filter(function (s) { return s.length > 0; });
     }
 
+    // The fields a refusal can be about, by the `field` the server names
+    // (API contract 2.72): the toast says the label and the field is marked.
+    var KEY_FIELDS = {
+        allowed_identifiers: { label: 'Names and addresses it may order', id: 'acmeKeyNames' },
+        kid: { label: 'Key identifier', id: 'acmeKeyKid' },
+        note: { label: 'Note', id: 'acmeKeyNote' }
+    };
+    var OPTION_FIELDS = {
+        validity_days: { label: 'Certificate validity', id: 'acmeValidity' },
+        allowed_identifiers: { label: 'Names and addresses an account without an EAB key may order', id: 'acmeOpenNames' }
+    };
+
     function acmeManager() {
         return {
             loading: true,
@@ -85,7 +97,10 @@
                         self.openNames = self.joined(view.allowed_identifiers);
                         CertMate.toast('ACME server saved', 'success');
                     })
-                    .catch(function (error) { CertMate.toast(error.message || 'Could not save', 'error'); })
+                    .catch(function (error) {
+                        CertMate.toast(CertMate.markFieldError(error.message || 'Could not save',
+                            error.body && error.body.field, OPTION_FIELDS), 'error');
+                    })
                     .then(function () { self.saving = false; });
             },
 
@@ -103,12 +118,8 @@
                     .catch(function (error) {
                         // The server names the field by its API key; say the
                         // label, and mark and focus the field (UX audit P61).
-                        CertMate.toast(CertMate.markFieldError(error.message || 'Could not create the key', [
-                            { match: /allowed[_ ]identifier|is not a DNS name|is not an IPv4|IPv6|allows every address/i,
-                              key: 'allowed_identifiers', label: 'Names and addresses it may order', id: 'acmeKeyNames' },
-                            { match: /^kid\b|EAB key called/, key: 'kid', label: 'Key identifier', id: 'acmeKeyKid' },
-                            { match: /^note\b/, key: 'note', label: 'Note', id: 'acmeKeyNote' }
-                        ]), 'error');
+                        CertMate.toast(CertMate.markFieldError(error.message || 'Could not create the key',
+                            error.body && error.body.field, KEY_FIELDS), 'error');
                     });
             },
 

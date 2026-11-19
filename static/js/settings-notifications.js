@@ -55,15 +55,29 @@
             // every chip selected, a click deselects one, and selecting all
             // of them again goes back to the empty list, which also covers an
             // event added in a later release.
-            get allEventsSent() {
+            //
+            // A stored list can hold names that have no chip: certificate_failed
+            // had one before #943, and the failures are sent whatever the list
+            // says, so such a name changes nothing that is sent. Only names with
+            // a chip are counted as selected; the list is saved as stored until
+            // a chip is clicked, and a click keeps only the names with a chip.
+            get chipEvents() {
                 var events = this.config.events;
-                return events.length === 0 || this.notifiableEvents.every(function (e) { return events.indexOf(e) !== -1; });
+                return this.notifiableEvents.filter(function (e) { return events.indexOf(e) !== -1; });
+            },
+            get allEventsSent() {
+                return this.config.events.length === 0 || this.chipEvents.length === this.notifiableEvents.length;
+            },
+            get eventsSummary() {
+                if (this.allEventsSent) return 'All events are sent.';
+                if (this.chipEvents.length === 0) return 'No event is selected: only failures are sent.';
+                return 'Only the selected events are sent.';
             },
             isEventSent: function (evt) {
                 return this.config.events.length === 0 || this.config.events.indexOf(evt) !== -1;
             },
             toggleEvent: function (evt, event) {
-                var events = this.config.events.length === 0 ? this.notifiableEvents.slice() : this.config.events.slice();
+                var events = this.config.events.length === 0 ? this.notifiableEvents.slice() : this.chipEvents;
                 var idx = events.indexOf(evt);
                 if (idx === -1) {
                     events.push(evt);

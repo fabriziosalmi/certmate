@@ -95,7 +95,15 @@ def _normalize_oidc_config(raw: dict) -> dict:
 
 
 class OIDCConfigError(ValueError):
-    """Raised when a settings payload fails validation."""
+    """Raised when a settings payload fails validation.
+
+    ``field`` is the setting the refusal is about, so the settings page marks
+    that field rather than guessing it from words in the message (#1511, P61).
+    """
+
+    def __init__(self, message, field=None):
+        super().__init__(message)
+        self.field = field
 
 
 class OIDCManager:
@@ -169,13 +177,18 @@ class OIDCManager:
         in the payload are stripped first so the UI's GET→edit→POST
         round-trip is a no-op for the masked ``client_secret`` field.
         """
+        ok, error, _field = self.update_config_naming_the_field(payload)
+        return ok, error
+
+    def update_config_naming_the_field(self, payload: dict) -> tuple[bool, str | None, str | None]:
+        """As update_config, and on a refusal also the setting it is about, or None."""
         if not isinstance(payload, dict):
-            return False, 'payload must be an object'
+            return False, 'payload must be an object', None
 
         # Strip masked sentinels recursively (covers client_secret).
         cleaned_payload = _strip_masked_values(payload)
         if not isinstance(cleaned_payload, dict):
-            return False, 'payload must be an object'
+            return False, 'payload must be an object', None
 
         # Merge on top of the existing config so partial updates (e.g.
         # toggling `enabled`) don't blow away unrelated fields.
@@ -185,7 +198,7 @@ class OIDCManager:
         try:
             self._validate_config(merged)
         except OIDCConfigError as exc:
-            return False, str(exc)
+            return False, str(exc), exc.field
 
         normalized = _normalize_oidc_config(merged)
 
@@ -200,8 +213,8 @@ class OIDCManager:
 
         ok = self.settings_manager.update(_mutate, 'oidc_config')
         if not ok:
-            return False, 'failed to persist OIDC settings'
-        return True, None
+            return False, 'failed to persist OIDC settings', None
+        return True, None, None
 
     @staticmethod
     def _validate_config(cfg: dict) -> None:
@@ -210,44 +223,45 @@ class OIDCManager:
             issuer = (cfg.get('issuer_url') or '').strip()
             client_id = (cfg.get('client_id') or '').strip()
             if not issuer:
-                raise OIDCConfigError('issuer_url is required when OIDC is enabled')
+                raise OIDCConfigError('issuer_url is required when OIDC is enabled', field='issuer_url')
             parsed = urlparse(issuer)
             if parsed.scheme not in ('https', 'http') or not parsed.netloc:
-                raise OIDCConfigError('issuer_url must be a valid http(s) URL')
+                raise OIDCConfigError('issuer_url must be a valid http(s) URL', field='issuer_url')
             if parsed.scheme == 'http' and parsed.hostname not in ('localhost', '127.0.0.1'):
-                raise OIDCConfigError('issuer_url must use https (except localhost)')
+                raise OIDCConfigError('issuer_url must use https (except localhost)', field='issuer_url')
             # Never a link-local or cloud-metadata address (loopback stays
             # allowed for the localhost dev path above).
             from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
             try:
                 refuse_metadata_endpoint(issuer)
             except UnsafeDestination as exc:
-                raise OIDCConfigError(str(exc)) from exc
+                raise OIDCConfigError(str(exc), field='issuer_url') from exc
             if not client_id:
-                raise OIDCConfigError('client_id is required when OIDC is enabled')
+                raise OIDCConfigError('client_id is required when OIDC is enabled', field='client_id')
 
         default_role = cfg.get('default_role', 'viewer')
         if default_role not in VALID_ROLES:
-            raise OIDCConfigError(f'default_role must be one of {VALID_ROLES}')
+            raise OIDCConfigError(f'default_role must be one of {VALID_ROLES}', field='default_role')
 
         scopes = cfg.get('scopes', DEFAULT_SCOPES)
         if not isinstance(scopes, list) or not all(isinstance(s, str) and s for s in scopes):
-            raise OIDCConfigError('scopes must be a list of non-empty strings')
+            raise OIDCConfigError('scopes must be a list of non-empty strings', field='scopes')
         if 'openid' not in scopes:
-            raise OIDCConfigError("scopes must include 'openid'")
+            raise OIDCConfigError("scopes must include 'openid'", field='scopes')
 
         mappings = cfg.get('role_mappings', [])
         if not isinstance(mappings, list):
-            raise OIDCConfigError('role_mappings must be a list')
+            raise OIDCConfigError('role_mappings must be a list', field='role_mappings')
         for idx, m in enumerate(mappings):
             if not isinstance(m, dict):
-                raise OIDCConfigError(f'role_mappings[{idx}] must be an object')
+                raise OIDCConfigError(f'role_mappings[{idx}] must be an object', field='role_mappings')
             claim_value = m.get('claim_value')
             role = m.get('role')
             if not isinstance(claim_value, str) or not claim_value:
-                raise OIDCConfigError(f'role_mappings[{idx}].claim_value must be a non-empty string')
+                raise OIDCConfigError(f'role_mappings[{idx}].claim_value must be a non-empty string',
+                                      field='role_mappings')
             if role not in VALID_ROLES:
-                raise OIDCConfigError(f'role_mappings[{idx}].role must be one of {VALID_ROLES}')
+                raise OIDCConfigError(f'role_mappings[{idx}].role must be one of {VALID_ROLES}', field='role_mappings')
 
     # ----------------------------------------------------------- Authlib glue
 

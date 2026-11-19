@@ -35,7 +35,7 @@
                     </div>
                     <!-- An empty list means every event (modules/core/notifier.py),
                          so it is drawn with every chip selected and says so. -->
-                    <p class="mt-2 text-xs text-label" x-text="allEventsSent ? 'All events are sent.' : 'Only the selected events are sent.'">All events are sent.</p>
+                    <p class="mt-2 text-xs text-label" x-text="eventsSummary">All events are sent.</p>
                     <p class="mt-1 text-xs text-muted">Failures are always sent and are not listed here: a certificate that did not issue or renew, and a deploy hook that did not succeed.</p>
                 </div>
 

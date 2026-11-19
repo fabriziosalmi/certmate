@@ -527,34 +527,44 @@
     };
 
     // ── A refused field, by its label ────────────────────────────
-    // A server refusal names a field by its API key ("issuer_url is
-    // required..."). Given the fields a form holds, as
-    // { match: RegExp, key: 'issuer_url', label: 'Issuer URL', id: 'input-id' },
-    // the first one the message is about is marked aria-invalid, outlined
-    // and focused until it is edited, and the message comes back with the
-    // label in place of the key (UX audit P61). A message about none of them
-    // comes back as it was, and nothing is marked.
-    CM.markFieldError = function(message, fields) {
+    // A refusal of a settings write carries `field`, the request field it is
+    // about (API contract 2.72). Given that and the fields a form holds, as
+    // { issuer_url: { label: 'Issuer URL', id: 'input-id' } }, the field is
+    // marked aria-invalid, outlined and focused until it is edited, and the
+    // message comes back saying the label: the key, where it stands as a word
+    // outside a quoted value, becomes the label, and a message that does not
+    // carry the key is led by the label. A value the user typed is quoted by
+    // the server and never rewritten. With no field, or one the form does not
+    // hold, the message comes back as it was and nothing is marked (UX audit
+    // P61): a field is never guessed from words in the text.
+    CM.markFieldError = function(message, field, fields) {
         var text = String(message == null ? '' : message);
-        (fields || []).forEach(function(field) {
-            var el = document.getElementById(field.id);
+        fields = fields || {};
+        Object.keys(fields).forEach(function(key) {
+            var el = document.getElementById(fields[key].id);
             if (el) clearFieldError(el);
         });
-        for (var i = 0; i < (fields || []).length; i++) {
-            var field = fields[i];
-            if (!field.match.test(text)) continue;
-            if (field.key) text = text.split(field.key).join(field.label);
-            var el = document.getElementById(field.id);
-            if (el) {
-                el.setAttribute('aria-invalid', 'true');
-                el.classList.add('border-red-500');
-                el.addEventListener('input', function onInput(event) {
-                    clearFieldError(event.target);
-                    event.target.removeEventListener('input', onInput);
-                });
-                el.focus();
-            }
-            break;
+        var known = field && Object.prototype.hasOwnProperty.call(fields, field) ? fields[field] : null;
+        if (!known) return text;
+        var word = new RegExp('(^|[^\\w])' + field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?!\\w)', 'g');
+        var named = false;
+        text = text.split(/('[^']*'|"[^"]*")/).map(function(part, i) {
+            if (i % 2 === 1) return part;            // a quoted value, as typed
+            return part.replace(word, function(all, before) {
+                named = true;
+                return before + known.label;
+            });
+        }).join('');
+        if (!named) text = known.label + ': ' + text;
+        var el = document.getElementById(known.id);
+        if (el) {
+            el.setAttribute('aria-invalid', 'true');
+            el.classList.add('border-red-500');
+            el.addEventListener('input', function onInput(event) {
+                clearFieldError(event.target);
+                event.target.removeEventListener('input', onInput);
+            });
+            el.focus();
         }
         return text;
     };
