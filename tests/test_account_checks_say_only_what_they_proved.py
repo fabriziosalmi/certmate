@@ -306,6 +306,24 @@ def test_a_corrupt_record_file_is_kept_aside_not_overwritten(instance):
 
 
 
+@pytest.mark.parametrize('content', ['{"dns": []}', '{"dns": {"cloudflare": []}}',
+                                     '{"dns": {"cloudflare": {"prod": "passed"}}}'])
+def test_a_record_file_edited_into_another_shape_is_kept_aside_and_the_check_answers(instance, content):
+    """Valid JSON in the wrong shape made the write after a check raise, and
+    the check answered 500 (review of 59b96a1)."""
+    client, managers = instance
+    from modules.core import account_checks
+    path = account_checks.store_for(managers['settings']).path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding='utf-8')
+    _create_cf(client, {'api_token': TOKEN})
+    with mock.patch.object(account_checks.logger, 'error'):
+        _check_cf(client, _Answer(200, ZONES))
+    kept = sorted(path.parent.glob('account_checks.json.corrupt-*'))
+    assert len(kept) == 1 and kept[0].read_text(encoding='utf-8') == content
+    assert json.loads(path.read_text(encoding='utf-8'))['dns']['cloudflare']['prod']['outcome'] == 'passed'
+
+
 def test_forgetting_through_a_test_double_writes_nothing(tmp_path, monkeypatch):
     """A settings manager whose settings_file is not a path (a MagicMock in the
     route tests) has no store: forgetting through it made a directory named

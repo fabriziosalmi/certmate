@@ -123,6 +123,17 @@ def _timeout_reason(exc, host) -> str:
 
 # ------------------------------------------------------------------ store
 
+def _well_formed(data) -> bool:
+    """The shape the store writes: {kind: {provider: {account_id: {...}}}}. A
+    file edited into another shape is kept aside like one that does not parse,
+    so a write after a check never fails on it."""
+    return isinstance(data, dict) and all(
+        isinstance(providers, dict) and all(
+            isinstance(accounts, dict) and all(isinstance(entry, dict) for entry in accounts.values())
+            for accounts in providers.values())
+        for providers in data.values())
+
+
 class AccountCheckStore:
     """The last check of each account, in one JSON file written 0600."""
 
@@ -138,7 +149,7 @@ class AccountCheckStore:
             return {}, False
         except (OSError, ValueError):
             return {}, True
-        return (data, False) if isinstance(data, dict) else ({}, True)
+        return (data, False) if _well_formed(data) else ({}, True)
 
     def _write(self, data) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
