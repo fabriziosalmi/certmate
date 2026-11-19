@@ -11,6 +11,7 @@ from modules.core.constants import iter_cert_domain_dirs
 from modules.core.utils import validate_email
 from modules.core.domain_entries import entry_domain
 from modules.core.dns_providers import refuses_a_taken_account, refuses_to_delete_an_account_in_use
+from modules.core import account_checks
 
 logger = logging.getLogger(__name__)
 
@@ -418,9 +419,28 @@ def _register_ca_account_route(app, auth_manager, managers, settings_manager, au
     @app.route('/api/web/settings/ca-providers/<string:provider>/accounts/<string:account_id>',
                methods=['POST', 'DELETE'])
     @auth_manager.require_role('admin')
+    @account_checks.checks_before_save('ca', lambda: managers, account_checks.ca_save_target)
     def ca_provider_account(provider, account_id):
         return _ca_provider_account(managers, settings_manager, audit_logger,
                                     provider, account_id)
+
+    @app.route('/api/web/settings/ca-providers/<string:provider>/accounts/<string:account_id>/check',
+               methods=['POST'])
+    @auth_manager.require_role('admin')
+    def ca_provider_account_check(provider, account_id):
+        """Check a saved CA account: the directory issuance uses, and what it reads."""
+        config = account_checks.stored_ca_account(settings_manager.load_settings() or {},
+                                                  provider, account_id)
+        if config is None:
+            return jsonify({'error': 'CA account not found'}), 404
+        result = account_checks.run_and_keep(managers, 'ca', provider, account_id, config)
+        return jsonify({'provider': provider, 'account_id': account_id, 'last_check': result})
+
+    @app.route('/api/web/settings/ca-account-checks', methods=['GET'])
+    @auth_manager.require_role('admin')
+    def ca_account_checks():
+        """Every saved CA account with its last check."""
+        return jsonify(account_checks.ca_last_checks(managers))
 
 
 def register_settings_routes(app, managers, require_web_auth, auth_manager,
@@ -743,10 +763,11 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/api/web/settings/accounts', methods=['GET', 'POST'])
     @auth_manager.require_role('admin')
     @refuses_a_taken_account(lambda: dns_manager)
+    @account_checks.checks_before_save('dns', lambda: managers, account_checks.dns_create_target)
     def api_dns_accounts(provider=None):
         """Route for getting or adding DNS provider accounts"""
         if request.method == 'GET':
-            accounts = dns_manager.list_accounts()
+            accounts = account_checks.answer_with_last_checks(managers, dns_manager.list_accounts())
             if provider:
                 # Filter by provider if specified in legacy URL
                 accounts = [a for a in accounts if a.get('provider') == provider]

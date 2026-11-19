@@ -345,6 +345,13 @@ def _walk(app, token, trace, certbot, container, seeded, report):
     call('get', '/api/web/update-check')
     call('get', '/api/web/audit-logs')
     call('get', '/api/web/logs/stream', stream=True)
+    # The CA account checks (P39). Sealed, the Let's Encrypt directory cannot be reached: a
+    # failed check, kept.
+    call('get', '/api/web/settings/ca-account-checks')
+    call('post', '/api/web/settings/ca-providers/<provider>/accounts/<account_id>/check',
+         path='/api/web/settings/ca-providers/letsencrypt/accounts/default/check')
+    call('post', '/api/web/settings/ca-providers/<provider>/accounts/<account_id>/check',
+         path='/api/web/settings/ca-providers/letsencrypt/accounts/nobody/check')         # 404
     call('post', '/api/auth/logout', client=browser, headers=origin)
     call('post', '/api/auth/config', body={'local_auth_enabled': False})
 

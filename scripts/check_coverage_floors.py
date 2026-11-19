@@ -120,6 +120,9 @@ FLOORS = {
     # problems 94%, server 95%, store 95%. What is left is the handling of
     # inputs josepy refuses before these checks see them.
     # The ACME root and its leaves: 91.1% when it arrived.
+    # The last credential check of a CA or DNS account (#1511, P39): 86%
+    # measured by tests/test_accounts_carry_their_last_check.py alone.
+    'modules/core/account_checks.py': 85,
     'modules/core/acme_ca.py': 90,
     'modules/core/acme_jws.py': 85,
     'modules/core/acme_nonces.py': 95,

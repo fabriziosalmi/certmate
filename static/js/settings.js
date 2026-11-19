@@ -15,6 +15,8 @@
     // Global variables - properly initialized
     var currentSettings = {};
     var configuredCAProviders = [];
+    // The server's last check of each CA account, by provider then account id.
+    var caAccountChecks = {};
     var editingCAProvider = '';
     var editingCAAccount = '';
     var dnsProviders = {};
@@ -638,7 +640,12 @@
             .then(applyCredentialVerdict)
             .catch(function (error) {
                 addDebugLog('Could not ask which DNS accounts have credentials: ' + error.message, 'error');
-                Object.keys(dnsProviders).forEach(function (provider) { dnsProviders[provider].configured = null; });
+                Object.keys(dnsProviders).forEach(function (provider) {
+                    dnsProviders[provider].configured = null;
+                    dnsProviders[provider].accounts.forEach(function (account) {
+                        account.lastCheck = { outcome: 'unknown' };
+                    });
+                });
             })
             .then(function () {
                 updateProviderStatusIndicators();
@@ -651,14 +658,19 @@
     // is configured when one of its accounts has them.
     function applyCredentialVerdict(list) {
         var verdict = {};
+        var checks = {};
         (Array.isArray(list) ? list : []).forEach(function (account) {
             if (!account || !account.provider) return;
             (verdict[account.provider] = verdict[account.provider] || {})[account.account_id] = account.configured === true;
+            (checks[account.provider] = checks[account.provider] || {})[account.account_id] = account.last_check || null;
         });
         Object.keys(dnsProviders).forEach(function (provider) {
             var known = verdict[provider] || {};
             dnsProviders[provider].accounts.forEach(function (account) {
                 account.hasCredentials = known[account.id] === true;
+                // The server's record of the last check (P39): only a check
+                // it ran can say "passed".
+                account.lastCheck = (checks[provider] || {})[account.id] || null;
             });
             dnsProviders[provider].configured = dnsProviders[provider].accounts.some(function (account) {
                 return account.hasCredentials;
@@ -690,7 +702,13 @@
                 var providerData = dnsProviders[provider];
                 if (providerData && providerData.configured) {
                     statusEl.textContent = 'Configured';
-                    statusEl.className = 'text-xs text-success-fg mt-1 whitespace-nowrap';
+                    // Green only when every account it counts passed its
+                    // last check: "Configured" says the credentials are
+                    // there, not that the provider takes them (P39).
+                    var allPassed = providerData.accounts.every(function (account) {
+                        return !account.hasCredentials || lastCheckOutcome(account.lastCheck) === 'passed';
+                    });
+                    statusEl.className = 'text-xs mt-1 whitespace-nowrap ' + (allPassed ? 'text-success-fg' : 'text-label');
 
                     // The accounts that can issue, not every account on file.
                     if (accountsEl && countEl) {
@@ -724,6 +742,75 @@
                 }
             }
         });
+    }
+
+    // =============================================
+    // The last check of a CA or DNS account (P39)
+    // =============================================
+
+    // The server keeps the last check of each account; only a check it ran
+    // records "passed". An account is drawn green only from that record.
+    function lastCheckOutcome(check) {
+        return (check && check.outcome) || 'never';
+    }
+
+    function lastCheckText(check) {
+        var outcome = lastCheckOutcome(check);
+        var when = check && check.at ? ' ' + CertMate.formatDateTime(check.at) : '';
+        if (outcome === 'passed') return 'Last check passed' + when;
+        if (outcome === 'failed') return 'Last check failed' + when + (check.reason ? ': ' + check.reason : '');
+        if (outcome === 'not_checkable') return 'Not checkable yet';
+        // The record could not be read: not "never", which may be untrue.
+        if (outcome === 'unknown') return 'Last check not known: CertMate could not be asked';
+        return 'Never checked';
+    }
+
+    function lastCheckClass(check) {
+        var outcome = lastCheckOutcome(check);
+        if (outcome === 'passed') return 'text-success-fg';
+        if (outcome === 'failed') return 'text-danger-fg';
+        return 'text-muted';
+    }
+
+    function lastCheckElement(check) {
+        var line = document.createElement('p');
+        line.className = 'text-xs mt-1 break-words ' + lastCheckClass(check);
+        line.setAttribute('data-last-check', lastCheckOutcome(check));
+        line.textContent = lastCheckText(check);
+        return line;
+    }
+
+    function readJSON(response) {
+        return response.json().catch(function () { return {}; }).then(function (body) {
+            return { response: response, body: body || {} };
+        });
+    }
+
+    // A save that checks first. A failed check asks in the page's own
+    // dialog; Save anyway sends the save again with save_anyway, Cancel
+    // sends nothing and resolves null. A check that could not run (no
+    // answer, a refused connection) is a failed check on the server, so it
+    // asks too.
+    function saveWithCheck(url, init) {
+        var joiner = url.indexOf('?') === -1 ? '?' : '&';
+        return fetch(url + joiner + 'check=1', init).then(readJSON).then(function (first) {
+            if (first.response.status !== 422 || first.body.code !== 'ACCOUNT_CHECK_FAILED') return first;
+            var reason = String(((first.body.last_check || {}).reason) || 'no reason given').replace(/[.\s]+$/, '');
+            return CertMate.confirm('The check failed: ' + reason + '. Save anyway?', 'Check failed',
+                { confirmText: 'Save anyway' }).then(function (anyway) {
+                if (!anyway) return null;
+                return fetch(url + joiner + 'check=1&save_anyway=1', init).then(readJSON);
+            });
+        });
+    }
+
+    // What a save says about the check it ran.
+    function savedWithCheckMessage(what, check) {
+        var outcome = lastCheckOutcome(check);
+        if (outcome === 'passed') return { text: what + ' saved; its check passed', type: 'success' };
+        if (outcome === 'failed') return { text: what + ' saved; its check failed: ' + check.reason, type: 'warning' };
+        if (outcome === 'not_checkable') return { text: what + ' saved; it cannot be checked yet', type: 'success' };
+        return { text: what + ' saved', type: 'success' };
     }
 
     // =============================================
@@ -1444,29 +1531,24 @@
 
         addDebugLog('Account payload: ' + JSON.stringify(payload, null, 2), 'info');
 
-        // Send to backend
-        fetch('/api/dns/' + provider + '/accounts', {
+        // Send to backend, checking the credentials first (P39).
+        saveWithCheck('/api/dns/' + encodeURIComponent(provider) + '/accounts', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
         })
-            .then(function (response) {
-                if (!response.ok) {
-                    return response.text().then(function (errorData) {
-                        // The server's own sentence when it sent one: a name
-                        // already in use answers 409 and says what to do.
-                        var said = null;
-                        try { said = JSON.parse(errorData).error; } catch (_) { /* not JSON */ }
-                        throw new Error(said || ('HTTP ' + response.status + ': ' + errorData));
-                    });
+            .then(function (answer) {
+                if (!answer) return; // Cancelled after a failed check: nothing saved, the form stays open.
+                if (!answer.response.ok) {
+                    // The server's own sentence when it sent one: a name
+                    // already in use answers 409 and says what to do.
+                    throw new Error(answer.body.error || ('HTTP ' + answer.response.status));
                 }
-                return response.json();
-            })
-            .then(function (result) {
-                addDebugLog('Account created: ' + result.account_id, 'info');
-                showMessage('Account "' + accountName + '" created successfully', 'success');
+                addDebugLog('Account created: ' + accountId, 'info');
+                var said = savedWithCheckMessage('Account "' + accountName + '"', answer.body.last_check);
+                showMessage(said.text, said.type);
 
                 // Refresh settings and close modal
                 return loadSettings().then(function () {
@@ -1517,25 +1599,22 @@
 
         addDebugLog('Updated account data: ' + JSON.stringify(accountData, null, 2), 'info');
 
-        // Send to backend
-        fetch('/api/dns/' + provider + '/accounts/' + accountId, {
+        // Send to backend, checking the credentials first (P39).
+        saveWithCheck('/api/dns/' + encodeURIComponent(provider) + '/accounts/' + encodeURIComponent(accountId), {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(accountData)
         })
-            .then(function (response) {
-                if (!response.ok) {
-                    return response.text().then(function (errorData) {
-                        throw new Error('HTTP ' + response.status + ': ' + errorData);
-                    });
+            .then(function (answer) {
+                if (!answer) return; // Cancelled after a failed check: nothing saved, the form stays open.
+                if (!answer.response.ok) {
+                    throw new Error(answer.body.error || ('HTTP ' + answer.response.status));
                 }
-                return response.json();
-            })
-            .then(function (result) {
                 addDebugLog('Account updated: ' + accountId, 'info');
-                showMessage('Account "' + accountData.name + '" updated successfully', 'success');
+                var said = savedWithCheckMessage('Account "' + accountData.name + '"', answer.body.last_check);
+                showMessage(said.text, said.type);
 
                 // Refresh settings and close modal
                 return loadSettings().then(function () {
@@ -1649,8 +1728,10 @@
             : '';
 
         card.innerHTML =
-            '<div class="flex items-center justify-between">' +
-            '<div class="flex-1">' +
+            // Wraps: with Check credentials the three buttons squeezed the
+            // name and the last check into a column a word wide on a phone.
+            '<div class="flex flex-wrap items-center justify-between gap-3">' +
+            '<div class="flex-1 min-w-40">' +
             // Wraps: with both badges the row was 3 px wider than a 360 px phone.
             '<div class="flex flex-wrap items-center gap-2">' +
             '<h5 class="text-sm font-medium text-foreground">' + safeName + '</h5>' +
@@ -1658,8 +1739,14 @@
             '</div>' +
             descHtml +
             '<div class="text-xs text-muted mt-1">ID: ' + safeId + '</div>' +
+            '<div data-last-check-slot></div>' +
             '</div>' +
-            '<div class="flex items-center space-x-2">' +
+            '<div class="flex flex-wrap items-center gap-2">' +
+            '<button type="button" data-action="check" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
+            ' class="inline-flex items-center px-2 py-1 border border-border shadow-sm text-xs font-medium rounded text-label bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
+            '<i class="fas fa-plug mr-1" aria-hidden="true"></i>' +
+            'Check credentials' +
+            '</button>' +
             '<button type="button" data-action="edit" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
             ' class="inline-flex items-center px-2 py-1 border border-border shadow-sm text-xs font-medium rounded text-label bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
             '<i class="fas fa-edit mr-1"></i>' +
@@ -1673,10 +1760,39 @@
             '</div>' +
             '</div>';
 
+        card.querySelector('[data-last-check-slot]').replaceWith(lastCheckElement(account.lastCheck));
+
         // Attach event listeners safely (no inline onclick with string interpolation)
+        card.querySelector('[data-action="check"]').addEventListener('click', function (event) {
+            checkDNSAccount(provider, account, event.currentTarget);
+        });
         card.querySelector('[data-action="edit"]').addEventListener('click', function () { showEditAccountModal(provider, account.id); });
         card.querySelector('[data-action="delete"]').addEventListener('click', function () { deleteAccount(provider, account.id); });
         return card;
+    }
+
+    // One read-only call to the provider, run by the server, which keeps the
+    // result; the card and the provider tile follow it.
+    function checkDNSAccount(provider, account, button) {
+        if (button) button.disabled = true;
+        return fetch('/api/dns/' + encodeURIComponent(provider) + '/accounts/' +
+            encodeURIComponent(account.id) + '/check', { method: 'POST', headers: API_HEADERS })
+            .then(readJSON)
+            .then(function (answer) {
+                if (!answer.response.ok || !answer.body.last_check) {
+                    throw new Error(answer.body.error || ('HTTP ' + answer.response.status));
+                }
+                account.lastCheck = answer.body.last_check;
+                var outcome = lastCheckOutcome(account.lastCheck);
+                showMessage(account.name + ': ' + lastCheckText(account.lastCheck),
+                    outcome === 'passed' ? 'success' : outcome === 'failed' ? 'error' : 'info');
+                updateProviderStatusIndicators();
+                updateAccountLists();
+            })
+            .catch(function (error) {
+                showMessage('Could not check the account: ' + error.message, 'error');
+            })
+            .then(function () { if (button && button.isConnected) button.disabled = false; });
     }
 
     // =============================================
@@ -2301,6 +2417,7 @@
         var types = document.getElementById('add-ca-type');
         list.replaceChildren();
         var allUsable = true;
+        var allPassed = true;
         configuredCAProviders.forEach(function (provider) {
             var config = ((currentSettings.ca_providers || {})[provider]) || {};
             var accounts = config.accounts || {default: config};
@@ -2317,6 +2434,13 @@
                 // Listed is not usable: an account the create form would
                 // refuse says what it lacks, and opens to add it.
                 var missing = CertMate.caAccountMissing(provider, account, currentSettings);
+                var check = caAccountChecks === null ? { outcome: 'unknown' }
+                    : ((caAccountChecks[provider] || {})[accountId] || null);
+                if (lastCheckOutcome(check) !== 'passed') allPassed = false;
+                var checkLine = lastCheckElement(check);
+                checkLine.classList.remove('mt-1');
+                checkLine.classList.add('w-full', 'order-last');
+                row.appendChild(checkLine);
                 if (missing.length) {
                     allUsable = false;
                     var lacks = document.createElement('span');
@@ -2358,6 +2482,14 @@
                     setDefaultCAAccount(provider, accountId, account, true);
                 });
                 row.appendChild(global);
+                var checkButton = document.createElement('button');
+                checkButton.type = 'button';
+                checkButton.textContent = 'Check credentials';
+                checkButton.className = 'text-xs px-2 py-1 rounded bg-surface-2 text-label hover:bg-hover';
+                checkButton.addEventListener('click', function () {
+                    checkCAAccount(provider, accountId, checkButton);
+                });
+                row.appendChild(checkButton);
                 var edit = document.createElement('button');
                 edit.type = 'button';
                 edit.textContent = 'Edit';
@@ -2376,13 +2508,69 @@
                 list.appendChild(row);
             });
         });
-        // The heading's green check only over accounts that can all issue.
+        // The heading's green check only over accounts that can all issue
+        // and whose last checks all passed (P39); a warning when one cannot
+        // issue or its last check failed; otherwise no colour at all.
+        var anyFailed = configuredCAProviders.some(function (provider) {
+            return Object.keys((caAccountChecks || {})[provider] || {}).some(function (id) {
+                return lastCheckOutcome(caAccountChecks[provider][id]) === 'failed';
+            });
+        });
         var status = document.querySelector('[data-ca-accounts-status]');
         if (status) {
-            status.className = allUsable
+            status.className = (allUsable && allPassed)
                 ? 'fas fa-fw fa-check-circle mr-2 text-green-500'
-                : 'fas fa-fw fa-exclamation-triangle mr-2 text-warning-fg';
+                : (!allUsable || anyFailed)
+                    ? 'fas fa-fw fa-exclamation-triangle mr-2 text-warning-fg'
+                    : 'fas fa-fw fa-info-circle mr-2 text-muted';
         }
+    }
+
+    // The last checks of the CA accounts, from the server. Never rejects: a
+    // failed read draws every account's last check as not known, not green.
+    function loadCAAccountChecks() {
+        return fetch('/api/web/settings/ca-account-checks', { headers: API_HEADERS })
+            .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
+            })
+            .then(function (list) {
+                caAccountChecks = {};
+                (Array.isArray(list) ? list : []).forEach(function (entry) {
+                    if (!entry || !entry.provider) return;
+                    (caAccountChecks[entry.provider] = caAccountChecks[entry.provider] || {})[entry.account_id] =
+                        entry.last_check || null;
+                });
+            })
+            .catch(function (error) {
+                caAccountChecks = null;
+                addDebugLog('Could not read the CA account checks: ' + error.message, 'error');
+            })
+            .then(function () { renderConfiguredCAProviders(); });
+    }
+
+    function checkCAAccount(provider, accountId, button) {
+        if (button) button.disabled = true;
+        return fetch('/api/web/settings/ca-providers/' + encodeURIComponent(provider) + '/accounts/' +
+            encodeURIComponent(accountId) + '/check', { method: 'POST', headers: API_HEADERS })
+            .then(readJSON)
+            .then(function (answer) {
+                if (!answer.response.ok || !answer.body.last_check) {
+                    throw new Error(answer.body.error || ('HTTP ' + answer.response.status));
+                }
+                var outcome = lastCheckOutcome(answer.body.last_check);
+                showMessage(accountId + ': ' + lastCheckText(answer.body.last_check),
+                    outcome === 'passed' ? 'success' : outcome === 'failed' ? 'error' : 'info');
+                // After a failed read the other accounts' checks are not known
+                // here: read them all again rather than draw them as never checked.
+                if (caAccountChecks === null) return loadCAAccountChecks();
+                (caAccountChecks[provider] = caAccountChecks[provider] || {})[accountId] = answer.body.last_check;
+                renderConfiguredCAProviders();
+            })
+            .catch(function (error) {
+                showMessage('Could not check the CA account: ' + error.message, 'error');
+            })
+            .then(function () { if (button && button.isConnected) button.disabled = false; });
     }
 
     function currentCAAccountConfig() {
@@ -2454,16 +2642,18 @@
         // The account's default ACME profile (#395); '' clears it.
         var profileField = document.getElementById('ca-account-acme-profile');
         if (profileField) config.acme_profile = profileField.value;
-        fetch('/api/web/settings/ca-providers/' + encodeURIComponent(provider) +
+        // The save checks the account first (P39): a failed check asks
+        // before anything is saved.
+        saveWithCheck('/api/web/settings/ca-providers/' + encodeURIComponent(provider) +
             '/accounts/' + encodeURIComponent(name) + (editingCAAccount ? '' : '?create=1'), {
             method: 'POST', headers: API_HEADERS, body: JSON.stringify(config)
-        }).then(function (response) {
-            return response.json().then(function (body) {
-                if (!response.ok) throw new Error(body.error || 'Unable to save CA account');
-                document.getElementById('caAccountModal').classList.add('hidden');
-                showMessage('CA account saved', 'success');
-                return loadSettings();
-            });
+        }).then(function (answer) {
+            if (!answer) return; // Cancelled after a failed check: nothing saved, the dialog stays open.
+            if (!answer.response.ok) throw new Error(answer.body.error || 'Unable to save CA account');
+            document.getElementById('caAccountModal').classList.add('hidden');
+            var said = savedWithCheckMessage('CA account', answer.body.last_check);
+            showMessage(said.text, said.type);
+            return loadSettings();
         }).catch(function (error) { showMessage(error.message, 'error'); });
     }
 
@@ -2955,7 +3145,9 @@
     function loadCAProviderSettings(settings) {
         document.getElementById('default-ca').value = settings.default_ca || 'letsencrypt';
         configuredCAProviders = CertMate.configuredCAProviders(settings);
-        renderConfiguredCAProviders();
+        // Drawn once, with the last checks: drawn first without them, each
+        // row would grow by its check's line when the answer came.
+        loadCAAccountChecks();
         editingCAProvider = '';
         editingCAAccount = '';
         toggleCAProviderConfig();

@@ -9,7 +9,7 @@ import tempfile
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 from .domain_paths import certificate_dir
-from .secret_refs import SecretReferenceError, resolve_field
+from .secret_refs import SecretReferenceError, has_value, resolve_field
 from .utils import create_eab_config, is_ip_identifier
 
 logger = logging.getLogger(__name__)
@@ -601,8 +601,11 @@ class CAManager:
         
         # Check required fields based on CA provider
         if ca_info['requires_eab']:
-            has_kid = config.get('eab_key_id') or config.get('eab_kid')
-            has_hmac = config.get('eab_hmac_key') or config.get('eab_hmac')
+            # has_value, so an EAB given by reference (`eab_hmac_file`,
+            # `eab_hmac_env`) counts as get_eab_credentials reads it. The
+            # literal-only test refused an account issuance could use.
+            has_kid = has_value(config, 'eab_key_id') or has_value(config, 'eab_kid')
+            has_hmac = has_value(config, 'eab_hmac_key') or has_value(config, 'eab_hmac')
             if not has_kid or not has_hmac:
                 return False, f"{ca_info['name']} requires EAB Key ID and HMAC Key"
 

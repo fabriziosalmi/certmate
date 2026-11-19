@@ -62,6 +62,14 @@ def dns_accounts(plan):
     call('post', '/api/dns/accounts', body={})                                              # 400
     call('put', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/walk',
          body={'api_token': 'z' * 24})
+    # The credential check (P39). Sealed, Cloudflare cannot be reached: a failed check, kept.
+    call('post', '/api/dns/<provider>/accounts/<account_id>/check', path='/api/dns/cloudflare/accounts/walk/check')
+    call('post', '/api/dns/<provider>/accounts/<account_id>/check',
+         path='/api/dns/cloudflare/accounts/never-existed/check')                          # 404
+    call('post', '/api/dns/<provider>/accounts', path='/api/dns/cloudflare/accounts', query={'check': '1'},
+         body={'name': 'walk3', 'config': {'api_token': 'w' * 24}})                      # 422: the check failed
+    call('put', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/walk',
+         query={'check': '1', 'save_anyway': '1'}, body={'api_token': 'v' * 24})       # saved, with last_check
     call('delete', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/walk')
     call('delete', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/walk2')
     call('delete', '/api/dns/<provider>/accounts/<account_id>', path='/api/dns/cloudflare/accounts/never-existed')

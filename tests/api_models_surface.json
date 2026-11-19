@@ -1,5 +1,5 @@
 {
- "contract_version": "2.71",
+ "contract_version": "2.72",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -2361,12 +2361,50 @@
    }
   },
   "POST /dns/accounts": {
-   "parameters": {},
+   "parameters": {
+    "query:check": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    },
+    "query:save_anyway": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    }
+   },
    "responses": {
     "200": null
    }
   },
   "POST /dns/{X}/accounts": {
+   "parameters": {
+    "path:{X}": {
+     "required": true,
+     "shape": {
+      "type": "string"
+     }
+    },
+    "query:check": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    },
+    "query:save_anyway": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    }
+   },
+   "responses": {
+    "200": null
+   }
+  },
+  "POST /dns/{X}/accounts/{X}/check": {
    "parameters": {
     "path:{X}": {
      "required": true,
@@ -2501,6 +2539,18 @@
      "shape": {
       "type": "string"
      }
+    },
+    "query:check": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
+    },
+    "query:save_anyway": {
+     "required": false,
+     "shape": {
+      "type": "boolean"
+     }
     }
    },
    "responses": {
@@ -2534,6 +2584,7 @@
   "GET /api/users",
   "GET /api/web/audit-logs",
   "GET /api/web/logs/stream",
+  "GET /api/web/settings/ca-account-checks",
   "GET /api/web/update-check",
   "GET /api/webhooks/deliveries",
   "PATCH /api/keys/<X>",
@@ -2551,6 +2602,7 @@
   "POST /api/notifications/test",
   "POST /api/notifications/webhook/preview",
   "POST /api/users",
+  "POST /api/web/settings/ca-providers/<X>/accounts/<X>/check",
   "PUT /api/dns-providers/accounts/<X>",
   "PUT /api/settings/rate-limits",
   "PUT /api/users/<X>"

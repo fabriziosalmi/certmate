@@ -16,7 +16,7 @@ from flask_restx import Resource
 
 import logging
 
-from ..core import dns_availability
+from ..core import account_checks, dns_availability
 from ..core.dns_providers import refuses_a_taken_account, refuses_to_delete_an_account_in_use
 from ..core.settings import mask_secrets_in_settings
 from .resource_context import ApiContext, instance_wide
@@ -55,6 +55,37 @@ def _dns_provider_availability(api, models, ctx):
             return dns_availability.current(_shell_executor(ctx))
 
     return DNSProviderAvailability
+
+
+# `?check=1` on a create or an update (account_checks.checks_before_save).
+_CHECK_PARAMS = {
+    'check': {'in': 'query', 'type': 'boolean',
+              'description': 'Check the credentials with one read-only call to the provider before saving. '
+                             'A failed check answers 422 ACCOUNT_CHECK_FAILED and saves nothing'},
+    'save_anyway': {'in': 'query', 'type': 'boolean',
+                    'description': 'With check: save even when the check fails, and keep the failed result'},
+}
+
+
+def _dns_account_check(api, models, ctx):
+    """POST /api/dns/<provider>/accounts/<account_id>/check. Module level, for the closure's budget."""
+
+    class DNSAccountCheck(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('admin')
+        def post(self, provider, account_id):
+            """Check a saved account's credentials with one read-only call to its provider, and keep the result.
+
+            Cloudflare and Route53 are checked; any other provider answers `not_checkable`.
+            """
+            config = ctx.dns.stored_account(provider, account_id)
+            if config is None:
+                return {'error': f"No DNS account called '{account_id}' for provider '{provider}'",
+                        'code': 'DNS_ACCOUNT_NOT_FOUND'}, 404
+            result = account_checks.run_and_keep(ctx.managers, 'dns', provider, account_id, config)
+            return {'provider': provider, 'account_id': account_id, 'last_check': result}
+
+    return DNSAccountCheck
 
 
 def create_settings_resources(api, models, ctx: ApiContext) -> dict:
@@ -194,9 +225,9 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
         @api.doc(security='Bearer')
         @ctx.auth.require_role('admin')
         def get(self, provider=None):
-            """List DNS provider accounts"""
+            """List DNS provider accounts, each with its `last_check`"""
             try:
-                accounts = ctx.dns.list_accounts()
+                accounts = account_checks.answer_with_last_checks(ctx.managers, ctx.dns.list_accounts())
                 if provider:
                     accounts = [a for a in accounts if a.get('provider') == provider]
                 return accounts
@@ -204,9 +235,10 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                 logger.error(f"Error listing DNS accounts: {e}")
                 return {'error': 'Failed to list DNS accounts'}, 500
 
-        @api.doc(security='Bearer')
+        @api.doc(security='Bearer', params=_CHECK_PARAMS)
         @ctx.auth.require_role('admin')
         @refuses_a_taken_account(lambda: ctx.dns)
+        @account_checks.checks_before_save('dns', lambda: ctx.managers, account_checks.dns_create_target)
         def post(self, provider=None):
             """Add new DNS provider account"""
             try:
@@ -264,8 +296,9 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                 return {'error': str(e)}, 500
 
     class DNSAccountDetail(Resource):
-        @api.doc(security='Bearer')
+        @api.doc(security='Bearer', params=_CHECK_PARAMS)
         @ctx.auth.require_role('admin')
+        @account_checks.checks_before_save('dns', lambda: ctx.managers, account_checks.dns_update_target)
         def put(self, provider, account_id):
             """Update a DNS provider account"""
             try:
@@ -379,4 +412,5 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
         'DNSAccounts': DNSAccounts,
         'DNSAccountDetail': DNSAccountDetail,
         'DNSProviderAvailability': _dns_provider_availability(api, models, ctx),
+        'DNSAccountCheck': _dns_account_check(api, models, ctx),
     }

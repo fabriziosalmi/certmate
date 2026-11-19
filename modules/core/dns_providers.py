@@ -226,16 +226,8 @@ class DNSManager:
             provider, account_id=account_id, settings=settings)
         if config is None:
             return None, None
-        if provider == 'route53' and config.get('auth_mode') == 'iam_role':
-            # Old access keys/references can remain after switching to IAM.
-            # They are unused; resolving a removed secret would block the
-            # AWS credential chain before certbot ever runs.
-            unused = {'access_key_id', 'secret_access_key',
-                      'access_key_id_file', 'secret_access_key_file',
-                      'access_key_id_env', 'secret_access_key_env'}
-            config = {key: value for key, value in config.items() if key not in unused}
         try:
-            return resolve(config), used_account_id
+            return self.resolve_account_config(provider, config), used_account_id
         except SecretReferenceError as exc:
             # Named precisely, because the alternative is an issuance failure
             # at the DNS provider that blames the credential rather than the
@@ -251,6 +243,34 @@ class DNSManager:
                 provider, used_account_id, exc.field, exc.reference,
                 exc.reason)
             return None, None
+
+    @staticmethod
+    def resolve_account_config(provider, config):
+        """*config* as issuance uses it: every referenced secret read.
+
+        The one resolver for a DNS account: issuance reaches it through the
+        wrapper above, and the credential check (account_checks) calls it on
+        the account it checks, saved or about to be. Raises
+        SecretReferenceError for a reference that yields nothing.
+        """
+        if provider == 'route53' and config.get('auth_mode') == 'iam_role':
+            # Old access keys/references can remain after switching to IAM.
+            # They are unused; resolving a removed secret would block the
+            # AWS credential chain before certbot ever runs.
+            unused = {'access_key_id', 'secret_access_key',
+                      'access_key_id_file', 'secret_access_key_file',
+                      'access_key_id_env', 'secret_access_key_env'}
+            config = {key: value for key, value in config.items() if key not in unused}
+        return resolve(config)
+
+    def stored_account(self, provider, account_id):
+        """The account *account_id* of *provider* as it is saved, references
+        unresolved, or None when there is no such account."""
+        settings = self.settings_manager.migrate_dns_providers_to_multi_account(
+            self.settings_manager.load_settings())
+        accounts = (settings.get('dns_providers', {}).get(provider) or {}).get('accounts') or {}
+        account = accounts.get(account_id)
+        return account if isinstance(account, dict) else None
 
     def _locate_account_config(self, provider, account_id=None, settings=None):
         """Find the stored account configuration, exactly as written.
