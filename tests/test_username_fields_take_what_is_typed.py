@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 TEMPLATES = Path(__file__).resolve().parent.parent / 'templates'
 FIELDS = [
     ('login.html', 'username'),
