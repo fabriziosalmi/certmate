@@ -48,11 +48,21 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from .secret_refs import SecretReferenceError
+from .structured_logging import scrub_log_value
 from .utils import _DNS_PROVIDER_CREDENTIALS
 
 logger = logging.getLogger(__name__)
 
 PASSED = 'passed'
+
+# What a check answers when the account's own settings are refused before any
+# call: fixed sentences, true for every refusal they stand for; the refusal
+# itself goes to the server log.
+_ROUTE53_RULES = ('The Route53 settings of this account are not usable: auth_mode is access_keys '
+                  '(with access_key_id and secret_access_key) or iam_role, and assume_role_arn, '
+                  'when given, is an IAM role ARN')
+_CA_SETTINGS_REFUSED = ("The account's CA settings cannot be used (its CA, or its ACME directory "
+                        'URL); the server log says which')
 FAILED = 'failed'
 REACHABLE = 'reachable'
 NOT_CHECKABLE = 'not_checkable'
@@ -342,7 +352,10 @@ def _check_route53(config):
     try:
         mode, key, secret, role_arn = _aws_storage_auth(config, 'Route53 DNS')
     except ValueError as exc:
-        return FAILED, str(exc)
+        # The answer states the rules, not the exception's text, which stays
+        # in the log (CodeQL py/stack-trace-exposure).
+        logger.warning("Route53 account settings refused: %s", scrub_log_value(exc))
+        return FAILED, _ROUTE53_RULES
     try:
         from botocore.config import Config
         from botocore.exceptions import BotoCoreError, ClientError
@@ -358,7 +371,8 @@ def _check_route53(config):
         error = (exc.response or {}).get('Error') or {}
         return FAILED, f"AWS answered {error.get('Code') or 'an error'}: {error.get('Message') or ''}"
     except BotoCoreError as exc:
-        return FAILED, f'{type(exc).__name__}: {exc}'
+        logger.info("Route53 check could not ask AWS: %s", scrub_log_value(exc))
+        return FAILED, f'AWS could not be asked ({type(exc).__name__})'
     if mode == 'iam_role':
         # Not part of the record's key: CertMate does not hold that identity.
         return PASSED, (f"this host's AWS identity can list hosted zones; {_TESTED_LATER}. "
@@ -451,7 +465,12 @@ def check_ca_account(ca_manager, provider, config, instance_email='') -> dict:
     except (ValueError, OSError) as exc:
         unreadable = (isinstance(exc, (UnicodeDecodeError, OSError))
                       or _reference_error(exc) is not None)
-        return _result(FAILED, unreadable_reason(exc) if unreadable else str(exc))
+        if unreadable:
+            return _result(FAILED, unreadable_reason(exc))
+        # Not the exception's text (CodeQL py/stack-trace-exposure): it stays
+        # in the log, and the answer says where to look.
+        logger.warning("CA account settings refused: %s", scrub_log_value(exc))
+        return _result(FAILED, _CA_SETTINGS_REFUSED)
     secrets_ = [value for value in eab if value]
     bundle = None
     if provider == 'private_ca' and config.get('ca_cert'):
@@ -536,7 +555,7 @@ def keep(managers, kind, provider, account_id, config, result) -> None:
     _audit(managers, kind, provider, account_id, result)
     # Never the reason: it is the provider's text.
     logger.info("Credential check of %s account %r of provider %r ended %s",
-                kind, account_id, provider, result['outcome'])
+                kind, scrub_log_value(account_id), scrub_log_value(provider), result['outcome'])
 
 
 def run_and_keep(managers, kind, provider, account_id, config) -> dict:

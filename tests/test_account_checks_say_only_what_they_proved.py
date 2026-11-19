@@ -458,3 +458,42 @@ def test_a_long_path_is_cut_never_the_cause(instance, tmp_path):
     assert len(check['reason']) <= 200
     assert check['reason'].startswith('api_token could not be read: it does not exist ('), check
     assert check['reason'].endswith('...')
+
+
+# ------------------------------------------- what an answer may carry (CodeQL)
+# The text of a caught exception never reaches the answer (py/stack-trace-
+# exposure): the refusal goes to the server log, and the answer says what is
+# true for every refusal of that kind.
+
+def test_a_route53_account_whose_settings_are_refused_is_told_the_rules_not_the_exception():
+    from modules.core import account_checks
+    outcome, reason = account_checks._check_route53({'auth_mode': 'no-such-mode'})
+    assert outcome == account_checks.FAILED
+    assert reason == account_checks._ROUTE53_RULES
+    assert 'no-such-mode' not in reason
+
+
+def test_aws_that_cannot_be_asked_is_named_by_the_error_class_only():
+    from botocore.exceptions import EndpointConnectionError
+
+    from modules.core import account_checks
+    with mock.patch('modules.core.storage_backends._aws_storage_client',
+                    side_effect=EndpointConnectionError(endpoint_url='https://route53.secret-host.example')):
+        outcome, reason = account_checks._check_route53(
+            {'auth_mode': 'access_keys', 'access_key_id': 'AKIAEXAMPLE', 'secret_access_key': 'x' * 40})
+    assert outcome == account_checks.FAILED
+    assert reason == 'AWS could not be asked (EndpointConnectionError)'
+
+
+def test_a_ca_account_whose_settings_are_refused_says_the_log_has_why_and_the_log_has_it(caplog):
+    from modules.core import account_checks
+    ca = mock.Mock()
+    ca.validate_ca_configuration.return_value = (True, '')
+    ca.get_eab_credentials.return_value = (None, None)
+    ca.get_acme_server_url.side_effect = ValueError('Private CA ACME Directory URL must use https')
+    with caplog.at_level('WARNING'):
+        result = account_checks.check_ca_account(ca, 'private_ca', {'email': 'ops@example.com'})
+    assert result['outcome'] == account_checks.FAILED
+    assert result['reason'] == account_checks._CA_SETTINGS_REFUSED
+    assert 'must use https' not in result['reason']
+    assert any('must use https' in record.getMessage() for record in caplog.records)
