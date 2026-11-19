@@ -122,3 +122,25 @@ def test_the_message_names_the_file_source(monkeypatch, caplog, tmp_path):
         am.warn_if_bearer_token_hash_is_stale()
     msg = ' '.join(r.getMessage() for r in caplog.records)
     assert 'API_BEARER_TOKEN_FILE' in msg
+
+
+def test_the_message_says_what_happens_and_sends_no_one_to_the_api_keys_page(monkeypatch, caplog):
+    """Startup reconciles the supplied token right after this check (#401), so
+    the message said two false things: that requests will 401, and to reset
+    the token in the API Keys UI, where it cannot be changed."""
+    monkeypatch.setenv('API_BEARER_TOKEN', _TOKEN)
+    monkeypatch.delenv('API_BEARER_TOKEN_FILE', raising=False)
+    am = AuthManager(_mgr(_hash_with(_OLD)))
+    am.set_hmac_key(_NEW)
+    caplog.clear()
+    with caplog.at_level('WARNING'):
+        am.warn_if_bearer_token_hash_is_stale()
+    msg = ' '.join(r.getMessage() for r in caplog.records)
+    assert 'does not match the stored' in msg, msg
+    assert '401' not in msg and 'API Keys' not in msg, msg
+    assert 'a later message says whether it could' in msg, msg
+    # Read as the log handler writes it: a "name: value" in the text would be
+    # redacted, hiding the word after the colon.
+    from modules.core.structured_logging import sanitize_text
+    assert sanitize_text(msg) == msg, sanitize_text(msg)
+

@@ -149,8 +149,8 @@ docker run -d --name certmate \
 |----------|----------|-------------|
 | `SECRET_KEY` | No | Flask secret key for sessions (auto-generated if unset) |
 | `SECRET_KEY_FILE` | No | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`). If set and the file cannot be read or is empty, CertMate refuses to start: a secret that failed to mount is a configuration error, and generating a key instead would sign out every user, on every restart, with sessions signed by a key you did not choose. |
-| `API_BEARER_TOKEN` | No (auto-generated) | API auth token. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin. **This value is authoritative:** if it differs from the token already stored, the stored one is replaced at startup and stops working. That is what makes adding or rotating the variable on an existing install take effect — previously enforcement used this value while authentication still checked the old one, and the first-run screen asked for a token it then rejected |
-| `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
+| `API_BEARER_TOKEN` | No (auto-generated) | The API Bearer Token, with full admin access. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin. **This value is authoritative:** if it differs from the token already stored, the stored one is replaced at startup and stops working. That is what makes adding or rotating the variable on an existing install take effect — previously enforcement used this value while authentication still checked the old one, and the first-run screen asked for a token it then rejected |
+| `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API Bearer Token (takes precedence over `API_BEARER_TOKEN`) |
 | `CERTMATE_LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **Set it if you want automatic backups you can restore from** | Encrypts unified backups at rest (`.zip.enc`, PBKDF2-SHA256 + Fernet), and is what makes automatic backups *complete* — with it they can restore this instance, without it they keep their credentials masked and cannot. The same passphrase is required to restore them, and CertMate never stores it for you. Keep it somewhere other than the machine holding the backups |
 | `CERTMATE_RESTORE_MAX_BYTES` | No | The most one backup restore may write in all, in bytes (default 2 GiB). A restore that would write more stops and reports that it did not complete; see [Backup](./backup.md#restoring) |
@@ -185,7 +185,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}
       # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
-      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
+      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the API Bearer Token
       - CERTMATE_LOG_LEVEL=${CERTMATE_LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
@@ -243,7 +243,7 @@ sudo loginctl enable-linger "$USER"
 
 Rootful instead: put the file in `/etc/containers/systemd/`, create the secrets as root, then run `sudo systemctl daemon-reload && sudo systemctl start certmate`.
 
-Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the API token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
+Open `http://127.0.0.1:8000`. The first page creates the administrator account and asks for the API Bearer Token: `podman secret inspect --showsecret certmate-api-token --format '{{.SecretData}}'`.
 
 Checked on Fedora 44 with Podman 5.8, rootful and rootless: the service starts healthy, the token authorises the API, and it comes back after a reboot (rootless through lingering).
 

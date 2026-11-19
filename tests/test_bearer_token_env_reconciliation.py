@@ -119,6 +119,32 @@ def test_a_rotated_env_token_replaces_the_previous_one(instance, monkeypatch):
     )
 
 
+def test_a_refused_save_says_the_supplied_token_is_not_in_force(instance, monkeypatch, caplog, tmp_path):
+    """save_settings refuses rather than raises (here an invalid email
+    elsewhere in settings.json). Reconciliation ignored that and logged that
+    the supplied token now authenticates, while the old one still did."""
+    import json
+    auth, settings = instance
+    path = settings.settings_file
+    data = json.loads(path.read_text())
+    data['email'] = 'not-an-email'
+    path.write_text(json.dumps(data))
+    settings.load_settings(use_cache=False)
+    monkeypatch.setenv('API_BEARER_TOKEN', ENV_TOKEN)
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        assert auth.reconcile_bearer_token_from_env() is False
+    text = ' '.join(r.getMessage() for r in caplog.records)
+    assert 'Could not store the API Bearer Token' in text, text
+    assert 'Reconciled' not in text, text
+    # Read as the log handler writes it: "name: value" would be redacted.
+    from modules.core.structured_logging import sanitize_text
+    mine = ' '.join(r.getMessage() for r in caplog.records if 'Could not store' in r.getMessage())
+    assert sanitize_text(mine) == mine, sanitize_text(mine)
+    assert _authenticates(auth, settings, OTHER_TOKEN)
+    assert not _authenticates(auth, settings, ENV_TOKEN)
+
+
 # ---------------------------------------------------------------------------
 # What it must NOT do
 # ---------------------------------------------------------------------------

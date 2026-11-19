@@ -4,8 +4,8 @@ Every environment variable CertMate reads, its default, and what it changes. Eve
 
 | Variable           | Required | Default        | Description                         |
 | ------------------ | -------- | -------------- | ----------------------------------- |
-| `API_BEARER_TOKEN`      |          | auto-generated | Bearer token for API authentication |
-| `API_BEARER_TOKEN_FILE` |          | -              | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
+| `API_BEARER_TOKEN`      |          | auto-generated | The API Bearer Token: full admin access to the API |
+| `API_BEARER_TOKEN_FILE` |          | -              | Path to a file containing the API Bearer Token (takes precedence over `API_BEARER_TOKEN`) |
 | `SECRET_KEY`            |          | auto-generated | Flask secret key for sessions       |
 | `SECRET_KEY_FILE`       |          | -              | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`). **If set and unreadable or empty, CertMate refuses to start** rather than inventing one: a secret that failed to mount is a configuration error, and a fresh key would sign out every user on every restart |
 | `PORT`             |          | `8000`         | Server port (honoured by the container entrypoint) |
