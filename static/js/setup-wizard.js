@@ -204,10 +204,10 @@
                     'This usually happens after a downgrade. You can restore the latest backup to recover your users and domains, or start fresh.' +
                 '</p>' +
                 '<div class="space-y-3">' +
-                    '<button id="recoveryRestore" class="w-full px-6 py-3 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition">' +
+                    '<button id="recoveryRestore" class="btn btn-primary w-full">' +
                         '<i class="fas fa-archive mr-2"></i>Restore from Backup' +
                     '</button>' +
-                    '<button id="recoveryFresh" class="w-full px-6 py-3 border border-border text-label font-medium rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
+                    '<button id="recoveryFresh" class="btn btn-secondary w-full">' +
                         'Start Fresh Setup' +
                     '</button>' +
                 '</div>' +
@@ -345,7 +345,7 @@
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<button type="button" id="wizSkip" class="text-sm text-muted hover:text-gray-600 dark:hover:text-gray-300">Skip wizard</button>' +
-            '<button type="button" id="wizNext1" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition">Next <i class="fas fa-arrow-right ml-1"></i></button>';
+            '<button type="button" id="wizNext1" class="btn btn-primary">Next <i class="fas fa-arrow-right ml-1"></i></button>';
 
         document.getElementById('wizNext1').addEventListener('click', function() {
             var email = document.getElementById('wizEmail').value.trim();
@@ -487,7 +487,7 @@
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-muted hover:text-foreground"><i class="fas fa-arrow-left mr-1"></i> Back</button>' +
-            '<button type="button" id="wizNext2" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition ' + (!ready ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!ready ? 'disabled' : '') + '>Save & Finish <i class="fas fa-check ml-1"></i></button>';
+            '<button type="button" id="wizNext2" class="btn btn-primary ' + (!ready ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!ready ? 'disabled' : '') + '>Save & Finish <i class="fas fa-check ml-1"></i></button>';
 
         document.getElementById('wizBack2').addEventListener('click', function() {
             state.step = 1;
@@ -828,7 +828,7 @@
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<a href="/settings" class="text-sm text-muted hover:text-gray-700 dark:hover:text-gray-200">Advanced Settings</a>' +
-            '<button type="button" id="wizFinish" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition"><i class="fas fa-certificate mr-1"></i> Create a Certificate</button>';
+            '<button type="button" id="wizFinish" class="btn btn-primary"><i class="fas fa-certificate mr-1"></i> Create a Certificate</button>';
 
         document.getElementById('wizFinish').addEventListener('click', function() {
             closeWizard();

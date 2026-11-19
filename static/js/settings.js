@@ -1714,6 +1714,19 @@
     // Create account card element
     // =============================================
 
+    // One action row for a DNS account and a CA account (#1511, P42): the
+    // same small outlined buttons with the same icons. A DNS account's Edit
+    // and Delete were white with a border and icons, a CA account's tinted
+    // chips with neither. The small size: the row holds three to four
+    // actions beside the account's name and its last check.
+    var ACCOUNT_ACTION = 'btn btn-secondary btn-sm';
+    var ACCOUNT_DELETE = ACCOUNT_ACTION + ' text-danger-fg';
+    var ACCOUNT_ICONS = { check: 'fa-plug', edit: 'fa-pen', delete: 'fa-trash-alt' };
+
+    function accountButtonHtml(action, label) {
+        return '<i class="fas ' + ACCOUNT_ICONS[action] + ' mr-1" aria-hidden="true"></i>' + label;
+    }
+
     function createAccountCard(provider, account, isDefault) {
         var card = document.createElement('div');
         card.className = 'bg-input border border-border rounded-lg p-4';
@@ -1748,20 +1761,11 @@
             '</div>' +
             '<div class="flex flex-wrap items-center gap-2">' +
             '<button type="button" data-action="check" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
-            ' class="inline-flex items-center px-2 py-1 border border-border shadow-sm text-xs font-medium rounded text-label bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
-            '<i class="fas fa-plug mr-1" aria-hidden="true"></i>' +
-            'Check credentials' +
-            '</button>' +
+            ' class="' + ACCOUNT_ACTION + '">' + accountButtonHtml('check', 'Check credentials') + '</button>' +
             '<button type="button" data-action="edit" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
-            ' class="inline-flex items-center px-2 py-1 border border-border shadow-sm text-xs font-medium rounded text-label bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
-            '<i class="fas fa-edit mr-1"></i>' +
-            'Edit' +
-            '</button>' +
+            ' class="' + ACCOUNT_ACTION + '">' + accountButtonHtml('edit', 'Edit') + '</button>' +
             '<button type="button" data-action="delete" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
-            ' class="inline-flex items-center px-2 py-1 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">' +
-            '<i class="fas fa-trash mr-1"></i>' +
-            'Delete' +
-            '</button>' +
+            ' class="' + ACCOUNT_DELETE + '">' + accountButtonHtml('delete', 'Delete') + '</button>' +
             '</div>' +
             '</div>';
 
@@ -2454,7 +2458,7 @@
                     var complete = document.createElement('button');
                     complete.type = 'button';
                     complete.textContent = missing.length === 1 && missing[0] === 'email' ? 'Add email' : 'Complete account';
-                    complete.className = 'text-xs px-2 py-1 rounded bg-warning-surface text-warning-fg hover:bg-hover';
+                    complete.className = 'btn btn-sm bg-warning-surface text-warning-fg hover:bg-hover';
                     complete.addEventListener('click', function () { openCAAccountModal(provider, accountId); });
                     row.appendChild(complete);
                 }
@@ -2477,9 +2481,11 @@
                 var global = document.createElement('button');
                 global.type = 'button';
                 global.textContent = globalDefault ? 'Global default' : 'Make global default';
+                // The global default is a state, not an unavailable action:
+                // tinted and not dimmed, though it cannot be pressed.
                 global.className = globalDefault
-                    ? 'text-xs px-2 py-1 rounded bg-info-surface text-info-fg'
-                    : 'text-xs px-2 py-1 rounded bg-surface-2 text-label hover:bg-hover';
+                    ? 'btn btn-sm bg-info-surface text-info-fg disabled:opacity-100 disabled:cursor-default'
+                    : ACCOUNT_ACTION;
                 global.disabled = globalDefault;
                 global.addEventListener('click', function () {
                     setDefaultCAAccount(provider, accountId, account, true);
@@ -2487,23 +2493,23 @@
                 row.appendChild(global);
                 var checkButton = document.createElement('button');
                 checkButton.type = 'button';
-                checkButton.textContent = 'Check credentials';
-                checkButton.className = 'text-xs px-2 py-1 rounded bg-surface-2 text-label hover:bg-hover';
+                checkButton.innerHTML = accountButtonHtml('check', 'Check credentials');
+                checkButton.className = ACCOUNT_ACTION;
                 checkButton.addEventListener('click', function () {
                     checkCAAccount(provider, accountId, checkButton);
                 });
                 row.appendChild(checkButton);
                 var edit = document.createElement('button');
                 edit.type = 'button';
-                edit.textContent = 'Edit';
-                edit.className = 'text-xs px-2 py-1 rounded bg-info-surface text-info-fg hover:bg-blue-200 dark:hover:bg-blue-900/50';
+                edit.innerHTML = accountButtonHtml('edit', 'Edit');
+                edit.className = ACCOUNT_ACTION;
                 edit.addEventListener('click', function () { openCAAccountModal(provider, accountId); });
                 row.appendChild(edit);
                 var remove = document.createElement('button');
                 remove.type = 'button';
-                remove.textContent = 'Delete';
-                remove.className = 'text-xs px-2 py-1 rounded bg-danger-surface text-danger-fg ' +
-                    (globalDefault ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-200 dark:hover:bg-red-900/40');
+                remove.innerHTML = accountButtonHtml('delete', 'Delete');
+                // .btn dims a disabled button and shows it cannot be pressed.
+                remove.className = ACCOUNT_DELETE;
                 remove.disabled = globalDefault;
                 remove.title = globalDefault ? 'Choose another global default CA account before deleting this one' : '';
                 remove.addEventListener('click', function () { deleteCAAccount(provider, accountId); });
@@ -3367,23 +3373,27 @@
             '<option value="">Choose source backend...</option>' +
             '<option value="local_filesystem">Local filesystem</option>' +
             '</select>' +
+            // What POST /api/storage/migrate does (#1511, P42): every
+            // certificate the source lists is written into the target with
+            // store_certificate, which replaces one of the same name there;
+            // the source is only read; the settings are not saved.
             '<div class="mt-3 p-3 bg-warning-surface border border-warning-line rounded-md">' +
             '<div class="flex">' +
-            '<i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5 mr-2"></i>' +
+            '<i class="fas fa-exclamation-triangle text-warning-fg mt-0.5 mr-2" aria-hidden="true"></i>' +
             '<div class="text-sm text-warning-strong">' +
-            '<strong>Important:</strong> This operation will copy certificates to the new backend. ' +
-            'Original certificates will remain in the current location until manually removed.' +
+            'Copies every certificate in the source into the backend shown in Settings, overwriting a certificate with the same name there. ' +
+            'The source keeps its copies until you remove them. ' +
+            'Nothing in Settings changes: CertMate keeps using the saved storage settings until you save them.' +
             '</div>' +
             '</div>' +
             '</div>' +
             '</div>' +
             '<div class="flex justify-end space-x-3">' +
-            '<button type="button" id="storageMigCancelBtn" ' +
-            'class="px-4 py-2 text-sm font-medium text-label bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">' +
+            '<button type="button" id="storageMigCancelBtn" class="btn btn-secondary">' +
             'Cancel' +
             '</button>' +
-            '<button type="button" id="storageMigStartBtn" ' +
-            'class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">' +
+            // Amber, like the button that opened this: it is the risky step.
+            '<button type="button" id="storageMigStartBtn" class="btn btn-warning">' +
             '<i class="fas fa-play mr-1"></i>Start Migration' +
             '</button>' +
             '</div>' +

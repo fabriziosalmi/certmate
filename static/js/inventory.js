@@ -71,18 +71,19 @@
     }
 
     // The pill's colour is the renewal state, in the dashboard's words on
-    // hover (P25): Overdue red, Due amber, Valid green.
+    // hover (P25): Overdue red, Due amber, Valid green. It is the status pill
+    // of the server and client lists (#1511, P68), with the dashboard's icon
+    // for each state.
     function statusBadge(status, days) {
         var map = {
-            expired: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Expired', 'Expired'],
-            critical: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', days + 'd', 'Renewal overdue'],
-            warning: ['bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', days + 'd', 'Renewal due'],
-            ok: ['bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', days + 'd', 'Valid: renewal not due yet'],
-            unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', '—', '']
+            expired: ['danger', 'fa-times-circle', 'Expired', 'Expired'],
+            critical: ['danger', 'fa-circle-exclamation', days + 'd', 'Renewal overdue'],
+            warning: ['warning', 'fa-exclamation-triangle', days + 'd', 'Renewal due'],
+            ok: ['success', 'fa-check-circle', days + 'd', 'Valid: renewal not due yet'],
+            unknown: ['neutral', 'fa-minus', '—', '']
         };
         var m = map[status] || map.unknown;
-        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' + m[0] + '"'
-            + (m[2] ? ' title="' + escapeHtml(m[2]) + '"' : '') + '>' + escapeHtml(m[1]) + '</span>';
+        return CertMate.statusBadge(m[0], m[1], m[2], m[3]);
     }
 
     // Only a verified answer is shown as good or revoked; everything else is

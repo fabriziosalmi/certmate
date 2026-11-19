@@ -127,7 +127,7 @@ document.addEventListener('alpine:init', function () {
              `invisible` also takes it out of the tab order and the accessibility tree. -->
         <span class="mx-0.5 sm:mx-1 h-6 w-px bg-border" aria-hidden="true" :class="$store.certs.view === 'acme' ? 'invisible' : ''"></span>
         <button type="button" @click="$store.certs.openDrawer()" :class="$store.certs.view === 'acme' ? 'invisible' : ''"
-                class="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
+                class="btn btn-primary gap-1 sm:gap-1.5 px-2 sm:px-3"
                 title="New certificate">
             <i class="fas fa-plus" aria-hidden="true"></i>New
         </button>

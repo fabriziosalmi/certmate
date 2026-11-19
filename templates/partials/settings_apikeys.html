@@ -79,7 +79,7 @@
                         <p class="text-xs text-success-fg mt-1 mb-2">Copy this token now. It will not be shown again.</p>
                         <div class="flex items-center space-x-2">
                             <code class="flex-1 px-3 py-2 bg-surface text-foreground border border-success-line rounded text-sm font-mono break-all" x-text="createdToken"></code>
-                            <button type="button" @click="copyToken()" title="Copy token" class="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"><i class="fas fa-copy"></i></button>
+                            <button type="button" @click="copyToken()" title="Copy token" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
                         </div>
                     </div>
                 </div>
@@ -215,7 +215,7 @@
 
             <div class="mt-6 flex justify-end">
                 <button type="button" @click="save()" :disabled="saving" title="Save rate limits" data-saves
-                        class="px-4 py-2 bg-yellow-700 text-white rounded-md hover:bg-yellow-800 text-sm whitespace-nowrap">
+                        class="btn btn-primary whitespace-nowrap">
                     <i class="fas fa-save mr-1"></i>
                     <span x-text="saving ? 'Saving...' : 'Save Rate Limits'"></span>
                 </button>

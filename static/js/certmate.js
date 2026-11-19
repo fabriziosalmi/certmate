@@ -18,6 +18,28 @@
             .replace(/'/g, '&#39;');
     };
 
+    // ── One status badge (#1511, P68) ────────────────────────────
+    // The state of a row on the server list, the client list and the
+    // inventory: a 20 px pill with an icon and a label, in the colour of
+    // the state. The client "Active" was a square chip, the shape of the
+    // "vpn" usage tag beside it, and the inventory pill another green with
+    // no icon. Square chips are for category tags (a usage, a source).
+    // Returns HTML: the label and the title are escaped here.
+    var STATUS_TONES = {
+        success: 'bg-green-500/10 text-success-fg ring-green-500/20',
+        warning: 'bg-yellow-500/10 text-warning-fg ring-yellow-500/20',
+        danger: 'bg-red-500/10 text-danger-fg ring-red-500/20',
+        info: 'bg-blue-500/10 text-info-fg ring-blue-500/20',
+        neutral: 'bg-surface-2 text-muted ring-border'
+    };
+    CM.statusBadge = function(tone, icon, label, title) {
+        var glyph = String(icon || 'fa-circle').replace(/[^a-z0-9 -]/g, '');
+        return '<span class="inline-flex items-center gap-1 h-5 px-2 rounded-full text-xs font-medium whitespace-nowrap ring-1 ring-inset ' +
+            (STATUS_TONES[tone] || STATUS_TONES.neutral) + '"' +
+            (title ? ' title="' + CM.escapeHtml(title) + '"' : '') + '>' +
+            '<i class="fas ' + glyph + '" aria-hidden="true"></i>' + CM.escapeHtml(label) + '</span>';
+    };
+
     // What a CA account still lacks before it can issue, as keys of
     // CA_ACCOUNT_NEEDS: [] when it can. The global contact email stands in
     // for an account's own, as it does when CertMate issues.
@@ -407,10 +429,11 @@
         setTimeout(function() { overlay.remove(); }, 200);
     }
 
-    var BTN_BASE = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800';
-    var BTN_CANCEL = BTN_BASE + ' bg-surface-2 text-label hover:bg-gray-200 dark:hover:bg-gray-600 focus:ring-gray-300';
-    var BTN_DANGER = BTN_BASE + ' bg-red-600 text-white hover:bg-red-700 focus:ring-red-500';
-    var BTN_PRIMARY = BTN_BASE + ' bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500';
+    // The dialogs' buttons are the page's buttons (#1511, P42): the confirm
+    // was Tailwind blue-600 beside the brand blue of every other primary.
+    var BTN_CANCEL = 'btn btn-secondary';
+    var BTN_DANGER = 'btn btn-danger';
+    var BTN_PRIMARY = 'btn btn-primary';
 
     CM.confirm = function(message, title, options) {
         title = title || 'Confirm';

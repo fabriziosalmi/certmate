@@ -100,7 +100,7 @@
                                             <button type="button"
                                                     id="azure-backfill-btn"
                                                     data-click="backfillAzureCertificateObjects"
-                                                    class="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                                                    class="btn btn-secondary">
                                                 <i class="fas fa-cloud-upload-alt mr-1"></i> Backfill Certificate objects
                                             </button>
                                             <p class="text-xs text-info-fg mt-1">
@@ -321,11 +321,11 @@
                             <!-- Storage Backend Actions -->
                             <div class="flex flex-wrap gap-3 pt-2 border-t border-border">
                                 <button type="button" data-click="testStorageBackend" 
-                                        class="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                                        class="btn btn-secondary">
                                     <i class="fas fa-plug mr-1"></i> Test Connection
                                 </button>
                                 <button type="button" data-click="showStorageMigrationModal" 
-                                        class="bg-yellow-700 text-white px-3 py-2 rounded-md hover:bg-yellow-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors text-sm">
+                                        class="btn btn-warning">
                                     <i class="fas fa-exchange-alt mr-1"></i> Migrate Certificates
                                 </button>
                                 <div class="text-xs text-muted flex items-center">
@@ -363,7 +363,7 @@
                         <div class="flex justify-end mt-6 -mx-6 px-6 py-3 bg-surface border-t border-border">
                             <!-- One form holds the DNS, General and Storage tabs, so
                                  this one button saves all three and says so (UX audit P28). -->
-                            <button type="submit" id="saveBtn" data-saves class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
+                            <button type="submit" id="saveBtn" data-saves class="btn btn-primary">
                                 <i class="fas fa-save mr-2"></i>
                                 Save DNS, General and Storage
                             </button>

@@ -370,7 +370,7 @@
                             <!-- CA Provider Actions -->
                             <div class="flex flex-wrap gap-3 pt-2 border-t border-border">
                                 <button type="button" data-click="testCAProvider" 
-                                        class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm font-medium">
+                                        class="btn btn-secondary font-medium">
                                     <i class="fas fa-plug mr-1"></i> Check configuration
                                 </button>
                                 <div class="text-xs text-muted flex items-center">
@@ -382,8 +382,8 @@
                                 <p id="ca-test-result" class="hidden w-full text-sm"></p>
                             </div>
                             <div class="flex justify-end gap-2 pt-2">
-                                <button type="button" data-modal-close class="px-3 py-2 border border-border rounded">Cancel</button>
-                                <button type="button" data-click="saveCAAccount" class="px-3 py-2 bg-primary text-white rounded">Save Account</button>
+                                <button type="button" data-modal-close class="btn btn-secondary">Cancel</button>
+                                <button type="button" data-click="saveCAAccount" class="btn btn-primary">Save Account</button>
                             </div>
                         </div>
                     {% endcall %}

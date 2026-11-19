@@ -103,7 +103,9 @@ const payload = JSON.parse(process.env.PAYLOAD);
 const steps = JSON.parse(process.env.STEPS);
 const context = {
   window: {}, console, Promise,
-  CertMate: {globalActions() {}, actions() {}},
+  // The status pill is drawn by certmate.js (CertMate.statusBadge, #1511 P68),
+  // not loaded here: these tests read which rows are listed and in what order.
+  CertMate: {globalActions() {}, actions() {}, statusBadge: (tone, icon, label) => '<span>' + label + '</span>'},
   document: {
     getElementById: el, addEventListener() {},
     querySelectorAll(sel) {

@@ -18,11 +18,11 @@
                      unexplained no-op reads as a broken button. -->
                 <span id="scanMsg" class="text-xs text-muted" role="status"></span>
                 <button type="button" id="scanNowBtn" data-click="InventoryPage.runScan"
-                        class="{% if not inventory_admin %}hidden {% endif %}px-2.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"
+                        class="{% if not inventory_admin %}hidden {% endif %}btn btn-primary btn-sm"
                         title="Run a discovery sweep and CT-log poll now">
                     <i class="fas fa-magnifying-glass mr-1"></i>Scan now
                 </button>
-                <button type="button" data-click="InventoryPage.load" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh inventory">
+                <button type="button" data-click="InventoryPage.load" class="btn btn-secondary btn-sm" title="Refresh" aria-label="Refresh inventory">
                     <i class="fas fa-sync"></i>
                 </button>
             </div>
@@ -228,7 +228,7 @@
             </div>
             <div class="px-6 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">
                 <span id="cfgMsg" class="text-xs text-muted mr-auto"></span>
-                <button type="button" data-click="InventoryPage.saveConfig" class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition">Save configuration</button>
+                <button type="button" data-click="InventoryPage.saveConfig" class="btn btn-primary">Save configuration</button>
             </div>
         </details>
     </div>

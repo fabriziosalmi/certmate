@@ -1220,7 +1220,7 @@
                     '<p class="text-muted">Follow these steps to get started:</p>' +
                     '</div>' +
                     '<ol id="welcomeSteps" class="space-y-3 mb-6 text-sm">' + welcomeStepsHtml() + '</ol>' +
-                    '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
+                    '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="btn btn-primary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
             }
@@ -1275,7 +1275,7 @@
             if (!cert.exists) {
                 return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" data-click="openCertRow" data-pass="el">
                     <td class="px-6 py-4 md:max-w-0">${nameButton(title)}${ipHint}</td>
-                    <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
+                    <td class="px-4 py-4 whitespace-nowrap">${rowRaw(CertMate.statusBadge('danger', 'fa-times-circle', 'Not Found'))}</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
@@ -1292,23 +1292,22 @@
             var isExpired = hasExpired(cert);
             var isExpiringSoon = !isExpired && isExpiring(cert);
             var isOverdueRow = isExpiringSoon && isOverdue(cert);
-            var statusClass, statusIcon, statusText, healthClass;
+            // The tone and icon of the row's status badge (CertMate.statusBadge).
+            var statusTone, statusIcon, statusText, healthClass;
             var keylessRow = lostItsKey(cert);
             if (keylessRow) {
-                statusClass = isExpired
-                    ? 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'
-                    : 'bg-yellow-500/10 text-warning-fg ring-1 ring-inset ring-yellow-500/20';
+                statusTone = isExpired ? 'danger' : 'warning';
                 statusIcon = 'fa-key'; statusText = 'Needs reissue';
                 healthClass = isExpired ? 'health-expired' : 'health-warning';
             } else if (isExpired) {
-                statusClass = 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
+                statusTone = 'danger'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
             } else if (isOverdueRow) {
                 // Overdue is red and Due amber (P25): they shared the amber "Expiring".
-                statusClass = 'bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20'; statusIcon = 'fa-circle-exclamation'; statusText = 'Overdue'; healthClass = 'health-expired';
+                statusTone = 'danger'; statusIcon = 'fa-circle-exclamation'; statusText = 'Overdue'; healthClass = 'health-expired';
             } else if (isExpiringSoon) {
-                statusClass = 'bg-yellow-500/10 text-warning-fg ring-1 ring-inset ring-yellow-500/20'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Due'; healthClass = 'health-warning';
+                statusTone = 'warning'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Due'; healthClass = 'health-warning';
             } else {
-                statusClass = 'bg-green-500/10 text-success-fg ring-1 ring-inset ring-green-500/20'; statusIcon = 'fa-check-circle'; statusText = 'Valid'; healthClass = 'health-valid';
+                statusTone = 'success'; statusIcon = 'fa-check-circle'; statusText = 'Valid'; healthClass = 'health-valid';
             }
 
             var expiryDate = new Date(cert.expiry_date);
@@ -1415,7 +1414,7 @@
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}" title="${statusTitle}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span>${renewalFailedChip}</td>
+                <td class="px-4 py-4 whitespace-nowrap">${rowRaw(CertMate.statusBadge(statusTone, statusIcon, statusText, statusTitle))}${renewalFailedChip}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${external ? 'Replace by ' + expiryStr : expiryStr}</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(caCell)}</td>
@@ -1694,8 +1693,8 @@
             '<textarea id="certLabelNotes" rows="3" maxlength="2000" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" ' +
             'placeholder="Where it is installed, which ticket it was issued for, who owns it">' + escapeHtml(cert.notes || '') + '</textarea>' +
             '<div class="mt-3 flex items-center gap-2">' +
-            '<button type="button" data-labels-save class="px-3 py-1.5 bg-primary text-white rounded text-sm">Save</button>' +
-            '<button type="button" data-labels-cancel class="px-3 py-1.5 rounded border border-border text-sm text-muted hover:text-foreground">Cancel</button>' +
+            '<button type="button" data-labels-save class="btn btn-primary">Save</button>' +
+            '<button type="button" data-labels-cancel class="btn btn-secondary">Cancel</button>' +
             '</div>';
         section.querySelector('[data-labels-save]').addEventListener('click', function () { saveLabels(domain); });
         section.querySelector('[data-labels-cancel]').addEventListener('click', function () {
@@ -3752,7 +3751,7 @@
             'Accept a certificate that expires before this one</label>' +
             '<div class="flex justify-end gap-2">' +
             '<button type="button"' + CertMate.does('click', 'closeReplaceCertificate', []) + 'class="px-3 py-1.5 text-sm rounded-lg border border-border text-label hover:bg-hover">Cancel</button>' +
-            '<button type="button" id="replaceCertificateSubmit"' + CertMate.does('click', 'submitReplaceCertificate', [cert.domain]) + 'class="btn-cta px-4 py-1.5 text-sm">Replace certificate</button>' +
+            '<button type="button" id="replaceCertificateSubmit"' + CertMate.does('click', 'submitReplaceCertificate', [cert.domain]) + 'class="btn btn-primary">Replace certificate</button>' +
             '</div></div>';
     }
 
@@ -4512,7 +4511,7 @@
             '<i class="fas fa-spinner fa-spin text-info-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
             '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="' + domain + '">' + domain + '</div>' +
             '<div class="mt-1 text-xs text-muted">' + sub + '</div></div></div></td>' +
-            '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-info-fg ring-1 ring-inset ring-blue-500/20"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Issuing</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap">' + CertMate.statusBadge('info', 'fa-spinner fa-spin', 'Issuing') + '</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
             // CA and Deployment columns: the table has seven, and a pending row
@@ -4548,7 +4547,7 @@
             (stagingWouldHelp(job.jobCaProvider || job.caProvider, false, job.caFailure)
                 ? stagingHintHtml(job.domain, !!ipAddressOf(job.domain || ''), 'text-xs') : '') +
             '</div></div></td>' +
-            '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap">' + CertMate.statusBadge('danger', 'fa-times-circle', 'Failed') + '</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
             // CA and Deployment columns (seven-column table): see issuingRowHtml.

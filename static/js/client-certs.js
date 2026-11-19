@@ -203,7 +203,7 @@
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-id-card text-blue-500 text-2xl" aria-hidden="true"></i></div>' +
                     '<h3 class="text-lg font-medium text-foreground mb-2">No client certificates yet</h3>' +
                     '<p class="text-muted mb-6">Issue mTLS / client identity certificates for VPN access, API authentication, or user login.</p>' +
-                    '<button type="button"' + CertMate.does('click', 'openCertDrawer', ['client']) + 'class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2" aria-hidden="true"></i>New Client Certificate</button>' +
+                    '<button type="button"' + CertMate.does('click', 'openCertDrawer', ['client']) + 'class="btn btn-primary"><i class="fas fa-plus mr-2" aria-hidden="true"></i>New Client Certificate</button>' +
                     '</div></td></tr>';
             }
             return;
@@ -220,9 +220,11 @@
             var safeEmail = escapeHtml(cert.email || '-');
             var safeUsage = escapeHtml(cert.cert_usage);
             var safeId = escapeHtml(cert.identifier);
+            // The status is the one status pill; the usage beside it stays a
+            // square tag (#1511, P68): they had the same shape.
             var statusPill = cert.revoked
-                ? '<span class="px-2 py-1 bg-danger-surface text-danger-strong rounded text-xs font-medium">Revoked</span>'
-                : '<span class="px-2 py-1 bg-success-surface text-success-strong rounded text-xs font-medium">Active</span>';
+                ? CertMate.statusBadge('danger', 'fa-ban', 'Revoked')
+                : CertMate.statusBadge('success', 'fa-check-circle', 'Active');
 
             // A native row, so a screen reader walks the list as a table (P13):
             // the name is the button that opens the detail dialog, and a click

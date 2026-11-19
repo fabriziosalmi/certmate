@@ -168,7 +168,7 @@
                         <div class="flex flex-col gap-4">
                             <div data-issuance-only>
                                 <label for="domain" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-globe mr-2 text-blue-500"></i>
+                                    <i class="fas fa-globe mr-2 text-muted"></i>
                                     Domain or IP Address
                                 </label>
                                 <input type="text" id="domain" name="domain"
@@ -195,7 +195,7 @@
                             <!-- SAN Domains (optional) -->
                             <div data-issuance-only data-ip-hidden>
                                 <label for="san_entry" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-plus-circle mr-2 text-indigo-500"></i>
+                                    <i class="fas fa-plus-circle mr-2 text-muted"></i>
                                     Additional Domains (SAN)
                                     <span class="font-normal text-xs text-muted ml-1">Optional</span>
                                 </label>
@@ -232,7 +232,7 @@
                                         aria-expanded="false" aria-controls="csr_panel"
                                         class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                                     <span class="font-medium text-foreground text-sm">
-                                        <i class="fas fa-file-signature mr-2 text-purple-500"></i>
+                                        <i class="fas fa-file-signature mr-2 text-muted"></i>
                                         The private key stays on the device
                                         <span class="font-normal text-xs text-muted ml-1">Optional</span>
                                     </span>
@@ -259,7 +259,7 @@
 
                             <div data-renewal-source>
                                 <label for="ca_provider_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-shield-alt mr-2 text-green-500"></i>
+                                    <i class="fas fa-shield-alt mr-2 text-muted"></i>
                                     Certificate Authority
                                 </label>
                                 <select id="ca_provider_select" name="ca_provider" 
@@ -285,7 +285,7 @@
                         <div class="space-y-4">
                             <div data-renewal-source>
                                 <label for="challenge_type_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-flag-checkered mr-2 text-teal-500"></i>
+                                    <i class="fas fa-flag-checkered mr-2 text-muted"></i>
                                     Challenge Type
                                 </label>
                                 <select id="challenge_type_select" name="challenge_type"
@@ -305,7 +305,7 @@
                             <div id="dns-provider-container" data-renewal-source>
                             <div>
                                 <label for="dns_provider_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-server mr-2 text-purple-500"></i>
+                                    <i class="fas fa-server mr-2 text-muted"></i>
                                     DNS Provider
                                 </label>
                                 <select id="dns_provider_select" name="dns_provider"
@@ -350,7 +350,7 @@
                             
                             <div id="account-selection-container" style="display: none;">
                                 <label for="account_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-user mr-2 text-orange-500"></i>
+                                    <i class="fas fa-user mr-2 text-muted"></i>
                                     Account
                                 </label>
                                 <select id="account_select" name="account_id"
@@ -384,7 +384,7 @@
                                     <label class="flex items-center text-sm text-label">
                                         <input type="checkbox" id="wildcard-cert" class="rounded border-border text-primary focus:ring-primary dark:bg-gray-700">
                                         <span class="ml-2">
-                                            <i class="fas fa-asterisk mr-1 text-yellow-500"></i>
+                                            <i class="fas fa-asterisk mr-1 text-muted"></i>
                                             Generate wildcard certificate
                                         </span>
                                     </label>
@@ -397,7 +397,7 @@
                                      an import take none. -->
                                 <div data-issuance-only data-ip-hidden>
                                     <label for="cert_name" class="block text-sm font-medium text-label mb-1">
-                                        <i class="fas fa-signature mr-1 text-blue-500"></i>
+                                        <i class="fas fa-signature mr-1 text-muted"></i>
                                         Name <span class="text-xs font-normal text-muted">(optional)</span>
                                     </label>
                                     <input type="text" id="cert_name" name="name"
@@ -414,7 +414,7 @@
                             <!-- DNS-01 Alias Mode -->
                             <div class="mt-4" data-renewal-source data-ip-hidden>
                                 <label for="dns_alias_domain" class="block text-sm font-medium text-label mb-1">
-                                    <i class="fas fa-random mr-1 text-blue-500"></i>
+                                    <i class="fas fa-random mr-1 text-muted"></i>
                                     DNS-01 Alias Domain <span class="text-xs font-normal text-muted">(optional)</span>
                                 </label>
                                 <input type="text" id="dns_alias_domain" name="dns_alias_domain"
@@ -439,7 +439,7 @@
                             <div data-issuance-only class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="cert_key_type" class="block text-sm font-medium text-label mb-1">
-                                        <i class="fas fa-key mr-1 text-purple-500"></i>
+                                        <i class="fas fa-key mr-1 text-muted"></i>
                                         Key Type <span class="text-xs font-normal text-muted">(optional)</span>
                                     </label>
                                     <select id="cert_key_type"
@@ -479,7 +479,7 @@
                             <!-- ACME profile (#395) -->
                             <div class="mt-4" data-renewal-source>
                                 <label for="cert_acme_profile" class="block text-sm font-medium text-label mb-1">
-                                    <i class="fas fa-hourglass-half mr-1 text-purple-500"></i>
+                                    <i class="fas fa-hourglass-half mr-1 text-muted"></i>
                                     ACME Profile <span class="text-xs font-normal text-muted">(optional)</span>
                                 </label>
                                 <select id="cert_acme_profile"
@@ -500,11 +500,11 @@
                     <!-- Action Button -->
                     <div class="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
                         <div data-issuance-only class="text-sm text-muted">
-                            <i class="fas fa-shield-alt mr-1 text-green-500"></i>
+                            <i class="fas fa-shield-alt mr-1 text-muted"></i>
                             SSL certificates with automatic renewal
                         </div>
                         <button type="submit"
-                                class="btn-cta w-full sm:w-auto sm:ml-auto px-8 py-3 text-base shadow-lg hover:scale-105">
+                                class="btn btn-primary w-full sm:w-auto sm:ml-auto">
                             <i class="fas fa-magic mr-2"></i>
                             Create Certificate
                         </button>
