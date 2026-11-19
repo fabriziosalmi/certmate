@@ -147,7 +147,8 @@ INVENTORY = [_record('fine.example.test', 90 * DAY, 60 * DAY, 'good'),
              _record('due.example.test', 90 * DAY, 20 * DAY, 'unknown'),
              _record('overdue.example.test', 90 * DAY, 3 * DAY, 'unavailable'),
              _record('gone.example.test', 90 * DAY, -2 * DAY, 'revoked'),
-             _record('nodate.example.test', 90 * DAY, None, 'not_applicable')]
+             _record('nodate.example.test', 90 * DAY, None, 'not_applicable'),
+             _record('plain.example.test', 90 * DAY, 60 * DAY)]
 
 
 def _json(route, body):
@@ -259,84 +260,124 @@ def test_amber_is_only_on_the_risky_migration(page):
     assert [b['bg'] for b in save] == [BRAND], save
 
 
-def test_migrate_certificates_asks_in_its_own_dialog_before_it_copies(page):
+# What the server does with each certificate (StorageBackendMigrate,
+# migrate_certificates, each backend's store_certificate), for the target the
+# Settings form shows: (form backend, Azure storage mode) -> words that must be
+# there, and words of the other targets that must not.
+EFFECT = {
+    ('local_filesystem', None): ['into the local directory shown in Settings',
+                                 'a file the source does not have stays as it was'],
+    ('s3_compatible', None): ['into the S3-compatible bucket shown in Settings',
+                              'replacing a certificate with the same name there whole'],
+    ('azure_keyvault', 'secrets'): ['into Azure Key Vault (secrets only) shown in Settings',
+                                    'a file the source does not have stays as it was'],
+    ('azure_keyvault', 'certificate'): ['into Azure Key Vault (certificate object only) shown in Settings',
+                                        'a new version of the certificate object with the same name',
+                                        'A certificate without a private key cannot be imported: '
+                                        'it is counted as failed and nothing is written for it'],
+    ('azure_keyvault', 'both'): ['into Azure Key Vault (secrets and certificate object) shown in Settings',
+                                 'a file the source does not have stays as it was',
+                                 'its secrets are written first, so it is counted as failed after being partly copied'],
+}
+EVERYWHERE = ['A certificate that cannot be copied is counted as failed', 'the migration goes on with the others',
+              'The source keeps its copies', 'Nothing in Settings changes']
+
+
+def _migration_dialog(page, source=None):
+    page.click('button:has-text("Migrate Certificates")')
+    dialog = page.locator('#storageMigrationModal[role=dialog]')
+    dialog.wait_for(state='visible')
+    if source is not None:
+        page.select_option('#storageMigSource', source)
+    return dialog
+
+
+@pytest.mark.parametrize('target', list(EFFECT), ids=lambda t: '-'.join(x for x in t if x))
+def test_migrate_certificates_says_what_it_writes_into_the_backend_settings_shows(page, target):
     sent = []
     page.route('**/api/storage/migrate', lambda route: (sent.append(route.request.url), _json(route, {}))[1])
     page.on('dialog', lambda d: (sent.append('window dialog: ' + d.message), d.dismiss()))
     _open(page, '/settings#storage')
-    page.click('button:has-text("Migrate Certificates")')
-    dialog = page.locator('#storageMigrationModal[role=dialog]')
-    dialog.wait_for(state='visible')
+    backend, mode = target
+    page.select_option('#storage-backend', backend)
+    if mode:
+        page.select_option('#azure-storage-mode', mode)
+    dialog = _migration_dialog(page)
     text = ' '.join(dialog.inner_text().split())
-    # What the server does (StorageBackendMigrate, migrate_certificates): each
-    # certificate of the source is written into the target, file by file on
-    # the local filesystem, Azure Key Vault and Infisical (a target file the
-    # source lacks stays), whole on AWS, Vault and S3; it goes on after a
-    # failure and counts it; the source is not touched; nothing is saved.
-    for words in ('Copies each certificate', 'its files are written over those of a certificate with the same name',
-                  'a file the source does not have stays as it was',
-                  'AWS Secrets Manager, HashiCorp Vault and S3 replace the certificate whole',
-                  'A certificate that cannot be copied is counted as failed',
-                  'The source keeps its copies', 'Nothing in Settings changes'):
-        assert words in text, (words, text)
+    for words in EFFECT[target] + EVERYWHERE:
+        assert words in text, (target, words, text)
+    for other, phrases in EFFECT.items():
+        if other != target:
+            assert phrases[0] not in text, (target, phrases[0])
     dialog.locator('button:has-text("Cancel")').click()
     dialog.wait_for(state='detached')
     assert sent == [], sent
 
 
-def _migration_dialog(page, source):
-    page.click('button:has-text("Migrate Certificates")')
-    dialog = page.locator('#storageMigrationModal[role=dialog]')
-    dialog.wait_for(state='visible')
-    page.select_option('#storageMigSource', source)
-    return dialog
+SAME = ('If this source is the same location as the backend in use, there is nothing to copy: '
+        'each certificate would be written onto itself and counted as migrated.')
 
 
-def test_the_backend_in_use_is_not_offered_as_a_migration_onto_itself(page):
-    """Picking the saved backend as the source while Settings still shows it
-    unchanged copied every certificate onto itself and reported it migrated."""
-    sent = []
-    page.route('**/api/storage/migrate', lambda route: (sent.append(route.request.url), _json(route, {}))[1])
+def test_a_source_of_the_backend_in_use_says_it_may_be_a_copy_onto_itself(page):
+    """The server does not refuse a migration onto the same location: it writes
+    each certificate onto itself and counts it migrated. The page cannot always
+    tell the same location from another one of the same type (another bucket,
+    a directory written another way), so it says so and leaves Start on."""
+    def settings(route):
+        if route.request.method != 'GET':
+            return route.continue_()
+        body = route.fetch().json()
+        storage = dict(body.get('certificate_storage') or {}, backend='local_filesystem')
+        storage['s3_compatible'] = {'bucket': 'other-b18', 'auth_mode': 'iam_role'}
+        body['certificate_storage'] = storage
+        return _json(route, body)
+    page.route('**/api/web/settings', settings)
     _open(page, '/settings#storage')
     page.wait_for_function("() => document.getElementById('storage-backend').value === 'local_filesystem'")
     dialog = _migration_dialog(page, 'local_filesystem')
     same = dialog.locator('#storageMigSame')
     start = dialog.locator('#storageMigStartBtn')
-    assert same.is_visible(), dialog.inner_text()
-    assert 'is the backend in use' in same.inner_text() and 'nothing to copy' in same.inner_text(), same.inner_text()
-    assert start.is_disabled()
-    # No source chosen yet: the note goes, the button is back.
-    page.select_option('#storageMigSource', '')
+    assert same.is_visible() and ' '.join(same.inner_text().split()) == SAME, same.inner_text()
+    assert start.is_enabled()
+    # Another type than the one in use: not said.
+    page.select_option('#storageMigSource', 's3_compatible')
     assert not same.is_visible() and start.is_enabled()
+    page.select_option('#storageMigSource', '')
+    assert not same.is_visible()
     dialog.locator('button:has-text("Cancel")').click()
-    dialog.wait_for(state='detached')
-    # CONTROL: the same backend with another directory in the form is a real migration.
-    page.fill('#storage-cert-dir', '/tmp/elsewhere-b18')
-    dialog = _migration_dialog(page, 'local_filesystem')
-    assert not dialog.locator('#storageMigSame').is_visible()
-    assert dialog.locator('#storageMigStartBtn').is_enabled()
-    dialog.locator('button:has-text("Cancel")').click()
-    assert sent == [], sent
 
 
-def test_the_add_account_buttons_stay_on_one_line_on_a_phone(browser_page, ui_session_cookie):
-    """At 390 px "Add Account" and "Add CA Account" wrapped onto two lines, 54 px tall."""
-    context = browser_page.context.browser.new_context(viewport={'width': 390, 'height': 844})
+ROW_FIT = """(button) => {
+  const card = button.closest('.p-4, .px-4');
+  const b = button.getBoundingClientRect(), c = card.getBoundingClientRect(), s = getComputedStyle(card);
+  return {h: Math.round(b.height), inside: b.left >= c.left + parseFloat(s.paddingLeft) - 0.5
+          && b.right <= c.right - parseFloat(s.paddingRight) + 0.5};
+}"""
+
+
+@pytest.mark.parametrize('width', [360, 390])
+def test_the_add_account_buttons_stay_one_line_and_inside_their_card_on_a_phone(
+        browser_page, ui_session_cookie, width):
+    """At 390 px "Add Account" and "Add CA Account" wrapped onto two lines, 54
+    px tall; kept on one line, at 360 px they ran 16 px onto the card's padding.
+    The row wraps instead: the button moves under the heading."""
+    context = browser_page.context.browser.new_context(viewport={'width': width, 'height': 844})
     context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
     phone = context.new_page()
     try:
-        heights = {}
+        seen = {}
         phone.goto(BASE_URL + '/settings#dns', wait_until='networkidle')
-        phone.click('label:has(input[name="dns_provider"][value="cloudflare"])')
-        button = phone.locator('#cloudflare-add-account')
-        button.wait_for(state='visible')
-        heights['Add Account'] = button.bounding_box()['height']
+        for provider in ('cloudflare', 'rfc2136'):
+            phone.click(f'label:has(input[name="dns_provider"][value="{provider}"])')
+            button = phone.locator(f'#{provider}-add-account')
+            button.wait_for(state='visible')
+            seen[provider] = button.evaluate(ROW_FIT)
         phone.goto(BASE_URL + '/settings#ca', wait_until='networkidle')
         phone.reload(wait_until='networkidle')
         button = phone.locator('button:has-text("Add CA Account")')
         button.wait_for(state='visible')
-        heights['Add CA Account'] = button.bounding_box()['height']
-        assert heights == {'Add Account': 36, 'Add CA Account': 36}, heights
+        seen['ca'] = button.evaluate(ROW_FIT)
+        assert all(v == {'h': 36, 'inside': True} for v in seen.values()), (width, seen)
     finally:
         context.close()
 
@@ -403,6 +444,9 @@ def _badges(page):
     page.wait_for_selector('#inventoryBody tr td >> text=fine.example.test')
     inventory = page.locator('#inventoryBody tr > td:nth-child(3) > span:first-child').evaluate_all(BADGE)
     revocation = page.locator('#inventoryBody tr > td:nth-child(3) > div > span').evaluate_all(BADGE)
+    # A row with no revocation answer draws no empty line under its expiry.
+    empty = page.locator('#inventoryBody tr > td:nth-child(3) > div:empty').count()
+    assert empty == 0, empty
     return server, client, usage, inventory, revocation
 
 
@@ -412,7 +456,7 @@ def test_every_status_badge_is_one_pill_with_an_icon_and_a_tag_stays_square(page
     # expiry date says so in a word (it was a minus icon and a dash).
     assert sorted(b['text'] for b in server) == ['Due', 'Expired', 'Overdue', 'Valid'], server
     assert sorted(b['text'] for b in client) == ['Active', 'Revoked'], client
-    assert [b['text'] for b in inventory][3:] == ['Expired', 'Unknown'], inventory
+    assert [b['text'] for b in inventory][3:5] == ['Expired', 'Unknown'] and len(inventory) == 6, inventory
     # The revocation answer under the expiry is the same pill, in the same cell.
     assert sorted(b['text'] for b in revocation) == ['Not revoked', 'Revocation unknown', 'Revocation unverified',
                                                       'Revoked', 'Self-signed'], revocation
@@ -428,8 +472,8 @@ def test_a_good_badge_is_the_same_green_on_the_three_lists(page):
     server = {b['text']: b for b in server}
     client = {b['text']: b for b in client}
     revocation = {b['text']: b for b in revocation}
-    # The inventory rows come in the order of INVENTORY: 60, 20, 3 days, gone, no date.
-    ok, due, overdue, gone, nodate = inventory
+    # The inventory rows come in the order of INVENTORY: 60, 20, 3 days, gone, no date, 60.
+    ok, due, overdue, gone, nodate, _plain = inventory
     good = [server['Valid'], client['Active'], ok, revocation['Not revoked']]
     looks = {(b['bg'], b['color'], b['ring']) for b in good}
     assert len(looks) == 1, good

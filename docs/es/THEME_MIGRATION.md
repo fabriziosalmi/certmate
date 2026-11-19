@@ -1,6 +1,6 @@
 # Migración de tema — desacoplamiento claro/oscuro mediante tokens de variables CSS
 
-<!-- CERTMATE-TRANSLATED-FROM ab5adb762dd4c43e -->
+<!-- CERTMATE-TRANSLATED-FROM c5fc6babcbbbd54a -->
 
 Estado: **entregado** (Fases 0–5 en v2.9.0, Fases 6–9 después; Fase 10 planificada) · Propietario: Fabrizio · Creado: 2026-05-25
 
@@ -155,7 +155,7 @@ Unos pocos residuos (`dark:text-gray-400{%`, `dark:text-gray-300'`) son atributo
 - No hecho en esta fase: adopción de `.btn`/`.form-*` en los sitios de llamada (los sitios
   de llamada inline ya estaban tokenizados; forzar los componentes habría cambiado el tamaño
   de los botones sin ninguna ganancia de desacoplamiento). `.btn` se adoptó más tarde por otra
-  razón (#1511, auditoría UX P42): los botones rellenos medían de 28 a 50 px de alto, en tres azules, un índigo, un verde, un ámbar y un casi negro, además del rojo de un borrado.
+  razón (#1511, auditoría UX P42): los botones rellenos medían de 28 a 50 px de alto, en tres azules, un índigo, un verde, un ámbar y un casi negro, además del rojo, en un borrado y en el Reintentar de la página de SSO.
   Los botones rellenos de la app (salvo el interruptor de la consola de depuración de los
   ajustes) son ahora `.btn` con `.btn-primary`, `.btn-danger`, `.btn-warning` (ámbar, solo
   para migrar certificados) o `.btn-secondary`, de 36 px de alto, y `.btn-sm` (28 px) en las

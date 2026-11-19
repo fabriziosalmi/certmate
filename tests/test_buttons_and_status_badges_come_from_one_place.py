@@ -149,3 +149,12 @@ def test_the_cancel_beside_a_primary_is_a_secondary_button(path, marker):
     tag = text[at:at + 400]
     classes = CLASS.search(tag).group(1)
     assert classes.split()[:2] == ['btn', 'btn-secondary'], (path, classes)
+
+
+def test_a_registration_with_no_known_expiry_is_not_called_a_certificate():
+    """The expiry pill's "Unknown" said "for this certificate"; the domain
+    registrations draw the same pill."""
+    inventory = (REPO / 'static' / 'js' / 'inventory.js').read_text(encoding='utf-8')
+    cell = inventory[inventory.index('function registrationExpiryCell'):]
+    cell = cell[:cell.index('\n    }\n')]
+    assert 'this registration' in cell, cell[:300]

@@ -1,6 +1,6 @@
 # Migration de thème — découplage clair/sombre via des tokens de variables CSS
 
-<!-- CERTMATE-TRANSLATED-FROM ab5adb762dd4c43e -->
+<!-- CERTMATE-TRANSLATED-FROM c5fc6babcbbbd54a -->
 
 Statut : **livrée** (Phases 0–5 dans v2.9.0, Phases 6–9 ensuite ; Phase 10 planifiée) · Propriétaire : Fabrizio · Créé : 2026-05-25
 
@@ -167,7 +167,7 @@ Quelques reliquats (`dark:text-gray-400{%`, `dark:text-gray-300'`) sont des attr
 - Non fait dans cette phase : adoption de `.btn`/`.form-*` aux sites d'appel (les sites
   d'appel inline étaient déjà tokenisés ; imposer les composants aurait changé la taille
   des boutons sans gain de découplage). `.btn` a été adopté plus tard pour une autre raison
-  (#1511, audit UX P42) : les boutons pleins mesuraient de 28 à 50 px de haut, en trois bleus, un indigo, un vert, un ambre et un quasi-noir, en plus du rouge d'une suppression. Les
+  (#1511, audit UX P42) : les boutons pleins mesuraient de 28 à 50 px de haut, en trois bleus, un indigo, un vert, un ambre et un quasi-noir, en plus du rouge, sur une suppression et sur le Réessayer de la page SSO. Les
   boutons pleins de l'application (hormis le bouton de la console de débogage des
   paramètres) sont désormais `.btn` avec `.btn-primary`, `.btn-danger`, `.btn-warning`
   (ambre, uniquement pour migrer les certificats) ou `.btn-secondary`, hauts de 36 px, et

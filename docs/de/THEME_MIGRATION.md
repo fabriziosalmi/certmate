@@ -1,6 +1,6 @@
 # Theme-Migration — Entkopplung von Hell/Dunkel über CSS-Variable-Tokens
 
-<!-- CERTMATE-TRANSLATED-FROM ab5adb762dd4c43e -->
+<!-- CERTMATE-TRANSLATED-FROM c5fc6babcbbbd54a -->
 
 Status: **ausgeliefert** (Phasen 0–5 in v2.9.0, Phasen 6–9 danach; Phase 10 geplant) · Verantwortlicher: Fabrizio · Erstellt: 2026-05-25
 
@@ -163,7 +163,7 @@ Einige Überreste (`dark:text-gray-400{%`, `dark:text-gray-300'`) sind Klassenat
   (die Inline-Verwendungsstellen waren bereits tokenisiert; das Erzwingen der Komponenten
   hätte die Button-Größe ohne Entkopplungsgewinn geändert). `.btn` wurde später aus einem
   anderen Grund übernommen (#1511, UX-Audit P42): die gefüllten Buttons waren 28 bis 50 px
-  hoch, in drei Blautönen, einem Indigo, einem Grün, einem Bernstein und einem Fast-Schwarz, neben dem Rot einer Löschung. Die gefüllten Buttons der App (abgesehen vom Schalter der
+  hoch, in drei Blautönen, einem Indigo, einem Grün, einem Bernstein und einem Fast-Schwarz, neben Rot, bei einer Löschung und beim Erneut-versuchen der SSO-Seite. Die gefüllten Buttons der App (abgesehen vom Schalter der
   Debug-Konsole in den Einstellungen) sind jetzt `.btn` mit `.btn-primary`, `.btn-danger`,
   `.btn-warning` (Bernstein, nur für das Migrieren von Zertifikaten) oder `.btn-secondary`,
   36 px hoch, und `.btn-sm` (28 px) in dichten Werkzeugleisten; die Anmelde- und

@@ -166,7 +166,7 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
   call sites were already tokenised; forcing the components would have changed
   button sizing for no decoupling gain). `.btn` was adopted later for another
   reason (#1511, UX audit P42): the filled buttons were 28 to 50 px tall, in three blues, an indigo,
-  a green, an amber and a near-black besides the red of a deletion. The app's filled buttons (the settings debug-console toggle aside)
+  a green, an amber and a near-black besides red, on a deletion and on the SSO page's Retry. The app's filled buttons (the settings debug-console toggle aside)
   are now `.btn` with `.btn-primary`, `.btn-danger`, `.btn-warning` (amber, only
   for migrating certificates) or `.btn-secondary`, 36 px tall, and `.btn-sm`
   (28 px) in dense toolbars; the sign-in and first-admin pages keep their own.

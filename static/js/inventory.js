@@ -74,14 +74,14 @@
     // hover (P25): Overdue red, Due amber, Valid green. It is the status pill
     // of the server and client lists (#1511, P68), with the dashboard's icon
     // for each state.
-    function statusBadge(status, days) {
+    function statusBadge(status, days, unknownTitle) {
         var map = {
             expired: ['danger', 'fa-times-circle', 'Expired', 'Expired'],
             critical: ['danger', 'fa-circle-exclamation', days + 'd', 'Renewal overdue'],
             warning: ['warning', 'fa-exclamation-triangle', days + 'd', 'Renewal due'],
             ok: ['success', 'fa-check-circle', days + 'd', 'Valid: renewal not due yet'],
             // No expiry date that could be read: one word, not a minus and a dash.
-            unknown: ['neutral', 'fa-question-circle', 'Unknown', 'No expiry date is known for this certificate']
+            unknown: ['neutral', 'fa-question-circle', 'Unknown', unknownTitle || 'No expiry date is known for this certificate']
         };
         var m = map[status] || map.unknown;
         return CertMate.statusBadge(m[0], m[1], m[2], m[3]);
@@ -118,6 +118,12 @@
         var m = map[rev.status];
         if (!m) { return ''; }
         return CertMate.statusBadge(m[0], m[1], m[2], m[3]);
+    }
+
+    // The markup around a piece, or nothing when the piece is empty: a row with
+    // no revocation answer drew an empty line under its expiry.
+    function wrapped(html, open, close) {
+        return html ? open + html + close : '';
     }
 
     function sourceBadge(source, managed) {
@@ -354,7 +360,7 @@
                 + '<td class="px-4 py-2">' + subjectCell(r) + phoneSummary(r) + '</td>'
                 + '<td class="px-4 py-2 text-xs text-muted hidden md:table-cell">' + escapeHtml(issuerText(r)) + '</td>'
                 + '<td class="px-4 py-2 hidden md:table-cell">' + statusBadge(r.expiry_status, r.days_until_expiry)
-                    + '<div class="mt-1">' + revocationBadge(r.revocation) + '</div></td>'
+                    + wrapped(revocationBadge(r.revocation), '<div class="mt-1">', '</div>') + '</td>'
                 + '<td class="px-4 py-2 text-xs hidden md:table-cell">' + keyLabel(r.key) + '</td>'
                 + '<td class="px-4 py-2 hidden md:table-cell">' + sourceBadge(r.source, r.managed) + '</td>'
                 + '<td class="px-4 py-2 hidden md:table-cell">' + endpointsCell(r) + '</td>'
@@ -521,7 +527,7 @@
     // of showing a number nobody stated.
     function registrationExpiryCell(r) {
         if (r.status === 'ok') {
-            return statusBadge(r.expiry_status, r.days_until_expiry)
+            return statusBadge(r.expiry_status, r.days_until_expiry, 'No expiry date is known for this registration')
                 + ' <span class="text-xs text-muted">' + escapeHtml((r.expires_at || '').slice(0, 10)) + '</span>';
         }
         var words = {

@@ -1047,10 +1047,8 @@
                 }
             });
 
-            // Load storage backend settings, and keep the form as it was filled
-            // from them (migratesOntoItself compares against it).
+            // Load storage backend settings
             loadStorageBackendSettings(data);
-            savedStorageForm = JSON.stringify(collectStorageBackendSettings());
             addDebugLog('Storage backend settings loaded', 'info');
 
             // Load CA provider settings
@@ -3108,9 +3106,6 @@
     // backend (#1424): the page never fills a saved secret back in, and Test, Migrate and
     // Save all read an empty secret as "use the stored one".
     var savedStorageConfig = {};
-    // The storage form as loadStorageBackendSettings filled it from that answer
-    // (set by the settings load, right after it).
-    var savedStorageForm = '';
 
     function savedSecret(backend, key) {
         var block = (savedStorageConfig[backend] && typeof savedStorageConfig[backend] === 'object')
@@ -3349,6 +3344,44 @@
     // Storage migration
     // =============================================
 
+    // What the migration writes into the target the Settings form shows,
+    // from that backend's store_certificate (modules/core/storage_backends.py):
+    // the local filesystem, Infisical and Azure Key Vault secrets write each
+    // file sent and leave the others; AWS Secrets Manager, HashiCorp Vault and
+    // S3 write one secret or object; Azure's certificate object is imported as
+    // a new version and needs a private key, and in "both" the secrets are
+    // written before that import (#1511 review).
+    var MIGRATION_EFFECT = {
+        local_filesystem: 'Copies each certificate in the source into the local directory shown in Settings: ' +
+            'its files are written over those of a certificate with the same name there, and a file the source does not have stays as it was.',
+        aws_secrets_manager: 'Copies each certificate in the source into AWS Secrets Manager shown in Settings, ' +
+            'as one secret, replacing a certificate with the same name there whole.',
+        hashicorp_vault: 'Copies each certificate in the source into the HashiCorp Vault shown in Settings, ' +
+            'as one secret, replacing a certificate with the same name there whole.',
+        s3_compatible: 'Copies each certificate in the source into the S3-compatible bucket shown in Settings, ' +
+            'as one object, replacing a certificate with the same name there whole.',
+        infisical: 'Copies each certificate in the source into the Infisical project shown in Settings: ' +
+            'each file is written as its own secret over one with the same name, and a file the source does not have stays as it was.',
+        'azure_keyvault:secrets': 'Copies each certificate in the source into Azure Key Vault (secrets only) shown in Settings: ' +
+            'each file is written as its own secret over one with the same name, and a file the source does not have stays as it was.',
+        'azure_keyvault:certificate': 'Copies each certificate in the source into Azure Key Vault (certificate object only) shown in Settings, ' +
+            'as a new version of the certificate object with the same name, built only from the certificate, chain and key the source has. ' +
+            'A certificate without a private key cannot be imported: it is counted as failed and nothing is written for it.',
+        'azure_keyvault:both': 'Copies each certificate in the source into Azure Key Vault (secrets and certificate object) shown in Settings: ' +
+            'each file is written as its own secret over one with the same name, and a file the source does not have stays as it was; ' +
+            'then a new version of the certificate object is imported. A certificate without a private key cannot be imported, and ' +
+            'its secrets are written first, so it is counted as failed after being partly copied.'
+    };
+
+    function migrationEffect() {
+        var backend = document.getElementById('storage-backend').value;
+        if (backend === 'azure_keyvault') {
+            var mode = document.getElementById('azure-storage-mode');
+            backend += ':' + ((mode && mode.value) || 'secrets');
+        }
+        return MIGRATION_EFFECT[backend] || 'Copies each certificate in the source into the backend shown in Settings.';
+    }
+
     function showStorageMigrationModal() {
         // Create migration modal dynamically
         var modal = document.createElement('div');
@@ -3379,25 +3412,20 @@
             '<option value="local_filesystem">Local filesystem</option>' +
             '</select>' +
             '<p id="storageMigSame" class="hidden mt-2 text-sm text-label" role="status">' +
-            'This source is the backend in use, and Settings still shows it unchanged: there is nothing to copy. ' +
-            'Change the backend in Settings, or choose another source.' +
+            'If this source is the same location as the backend in use, there is nothing to copy: ' +
+            'each certificate would be written onto itself and counted as migrated.' +
             '</p>' +
-            // What POST /api/storage/migrate does (#1511, P42): each certificate
-            // the source lists is read and given to the target's
-            // store_certificate. The local filesystem, Azure Key Vault (secrets)
-            // and Infisical write each file sent and leave the others; AWS
-            // Secrets Manager, HashiCorp Vault and S3 write the certificate as
-            // one secret or object. migrate_certificates goes on after a failure
-            // and the answer counts it. The source is only read; nothing is saved.
+            // What POST /api/storage/migrate does: migrate_certificates reads
+            // each certificate the source lists and gives it to the target's
+            // store_certificate, going on after a failure and counting it. The
+            // source is only read; nothing is saved. What the target writes
+            // depends on it, and the dialog says it for the one the form shows.
             '<div class="mt-3 p-3 bg-warning-surface border border-warning-line rounded-md">' +
             '<div class="flex">' +
             '<i class="fas fa-exclamation-triangle text-warning-fg mt-0.5 mr-2" aria-hidden="true"></i>' +
             '<div class="text-sm text-warning-strong">' +
-            'Copies each certificate in the source into the backend shown in Settings: ' +
-            'its files are written over those of a certificate with the same name there. ' +
-            'On the local filesystem, Azure Key Vault and Infisical a file the source does not have stays as it was; ' +
-            'AWS Secrets Manager, HashiCorp Vault and S3 replace the certificate whole. ' +
-            'A certificate that cannot be copied is counted as failed in the result, and the others are still copied. ' +
+            migrationEffect() + ' ' +
+            'A certificate that cannot be copied is counted as failed in the result, and the migration goes on with the others. ' +
             'The source keeps its copies until you remove them. ' +
             'Nothing in Settings changes: CertMate keeps using the saved storage settings until you save them.' +
             '</div>' +
@@ -3431,10 +3459,13 @@
         document.getElementById('storageMigCloseBtn').addEventListener('click', closeStorageMigrationModal);
         document.getElementById('storageMigCancelBtn').addEventListener('click', closeStorageMigrationModal);
         document.getElementById('storageMigStartBtn').addEventListener('click', performStorageMigration);
+        // A source of the type in use may be the very location the form
+        // shows: the server does not refuse that, it writes each certificate
+        // onto itself and counts it migrated. The page cannot always tell (a
+        // retyped secret, a directory written another way), so it says so.
         sourceSelect.addEventListener('change', function () {
-            var same = migratesOntoItself(sourceSelect.value);
-            document.getElementById('storageMigSame').classList.toggle('hidden', !same);
-            document.getElementById('storageMigStartBtn').disabled = same;
+            var inUse = savedStorageConfig.backend || 'local_filesystem';
+            document.getElementById('storageMigSame').classList.toggle('hidden', sourceSelect.value !== inUse);
         });
 
         // Escape key handler
@@ -3460,15 +3491,6 @@
         }
     }
 
-    // The saved backend, chosen as the source while the form still holds it
-    // as loaded: the migration would write each certificate onto itself and
-    // report it migrated (#1511 review). A form with any edit (another
-    // bucket, another directory) is a different target.
-    function migratesOntoItself(source) {
-        return source === (savedStorageConfig.backend || 'local_filesystem') &&
-            JSON.stringify(collectStorageBackendSettings()) === savedStorageForm;
-    }
-
     function performStorageMigration() {
         var newConfig = collectStorageBackendSettings();
         var sourceBackend = document.getElementById('storageMigSource').value;
@@ -3476,7 +3498,6 @@
             showMessage('Select the source backend before migrating certificates.', 'error');
             return;
         }
-        if (migratesOntoItself(sourceBackend)) return;
         // Pull the per-backend sub-config out of the envelope produced by
         // collectStorageBackendSettings (which nests under the backend key,
         // e.g. { backend: 'azure_keyvault', azure_keyvault: {...} }). The

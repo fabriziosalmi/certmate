@@ -1,6 +1,6 @@
 # Migrazione del tema — disaccoppiamento chiaro/scuro tramite token basati su variabili CSS
 
-<!-- CERTMATE-TRANSLATED-FROM ab5adb762dd4c43e -->
+<!-- CERTMATE-TRANSLATED-FROM c5fc6babcbbbd54a -->
 
 Stato: **rilasciata** (Fasi 0–5 nella v2.9.0, Fasi 6–9 dopo di essa; Fase 10 pianificata) · Responsabile: Fabrizio · Creato: 2026-05-25
 
@@ -167,7 +167,7 @@ Alcuni residui (`dark:text-gray-400{%`, `dark:text-gray-300'`) sono attributi di
   di chiamata inline erano già tokenizzati; forzare i componenti avrebbe cambiato le
   dimensioni dei pulsanti senza alcun guadagno di disaccoppiamento). `.btn` è stato
   adottato in seguito per un'altra ragione (#1511, audit UX P42): i pulsanti pieni
-  erano alti da 28 a 50 px, in tre blu, un indaco, un verde, un ambra e un quasi nero, oltre al rosso di un'eliminazione. I pulsanti pieni dell'app (a parte il pulsante
+  erano alti da 28 a 50 px, in tre blu, un indaco, un verde, un ambra e un quasi nero, oltre al rosso, su un'eliminazione e sul Riprova della pagina SSO. I pulsanti pieni dell'app (a parte il pulsante
   della console di debug delle impostazioni) ora sono `.btn` con `.btn-primary`,
   `.btn-danger`, `.btn-warning` (ambra, solo per migrare i certificati) o
   `.btn-secondary`, alti 36 px, e `.btn-sm` (28 px) nelle barre di strumenti dense;
