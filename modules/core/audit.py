@@ -710,26 +710,37 @@ class AuditLogger:
         except Exception as e:
             logger.error(f"Failed to write audit log: {e}")
 
+    # The four lifecycle helpers below are what the client-certificate routes
+    # and the download routes call (#1511, P24). They take the resource type
+    # because a client certificate is not a server certificate: Activity offers
+    # "View certificate" for `certificate` rows, and a client certificate has no
+    # page there. `status` and `error` let a refused attempt be recorded as
+    # one, which docs/api.md promises for the lifecycle paths.
+
     def log_certificate_created(
         self,
         identifier: str,
         common_name: str,
         usage: str,
         user: Optional[str] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
+        resource_type: str = 'certificate',
+        status: str = 'success',
+        error: str | None = None,
     ) -> None:
         """Log certificate creation."""
         self.log_operation(
             operation='create',
-            resource_type='certificate',
+            resource_type=resource_type,
             resource_id=identifier,
-            status='success',
+            status=status,
             details={
                 'common_name': common_name,
                 'usage': usage
             },
             user=user,
-            ip_address=ip_address
+            ip_address=ip_address,
+            error=error,
         )
 
     def log_certificate_revoked(
@@ -737,49 +748,79 @@ class AuditLogger:
         identifier: str,
         reason: str,
         user: Optional[str] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
+        resource_type: str = 'certificate',
+        status: str = 'success',
+        error: str | None = None,
+        common_name: str | None = None,
     ) -> None:
         """Log certificate revocation."""
+        details: dict[str, Any] = {'reason': reason}
+        if common_name:
+            details['common_name'] = common_name
         self.log_operation(
             operation='revoke',
-            resource_type='certificate',
+            resource_type=resource_type,
             resource_id=identifier,
-            status='success',
-            details={'reason': reason},
+            status=status,
+            details=details,
             user=user,
-            ip_address=ip_address
+            ip_address=ip_address,
+            error=error,
         )
 
     def log_certificate_renewed(
         self,
         identifier: str,
         user: Optional[str] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
+        resource_type: str = 'certificate',
+        status: str = 'success',
+        error: str | None = None,
+        common_name: str | None = None,
+        new_identifier: str | None = None,
     ) -> None:
-        """Log certificate renewal."""
+        """Log certificate renewal. A renewed client certificate is a new
+        one, with its own identifier: ``new_identifier`` names it."""
+        details: dict[str, Any] = {}
+        if common_name:
+            details['common_name'] = common_name
+        if new_identifier:
+            details['new_identifier'] = new_identifier
         self.log_operation(
             operation='renew',
-            resource_type='certificate',
+            resource_type=resource_type,
             resource_id=identifier,
-            status='success',
+            status=status,
+            details=details or None,
             user=user,
-            ip_address=ip_address
+            ip_address=ip_address,
+            error=error,
         )
 
     def log_certificate_downloaded(
         self,
         identifier: str,
         file_type: str,
+        key_included: bool,
         user: Optional[str] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
+        resource_type: str = 'certificate',
+        common_name: str | None = None,
     ) -> None:
-        """Log certificate file download."""
+        """Log one certificate download: one request, one entry, whatever
+        the number of files in it. ``key_included`` says whether what was
+        handed over carried the private key, which is the question an
+        operator asks of this entry."""
+        details: dict[str, Any] = {'file_type': file_type, 'key_included': bool(key_included)}
+        if common_name:
+            details['common_name'] = common_name
         self.log_operation(
             operation='download',
-            resource_type='certificate',
+            resource_type=resource_type,
             resource_id=identifier,
             status='success',
-            details={'file_type': file_type},
+            details=details,
             user=user,
             ip_address=ip_address
         )
@@ -1006,6 +1047,8 @@ class AuditLogger:
         operation: str,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        status: str = 'success',
+        error: str | None = None,
     ) -> None:
         """Log a deploy hook mutation. Hook commands themselves are NOT logged
         (they can contain secrets and risk creating an injection log line).
@@ -1013,16 +1056,18 @@ class AuditLogger:
         Args:
             scope: 'global' or a domain name
             hook_id: hook identifier
-            operation: 'create' | 'update' | 'delete' | 'enable' | 'disable'
+            operation: 'create' | 'update' | 'delete' | 'enable' | 'disable' | 'test'
+            status: the outcome; a test passes only when its run did
         """
         self.log_operation(
             operation=operation,
             resource_type='deploy_hook',
             resource_id=f"{scope}:{hook_id}",
-            status='success',
+            status=status,
             details={'scope': scope},
             user=user,
             ip_address=ip_address,
+            error=error,
         )
 
     def log_authz_denied(

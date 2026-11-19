@@ -30,6 +30,17 @@
                 </div>
             </div>
         </div>
+        <!-- What a server that checks these certificates has to have (P45):
+             both routes answered and nothing linked to them. The CRL is
+             offered as PEM only: /api/crl/download/der answers 404 while the
+             CRL lists no certificate. -->
+        <p class="text-xs text-muted mt-2" id="ccTrustMaterial">
+            A server that checks them needs the
+            <a href="/api/client-certs/ca" class="text-primary hover:underline">CA certificate</a>
+            to trust them and the
+            <a href="/api/crl/download/pem" class="text-primary hover:underline">CRL (PEM)</a>
+            to refuse revoked ones.
+        </p>
     </div>
 
     <!-- Loading is said outside the table, and the table is shown with its
@@ -120,9 +131,26 @@
             <button type="button" data-click="downloadCertFile" data-args='["csr"]' aria-label="Download CSR file" class="btn btn-secondary flex-1 min-w-[6rem]">
                 <i class="fas fa-download mr-1.5"></i> .csr
             </button>
+            <!-- The .pfx is encrypted with the PFX password in Settings, and
+                 refused without one. The button looked available and said so
+                 only in a toast after the click (P49): without a password it
+                 is drawn unavailable, with the reason and where to set it. -->
+            {% if pfx_password_set %}
             <button type="button" data-click="downloadCertFile" data-args='["pfx"]' aria-label="Download PKCS#12 bundle (certificate and private key, encrypted with the PFX password from Settings)" title="PKCS#12 bundle for Windows / browsers — encrypted with the PFX password set in Settings → General" class="btn btn-secondary flex-1 min-w-[6rem] text-warning-fg">
                 <i class="fas fa-file-archive mr-1.5"></i> .pfx
             </button>
+            {% else %}
+            <button type="button" aria-disabled="true" aria-label="Download PKCS#12 bundle: needs a PFX password" aria-describedby="ccPfxNeedsPassword" class="btn btn-secondary flex-1 min-w-[6rem] opacity-50 cursor-not-allowed">
+                <i class="fas fa-file-archive mr-1.5" aria-hidden="true"></i> .pfx
+            </button>
+            <p id="ccPfxNeedsPassword" class="w-full text-xs text-muted">
+                {% if (current_user or {}).get('role') == 'admin' %}
+                The .pfx needs a PFX password: set one in <a href="/settings#general" class="text-primary hover:underline">Settings → General</a>.
+                {% else %}
+                The .pfx needs a PFX password, which an admin sets in Settings → General.
+                {% endif %}
+            </p>
+            {% endif %}
         </div>
     </div>
 </div>

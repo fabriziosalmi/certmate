@@ -536,6 +536,29 @@
         return true;
     };
 
+    // The serial as openssl and a CRL print it: upper-case hex, two digits a
+    // byte. The API stores it in decimal, and the decimal could not be matched
+    // against `openssl x509 -serial` without converting it by hand (P71).
+    // A value that is not a decimal integer is shown as it is.
+    function serialHex(serial) {
+        var text = String(serial == null ? '' : serial).trim();
+        if (!/^\d+$/.test(text) || typeof BigInt !== 'function') return text;
+        var hex = BigInt(text).toString(16).toUpperCase();
+        return hex.length % 2 ? '0' + hex : hex;
+    }
+
+    function serialRow(serial) {
+        var hex = serialHex(serial);
+        if (!hex) return '';
+        return '<div class="flex items-start justify-between gap-4 py-2.5">' +
+            '<dt class="text-sm text-muted flex-shrink-0" title="Hexadecimal, as openssl and the CRL print it">Serial</dt>' +
+            '<dd class="flex items-start gap-1 min-w-0 text-right">' +
+                '<span id="ccSerial" class="text-xs font-mono font-medium text-foreground break-all">' + escapeHtml(hex) + '</span>' +
+                '<button type="button"' + CertMate.does('click', 'ccCopySerial') + 'class="flex-shrink-0 -my-1 inline-flex items-center justify-center min-w-6 min-h-6 rounded text-muted hover:text-foreground hover:bg-hover" ' +
+                    'aria-label="Copy serial number" title="Copy serial number"><i class="fas fa-copy text-xs" aria-hidden="true"></i></button>' +
+            '</dd></div>';
+    }
+
     function ccShowCertDetails(id) {
         var cert = certificatesData.find(function(c) { return c.identifier === id; });
         if (!cert) return;
@@ -571,7 +594,7 @@
                 row('Email', cert.email || 'N/A') +
                 row('Organization', cert.organization) +
                 row('Usage', cert.cert_usage) +
-                row('Serial', cert.serial_number, true) +
+                serialRow(cert.serial_number) +
                 row('Created', CertMate.formatDateTime(cert.created_at)) +
                 row('Identifier', cert.identifier, true) +
             '</dl>';
@@ -652,7 +675,11 @@
             }).then(function(response) {
                 return response.json().catch(function() { return {}; }).then(function(body) {
                     if (response.ok) {
-                        CertMate.toast('Certificate revoked', 'success');
+                        // A server that reads a CRL it has already fetched does not
+                        // know yet (P45): say so, with the CRL to fetch.
+                        CertMate.toast('Certificate revoked. A server that checks the CRL accepts it '
+                            + 'until it fetches the CRL again.', 'success', null,
+                            { link: { href: '/api/crl/download/pem', text: 'Download the CRL (PEM)' } });
                         if (done) done();
                         ccLoadCertificates();
                         ccLoadStatistics();
@@ -706,6 +733,14 @@
         },
         ccRevokeShownCert: function () {
             if (currentCertId) ccRevokeCert(currentCertId, window.closeCertModal);
+        },
+        ccCopySerial: function () {
+            var node = document.getElementById('ccSerial');
+            if (!node) return;
+            CertMate.copyText(node.textContent).then(function (ok) {
+                CertMate.toast(ok ? 'Serial number copied' : 'Could not copy: the browser blocked the clipboard',
+                    ok ? 'success' : 'error');
+            });
         },
         ccChangePageSize: function (select) {
             var size = Number(select.value);

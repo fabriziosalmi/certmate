@@ -102,7 +102,9 @@ def test_saving_the_section_stops_the_question(page):
     _settings_answered_in_the_browser(page)
     _open(page, 'general')
     original = _threshold(page)
-    page.fill(THRESHOLD, original)          # an edit, back to the value it had
+    # A value other than the one it had: since #1511 (P28) an edit put back
+    # where it started is no change. The save is answered in the browser.
+    page.fill(THRESHOLD, '21' if original != '21' else '22')
     assert _would_ask(page)
     with page.expect_response(lambda r: r.request.method == 'POST' and r.url.endswith('/api/web/settings') and r.ok):
         page.click('#saveBtn')
@@ -132,13 +134,12 @@ def test_each_section_is_saved_by_its_own_button(page):
     _settings_answered_in_the_browser(page)
     _open(page, 'notifications')
     switch = page.locator('label:has(input[title="Enable notifications"])')
-    switch.click()
-    switch.click()                          # back to the value it had
+    switch.click()                          # nothing saves it: the instance keeps its value
     assert _unsaved(page) == ['notifications']
 
     page.click('#settings-tab-general')
     original = _threshold(page)
-    page.fill(THRESHOLD, original)
+    page.fill(THRESHOLD, '21' if original != '21' else '22')   # answered in the browser
     with page.expect_response(lambda r: r.request.method == 'POST' and r.url.endswith('/api/web/settings') and r.ok):
         page.click('#saveBtn')
     page.wait_for_function("() => !window.CertMate.unsavedSettings().includes('dns, ca, general and storage')")

@@ -51,7 +51,7 @@ def _auto_renew_failure(error):
     return {'error': message, 'code': 'AUTO_RENEW_UPDATE_FAILED'}, 500
 
 
-def _submit(ctx, operation, domain, fn, explain=None):
+def _submit(ctx, operation, domain, fn, explain=None, ca_provider=None):
     """Hand the blocking half to the executor, or say no.
 
     The queue is bounded: two workers with an unbounded queue turned a retry
@@ -64,7 +64,8 @@ def _submit(ctx, operation, domain, fn, explain=None):
     complexity budget.
     """
     try:
-        job_id = ctx.cert_executor.submit(operation, domain, fn, explain=explain)
+        job_id = ctx.cert_executor.submit(operation, domain, fn, explain=explain,
+                                          ca_provider=ca_provider)
     except IssuanceQueueFull as e:
         return {
             'code': 'ISSUANCE_QUEUE_FULL',
@@ -238,7 +239,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     challenge = _requested_challenge(data, ctx.settings)
                     return _submit(ctx, 'create', prepared['domain'],
                                    lambda: ctx.cert_service.issue_create(prepared),
-                                   explain=lambda message: _creation_failure(message, challenge, fallback=False))
+                                   explain=lambda message: _creation_failure(message, challenge, fallback=False),
+                                   ca_provider=prepared['ca_provider'])
 
                 result = ctx.cert_service.create(
                     domain=domain,
@@ -426,7 +428,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     challenge = _requested_challenge(data, ctx.settings)
                     return _submit(ctx, 'reissue', domain,
                                    lambda: ctx.cert_service.issue_reissue(prepared),
-                                   explain=lambda message: _reissue_failure(message, challenge, fallback=False))
+                                   explain=lambda message: _reissue_failure(message, challenge, fallback=False),
+                                   ca_provider=prepared['ca_provider'])
 
                 result = ctx.cert_service.issue_reissue(
                     ctx.cert_service.prepare_reissue(**kwargs)

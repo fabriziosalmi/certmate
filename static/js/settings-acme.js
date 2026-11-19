@@ -12,12 +12,28 @@
             .filter(function (s) { return s.length > 0; });
     }
 
+    // The fields a refusal can be about, by the `field` the server names
+    // (API contract 2.73): the toast leads with its label and the field is marked.
+    var KEY_FIELDS = {
+        allowed_identifiers: { label: 'Names and addresses it may order', id: 'acmeKeyNames' },
+        kid: { label: 'Key identifier', id: 'acmeKeyKid' },
+        note: { label: 'Note', id: 'acmeKeyNote' }
+    };
+    var OPTION_FIELDS = {
+        validity_days: { label: 'Certificate validity', id: 'acmeValidity' },
+        allowed_identifiers: { label: 'Names and addresses an account without an EAB key may order', id: 'acmeOpenNames' }
+    };
+
     function acmeManager() {
         return {
             loading: true,
             saving: false,
             server: { enabled: false, allow_http: false, eab_required: true, validity_days: 45,
                       allowed_identifiers: [], directory_url: '', eab_keys: [] },
+            // What the server has, as the last read or save left it: the badge
+            // and the directory URL follow it, not the ticked box, because
+            // nothing is served until Save (UX audit P27).
+            savedEnabled: false,
             openNames: '',
             accounts: [],
             newKey: { kid: '', names: '', note: '' },
@@ -44,13 +60,21 @@
             isClient: function (id) { return this.client === id; },
             pickClient: function (id) { this.client = id; },
 
-            load: function () {
+            // keepOptions: a refresh after a key or an account changed keeps
+            // the options as edited; only the first read fills them in.
+            load: function (keepOptions) {
                 var self = this;
-                self.loading = true;
+                if (!keepOptions) self.loading = true;
                 Promise.all([CertMate.api('GET', '/api/acme/server'), CertMate.api('GET', '/api/acme/accounts')])
                     .then(function (answers) {
-                        self.server = answers[0];
-                        self.openNames = self.joined(answers[0].allowed_identifiers);
+                        self.savedEnabled = answers[0].enabled === true;
+                        if (keepOptions) {
+                            self.server.eab_keys = answers[0].eab_keys;
+                            self.server.directory_url = answers[0].directory_url;
+                        } else {
+                            self.server = answers[0];
+                            self.openNames = self.joined(answers[0].allowed_identifiers);
+                        }
                         self.accounts = answers[1].accounts;
                     })
                     .catch(function (error) { CertMate.toast(error.message || 'Could not load the ACME server', 'error'); })
@@ -69,10 +93,14 @@
                 })
                     .then(function (view) {
                         self.server = view;
+                        self.savedEnabled = view.enabled === true;
                         self.openNames = self.joined(view.allowed_identifiers);
                         CertMate.toast('ACME server saved', 'success');
                     })
-                    .catch(function (error) { CertMate.toast(error.message || 'Could not save', 'error'); })
+                    .catch(function (error) {
+                        CertMate.toast(CertMate.markFieldError(error.message || 'Could not save',
+                            error.body && error.body.field, OPTION_FIELDS), 'error');
+                    })
                     .then(function () { self.saving = false; });
             },
 
@@ -85,9 +113,14 @@
                         self.created = created;
                         self.client = 'certbot';
                         self.newKey = { kid: '', names: '', note: '' };
-                        self.load();
+                        self.load(true);
                     })
-                    .catch(function (error) { CertMate.toast(error.message || 'Could not create the key', 'error'); });
+                    .catch(function (error) {
+                        // The toast leads with the label of the field the
+                        // server names, which is marked and focused (UX audit P61).
+                        CertMate.toast(CertMate.markFieldError(error.message || 'Could not create the key',
+                            error.body && error.body.field, KEY_FIELDS), 'error');
+                    });
             },
 
             copy: function (text) {
@@ -107,7 +140,7 @@
                     .then(function (yes) {
                         if (!yes) return;
                         CertMate.api('DELETE', '/api/acme/eab-keys/' + encodeURIComponent(kid))
-                            .then(function () { CertMate.toast('EAB key disabled', 'success'); self.load(); })
+                            .then(function () { CertMate.toast('EAB key disabled', 'success'); self.load(true); })
                             .catch(function (error) { CertMate.toast(error.message || 'Could not disable', 'error'); });
                     });
             },
@@ -119,7 +152,7 @@
                     .then(function (yes) {
                         if (!yes) return;
                         CertMate.api('POST', '/api/acme/accounts/' + encodeURIComponent(account.id) + '/deactivate')
-                            .then(function () { CertMate.toast('Account deactivated', 'success'); self.load(); })
+                            .then(function () { CertMate.toast('Account deactivated', 'success'); self.load(true); })
                             .catch(function (error) { CertMate.toast(error.message || 'Could not deactivate', 'error'); });
                     });
             }

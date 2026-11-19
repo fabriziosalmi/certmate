@@ -4,6 +4,7 @@ Runs shell commands after certificate issuance or renewal.
 Hooks are configured in settings under 'deploy_hooks'.
 """
 
+import copy
 import datetime
 import json
 import logging
@@ -1376,8 +1377,21 @@ class DeployManager:
             # the asymmetry was the defect, not the absolute path.
             r'|(?:^|[\s|])\.\s+\S'
         )
-        if _DANGEROUS_SHELL.search(sanitized):
-            return False, "contains dangerous shell metacharacters"
+        found = _DANGEROUS_SHELL.search(sanitized)
+        if found:
+            # Name what was found (#1511, P40): the page lists a dozen blocked
+            # sequences, and "contains dangerous shell metacharacters" left the
+            # operator to find which one by eye. The source shorthand is named
+            # by its dot alone: its match runs into the next word, which in the
+            # sanitized text can be a $CERTMATE_ placeholder.
+            sequence = found.group(0).strip()
+            if sequence.lstrip('|').lstrip().startswith('.'):
+                sequence = '.'
+            # A control character inside it (`>` line break `/`) is shown as
+            # an escape: sent raw, it broke the toast and the log line.
+            shown = ''.join(ch if ch.isprintable() else repr(ch)[1:-1] for ch in sequence)
+            named = 'a line break' if sequence == '' else f"'{shown}'"
+            return False, f"contains dangerous shell metacharacters ({named})"
 
         # Block access to CertMate's own sensitive files.
         _BLOCKED_FILES = re.compile(
@@ -1391,28 +1405,56 @@ class DeployManager:
         return True, None
 
     def _validate_hook(self, hook):
+        """Validate a single hook dict: (valid, error). See _check_hook."""
+        field, error = self._check_hook(hook)
+        return field is None, error
+
+    def refused_hook(self, config, error):
+        """The hook whose refusal *error* (save_config's) reports, and the
+        field at fault, as {'hook_id', 'field'}; None when the error is not a
+        hook's (#1511, P40): the page marks that field instead of leaving the
+        operator to find it. Same order as _validate_deploy_config, and only a
+        hook whose own reason is in *error*, so a refusal about `enabled`
+        points at no hook."""
+        if not isinstance(config, dict):
+            return None
+        hooks = list(config.get('global_hooks') or [])
+        domain_hooks = config.get('domain_hooks')
+        if isinstance(domain_hooks, dict):
+            for listed in domain_hooks.values():
+                hooks.extend(listed if isinstance(listed, list) else [])
+        for hook in hooks:
+            field, reason = self._check_hook(copy.deepcopy(hook))
+            if field is not None and reason and reason in (error or ''):
+                return {'hook_id': hook.get('id') if isinstance(hook, dict) else None,
+                        'field': field}
+        return None
+
+    def _check_hook(self, hook):
         """Validate a single hook dict.
 
-        Returns (valid: bool, error: str | None). The error names the
+        Returns (field, error): both None when the hook is valid, otherwise
+        the field at fault ('hook', 'name', 'command', 'timeout' or 'window')
+        and the reason. The error names the
         offending hook (by name) and the specific reason so callers can
         surface it to the user (issue #102: command field rejections used
         to be a generic "save failed").
         """
         if not isinstance(hook, dict):
-            return False, "hook entry is not an object"
+            return 'hook', "hook entry is not an object"
         if not hook.get('id'):
-            return False, "hook is missing its id"
+            return 'hook', "hook is missing its id"
         hook_label = hook.get('name', '').strip() or hook.get('id') or 'unnamed'
         if not hook.get('name', '').strip():
-            return False, f"hook '{hook_label}' is missing a name"
+            return 'name', f"hook '{hook_label}' is missing a name"
         if not hook.get('command', '').strip():
-            return False, f"hook '{hook_label}' is missing a command"
+            return 'command', f"hook '{hook_label}' is missing a command"
 
         command = hook['command'].strip()
         safe, reason = self._is_command_safe(command)
         if not safe:
             logger.warning("Deploy hook '%s' command rejected: %s", hook_label, reason)
-            return False, f"hook '{hook_label}' command {reason}"
+            return 'command', f"hook '{hook_label}' command {reason}"
 
         # Absence and error are different answers, and this conflated them by
         # raising on both. `int(None)` is a TypeError, `int("abc")` a
@@ -1430,11 +1472,11 @@ class DeployManager:
         if raw_timeout is None or raw_timeout == '':
             raw_timeout = DEFAULT_TIMEOUT
         if isinstance(raw_timeout, bool) or not isinstance(raw_timeout, (int, float, str)):
-            return False, f"hook '{hook_label}' timeout must be a number"
+            return 'timeout', f"hook '{hook_label}' timeout must be a number"
         try:
             timeout_seconds = int(raw_timeout)
         except (TypeError, ValueError):
-            return False, f"hook '{hook_label}' timeout must be a number"
+            return 'timeout', f"hook '{hook_label}' timeout must be a number"
         hook['timeout'] = min(max(timeout_seconds, 1), MAX_TIMEOUT)
         if not isinstance(hook.get('on_events'), list):
             hook['on_events'] = list(DEFAULT_ON_EVENTS)
@@ -1448,12 +1490,12 @@ class DeployManager:
         try:
             window = normalize_window(hook.get('window'))
         except WindowError as e:
-            return False, f"hook '{hook_label}' window: {e}"
+            return 'window', f"hook '{hook_label}' window: {e}"
         if window is None:
             hook.pop('window', None)
         else:
             hook['window'] = window
-        return True, None
+        return None, None
 
     # ------------------------------------------------------------------
     # Test hook

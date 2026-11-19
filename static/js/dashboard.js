@@ -1061,6 +1061,57 @@
         return text || 'The job failed without a message.';
     }
 
+    // A failed validation or a rate limit at production Let's Encrypt says
+    // that staging exists and how to use it (UX perception audit, 2026-11-18,
+    // P22): what staging helps with is repeating validation attempts without
+    // spending production's limits. From `ca_failure` (failure_hints.ca_failure,
+    // read from the whole error): "validation" or "rate_limit". Not "account"
+    // (staging refuses the same email), "order" (the same policy and CAA),
+    // "other", or null (the CA was not reached: no certbot lineage, a
+    // certificate that already exists, a DNS provider refusing CertMate's
+    // credentials, an unreachable directory). Production is "letsencrypt"
+    // without the staging flag: before 2.12.0 Let's Encrypt staging was
+    // recorded as "letsencrypt" with it, and still renews from staging. No
+    // recorded CA is not known to be production.
+    var STAGING_HELPS_WITH = ['validation', 'rate_limit'];
+
+    function stagingWouldHelp(caProvider, staging, caFailure) {
+        return STAGING_HELPS_WITH.indexOf(caFailure) !== -1 && caProvider === 'letsencrypt' && staging !== true;
+    }
+
+    var STAGING_HINT_SHORT = 'Test with staging first';
+    var STAGING_LIMITS = 'Staging certificates are not trusted by browsers, and their rate limits are ' +
+        'separate from production\'s.';
+
+    // The how, for what the reader may do. The create form offers a CA only
+    // once Settings, CA has an account for it that can issue
+    // (CertMate.configuredCAProviders); only an admin adds one, and a viewer
+    // requests no certificate. A second certificate for a domain that has one
+    // needs a Name, which must be shaped like a domain (an address takes none).
+    function stagingHintText(host, isIp) {
+        var what = isIp ? 'address' : 'domain';
+        if (!roleAtLeast('operator')) {
+            return escapeHtml(STAGING_HINT_SHORT + ': an operator can request a certificate for this ' + what +
+                ' from Let\'s Encrypt (Staging), once Settings, CA has an account for it. ' +
+                STAGING_LIMITS);
+        }
+        var example = 'staging.' + String(host || '').replace(/^\*\./, '');
+        return escapeHtml(STAGING_HINT_SHORT + ': request a certificate for this ' + what + ' with ') +
+            '<span class="font-medium">Let\'s Encrypt (Staging)</span> as its Certificate Authority' +
+            (isIp ? '. ' : escapeHtml('; if the domain already has a certificate, give the new one a Name of its ' +
+                'own, shaped like a domain, such as ' + example + '. ')) +
+            (roleAtLeast('admin')
+                ? 'If the list does not offer it, add it in ' +
+                  '<a href="/settings#ca" class="text-info-fg hover:underline">Settings, CA</a> with Add CA Account. '
+                : 'If the list does not offer it, an admin can add it in Settings, CA. ') +
+            escapeHtml(STAGING_LIMITS);
+    }
+
+    function stagingHintHtml(host, isIp, extraClass) {
+        return '<div class="mt-1 text-label break-words ' + (extraClass || '') + '" data-staging-hint>' +
+            stagingHintText(host, isIp) + '</div>';
+    }
+
     // The banner's account of the last failed renewal: when, why, what to
     // check, and where the run is recorded.
     function lastRenewalFailureHtml(cert) {
@@ -1071,6 +1122,8 @@
             '<div class="font-semibold">Last renewal failed' + (when ? ' ' + escapeHtml(when) : '') + '</div>' +
             '<div class="[overflow-wrap:anywhere]" title="' + escapeHtml(failed.error || '') + '">' + escapeHtml(failureCause(failed.error)) + '</div>' +
             (failed.hint ? '<div class="mt-1 text-label break-words">' + escapeHtml(failed.hint) + '</div>' : '') +
+            (stagingWouldHelp(cert.ca_provider, cert.staging, failed.ca_failure)
+                ? stagingHintHtml(cert.host || cert.domain, !!cert.ip_address) : '') +
             '<a href="/activity" class="text-xs text-info-fg hover:underline">See it in the Activity log</a>' +
             '</div>';
     }
@@ -1308,6 +1361,12 @@
             var renewalFailedHint = renewalFailed
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-start text-xs text-danger-fg min-w-0" data-renewal-failed><i class="fas fa-circle-exclamation mr-1 mt-0.5 shrink-0" aria-hidden="true"></i><span class="min-w-0 [overflow-wrap:anywhere] md:truncate" title="${(renewalFailed.error || '') + (renewalFailed.hint ? '\n\n' + renewalFailed.hint : '')}">Renewal failed: ${failureCause(renewalFailed.error)}</span></div>`)
                 : false;
+            // The how is in the detail panel; the row says only that staging is there.
+            var stagingHint = renewalFailed &&
+                    stagingWouldHelp(cert.ca_provider, cert.staging, renewalFailed.ca_failure)
+                ? rowRaw('<div class="mt-1 text-xs text-label" data-staging-hint>' + STAGING_HINT_SHORT +
+                    (roleAtLeast('operator') ? ': its details say how' : ': its details say more') + '</div>')
+                : false;
             var renewalFailedChip = renewalFailed
                 ? rowRaw('<div class="mt-1"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-circle-exclamation mr-1" aria-hidden="true"></i>Renewal failed</span></div>')
                 : false;
@@ -1350,6 +1409,7 @@
                             ${ipHint}
                             ${aliasHint}
                             ${renewalFailedHint}
+                            ${stagingHint}
                             ${tagHint}
                             ${mobileMeta}
                         </div>
@@ -4432,11 +4492,13 @@
         return escapeHtml(ipAddressOf(job.domain || '') || job.domain || '');
     }
 
-    // The CA a pending create or reissue asked for, as the real row names it
-    // (P38: a failed create with Private CA chosen showed "—"). A request that
-    // named none takes the instance default, which this page does not guess.
+    // The CA a pending create or reissue went to, as the real row names it
+    // (P38: a failed create with Private CA chosen showed "—"): the one the
+    // request named, or once the job has ended, the one its job says it
+    // resolved to (API contract 2.74). This page does not guess the default.
     function pendingCaLabel(job) {
-        return job.caProvider ? caDisplayName(job.caProvider) : '—';
+        var ca = job.caProvider || job.jobCaProvider;
+        return ca ? caDisplayName(ca) : '—';
     }
 
     function issuingRowHtml(jobId, job) {
@@ -4481,6 +4543,10 @@
             '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono" title="' + domain + '">' + domain + '</div>' +
             '<div class="mt-1 text-xs text-danger-fg break-words" title="' + errTitle + '">' + errText + '</div>' +
             (job.hint ? '<div class="mt-1 text-xs text-label break-words" data-failure-hint>' + escapeHtml(job.hint) + '</div>' : '') +
+            // The CA the request went to, as the job says (the request may
+            // have named none and taken the default).
+            (stagingWouldHelp(job.jobCaProvider || job.caProvider, false, job.caFailure)
+                ? stagingHintHtml(job.domain, !!ipAddressOf(job.domain || ''), 'text-xs') : '') +
             '</div></div></td>' +
             '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
@@ -4664,6 +4730,8 @@
                     // hid why it failed (UX audit, 2026-11-18). certbot's full
                     // output stays in the row.
                     pendingJobs[jobId].hint = (jobRec && jobRec.hint) || '';
+                    pendingJobs[jobId].jobCaProvider = (jobRec && jobRec.ca_provider) || '';
+                    pendingJobs[jobId].caFailure = (jobRec && jobRec.ca_failure) || null;
                     delete pendingPollTimers[jobId];
                     var failedKind = pendingJobs[jobId].kind || (jobRec && jobRec.operation);
                     var failedHint = pendingJobs[jobId].hint;

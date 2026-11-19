@@ -55,6 +55,10 @@ def _wizard(page):
             answer = route.fetch()
             body = answer.json()
             body.update(setup_completed=False, wizard_dismissed=False)
+            # Read back as a server would: step 3 lists what the settings hold
+            # after the save (P19), not what the page sent.
+            for posted in saved:
+                body.update(posted)
             return route.fulfill(response=answer, body=json.dumps(body))
         saved.append(json.loads(route.request.post_data or '{}'))
         return route.fulfill(status=200, content_type='application/json', body=json.dumps({'message': 'saved'}))

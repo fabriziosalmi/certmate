@@ -38,6 +38,17 @@
             .filter(function (t) { return t.length > 0; });
     }
 
+    // The fields a refused save can be about, by the `field` the server names
+    // (API contract 2.73). role_mappings has no single field to mark: the
+    // page drops the empty rows that the server would refuse.
+    var OIDC_FIELDS = {
+        enabled: { label: 'Enable OIDC/SSO', id: 'oidc-enabled' },
+        issuer_url: { label: 'Issuer URL', id: 'oidc-issuer-url' },
+        client_id: { label: 'Client ID', id: 'oidc-client-id' },
+        default_role: { label: 'Default role', id: 'oidc-default-role' },
+        scopes: { label: 'Scopes', id: 'oidc-scopes' }
+    };
+
     function oidcSettings() {
         return {
             loading: true,
@@ -138,7 +149,11 @@
                     .then(function (res) {
                         self.saving = false;
                         if (!res.ok) {
-                            showMessage('Save failed: ' + (res.data && res.data.error ? res.data.error : 'unknown'), 'error');
+                            // The toast leads with the label of the field the
+                            // server names, which is marked and focused (UX
+                            // audit P61).
+                            var error = res.data && res.data.error ? res.data.error : 'unknown';
+                            showMessage('Save failed: ' + CertMate.markFieldError(error, res.data && res.data.field, OIDC_FIELDS), 'error');
                             return;
                         }
                         showMessage('SSO settings saved', 'success');

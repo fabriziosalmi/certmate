@@ -1,6 +1,6 @@
 # Conformità e traccia di audit
 
-<!-- CERTMATE-TRANSLATED-FROM 0ddda303c6fe494a -->
+<!-- CERTMATE-TRANSLATED-FROM ae7a0a33343d52fd -->
 
 Questa pagina mette in relazione la traccia di audit di CertMate con i regimi su cui gli operatori chiedono più spesso — l'AI Act dell'UE, NIS2 e ISO/IEC 42001 — quando lasciano che un agente IA/MCP gestisca i certificati in modo pianificato.
 
@@ -43,7 +43,7 @@ Questa pagina mette in relazione la traccia di audit di CertMate con i regimi su
 
 ## Conservazione: archiviare parte della chain
 
-La chain cresce di una riga per ogni operazione registrata — nell'ordine delle centinaia di kilobyte all'anno su un'istanza molto usata — quindi la maggior parte degli operatori non ne ha mai bisogno. Esiste per il caso in cui una policy di conservazione richieda che i record più vecchi lascino la macchina.
+La chain cresce di una riga per ogni operazione registrata. La riga del download di un certificato server misura circa da 530 a 650 byte: 539 e 550 con l'API Bearer Token, 632 e 643 con una chiave API chiamata deploy-bot. Una riga è più grande per il download di un certificato client, che nomina anche il common name (576 e 577 byte con l'API Bearer Token, 669 e 670 con deploy-bot), e con un nome di certificato o di chiave più lungo, un motivo di revoca (fino a 200 caratteri), un messaggio di errore o l'elenco dei domini di un download in blocco: la revoca di un certificato client con quella chiave ha misurato 652 byte. Emissioni e rinnovi aggiungono poco, ma ogni download di un certificato è una riga: un'automazione che scarica un certificato ogni 5 minuti aggiunge circa 105.000 righe, da 55 a 70 MB all'anno. Esiste per un'istanza interrogata così, e per il caso in cui una policy di conservazione richieda che i record più vecchi lascino la macchina.
 
 Non c'è potatura automatica, e non c'è un endpoint API per farla. Cancellare la cronologia di audit è esattamente ciò che vorrebbe fare chi ha appena compromesso un account amministratore, e un operatore con un obbligo di conservazione legittimo ha comunque accesso alla shell — l'archivio deve pur metterlo da qualche parte. Quindi è un unico comando esplicito, da eseguire con CertMate fermo:
 

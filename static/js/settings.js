@@ -392,7 +392,7 @@
                     isLoading = false;
                     if (saveBtn) {
                         saveBtn.disabled = false;
-                        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Settings';
+                        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save DNS, General and Storage';
                     }
                 });
         } catch (error) {
@@ -401,7 +401,7 @@
             isLoading = false;
             if (saveBtn) {
                 saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Settings';
+                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save DNS, General and Storage';
             }
         }
     }

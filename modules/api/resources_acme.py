@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 def _refusal(error):
-    return {'error': error.message, 'code': error.code}, error.status
+    body = {'error': error.message, 'code': error.code}
+    if error.field:
+        body['field'] = error.field
+    return body, error.status
 
 
 def _audit(ctx, operation, resource_id, details):

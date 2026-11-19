@@ -91,6 +91,91 @@ _ACCOUNT_REFUSED_HINT = ('The CA refused to register the ACME account: check the
 # than nothing.
 _NOTHING_REPORTED = 'without reporting an error'
 PREVIOUS_KEPT = 'The previous certificate is still in place.'
+# An ACME problem document, which only the CA sends (RFC 8555 section 6.7).
+_ACME_PROBLEM = 'urn:ietf:params:acme:error:'
+# The CA refused the order itself, at new-order or at finalize: a name its
+# policy forbids, a CAA record, an identifier or a CSR it rejects. Retrying
+# against staging meets the same refusal.
+_ORDER_REFUSED_MARKERS = (
+    'error creating new order',
+    'error finalizing order',
+    'forbidden by policy',
+    'acme:error:rejectedidentifier',
+    'acme:error:caa',
+    'caa record',
+    'rechecking caa',
+    'acme:error:badcsr',
+)
+_ACCOUNT_MARKERS = (*_ACCOUNT_REFUSED_MARKERS, 'acme:error:accountdoesnotexist',
+                    'acme:error:externalaccountrequired')
+
+# The CA answered with a fault of its own, not a refusal: a server error, a
+# nonce to retry with, maintenance. Checked before the order markers, because
+# certbot prefixes a server error at new-order with "Error creating new order".
+_CA_SERVER_MARKERS = (
+    'acme:error:serverinternal',
+    'acme:error:badnonce',
+    'service is down for maintenance',
+    'had an internal error',
+)
+
+CA_FAILURE_VALIDATION = 'validation'
+CA_FAILURE_RATE_LIMIT = 'rate_limit'
+CA_FAILURE_ACCOUNT = 'account'
+CA_FAILURE_ORDER = 'order'
+CA_FAILURE_OTHER = 'other'
+
+
+def ca_failure(error_msg: str | None) -> str | None:
+    """What the CA's answer, in the failure's own words, says went wrong.
+
+    Read from the whole error, in this order (the first that matches wins):
+
+    * None: the CA's directory could not be reached (urllib3's own words), or
+      nothing in the error shows the CA answered (no certbot lineage to renew,
+      a certificate that already exists, a DNS provider refusing CertMate's
+      credentials before any challenge).
+    * "rate_limit": `is_acme_rate_limit` (the rateLimited problem type, Let's
+      Encrypt's "too many certificates", "too many failed authorizations",
+      "too many new orders", "too many new registrations", its rate-limits
+      page).
+    * "other", first: the CA's own fault, not a refusal (serverInternal,
+      badNonce, "service is down for maintenance", "had an internal error"),
+      even inside "Error creating new order :: ...".
+    * "account": the account registration or the account was refused
+      (unable to register an account, invalidContact, unsupportedContact,
+      invalidEmail, "invalid email address", accountDoesNotExist,
+      externalAccountRequired).
+    * "order": the CA refused the order at new-order or at finalize ("Error
+      creating new order", "Error finalizing order", "forbidden by policy",
+      rejectedIdentifier, caa or a CAA record, badCSR).
+    * "validation": a challenge failed at the CA (_CA_REFUSED_MARKERS: "Some
+      challenges have failed", "DNS problem", "Invalid response from", the
+      unauthorized, connection, dns and incorrectResponse problem types).
+    * "other": any other ACME problem document (serverInternal, malformed...).
+
+    The dashboard suggests testing with staging only for "validation" and
+    "rate_limit" at production Let's Encrypt (UX perception audit, 2026-11-18,
+    P22): what staging helps with is repeating validation attempts without
+    spending production's limits. Staging refuses the same account email and
+    the same order.
+    """
+    lowered = (error_msg or '').lower()
+    if not lowered or _ca_unreachable_hint(error_msg or ''):
+        return None
+    if is_acme_rate_limit(error_msg):
+        return CA_FAILURE_RATE_LIMIT
+    if any(marker in lowered for marker in _CA_SERVER_MARKERS):
+        return CA_FAILURE_OTHER
+    if any(marker in lowered for marker in _ACCOUNT_MARKERS):
+        return CA_FAILURE_ACCOUNT
+    if any(marker in lowered for marker in _ORDER_REFUSED_MARKERS):
+        return CA_FAILURE_ORDER
+    if any(marker in lowered for marker in _CA_REFUSED_MARKERS):
+        return CA_FAILURE_VALIDATION
+    if _ACME_PROBLEM in lowered:
+        return CA_FAILURE_OTHER
+    return None
 
 
 def certbot_hint(error_msg: str, challenge_type: str | None = None, fallback: bool = True) -> str | None:

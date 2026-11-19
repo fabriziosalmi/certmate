@@ -1,6 +1,6 @@
 # Compliance und Audit-Trail
 
-<!-- CERTMATE-TRANSLATED-FROM 0ddda303c6fe494a -->
+<!-- CERTMATE-TRANSLATED-FROM ae7a0a33343d52fd -->
 
 Diese Seite ordnet den Audit-Trail von CertMate den Regelwerken zu, nach denen Betreiber am häufigsten fragen — dem EU AI Act, NIS2 und ISO/IEC 42001 — wenn sie einen KI/MCP-Agenten Zertifikate nach einem Zeitplan verwalten lassen.
 
@@ -43,7 +43,7 @@ Diese Seite ordnet den Audit-Trail von CertMate den Regelwerken zu, nach denen B
 
 ## Aufbewahrung: einen Teil der Kette archivieren
 
-Die Kette wächst um eine Zeile pro auditierter Operation — auf einer stark genutzten Instanz in der Größenordnung von einigen hundert Kilobyte pro Jahr —, daher brauchen die meisten Betreiber dies nie. Es existiert für den Fall, dass eine Aufbewahrungsrichtlinie verlangt, dass ältere Aufzeichnungen die Maschine verlassen.
+Die Kette wächst um eine Zeile pro auditierter Operation. Eine Zeile für den Download eines Serverzertifikats misst etwa 530 bis 650 Byte: 539 und 550 mit dem API Bearer Token, 632 und 643 mit einem API-Schlüssel namens deploy-bot. Eine Zeile ist größer beim Download eines Client-Zertifikats, der auch den Common Name nennt (576 und 577 Byte mit dem API Bearer Token, 669 und 670 mit deploy-bot), und bei einem längeren Zertifikat- oder Schlüsselnamen, einem Widerrufsgrund (bis zu 200 Zeichen), einer Fehlermeldung oder der Domainliste eines Sammel-Downloads: ein Widerruf eines Client-Zertifikats mit diesem Schlüssel maß 652 Byte. Ausstellungen und Erneuerungen fallen kaum ins Gewicht, aber jeder Zertifikat-Download ist eine Zeile: eine Automatisierung, die alle 5 Minuten ein Zertifikat abholt, fügt etwa 105.000 Zeilen, 55 bis 70 MB pro Jahr hinzu. Dies existiert für eine so abgefragte Instanz und für den Fall, dass eine Aufbewahrungsrichtlinie verlangt, dass ältere Aufzeichnungen die Maschine verlassen.
 
 Es gibt kein automatisches Bereinigen und keinen API-Endpoint dafür. Audit-Historie zu löschen ist genau das, was jemand tun wollen würde, der gerade ein Administratorkonto kompromittiert hat, und ein Betreiber mit einer legitimen Aufbewahrungspflicht hat ohnehin Shell-Zugriff — er muss das Archiv ja irgendwo ablegen. Daher ist es ein einziger expliziter Befehl, ausgeführt bei gestopptem CertMate:
 

@@ -818,7 +818,56 @@ METADATA_SCHEMA_VERSION = 1
 #                                   when those checks are enabled. With no row
 #                                   it tells "not checked yet" from "nothing
 #                                   to check". A new field.
-#                                   2.72, MINOR: POST /api/dns/<provider>/
+#                                   2.72, MINOR: the audit log (GET
+#                                   /api/activity) records client certificates
+#                                   created, renewed and revoked, and every
+#                                   server or client certificate download from
+#                                   the API and the dashboard, one entry per
+#                                   request with details.key_included. A hook
+#                                   test's `test` entry has the outcome as its
+#                                   status. A refused POST /api/deploy/config
+#                                   names the blocked sequence and, when the
+#                                   refusal is a hook's, carries its hook_id
+#                                   and field. A client-certificate revoke
+#                                   reason over 200 characters, with a line
+#                                   break, or not text is a 400 (a new code for
+#                                   a new condition), and so is a client-cert
+#                                   batch whose headers or rows are not a list
+#                                   of names and a list of lists of cells.
+#                                   New entries, new fields.
+#                                   2.73, MINOR: a refusal of POST
+#                                   /api/acme/eab-keys, PATCH /api/acme/server
+#                                   and POST /api/auth/oidc/settings carries
+#                                   `field`, the request field it is about,
+#                                   when it is about one, so the settings page
+#                                   marks that field and does not guess it
+#                                   from the message. A new field. The route
+#                                   walk runs with an API token, so it cannot
+#                                   reach the SSO 409 (field `enabled`);
+#                                   tests/test_a_refusal_names_the_field_it_is_about.py
+#                                   holds it. POST /api/auth/oidc/settings
+#                                   with a JSON list, string or number is a
+#                                   400 with no field: it answered 500 (a
+#                                   server error) or, for an empty list, 200
+#                                   having saved nothing. The rule below calls
+#                                   a changed status MAJOR; counted MINOR as
+#                                   2.66 counted its fixes, since neither old
+#                                   answer did what the request asked.
+#                                   2.74, MINOR: a create or reissue job
+#                                   (GET jobs/<id>, GET jobs) carries
+#                                   ca_provider, the CA its request resolved
+#                                   to (named; else for a create the default,
+#                                   for a reissue the recorded CA or the
+#                                   default); null for a renewal. A failed job
+#                                   and last_renewal_attempt carry ca_failure
+#                                   (validation, rate_limit, account, order,
+#                                   other, or null).
+#                                   A certificate's answer carries staging,
+#                                   true when its recorded CA is a staging one
+#                                   (also a pre-2.12.0 letsencrypt record with
+#                                   the staging flag). POST /api/settings
+#                                   answers not_in_effect. New fields.
+#                                   2.75, MINOR: POST /api/dns/<provider>/
 #                                   accounts/<account_id>/check checks a DNS
 #                                   account's credentials with one read-only
 #                                   call to its provider (Cloudflare, Route53;
@@ -861,7 +910,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.72'
+API_CONTRACT_VERSION = '2.75'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

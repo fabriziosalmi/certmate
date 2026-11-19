@@ -597,6 +597,11 @@ _ACME_RATE_LIMIT_MARKERS = (
     'too many currently pending authorizations',
     'too many new orders',
     'too many registrations',
+    # Let's Encrypt's registrations limit: "too many new registrations (10)
+    # from this IP address" (UX audit P22, review). Its rate-limit answers
+    # also point at its rate-limits page.
+    'too many new registrations',
+    'letsencrypt.org/docs/rate-limits',
 )
 
 
