@@ -43,7 +43,8 @@ const byId = {cmdPaletteInput: input, cmdPaletteResults: results, cmdPaletteOver
 global.document = {
   body: {appendChild() {}},
   activeElement: null,
-  createElement() { return {classList: classes(), set innerHTML(v) {}, addEventListener() {}}; },
+  // setAttribute: certmate.js makes the toasts' live region when it loads (P34).
+  createElement() { return {classList: classes(), set innerHTML(v) {}, addEventListener() {}, setAttribute() {}}; },
   getElementById(id) { return byId[id] || null; },
   querySelectorAll() { return []; },
   addEventListener(type, fn) { listeners['doc:' + type] = fn; },

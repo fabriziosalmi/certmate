@@ -39,6 +39,12 @@
         var div = document.createElement('div');
         div.id = 'shortcutOverlay';
         div.className = 'fixed inset-0 z-[101] hidden';
+        // A dialog: it says so, takes focus, keeps Tab inside it
+        // ([data-focus-trap], certmate.js) and gives focus back (P14).
+        div.setAttribute('role', 'dialog');
+        div.setAttribute('aria-modal', 'true');
+        div.setAttribute('aria-labelledby', 'shortcutOverlayTitle');
+        div.setAttribute('data-focus-trap', '');
         var cols = '';
         shortcuts.forEach(function(s) {
             var keys = s.key.split(' ');
@@ -56,9 +62,9 @@
             '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm" id="shortcutOverlayBg"></div>' +
             '<div class="fixed inset-x-4 top-[12vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md ' + 'bg-surface rounded-xl shadow-2xl border border-border overflow-hidden">' +
                 '<div class="px-5 py-3 border-b border-border flex items-center justify-between">' +
-                    '<h3 class="text-sm font-semibold text-foreground"><i class="fas fa-keyboard mr-2 text-gray-400"></i>Keyboard Shortcuts</h3>' +
-                    '<button type="button" id="shortcutOverlayClose" class="text-muted hover:text-gray-600 dark:hover:text-gray-200" title="Close">' +
-                        '<i class="fas fa-times"></i>' +
+                    '<h3 id="shortcutOverlayTitle" class="text-sm font-semibold text-foreground"><i class="fas fa-keyboard mr-2 text-gray-400" aria-hidden="true"></i>Keyboard Shortcuts</h3>' +
+                    '<button type="button" id="shortcutOverlayClose" class="-mr-2 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-8 md:min-h-8 rounded-lg text-muted hover:text-gray-600 dark:hover:text-gray-200" title="Close" aria-label="Close keyboard shortcuts">' +
+                        '<i class="fas fa-times" aria-hidden="true"></i>' +
                     '</button>' +
                 '</div>' +
                 '<div class="px-5 py-3 divide-y divide-gray-100 dark:divide-gray-700/50">' + cols + '</div>' +
@@ -75,13 +81,21 @@
         document.getElementById('shortcutOverlayClose').addEventListener('click', closeOverlay);
     }
 
+    var overlayOpener = null;
+
     function openOverlay() {
         if (!shortcutOverlay) createOverlay();
+        overlayOpener = document.activeElement;
         shortcutOverlay.classList.remove('hidden');
+        document.getElementById('shortcutOverlayClose').focus();
     }
 
     function closeOverlay() {
-        if (shortcutOverlay) shortcutOverlay.classList.add('hidden');
+        if (!shortcutOverlay || shortcutOverlay.classList.contains('hidden')) return;
+        shortcutOverlay.classList.add('hidden');
+        var opener = overlayOpener;
+        overlayOpener = null;
+        if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
     }
 
     function isOverlayOpen() {

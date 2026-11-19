@@ -7,6 +7,9 @@
 
     var escapeHtml = CertMate.escapeHtml;
     var currentCertId = null;
+    // What had focus when the details dialog opened: focus goes back there
+    // when it closes (P14).
+    var certModalOpener = null;
     var certificatesData = [];
     var ccPage = 1;
     var ccPageSize = 25;
@@ -577,8 +580,15 @@
         if (titleEl) titleEl.textContent = cert.common_name || 'Certificate Details';
         var revokeEl = document.getElementById('certModalRevoke');
         if (revokeEl) revokeEl.classList.toggle('hidden', !!cert.revoked);
-        document.getElementById('certModal').classList.remove('hidden');
-        if (CertMate.lockScroll) CertMate.lockScroll();
+        var modal = document.getElementById('certModal');
+        var opening = modal.classList.contains('hidden');
+        if (opening) certModalOpener = document.activeElement;
+        modal.classList.remove('hidden');
+        if (opening && CertMate.lockScroll) CertMate.lockScroll();
+        // The dialog takes focus: it used to stay on the row behind it, so the
+        // next Tabs reached that row's buttons under the overlay (P14).
+        var closeBtn = modal.querySelector('button[data-click="closeCertModal"]');
+        if (closeBtn) closeBtn.focus();
     }
 
     // Global functions referenced by onclick in the partial HTML
@@ -587,6 +597,9 @@
         if (modal.classList.contains('hidden')) return;  // already closed — don't double-unlock
         modal.classList.add('hidden');
         if (CertMate.unlockScroll) CertMate.unlockScroll();
+        var opener = certModalOpener;
+        certModalOpener = null;
+        if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
     };
     document.addEventListener('keydown', function(e) {
         // A question asked from the dialog (Revoke) owns the Escape that

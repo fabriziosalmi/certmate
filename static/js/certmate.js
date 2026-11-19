@@ -124,6 +124,25 @@
         document.body.appendChild(toastContainer);
         return toastContainer;
     }
+    // The live region is on the page before the first toast: one made at the
+    // moment of the first message is not yet watched by a screen reader, and
+    // that first message could go unannounced (P34).
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ensureToastContainer);
+    } else if (document.body) {
+        ensureToastContainer();
+    }
+
+    // How long a toast stays when the caller does not say: long enough to read
+    // it. 5 s (10 s with a Report button) was the same for "Saved" and for a
+    // 560-character renewal error (P34); now it is that or 4 s plus 60 ms a
+    // character, whichever is longer, up to a minute. A toast also waits while
+    // it is pointed at or focused, and has a button to close it.
+    function toastDuration(message, opts) {
+        var base = (opts && opts.errorContext) ? 10000 : 5000;
+        var reading = 4000 + 60 * String(message == null ? '' : message).length;
+        return Math.min(60000, Math.max(base, reading));
+    }
 
     var TOAST_ICONS = {
         success: 'fa-check-circle',
@@ -146,10 +165,14 @@
         // 5s default — still goes away on its own so a chatty page
         // doesn't grow a pile of toasts.
         if (duration === undefined || duration === null) {
-            duration = (options && options.errorContext) ? 10000 : 5000;
+            duration = toastDuration(message, options);
         }
         var container = ensureToastContainer();
         var opts = options || {};
+        // A toast with a key takes the place of the one before it with the
+        // same key: "Issuing certificate for ..." gives way to its result
+        // instead of standing next to it (P34).
+        if (opts.key) CM.dismissToast(opts.key);
 
         // Render the "Report this issue" button when (a) the caller
         // supplied an errorContext (so there's something to report),
@@ -171,13 +194,14 @@
         if (type === 'error') {
             toast.setAttribute('role', 'alert');
         }
+        if (opts.key) toast.setAttribute('data-toast-key', opts.key);
 
         var headerHtml =
             '<div class="flex items-start gap-3">' +
                 '<i class="fas ' + (TOAST_ICONS[type] || TOAST_ICONS.info) + ' text-lg mt-0.5 flex-shrink-0"></i>' +
                 '<div class="flex-1 text-sm font-medium">' + CM.escapeHtml(message) + '</div>' +
-                '<button class="flex-shrink-0 text-current opacity-50 hover:opacity-100" data-action="dismiss">' +
-                '<i class="fas fa-times"></i></button>' +
+                '<button type="button" class="flex-shrink-0 -m-1 inline-flex items-center justify-center min-w-6 min-h-6 rounded text-current opacity-50 hover:opacity-100" data-action="dismiss" aria-label="Dismiss notification">' +
+                '<i class="fas fa-times" aria-hidden="true"></i></button>' +
             '</div>';
 
         var reportRowHtml = canReport
@@ -218,15 +242,55 @@
             toast.classList.add('translate-x-0', 'opacity-100');
         });
 
-        // Auto dismiss
+        // Auto dismiss, held while the toast is pointed at or has focus. The
+        // progress bar holds with it.
         if (duration > 0) {
-            setTimeout(function() {
+            var bar = toast.querySelector('.toast-progress');
+            var remaining = duration;
+            var startedAt = 0;
+            var timer = null;
+            var hovered = false;
+            var focused = false;
+            var leave = function () {
+                timer = null;
                 toast.classList.add('translate-x-full', 'opacity-0');
                 setTimeout(function() { toast.remove(); }, 300);
-            }, duration);
+            };
+            var run = function () {
+                if (timer || hovered || focused) return;
+                startedAt = Date.now();
+                timer = setTimeout(leave, remaining);
+                if (bar) bar.style.animationPlayState = 'running';
+            };
+            var hold = function () {
+                if (!timer) return;
+                clearTimeout(timer);
+                timer = null;
+                // Back from a pause, there is time to move away and back again.
+                remaining = Math.max(1500, remaining - (Date.now() - startedAt));
+                if (bar) bar.style.animationPlayState = 'paused';
+            };
+            toast.addEventListener('mouseenter', function () { hold(); hovered = true; });
+            toast.addEventListener('mouseleave', function () { hovered = false; run(); });
+            toast.addEventListener('focusin', function () { hold(); focused = true; });
+            toast.addEventListener('focusout', function (e) {
+                if (e.relatedTarget && toast.contains(e.relatedTarget)) return;
+                focused = false;
+                run();
+            });
+            run();
         }
 
         return toast;
+    };
+
+    // Take away the toast(s) shown with this key, e.g. a progress toast whose
+    // work ended without a message of its own.
+    CM.dismissToast = function(key) {
+        if (!key || !toastContainer) return;
+        Array.prototype.forEach.call(toastContainer.querySelectorAll('[data-toast-key]'), function (el) {
+            if (el.getAttribute('data-toast-key') === key) el.remove();
+        });
     };
 
     // ── Current-user role (cross-page) ───────────────────────────
@@ -568,16 +632,74 @@
             dismissModal(root);
             return;
         }
-        if (e.key === 'Tab') {
-            var f = focusableIn(root);
-            if (f.length === 0) { e.preventDefault(); return; }
-            var first = f[0], last = f[f.length - 1];
-            if (e.shiftKey && document.activeElement === first) {
-                e.preventDefault(); last.focus();
-            } else if (!e.shiftKey && document.activeElement === last) {
-                e.preventDefault(); first.focus();
-            }
+        if (e.key === 'Tab') CM.trapTab(e, root);
+    });
+
+    // ── Keeping Tab inside an open dialog ────────────────────────
+    // An element marked [data-focus-trap] keeps Tab and Shift+Tab inside it
+    // while it is shown (not .hidden, not inert, on the page): the create
+    // drawer, the certificate detail and its Replace form, the client
+    // certificate dialog and the keyboard shortcuts overlay. They let Tab walk
+    // out to the page behind them (P14). Focus that is outside when Tab is
+    // pressed is brought in. The toasts are part of the cycle, after the
+    // dialog's own controls: a result shown in a toast while a dialog is open
+    // must be reachable too (P34).
+    function tabbableIn(root) {
+        return Array.prototype.filter.call(root.querySelectorAll(FOCUSABLE_SELECTOR), function (el) {
+            return el.getClientRects().length > 0 && !el.closest('[inert]') &&
+                getComputedStyle(el).visibility !== 'hidden';
+        });
+    }
+
+    CM.trapTab = function(e, root) {
+        if (e.key !== 'Tab' || !root) return;
+        var inside = tabbableIn(root);
+        var region = document.getElementById('cm-toasts');
+        var toasts = region ? tabbableIn(region) : [];
+        var active = document.activeElement;
+        if (!inside.length && !toasts.length) { e.preventDefault(); return; }
+        var cycle = inside.concat(toasts);
+        var at = toasts.indexOf(active);
+        if (at !== -1) {
+            // Among the toasts the order is ours; after the last one, back in.
+            e.preventDefault();
+            at += inside.length;
+            cycle[(at + (e.shiftKey ? -1 : 1) + cycle.length) % cycle.length].focus();
+            return;
         }
+        if (!root.contains(active)) {
+            e.preventDefault();
+            (e.shiftKey ? cycle[cycle.length - 1] : cycle[0]).focus();
+            return;
+        }
+        // Inside the dialog the browser moves focus, except at either end.
+        if (!e.shiftKey && active === inside[inside.length - 1]) {
+            e.preventDefault();
+            cycle[inside.length % cycle.length].focus();
+        } else if (e.shiftKey && active === inside[0]) {
+            e.preventDefault();
+            cycle[cycle.length - 1].focus();
+        }
+    };
+
+    function openFocusTraps() {
+        return Array.prototype.filter.call(document.querySelectorAll('[data-focus-trap]'), function (el) {
+            return !el.classList.contains('hidden') && !el.hasAttribute('inert') &&
+                !el.hasAttribute('data-closing') && el.getClientRects().length > 0;
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Tab' || e.defaultPrevented) return;
+        // A confirm or prompt, or a [data-modal-root] modal, keeps its own.
+        if (CM.anyDialogOpen()) return;
+        var traps = openFocusTraps();
+        if (!traps.length) return;
+        var root = traps[traps.length - 1];
+        for (var i = traps.length - 1; i >= 0; i--) {
+            if (traps[i].contains(document.activeElement)) { root = traps[i]; break; }
+        }
+        CM.trapTab(e, root);
     });
 
     // [data-modal-close] anywhere, or click on the root itself (backdrop).

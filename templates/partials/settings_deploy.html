@@ -15,7 +15,7 @@
                     <p class="text-sm text-muted">Run shell commands, and deliver to deploy targets, after certificate issuance or renewal</p>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable deploy hooks">
+                    <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable deploy hooks" aria-label="Enable deploy hooks">
                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-500 peer-checked:bg-primary"></div>
                 </label>
             </div>
@@ -78,7 +78,7 @@
                                 <div class="flex items-center justify-between mb-3">
                                     <div class="flex items-center gap-3 flex-1">
                                         <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook">
+                                            <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook" :aria-label="'Enable hook ' + (hook.name || hook.id)">
                                             <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                         </label>
                                         <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name"
@@ -204,7 +204,7 @@
                                         <div class="flex items-center justify-between mb-2">
                                             <div class="flex items-center gap-3 flex-1">
                                                 <label class="relative inline-flex items-center cursor-pointer">
-                                                    <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook">
+                                                    <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook" :aria-label="'Enable hook ' + (hook.name || hook.id)">
                                                     <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                                 </label>
                                                 <input aria-label="Hook name" type="text" x-model="hook.name" placeholder="Hook name"
