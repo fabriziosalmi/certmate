@@ -47,10 +47,51 @@
             deliveries: [],
             get smtpToStr() { return (this.config.channels.smtp.to_addresses || []).join(', '); },
             set smtpToStr(v) { this.config.channels.smtp.to_addresses = v.split(',').map(function (s) { return s.trim(); }).filter(Boolean); },
-            toggleEvent: function (evt) {
-                var idx = this.config.events.indexOf(evt);
-                if (idx === -1) this.config.events.push(evt);
-                else this.config.events.splice(idx, 1);
+            // The notifier reads an empty list as "every event" and a list as
+            // "only these, plus the failures" (modules/core/notifier.py). The
+            // chips used to draw the empty list as six grey chips, so a click
+            // meant to make sure one event was sent narrowed the notifications
+            // to that event alone (UX audit P06). Now the empty list draws
+            // every chip selected, a click deselects one, and selecting all
+            // of them again goes back to the empty list, which also covers an
+            // event added in a later release.
+            //
+            // A stored list can hold names that have no chip: certificate_failed
+            // had one before #943, and the failures are sent whatever the list
+            // says, so such a name changes nothing that is sent. Only names with
+            // a chip are counted as selected; the list is saved as stored until
+            // a chip is clicked, and a click keeps only the names with a chip.
+            get chipEvents() {
+                var events = this.config.events;
+                return this.notifiableEvents.filter(function (e) { return events.indexOf(e) !== -1; });
+            },
+            get allEventsSent() {
+                return this.config.events.length === 0 || this.chipEvents.length === this.notifiableEvents.length;
+            },
+            get eventsSummary() {
+                if (this.allEventsSent) return 'All events are sent.';
+                if (this.chipEvents.length === 0) return 'No event is selected: only failures are sent.';
+                return 'Only the selected events are sent.';
+            },
+            isEventSent: function (evt) {
+                return this.config.events.length === 0 || this.config.events.indexOf(evt) !== -1;
+            },
+            toggleEvent: function (evt, event) {
+                var events = this.config.events.length === 0 ? this.notifiableEvents.slice() : this.chipEvents;
+                var idx = events.indexOf(evt);
+                if (idx === -1) {
+                    events.push(evt);
+                } else if (events.length === 1) {
+                    // An empty list would send every event, the opposite of
+                    // what deselecting the last one asks for.
+                    if (event && event.target) event.target.checked = true;
+                    CertMate.toast('One event at least stays selected: an empty list sends every event.', 'info');
+                    return;
+                } else {
+                    events.splice(idx, 1);
+                }
+                var all = this.notifiableEvents.every(function (e) { return events.indexOf(e) !== -1; });
+                this.config.events = all ? [] : events;
             },
             loadConfig: function () {
                 var self = this;

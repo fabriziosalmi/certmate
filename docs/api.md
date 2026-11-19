@@ -2129,6 +2129,15 @@ enrolled, and never with its `hmac_key`. `DELETE` disables a key: it enrols no
 one again, and the accounts it enrolled keep working. It answers with the key
 as `GET` lists it; an unknown `kid` is a `404`.
 
+Since API contract **2.73**, a refusal of `POST /api/acme/eab-keys` or
+`PATCH /api/acme/server` names the request field it is about in `field`:
+`kid` (also for the `409` of a `kid` that exists), `allowed_identifiers`
+(also when the list is empty or one of its patterns is refused) or `note` for
+a key; `validity_days` or `allowed_identifiers` for the options. An unknown
+option has no `field`, and neither has a key left without
+`allowed_identifiers` or a value of the wrong JSON type: the request
+validation refuses those first, with its own `errors` object.
+
 #### What it issued, and to whom
 
 **Endpoint**: `GET /api/acme/certificates` — viewer
@@ -2409,6 +2418,14 @@ and a `********` value keeps the stored secret, so what `GET` returned can be
 posted back unchanged. Every write is audited. This is the only way to change
 the block: the bulk settings endpoint refuses the `oidc` key. The keys are
 listed in [sso.md](./sso.md#role-mapping-example).
+
+Since API contract **2.73**, a refused `POST` names the key it is about in
+`field`: `issuer_url`, `client_id`, `default_role`, `scopes` or
+`role_mappings` for a `400`, and `enabled` for the `409` that refuses to turn
+off the only credential. A JSON body that is a list, a string or a number is
+a `400` with no `field` (it answered `500`, or an empty list was read as `{}`
+and answered `200`, before 2.73); `null` is still read as `{}`. A settings
+write that failed has no `field` either.
 
 ### Probing a host
 

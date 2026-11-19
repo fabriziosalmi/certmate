@@ -540,6 +540,42 @@
         });
     };
 
+    // ── A refused field, by its label ────────────────────────────
+    // A refusal of a settings write carries `field`, the request field it is
+    // about (API contract 2.73). Given that and the fields a form holds, as
+    // { issuer_url: { label: 'Issuer URL', id: 'input-id' } }, the field is
+    // marked aria-invalid, outlined and focused until it is edited, and the
+    // message comes back led by the field's label, the server's text after it
+    // as it was sent (UX audit P61). With no field, or one the form does not
+    // hold, the message comes back as it was and nothing is marked: a field
+    // is never guessed from words in the text.
+    CM.markFieldError = function(message, field, fields) {
+        var text = String(message == null ? '' : message);
+        fields = fields || {};
+        Object.keys(fields).forEach(function(key) {
+            var el = document.getElementById(fields[key].id);
+            if (el) clearFieldError(el);
+        });
+        var known = field && Object.prototype.hasOwnProperty.call(fields, field) ? fields[field] : null;
+        if (!known) return text;
+        text = known.label + ': ' + text;
+        var el = document.getElementById(known.id);
+        if (el) {
+            el.setAttribute('aria-invalid', 'true');
+            el.classList.add('border-red-500');
+            el.addEventListener('input', function onInput(event) {
+                clearFieldError(event.target);
+                event.target.removeEventListener('input', onInput);
+            });
+            el.focus();
+        }
+        return text;
+    };
+    function clearFieldError(el) {
+        el.removeAttribute('aria-invalid');
+        el.classList.remove('border-red-500');
+    }
+
     // ── Debug Logger ─────────────────────────────────────────────
     CM.debug = {
         _container: null,
