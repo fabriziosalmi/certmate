@@ -86,7 +86,7 @@ def _main(
     url: Optional[str] = typer.Option(None, "--url", envvar="CERTMATE_URL",
                                       help="CertMate base URL (default http://localhost:8000)."),
     token: Optional[str] = typer.Option(None, "--token", envvar="CERTMATE_TOKEN",
-                                        help="API bearer token. Prefer the CERTMATE_TOKEN "
+                                        help="API key or API Bearer Token. Prefer the CERTMATE_TOKEN "
                                              "environment variable: --token is visible to other "
                                              "local processes (ps) and shell history."),
     # Lives on THIS callback rather than a second one: Typer keeps only one

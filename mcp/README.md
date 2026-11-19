@@ -16,7 +16,7 @@ The server reads two environment variables:
 | Variable | Meaning |
 | --- | --- |
 | `CERTMATE_URL` | The CertMate instance, e.g. `http://localhost:8000` (the default) |
-| `CERTMATE_TOKEN` | An API bearer token for that instance |
+| `CERTMATE_TOKEN` | An API key for that instance, or its API Bearer Token |
 
 ### Claude Desktop, Cursor, and other JSON-configured clients
 

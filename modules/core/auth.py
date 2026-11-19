@@ -1452,9 +1452,20 @@ class AuthManager:
             source = ('API_BEARER_TOKEN_FILE'
                       if os.getenv('API_BEARER_TOKEN_FILE')
                       else 'API_BEARER_TOKEN')
-            self.settings_manager.atomic_update({'api_bearer_token': cleaned})
+            saved = self.settings_manager.atomic_update({'api_bearer_token': cleaned})
+            if saved is False:
+                # save_settings refuses rather than raises (an invalid value
+                # elsewhere in settings.json, a write failure): the stored
+                # token is unchanged and still the one that authenticates.
+                logger.error(
+                    "Could not store the API Bearer Token supplied in %s, because "
+                    "the settings save was refused (the settings error above says "
+                    "why). The previously stored token still authenticates and "
+                    "the supplied one does not, until settings.json can be "
+                    "saved and CertMate is restarted.", source)
+                return False
             logger.warning(
-                "Reconciled the stored API bearer token from %s: the value "
+                "Reconciled the stored API Bearer Token from %s. The value "
                 "supplied there did not match what was stored, so enforcement "
                 "and authentication disagreed and every request with the "
                 "supplied token answered 401. The supplied token is now the "
@@ -1474,12 +1485,13 @@ class AuthManager:
         wrong token: an api_bearer_token_hash that no longer matches SECRET_KEY.
 
         The stored hash is HMAC-SHA256 keyed on SECRET_KEY. Restoring a backup
-        onto a host with a different SECRET_KEY leaves the hash unverifiable, so
-        the operator's own token — the right one — 401s on every request, and
-        nothing says why (the instance is not world-open thanks to the bearer
-        fail-closed, it just rejects). If the operator supplied a token via
-        API_BEARER_TOKEN(_FILE) and it does not verify against the stored HMAC
-        hash, log the likely cause and the fix. Best-effort and read-only: it
+        onto a host with a different SECRET_KEY leaves the hash unverifiable,
+        and so does a rotated token. Before #401 the operator's own token then
+        401'd on every request with nothing saying why; now
+        reconcile_bearer_token_from_env, which startup runs right after this,
+        stores the supplied token and logs whether it could. If the operator
+        supplied a token via API_BEARER_TOKEN(_FILE) and it does not verify
+        against the stored HMAC hash, log the likely cause. Best-effort and read-only: it
         never changes the stored hash (a wrong token must not overwrite it) and
         never raises into startup.
         """
@@ -1514,15 +1526,21 @@ class AuthManager:
             source = ('API_BEARER_TOKEN_FILE'
                       if os.getenv('API_BEARER_TOKEN_FILE')
                       else 'API_BEARER_TOKEN')
+            # Startup reconciles right after this (factory: reconcile_bearer_
+            # token_from_env), which stores the supplied token unless the save
+            # is refused, and says which. So this names the cause and points
+            # there: no "requests will 401", no API Keys page (this token
+            # cannot be changed there). No "name: value" in the text: the log
+            # redaction would hide the word after the colon.
             logger.warning(
                 "The %s supplied does not match the stored "
-                "api_bearer_token_hash. That hash is bound to SECRET_KEY "
-                "(HMAC-SHA256), so the usual cause is a SECRET_KEY different "
-                "from the one in effect when the token was hashed — typically "
-                "after restoring a backup onto a new host. API requests will "
-                "401 until this is resolved. Fix: provide the original "
-                "SECRET_KEY (SECRET_KEY or SECRET_KEY_FILE), or reset the "
-                "bearer token via the API Keys UI / a fresh settings save.",
+                "api_bearer_token_hash. Either the API Bearer Token was "
+                "rotated, or SECRET_KEY changed since it was hashed (for "
+                "example a backup restored onto a new host; the hash is "
+                "HMAC-SHA256 bound to SECRET_KEY). Startup now stores the "
+                "supplied token in its place; a later message says whether "
+                "it could. If SECRET_KEY changed, other values bound to it "
+                "may need attention too.",
                 source)
         except Exception as e:
             logger.debug(f"bearer-token staleness check skipped: {e}")

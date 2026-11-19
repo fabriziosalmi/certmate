@@ -2,7 +2,8 @@
 
 Since #1429 a certificate's state comes from `expiry_status`, the server's
 renewal rule: a row reads "Expiring" when renewal is due and "Valid" otherwise,
-and so do the Expiring counter and filter. The Valid counter and the Valid
+and so do the Expiring counter and filter. (Since #1511, P25, "Expiring" is two
+states, "Overdue" and "Due", each with its counter and filter chip.) The Valid counter and the Valid
 filter kept a fixed "more than 30 days left". So a 47-day certificate with 20
 days left, which the rule calls healthy, had a green Valid badge and was counted
 nowhere: twelve Valid rows under "Valid 7, Expiring 0, Expired 0". And a
@@ -33,7 +34,7 @@ def _function(name):
 
 
 def _helpers():
-    names = ['lifeKnown', 'hasExpired', 'isExpiring', 'lostItsKey']
+    names = ['lifeKnown', 'hasExpired', 'isExpiring', 'lostItsKey', 'isOverdue', 'isDue']
     if re.search(r'\n    function isValid\(', DASHBOARD):
         names.append('isValid')
     return ''.join(_function(n) for n in names)
@@ -70,13 +71,13 @@ def _cert(domain, days, status=None):
 def test_a_certificate_the_rule_calls_healthy_is_counted_valid_at_twenty_days():
     """A 47-day certificate with 20 days left: renewal is not due yet."""
     out = _stats([_cert('short.example.com', 20, 'ok')])
-    assert out == {'all': 1, 'valid': 1, 'expiring': 0, 'expired': 0}, out
+    assert out == {'all': 1, 'valid': 1, 'overdue': 0, 'due': 0, 'expired': 0}, out
 
 
 def test_a_certificate_due_for_renewal_is_not_also_counted_valid():
-    """Renewal due with 40 days left: Expiring only, not Valid as well."""
+    """Renewal due with 40 days left: Due only, not Valid as well."""
     out = _stats([_cert('long.example.com', 40, 'warning')])
-    assert out == {'all': 1, 'valid': 0, 'expiring': 1, 'expired': 0}, out
+    assert out == {'all': 1, 'valid': 0, 'overdue': 0, 'due': 1, 'expired': 0}, out
 
 
 def test_every_certificate_is_counted_exactly_once():
@@ -86,14 +87,14 @@ def test_every_certificate_is_counted_exactly_once():
              _cert('e.example.com', 40, 'warning'), _cert('f.example.com', 3, 'ok'),
              dict(_cert('g.example.com', -1, 'expired'), expired=True)]
     out = _stats(certs)
-    assert out['valid'] + out['expiring'] + out['expired'] == out['all'] == len(certs), out
-    assert out == {'all': 7, 'valid': 4, 'expiring': 2, 'expired': 1}, out
+    assert out['valid'] + out['overdue'] + out['due'] + out['expired'] == out['all'] == len(certs), out
+    assert out == {'all': 7, 'valid': 4, 'overdue': 1, 'due': 1, 'expired': 1}, out
 
 
 def test_an_older_server_without_expiry_status_keeps_the_thirty_days():
     """An answer from before contract 2.62 has no expiry_status: 30 days stays the line."""
     out = _stats([_cert('old-a.example.com', 20), _cert('old-b.example.com', 45)])
-    assert out == {'all': 2, 'valid': 1, 'expiring': 1, 'expired': 0}, out
+    assert out == {'all': 2, 'valid': 1, 'overdue': 0, 'due': 1, 'expired': 0}, out
 
 
 def test_the_valid_filter_and_the_valid_counter_are_one_rule():

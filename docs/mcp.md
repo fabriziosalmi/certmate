@@ -67,7 +67,7 @@ npm install
 ### Environment Variables
 The MCP server communicates with the CertMate REST API and requires two environment variables:
 - `CERTMATE_URL` — The URL of your CertMate instance (default: `http://localhost:8000`).
-- `CERTMATE_TOKEN` — A valid API Bearer token with appropriate role permissions (typically `operator` or `admin`). For an auditable agent, use a key flagged as an agent key (see [Audit attribution](#audit-attribution)).
+- `CERTMATE_TOKEN` — An API key with the role permissions it needs (typically `operator` or `admin`), or the API Bearer Token, which has full admin access. For an auditable agent, use a key flagged as an agent key (see [Audit attribution](#audit-attribution)).
 
 Optional:
 - `CERTMATE_AGENT_SESSION` — Overrides the per-process session id the server sends on every call (`X-CertMate-Agent-Session`), so a run can be correlated with an external orchestrator's id. A fresh UUID is generated per process if unset.
@@ -152,8 +152,8 @@ only if it must run deploy hooks, list DNS accounts, delete certificates, or rea
 ## Audit attribution
 
 So the audit trail can tell an agent's actions apart from a human operator's,
-give the MCP server a **dedicated, agent-flagged API key** rather than the legacy
-global bearer token:
+give the MCP server a **dedicated, agent-flagged API key** rather than the
+API Bearer Token:
 
 1. In CertMate, go to **Settings → API Keys**, create a key, and tick **AI agent
    key** (or send `"is_agent": true` to `POST /api/keys`). Give it the least role it needs,
@@ -165,7 +165,7 @@ Every certificate action the agent then takes is recorded with
 `actor.kind="agent"`, the key's stable id, and the per-process
 `X-CertMate-Agent-Session` the server sends — so you can later show exactly which
 certificate changes an AI agent made, under which identity, and grouped by run.
-The legacy global bearer token collapses every caller to `api_user` with no key
+The API Bearer Token collapses every caller to `api_user` with no key
 id and is recorded as `api_token`, not `agent`. The agent-session header is an
 informational claim and never by itself promotes a caller to `agent`.
 

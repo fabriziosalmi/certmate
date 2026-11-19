@@ -1,6 +1,6 @@
 # Servidor MCP (Model Context Protocol) de CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 395373cede92672b -->
+<!-- CERTMATE-TRANSLATED-FROM 58ca0a53ff2c8362 -->
 
 CertMate incluye un servidor MCP (Model Context Protocol) integrado escrito en Node.js. Esto permite a los asistentes de IA agentivos (como Claude o Gemini) inspeccionar el estado de los certificados, disparar renovaciones, solicitar diagnósticos e interactuar directamente con la API de CertMate.
 
@@ -69,7 +69,7 @@ npm install
 ### Variables de entorno
 El servidor MCP se comunica con la API REST de CertMate y requiere dos variables de entorno:
 - `CERTMATE_URL` — La URL de tu instancia de CertMate (por defecto: `http://localhost:8000`).
-- `CERTMATE_TOKEN` — Un token Bearer de API válido con los permisos de rol adecuados (normalmente `operator` o `admin`). Para un agente auditable, usa una clave marcada como clave de agente (ver [Atribución de auditoría](#atribución-de-auditoría)).
+- `CERTMATE_TOKEN` — Una clave de API con los permisos de rol que necesita (normalmente `operator` o `admin`), o el API Bearer Token, que tiene acceso completo de administrador. Para un agente auditable, usa una clave marcada como clave de agente (ver [Atribución de auditoría](#atribución-de-auditoría)).
 
 Opcionales:
 - `CERTMATE_AGENT_SESSION` — Sobreescribe el ID de sesión por proceso que el servidor envía en cada llamada (`X-CertMate-Agent-Session`), de modo que una ejecución pueda correlacionarse con el ID de un orquestador externo. Se genera un UUID nuevo por proceso si no se define.
@@ -154,8 +154,8 @@ solo si tiene que ejecutar deploy hooks, listar cuentas DNS, eliminar certificad
 ## Atribución de auditoría
 
 Para que el registro de auditoría pueda distinguir las acciones de un agente de las de un operador humano,
-dale al servidor MCP una **clave API dedicada y marcada como agente** en lugar del token Bearer
-global heredado:
+dale al servidor MCP una **clave API dedicada y marcada como agente** en lugar del
+API Bearer Token:
 
 1. En CertMate, ve a **Ajustes → Claves API**, crea una clave y marca **Clave de agente
    de IA** (o envía `"is_agent": true` a `POST /api/keys`). Dale el rol mínimo que necesite
@@ -167,7 +167,7 @@ Cada acción sobre certificados que realice el agente quedará registrada con
 `actor.kind="agent"`, el ID estable de la clave y el `X-CertMate-Agent-Session`
 por proceso que envía el servidor, así que más adelante puedes mostrar exactamente qué
 cambios en certificados realizó un agente de IA, bajo qué identidad y agrupados por ejecución.
-El token Bearer global heredado reduce a cada llamante a `api_user` sin ID
+El API Bearer Token reduce a cada llamante a `api_user` sin ID
 de clave y se registra como `api_token`, no como `agent`. La cabecera de sesión de agente es una
 declaración informativa y por sí sola nunca promueve a un llamante a `agent`.
 

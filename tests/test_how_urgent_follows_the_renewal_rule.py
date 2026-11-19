@@ -170,7 +170,10 @@ def test_the_dashboard_tile_counts_a_new_short_lived_certificate_as_valid():
     old_server = {**fresh, 'domain': 'old.example.com'}
     del old_server['expiry_status']
 
-    assert str(_stats([fresh])['chips']['expiring']) == '0'
-    assert str(_stats([fresh, due])['chips']['expiring']) == '1'
-    # An answer from a server before 2.62 keeps the 30 days it had.
-    assert str(_stats([old_server])['chips']['expiring']) == '1'
+    # Since #1511 (P25) the expiring chip is two, Overdue and Due.
+    assert str(_stats([fresh])['chips']['due']) == '0'
+    assert str(_stats([fresh])['chips']['overdue']) == '0'
+    assert str(_stats([fresh, due])['chips']['due']) == '1'
+    # An answer from a server before 2.62 keeps the 30 and 7 days it had:
+    # 6 days left is overdue there.
+    assert str(_stats([old_server])['chips']['overdue']) == '1'

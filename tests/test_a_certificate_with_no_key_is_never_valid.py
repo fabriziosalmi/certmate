@@ -40,7 +40,7 @@ def _stats(certificates):
         "    return chips[k] = chips[k] || {textContent: ''}; }};\n"
         "var CertMate = {escapeHtml: function (s) { return String(s); }};\n"
         + _function('lifeKnown') + _function('hasExpired') + _function('isExpiring') + _function('lostItsKey')
-        + _function('isValid')
+        + _function('isValid') + _function('isOverdue') + _function('isDue')
         + _function('updateStats')
         + "updateStats(" + json.dumps(certificates) + ");\n"
         "var text = tiles.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n"
@@ -77,7 +77,9 @@ def test_an_expired_certificate_still_takes_the_attention_tile():
 
 def test_without_keyless_certificates_nothing_changes():
     out = _stats([_cert('a.example.com'), _cert('b.example.com', days=10)])
-    assert '1 Valid' in out['tiles'] and '1 Expiring' in out['tiles'], out
+    # Ten days left with no expiry_status (an older server): a renewal that is
+    # due, named "Due" since the expiry vocabulary was made one (#1511, P25).
+    assert '1 Valid' in out['tiles'] and '1 Due' in out['tiles'], out
     assert 'No key' not in out['tiles']
 
 

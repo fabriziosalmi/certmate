@@ -11,7 +11,7 @@ next renewal run renews it" under a past date, and nothing about the failure.
 Now the failure is on the certificate's own row (a "Renewal failed" chip and
 the cause under the name) and in its detail panel ("Last renewal failed",
 the cause, the hint ending "The previous certificate is still in place.",
-and "Renewal overdue since <date>" for a past renewal date), read from the
+and "Renewal due since <date>" for a past renewal date), read from the
 `last_renewal_attempt` the server keeps (tests/test_a_failed_renewal_is_kept_on_the_certificate.py).
 A failed create's row names the CA the request chose. The answers are given
 in the browser (page.route), as in tests/test_ui_a_failed_job_shows_what_to_check.py.
@@ -147,7 +147,7 @@ def test_after_a_reload_the_detail_says_the_last_renewal_failed(page):
     assert "could not reach the CA's ACME directory" in detail, detail
     assert 'still in place' in detail, detail
     assert 'the next renewal run renews it' not in detail, detail
-    assert 'Renewal overdue since' in detail, detail
+    assert 'Renewal due since' in detail, detail
 
 
 def test_a_renewal_after_a_failure_clears_the_marker(page):

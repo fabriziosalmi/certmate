@@ -112,9 +112,18 @@
             .then(function(r) { return r.json(); })
             .then(function(stats) {
                 var el = function(id) { return document.getElementById(id); };
+                // A count and its colour together, muted at zero as on the
+                // Server strip (P65): "0 Revoked" was red and "0 Active" green.
+                var counter = function (id, value, earned) {
+                    var node = el(id);
+                    if (!node) return;
+                    node.textContent = value;
+                    node.classList.toggle('text-muted', value === 0);
+                    node.classList.toggle(earned, value > 0);
+                };
                 if (el('totalCount')) el('totalCount').textContent = stats.total || 0;
-                if (el('activeCount')) el('activeCount').textContent = stats.active || 0;
-                if (el('revokedCount')) el('revokedCount').textContent = stats.revoked || 0;
+                counter('activeCount', stats.active || 0, 'text-success-fg');
+                counter('revokedCount', stats.revoked || 0, 'text-danger-fg');
                 // Status filter chip counts (mirror the server chips).
                 var setChipCount = function (k, v) { var c = document.querySelector('[data-cc-status-count="' + k + '"]'); if (c) { c.textContent = v; } };
                 setChipCount('all', stats.total || 0);

@@ -1,6 +1,6 @@
 # Server MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 395373cede92672b -->
+<!-- CERTMATE-TRANSLATED-FROM 58ca0a53ff2c8362 -->
 
 CertMate include un server MCP (Model Context Protocol) integrato scritto in Node.js. Questo consente agli assistenti IA agentici (come Claude o Gemini) di ispezionare lo stato dei certificati, attivare rinnovi, richiedere diagnostiche e interagire direttamente con l'API CertMate.
 
@@ -70,7 +70,7 @@ npm install
 ### Variabili d'ambiente
 Il server MCP comunica con l'API REST CertMate e richiede due variabili d'ambiente:
 - `CERTMATE_URL` — L'URL della tua istanza CertMate (predefinito: `http://localhost:8000`).
-- `CERTMATE_TOKEN` — Un token Bearer API valido con le opportune autorizzazioni di ruolo (solitamente `operator` o `admin`). Per un agente tracciabile nell'audit, usa una chiave contrassegnata come chiave agente (vedi [Attribuzione audit](#attribuzione-audit)).
+- `CERTMATE_TOKEN` — Una chiave API con le autorizzazioni di ruolo necessarie (solitamente `operator` o `admin`), oppure l'API Bearer Token, che ha accesso amministrativo completo. Per un agente tracciabile nell'audit, usa una chiave contrassegnata come chiave agente (vedi [Attribuzione audit](#attribuzione-audit)).
 
 Opzionale:
 - `CERTMATE_AGENT_SESSION` — Sovrascrive l'id di sessione per processo che il server invia a ogni chiamata (`X-CertMate-Agent-Session`), in modo che un'esecuzione possa essere correlata con l'id di un orchestratore esterno. Se non impostato, viene generato un UUID nuovo per ogni processo.
@@ -137,11 +137,11 @@ Poiché le condizioni vivono nel prompt, puoi regolare la policy (soglia, quali 
 
 ## Attribuzione audit
 
-Affinché la traccia di audit possa distinguere le azioni di un agente da quelle di un operatore umano, assegna al server MCP una **chiave API dedicata contrassegnata come agente** anziché il token Bearer globale legacy:
+Affinché la traccia di audit possa distinguere le azioni di un agente da quelle di un operatore umano, assegna al server MCP una **chiave API dedicata contrassegnata come agente** anziché l'API Bearer Token:
 
 1. In CertMate, vai in **Impostazioni → Chiavi API**, crea una chiave e spunta **Chiave agente IA** (oppure invia `"is_agent": true` a `POST /api/keys`). Assegnale il ruolo minimo necessario e, per una chiave `viewer` o `operator`, limitala con `allowed_domains`. Una chiave `admin` non può essere limitata per dominio: il server la rifiuta con un 400.
 2. Imposta quella chiave come `CERTMATE_TOKEN` per il server MCP.
 
-Ogni azione sui certificati eseguita poi dall'agente viene registrata con `actor.kind="agent"`, l'id stabile della chiave e il `X-CertMate-Agent-Session` per processo inviato dal server — così puoi in seguito mostrare esattamente quali modifiche ai certificati ha effettuato un agente IA, sotto quale identità e raggruppate per esecuzione. Il token Bearer globale legacy riduce ogni chiamante a `api_user` senza id di chiave ed è registrato come `api_token`, non `agent`. L'header di sessione dell'agente è un'asserzione informativa e da solo non promuove mai un chiamante ad `agent`.
+Ogni azione sui certificati eseguita poi dall'agente viene registrata con `actor.kind="agent"`, l'id stabile della chiave e il `X-CertMate-Agent-Session` per processo inviato dal server — così puoi in seguito mostrare esattamente quali modifiche ai certificati ha effettuato un agente IA, sotto quale identità e raggruppate per esecuzione. L'API Bearer Token riduce ogni chiamante a `api_user` senza id di chiave ed è registrato come `api_token`, non `agent`. L'header di sessione dell'agente è un'asserzione informativa e da solo non promuove mai un chiamante ad `agent`.
 
 I record risultanti fanno parte della catena di audit in cui ogni manomissione è rilevabile; vedi [log di audit](./api.md#journalizzazione-dellaudit) e [compliance.md](./compliance.md).

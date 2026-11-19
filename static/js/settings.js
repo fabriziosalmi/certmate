@@ -91,21 +91,6 @@
         setTokenVisible(document.getElementById('api_bearer_token').type === 'password');
     }
 
-    function generateRandomToken() {
-        var array = new Uint8Array(32);
-        crypto.getRandomValues(array);
-        return Array.from(array, function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
-    }
-
-    function generateToken() {
-        var tokenField = document.getElementById('api_bearer_token');
-        var newToken = generateRandomToken();
-        tokenField.value = newToken;
-        setTokenVisible(true); // Show the generated token
-        addDebugLog('Generated new API Bearer Token', 'info');
-        showMessage('New API token generated. Remember to save your settings!', 'success');
-    }
-
     // =============================================
     // Debug logging
     // =============================================
@@ -226,9 +211,6 @@
             var domainsRaw = formData.get('domains');
             var domainsValue = domainsRaw ? domainsRaw.split('\n').map(function (d) { return d.trim(); }).filter(function (d) { return d; }) : undefined;
 
-            var tokenRaw = formData.get('api_bearer_token');
-            var tokenValue = tokenRaw ? tokenRaw.trim() : undefined;
-
             // Default certificate-key shape selectors. RSA always carries
             // a key_size, ECDSA always a curve — the inactive branch is
             // omitted from the payload so save_settings doesn't trip the
@@ -247,7 +229,6 @@
                 renewal_threshold_days: parseInt(formData.get('renewal_threshold_days')) || 30,
                 dns_provider: formData.get('dns_provider'),
                 challenge_type: formData.get('challenge_type') || 'dns-01',
-                api_bearer_token: tokenValue,
                 cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
                 certificate_storage: collectStorageBackendSettings(),
                 default_ca: defaultCA,
@@ -286,12 +267,11 @@
             // was a client-side block on a value the backend does not require.
             //
             // Blocking here made every unrelated change unsaveable — a DNS
-            // provider, a storage backend, a regenerated bearer token — for
+            // provider, a storage backend — for
             // anyone whose selected CA had no email yet, including right after
             // switching the default CA. See issue #491.
             //
-            // It is still enforced to finish initial setup, mirroring how the
-            // API bearer token check below is scoped to setup_completed. After
+            // It is still enforced to finish initial setup. After
             // that it degrades to a warning shown once the save succeeds:
             // create_certificate still raises "Domain and email are required"
             // if it is genuinely missing at issuance time.
@@ -315,24 +295,12 @@
                 throw new Error('DNS provider must be selected');
             }
 
-            // API Bearer Token is only required after initial setup when the
-            // backend has no hashed token already. Post-2.4.8 settings.json
-            // stores only api_bearer_token_hash (the plaintext is intentionally
-            // absent from GET /api/web/settings), so an empty form field on
-            // save means "keep the existing hash", not "no token configured".
-            if (!settings.api_bearer_token && currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
-                throw new Error('API Bearer Token is required');
-            }
-
-            // Auto-generate token for initial setup if not provided
-            if (!settings.api_bearer_token && !currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
-                settings.api_bearer_token = generateRandomToken();
-                var tokenField = document.getElementById('api_bearer_token');
-                if (tokenField) {
-                    tokenField.value = settings.api_bearer_token;
-                }
-                addDebugLog('Auto-generated API Bearer Token for initial setup', 'info');
-            }
+            // The API Bearer Token is never part of this save (UX audit P04).
+            // The endpoint refuses api_bearer_token: the token comes from
+            // API_BEARER_TOKEN (or API_BEARER_TOKEN_FILE) at startup. Sent,
+            // any value in the field answered 400 "Forbidden fields in
+            // payload", and the field kept it, so every later Save failed too.
+            // Left out, the stored token is kept as it is.
 
             // Add legacy DNS provider configurations from form fields
             var legacyConfig = {};
@@ -926,7 +894,7 @@
             } else if (data.api_bearer_token_hash) {
                 var hashedTokenField = document.getElementById('api_bearer_token');
                 if (hashedTokenField) {
-                    hashedTokenField.placeholder = 'API token configured — leave empty to keep, or enter a new one to rotate';
+                    hashedTokenField.placeholder = 'Set. Stored only as a hash, so it cannot be shown.';
                     addDebugLog('API bearer token already configured (hash present)', 'info');
                 }
             }
@@ -3912,7 +3880,6 @@
     window.applyPrivateCaPreset = applyPrivateCaPreset;
     window.testCAProvider = testCAProvider;
     window.toggleTokenVisibility = toggleTokenVisibility;
-    window.generateToken = generateToken;
     window.toggleStorageBackendConfig = toggleStorageBackendConfig;
     window.toggleAWSAuthMode = toggleAWSAuthMode;
     window.toggleS3AuthMode = toggleS3AuthMode;
@@ -4025,7 +3992,7 @@
     // `data-input`): see CertMate.actions in certmate.js.
     CertMate.globalActions([
         'applyPrivateCaPreset', 'backfillAzureCertificateObjects', 'clearSettingsDebugConsole',
-        'createBackup', 'createUser', 'generateToken', 'openCAAccountModal',
+        'createBackup', 'createUser', 'openCAAccountModal',
         'refreshBackupList', 'refreshUserList', 'saveAccount', 'saveCAAccount',
         'saveEditAccount', 'selectCAAccountType', 'showAddAccountModal',
         'showStorageMigrationModal', 'testCAProvider', 'testStorageBackend',

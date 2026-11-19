@@ -28,16 +28,23 @@
             </div>
         </div>
 
-        <!-- Summary cards -->
+        <!-- Summary cards. Each one is a button that sets the filters below to
+             what it counts, and its number is counted with that same filter
+             (inventory.js cardCount), so the list it opens has as many rows as
+             the card says (UX perception audit, 2026-11-18, P09). The expiry
+             cards count by the renewal rule the row pills and the expiry filter
+             use: "≤ 7 days" counted calendar days, so a 4-day certificate with
+             2 days to go was in an orange card, under a green pill, and the
+             "≤ 7 days" filter showed nothing. -->
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-px bg-gray-100 dark:bg-white/5" id="summaryCards">
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Total</div><div class="text-xl font-semibold text-foreground" id="sumTotal">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Managed</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Discovered</div><div class="text-xl font-semibold text-foreground" id="sumDiscovered">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumExpired">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 7 days</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-orange-600 dark:text-orange-400" id="sum7">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="sum30">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="sum90">–</div></div>
-            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="A verified OCSP or CRL answer says the issuer revoked it">Revoked</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumRevoked">–</div></div>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="" data-card-expiry="" title="Show every certificate"><div class="text-xs text-muted">Total</div><div class="text-xl font-semibold text-foreground" id="sumTotal">–</div></button>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="issued" data-card-expiry="" title="Show the certificates CertMate manages"><div class="text-xs text-muted">Managed</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></button>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="discovered" data-card-expiry="" title="Show the certificates CertMate found and does not manage"><div class="text-xs text-muted">Discovered</div><div class="text-xl font-semibold text-foreground" id="sumDiscovered">–</div></button>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="" data-card-expiry="expired" title="Show the expired certificates"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumExpired">–</div></button>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="" data-card-expiry="critical" title="Renewal overdue: no more than 7 days or a sixth of its lifetime, whichever is shorter, is left"><div class="text-xs text-muted">Renewal overdue</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumOverdue">–</div></button>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="" data-card-expiry="warning" title="Renewal due: from 30 days before expiry for a certificate of 60 days or more, from a third of its lifetime for a shorter one (half under 10 days)"><div class="text-xs text-muted">Renewal due</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-warning-fg" id="sumDue">–</div></button>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="" data-card-expiry="ok" title="Show the certificates whose renewal is not due yet"><div class="text-xs text-muted">Valid</div><div class="text-xl font-semibold text-foreground" id="sumValid">–</div></button>
+            <button type="button" data-click="InventoryPage.showCard" data-pass="el" class="bg-surface px-4 py-3 text-left hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" data-card-group="" data-card-expiry="revoked" title="A verified OCSP or CRL answer says the issuer revoked it"><div class="text-xs text-muted">Revoked</div><div class="text-xl font-semibold text-foreground" data-nonzero="text-danger-fg" id="sumRevoked">–</div></button>
         </div>
     </div>
 
@@ -247,9 +254,9 @@
             <select id="invExpiry" data-change="InventoryPage.render" aria-label="Filter by expiry" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                 <option value="">Any expiry</option>
                 <option value="expired">Expired</option>
-                <option value="critical">≤ 7 days</option>
-                <option value="warning">≤ 30 days</option>
-                <option value="ok">Healthy</option>
+                <option value="critical">Renewal overdue</option>
+                <option value="warning">Renewal due</option>
+                <option value="ok">Valid</option>
                 <option value="revoked">Revoked</option>
             </select>
             <label class="inline-flex items-center gap-2 text-xs text-muted cursor-pointer"

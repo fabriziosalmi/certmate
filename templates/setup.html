@@ -200,12 +200,12 @@
 
             // On a bearer-only box the create-admin POSTs are gated by
             // @require_role('admin'); the operator authorizes them by proving
-            // possession of the API bearer token they configured. In genuine
+            // possession of the API Bearer Token they configured. In genuine
             // setup mode no token is needed and the setup-mode bypass authorizes
             // both calls exactly as before. #397
             const requiresToken = {{ 'true' if bootstrap_requires_token else 'false' }};
             const token = requiresToken ? document.getElementById('operatorToken').value.trim() : null;
-            if (requiresToken && !token) { showMessage('API bearer token is required'); return; }
+            if (requiresToken && !token) { showMessage('API Bearer Token is required'); return; }
             const authHeaders = token ? { 'Authorization': 'Bearer ' + token } : {};
 
             setupBtn.disabled = true;
@@ -222,14 +222,16 @@
                                                        email ? { email } : {}))
                 });
 
-                // Divergent-token lockout: the box enforces the STORED bearer token,
-                // which can differ from the env token if it was added/rotated after
-                // the first start. Point the operator at the recovery script rather
-                // than the generic "invalid token" message. #397
+                // The box checks the token CertMate was last started with: at
+                // startup the stored token is replaced by API_BEARER_TOKEN_FILE's
+                // content if that is set, otherwise by API_BEARER_TOKEN
+                // (auth.reconcile_bearer_token_from_env). A token added or rotated
+                // after the last start is not in force until a restart. #397
                 if (requiresToken && (response.status === 401 || response.status === 403)) {
-                    showMessage('The pasted API bearer token was not accepted. If you added or '
-                        + 'rotated API_BEARER_TOKEN after the first start, the token this '
-                        + 'instance stored differs — reset with scripts/reset_admin_password.py.');
+                    showMessage('The pasted API Bearer Token was not accepted. Paste the token '
+                        + 'CertMate was last started with: the content of API_BEARER_TOKEN_FILE '
+                        + 'if it is set (the file wins), otherwise API_BEARER_TOKEN. A token '
+                        + 'changed since then takes effect after a restart.');
                     return;
                 }
 
