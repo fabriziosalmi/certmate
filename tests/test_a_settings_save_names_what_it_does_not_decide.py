@@ -116,14 +116,41 @@ def test_an_email_the_default_ca_account_has_its_own_of_is_named(tmp_path, monke
 def test_an_email_for_a_default_ca_that_is_not_configured_is_named(tmp_path, monkeypatch):
     manager = _manager(tmp_path, monkeypatch)
     assert manager.atomic_update({'default_ca': 'zerossl'})
-    assert _save(manager, {'email': 'typed@example.org'}) == [{'setting': 'email', 'by': 'default_ca'}]
+    assert _save(manager, {'email': 'typed@example.org'}) == [{'setting': 'email', 'by': 'default_ca', 'ca': 'zerossl'}]
 
 
-def test_a_token_whose_account_reads_an_unreadable_file_names_it_unreadable(tmp_path, monkeypatch):
+@pytest.mark.parametrize('content, problem', [
+    (None, 'missing'),
+    (b'   \n', 'empty'),
+    (b'\xff\xfe\x00binary', 'not_text'),
+])
+def test_a_token_whose_account_reads_a_broken_file_names_the_file_and_its_problem(tmp_path, monkeypatch,
+                                                                                    content, problem):
+    manager = _manager(tmp_path, monkeypatch)
+    secret = tmp_path / 'cf-token'
+    if content is not None:
+        secret.write_bytes(content)
+    assert manager.atomic_update({'dns_providers': {'cloudflare': {'accounts': {'default': {
+        'api_token_file': str(secret)}}}}})
+    assert _save(manager) == [{'setting': TOKEN_SETTING, 'by': 'api_token_file', 'problem': problem}]
+
+
+def test_another_field_s_broken_reference_is_not_named_as_the_written_field_s_source(tmp_path, monkeypatch):
+    """The account cannot be used, and the token is not read from the zone file."""
     manager = _manager(tmp_path, monkeypatch)
     assert manager.atomic_update({'dns_providers': {'cloudflare': {'accounts': {'default': {
-        'api_token_file': str(tmp_path / 'no-such-token')}}}}})
-    assert _save(manager) == [{'setting': TOKEN_SETTING, 'by': 'api_token_file', 'readable': False}]
+        'zone_id_file': str(tmp_path / 'no-such-zone')}}}}})
+    assert _save(manager) == [{'setting': TOKEN_SETTING, 'by': 'zone_id_file', 'problem': 'missing',
+                               'reference_of': 'zone_id'}]
+
+
+def test_a_read_back_that_fails_says_the_value_was_not_checked(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+
+    def fails(*args, **kwargs):
+        raise ValueError('a defect in the read-back')
+    monkeypatch.setattr(DNSManager, 'get_dns_provider_account_config', fails)
+    assert _save(manager) == [{'setting': TOKEN_SETTING, 'by': 'unchecked'}]
 
 
 def test_route53_keys_under_an_iam_role_are_named_by_the_mode(tmp_path, monkeypatch):

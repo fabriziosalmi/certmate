@@ -721,7 +721,18 @@
         sslcom: 'SSL.com', private_ca: 'Private CA'
     };
 
-    function emailSentence(by) {
+    // What a reference that does not resolve has wrong, as the save names it
+    // (secret_refs.PROBLEMS).
+    var PROBLEM_WORDS = {
+        missing: 'does not exist', not_a_file: 'is not a regular file', too_large: 'is larger than 64 KiB',
+        not_text: 'is not UTF-8 text', empty: 'is empty', unreadable: 'cannot be read',
+        unset: 'names an environment variable that is not set'
+    };
+
+    function emailSentence(by, entry) {
+        if (by === 'unchecked') {
+            return 'Email: CertMate could not check whether the address you entered is the one in use.';
+        }
         if (by === 'LETSENCRYPT_EMAIL') {
             return 'Email: LETSENCRYPT_EMAIL on this instance replaces ' + state.email.trim() + ', the address you entered.';
         }
@@ -731,8 +742,9 @@
                 ' in Settings, CA has an email of its own, and certificates use it, not the address you entered.';
         }
         if (by === 'default_ca') {
-            return 'Email: the default certificate authority is not configured in Settings, CA, so no certificate ' +
-                'uses the address you entered yet.';
+            var ca = entry.ca ? ' (' + (CA_LABELS[entry.ca] || entry.ca) + ')' : '';
+            return 'Email: the default certificate authority' + ca + ' is not configured in Settings, CA, so ' +
+                'requests that take the default fail until it is.';
         }
         return 'Email: the address you entered is not the one in use.';
     }
@@ -744,21 +756,32 @@
     function notInEffectSentence(entry) {
         var setting = String(entry.setting || '');
         var by = String(entry.by || '');
-        if (setting === 'email') return emailSentence(by);
+        if (setting === 'email') return emailSentence(by, entry);
         var dns = setting.match(/^dns_providers\.([^.]+)\.accounts\.([^.]+)\.([^.]+)$/) ||
             setting.match(/^dns_providers\.([^.]+)()\.([^.]+)$/);
         var provider = dns ? dns[1] : (setting === 'cloudflare_token' ? 'cloudflare' : '');
         var field = dns ? dns[3] : (setting === 'cloudflare_token' ? 'api_token' : '');
         var what = provider ? providerLabel(provider) + ' ' + fieldLabel(provider, field) : 'A value you entered';
         var account = dns && dns[2] ? 'the account ' + dns[2] : 'its account';
+        var Account = account.charAt(0).toUpperCase() + account.slice(1);
+        if (by === 'unchecked') {
+            return what + ': CertMate could not check whether what you entered is the value in use.';
+        }
         if (by === 'CERTMATE_CONFIG_FILE') {
             return what + ': not saved. The configuration file named by CERTMATE_CONFIG_FILE declares ' + account +
                 ', and the account as it declares it is what issuance uses.';
         }
         if (/_(env|file)$/.test(by)) {
-            if (entry.readable === false) {
-                return what + ': not used. ' + account.charAt(0).toUpperCase() + account.slice(1) + ' reads it from ' +
-                    by + ', which cannot be read; issuance fails until it can.';
+            if (entry.problem) {
+                var wrong = PROBLEM_WORDS[entry.problem] || 'has a problem';
+                // Another field's reference: the account cannot be used, and
+                // this field is not read from it.
+                if (entry.reference_of && entry.reference_of !== field) {
+                    return what + ': ' + account + ' cannot be used, because its ' + by + ' ' + wrong +
+                        '; issuance with this account fails until that is fixed.';
+                }
+                return what + ': not used. ' + Account + ' reads it from ' + by + ', which ' + wrong +
+                    '; issuance with this account fails until that is fixed.';
             }
             return what + ': ' + account + ' takes it from ' + by + ', not from what you entered.';
         }
@@ -782,7 +805,10 @@
     function renderStep3() {
         var body = document.getElementById('wizardBody');
         var saved = state.saved;
-        var exceptions = (state.notInEffect || []).length > 0;
+        var notes = state.notInEffect || [];
+        var exceptions = notes.length > 0;
+        // Only values it could not check: whether they are in effect is not known.
+        var onlyUnchecked = exceptions && notes.every(function (entry) { return entry.by === 'unchecked'; });
         var dns = saved ? saved.challenge_type !== 'http-01' && saved.dns_provider : state.challenge !== 'http-01' && state.provider;
         var unchecked = 'CertMate has not checked them with your certificate authority' +
             (dns ? ' or with ' + escapeHtml(providerLabel(dns)) : '') + '. Requesting a certificate is what tests them.';
@@ -792,7 +818,8 @@
                     '<i class="fas fa-save text-muted text-4xl" aria-hidden="true"></i>' +
                 '</div>' +
                 '<h3 class="text-xl font-bold text-foreground mb-2">' +
-                    (exceptions ? 'Settings saved, not all in effect' : 'Settings saved') + '</h3>' +
+                    (onlyUnchecked ? 'Settings saved, not all checked'
+                        : exceptions ? 'Settings saved, not all in effect' : 'Settings saved') + '</h3>' +
                 '<p class="text-sm text-muted mb-4">' + unchecked + '</p>' +
                 savedSettingsHtml(saved) +
                 notInEffectHtml() +

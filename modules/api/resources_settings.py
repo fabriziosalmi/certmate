@@ -173,7 +173,9 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                     )
                 # What it set that something else decides instead (P19).
                 return {'message': 'Settings updated successfully',
-                        'not_in_effect': settings_not_in_effect(ctx.settings, ctx.dns, filtered)}, 200
+                        'not_in_effect': settings_not_in_effect(
+                            ctx.settings, ctx.dns, filtered,
+                            ca_manager=ctx.managers.get('ca'))}, 200
 
             except Exception as e:
                 logger.error(f"Error updating settings: {e}")

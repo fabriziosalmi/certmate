@@ -145,6 +145,10 @@ Details worth knowing before relying on it:
 - A reference that resolves to nothing is **refused**, not treated as empty. A
   missing mount fails issuance with a log line naming the field and the path,
   rather than sending a blank token to the DNS provider.
+- A `_file` reference is read only from a regular file of at most 64 KiB that
+  holds UTF-8 text. A missing file, a directory, a FIFO or a device, a larger
+  file, a file that is not text and an empty one are each refused with that
+  reason, the same way; a FIFO or a device is refused without being read.
 
 This does not encrypt anything and is not a substitute for protecting the data
 volume. What it does is let the highest-value secrets live wherever the

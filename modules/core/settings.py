@@ -2466,11 +2466,13 @@ def _digest(value) -> bytes:
 _IAM_UNUSED_KEYS = frozenset({'access_key_id', 'secret_access_key'})
 
 
-def _unreadable_reference(raw_account, field):
-    """The reference of *raw_account* that cannot be read, preferring *field*'s, or None.
+def _broken_reference(raw_account, field):
+    """The reference of *raw_account* that does not resolve, preferring *field*'s own.
 
-    `resolve_field` reads ``<field>_file`` first, then ``<field>_env``; one
-    that cannot be read makes the whole account unusable for issuance.
+    ``(reference key, problem, the field it belongs to)`` or None. The
+    account is unusable for issuance if any of its references fails
+    (`secret_refs.resolve`), so another field's is reported too, as that
+    field's: it is not where *field* is read from.
     """
     from .secret_refs import SecretReferenceError, resolve_field
     bases = [field, *sorted({key[:-len(suffix)] for key in raw_account
@@ -2478,20 +2480,26 @@ def _unreadable_reference(raw_account, field):
     for base in bases:
         try:
             resolve_field(raw_account, base)
-        except SecretReferenceError:
-            return next(base + suffix for suffix in ('_file', '_env')
-                        if isinstance(raw_account.get(base + suffix), str) and raw_account[base + suffix].strip())
+        except SecretReferenceError as error:
+            reference = next(base + suffix for suffix in ('_file', '_env')
+                             if isinstance(raw_account.get(base + suffix), str)
+                             and raw_account[base + suffix].strip())
+            return reference, error.problem, base
     return None
 
 
 def _what_decides(settings_manager, raw_account, provider, used, field, effective):
-    """By what, by name, a DNS account field is not the value written: ``{'by'[, 'readable']}``."""
+    """By what, by name, a DNS account field is not the value written: ``{'by', ...}``."""
     if ('dns_providers', provider, 'accounts', used) in settings_manager.managed_account_paths:
         return {'by': managed_configuration.CONFIG_FILE_ENV}
     if effective is None:
-        broken = _unreadable_reference(raw_account, field)
+        broken = _broken_reference(raw_account, field)
         if broken:
-            return {'by': broken, 'readable': False}
+            reference, problem, owner = broken
+            entry = {'by': reference, 'problem': problem}
+            if owner != field:
+                entry['reference_of'] = owner
+            return entry
     for variable, path, normalised in _ENV_OVERLAYS:
         wanted = os.getenv(variable)
         if (wanted and path == ('dns_providers', provider, 'accounts', used, field)
@@ -2518,6 +2526,16 @@ def _raw_account(loaded, provider, account_id, used):
     return account if isinstance(account, dict) else {}
 
 
+def _written_fields(fields):
+    """The fields of a written account that carry a value to compare."""
+    return {field: value for field, value in fields.items()
+            if isinstance(value, str) and value.strip() and not field.endswith(('_env', '_file'))}
+
+
+def _setting_of(prefix, field):
+    return prefix if prefix == 'cloudflare_token' else f'{prefix}.{field}'
+
+
 def _dns_fields_not_in_effect(settings_manager, dns_manager, loaded, provider, account_id, prefix, fields):
     """The fields of one written DNS account whose value in effect is another.
 
@@ -2528,16 +2546,24 @@ def _dns_fields_not_in_effect(settings_manager, dns_manager, loaded, provider, a
     config, used = dns_manager.get_dns_provider_account_config(provider, account_id=account_id)
     raw_account = _raw_account(loaded, provider, account_id, used)
     found = []
-    for field, value in fields.items():
-        if not isinstance(value, str) or not value.strip() or field.endswith(('_env', '_file')):
-            continue
+    for field, value in _written_fields(fields).items():
         effective = (config or {}).get(field)
         if effective is not None and _digest(value) == _digest(effective):
             continue
-        setting = prefix if prefix == 'cloudflare_token' else f'{prefix}.{field}'
-        found.append({'setting': setting,
+        found.append({'setting': _setting_of(prefix, field),
                       **_what_decides(settings_manager, raw_account, provider, used, field, effective)})
     return found
+
+
+# What the read-back may meet and survive. The save has been written by the
+# time it runs: a failure here must not turn into an answer that says it was
+# not (review of UX audit P19: a reference that was not UTF-8 made a written
+# save answer 500). Each value it could not check says so instead.
+_READ_BACK_ERRORS = (OSError, ValueError, TypeError, KeyError, AttributeError, LookupError)
+
+
+def _unchecked(prefix, fields):
+    return [{'setting': _setting_of(prefix, field), 'by': 'unchecked'} for field in _written_fields(fields)]
 
 
 def _email_not_in_effect(settings_manager, ca_manager, loaded, email):
@@ -2552,8 +2578,8 @@ def _email_not_in_effect(settings_manager, ca_manager, loaded, email):
         account, used = resolve_ca_account(ca_manager or CAManager(settings_manager), default_ca,
                                            settings=loaded)
     except ValueError:
-        # Issuance refuses a default CA that is not configured.
-        return {'setting': 'email', 'by': 'default_ca'}
+        # Issuance refuses a request that takes this default CA.
+        return {'setting': 'email', 'by': 'default_ca', 'ca': default_ca}
     own = str((account or {}).get('email') or '').strip().lower()
     effective = own or str(loaded.get('email') or '').strip().lower()
     if _digest(email.strip().lower()) == _digest(effective):
@@ -2575,41 +2601,50 @@ def settings_not_in_effect(settings_manager, dns_manager, written: dict, ca_mana
     the email through the default CA's account (`resolve_ca_account`, as
     `CertificateService.resolve_ca_email` does), the DNS fields through
     `DNSManager.get_dns_provider_account_config`. Each that differs is
-    ``{'setting': <dotted path>, 'by': <what decides>}``, with
-    ``'readable': False`` when ``by`` is a reference that cannot be read.
-    ``by`` is LETSENCRYPT_EMAIL, CLOUDFLARE_TOKEN, CERTMATE_CONFIG_FILE, the
-    default CA account's email path, ``default_ca`` (not configured), a
-    reference field (``api_token_file``, ``api_token_env``), ``auth_mode``, or
-    "another setting" when it cannot be named. No credential value is
-    returned or logged. Empty when every such value written is the one in
-    effect (UX perception audit, 2026-11-18, P19). Other settings are not
-    checked.
+    ``{'setting': <dotted path>, 'by': <what decides>}``: LETSENCRYPT_EMAIL,
+    CLOUDFLARE_TOKEN, CERTMATE_CONFIG_FILE, the default CA account's email
+    path, ``default_ca`` (with ``ca``), a reference field, ``auth_mode``, or
+    "another setting" when it cannot be named. A reference that does not
+    resolve adds ``problem`` (secret_refs.PROBLEMS), and ``reference_of`` when
+    it is another field's, which makes the account unusable without being
+    where the written field is read from. ``by`` is ``unchecked`` for a value
+    the read-back could not check: it never fails the save it follows. No
+    credential value is returned or logged (UX perception audit, 2026-11-18,
+    P19). Other settings are not checked.
     """
     loaded = settings_manager.load_settings() or {}
     found = []
     email = written.get('email')
     if isinstance(email, str) and email.strip():
-        entry = _email_not_in_effect(settings_manager, ca_manager, loaded, email)
+        try:
+            entry = _email_not_in_effect(settings_manager, ca_manager, loaded, email)
+        except _READ_BACK_ERRORS:
+            entry = {'setting': 'email', 'by': 'unchecked'}
         if entry:
             found.append(entry)
     if dns_manager is None:
         return found
+    targets = []
     for provider, entry in (written.get('dns_providers') or {}).items():
         if not isinstance(entry, dict):
             continue
         for account_id, fields in (entry.get('accounts') or {}).items():
             if isinstance(fields, dict):
-                found.extend(_dns_fields_not_in_effect(
-                    settings_manager, dns_manager, loaded, provider, account_id,
-                    f'dns_providers.{provider}.accounts.{account_id}', fields))
+                targets.append((provider, account_id, f'dns_providers.{provider}.accounts.{account_id}', fields))
         flat = {key: value for key, value in entry.items() if key != 'accounts'}
         if flat:
             # A flat write lands in the account issuance takes by default.
-            found.extend(_dns_fields_not_in_effect(
-                settings_manager, dns_manager, loaded, provider, None, f'dns_providers.{provider}', flat))
+            targets.append((provider, None, f'dns_providers.{provider}', flat))
     legacy = written.get('cloudflare_token')
     if isinstance(legacy, str) and legacy.strip():
         # Nothing reads this key: the token used is the default account's.
-        found.extend(_dns_fields_not_in_effect(
-            settings_manager, dns_manager, loaded, 'cloudflare', None, 'cloudflare_token', {'api_token': legacy}))
+        targets.append(('cloudflare', None, 'cloudflare_token', {'api_token': legacy}))
+    for provider, account_id, prefix, fields in targets:
+        try:
+            found.extend(_dns_fields_not_in_effect(
+                settings_manager, dns_manager, loaded, provider, account_id, prefix, fields))
+        except _READ_BACK_ERRORS as error:
+            logger.warning("Could not check the %s account written to %s: %s",
+                           provider, prefix, error.__class__.__name__)
+            found.extend(_unchecked(prefix, fields))
     return found
