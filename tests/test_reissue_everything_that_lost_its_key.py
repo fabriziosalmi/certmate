@@ -88,7 +88,7 @@ def _service(domains, *, refuse=()):
     def prepare(domain, **kwargs):
         if domain in refuse:
             raise DomainOutOfScope(domain)
-        return {'domain': domain}
+        return {'domain': domain, 'ca_provider': 'letsencrypt'}
 
     def issue(prepared):
         release.wait(5)

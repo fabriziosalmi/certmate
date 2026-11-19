@@ -162,7 +162,7 @@ class _FakeExecutor:
         self.calls = []
         self._jobs = {}
 
-    def submit(self, kind, domain, fn, explain=None):
+    def submit(self, kind, domain, fn, explain=None, ca_provider=None):
         jid = f'job-{len(self.calls)}'
         self.calls.append((kind, domain, fn))
         self._jobs[jid] = {

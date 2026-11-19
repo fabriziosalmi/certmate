@@ -18,6 +18,7 @@ import uuid
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
+from .failure_hints import ca_failure
 from .utils import utc_now_iso
 from .certificates import DomainOperationInProgress
 
@@ -87,7 +88,7 @@ class IssuanceExecutor:
         self._jobs = OrderedDict()  # job_id -> record (insertion-ordered for eviction)
         self._lock = threading.Lock()
 
-    def submit(self, kind, domain, fn, explain=None):
+    def submit(self, kind, domain, fn, explain=None, ca_provider=None):
         """Register a job and run *fn* (a zero-arg callable performing the
         blocking issuance) on the pool. Returns the job_id immediately.
 
@@ -96,6 +97,15 @@ class IssuanceExecutor:
         so a job that failed says what to check too. The dashboard always
         issues through a job, so without it the hint was never shown (UX
         audit, 2026-11-17).
+
+        *ca_provider* is the CA a create or reissue request resolved to,
+        kept on the record so a failure can be told apart by CA (UX audit
+        P22: the dashboard suggests testing with staging only after a refusal
+        by production Let's Encrypt). The CA the request named; when it named
+        none, for a create the instance default, for a reissue the CA the
+        certificate records, or the instance default when it records none.
+        None for a renewal. A failed job also says what the CA's answer, in
+        its whole error, says went wrong (`ca_failure`, failure_hints.ca_failure).
 
         Raises `IssuanceQueueFull` when the backlog is already at the limit,
         which the API turns into a 429. The check and the registration happen
@@ -125,6 +135,8 @@ class IssuanceExecutor:
                 'error': None,
                 'error_code': None,
                 'hint': None,
+                'ca_provider': ca_provider,
+                'ca_failure': None,
             }
             self._evict_locked()
         try:
@@ -220,7 +232,8 @@ class IssuanceExecutor:
                       error=str(e),
                       error_code=('DOMAIN_OPERATION_IN_PROGRESS' if busy
                                   else explained.get('code')),
-                      hint=explained.get('hint'))
+                      hint=explained.get('hint'),
+                      ca_failure=None if busy else ca_failure(str(e)))
         finally:
             if ctx is not None:
                 ctx.pop()

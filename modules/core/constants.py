@@ -853,6 +853,20 @@ METADATA_SCHEMA_VERSION = 1
 #                                   a changed status MAJOR; counted MINOR as
 #                                   2.66 counted its fixes, since neither old
 #                                   answer did what the request asked.
+#                                   2.74, MINOR: a create or reissue job
+#                                   (GET jobs/<id>, GET jobs) carries
+#                                   ca_provider, the CA its request resolved
+#                                   to (named; else for a create the default,
+#                                   for a reissue the recorded CA or the
+#                                   default); null for a renewal. A failed job
+#                                   and last_renewal_attempt carry ca_failure
+#                                   (validation, rate_limit, account, order,
+#                                   other, or null).
+#                                   A certificate's answer carries staging,
+#                                   true when its recorded CA is a staging one
+#                                   (also a pre-2.12.0 letsencrypt record with
+#                                   the staging flag). POST /api/settings
+#                                   answers not_in_effect. New fields.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -878,7 +892,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.73'
+API_CONTRACT_VERSION = '2.74'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

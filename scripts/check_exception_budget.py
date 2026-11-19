@@ -200,7 +200,21 @@ GENERAL_LIMIT = 10
 #                             _looks_absent in that file: hvac is optional and
 #                             the offline suite runs without it), so it matches
 #                             the class by name and re-raises anything else.
-TOTAL_LIMIT = 418
+# 418 -> 419 on 2026-11-19, for a settings save that was written answering
+# that it was (UX perception audit P19, review of #1511 B15). It logs the
+# class and returns:
+#
+#   modules/core/settings.py  not_in_effect_after_write. Both settings routes
+#                             call it after the write succeeded, to say which
+#                             values written are not the ones in effect. An
+#                             error of any class there turned the answer into
+#                             a 500 "Failed to update settings" over a save
+#                             that had been written (measured with a secret
+#                             reference that was not UTF-8). The read-back
+#                             catches what it foresees itself; this handler is
+#                             for the rest, and lists every value written as
+#                             unchecked, which is true.
+TOTAL_LIMIT = 419
 
 # Broad handlers that neither record the failure nor carry a comment saying why
 # silence is correct. This is the tractable half of #671: `except Exception` is
@@ -241,7 +255,7 @@ BUDGET = {
     'modules/api/client_certificates.py': 13,
     'modules/core/client_certificates.py': 12,
     'modules/core/private_ca.py': 11,
-    'modules/core/settings.py': 11,
+    'modules/core/settings.py': 12,
 }
 
 

@@ -141,7 +141,21 @@
         } catch (e) { /* fetch unavailable — localStorage skip still applies */ }
     }
 
+    // The admin email typed on the setup page, handed over in this tab's
+    // sessionStorage (templates/setup.html, UX audit P58), to start the
+    // contact email with. Kept until the wizard saves or is dismissed.
+    var SETUP_EMAIL_KEY = 'certmate_setup_email';
+
+    function setupEmail() {
+        try { return window.sessionStorage.getItem(SETUP_EMAIL_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    function forgetSetupEmail() {
+        try { window.sessionStorage.removeItem(SETUP_EMAIL_KEY); } catch (e) { /* storage unavailable: nothing was kept */ }
+    }
+
     function dismissWizard() {
+        forgetSetupEmail();
         rememberSkip();
         persistDismissal();
         closeWizard();
@@ -154,6 +168,9 @@
         fetch('/api/web/settings?t=' + t, { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
+                // Only while the settings hold no email: one already saved is
+                // not replaced by a click on Next.
+                if (data && !data.email && !state.email) state.email = setupEmail();
                 if (data && data.certmate_recovery_suggested) {
                     showRecoveryPrompt();
                 } else if (data && data.setup_completed === false && !data.wizard_dismissed && !wizardSkipped()) {
@@ -298,11 +315,12 @@
         for (var i = 1; i <= 3; i++) {
             var cls = i === state.step
                 ? 'w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold'
+                // A step behind is done, not checked: no status colour (P19).
                 : i < state.step
-                    ? 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm'
+                    ? 'w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm'
                     : 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-muted flex items-center justify-center text-sm';
             html += '<div class="' + cls + '">' + (i < state.step ? '<i class="fas fa-check text-xs"></i>' : i) + '</div>';
-            if (i < 3) html += '<div class="w-6 h-0.5 ' + (i < state.step ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600') + '"></div>';
+            if (i < 3) html += '<div class="w-6 h-0.5 ' + (i < state.step ? 'bg-primary/40' : 'bg-gray-200 dark:bg-gray-600') + '"></div>';
         }
         el.innerHTML = html;
     }
@@ -490,10 +508,14 @@
             providerDef.fields.forEach(function(f) {
                 var el = document.getElementById('wiz_' + f.key);
                 var val = el ? el.value.trim() : '';
-                var missing = !val && !f.optional && !(state.provider === 'route53' &&
+                // Hidden by the chosen mode (Route 53 with an IAM role): not
+                // sent, so keys typed before switching are not saved unused.
+                var hidden = state.provider === 'route53' &&
                         (f.key === 'access_key_id' || f.key === 'secret_access_key') &&
-                        document.getElementById('wiz_auth_mode').value === 'iam_role');
+                        document.getElementById('wiz_auth_mode').value === 'iam_role';
+                var missing = !val && !f.optional && !hidden;
                 if (el) markRequired(el, f.label, missing);
+                if (hidden) return;
                 if (missing) {
                     valid = false;
                     firstMissing = firstMissing || el;
@@ -626,9 +648,19 @@
             if (!r.ok) throw new Error('Save failed');
             return r.json();
         })
-        .then(function() {
-            state.step = 3;
-            renderStep();
+        .then(function(answer) {
+            // What the save set that something else decides instead: an
+            // environment variable, the configuration file, another default
+            // account (API contract 2.74).
+            state.notInEffect = (answer && Array.isArray(answer.not_in_effect)) ? answer.not_in_effect : [];
+            forgetSetupEmail();
+            // Step 3 lists what the instance now holds, read back: the
+            // environment can override a saved value (LETSENCRYPT_EMAIL).
+            return readBackSettings().then(function (saved) {
+                state.step = 3;
+                state.saved = saved;
+                renderStep();
+            });
         })
         .catch(function(err) {
             console.error('Setup wizard save error:', err);
@@ -640,28 +672,163 @@
         });
     }
 
+    // The settings as the instance holds them after the save, or null when
+    // they could not be read. Never rejects.
+    function readBackSettings() {
+        return fetch('/api/web/settings?t=' + new Date().getTime(), { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; });
+    }
+
+    function providerLabel(key) {
+        return PROVIDERS[key] ? PROVIDERS[key].label : key;
+    }
+
+    function savedRow(icon, label, value, note) {
+        return '<div class="flex items-start"><i class="fas ' + icon + ' text-muted mr-2 w-4 mt-0.5" aria-hidden="true"></i>' +
+            '<span class="text-label">' + label + ': <strong>' + escapeHtml(value) + '</strong>' +
+            (note ? '<span class="block text-xs text-muted">' + escapeHtml(note) + '</span>' : '') + '</span></div>';
+    }
+
+    // What was saved, as the instance now holds it (UX perception audit,
+    // 2026-11-18, P19). No success claim and no status colour: the wizard
+    // checks nothing with the CA or the DNS provider, it only saves. Step 3
+    // is reached only once the save answered OK.
+    function savedSettingsHtml(saved) {
+        if (!saved) {
+            return '<p class="text-sm text-muted">They could not be read back to list here: Advanced Settings shows them.</p>';
+        }
+        return '<div class="bg-surface-2 rounded-lg p-4 text-left text-sm space-y-2">' +
+            savedRow('fa-envelope', 'Email', saved.email || 'none') +
+            (saved.challenge_type === 'http-01'
+                ? savedRow('fa-globe', 'Validation', 'HTTP-01, on port 80')
+                : savedRow('fa-globe-americas', 'DNS Provider', providerLabel(saved.dns_provider || '') || 'none')) +
+            savedRow('fa-sync-alt', 'Auto-renewal', saved.auto_renew === false ? 'Disabled' : 'Enabled') +
+        '</div>';
+    }
+
+    // One sentence per value the save set that is not the one in effect, as
+    // the save's answer names them: by what, never with a value.
+    // The label the credential form gives a field, or the field's own name.
+    function fieldLabel(provider, field) {
+        var found = ((PROVIDERS[provider] || {}).fields || []).filter(function (f) { return f.key === field; })[0];
+        return found ? found.label : field;
+    }
+
+    var CA_LABELS = {
+        letsencrypt: "Let's Encrypt", letsencrypt_staging: "Let's Encrypt (Staging)", zerossl: 'ZeroSSL',
+        google: 'Google Trust Services', actalis: 'Actalis', digicert: 'DigiCert', sectigo: 'Sectigo',
+        sslcom: 'SSL.com', private_ca: 'Private CA'
+    };
+
+    // What a reference that does not resolve has wrong, as the save names it
+    // (secret_refs.PROBLEMS).
+    var PROBLEM_WORDS = {
+        missing: 'does not exist', not_a_file: 'is not a regular file', too_large: 'is larger than 64 KiB',
+        not_text: 'is not UTF-8 text', empty: 'is empty', unreadable: 'cannot be read',
+        unset: 'names an environment variable that is not set or is empty'
+    };
+
+    function emailSentence(by, entry) {
+        if (by === 'unchecked') {
+            return 'Email: CertMate could not check whether the address you entered is the one in use.';
+        }
+        if (by === 'LETSENCRYPT_EMAIL') {
+            return 'Email: LETSENCRYPT_EMAIL on this instance replaces ' + state.email.trim() + ', the address you entered.';
+        }
+        var account = by.match(/^ca_providers\.([^.]+)\.accounts\.([^.]+)\.email$/);
+        if (account) {
+            return 'Email: the ' + (CA_LABELS[account[1]] || account[1]) + ' account ' + account[2] +
+                ' in Settings, CA has an email of its own, and certificates use it, not the address you entered.';
+        }
+        if (by === 'default_ca') {
+            var ca = entry.ca ? ' (' + (CA_LABELS[entry.ca] || entry.ca) + ')' : '';
+            return 'Email: the default certificate authority' + ca + ' is not configured in Settings, CA, so ' +
+                'requests that take the default fail until it is.';
+        }
+        return 'Email: the address you entered is not the one in use.';
+    }
+
+    // Every value `by` can take says something true (P19, review): what
+    // decides the value, never a claim that is not known, never a raw name
+    // alone. A value this page does not know says only that what was
+    // entered is not in use.
+    function notInEffectSentence(entry) {
+        var setting = String(entry.setting || '');
+        var by = String(entry.by || '');
+        if (setting === 'email') return emailSentence(by, entry);
+        var dns = setting.match(/^dns_providers\.([^.]+)\.accounts\.([^.]+)\.([^.]+)$/) ||
+            setting.match(/^dns_providers\.([^.]+)()\.([^.]+)$/);
+        var provider = dns ? dns[1] : (setting === 'cloudflare_token' ? 'cloudflare' : '');
+        var field = dns ? dns[3] : (setting === 'cloudflare_token' ? 'api_token' : '');
+        var what = provider ? providerLabel(provider) + ' ' + fieldLabel(provider, field) : 'A value you entered';
+        var account = dns && dns[2] ? 'the account ' + dns[2] : 'its account';
+        var Account = account.charAt(0).toUpperCase() + account.slice(1);
+        if (by === 'unchecked') {
+            return what + ': CertMate could not check whether what you entered is the value in use.';
+        }
+        if (by === 'CERTMATE_CONFIG_FILE') {
+            return what + ': not saved. The configuration file named by CERTMATE_CONFIG_FILE declares ' + account +
+                ', and the account as it declares it is what issuance uses.';
+        }
+        if (/_(env|file)$/.test(by)) {
+            if (entry.problem) {
+                var wrong = PROBLEM_WORDS[entry.problem] || 'has a problem';
+                // Another field's reference: the account cannot be used, and
+                // this field is not read from it.
+                if (entry.reference_of && entry.reference_of !== field) {
+                    return what + ': ' + account + ' cannot be used, because its ' + by + ' ' + wrong +
+                        '; issuance with this account fails until that is fixed.';
+                }
+                return what + ': not used. ' + Account + ' reads it from ' + by + ', which ' + wrong +
+                    '; issuance with this account fails until that is fixed.';
+            }
+            return what + ': ' + account + ' takes it from ' + by + ', not from what you entered.';
+        }
+        if (by === 'CLOUDFLARE_TOKEN') {
+            return what + ': CLOUDFLARE_TOKEN on this instance replaces what you entered.';
+        }
+        if (by === 'auth_mode') {
+            return what + ': not used, since ' + account + ' authenticates with an IAM role.';
+        }
+        return what + ': what you entered is not the value in use.';
+    }
+
+    function notInEffectHtml() {
+        var notes = state.notInEffect || [];
+        if (!notes.length) return '';
+        return '<ul class="mt-3 text-left text-sm text-label space-y-1 list-disc ml-5" data-not-in-effect>' +
+            notes.map(function (entry) { return '<li>' + escapeHtml(notInEffectSentence(entry)) + '</li>'; }).join('') +
+            '</ul>';
+    }
+
     function renderStep3() {
         var body = document.getElementById('wizardBody');
+        var saved = state.saved;
+        var notes = state.notInEffect || [];
+        var exceptions = notes.length > 0;
+        // Only values it could not check: whether they are in effect is not known.
+        var onlyUnchecked = exceptions && notes.every(function (entry) { return entry.by === 'unchecked'; });
+        var dns = saved ? saved.challenge_type !== 'http-01' && saved.dns_provider : state.challenge !== 'http-01' && state.provider;
+        var unchecked = 'CertMate has not checked them with your certificate authority' +
+            (dns ? ' or with ' + escapeHtml(providerLabel(dns)) : '') + '. Requesting a certificate is what tests them.';
         body.innerHTML =
             '<div class="text-center">' +
-                '<div class="w-20 h-20 bg-success-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-check-circle text-green-500 text-4xl"></i>' +
+                '<div class="w-20 h-20 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-4">' +
+                    '<i class="fas fa-save text-muted text-4xl" aria-hidden="true"></i>' +
                 '</div>' +
-                '<h3 class="text-xl font-bold text-foreground mb-2">You\'re All Set!</h3>' +
-                '<p class="text-sm text-muted mb-4">CertMate is configured and ready to manage your certificates.</p>' +
-                '<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-left text-sm space-y-2">' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Email: <strong>' + escapeHtml(state.email) + '</strong></span></div>' +
-                    (state.challenge === 'http-01'
-                        ? '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Validation: <strong>HTTP-01, on port 80</strong></span></div>'
-                        : '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>') +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Auto-renewal: <strong>Enabled</strong></span></div>' +
-                '</div>' +
+                '<h3 class="text-xl font-bold text-foreground mb-2">' +
+                    (onlyUnchecked ? 'Settings saved, not all checked'
+                        : exceptions ? 'Settings saved, not all in effect' : 'Settings saved') + '</h3>' +
+                '<p class="text-sm text-muted mb-4">' + unchecked + '</p>' +
+                savedSettingsHtml(saved) +
+                notInEffectHtml() +
             '</div>';
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<a href="/settings" class="text-sm text-muted hover:text-gray-700 dark:hover:text-gray-200">Advanced Settings</a>' +
-            '<button type="button" id="wizFinish" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition"><i class="fas fa-certificate mr-1"></i> Create Your First Certificate</button>';
+            '<button type="button" id="wizFinish" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition"><i class="fas fa-certificate mr-1"></i> Create a Certificate</button>';
 
         document.getElementById('wizFinish').addEventListener('click', function() {
             closeWizard();

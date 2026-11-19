@@ -285,6 +285,7 @@ rather than written by hand:
   "alias_dns_provider": null,
   "san_domains": ["www.example.com"],
   "ca_provider": "letsencrypt",
+  "staging": false,
   "ca_account_id": "default",
   "imported_at": null,
   "external": false,
@@ -423,7 +424,8 @@ after a reload and for a failure nobody watched.
   "attempted_at": "2026-11-18T09:12:40Z",
   "outcome": "failed",
   "error": "Certificate renewal failed: ... DNS problem: NXDOMAIN looking up TXT for _acme-challenge.app.example.com",
-  "hint": "The CA could not verify the DNS TXT record: check that it was created in the name's zone and has had time to propagate. The previous certificate is still in place."
+  "hint": "The CA could not verify the DNS TXT record: check that it was created in the name's zone and has had time to propagate. The previous certificate is still in place.",
+  "ca_failure": "validation"
 }
 ```
 
@@ -435,6 +437,34 @@ certificate as it was. The field is `null` when no renewal has failed, after a
 renewal that happened, and once a reissue or an upload has replaced the
 certificate it was about. A domain busy with another operation is not a failed
 renewal and leaves nothing. Since API contract **2.70**.
+
+`ca_failure` says what the CA's answer, in the whole error (not only the 2000
+characters kept), shows went wrong. The first that matches, in this order:
+
+| `ca_failure` | When the error says |
+| --- | --- |
+| `null` | The CA's directory could not be reached (urllib3's own words), or nothing shows the CA answered: a renewal with no certbot lineage, a certificate that already exists, a DNS provider refusing CertMate's credentials. |
+| `rate_limit` | A rate limit: `rateLimited`, Let's Encrypt's "too many certificates", "too many failed authorizations", "too many new orders", "too many new registrations", or its rate-limits page. |
+| `other` | The CA's own fault, not a refusal, checked next: `serverInternal`, `badNonce`, "service is down for maintenance", "had an internal error", also inside "Error creating new order :: ...". |
+| `account` | The account or its registration was refused: "unable to register an account", `invalidContact`, `unsupportedContact`, `invalidEmail`, "invalid email address", `accountDoesNotExist`, `externalAccountRequired`. |
+| `order` | The order was refused at new-order or at finalize: "Error creating new order", "Error finalizing order", "forbidden by policy", `rejectedIdentifier`, `caa` or a CAA record, `badCSR`. |
+| `validation` | A challenge failed at the CA: "Some challenges have failed", "DNS problem", "Invalid response from", the `unauthorized`, `connection`, `dns` and `incorrectResponse` problem types. |
+| `other` | Last: any other ACME problem document (`urn:ietf:params:acme:error:`). |
+
+A record kept before the field is classified from the error it kept. Since
+API contract **2.74**.
+
+##### Is it a staging certificate?
+
+`staging` is `true` when what CertMate records for the certificate is a staging
+CA, whose certificates browsers do not trust: `ca_provider` is
+`letsencrypt_staging`, or the certificate was recorded with the staging flag.
+Before 2.12.0 a Let's Encrypt staging certificate was recorded as `ca_provider`
+`letsencrypt` with that flag, and it still renews from staging, so `ca_provider`
+alone does not tell it from production. For an imported certificate
+`ca_provider` is the CA it renews from and nothing records who issued it, so an
+imported staging certificate set to renew from production answers `false`.
+Since API contract **2.74**.
 
 ##### Deprecated fields
 
@@ -1840,6 +1870,16 @@ synchronous 422 `CERTIFICATE_CREATION_FAILED` is unchanged and keeps that
 generic hint, a string. `hint` is also `null` while the job runs and after it
 succeeds.
 
+A create or reissue job, a keyless reissue's included, carries `ca_provider`,
+the CA its request went to: the one it named; when it named none, for a create
+the instance's default CA, for a reissue the CA the certificate records, or the
+default when it records none. A renewal job carries `null`; the CA a renewal
+goes to is the certificate's `ca_provider`, which is `null` when none was
+recorded. A job that failed carries `ca_failure`, classified from its whole
+error as a certificate's `last_renewal_attempt` is; `null` while it runs, after
+it succeeds, and for a domain busy with another operation. Since API contract
+**2.74**.
+
 **Errors**: 400 validation or configuration (the body names the problem),
 403 scope, 409 `CERTIFICATE_ALREADY_EXISTS` when the domain already has a
 certificate (renew it, or reissue it to change its configuration) or an
@@ -2406,6 +2446,35 @@ to register at the provider as the redirect URI. It is not rate-limited
 itself: a failed callback counts against the login limit of the caller's IP,
 so the next `GET /api/auth/oidc/login` from that IP backs off. Setting up a
 provider is in [sso.md](./sso.md).
+
+#### What a settings save does not decide
+
+Since API contract **2.74** the answer to `POST /api/settings` carries
+`not_in_effect`. For the contact `email` and for every field written into a
+DNS provider's account (in the `accounts` shape or the flat one, and the
+legacy `cloudflare_token`), the save reads the value in effect back the way
+issuance reads it and compares it with the value written: the email the way
+issuance picks it (the default CA's account email first, then the contact
+email, the environment applied), the DNS fields with references resolved and
+the environment and the configuration file applied. Each that differs is an
+entry `{"setting", "by"}`: `setting` is the dotted path written, `by` what
+decides the value in use. No credential value is returned or logged.
+
+| `by` | What happens to the value written |
+| --- | --- |
+| `LETSENCRYPT_EMAIL`, `CLOUDFLARE_TOKEN` | Kept in the file, and replaced by the environment variable whenever the settings are read. |
+| `ca_providers.<ca>.accounts.<id>.email` | Kept, but the default CA's account has an email of its own, which issuance uses. |
+| `default_ca` | Kept, but the default CA, named in `ca`, is not configured, so requests that take the default CA are refused until it is. A request that names another CA is not affected. |
+| `CERTMATE_CONFIG_FILE` | Not saved: the configuration file declares that account, and the account as it declares it is what issuance uses. |
+| `<field>_env`, `<field>_file` | Kept, but the account takes the field from that reference, which comes first. With `problem`, the reference does not resolve and issuance with that account fails until it does: `missing`, `not_a_file`, `too_large` (over 64 KiB), `not_text` (not UTF-8), `empty`, `unreadable`, or `unset` (the variable is not set, or is empty). With `reference_of` as well, the reference belongs to that other field: the account cannot be used, and the field written is not read from it. |
+| `auth_mode` | A Route 53 account in IAM role mode does not use access keys. |
+| `another setting` | The value in use is another, and what decides it cannot be named. |
+| `unchecked` | The read-back could not check the value. After a save that was written, any error in the read-back is logged by its class and lists every value written as `unchecked`; the answer is still 200. |
+
+A value written into an account other than the provider's default is in effect
+for the certificates that name that account, and is not listed. The list is
+empty when every email and DNS account value written is the one in effect;
+other settings are not checked.
 
 #### SSO settings
 

@@ -43,6 +43,9 @@
                  (P15); showError ties it to the password field as well. -->
             <div id="errorMessage" role="alert" class="hidden mb-4 p-3 bg-danger-surface border border-danger-line text-danger-fg rounded-md text-sm">
             </div>
+            <!-- Shown once, right after setup created the first admin (P58). -->
+            <div id="createdMessage" role="status" class="hidden mb-4 p-3 bg-surface-2 border border-border text-foreground rounded-md text-sm">
+            </div>
 
             <form id="loginForm" class="space-y-6">
                 <!-- Username -->
@@ -241,6 +244,23 @@
                 loginBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i> Sign In';
             }
         });
+
+        // Setup has just created the first admin (UX audit P58): say so once
+        // and fill in its name. The setup page hands the name over in this
+        // tab's sessionStorage; it is read once and shown as text only.
+        (function() {
+            var name = null;
+            try {
+                name = sessionStorage.getItem('certmate_setup_created');
+                sessionStorage.removeItem('certmate_setup_created');
+            } catch (e) { return; }
+            if (!name) return;
+            var box = document.getElementById('createdMessage');
+            box.textContent = 'Admin account ' + name + ' created. Sign in with the password you just set.';
+            box.classList.remove('hidden');
+            document.getElementById('username').value = name;
+            document.getElementById('password').focus();
+        })();
 
         // Client-side already-logged-in check kept as a defensive
         // fallback. The /login route now server-side redirects on

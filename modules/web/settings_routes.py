@@ -528,8 +528,9 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         Flask-RESTX Settings.post resource."""
         try:
             from modules.core.settings import (
-                validate_settings_post,
                 diff_settings_keys,
+                not_in_effect_after_write,
+                validate_settings_post,
             )
             data = request.json or {}
             # Load *before* validating: validate_settings_post uses the
@@ -602,7 +603,12 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                     user=current.get('username'),
                     ip_address=request.remote_addr,
                 )
-            return jsonify({'message': 'Settings updated'})
+            # What it set that something else decides instead (P19): the
+            # first-run wizard says so rather than "saved".
+            return jsonify({'message': 'Settings updated',
+                            'not_in_effect': not_in_effect_after_write(
+                                settings_manager, managers.get('dns'), filtered,
+                                ca_manager=managers.get('ca'))})
         except Exception as e:
             logger.error(f"Failed to update settings: {e}")
             return jsonify({'error': 'Failed to update settings'}), 500

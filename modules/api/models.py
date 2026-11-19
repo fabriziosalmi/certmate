@@ -292,6 +292,14 @@ def create_api_models(api):
             description=(
                 'What to check, the hint the renewal job gives for the same error, ending with '
                 '"The previous certificate is still in place."')),
+        'ca_failure': fields.String(
+            enum=['validation', 'rate_limit', 'account', 'order', 'other'],
+            description=(
+                "What the CA's answer, in the whole error, shows went wrong: validation (a challenge "
+                'failed), rate_limit, account (registration or account refused), order (new-order or '
+                'finalize refused: policy, CAA, identifier, CSR), other (the CA\'s own fault, such as '
+                'serverInternal, or any other ACME problem), or null '
+                'when the CA was not reached or it cannot be told. Since API contract 2.74.')),
     })
 
     certificate_model = api.model('Certificate', {
@@ -436,6 +444,11 @@ def create_api_models(api):
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
         'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
         'ca_provider': fields.String(description='CA used at issuance, or selected for the next renewal of an imported certificate (from metadata)'),
+        'staging': fields.Boolean(description=(
+            'True when the CA CertMate records for the certificate is a staging one, whose certificates '
+            'browsers do not trust: ca_provider letsencrypt_staging, or a certificate recorded with the '
+            'staging flag (before 2.12.0, Let\'s Encrypt staging was ca_provider letsencrypt with it). For an '
+            'imported certificate it is about the CA it renews from. Since API contract 2.74.')),
         'ca_account_id': fields.String(description=(
             'CA account used at issuance, or selected for renewal of an imported certificate')),
         'imported_at': fields.String(description=(

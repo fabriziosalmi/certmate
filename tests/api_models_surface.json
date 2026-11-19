@@ -1,5 +1,5 @@
 {
- "contract_version": "2.73",
+ "contract_version": "2.74",
  "models": {
   "ACMEDNSConfig": {
    "properties": {
@@ -627,6 +627,9 @@
     "seconds_left": {
      "type": "integer"
     },
+    "staging": {
+     "type": "boolean"
+    },
     "storage_warning": {
      "type": "string"
     },
@@ -1125,6 +1128,16 @@
   "LastRenewalAttempt": {
    "properties": {
     "attempted_at": {
+     "type": "string"
+    },
+    "ca_failure": {
+     "enum": [
+      "account",
+      "order",
+      "other",
+      "rate_limit",
+      "validation"
+     ],
      "type": "string"
     },
     "error": {

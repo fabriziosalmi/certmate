@@ -38,13 +38,23 @@ credential produces a certbot failure that reads like a provider outage.
 from __future__ import annotations
 
 import os
-import pathlib
+import stat
 
 # Only these two suffixes are references. Checked against the credential
 # registry by a test, so a provider field that one day genuinely ends in
 # `_file` is a failing test rather than a field silently read as a pointer.
 FILE_SUFFIX = '_file'
 ENV_SUFFIX = '_env'
+
+# The most a referenced file may hold. A credential is an API token, a key
+# pair, a PEM private key or a cloud service-account JSON document: a few
+# kilobytes at the most. 64 KiB leaves an order of magnitude of room above
+# that, and stops a reference to a log, an image or a device from being read
+# into memory, or read forever, by a settings save or an issuance.
+MAX_SECRET_FILE_BYTES = 64 * 1024
+
+# What is wrong with a reference, as SecretReferenceError.problem says it.
+PROBLEMS = ('missing', 'not_a_file', 'too_large', 'not_text', 'empty', 'unreadable', 'unset')
 
 
 class SecretReferenceError(Exception):
@@ -55,10 +65,13 @@ class SecretReferenceError(Exception):
     credential.
     """
 
-    def __init__(self, field: str, reference: str, reason: str):
+    def __init__(self, field: str, reference: str, reason: str, problem: str = 'unreadable'):
         self.field = field
         self.reference = reference
         self.reason = reason
+        # One of PROBLEMS: what a caller can say about it without parsing
+        # the reason.
+        self.problem = problem
         super().__init__(f'{field}: {reference} {reason}')
 
 
@@ -66,15 +79,45 @@ def _read_file(field: str, path: str) -> str:
     """*field* is threaded through so the error names it. It was not, once,
     and the log line read `field ''` — which is the one thing the operator
     needed, since the whole point of that message is to say which credential
-    the missing mount belongs to."""
+    the missing mount belongs to.
+
+    Only a regular file, of at most MAX_SECRET_FILE_BYTES, holding UTF-8
+    text. Opened without blocking and checked on the descriptor, so a FIFO
+    or a device named here is refused rather than read forever, and a file
+    swapped between a check and the read cannot slip past it. Every failure
+    is a SecretReferenceError with its problem: a reference that is not
+    text used to raise UnicodeDecodeError, which no caller expected (review
+    of UX audit P19: a settings save answered 500 after writing).
+    """
     try:
-        text = pathlib.Path(path).read_text(encoding='utf-8')
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0))
+    except FileNotFoundError:
+        raise SecretReferenceError(field, path, 'could not be read: it does not exist', 'missing') from None
     except OSError as exc:
         # strerror, not the exception: str(OSError) includes the filename,
         # which is already in the message, and nothing else useful.
-        raise SecretReferenceError(
-            field, path, f'could not be read ({exc.strerror})')
-    return text
+        raise SecretReferenceError(field, path, f'could not be read ({exc.strerror})', 'unreadable') from None
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise SecretReferenceError(field, path, 'is not a regular file', 'not_a_file')
+        chunks, size = [], 0
+        while size <= MAX_SECRET_FILE_BYTES:
+            chunk = os.read(descriptor, MAX_SECRET_FILE_BYTES + 1 - size)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+    except OSError as exc:
+        raise SecretReferenceError(field, path, f'could not be read ({exc.strerror})', 'unreadable') from None
+    finally:
+        os.close(descriptor)
+    if size > MAX_SECRET_FILE_BYTES:
+        raise SecretReferenceError(field, path, f'is larger than {MAX_SECRET_FILE_BYTES // 1024} KiB',
+                                   'too_large')
+    try:
+        return b''.join(chunks).decode('utf-8')
+    except UnicodeDecodeError:
+        raise SecretReferenceError(field, path, 'is not UTF-8 text', 'not_text') from None
 
 
 def resolve_field(config: dict, field: str) -> str | None:
@@ -90,7 +133,7 @@ def resolve_field(config: dict, field: str) -> str | None:
     if isinstance(reference, str) and reference.strip():
         value = _read_file(field, reference.strip()).strip()
         if not value:
-            raise SecretReferenceError(field, reference.strip(), 'is empty')
+            raise SecretReferenceError(field, reference.strip(), 'is empty', 'empty')
         return value
 
     reference = config.get(env_key)
@@ -98,7 +141,7 @@ def resolve_field(config: dict, field: str) -> str | None:
         value = (os.environ.get(reference.strip()) or '').strip()
         if not value:
             raise SecretReferenceError(
-                field, reference.strip(), 'is unset or empty in the environment')
+                field, reference.strip(), 'is unset or empty in the environment', 'unset')
         return value
 
     literal = config.get(field)

@@ -186,6 +186,18 @@
             document.getElementById('setupMessage').classList.add('hidden');
         }
 
+        // The admin just created, for the login page to name and fill in, and
+        // its email, for the first-run wizard (UX audit P58). In this tab's
+        // sessionStorage, not in the URL: /login?created=<name> lands the name
+        // in the access log (the image's gunicorn logs every request line).
+        function handOverTheNewAdmin(name, email) {
+            try {
+                sessionStorage.setItem('certmate_setup_created', name);
+                if (email) sessionStorage.setItem('certmate_setup_email', email);
+                else sessionStorage.removeItem('certmate_setup_email');
+            } catch (_) { /* storage unavailable: the login page is the plain one */ }
+        }
+
         document.getElementById('setupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             hideMessage();
@@ -251,7 +263,12 @@
                 if (created) {
                     try { enabled = (await response.clone().json()).local_auth_enabled === true; } catch (_) { /* non-JSON */ }
                 }
-                if (enabled) { navigating = true; window.location.href = '/login'; return; }
+                if (enabled) {
+                    handOverTheNewAdmin(username.trim(), email);
+                    navigating = true;
+                    window.location.href = '/login';
+                    return;
+                }
 
                 // Enable local auth so the admin can actually log in.
                 const cfg = await fetch('/api/auth/config', {
@@ -277,6 +294,7 @@
                     setTimeout(function () { window.location.href = '/login'; }, 4000);
                     return;
                 }
+                handOverTheNewAdmin(username.trim(), email);
                 navigating = true;
                 window.location.href = '/login';
             } catch (err) {

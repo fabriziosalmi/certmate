@@ -20,7 +20,7 @@
    "headers": "the HTTP headers the delivery sends, set by the code"
   }
  },
- "contract_version": "2.73",
+ "contract_version": "2.74",
  "known_defects": {},
  "maps": {
   "GET /api/client-certs/stats": [
@@ -991,6 +991,9 @@
     "[].last_renewal_attempt.attempted_at": [
      "str"
     ],
+    "[].last_renewal_attempt.ca_failure": [
+     "str"
+    ],
     "[].last_renewal_attempt.error": [
      "str"
     ],
@@ -1062,6 +1065,9 @@
     ],
     "[].seconds_left": [
      "int"
+    ],
+    "[].staging": [
+     "bool"
     ],
     "[].storage_warning": [
      "null"
@@ -1231,6 +1237,9 @@
     ],
     "seconds_left": [
      "int"
+    ],
+    "staging": [
+     "bool"
     ],
     "storage_warning": [
      "null"
@@ -1453,6 +1462,12 @@
     "jobs[]": [
      "dict"
     ],
+    "jobs[].ca_failure": [
+     "null"
+    ],
+    "jobs[].ca_provider": [
+     "str"
+    ],
     "jobs[].domain": [
      "str"
     ],
@@ -1492,6 +1507,12 @@
    "200": {
     ".": [
      "dict"
+    ],
+    "ca_failure": [
+     "null"
+    ],
+    "ca_provider": [
+     "str"
     ],
     "domain": [
      "str"
@@ -6049,6 +6070,9 @@
     ],
     "message": [
      "str"
+    ],
+    "not_in_effect": [
+     "list"
     ]
    }
   },
@@ -6464,6 +6488,9 @@
   ],
   "POST /api/probe": [
    "revocation.attempts"
+  ],
+  "POST /api/settings": [
+   "not_in_effect"
   ]
  }
 }
