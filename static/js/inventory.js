@@ -190,12 +190,16 @@
                 + 'title="Take over issuance/renewal of this certificate">'
                 + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
         }
-        // Forget removes the inventory row (#634), and only a discovered one.
-        // A managed record is a certificate CertMate holds (#1505): recorded at
-        // startup and on each issuance or renewal, and by a scan only where
-        // discovery finds it served, so a forgotten one left Managed one short
-        // of the certificates until the next restart (P48).
-        if (r.managed) { return html; }
+        // Forget removes the inventory row (#634). A managed row whose domain
+        // CertMate still holds a certificate for has none: that record comes
+        // back only at startup or on the next issuance or renewal, so a
+        // forgotten one left Managed short of the certificates (P48). A
+        // managed row whose certificate was deleted keeps Forget, or nothing
+        // in the page could remove it: 'managed' never goes back to false.
+        // Until the certificate list is known, managed rows show none.
+        if (r.managed && (heldDomains === null || !r.managed_domain || heldDomains[r.managed_domain])) {
+            return html;
+        }
         html += '<button type="button" data-fp="' + fp + '" '
             + 'data-click="InventoryPage.forgetFromEl" data-pass="el" '
             + 'class="ml-1 px-2 py-1 text-xs bg-surface-2 text-muted rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
@@ -462,7 +466,26 @@
         render();
     }
 
+    // The domains CertMate holds a certificate for, as {domain: true}, or null
+    // while unknown (not loaded, or the request failed).
+    var heldDomains = null;
+
+    function loadHeldDomains() {
+        fetch('/api/certificates', { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (list) {
+                var held = {};
+                (Array.isArray(list) ? list : []).forEach(function (c) {
+                    if (c && c.exists && c.domain) held[c.domain] = true;
+                });
+                heldDomains = held;
+                render();
+            })
+            .catch(function () { /* unknown: managed rows keep no Forget */ });
+    }
+
     function load() {
+        loadHeldDomains();
         // Superseded certificates are left out by the server unless asked for, so the summary cards
         // describe what the list shows; the API itself returns them, marked, by default.
         var url = '/api/inventory' + (showSuperseded() ? '' : '?include_superseded=false');

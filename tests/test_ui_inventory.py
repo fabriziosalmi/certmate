@@ -91,13 +91,24 @@ _DISCOVERED = dict(_MANAGED, fingerprint='bb' * 32, subject_cn='found.example.te
                    endpoints=[{'host': 'found.example.test', 'port': 443}], san_dns=['found.example.test'])
 
 
+# A managed record whose certificate was deleted from CertMate: 'managed'
+# never goes back to false, so only Forget can remove it.
+_ORPHAN = dict(_MANAGED, fingerprint='cc' * 32, subject_cn='gone.example.test',
+               managed_domain='gone.example.test', san_dns=['gone.example.test'])
+
+
 def _inventory_answered(page, deleted):
+    page.route('**/api/certificates', lambda route: route.fulfill(
+        status=200, content_type='application/json',
+        body=json.dumps([{'domain': 'held.example.test', 'exists': True}]))
+        if route.request.method == 'GET' else route.continue_())
+
     def answer(route):
         request = route.request
         path = request.url.split('?')[0]
         if request.method == 'GET' and path.endswith('/api/inventory'):
             return route.fulfill(status=200, content_type='application/json', body=json.dumps(
-                {'certificates': [_MANAGED, _DISCOVERED], 'summary': {'superseded': 0}}))
+                {'certificates': [_MANAGED, _DISCOVERED, _ORPHAN], 'summary': {'superseded': 0}}))
         if request.method == 'DELETE' and '/api/inventory/' in path:
             deleted.append(path.rsplit('/', 1)[1])
             return route.fulfill(status=200, content_type='application/json',
@@ -120,6 +131,9 @@ def test_a_managed_certificate_cannot_be_forgotten_and_a_discovered_one_is_asked
     assert held.locator('button:has-text("Forget")').count() == 0, \
         'a certificate CertMate manages is offered Forget'
     assert found.locator('button:has-text("Forget")').count() >= 1
+    gone = page.locator('#inventoryBody tr', has_text='gone.example.test')
+    assert gone.locator('button:has-text("Forget")').count() >= 1, \
+        'a managed record whose certificate was deleted cannot be removed from the page'
 
     found.locator('button:has-text("Forget")').filter(visible=True).first.click()
     page.wait_for_timeout(300)

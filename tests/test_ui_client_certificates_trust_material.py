@@ -158,3 +158,22 @@ def test_the_pfx_button_says_up_front_that_it_needs_a_pfx_password(browser_page,
         assert page.locator('#certModal a[href="/settings#general"]').count() == 0
     finally:
         _set_pfx_password(ui_session_cookie, None)
+
+
+def test_a_toast_link_that_leaves_the_origin_is_not_drawn(browser_page):
+    """options.link is for same-origin paths: '/\\host' and '//host' are read
+    by the browser as another host, and a check on the first two characters let
+    the backslash form through."""
+    page = browser_page
+    page.goto(f"{BASE_URL}/#client", wait_until='networkidle')
+    drawn = page.evaluate("""() => {
+        const hrefs = ['/\\\\evil.example', '//evil.example', 'https://evil.example/x', '/api/crl/download/pem'];
+        return hrefs.map((href, i) => {
+            CertMate.toast('link test ' + i, 'info', null, {link: {href: href, text: 'go'}});
+            const box = Array.from(document.querySelectorAll('#cm-toasts > div'))
+                .find(t => t.innerText.includes('link test ' + i));
+            return box ? box.querySelectorAll('a').length : -1;
+        });
+    }""")
+    assert drawn == [0, 0, 0, 1], drawn
+

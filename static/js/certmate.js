@@ -205,9 +205,14 @@
             '</div>';
 
         // A link the message points to (options.link = {href, text}), e.g.
-        // the CRL after a revoke (P45). Same-origin paths only.
-        var link = opts.link && typeof opts.link.href === 'string' && opts.link.href.charAt(0) === '/'
-            && opts.link.href.charAt(1) !== '/' ? opts.link : null;
+        // the CRL after a revoke (P45). Same-origin only, decided by the URL
+        // the browser would follow ('/\\host' and '//host' leave the origin).
+        var link = null;
+        if (opts.link && typeof opts.link.href === 'string') {
+            try {
+                if (new URL(opts.link.href, window.location.href).origin === window.location.origin) link = opts.link;
+            } catch (e) { link = null; }
+        }
         var linkRowHtml = link
             ? '<div class="pl-7 text-xs"><a class="font-medium underline" href="' + CM.escapeHtml(link.href) + '">'
                 + CM.escapeHtml(link.text || link.href) + '</a></div>'
