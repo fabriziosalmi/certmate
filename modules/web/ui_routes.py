@@ -10,6 +10,13 @@ def _check_is_on(managers, name):
     return bool(manager is not None and manager.get_config().get('enabled'))
 
 
+def _pfx_password_set(managers):
+    """Whether a PFX password is saved, by the test the client .pfx download applies."""
+    settings_manager = managers.get('settings')
+    settings = settings_manager.load_settings() if settings_manager else {}
+    return bool(((settings or {}).get('pfx_password') or '').strip())
+
+
 def register_ui_routes(app, managers, require_web_auth, auth_manager):
     """Register UI-related routes"""
 
@@ -40,8 +47,12 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         # It was the literal "CertMate" in the markup, and the form always sends
         # the field, so CERTMATE_CLIENT_CERT_DEFAULT_ORGANIZATION could never
         # reach a certificate created from the UI.
+        #
+        # Whether the client .pfx can be made, read as the download reads it:
+        # the button looked available and refused only after the click (P49).
         return render_template(
-            'index.html', client_cert_default_organization=default_client_organization())
+            'index.html', client_cert_default_organization=default_client_organization(),
+            pfx_password_set=_pfx_password_set(managers))
 
     @app.route('/certificates')
     def certificates_page():

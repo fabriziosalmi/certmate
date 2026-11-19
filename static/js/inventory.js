@@ -190,9 +190,16 @@
                 + 'title="Take over issuance/renewal of this certificate">'
                 + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
         }
-        // Forget removes the inventory row (#634). Offered for managed records
-        // too: the certificate itself is untouched, so the only consequence is
-        // that CertMate stops listing this observation.
+        // Forget removes the inventory row (#634). A managed row whose domain
+        // CertMate still holds a certificate for has none: that record comes
+        // back only at startup or on the next issuance or renewal, so a
+        // forgotten one left Managed short of the certificates (P48). A
+        // managed row whose certificate was deleted keeps Forget, or nothing
+        // in the page could remove it: 'managed' never goes back to false.
+        // Until the certificate list is known, managed rows show none.
+        if (r.managed && (heldDomains === null || !r.managed_domain || heldDomains[r.managed_domain])) {
+            return html;
+        }
         html += '<button type="button" data-fp="' + fp + '" '
             + 'data-click="InventoryPage.forgetFromEl" data-pass="el" '
             + 'class="ml-1 px-2 py-1 text-xs bg-surface-2 text-muted rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
@@ -378,7 +385,7 @@
                     { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
                     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
                     .then(function (res) {
-                        if (res.ok) { load(); }
+                        if (res.ok) { load(true); }
                         else { window.alert('Adoption failed: ' + (res.j.error || 'unknown error')); }
                     });
             })
@@ -389,23 +396,30 @@
         // Removing an inventory row is not the same as stopping discovery, and
         // the difference is the whole of #634: say it in the confirmation so an
         // operator does not delete the same row after every scan.
+        //
+        // Asked in the page's own dialog, not window.confirm (P48). Forget is on
+        // discovered rows and on managed rows whose certificate CertMate no
+        // longer holds; what brings one back is a sweep or a CT-log poll that
+        // finds it again, whatever made it look there: an endpoint, a watched
+        // domain, or the managed names it includes.
         var name = label || fingerprint;
-        if (!window.confirm(
-            'Remove "' + name + '" from the inventory?\n\n'
-            + 'The certificate itself is not touched — CertMate only forgets '
-            + 'that it observed it.\n\n'
-            + 'If this domain is still in the discovery configuration it will '
-            + 'be recorded again on the next scan. Remove it there first to '
-            + 'stop looking at it.')) { return; }
-
-        fetch('/api/inventory/' + encodeURIComponent(fingerprint),
-            { method: 'DELETE', headers: API_HEADERS, credentials: 'same-origin' })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-            .then(function (res) {
-                if (res.ok) { load(); }
-                else { window.alert('Could not remove it: ' + (res.j.error || 'unknown error')); }
-            })
-            .catch(function (err) { window.alert('Could not remove it (' + err + ').'); });
+        CertMate.confirm(
+            'Remove "' + name + '" from the inventory? The certificate itself is not touched: '
+            + 'CertMate only forgets that it saw it. A later discovery sweep or CT-log poll that '
+            + 'finds it again records it again; to stop that, first change the Discovery '
+            + 'configuration so it no longer looks there.',
+            'Forget certificate', { confirmText: 'Forget' }
+        ).then(function (confirmed) {
+            if (!confirmed) { return; }
+            fetch('/api/inventory/' + encodeURIComponent(fingerprint),
+                { method: 'DELETE', headers: API_HEADERS, credentials: 'same-origin' })
+                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (res) {
+                    if (res.ok) { load(); }
+                    else { CertMate.toast('Could not remove it: ' + (res.j.error || 'unknown error'), 'error'); }
+                })
+                .catch(function (err) { CertMate.toast('Could not remove it (' + err + ').', 'error'); });
+        });
     }
 
     // A card's filter: its group and expiry, nothing else.
@@ -453,12 +467,40 @@
         render();
     }
 
-    function load() {
+    // The domains CertMate holds a certificate for, as {domain: true}, or null
+    // while unknown (the request failed).
+    var heldDomains = null;
+    // The request for them, which always settles (a failure leaves null).
+    // Fetched when the page opens and again after an action that can change
+    // what CertMate holds (adopt, scan); the Superseded toggle reuses it.
+    var heldRequest = null;
+
+    function loadHeldDomains() {
+        return fetch('/api/certificates', { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (list) {
+                var held = {};
+                (Array.isArray(list) ? list : []).forEach(function (c) {
+                    if (c && c.exists && c.domain) held[c.domain] = true;
+                });
+                heldDomains = held;
+            })
+            .catch(function () { heldDomains = null; /* unknown: managed rows keep no Forget */ });
+    }
+
+    function load(refreshHeld) {
         // Superseded certificates are left out by the server unless asked for, so the summary cards
         // describe what the list shows; the API itself returns them, marked, by default.
         var url = '/api/inventory' + (showSuperseded() ? '' : '?include_superseded=false');
-        fetch(url, { headers: API_HEADERS, credentials: 'same-origin' })
+        var inventory = fetch(url, { headers: API_HEADERS, credentials: 'same-origin' });
+        if (!heldRequest || refreshHeld === true) { heldRequest = loadHeldDomains(); }
+        var held = heldRequest;
+        // The rows are drawn once, when both answers are in: drawn before the
+        // certificate list, a managed row whose certificate was deleted gained
+        // its Forget button afterwards and every column after it moved.
+        inventory
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (data) { return held.then(function () { return data; }); })
             .then(function (data) {
                 records = data.certificates || [];
                 hiddenSuperseded = showSuperseded() ? 0 : ((data.summary || {}).superseded || 0);
@@ -739,7 +781,7 @@
                                      function () { return { ok: r.ok, status: r.status, body: {} }; });
             })
             .then(function (res) {
-                if (res.ok) { load(); loadRegistrations(); loadDomainHealth(); return; }
+                if (res.ok) { load(true); loadRegistrations(); loadDomainHealth(); return; }
                 if (!msg) { return; }
                 msg.textContent = res.status === 409
                     ? (res.body.error || 'A scan is already running.')

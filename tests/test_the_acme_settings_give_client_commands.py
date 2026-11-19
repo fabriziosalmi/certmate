@@ -44,6 +44,15 @@ def test_each_command_uses_its_clients_own_flags(node):
     assert 'keyID: team-a' in commands['certmanager'] and 'secret: hmac-key-value' in commands['certmanager']
 
 
+def test_the_email_is_a_placeholder_the_reader_has_to_fill_in(node):
+    """UX perception audit, 2026-11-18 (P72): every command carried
+    ops@example.internal, an address that looks real and is copied with the
+    rest. The commands say <YOUR-EMAIL> instead."""
+    for client, text in _snippets(node).items():
+        assert 'example.internal' not in text.replace(DIRECTORY, ''), client
+        assert '<YOUR-EMAIL>' in text, client
+
+
 def test_an_exact_name_is_used_as_it_is(node):
     assert '-d nas.office.internal' in _snippets(node, patterns=['nas.office.internal'])['certbot']
 

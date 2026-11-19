@@ -479,9 +479,13 @@ class TestClientCertListKeepsItsFilter:
         expect(row(ids[0])).to_be_visible(timeout=10000)
         expect(row(ids[1])).to_have_count(0)
 
-        # The details panel has the PKCS#12 button next to crt/key/csr.
+        # The details panel has the PKCS#12 button next to crt/key/csr. Since
+        # P49 it is a download only with a PFX password set, and otherwise
+        # drawn unavailable with the reason (both states are tested in
+        # test_ui_client_certificates_trust_material.py); this instance may
+        # have either, so the button is looked for by its label.
         row(ids[0]).click()
-        pfx = browser_page.locator('button[data-click="downloadCertFile"][data-args*="pfx"]')
+        pfx = browser_page.locator('#certModal button:has-text(".pfx")')
         expect(pfx).to_be_visible(timeout=5000)
 
 
