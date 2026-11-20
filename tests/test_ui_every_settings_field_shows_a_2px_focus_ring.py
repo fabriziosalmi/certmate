@@ -5,19 +5,20 @@ width, and without the forms plugin that draws no ring: on focus by keyboard
 the only change was their 1 px border turning blue, about 2:1 against the
 unfocused border in the dark theme. A few fields (the probe's domain, the
 create drawer's) had `focus:ring-2` in the brand blue, under 3:1 on a dark
-card. Now one rule in static/css/input.css gives every text-like input,
-select and textarea the same 2 px ring in the accent colour on
-:focus-visible, and it replaces the ring of a field that had its own, so none
-draws two. A field marked `focus:ring-0` is a bare input inside a box that
-looks like the field: that box shows the ring instead (the SAN chip editor,
-whose brand-blue ring was 2.68:1 in dark; the webhook name had no ring at all
-and is now an ordinary field).
+card. Now static/css/input.css gives every text-like input, select and
+textarea the same 2 px ring in the accent colour on :focus-visible, and it
+replaces the ring of a field that had its own, so none draws two. A field
+marked `focus:ring-0` is a bare input whose ring goes on the `.field-box` it
+sits in: the SAN chip editor, whose brand-blue ring was 2.68:1 in dark. The
+test fails on a `focus:ring-0` field that is not directly in a `.field-box`
+(the webhook name was one, with only the browser's 1 px outline; it is now an
+ordinary field).
 
 The fields are reached the way a keyboard user reaches them: the walk starts
 at the top of a tab (of each DNS provider's and storage backend's form, of the
 create drawer's two forms) and presses Tab, and what is measured is the
-computed style of the focused element, or for a `focus:ring-0` field, of the
-box around it. A field on screen that Tab did not reach fails, and so does a
+computed style of the focused element, or for a `focus:ring-0` field, of its
+`.field-box`. A field on screen that Tab did not reach fails, and so does a
 field of a tab that the walk never saw, unless the server confirms why it is
 not on screen (a provider with accounts lists them in place of its token
 field). The repeatable rows (a webhook, a global and a domain deploy hook with
@@ -72,8 +73,8 @@ STOP = "() => { const s = document.getElementById('__focus_walk_start'); if (s) 
 # shadows drawn above it (a ring offset is one). Each band and the outline are
 # composited over the colour behind the box, and count as a focus indicator
 # when they differ from that colour by 3:1 (WCAG 1.4.11). A `focus:ring-0`
-# field draws nothing itself: the indicator is the nearest of its three
-# closest ancestors that shows one.
+# field draws nothing itself: it must sit directly in a `.field-box`, and the
+# indicator is measured on that box.
 MEASURE = """([scope, fields]) => {
     const el = document.activeElement;
     const root = document.querySelector(scope);
@@ -132,14 +133,10 @@ MEASURE = """([scope, fields]) => {
     };
     const own = indicator(el);
     const ringZero = el.classList.contains('focus:ring-0');
-    let container = null;
-    if (ringZero) {
-        for (let e = el.parentElement, n = 0; e && n < 3; e = e.parentElement, n++) {
-            const shown = indicator(e);
-            if (shown.rings.length || shown.outline) { container = Object.assign({id: e.id || e.tagName}, shown); break; }
-        }
-    }
-    return {outside: false, field: true, key: (""" + KEY + """)(el), ringZero, own, container,
+    const box = el.parentElement;
+    const inBox = !!box && box.classList.contains('field-box');
+    const container = ringZero && inBox ? Object.assign({id: box.id || box.tagName}, indicator(box)) : null;
+    return {outside: false, field: true, key: (""" + KEY + """)(el), ringZero, inBox, own, container,
             focusVisible: el.matches(':focus-visible')};
 }"""
 
@@ -363,10 +360,12 @@ def test_every_text_field_reached_by_tab_shows_one_2px_ring_that_stands_out(
         ring_zero = _ring_zero_fields()
         ring_zero_unmeasured = {field: where for field, where in ring_zero.items()
                                 if not (field in seen and seen[field]['ringZero'])}
+        outside_a_box = sorted(key for key, f in seen.items() if f['ringZero'] and not f['inBox'])
         assert len(seen) >= 80, f'only {len(seen)} fields reached: the walk lost its subject'
         assert not unreached, f'{scheme}: fields on screen that Tab did not reach: {unreached}'
         assert not unexplained, f'{scheme}: settings fields the walk never saw, with no reason: {unexplained}'
         assert not ring_zero_unmeasured, f'{scheme}: focus:ring-0 fields the walk did not measure: {ring_zero_unmeasured}'
+        assert not outside_a_box, f'{scheme}: focus:ring-0 fields not directly in a .field-box: {outside_a_box}'
         assert not not_visible, f'{scheme}: reached by Tab but not :focus-visible: {not_visible}'
         assert not weak, (f'{scheme}: {len(weak)} of {len(seen)} fields show no 2 px ring or outline at 3:1, '
                           f'on the field or, for a focus:ring-0 field, on the box around it '

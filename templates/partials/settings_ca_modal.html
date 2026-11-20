@@ -296,9 +296,10 @@
                                     <div>
                                         <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1" for="private-ca-preset">
                                             Known ACME CA (preset) - Optional
-                                            <i role="img" aria-label="Pre-fills the directory URL for public ACME CAs that work through the Private CA entry" class="fas fa-info-circle ml-1 cursor-help" title="Pre-fills the directory URL for public ACME CAs that work through the Private CA entry"></i>
+                                            <i aria-hidden="true" class="fas fa-info-circle ml-1 cursor-help" title="Pre-fills the directory URL for public ACME CAs that work through the Private CA entry"></i>
                                         </label>
-                                        <select id="private-ca-preset" data-change="applyPrivateCaPreset"
+                                        <span id="private-ca-preset-tip" class="sr-only">Pre-fills the directory URL for public ACME CAs that work through the Private CA entry</span>
+                                        <select id="private-ca-preset" aria-describedby="private-ca-preset-tip private-ca-preset-hint" data-change="applyPrivateCaPreset"
                                                 class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground">
                                             <option value="">Custom / self-hosted (default)</option>
                                             <option value="actalis">Actalis (EU public CA, EAB required)</option>
@@ -309,9 +310,10 @@
                                         <label for="private-ca-acme-url" class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
                                             ACME Directory URL
                                             <span class="text-red-500">*</span>
-                                            <i role="img" aria-label="URL to your private CA's ACME directory endpoint (e.g., step-ca, Smallstep, or custom ACME server)" class="fas fa-info-circle ml-1 cursor-help" title="URL to your private CA's ACME directory endpoint (e.g., step-ca, Smallstep, or custom ACME server)"></i>
+                                            <i aria-hidden="true" class="fas fa-info-circle ml-1 cursor-help" title="URL to your private CA's ACME directory endpoint (e.g., step-ca, Smallstep, or custom ACME server)"></i>
                                         </label>
-                                        <input type="url" id="private-ca-acme-url" 
+                                        <span id="private-ca-acme-url-tip" class="sr-only">URL to your private CA's ACME directory endpoint (e.g., step-ca, Smallstep, or custom ACME server)</span>
+                                        <input type="url" id="private-ca-acme-url" aria-describedby="private-ca-acme-url-tip" 
                                                class="w-full px-2 py-1 text-sm border-2 border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
                                                placeholder="https://step-ca.example.com:9000/acme/directory"
                                                required>

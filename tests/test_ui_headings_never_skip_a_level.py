@@ -84,12 +84,66 @@ def _render(template, **context):
         return render_template(template, **context)
 
 
+# The text a person sees in a heading, and in the label of a form field that
+# has one (and no aria-label or aria-labelledby): its text nodes that are
+# rendered, visible and not under aria-hidden (sr-only text included), and
+# the alt of an image there, the field's own subtree left out. Case is not
+# compared: a name keeps the text-transform the page draws it with. Each
+# element checked is marked for the accessibility tree.
+SEEN_TEXT = """() => {
+    const text = (root, skip) => {
+        let out = '';
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+            const element = n.nodeType === 1 ? n : n.parentElement;
+            if ((skip && skip.contains(n)) || element.closest('[aria-hidden=true]')
+                || !element.checkVisibility({visibilityProperty: true})) continue;
+            if (n.nodeType === 3) out += n.textContent;
+            else if (n.tagName === 'IMG' && n.alt) out += ' ' + n.alt + ' ';
+        }
+        return out.replace(/\\s+/g, ' ').trim();
+    };
+    const found = [];
+    document.querySelectorAll('[data-ax-check]').forEach(e => e.removeAttribute('data-ax-check'));
+    document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
+        h.dataset.axCheck = String(found.length);
+        found.push(['heading', text(h)]);
+    });
+    document.querySelectorAll('input, select, textarea').forEach(f => {
+        if (f.type === 'hidden' || f.hasAttribute('aria-label') || f.hasAttribute('aria-labelledby')
+            || !f.labels || !f.labels.length) return;
+        const label = [...f.labels].map(l => text(l, f)).filter(Boolean).join(' ');
+        if (!label) return;
+        f.dataset.axCheck = String(found.length);
+        found.push([f.tagName.toLowerCase() + ' ' + (f.id || f.name || f.type), label]);
+    });
+    return found;
+}"""
+
+
+def _marked(session):
+    """backendNodeId -> the data-ax-check index of each element SEEN_TEXT marked."""
+    marked, stack = {}, [session.send('DOM.getDocument', {'depth': -1})['root']]
+    while stack:
+        node = stack.pop()
+        attributes = node.get('attributes', [])
+        for index in range(0, len(attributes), 2):
+            if attributes[index] == 'data-ax-check':
+                marked[node['backendNodeId']] = int(attributes[index + 1])
+        stack.extend(node.get('children', []))
+    return marked
+
+
 def _outline(page, dialog=False):
-    """The headings (level, name) a screen reader lists, and every name with a
-    private-use character. With `dialog`, only what is inside the open modal
-    dialog (the page behind it is out of reach)."""
+    """The headings (level, name) a screen reader lists, every name with a
+    private-use character, every button or link with no name, and every
+    heading or labelled field whose name is not the text seen in it. With
+    `dialog`, only what is inside the open modal dialog (the page behind it
+    is out of reach)."""
+    seen_text = page.evaluate(SEEN_TEXT)
     session = page.context.new_cdp_session(page)
     try:
+        marked = _marked(session)
         nodes = session.send('Accessibility.getFullAXTree')['nodes']
     finally:
         session.detach()
@@ -100,7 +154,7 @@ def _outline(page, dialog=False):
                         and node.get('role', {}).get('value') in ('dialog', 'alertdialog')]
         assert len(open_dialogs) == 1, f'expected one open dialog, found {len(open_dialogs)}'
         root = open_dialogs[0]
-    headings, glyphs, unnamed = [], [], []
+    headings, glyphs, unnamed, renamed, compared = [], [], [], [], 0
     stack = [root]
     while stack:
         node = stack.pop()
@@ -117,7 +171,12 @@ def _outline(page, dialog=False):
         if role == 'heading':
             level = next((p['value']['value'] for p in node.get('properties', []) if p['name'] == 'level'), None)
             headings.append((level, name.strip()[:40]))
-    return headings, glyphs, unnamed
+        if node.get('backendDOMNodeId') in marked:
+            what, text = seen_text[marked[node['backendDOMNodeId']]]
+            compared += 1
+            if ' '.join(name.split()).casefold() != text.casefold():
+                renamed.append(f'{what}: seen {text[:60]!r}, named {name.strip()[:200]!r}')
+    return headings, glyphs, unnamed, renamed, compared
 
 
 def _skips(headings, start):
@@ -176,6 +235,10 @@ def _views(page):
     page.click('button[data-click="openCAAccountModal"]')
     page.wait_for_timeout(400)
     take('/settings#ca CA account dialog', dialog=True)
+    # The private CA form, whose two info icons carry its only help text.
+    page.select_option('#add-ca-type', 'private_ca')
+    page.wait_for_selector('#private-ca-config', state='visible')
+    take('/settings#ca CA account dialog, private CA', dialog=True)
     _dialogs(go, take, page)
     return seen
 
@@ -313,24 +376,35 @@ def views(browser_page, ui_session_cookie):
 
 
 def test_no_page_tab_or_dialog_skips_a_heading_level(views):
-    skips = {view: _skips(headings, start) for view, ((headings, _, _), start) in views.items()}
+    skips = {view: _skips(headings, start) for view, ((headings, *_), start) in views.items()}
     skips = {view: found for view, found in skips.items() if found}
-    bare = [view for view, ((headings, _, _), _) in views.items() if not headings]
+    bare = [view for view, ((headings, *_), _) in views.items() if not headings]
     assert not bare, f'no heading at all on: {bare}'
     assert not skips, f'heading levels skipped: {skips}'
 
 
 def test_every_page_has_an_h1_first(views):
-    first = {view: headings[0] for view, ((headings, _, _), start) in views.items()
+    first = {view: headings[0] for view, ((headings, *_), start) in views.items()
              if start == 0 and headings and headings[0][0] != 1}
     assert not first, f'pages whose first heading is not an h1: {first}'
 
 
 def test_no_accessible_name_carries_an_icon_glyph(views):
-    glyphs = {view: found for view, ((_, found, _), _) in views.items() if found}
+    glyphs = {view: found for view, ((_, found, *_), _) in views.items() if found}
     assert not glyphs, f'names with a private-use (icon font) character: {glyphs}'
 
 
 def test_no_button_or_link_is_left_without_a_name(views):
-    unnamed = {view: found for view, ((_, _, found), _) in views.items() if found}
+    unnamed = {view: found for view, ((_, _, found, *_), _) in views.items() if found}
     assert not unnamed, f'buttons and links with no accessible name: {unnamed}'
+
+
+def test_a_heading_or_a_labelled_field_is_named_by_the_text_it_shows(views):
+    """A tooltip given a name (role="img" with an aria-label) inside a heading
+    or a label put a help sentence into the name: "Role mappings First match
+    wins...", "AI agent key Mark this key as...". Help text is a description."""
+    renamed = {view: found for view, ((_, _, _, found, _), _) in views.items() if found}
+    compared = {view: count for view, ((*_, count), _) in views.items()}
+    # 275 on a fresh instance (#1511): a much lower count means the check lost its subject.
+    assert sum(compared.values()) >= 250, f'only {sum(compared.values())} names compared: {compared}'
+    assert not renamed, f'names that are not the text shown: {renamed}'

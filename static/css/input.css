@@ -153,9 +153,12 @@ button:not(.btn):focus-visible,
    transparent outline in place of the browser's. The ring's
    specificity (0,3,1) is above a `focus:ring-*` utility's (0,2,0), so
    it replaces a field's own ring rather than adding a second one.
-   A field marked `focus:ring-0` is a bare input inside a box that
-   looks like the field (the SAN chip editor): the ring goes on that
-   box, its direct parent, instead. Checkboxes, radios, switches and
+   A field marked `focus:ring-0` draws no ring itself: it is a bare
+   input in a box marked `.field-box` that looks like the field (the
+   SAN chip editor), and the ring goes on that box. A `focus:ring-0`
+   field outside a `.field-box` shows only the transparent outline
+   (tests/test_ui_every_settings_field_shows_a_2px_focus_ring.py
+   fails on one). Checkboxes, radios, switches and
    buttons keep their own styles. */
 :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"],
                [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
@@ -169,7 +172,7 @@ button:not(.btn):focus-visible,
   box-shadow: 0 0 0 2px hsl(var(--color-accent)), var(--tw-shadow, 0 0 #0000);
 }
 /* Its own rule: a browser without :has() drops only this one. */
-:has(> :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"],
+.field-box:has(> :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"],
                      [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
            select, textarea).focus\:ring-0:focus-visible) {
   box-shadow: 0 0 0 2px hsl(var(--color-accent)), var(--tw-shadow, 0 0 #0000);

@@ -131,17 +131,22 @@
                     <!-- Role mappings list -->
                     <div>
                         <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-semibold text-label">
-                                <i aria-hidden="true" class="fas fa-list mr-1"></i> Role mappings
-                                <span role="img" aria-label="First match wins. The claim value is matched against the role claim (handles lists and scalars)." class="ml-1 text-muted" title="First match wins. The claim value is matched against the role claim (handles lists and scalars).">
+                            <!-- The tooltip is beside the heading, not in it: the heading's name is
+                                 "Role mappings", and the sentence is the hint under it (#1511). -->
+                            <div class="text-sm">
+                                <h3 class="inline text-sm font-semibold text-label">
+                                    <i aria-hidden="true" class="fas fa-list mr-1"></i> Role mappings
+                                </h3>
+                                <span aria-hidden="true" class="ml-1 text-muted tracking-[-0.01em]" title="First match wins. The claim value is matched against the role claim (handles lists and scalars).">
                                     <i aria-hidden="true" class="fas fa-info-circle"></i>
                                 </span>
-                            </h3>
+                            </div>
                             <button type="button" @click="addMapping()"
                                     class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
                                 <i aria-hidden="true" class="fas fa-plus mr-1"></i> Add row
                             </button>
                         </div>
+                        <p class="sr-only">First match wins. The claim value is matched against the role claim (handles lists and scalars).</p>
                         <template x-if="!cfg.role_mappings || cfg.role_mappings.length === 0">
                             <p class="text-xs text-muted italic">No mappings configured — every user falls through to the default role.</p>
                         </template>

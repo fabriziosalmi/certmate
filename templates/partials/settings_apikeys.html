@@ -42,12 +42,13 @@
                 <div class="mt-4">
                     <label for="apikey-new-allowed-domains" class="block text-xs text-muted mb-1">
                         Allowed Domains (optional)
-                        <span role="img" aria-label="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access." class="ml-1 text-muted" title="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access.">
+                        <span aria-hidden="true" class="ml-1 text-muted" title="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access.">
                             <i aria-hidden="true" class="fas fa-info-circle"></i>
                         </span>
                     </label>
+                    <span id="apikey-new-allowed-domains-hint" class="sr-only">Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access.</span>
                     <div class="flex items-center space-x-2">
-                        <input type="text" id="apikey-new-allowed-domains" x-model="newKey.allowed_domains" placeholder="example.com, *.foo.org   (empty = unrestricted)"
+                        <input type="text" id="apikey-new-allowed-domains" aria-describedby="apikey-new-allowed-domains-hint" x-model="newKey.allowed_domains" placeholder="example.com, *.foo.org   (empty = unrestricted)"
                                class="flex-1 min-w-0 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                         <button type="button" @click="createKey()"
                                 class="btn btn-primary whitespace-nowrap">
@@ -60,13 +61,14 @@
                 </div>
                 <div class="mt-4">
                     <label class="flex items-center space-x-2 text-sm text-label cursor-pointer">
-                        <input type="checkbox" x-model="newKey.is_agent"
+                        <input type="checkbox" x-model="newKey.is_agent" aria-describedby="apikey-new-agent-hint"
                                class="rounded border-border text-yellow-600 focus:ring-yellow-500">
                         <span>AI agent key</span>
-                        <span role="img" aria-label="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key." class="text-muted" title="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.">
+                        <span aria-hidden="true" class="text-muted" title="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.">
                             <i aria-hidden="true" class="fas fa-info-circle"></i>
                         </span>
                     </label>
+                    <span id="apikey-new-agent-hint" class="sr-only">Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.</span>
                 </div>
             </div>
 

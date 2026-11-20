@@ -47,15 +47,19 @@
         return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    // Every place a provider icon is shown, its name is the text beside it
+    // (a settings card, the dashboard's provider cell), so the icon is
+    // decorative: an empty alt, and a hidden monogram. A name here was read
+    // twice, "Cloudflare Cloudflare Not configured" (#1511).
     function logoHtml(slug, label, sizeCls) {
-        return '<img src="/static/img/providers/' + slug + '.svg" alt="' + escapeAttr(label) + '" ' +
+        return '<img src="/static/img/providers/' + slug + '.svg" alt="" ' +
             'class="inline-block object-contain ' + (sizeCls || 'h-6 w-6 mb-1') + '" loading="lazy" draggable="false">';
     }
 
     function monoHtml(initials, label, sizeCls, textCls) {
         return '<span class="inline-flex items-center justify-center rounded-md bg-surface-2 text-muted font-semibold tracking-tight ' +
             (sizeCls || 'h-6 w-6 mb-1') + ' ' + (textCls || 'text-[10px]') + '" ' +
-            'role="img" aria-label="' + escapeAttr(label) + '">' + escapeAttr(initials) + '</span>';
+            'aria-hidden="true">' + escapeAttr(initials) + '</span>';
     }
 
     // Icon HTML for a provider value, or null to leave the existing glyph
