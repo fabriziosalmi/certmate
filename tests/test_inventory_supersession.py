@@ -293,7 +293,9 @@ const urls = [];
 const context = {
   window: {}, console, Promise,
   // The page registers the actions its controls name when it loads.
-  CertMate: {globalActions() {}, actions() {}},
+  // The status pill is drawn by certmate.js (CertMate.statusBadge, #1511 P68),
+  // not loaded here: these tests read which rows are listed and in what order.
+  CertMate: {globalActions() {}, actions() {}, statusBadge: (tone, icon, label) => '<span>' + label + '</span>'},
   document: { getElementById: el, addEventListener() {}, querySelectorAll() { return []; } },
   fetch(url) {
     urls.push(url);

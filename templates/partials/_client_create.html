@@ -17,7 +17,7 @@
 <form id="createClientCertForm" role="tabpanel" aria-labelledby="singleTabBtn" tabindex="0" class="space-y-6">
     <div>
         <label for="commonName" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-user mr-2 text-blue-500"></i>Common Name (Required)
+            <i class="fas fa-user mr-2 text-muted"></i>Common Name (Required)
         </label>
         <input type="text" id="commonName" name="commonName" placeholder="e.g., john.doe@example.com"
                class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary"
@@ -26,21 +26,21 @@
     </div>
     <div>
         <label for="email" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-envelope mr-2 text-blue-500"></i>Email
+            <i class="fas fa-envelope mr-2 text-muted"></i>Email
         </label>
         <input type="email" id="email" name="email" placeholder="user@example.com"
                class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
     </div>
     <div>
         <label for="organization" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-building mr-2 text-blue-500"></i>Organization
+            <i class="fas fa-building mr-2 text-muted"></i>Organization
         </label>
         <input type="text" id="organization" name="organization" value="{{ client_cert_default_organization or 'CertMate' }}" placeholder="Your Organization"
                class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
     </div>
     <div>
         <label for="certUsage" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-tag mr-2 text-blue-500"></i>Usage Type
+            <i class="fas fa-tag mr-2 text-muted"></i>Usage Type
         </label>
         <select id="certUsage" name="certUsage"
                 class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
@@ -53,14 +53,14 @@
     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>
             <label for="daysValid" class="block text-sm font-medium text-label mb-2">
-                <i class="fas fa-calendar mr-2 text-blue-500"></i>Valid For (Days)
+                <i class="fas fa-calendar mr-2 text-muted"></i>Valid For (Days)
             </label>
             <input type="number" id="daysValid" name="daysValid" value="365" min="1" max="3650"
                    class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
         </div>
         <div>
             <label for="notes" class="block text-sm font-medium text-label mb-2">
-                <i class="fas fa-sticky-note mr-2 text-blue-500"></i>Notes
+                <i class="fas fa-sticky-note mr-2 text-muted"></i>Notes
             </label>
             <input type="text" id="notes" name="notes" placeholder="Optional notes..."
                    class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
@@ -77,7 +77,7 @@
     <!-- The key CertMate generates (#1421). Hidden with a CSR, whose key is the device's. -->
     <div id="keyShapeBlock">
         <label for="clientKeyShape" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-key mr-2 text-blue-500"></i>Key
+            <i class="fas fa-key mr-2 text-muted"></i>Key
         </label>
         <select id="clientKeyShape" name="clientKeyShape"
                 class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
@@ -105,7 +105,7 @@
             request and never sees the private key.
         </p>
     </div>
-    <button type="submit" class="w-full bg-primary hover:bg-secondary text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center">
+    <button type="submit" class="btn btn-primary w-full">
         <i class="fas fa-check-circle mr-2"></i> Create Certificate
     </button>
 </form>
@@ -136,7 +136,7 @@
             </table>
         </div>
     </div>
-    <button type="button" id="submitBatchBtn" class="w-full bg-primary hover:bg-secondary text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center hidden">
+    <button type="button" id="submitBatchBtn" class="btn btn-primary w-full hidden">
         <i class="fas fa-upload mr-2"></i> Upload <span id="certCountText"></span> Certificates
     </button>
 </div>

@@ -71,49 +71,59 @@
     }
 
     // The pill's colour is the renewal state, in the dashboard's words on
-    // hover (P25): Overdue red, Due amber, Valid green.
-    function statusBadge(status, days) {
+    // hover (P25): Overdue red, Due amber, Valid green. It is the status pill
+    // of the server and client lists (#1511, P68), with the dashboard's icon
+    // for each state.
+    function statusBadge(status, days, unknownTitle) {
         var map = {
-            expired: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Expired', 'Expired'],
-            critical: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', days + 'd', 'Renewal overdue'],
-            warning: ['bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', days + 'd', 'Renewal due'],
-            ok: ['bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', days + 'd', 'Valid: renewal not due yet'],
-            unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', '—', '']
+            expired: ['danger', 'fa-times-circle', 'Expired', 'Expired'],
+            critical: ['danger', 'fa-circle-exclamation', days + 'd', 'Renewal overdue'],
+            warning: ['warning', 'fa-exclamation-triangle', days + 'd', 'Renewal due'],
+            ok: ['success', 'fa-check-circle', days + 'd', 'Valid: renewal not due yet'],
+            // No expiry date that could be read: one word, not a minus and a dash.
+            unknown: ['neutral', 'fa-question-circle', 'Unknown', unknownTitle || 'No expiry date is known for this certificate']
         };
         var m = map[status] || map.unknown;
-        return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' + m[0] + '"'
-            + (m[2] ? ' title="' + escapeHtml(m[2]) + '"' : '') + '>' + escapeHtml(m[1]) + '</span>';
+        return CertMate.statusBadge(m[0], m[1], m[2], m[3]);
     }
 
     // Only a verified answer is shown as good or revoked; everything else is
     // grey with the reason on hover, so "could not check" never reads as fine.
+    // The same status pill as the expiry above it (#1511, P68): the cell held
+    // the new pill and an older one in another green.
     function revocationBadge(rev) {
         if (!rev || !rev.status) { return ''; }
+        // [tone, icon, label, title]
         var map = {
-            revoked: ['bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', 'Revoked',
+            revoked: ['danger', 'fa-ban', 'Revoked',
                 'Revoked' + (rev.revoked_at ? ' on ' + rev.revoked_at : '') + (rev.reason ? ' (' + rev.reason + ')' : '')
                 + (rev.method ? ' — ' + rev.method.toUpperCase() : '')],
-            good: ['bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', 'Not revoked',
+            good: ['success', 'fa-check-circle', 'Not revoked',
                 'Not revoked — verified ' + (rev.method || '').toUpperCase() + ' answer, ' + (rev.checked_at || '')],
-            unknown: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation unknown',
+            unknown: ['neutral', 'fa-question-circle', 'Revocation unknown',
                 rev.error || 'The responder does not know this certificate'],
             // "not checked" was wrong: `unavailable` is what the checker
             // returns when it DID ask and got nothing it could trust — an
             // unreachable responder, a signature that did not verify, a
             // stale response. Saying it was not checked hides a failure
             // behind a shrug. The reason is in the tooltip either way.
-            unavailable: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Revocation unverified',
+            unavailable: ['neutral', 'fa-circle-exclamation', 'Revocation unverified',
                 rev.error || 'No verified answer could be obtained'],
             // revocation.py returns five statuses. This map had four, so a
             // self-signed certificate fell through `map[rev.status]` and the
             // cell rendered empty — indistinguishable from "never checked".
-            not_applicable: ['bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', 'Self-signed',
+            not_applicable: ['neutral', 'fa-minus', 'Self-signed',
                 'Self-signed, so there is no issuer that could revoke it']
         };
         var m = map[rev.status];
         if (!m) { return ''; }
-        return '<span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ' + m[0] + '" title="'
-            + escapeHtml(m[2]) + '">' + escapeHtml(m[1]) + '</span>';
+        return CertMate.statusBadge(m[0], m[1], m[2], m[3]);
+    }
+
+    // The markup around a piece, or nothing when the piece is empty: a row with
+    // no revocation answer drew an empty line under its expiry.
+    function wrapped(html, open, close) {
+        return html ? open + html + close : '';
     }
 
     function sourceBadge(source, managed) {
@@ -350,7 +360,7 @@
                 + '<td class="px-4 py-2">' + subjectCell(r) + phoneSummary(r) + '</td>'
                 + '<td class="px-4 py-2 text-xs text-muted hidden md:table-cell">' + escapeHtml(issuerText(r)) + '</td>'
                 + '<td class="px-4 py-2 hidden md:table-cell">' + statusBadge(r.expiry_status, r.days_until_expiry)
-                    + '<div>' + revocationBadge(r.revocation) + '</div></td>'
+                    + wrapped(revocationBadge(r.revocation), '<div class="mt-1">', '</div>') + '</td>'
                 + '<td class="px-4 py-2 text-xs hidden md:table-cell">' + keyLabel(r.key) + '</td>'
                 + '<td class="px-4 py-2 hidden md:table-cell">' + sourceBadge(r.source, r.managed) + '</td>'
                 + '<td class="px-4 py-2 hidden md:table-cell">' + endpointsCell(r) + '</td>'
@@ -517,7 +527,7 @@
     // of showing a number nobody stated.
     function registrationExpiryCell(r) {
         if (r.status === 'ok') {
-            return statusBadge(r.expiry_status, r.days_until_expiry)
+            return statusBadge(r.expiry_status, r.days_until_expiry, 'No expiry date is known for this registration')
                 + ' <span class="text-xs text-muted">' + escapeHtml((r.expires_at || '').slice(0, 10)) + '</span>';
         }
         var words = {

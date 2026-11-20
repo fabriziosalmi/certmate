@@ -8,8 +8,8 @@ module.exports = {
   // every R-3 class through so migration can land one call site at a time
   // without having to ship a dummy reference first.
   safelist: [
-    'btn', 'btn-primary', 'btn-secondary', 'btn-danger', 'btn-ghost',
-    'btn-sm', 'btn-lg',
+    'btn', 'btn-primary', 'btn-secondary', 'btn-danger', 'btn-warning', 'btn-ghost',
+    'btn-sm',
     'card',
     'badge', 'badge-success', 'badge-warning', 'badge-error', 'badge-info',
     'form-input', 'form-select', 'form-label',

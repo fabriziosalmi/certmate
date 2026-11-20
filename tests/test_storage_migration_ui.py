@@ -52,9 +52,12 @@ global.document = {
     elements.storageMigrationModal = modal;
     const options = [...modal.innerHTML.matchAll(/<option value="([^"]*)">([^<]*)<\/option>/g)]
       .map(([, value, text]) => new Option(text, value));
+    // The dialog listens to the picker: a source of the type in use gets a
+    // note that it may be the same location (#1511 review).
     elements.storageMigSource = {
       options, value: options[0].value,
       add(option) { options.push(option); },
+      addEventListener() {},
     };
     for (const id of ['storageMigCloseBtn', 'storageMigCancelBtn', 'storageMigStartBtn']) {
       elements[id] = {addEventListener() {}};

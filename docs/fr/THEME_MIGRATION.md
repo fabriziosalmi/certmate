@@ -1,6 +1,6 @@
 # Migration de thème — découplage clair/sombre via des tokens de variables CSS
 
-<!-- CERTMATE-TRANSLATED-FROM 7e728601de97421b -->
+<!-- CERTMATE-TRANSLATED-FROM c5fc6babcbbbd54a -->
 
 Statut : **livrée** (Phases 0–5 dans v2.9.0, Phases 6–9 ensuite ; Phase 10 planifiée) · Propriétaire : Fabrizio · Créé : 2026-05-25
 
@@ -101,7 +101,8 @@ Quelques reliquats (`dark:text-gray-400{%`, `dark:text-gray-300'`) sont des attr
 ### Phase 1 — Pilote : shell + primitives
 - [x] Migrer `base.html` (nav/header/footer/barre d'onglets) vers les tokens. 19 paires réduites ; les valeurs des tokens correspondent exactement aux originales.
 - [x] Migrer `login.html` vers les tokens. 12 paires réduites.
-- [ ] Adopter les classes de composants `.btn` / `.form-*` (reporté — le pilote a utilisé uniquement les tokens ; les inputs de connexion diffèrent en taille de `.form-input`, donc l'adoption des composants est une étape à part).
+- [x] Adopter les classes de composants `.btn` : fait plus tard, pour les boutons pleins de l'application (#1511, voir Phase 9).
+- [ ] Adopter les classes de composants `.form-*` (reporté : le pilote a utilisé uniquement les tokens ; les inputs de connexion diffèrent en taille de `.form-input`, donc l'adoption des composants est une étape à part).
 - [x] Valider la parité clair/sombre. Vérifiée en direct dans Docker (base.html + login.html, les deux thèmes) — pilote accepté.
 
 #### Décisions de conception ouvertes (soulevées par le pilote)
@@ -163,11 +164,19 @@ Quelques reliquats (`dark:text-gray-400{%`, `dark:text-gray-300'`) sont des attr
 - [x] Ajout d'un token `accent` sensible au thème (blue-600 → blue-400 en sombre) pour que
   `.nav-active` ne code plus le bleu en dur ; c'est l'accent sur surface qui manquait
   à #254.
-- Non fait (par conception) : adoption de `.btn`/`.form-*` aux sites d'appel (les sites
-  d'appel inline sont déjà tokenisés ; imposer les composants changerait la taille
-  des boutons pour un gain de découplage nul). `.btn-danger` (rouge d'action plein) et les
-  variantes de statut `.badge-*` restent littéraux. La couche `@apply` reste en dehors de
-  la porte `--check` — une future amélioration du codemod pourrait la scanner.
+- Non fait dans cette phase : adoption de `.btn`/`.form-*` aux sites d'appel (les sites
+  d'appel inline étaient déjà tokenisés ; imposer les composants aurait changé la taille
+  des boutons sans gain de découplage). `.btn` a été adopté plus tard pour une autre raison
+  (#1511, audit UX P42) : les boutons pleins mesuraient de 28 à 50 px de haut, en trois bleus, un indigo, un vert, un ambre et un quasi-noir, en plus du rouge, sur une suppression et sur le Réessayer de la page SSO. Les
+  boutons pleins de l'application (hormis le bouton de la console de débogage des
+  paramètres) sont désormais `.btn` avec `.btn-primary`, `.btn-danger`, `.btn-warning`
+  (ambre, uniquement pour migrer les certificats) ou `.btn-secondary`, hauts de 36 px, et
+  `.btn-sm` (28 px) dans les barres d'outils denses ; les pages de connexion et du premier
+  administrateur gardent les leurs. `.form-*` n'est toujours pas adopté. `.btn-danger` et
+  `.btn-warning` gardent des couleurs littérales, et les variantes `.badge-*` n'ont aucun
+  site d'appel : la pastille d'état des listes serveur, client et inventaire est
+  `CertMate.statusBadge` dans `static/js/certmate.js`. La couche `@apply` reste en dehors
+  de la porte `--check` ; une future amélioration du codemod pourrait la scanner.
 
 ### Phase 10 — Décomposition de la traîne de couleurs (planifiée, progressive)
 Le découplage a laissé **565 utilitaires `dark:`** que le codemod ne peut pas réduire : ils

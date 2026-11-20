@@ -580,14 +580,14 @@
 
                                 <div class="flex flex-wrap items-center gap-2">
                                     <button type="button" @click="runPreview()" :disabled="previewing"
-                                            class="px-3 py-1.5 bg-info-surface text-info-fg rounded text-sm hover:bg-blue-200 dark:hover:bg-blue-900/50 transition disabled:opacity-50">
+                                            class="btn btn-secondary">
                                         <i class="fas fa-eye mr-1"></i>Preview what would be sent
                                     </button>
                                     <button type="button" @click="save()" :disabled="!canSave()" data-saves
-                                            class="px-3 py-1.5 bg-primary text-white rounded text-sm hover:bg-secondary transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                            class="btn btn-primary">
                                         <i class="fas fa-save mr-1"></i>Save target
                                     </button>
-                                    <button type="button" @click="cancel()" data-discards class="px-3 py-1.5 bg-surface-2 text-label rounded text-sm hover:bg-hover transition">Cancel</button>
+                                    <button type="button" @click="cancel()" data-discards class="btn btn-secondary">Cancel</button>
                                 </div>
 
                                 <p x-show="previewError" x-text="previewError" role="alert" class="text-xs text-danger-fg" id="webhook-target-preview-error"></p>
@@ -700,7 +700,7 @@
                    beside it and aria-busy come from settings-unsaved.js, as on
                    every other section. #}
                 <button type="button" @click="saveConfig()" data-saves id="deploy-hooks-save"
-                        class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary transition text-sm">
+                        class="btn btn-primary">
                     <i class="fas mr-2" :class="saving ? 'fa-spinner fa-spin' : 'fa-save'" aria-hidden="true"></i>Save Deploy Settings
                 </button>
             </div>

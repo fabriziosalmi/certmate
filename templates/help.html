@@ -34,22 +34,25 @@
 
         <!-- Section navigation. Single horizontal row (scrolls on narrow
              viewports). Section anchors first, then a divider, then the
-             external full changelog. -->
+             external full changelog. The icons are muted, and primary for
+             the section in the address (aria-current, set by the script at
+             the end): they were seven hues, green and amber among them, the
+             colours of a certificate's state (#1511, P69). -->
         <nav class="flex items-center gap-1 mb-6 overflow-x-auto whitespace-nowrap text-sm px-4 sm:px-0 pb-1" aria-label="Help sections">
-            <a href="#quick-start"    class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-rocket text-green-600 mr-1.5" aria-hidden="true"></i>Quick Start</a>
-            <a href="#dns-providers"  class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-server text-blue-600 mr-1.5" aria-hidden="true"></i>DNS</a>
-            <a href="#ca-providers"   class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-shield-alt text-purple-600 mr-1.5" aria-hidden="true"></i>CA</a>
-            <a href="#api-usage"      class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-code text-indigo-600 mr-1.5" aria-hidden="true"></i>API</a>
-            <a href="#multi-account"  class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-users text-green-600 mr-1.5" aria-hidden="true"></i>Multi-account</a>
-            <a href="#client-certificates" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-id-card text-blue-600 mr-1.5" aria-hidden="true"></i>Client certificates</a>
-            <a href="#acme-server"    class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-certificate text-indigo-600 mr-1.5" aria-hidden="true"></i>ACME server</a>
-            <a href="#inventory"      class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-boxes-stacked text-purple-600 mr-1.5" aria-hidden="true"></i>Inventory</a>
-            <a href="#crypto-readiness" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-shield text-indigo-600 mr-1.5" aria-hidden="true"></i>Crypto readiness</a>
-            <a href="#backup-recovery" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-archive text-amber-600 mr-1.5" aria-hidden="true"></i>Backup</a>
-            <a href="#troubleshooting" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-tools text-orange-600 mr-1.5" aria-hidden="true"></i>Troubleshooting</a>
-            <a href="#report-issue"   class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fab fa-github text-label mr-1.5" aria-hidden="true"></i>Report an issue</a>
+            <a href="#quick-start"    class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-rocket text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Quick Start</a>
+            <a href="#dns-providers"  class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-server text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>DNS</a>
+            <a href="#ca-providers"   class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-shield-alt text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>CA</a>
+            <a href="#api-usage"      class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-code text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>API</a>
+            <a href="#multi-account"  class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-users text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Multi-account</a>
+            <a href="#client-certificates" class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-id-card text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Client certificates</a>
+            <a href="#acme-server"    class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-certificate text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>ACME server</a>
+            <a href="#inventory"      class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-boxes-stacked text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Inventory</a>
+            <a href="#crypto-readiness" class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-shield text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Crypto readiness</a>
+            <a href="#backup-recovery" class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-archive text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Backup</a>
+            <a href="#troubleshooting" class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-tools text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Troubleshooting</a>
+            <a href="#report-issue"   class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fab fa-github text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Report an issue</a>
             <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
-            <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-external-link-alt text-xs text-gray-400 mr-1.5" aria-hidden="true"></i>Full changelog</a>
+            <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-external-link-alt text-xs text-muted mr-1.5" aria-hidden="true"></i>Full changelog</a>
         </nav>
 
         <!-- Content sections. All cards use the compact px-4 py-4 padding
@@ -66,7 +69,7 @@
             <section id="quick-start" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-rocket text-green-600 mr-2" aria-hidden="true"></i>Quick Start
+                        <i class="fas fa-rocket text-muted mr-2" aria-hidden="true"></i>Quick Start
                     </h3>
                     <ol class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5 list-decimal ml-5">
                         <li>Until sign-in is on with a first user, an <code class="text-xs bg-surface-2 px-1 rounded">API_BEARER_TOKEN</code> is set or single sign-on is configured, a fresh instance is in setup mode: anyone who reaches it can read everything but private keys and backups, and create the first admin, so finish setup before exposing it. The setup page creates the first admin and turns sign-in on with it. Add more people, each a Viewer, an Operator or an Admin, in <a href="/settings#users" class="text-primary hover:underline">Settings → Users</a>.</li>
@@ -84,7 +87,7 @@
             <section id="dns-providers" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-server text-blue-600 mr-2" aria-hidden="true"></i>Validation and DNS Providers
+                        <i class="fas fa-server text-muted mr-2" aria-hidden="true"></i>Validation and DNS Providers
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         The CA checks that you control each name before it issues. A certificate picks one of two ways under <span class="font-medium" data-ui-label>Challenge Type</span>, and <a href="/settings#dns" class="text-primary hover:underline">Settings → DNS</a> sets the default:
@@ -125,7 +128,7 @@
             <section id="ca-providers" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-shield-alt text-purple-600 mr-2" aria-hidden="true"></i>Certificate Authorities
+                        <i class="fas fa-shield-alt text-muted mr-2" aria-hidden="true"></i>Certificate Authorities
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
                         Add accounts in <a href="/settings#ca" class="text-primary hover:underline">Settings → CA</a> with <span class="font-medium" data-ui-label>Add CA Account</span>; each authority has a default account. A certificate can pick another CA and account when it is created.
@@ -157,7 +160,7 @@
             <section id="api-usage" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-code text-indigo-600 mr-2" aria-hidden="true"></i>API
+                        <i class="fas fa-code text-muted mr-2" aria-hidden="true"></i>API
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
                         Create a key in <a href="/settings#apikeys" class="text-primary hover:underline">Settings → API Keys</a> and send it as a Bearer token. Each key has a role (Viewer reads, Operator also creates and renews, Admin also changes settings), an optional expiry and an optional list of the domains it may touch. The token is shown once, when the key is created.
@@ -203,7 +206,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="multi-account" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-users text-green-600 mr-2" aria-hidden="true"></i>Multi-account DNS
+                        <i class="fas fa-users text-muted mr-2" aria-hidden="true"></i>Multi-account DNS
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         Useful when you manage zones under different cloud accounts (for example one Cloudflare tenant per customer, or separate Route 53 accounts for production and staging).
@@ -221,7 +224,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="client-certificates" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-id-card text-blue-600 mr-2" aria-hidden="true"></i>Client Certificates
+                        <i class="fas fa-id-card text-muted mr-2" aria-hidden="true"></i>Client Certificates
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         A client certificate identifies a person, a device or a service to a server that asks for one: API mTLS, VPN access, user login. CertMate signs them with a CA of its own, separate from the authorities in Settings → CA.
@@ -247,7 +250,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="acme-server" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-certificate text-indigo-600 mr-2" aria-hidden="true"></i>ACME Server
+                        <i class="fas fa-certificate text-muted mr-2" aria-hidden="true"></i>ACME Server
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         CertMate can answer ACME (RFC 8555) itself, from a root of its own, so that certbot, lego, acme.sh and cert-manager on your network get certificates for internal names. It is off until you turn it on.
@@ -272,7 +275,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="inventory" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-boxes-stacked text-purple-600 mr-2" aria-hidden="true"></i>Inventory
+                        <i class="fas fa-boxes-stacked text-muted mr-2" aria-hidden="true"></i>Inventory
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         <a href="/inventory" class="text-primary hover:underline">Inventory</a> lists the server certificates CertMate knows of: the ones it holds (Managed) and the ones it found elsewhere (Discovered). Client certificates are not in it.
@@ -290,7 +293,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="crypto-readiness" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-shield text-indigo-600 mr-2" aria-hidden="true"></i>Crypto Readiness Report
+                        <i class="fas fa-shield text-muted mr-2" aria-hidden="true"></i>Crypto Readiness Report
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         The <span class="font-medium" data-ui-label>Cryptographic readiness</span> band on Inventory classifies every certificate in the inventory by key and signature algorithm, to plan the move to post-quantum algorithms. Client certificates are not in it. It is a report only: issuance does not change.
@@ -313,7 +316,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="backup-recovery" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-archive text-amber-600 mr-2" aria-hidden="true"></i>Backup &amp; Restore
+                        <i class="fas fa-archive text-muted mr-2" aria-hidden="true"></i>Backup &amp; Restore
                     </h3>
                     <ul class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5">
                         <li><span class="font-medium">What's in a backup:</span> the settings and every certificate, in one archive. Credentials and private keys are in it only when <code class="text-xs bg-surface-2 px-1 rounded">CERTMATE_BACKUP_PASSPHRASE</code> is set, and the archive is then encrypted with it. Without it, a backup is a snapshot of the configuration and the certificates that cannot restore the instance on its own.</li>
@@ -329,7 +332,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="troubleshooting" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fas fa-tools text-orange-600 mr-2" aria-hidden="true"></i>Troubleshooting
+                        <i class="fas fa-tools text-muted mr-2" aria-hidden="true"></i>Troubleshooting
                     </h3>
                     <dl class="text-sm text-gray-700 dark:text-gray-200 space-y-3">
                         <div>
@@ -363,7 +366,7 @@ curl -H "Authorization: Bearer $TOKEN" \
             <section id="report-issue" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
                     <h3 class="text-lg font-semibold text-foreground mb-3">
-                        <i class="fab fa-github text-label mr-2" aria-hidden="true"></i>Report an issue
+                        <i class="fab fa-github text-muted mr-2" aria-hidden="true"></i>Report an issue
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         When something goes wrong, including the items below makes the fix faster: most reports stall on missing context, not on hard root causes.
@@ -381,13 +384,13 @@ curl -H "Authorization: Bearer $TOKEN" \
                     <div class="mt-4 flex flex-wrap gap-3">
                         <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose"
                            target="_blank" rel="noopener"
-                           class="inline-flex items-center px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-md transition-colors">
+                           class="btn btn-primary">
                             <i class="fab fa-github mr-2" aria-hidden="true"></i>
                             Open an issue on GitHub
                             <i class="fas fa-external-link-alt ml-2 text-xs" aria-hidden="true"></i>
                         </a>
                         <button type="button" data-click="CertMate.copyDiagnosticsSnapshot" data-pass="el"
-                                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                                class="btn btn-secondary">
                             <i class="fas fa-clipboard mr-2" aria-hidden="true"></i>
                             Copy Diagnostic Snapshot
                         </button>
@@ -454,6 +457,20 @@ curl -H "Authorization: Bearer $TOKEN" \
                 input.blur();
             }
         });
+    })();
+
+    // The section link of the address is the current one (aria-current),
+    // drawn primary; every other section icon is muted.
+    (function() {
+        var links = document.querySelectorAll('nav[aria-label="Help sections"] a[href^="#"]');
+        function markCurrent() {
+            links.forEach(function(a) {
+                if (a.getAttribute('href') === window.location.hash) a.setAttribute('aria-current', 'location');
+                else a.removeAttribute('aria-current');
+            });
+        }
+        markCurrent();
+        window.addEventListener('hashchange', markCurrent);
     })();
     </script>
 {% endblock %}

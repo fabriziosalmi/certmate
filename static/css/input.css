@@ -234,12 +234,24 @@ button:not(.btn):focus-visible,
      ─────────────────────────────────────────────────────────── */
 
   /* Buttons ─────────────────────────────────────────────────── */
-  /* `.btn` carries shape / sizing / focus; pair with a variant
-     for color. Default size matches the px-4 py-2 used in the
-     bulk of the existing forms (Add Account, Save Settings). */
+  /* One button (#1511, P42): every filled button in the app is `.btn` with a
+     colour variant, 36 px tall with 14 px text and 6 px corners. They were
+     28 to 50 px, in three blues, an indigo, a green and an amber, so the
+     button that commits looked different on every screen.
+       .btn-primary    the brand blue: the action a section is for
+       .btn-danger     red: deletes or revokes
+       .btn-warning    amber: risky but not a deletion, and nothing else
+                       (Migrate Certificates copies every certificate into
+                       another backend, over what is there)
+       .btn-secondary  outlined: every other action
+     `.btn-sm` (28 px, 12 px text) is only for a dense toolbar, a strip of
+     compact controls: the inventory header, the crypto report's export
+     strip, the action row of a DNS or CA account. A min-height, not a
+     height: a label that wraps on a phone makes the button taller rather
+     than spilling out of it. */
   .btn {
     @apply inline-flex items-center justify-center
-           px-4 py-2 text-sm font-medium rounded-md
+           min-h-9 px-4 py-1.5 text-sm font-medium rounded-md
            border border-transparent
            focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
            transition-colors duration-150
@@ -250,20 +262,10 @@ button:not(.btn):focus-visible,
            focus:ring-primary focus:ring-offset-white
            dark:focus:ring-offset-gray-800;
   }
-  /* Page-level call-to-action — the gradient pill used for the single most
-     important action on a page (Create New Certificate on the dashboard,
-     Create Unified Backup on the backup tab). Self-contained: use bare, not
-     paired with .btn. One per view so the primary action reads the same
-     everywhere. */
-  .btn-cta {
-    @apply inline-flex items-center justify-center
-           px-5 py-2.5 text-sm font-medium rounded-lg shadow-sm
-           border border-transparent text-white
-           bg-gradient-to-r from-primary to-secondary
-           hover:from-secondary hover:to-primary
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary
-           transition-all duration-200
-           disabled:opacity-50 disabled:cursor-not-allowed;
+  .btn-warning {
+    @apply bg-yellow-700 text-white hover:bg-yellow-800
+           focus:ring-yellow-500 focus:ring-offset-white
+           dark:focus:ring-offset-gray-800;
   }
   .btn-secondary {
     @apply bg-input
@@ -286,9 +288,8 @@ button:not(.btn):focus-visible,
            border-transparent
            focus:ring-border-strong;
   }
-  /* Size overrides — combine with .btn and a variant: */
-  .btn-sm { @apply px-3 py-1.5 text-xs; }
-  .btn-lg { @apply px-6 py-3 text-base; }
+  /* The dense-toolbar size, combined with .btn and a variant: */
+  .btn-sm { @apply min-h-7 px-3 py-1 text-xs; }
 
   /* Card ────────────────────────────────────────────────────── */
   /* Canonical surface for grouped content: same shadow / radius
