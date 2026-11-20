@@ -86,18 +86,22 @@ def _render(template, **context):
 
 # The text a person sees in a heading, and in the label of a form field that
 # has one (and no aria-label or aria-labelledby): its text nodes that are
-# rendered, visible and not under aria-hidden (sr-only text included), and
-# the alt of an image there, the field's own subtree left out. Case is not
+# rendered, visible and not under aria-hidden, and the alt of an image there,
+# the field's own subtree left out. Text in an sr-only element is not seen,
+# unless the heading or label is itself sr-only (or inside one): an sr-only
+# sentence inside a label would lengthen the name as much as a tooltip. Case is not
 # compared: a name keeps the text-transform the page draws it with. Each
 # element checked is marked for the accessibility tree.
 SEEN_TEXT = """() => {
     const text = (root, skip) => {
+        const hiddenRoot = !!root.closest('.sr-only');
         let out = '';
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
             const element = n.nodeType === 1 ? n : n.parentElement;
             if ((skip && skip.contains(n)) || element.closest('[aria-hidden=true]')
-                || !element.checkVisibility({visibilityProperty: true})) continue;
+                || !element.checkVisibility({visibilityProperty: true})
+                || (!hiddenRoot && element.closest('.sr-only'))) continue;
             if (n.nodeType === 3) out += n.textContent;
             else if (n.tagName === 'IMG' && n.alt) out += ' ' + n.alt + ' ';
         }
@@ -408,3 +412,4 @@ def test_a_heading_or_a_labelled_field_is_named_by_the_text_it_shows(views):
     # 275 on a fresh instance (#1511): a much lower count means the check lost its subject.
     assert sum(compared.values()) >= 250, f'only {sum(compared.values())} names compared: {compared}'
     assert not renamed, f'names that are not the text shown: {renamed}'
+    print(f'{sum(compared.values())} names compared in {len(compared)} views')

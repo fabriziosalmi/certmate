@@ -230,7 +230,7 @@
         // the CRL after a revoke (P45). Same-origin only, decided by the URL
         // the browser would follow ('/\\host' and '//host' leave the origin).
         var link = null;
-        if (opts.link && typeof opts.link.href === 'string') {
+        if (opts.link && typeof opts.link.href === 'string' && opts.link.href) {
             try {
                 if (new URL(opts.link.href, window.location.href).origin === window.location.origin) link = opts.link;
             } catch (e) { link = null; }

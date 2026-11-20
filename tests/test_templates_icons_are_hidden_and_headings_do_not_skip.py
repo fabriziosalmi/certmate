@@ -27,8 +27,9 @@ scripts) and on the HTML the scripts in static/js build:
   ``x-html``, ``sr-only`` text or an image with an ``alt`` inside it count
   too. In a script, it is text inside a string literal: an expression alone
   (a variable, a call, ``${...}``) may be empty, so a control whose only
-  content is an expression fails, unless the expression is listed in
-  EXPRESSIONS_THAT_NAME with the reason it always gives text. The quotes,
+  content is an expression fails, unless that expression in that function
+  is listed in EXPRESSIONS_THAT_NAME with the reason it always gives text
+  (each entry must excuse exactly one control). The quotes,
   plus signs and whitespace between string pieces are neither.
 * Inside one template, a heading is at most one level below the heading
   before it. A template is read in source order; across templates (a page,
@@ -200,13 +201,34 @@ def skipped_levels(source):
     return found
 
 
-def unnamed_controls(source, script=False, allowed=()):
+FUNCTION = re.compile(r'function\s+(\w+)\s*\(|(\w+)\s*[:=]\s*function\s*\(')
+
+
+def _enclosing_function(lines, line):
+    """The name of the nearest function declared on or above ``line`` (1-based), or ''."""
+    for index in range(line - 1, -1, -1):
+        match = FUNCTION.search(lines[index])
+        if match:
+            return match.group(1) or match.group(2)
+    return ''
+
+
+def unnamed_controls(source, script=False, allowed=(), used=None):
     """Buttons and links with no text written inside them (only hidden icons, or in a script only an
-    expression) and no name of their own, as (line, tag). ``allowed`` holds the expressions known to
-    give text."""
-    return [(line, tag) for line, tag, attributes, has_name, expressions in _parse(source, script).controls
-            if not has_name and not any(name in attributes for name in NAME_ATTRIBUTES)
-            and not (expressions and expressions in allowed)]
+    expression) and no name of their own, as (line, tag). ``allowed`` holds the (function, expression)
+    pairs known to give text; each one excused is counted in ``used``."""
+    lines = source.split('\n')
+    found = []
+    for line, tag, attributes, has_name, expressions in _parse(source, script).controls:
+        if has_name or any(name in attributes for name in NAME_ATTRIBUTES):
+            continue
+        site = (_enclosing_function(lines, line), expressions)
+        if expressions and site in allowed:
+            if used is not None:
+                used[site] = used.get(site, 0) + 1
+            continue
+        found.append((line, tag))
+    return found
 
 
 def lost_tags(source):
@@ -219,17 +241,18 @@ def lost_tags(source):
 # give text: (file) -> {the expression: why it is never empty}.
 EXPRESSIONS_THAT_NAME = {
     'static/js/certmate.js': {
-        'CM.escapeHtml(link.text || link.href)':
-            'a toast link is only built when link.href is a string, and its text falls back to that href',
+        ('toast', 'CM.escapeHtml(link.text || link.href)'):
+            'a toast link is only built when link.href is a non-empty string, and its text falls back to that href',
     },
     'static/js/dashboard.js': {
-        'label': 'settingsLink and _menuItem: every caller passes a written label ("Settings, CA", "Force renew"...)',
-        'escapeHtml(reason.slice(cut 2))':
+        ('_menuItem', 'label'): 'every caller passes a written label ("Force renew", "Delete certificate"...)',
+        ('settingsLink', 'label'): 'every caller passes a written label ("Settings, CA", "Settings, DNS")',
+        ('updateCAProviderInfo', 'escapeHtml(reason.slice(cut 2))'):
             'the text after the last ": " of caNotUsableReason(), which is shown only when it is not empty and '
             'then ends ": add it in Settings > CA" (or "them")',
     },
     'static/js/setup-wizard.js': {
-        'label detail': 'challengeButton: both callers pass a written label and detail ("DNS-01", "HTTP-01")',
+        ('challengeButton', 'label detail'): 'both callers pass a written label and detail ("DNS-01", "HTTP-01")',
     },
 }
 
@@ -277,11 +300,20 @@ def test_no_template_skips_a_heading_level():
 
 
 def test_a_button_or_link_that_is_only_an_icon_has_a_name():
-    bare = [f'{path.relative_to(ROOT)}:{line} <{tag}>' for path in _templates() + _scripts()
-            for line, tag in unnamed_controls(path.read_text(), script=path.suffix == '.js',
-                                              allowed=EXPRESSIONS_THAT_NAME.get(str(path.relative_to(ROOT)), ()))]
+    bare, used = [], {}
+    for path in _templates() + _scripts():
+        relative = str(path.relative_to(ROOT))
+        allowed = EXPRESSIONS_THAT_NAME.get(relative, {})
+        counts = {}
+        bare += [f'{relative}:{line} <{tag}>' for line, tag in unnamed_controls(
+            path.read_text(), script=path.suffix == '.js', allowed=allowed, used=counts)]
+        used.update({(relative, *site): count for site, count in counts.items()})
     assert not bare, (f'buttons and links with no written text inside (only hidden icons, or an expression) '
                       f'and no aria-label, aria-labelledby or title: {bare}')
+    # Each excused expression is one place: a second copy of it is not excused.
+    listed = {(relative, *site) for relative, sites in EXPRESSIONS_THAT_NAME.items() for site in sites}
+    wrong = {site: used.get(site, 0) for site in listed if used.get(site, 0) != 1}
+    assert not wrong, f'allowed expressions that do not match exactly one control (site: count): {wrong}'
 
 
 @pytest.mark.parametrize('markup, loud', [
