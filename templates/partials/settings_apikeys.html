@@ -42,7 +42,7 @@
                 <div class="mt-4">
                     <label for="apikey-new-allowed-domains" class="block text-xs text-muted mb-1">
                         Allowed Domains (optional)
-                        <span class="ml-1 text-muted" title="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access.">
+                        <span role="img" aria-label="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access." class="ml-1 text-muted" title="Restrict this key to specific certificates. Comma-separated, supports wildcards like *.example.com. Leave empty for unrestricted access.">
                             <i aria-hidden="true" class="fas fa-info-circle"></i>
                         </span>
                     </label>
@@ -63,7 +63,7 @@
                         <input type="checkbox" x-model="newKey.is_agent"
                                class="rounded border-border text-yellow-600 focus:ring-yellow-500">
                         <span>AI agent key</span>
-                        <span class="text-muted" title="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.">
+                        <span role="img" aria-label="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key." class="text-muted" title="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.">
                             <i aria-hidden="true" class="fas fa-info-circle"></i>
                         </span>
                     </label>

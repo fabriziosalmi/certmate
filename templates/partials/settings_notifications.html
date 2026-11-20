@@ -100,7 +100,7 @@
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-2">
                                         <input aria-label="Webhook enabled" type="checkbox" x-model="wh.enabled" class="w-4 h-4 rounded text-primary focus:ring-primary">
-                                        <input type="text" aria-label="Webhook name" x-model="wh.name" placeholder="Webhook name" class="text-sm font-medium bg-transparent border-none p-0 text-foreground focus:ring-0 w-32">
+                                        <input type="text" aria-label="Webhook name" x-model="wh.name" placeholder="Webhook name" class="text-sm font-medium bg-transparent border-none p-0 text-foreground w-32">
                                     </div>
                                     <button title="Remove webhook" aria-label="Remove webhook" type="button" @click="config.channels.webhooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 text-sm"><i aria-hidden="true" class="fas fa-trash"></i></button>
                                 </div>

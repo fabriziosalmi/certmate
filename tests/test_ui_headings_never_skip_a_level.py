@@ -12,6 +12,16 @@ What is read is what Chromium gives a screen reader: its accessibility tree
 ignores. A template lint (tests/test_templates_icons_are_hidden_and_headings_do_not_skip.py)
 checks each file; the order across a page, its partials, its base and what
 its scripts build is only known here.
+
+The views: every app page, every Settings tab, the 403, setup and login
+pages, the create drawer, and every dialog that opens without saving
+anything: certificate detail, keyboard shortcuts, curl command, confirm,
+prompt, the report-issue fallback, CA account, storage migration, DNS add
+and edit account, deploy execution detail, and the first two steps of the
+setup wizard. A dialog's content that needs the server to hold something
+(an account, a run, a wizard not yet dismissed) is given it in the page
+only: a changed answer to what the page reads, or, for the run, the entry
+handed to the page's own showExecutionDetail.
 """
 import datetime
 import json
@@ -166,6 +176,109 @@ def _views(page):
     page.click('button[data-click="openCAAccountModal"]')
     page.wait_for_timeout(400)
     take('/settings#ca CA account dialog', dialog=True)
+    _dialogs(go, take, page)
+    return seen
+
+
+def _dialogs(go, take, page):
+    """The other dialogs, opened the way their page opens them; none saves."""
+    go('/')
+    page.evaluate("() => document.getElementById('curlModal').classList.remove('hidden')")
+    page.wait_for_timeout(300)
+    take('/ curl command dialog', dialog=True)
+    for kind, call in (('confirm', "CertMate.confirm('Sure?', 'Confirm title')"),
+                       ('prompt', "CertMate.prompt('Name?', 'Prompt title', '')")):
+        go('/')
+        page.evaluate(f'() => {{ {call}; }}')
+        page.wait_for_timeout(400)
+        take(f'/ {kind} dialog', dialog=True)
+    # The report-issue fallback, shown when the clipboard and a new tab are
+    # both refused. It is an overlay with no dialog role, so the page's
+    # outline is read with it on top.
+    go('/help')
+    page.evaluate("""() => {
+        Object.defineProperty(navigator, 'clipboard',
+            {value: {writeText: () => Promise.reject(new Error('refused'))}, configurable: true});
+        window.open = () => null;
+        CertMate.reportIssue({message: 'heading test'}); }""")
+    page.wait_for_selector('text=Report this issue')
+    take('/help report-issue fallback')
+    go('/settings#storage')
+    page.evaluate('() => showStorageMigrationModal()')
+    page.wait_for_selector('#storageMigrationModal')
+    page.wait_for_timeout(300)
+    take('/settings#storage migration dialog', dialog=True)
+    go('/settings#dns')
+    page.click('label:has(input[name="dns_provider"][value="cloudflare"])')
+    page.click('#cloudflare-add-account')
+    page.wait_for_selector('#addAccountModal:not(.hidden)')
+    page.wait_for_timeout(300)
+    take('/settings#dns add account dialog', dialog=True)
+    # The edit dialog needs an account: the settings the page reads are given
+    # one, in the page only.
+    settings = re.compile(r'.*/api/web/settings(\?.*)?$')
+
+    def with_an_account(route):
+        if route.request.method != 'GET':
+            route.continue_()
+            return
+        answer = route.fetch()
+        body = answer.json()
+        providers = body.setdefault('dns_providers', {})
+        cloudflare = providers.setdefault('cloudflare', {})
+        cloudflare.setdefault('accounts', {})['headingtest'] = {'name': 'Heading test', 'api_token': ''}
+        route.fulfill(response=answer, json=body)
+
+    page.route(settings, with_an_account)
+    try:
+        go('/settings#dns')
+        page.evaluate("() => showEditAccountModal('cloudflare', 'headingtest')")
+        page.wait_for_selector('#editAccountModal:not(.hidden)')
+        page.wait_for_timeout(300)
+        take('/settings#dns edit account dialog', dialog=True)
+    finally:
+        page.unroute(settings)
+    go('/settings#deploy')
+    page.evaluate("""() => Alpine.$data(document.getElementById('settings-panel-deploy')).showExecutionDetail(
+        {run_id: 'r1', hook_id: 'h1', hook_name: 'reload', domain: 'alpha.example.test', event: 'renewed',
+         success: true, exit_code: 0, duration_ms: 12, timestamp: '2026-11-20T10:00:00Z',
+         stdout: 'ok', stderr: ''})""")
+    page.wait_for_selector('#executionDetailModal:not(.hidden)')
+    page.wait_for_timeout(300)
+    take('/settings#deploy execution detail dialog', dialog=True)
+
+
+def _wizard(context):
+    """The first-run wizard's first two steps. The suite dismissed it on the
+    server, so the page is told it was not: the settings it reads say so.
+    Step 1 to step 2 is in the page; nothing is posted."""
+    page = context.new_page()
+    seen = {}
+
+    def not_dismissed(route):
+        if route.request.method != 'GET':
+            route.continue_()
+            return
+        answer = route.fetch()
+        body = answer.json()
+        body.update(setup_completed=False, wizard_dismissed=False)
+        route.fulfill(response=answer, json=body)
+
+    page.route('**/api/web/settings?t=*', not_dismissed)
+    page.route('**/api/certificates', lambda route: route.fulfill(
+        status=200, content_type='application/json', body='[]')
+        if route.request.method == 'GET' else route.continue_())
+    try:
+        page.goto(f'{BASE_URL}/', wait_until='networkidle')
+        page.wait_for_selector('#setupWizard #wizEmail')
+        seen['/ setup wizard step 1'] = (_outline(page, True), 1)
+        page.fill('#wizEmail', 'admin@example.test')
+        page.click('#wizNext1')
+        page.wait_for_function("() => !document.getElementById('wizEmail')")
+        page.wait_for_timeout(500)
+        seen['/ setup wizard step 2'] = (_outline(page, True), 1)
+    finally:
+        page.close()
     return seen
 
 
@@ -187,6 +300,7 @@ def views(browser_page, ui_session_cookie):
         if route.request.method == 'GET' else route.continue_())
     try:
         seen = _views(page)
+        seen.update(_wizard(context))
         # Signed out: the login page.
         anonymous = browser.new_context(viewport={'width': 1440, 'height': 900})
         login = anonymous.new_page()

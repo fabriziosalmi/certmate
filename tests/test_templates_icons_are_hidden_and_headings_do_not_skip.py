@@ -5,23 +5,26 @@ whose glyph is a character in the Unicode private use area. An icon without
 ``aria-hidden`` put that character into the accessible name of the heading,
 button or field it sat in (" Save Settings", " Create New Certificate"),
 and screen readers voiced it, or a "private use" placeholder, before every
-label. Of the 601 icons in the templates and scripts on main (69b9d67), 163
+label. Of the 600 icons in the templates and scripts on main (69b9d67), 163
 had ``aria-hidden``. And the headings skipped levels: the dashboard went
 from its h1 to h3, General from h1 to h3 and h4, Storage from h3 to h5.
 
 The rules, checked with html.parser on every template (with its inline
 scripts) and on the HTML the scripts in static/js build:
 
-* An icon (an ``<i>`` element) carries ``aria-hidden="true"``: it is
+* An icon (an ``<i>`` with a class) carries ``aria-hidden="true"``: it is
   decorative, its meaning is in the text or the ``aria-label`` beside it.
   The one exception is an icon whose meaning is nowhere else, which is then
   the accessible name of what it shows: it says so with ``role="img"`` and
   an ``aria-label`` (the two info icons of the private CA form, whose
-  tooltip was their only text).
-  An icon that was the only label of a control leaves the name to the
-  control: ``aria-label``, ``title`` or ``sr-only`` text on it (checked for
-  buttons by tests/test_every_form_control_has_an_accessible_name.py, and for
-  links here).
+  tooltip was their only text). Where that tooltip is on a span around the
+  icon (an API key's certificate restriction and agent flag, the SSO role
+  mappings), the span is the named image and the icon stays hidden. An
+  ``<i>`` with no class is not an icon (a comment that names the tag, say).
+* A button or a link whose only content is hidden icons has a name of its
+  own: ``aria-label``, ``aria-labelledby`` or ``title`` (Alpine's bound
+  forms included). Text, ``x-text``, ``x-html``, ``sr-only`` text or an
+  image with an ``alt`` inside it is a name too.
 * Inside one template, a heading is at most one level below the heading
   before it. A template is read in source order; across templates (a page,
   the partials it includes, the base it extends) and in what the scripts
@@ -29,9 +32,11 @@ scripts) and on the HTML the scripts in static/js build:
   tests/test_ui_headings_never_skip_a_level.py.
 
 A script builds its markup from string pieces, so html.parser can lose its
-place in a script (``i<n`` reads as a tag). The check counts the ``<i``
-tags it parsed against the ``<i `` and ``<i>`` texts in the file and fails
-when they differ, rather than passing on what it did not see.
+place in a script (``i<n`` reads as a tag, and ``'<i\\nclass=...'`` as a tag
+whose name is not ``i``). The check counts the ``<i`` tags it parsed against
+the ``<i`` written in the file followed by whitespace, ``>``, ``/`` or a
+JavaScript escape of whitespace, and fails when they differ, rather than
+passing on what it did not see.
 """
 import re
 from html.parser import HTMLParser
@@ -47,58 +52,77 @@ SCRIPTS = ROOT / 'static' / 'js'
 # Third-party bundles, not this project's markup.
 VENDORED = {'alpine.min.js', 'redoc.standalone.js'}
 JINJA = re.compile(r'\{%.*?%\}|\{\{.*?\}\}|\{#.*?#\}', re.S)
+# An <i> tag as written: whitespace, '>' or '/' after it, or a JS escape
+# (\n, \t...) that a string turns into whitespace.
+WRITTEN_I = re.compile(r'<i(?=[\s>/]|\\[ntrfv])')
 HEADINGS = {'h1': 1, 'h2': 2, 'h3': 3, 'h4': 4, 'h5': 5, 'h6': 6}
-NAME_ATTRIBUTES = ('aria-label', ':aria-label', 'x-bind:aria-label', 'aria-labelledby', 'title', ':title',
-                   'x-bind:title')
+CLASS_ATTRIBUTES = ('class', ':class', 'x-bind:class')
+NAME_ATTRIBUTES = ('aria-label', ':aria-label', 'x-bind:aria-label', 'aria-labelledby', ':aria-labelledby',
+                   'title', ':title', 'x-bind:title')
+CONTROLS = ('a', 'button')
+
+
+# In a script, the text between two string pieces ("' +\n '") is not text
+# on the page: quotes, plus signs, escapes and whitespace say nothing.
+JOINS = re.compile(r"\\[ntr]|[\s'\"`+]")
 
 
 class _Markup(HTMLParser):
-    def __init__(self):
+    def __init__(self, script=False):
         super().__init__(convert_charrefs=True)
+        self.script = script
+        self.tags_i = 0
         self.icons = []      # (line, attributes)
         self.headings = []   # (line, level)
-        self.links = []      # (line, attributes, has_name_text)
-        self.open = []
+        self.controls = []   # (line, tag, attributes, has_name_inside)
+        self.open = []       # [line, tag, attributes, has_name_inside]
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
         line = self.getpos()[0]
         if tag == 'i':
-            self.icons.append((line, attributes))
+            self.tags_i += 1
+            if any(name in attributes for name in CLASS_ATTRIBUTES):
+                self.icons.append((line, attributes))
         if tag in HEADINGS:
             self.headings.append((line, HEADINGS[tag]))
+        if tag in CONTROLS:
+            self.open.append([line, tag, attributes, False])
         if ('x-text' in attributes or 'x-html' in attributes or 'sr-only' in (attributes.get('class') or '').split()
                 or (tag == 'img' and (attributes.get('alt') or '').strip())):
-            self._name_open_links()
-        if tag == 'a':
-            self.open.append([line, attributes, False])
+            self._name_open_controls()
 
-    def _name_open_links(self):
-        for link in self.open:
-            link[2] = True
+    def _name_open_controls(self):
+        for control in self.open:
+            control[3] = True
 
     def handle_data(self, data):
         if self.cdata_elem == 'script':
-            # A page's own script builds markup too: its icons and links are
+            # A page's own script builds markup too: its icons and controls are
             # read the same way. Its headings are fragments placed elsewhere,
             # so they are not in this file's order (the browser test has them).
-            inner = _Markup()
+            inner = _Markup(script=True)
             inner.feed(data)
             inner.close()
             offset = self.getpos()[0] - 1
+            self.tags_i += inner.tags_i
             self.icons += [(line + offset, attributes) for line, attributes in inner.icons]
-            self.links += [(line + offset, attributes, named) for line, attributes, named in inner.links]
+            self.controls += [(line + offset, *rest) for line, *rest in inner.controls]
             return
-        if data.strip():
-            self._name_open_links()
+        if (JOINS.sub('', data) if self.script else data.strip()):
+            self._name_open_controls()
 
     def handle_endtag(self, tag):
-        if tag == 'a' and self.open:
-            self.links.append(tuple(self.open.pop()))
+        if tag not in CONTROLS:
+            return
+        for index in range(len(self.open) - 1, -1, -1):
+            if self.open[index][1] == tag:
+                self.controls.append(tuple(self.open.pop(index)))
+                return
 
 
-def _parse(source):
-    parser = _Markup()
+def _parse(source, script=False):
+    parser = _Markup(script)
     # Jinja is blanked out, newlines kept, so the line numbers are the file's;
     # an expression ({{ ... }}) prints something, so it stays as a letter.
     parser.feed(JINJA.sub(lambda match: ('x' if match.group(0).startswith('{{') else '')
@@ -127,10 +151,16 @@ def skipped_levels(source):
     return found
 
 
-def unnamed_links(source):
-    """Links whose only content is hidden icons and that carry no name of their own."""
-    return [line for line, attributes, has_text in _parse(source).links
-            if not has_text and not any(name in attributes for name in NAME_ATTRIBUTES)]
+def unnamed_controls(source, script=False):
+    """Buttons and links with nothing to say but hidden icons, and no name of their own, as (line, tag)."""
+    return [(line, tag) for line, tag, attributes, has_name in _parse(source, script).controls
+            if not has_name and not any(name in attributes for name in NAME_ATTRIBUTES)]
+
+
+def lost_tags(source):
+    """(written, parsed) when html.parser did not see every <i> tag the source holds, else None."""
+    written, parsed = len(WRITTEN_I.findall(source)), _parse(source).tags_i
+    return (written, parsed) if written != parsed else None
 
 
 def _templates():
@@ -149,10 +179,9 @@ def _loud_and_lost(paths):
     loud, lost = [], []
     for path in paths:
         source = path.read_text()
-        written = source.count('<i ') + source.count('<i>')
-        parsed = len(_parse(source).icons)
-        if parsed != written:
-            lost.append(f'{path.relative_to(ROOT)}: {written} written, {parsed} parsed')
+        counts = lost_tags(source)
+        if counts:
+            lost.append(f'{path.relative_to(ROOT)}: {counts[0]} written, {counts[1]} parsed')
         loud += [f'{path.relative_to(ROOT)}:{line}' for line in loud_icons(source)]
     return loud, lost
 
@@ -176,10 +205,10 @@ def test_no_template_skips_a_heading_level():
     assert not skips, f'headings more than one level below the one before them: {skips}'
 
 
-def test_a_link_that_is_only_an_icon_has_a_name():
-    bare = [f'{path.relative_to(ROOT)}:{line}' for path in _templates() + _scripts()
-            for line in unnamed_links(path.read_text())]
-    assert not bare, f'links with only an icon and no aria-label or title: {bare}'
+def test_a_button_or_link_that_is_only_an_icon_has_a_name():
+    bare = [f'{path.relative_to(ROOT)}:{line} <{tag}>' for path in _templates() + _scripts()
+            for line, tag in unnamed_controls(path.read_text(), script=path.suffix == '.js')]
+    assert not bare, f'buttons and links with only an icon and no aria-label, aria-labelledby or title: {bare}'
 
 
 @pytest.mark.parametrize('markup, loud', [
@@ -188,10 +217,22 @@ def test_a_link_that_is_only_an_icon_has_a_name():
     ('<i class="fas fa-check" aria-hidden="false"></i>', [1]),
     ('<i class="fas fa-check" role="img" aria-label="Valid"></i>', []),
     ('<i class="fas fa-check" role="img"></i>', [1]),
+    ('<i :class="open ? \'fa-chevron-up\' : \'fa-chevron-down\'"></i>', [1]),
     ("html += '<i class=\"fas fa-x\"></i>' + label;", [1]),
+    ('// the leading glyph (direct child <i>)', []),
 ])
 def test_the_icon_check_tells_a_loud_icon_from_a_hidden_one(markup, loud):
     assert loud_icons(markup) == loud
+
+
+@pytest.mark.parametrize('markup, lost', [
+    ('<i class="fas fa-x" aria-hidden="true"></i>', None),
+    ('<i\n class="fas fa-x" aria-hidden="true"></i>', None),
+    ("'<i\\nclass=\"fas fa-x\"></i>'", (1, 0)),
+    ("for (i = 0; i<n && x; i++) { html += '<i class=\"fas\"></i>'; }", (1, 0)),
+])
+def test_the_count_check_sees_a_tag_the_parser_misread(markup, lost):
+    assert lost_tags(markup) == lost
 
 
 @pytest.mark.parametrize('markup, skips', [
@@ -206,10 +247,24 @@ def test_the_heading_check_finds_a_skip(markup, skips):
 
 
 @pytest.mark.parametrize('markup, bare', [
-    ('<a href="/"><i class="fas fa-home" aria-hidden="true"></i></a>', [1]),
+    ('<a href="/"><i class="fas fa-home" aria-hidden="true"></i></a>', [(1, 'a')]),
     ('<a href="/" aria-label="Home"><i class="fas fa-home" aria-hidden="true"></i></a>', []),
     ('<a href="/"><i class="fas fa-home" aria-hidden="true"></i> Home</a>', []),
     ('<a href="/"><i class="fas fa-home" aria-hidden="true"></i><span class="sr-only">Home</span></a>', []),
+    ("'<button type=\"button\" id=\"x\"><i aria-hidden=\"true\" class=\"fas fa-times\"></i></button>'",
+     [(1, 'button')]),
+    ('<button type="button" :title="label"><i aria-hidden="true" class="fas fa-times"></i></button>', []),
+    ('<button type="button"><span x-text="label"></span></button>', []),
 ])
-def test_the_link_check_finds_a_link_with_no_name(markup, bare):
-    assert unnamed_links(markup) == bare
+def test_the_name_check_finds_a_control_with_no_name(markup, bare):
+    assert unnamed_controls(markup) == bare
+
+
+@pytest.mark.parametrize('markup, bare', [
+    ("'<button type=\"button\" id=\"x\">' +\n    '<i aria-hidden=\"true\" class=\"fas fa-times\"></i>' +\n    '</button>'",
+     [(1, 'button')]),
+    ("'<button type=\"button\">' + label + '</button>'", []),
+    ("'<a href=\"#\">' + CM.escapeHtml(name) + '</a>'", []),
+])
+def test_in_a_script_the_glue_between_string_pieces_is_not_a_name(markup, bare):
+    assert unnamed_controls(markup, script=True) == bare

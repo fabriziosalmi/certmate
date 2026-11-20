@@ -76,7 +76,7 @@
             if (!card) return;
             var host = card.querySelector('.text-center');
             if (!host) return;
-            // Only the leading glyph (direct child <i aria-hidden="true">) — never the nested
+            // Only the leading glyph (direct child <i>) — never the nested
             // account-count icon inside #<provider>-accounts.
             var glyph = host.querySelector(':scope > i');
             if (!glyph) return;

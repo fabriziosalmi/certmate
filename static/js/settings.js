@@ -3397,7 +3397,7 @@
             '<h2 id="storageMigrationModal-title" class="text-lg font-medium text-foreground">' +
             '<i aria-hidden="true" class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
             '</h2>' +
-            '<button type="button" id="storageMigCloseBtn" class="text-muted hover:text-gray-600 dark:hover:text-gray-300">' +
+            '<button type="button" id="storageMigCloseBtn" aria-label="Close" class="text-muted hover:text-gray-600 dark:hover:text-gray-300">' +
             '<i aria-hidden="true" class="fas fa-times"></i>' +
             '</button>' +
             '</div>' +

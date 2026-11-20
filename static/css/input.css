@@ -148,19 +148,30 @@ button:not(.btn):focus-visible,
    ring width, which draws no ring without the forms plugin: on focus
    only their 1 px border turned blue, about 2:1 in the dark theme. A
    few had `focus:ring-2` in the brand blue, under 3:1 on a dark card.
-   Every text field, select and textarea now gets the same 2 px ring
-   in the accent colour, which flips with the theme. Its specificity
-   (0,3,1) is above a `focus:ring-*` utility's (0,2,0), so it replaces
-   a field's own ring rather than adding a second one, and the
-   transparent outline replaces the browser's. A field with
-   `focus:ring-0` is drawn inside a box that shows the focus itself
-   (the SAN chip editor). Checkboxes, radios, switches and buttons
-   keep their own styles. */
+   Every text-like input, select and textarea now shows the same 2 px
+   ring in the accent colour, which flips with the theme, and a
+   transparent outline in place of the browser's. The ring's
+   specificity (0,3,1) is above a `focus:ring-*` utility's (0,2,0), so
+   it replaces a field's own ring rather than adding a second one.
+   A field marked `focus:ring-0` is a bare input inside a box that
+   looks like the field (the SAN chip editor): the ring goes on that
+   box, its direct parent, instead. Checkboxes, radios, switches and
+   buttons keep their own styles. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"],
+               [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+    select, textarea):focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
 :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"],
                [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
     select, textarea):not(.focus\:ring-0):focus-visible {
-  outline: 2px solid transparent;
-  outline-offset: 2px;
+  box-shadow: 0 0 0 2px hsl(var(--color-accent)), var(--tw-shadow, 0 0 #0000);
+}
+/* Its own rule: a browser without :has() drops only this one. */
+:has(> :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"],
+                     [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+           select, textarea).focus\:ring-0:focus-visible) {
   box-shadow: 0 0 0 2px hsl(var(--color-accent)), var(--tw-shadow, 0 0 #0000);
 }
 
