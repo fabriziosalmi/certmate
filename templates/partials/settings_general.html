@@ -1,9 +1,11 @@
 <!-- TAB: General Settings -->
                     <!-- The shell of every settings tab (#1511, P66): a bordered card,
                          an 18px/600 title with an icon, one description line, and
-                         the sections as 14px/600 subsections. -->
+                         the sections as 14px/600 subsections. Below sm the card
+                         draws no border, shadow or padding, so on a phone the
+                         fields are as wide as they were without it. -->
                     <div x-show="tab === 'general'" x-cloak id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0"
-                         class="bg-surface border border-border rounded-lg shadow-sm p-6">
+                         class="bg-surface border-border rounded-lg sm:border sm:shadow-sm sm:p-6">
                     <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
                         <i class="fas fa-cogs mr-2 text-primary" aria-hidden="true"></i>
                         General Settings

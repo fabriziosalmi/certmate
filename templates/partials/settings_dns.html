@@ -1,9 +1,12 @@
 <!-- TAB: DNS Providers -->
                     <!-- The shell of every settings tab (#1511, P66): a bordered card,
                          an 18px/600 title with an icon, one description line, and
-                         the sections as 14px/600 subsections. They were grey panels. -->
+                         the sections as 14px/600 subsections. They were grey panels.
+                         Below sm the card draws no border, shadow or padding: with
+                         them it took 50 px from the provider fields on a phone and cut the
+                         placeholders of 21 more provider fields at 360 px. -->
                     <div x-show="tab === 'dns'" x-cloak id="settings-panel-dns" role="tabpanel" aria-labelledby="settings-tab-dns" tabindex="0"
-                         class="bg-surface border border-border rounded-lg shadow-sm p-6">
+                         class="bg-surface border-border rounded-lg sm:border sm:shadow-sm sm:p-6">
                     <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
                         <i class="fas fa-server mr-2 text-primary" aria-hidden="true"></i>
                         Domain Validation
@@ -15,10 +18,7 @@
                             <i class="fas fa-shield-alt mr-1"></i>
                             ACME Challenge Type
                         </label>
-                        <!-- One card per line below sm: inside the tab's card a
-                             half-width card is 117 px at 390 px, and "DNS-01"
-                             and "HTTP-01" broke across two lines in it. -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-2 gap-4">
                             <label class="relative cursor-pointer">
                                 <input type="radio" name="challenge_type" value="dns-01" class="sr-only peer" checked>
                                 <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">

@@ -139,6 +139,100 @@ def test_on_a_phone_every_control_of_general_dns_and_storage_stays_inside_its_ca
         context.close()
 
 
+# A field as wide as the panel, per tab, and its text room on main before the
+# shell (#1511 review): the card's border and padding are left out below sm,
+# so on a phone the fields are no narrower than they were. Linode's key and the
+# local directory are shown whatever the instance holds once their provider or
+# backend is chosen (Cloudflare's token hides when it has accounts).
+ROOM_ON_MAIN = {
+    360: {'general': ('api_bearer_token', 193), 'dns': ('linode_api_key', 209),
+          'storage': ('storage-cert-dir', 193)},
+    390: {'general': ('api_bearer_token', 223), 'dns': ('linode_api_key', 239),
+          'storage': ('storage-cert-dir', 223)},
+}
+
+# Placeholders already wider than their field on main, measured for every DNS
+# provider and storage backend before the shell. They are a follow-up of their
+# own; what this test refuses is one more.
+CUT_ON_MAIN = {
+    360: {
+        'azure_client_id', 'azure_subscription_id', 'azure_tenant_id', 'cloudflare_api_token',
+        'custom-script_auth_hook', 'custom-script_cleanup_hook', 'desec_api_token', 'digitalocean_api_token',
+        'dnsmadeeasy_api_key', 'dnsmadeeasy_secret_key', 'duckdns_api_token', 'edgedns_access_token',
+        'edgedns_client_token', 'edgedns_host', 'gandi_api_token', 'google_service_account_key',
+        'he_ddns_password', 'he_ddns_username', 'hetzner-cloud_api_token', 'hetzner_api_token',
+        'powerdns_api_url', 'route53_assume_role_arn', 'route53_secret_access_key',
+        'scaleway_application_token', 'solidserver_dns_name',
+        'aws-assume-role-arn', 'azure-client-id', 'azure-tenant-id', 'azure-vault-url', 's3-assume-role-arn',
+        's3-endpoint-url', 'vault-url',
+    },
+    390: {
+        'azure_client_id', 'azure_subscription_id', 'azure_tenant_id', 'custom-script_auth_hook',
+        'custom-script_cleanup_hook', 'desec_api_token', 'dnsmadeeasy_secret_key', 'duckdns_api_token',
+        'edgedns_access_token', 'edgedns_client_token', 'google_service_account_key', 'he_ddns_password',
+        'he_ddns_username', 'hetzner-cloud_api_token', 'powerdns_api_url', 'route53_assume_role_arn',
+        'solidserver_dns_name',
+        'aws-assume-role-arn', 'azure-client-id', 'azure-tenant-id', 's3-assume-role-arn', 's3-endpoint-url',
+    },
+}
+
+CUT_PLACEHOLDERS = """(id) => {
+    const ctx = document.createElement('canvas').getContext('2d');
+    const panel = document.getElementById('settings-panel-' + id);
+    return [...panel.querySelectorAll('input[placeholder], textarea[placeholder]')]
+        .filter(f => f.checkVisibility() && f.placeholder).filter(f => {
+            const st = getComputedStyle(f);
+            ctx.font = `${st.fontStyle} ${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
+            return ctx.measureText(f.placeholder).width > f.clientWidth - parseFloat(st.paddingLeft)
+                - parseFloat(st.paddingRight) + 0.5;
+        }).map(f => f.id || f.name);
+}"""
+
+ROOM = """(id) => { const e = document.getElementById(id); const st = getComputedStyle(e);
+    return Math.round(e.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight)); }"""
+
+
+@pytest.mark.parametrize('width', [360, 390])
+def test_on_a_phone_the_tab_card_takes_no_room_from_the_fields(browser_page, ui_session_cookie, width):
+    """With its border and padding at every width, the card took 50 px from
+    the General and DNS fields on a phone and 18 from the Storage ones: 22
+    more placeholders were cut at 360 px and 19 more at 390."""
+    context = browser_page.context.browser.new_context(viewport={'width': width, 'height': 900})
+    context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
+    try:
+        page = context.new_page()
+        narrower, cut = {}, set()
+        for tab, (field, room) in ROOM_ON_MAIN[width].items():
+            page.goto('about:blank')
+            page.goto(f'{BASE_URL}/settings#{tab}', wait_until='networkidle')
+            page.wait_for_function(f"() => document.getElementById('settings-panel-{tab}').checkVisibility()")
+            if tab == 'dns':
+                page.click('label:has(input[name="dns_provider"][value="linode"])')
+            elif tab == 'storage':
+                page.select_option('#storage-backend', 'local_filesystem')
+            now = page.evaluate(ROOM, field)
+            if now < room:
+                narrower[field] = (now, room)
+            if tab == 'dns':
+                for provider in page.evaluate(
+                        "() => [...document.querySelectorAll('input[name=\"dns_provider\"]')].map(i => i.value)"):
+                    page.click(f'label:has(input[name="dns_provider"][value="{provider}"])')
+                    cut.update(page.evaluate(CUT_PLACEHOLDERS, tab))
+            elif tab == 'storage':
+                for backend in page.evaluate(
+                        "() => [...document.querySelectorAll('#storage-backend option')].map(o => o.value)"):
+                    page.select_option('#storage-backend', backend)
+                    cut.update(page.evaluate(CUT_PLACEHOLDERS, tab))
+            else:
+                cut.update(page.evaluate(CUT_PLACEHOLDERS, tab))
+        new = sorted(cut - CUT_ON_MAIN[width])
+        assert not narrower and not new, (
+            f'at {width} px, fields narrower than on main (now, main): {narrower}; '
+            f'placeholders cut that were whole on main ({len(new)}): {new}')
+    finally:
+        context.close()
+
+
 def test_the_sections_of_general_dns_and_storage_are_14px_semibold(settings_page):
     seen = _titles(settings_page)
     odd = {tab: seen[tab]['subsections'] for tab in ('general', 'dns', 'storage')

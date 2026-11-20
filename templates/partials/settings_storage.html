@@ -2,9 +2,11 @@
                     <!-- The shell of every settings tab (#1511, P66): a bordered card,
                          an 18px/600 title with an icon, one description line, and
                          the sections as 14px/600 subsections. The title was a
-                         14px/500 label in a grey panel. -->
+                         14px/500 label in a grey panel. Below sm the card draws no
+                         border, shadow or padding, so on a phone the fields are as
+                         wide as they were without it. -->
                     <div x-show="tab === 'storage'" x-cloak id="settings-panel-storage" role="tabpanel" aria-labelledby="settings-tab-storage" tabindex="0"
-                         class="bg-surface border border-border rounded-lg shadow-sm p-6">
+                         class="bg-surface border-border rounded-lg sm:border sm:shadow-sm sm:p-6">
                     <!-- Certificate Storage Backend Section -->
                     <div>
                         <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
