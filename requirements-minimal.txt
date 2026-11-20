@@ -29,7 +29,7 @@ cryptography==50.0.2               # certbot/acme 5.8.0 need >=47 and pyopenssl 
 pyopenssl==26.4.0                  # Requires cryptography>=49,<51. See requirements.txt.
 
 # Production server
-gunicorn==26.2.0
+gunicorn==27.0.1
 
 # APScheduler's SQLAlchemyJobStore backs the persistent renewal schedule, and
 # modules/factory.py imports it at module scope — so this is not optional
