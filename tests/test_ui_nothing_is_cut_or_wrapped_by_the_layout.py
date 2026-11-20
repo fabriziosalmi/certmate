@@ -102,7 +102,10 @@ def test_the_challenge_cards_keep_their_names_whole_and_match_on_a_phone(at_widt
 def test_the_list_title_and_the_search_box_do_not_touch(at_width):
     page = at_width('/', 1024)
     gap = page.evaluate("""() => {
-        const title = [...document.querySelectorAll('h3')].find(h => h.innerText.trim() === 'Your Certificates');
+        // The title is the dashboard's breadcrumb (#1511, P67): the
+        // breadcrumb is what sits beside the search box.
+        const title = [...document.querySelectorAll('h3')].find(h => h.innerText.trim() === 'Your Certificates')
+            .closest('nav[aria-label="Breadcrumb"]');
         const tools = title.nextElementSibling;
         return tools.getBoundingClientRect().left - title.getBoundingClientRect().right;
     }""")

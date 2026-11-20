@@ -1,18 +1,13 @@
 {% extends "base.html" %}
+{% from "partials/_page_header.html" import page_header %}
 {% block title %}CertMate - Activity{% endblock %}
 {% block content %}
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div class="bg-surface shadow-card rounded-xl overflow-hidden">
-            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
-                <!-- Below sm the header stacks: breadcrumb, a full-width search,
-                     then the selects (#1511, P30). Side by side they wrapped
-                     raggedly next to the breadcrumb on a phone. -->
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                        <a href="/" aria-label="Home" class="-m-2 md:m-0 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-6 md:min-h-6 text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
-                        <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
-                        <span class="text-gray-700 dark:text-gray-200 font-medium">Activity</span>
-                    </nav>
+            <!-- Below sm the header stacks: breadcrumb, a full-width search,
+                 then the selects (#1511, P30). Side by side they wrapped
+                 raggedly next to the breadcrumb on a phone. -->
+            {% call(slot) page_header('Activity', row='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between') %}{% if slot == 'actions' %}
                     <div class="flex items-center gap-2 flex-wrap">
                         <input type="search" id="filterSearch" aria-label="Search activity log"
                                placeholder="Search domain, resource, user…"
@@ -38,8 +33,7 @@
                             <i class="fas fa-sync"></i>
                         </button>
                     </div>
-                </div>
-            </div>
+            {% endif %}{% endcall %}
             <ul id="activityList" role="feed" aria-busy="false" aria-label="Activity log"
                 class="divide-y divide-gray-100 dark:divide-gray-700/50 list-none m-0 p-0">
                 <!-- Skeleton rows; replaced by JS once /api/activity responds. -->

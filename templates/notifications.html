@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "partials/_page_header.html" import page_header %}
 {% block title %}CertMate - Notifications{% endblock %}
 {% block content %}
-    <div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {# No overflow-hidden. It was clipping the snooze menu: the panel is
        absolutely positioned inside a row, and an `overflow: hidden` ancestor
        cuts it off no matter what z-index it carries — measured at 78 of its
@@ -10,13 +11,7 @@
        paints a background: every one is transparent, and the card's own
        `bg-surface` is clipped by its own border-radius. #}
         <div class="bg-surface shadow-card rounded-xl">
-            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
-                <div class="flex items-center justify-between gap-3">
-                    <nav class="flex items-center text-sm min-w-0" aria-label="Breadcrumb">
-                        <a href="/" aria-label="Home" class="-m-2 md:m-0 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-6 md:min-h-6 text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
-                        <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
-                        <span class="text-gray-700 dark:text-gray-200 font-medium">Notifications</span>
-                    </nav>
+            {% call(slot) page_header('Notifications', row='flex items-center justify-between gap-3') %}{% if slot == 'actions' %}
                     <div class="flex items-center gap-2 flex-wrap">
                         <label class="inline-flex items-center gap-1.5 text-xs text-muted cursor-pointer select-none">
                             <input type="checkbox" id="showSnoozed" class="rounded border-border text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
@@ -26,8 +21,7 @@
                             <i class="fas fa-sync"></i>
                         </button>
                     </div>
-                </div>
-            </div>
+            {% endif %}{% endcall %}
 
             <!-- Summary strip -->
             <div id="notifSummary" class="px-6 py-3 text-sm text-muted border-b border-gray-100 dark:border-white/5" aria-live="polite">

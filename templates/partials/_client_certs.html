@@ -1,4 +1,5 @@
 <!-- Client Certificates Partial — included in index.html under "Client" tab -->
+{% from "partials/_page_header.html" import page_header %}
 
 <!-- Stat counters live in the topbar beside the view toggle
      (partials/_dashboard_topbar.html); ccLoadStatistics() fills
@@ -7,9 +8,8 @@
 
 <!-- Certificates List -->
 <div class="bg-surface shadow-card rounded-xl overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-100 dark:border-white/5">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <h3 class="text-lg font-semibold text-foreground">Client Certificates</h3>
+    <!-- The frame of every page (#1511, P67), as on the server view. -->
+    {% call(slot) page_header('Client Certificates', current_tag='h3', home=false, row='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3') %}{% if slot == 'actions' %}
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Status + usage as chips (CN/email search lives in the ⌘K
                      palette) and an actions icon group — same vocabulary as the
@@ -29,7 +29,7 @@
                     <button type="button" data-click="ccRefresh" class="cm-icon-btn" title="Refresh the list" aria-label="Refresh client certificate list"><i class="fas fa-arrows-rotate" aria-hidden="true"></i></button>
                 </div>
             </div>
-        </div>
+    {% elif slot == 'below' %}
         <!-- What a server that checks these certificates has to have (P45):
              both routes answered and nothing linked to them. The CRL is
              offered as PEM only: /api/crl/download/der answers 404 while the
@@ -41,7 +41,7 @@
             <a href="/api/crl/download/pem" class="text-primary hover:underline">CRL (PEM)</a>
             to refuse revoked ones.
         </p>
-    </div>
+    {% endif %}{% endcall %}
 
     <!-- Loading is said outside the table, and the table is shown with its
          first rows (ccRenderCertificates). As a row inside it, the loading

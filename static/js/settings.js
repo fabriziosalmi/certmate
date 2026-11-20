@@ -986,7 +986,7 @@
             } else if (data.api_bearer_token_hash) {
                 var hashedTokenField = document.getElementById('api_bearer_token');
                 if (hashedTokenField) {
-                    hashedTokenField.placeholder = 'Set. Stored only as a hash, so it cannot be shown.';
+                    hashedTokenField.placeholder = 'Set (hash only)';
                     addDebugLog('API bearer token already configured (hash present)', 'info');
                 }
             }

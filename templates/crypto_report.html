@@ -1,37 +1,40 @@
 {% extends "base.html" %}
+{% from "partials/_page_header.html" import page_header %}
 {% block title %}CertMate - Crypto Readiness Report{% endblock %}
 {% block head %}
 <style>
     /* Print-to-PDF: drop the app chrome and colour backgrounds so the report
-       prints as a clean standalone document. */
+       prints as a clean standalone document. The page's card prints as a
+       plain sheet: no background, shadow, rounded corners or inset. */
     @media print {
         nav, #bottomTabBar, .no-print { display: none !important; }
         body { background: #fff !important; }
         main { padding: 0 !important; }
+        #reportRoot .report-card { background: transparent !important; box-shadow: none !important; border-radius: 0 !important; }
+        #reportRoot .report-sheet { padding: 0 !important; }
     }
 </style>
 {% endblock %}
 {% block content %}
-<div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="reportRoot">
-
-    <!-- The way back to Inventory, which opens this page in a tab of its own.
-         Not printed: `nav` is in the print rule above. -->
-    <nav class="flex items-center text-sm mb-3" aria-label="Breadcrumb">
-        <a href="/inventory" class="text-muted hover:text-foreground transition-colors">Inventory</a>
-        <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2" aria-hidden="true"></i>
-        <span class="text-foreground font-medium">Crypto readiness report</span>
-    </nav>
-
-    <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
-        <div>
-            <h1 class="text-xl font-semibold text-foreground">Cryptographic Readiness Report</h1>
-            <p class="text-xs text-muted" id="reportMeta">Generating…</p>
-        </div>
-        <div class="flex items-center gap-2 no-print">
+<div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="reportRoot">
+    <!-- The frame of every page (#1511, P67): one card, the breadcrumb and the
+         actions in its header. The header is not printed (no-print), and the
+         card prints as a plain sheet: see the print rule above. The
+         breadcrumb is the way back to Inventory, which opens this page in a
+         tab of its own. -->
+    <div class="report-card bg-surface shadow-card rounded-xl">
+    {% call(slot) page_header('Crypto readiness report', parent=('Inventory', '/inventory'), extra='no-print') %}{% if slot == 'actions' %}
+        <div class="flex flex-wrap items-center gap-2">
             <a href="/api/inventory/crypto-report?format=csv" class="btn btn-secondary btn-sm"><i class="fas fa-file-csv mr-1"></i>CSV</a>
             <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><i class="fas fa-file-code mr-1"></i>JSON</a>
             <button type="button" data-click="print" class="btn btn-primary btn-sm"><i class="fas fa-print mr-1"></i>Print / Save as PDF</button>
         </div>
+    {% endif %}{% endcall %}
+    <div class="report-sheet px-6 py-6">
+
+    <div class="mb-4">
+        <h1 class="text-xl font-semibold text-foreground">Cryptographic Readiness Report</h1>
+        <p class="text-xs text-muted" id="reportMeta">Generating…</p>
     </div>
 
     <!-- Server certificates only: the inventory holds what CertMate manages,
@@ -88,6 +91,8 @@
         </table>
     </div>
     </div><!-- /#reportBody -->
+    </div><!-- /.report-sheet -->
+    </div><!-- /.report-card -->
 </div>
 
 <script nonce="{{ csp_nonce }}">

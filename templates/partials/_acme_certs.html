@@ -1,10 +1,8 @@
 <!-- The certificates the ACME server issued (#476). -->
-<div x-data="acmeCertificates()" class="bg-surface rounded-xl shadow-card border border-border">
-    <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-border">
-        <div>
-            <h2 class="text-lg font-semibold text-foreground"><i class="fas fa-certificate mr-2 text-primary"></i>ACME certificates</h2>
-            <p class="text-xs text-muted">Ordered by ACME clients from this instance's own root. Newest first.</p>
-        </div>
+{% from "partials/_page_header.html" import page_header %}
+<div x-data="acmeCertificates()" class="bg-surface rounded-xl shadow-card">
+    <!-- The frame of every page (#1511, P67), as on the server view. -->
+    {% call(slot) page_header('ACME certificates', current_tag='h2', home=false, row='flex flex-wrap items-center justify-between gap-3') %}{% if slot == 'actions' %}
         <div class="flex items-center gap-2">
             <!-- Wide enough for its placeholder, which was cut to "Filter by
                  name or EAB k" at the browser's default width (P72). -->
@@ -12,7 +10,9 @@
                    class="h-10 w-56 px-3 border border-border rounded-md text-sm bg-input text-foreground">
             <button type="button" @click="load()" title="Refresh the ACME certificates" aria-label="Refresh ACME certificates" class="cm-icon-btn"><i class="fas fa-arrows-rotate" aria-hidden="true"></i></button>
         </div>
-    </div>
+    {% elif slot == 'below' %}
+        <p class="text-xs text-muted mt-2">Ordered by ACME clients from this instance's own root. Newest first.</p>
+    {% endif %}{% endcall %}
 
     <template x-if="loading && !loaded">
         <div class="text-center py-10 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading...</div>

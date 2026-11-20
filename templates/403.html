@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% from "partials/_page_header.html" import page_header %}
 {% block title %}Access restricted - CertMate{% endblock %}
 {% block content %}
-    <div class="max-w-2xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        <div class="bg-surface border border-border rounded-xl shadow-card p-8 text-center">
+    <!-- The frame of every page (#1511, P67): it was a narrow card of its own. -->
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div class="bg-surface shadow-card rounded-xl">
+            {{ page_header('Access restricted') }}
+            <div class="p-8 text-center">
             <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-warning-surface">
                 <i class="fas fa-user-lock text-2xl text-warning-fg" aria-hidden="true"></i>
             </div>
@@ -28,6 +32,7 @@
                 <a href="/help" class="btn btn-secondary">
                     <i class="fas fa-question-circle mr-2" aria-hidden="true"></i> Help
                 </a>
+            </div>
             </div>
         </div>
     </div>
