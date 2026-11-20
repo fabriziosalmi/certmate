@@ -3,10 +3,10 @@
              class="bg-surface border-border rounded-lg shadow-sm border p-6"
              x-data="deployManager()" x-init="loadConfig()">
 
-            <h3 class="text-lg font-semibold text-foreground flex items-center mb-6">
-                <i class="fas fa-rocket mr-2 text-primary"></i>
+            <h2 class="text-lg font-semibold text-foreground flex items-center mb-6">
+                <i aria-hidden="true" class="fas fa-rocket mr-2 text-primary"></i>
                 Deploy Hooks
-            </h3>
+            </h2>
 
             <!-- Master toggle -->
             <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg mb-6">
@@ -23,13 +23,13 @@
             <div x-show="config.enabled" class="space-y-6">
                 <!-- Security banner -->
                 <div class="p-3 bg-warning-surface border border-warning-line rounded-lg text-sm">
-                    <i class="fas fa-shield-alt text-amber-500 mr-1"></i>
+                    <i aria-hidden="true" class="fas fa-shield-alt text-amber-500 mr-1"></i>
                     <span class="text-warning-strong">Commands run as the CertMate process user. Only admins can manage hooks.</span>
                 </div>
 
                 <!-- Environment variables reference -->
                 <div class="p-3 bg-info-surface border border-info-line rounded-lg text-sm">
-                    <p class="font-medium text-info-strong mb-1"><i class="fas fa-info-circle mr-1"></i>Available Environment Variables</p>
+                    <p class="font-medium text-info-strong mb-1"><i aria-hidden="true" class="fas fa-info-circle mr-1"></i>Available Environment Variables</p>
                     <code class="text-xs text-info-fg">CERTMATE_DOMAIN</code>,
                     <code class="text-xs text-info-fg">CERTMATE_CERT_PATH</code>,
                     <code class="text-xs text-info-fg">CERTMATE_KEY_PATH</code>,
@@ -42,7 +42,7 @@
 
                 <!-- Blocked-patterns reference (issue #102) -->
                 <div class="p-3 bg-warning-surface border border-warning-line rounded-lg text-sm">
-                    <p class="font-medium text-warning-strong mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Blocked Shell Patterns</p>
+                    <p class="font-medium text-warning-strong mb-1"><i aria-hidden="true" class="fas fa-exclamation-triangle mr-1"></i>Blocked Shell Patterns</p>
                     <p class="text-xs text-warning-fg">
                         For safety, the command field rejects command substitution, chained commands, and redirects to absolute paths:
                         <code class="text-xs">&amp;&amp;</code>,
@@ -66,10 +66,10 @@
                     <button type="button" @click="showGlobal = !showGlobal"
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
-                            <i class="fas fa-globe mr-2 text-blue-500"></i>Global Hooks
+                            <i aria-hidden="true" class="fas fa-globe mr-2 text-blue-500"></i>Global Hooks
                             <span class="text-muted font-normal ml-1" x-text="'(' + config.global_hooks.length + ')'"></span>
                         </span>
-                        <i class="fas text-gray-400" :class="showGlobal ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        <i aria-hidden="true" class="fas text-gray-400" :class="showGlobal ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
                     <div x-show="showGlobal" x-cloak class="p-4 space-y-3">
                         <p class="text-xs text-muted mb-2">These hooks run for every domain after certificate issuance or renewal.</p>
@@ -86,10 +86,10 @@
                                     </div>
                                     <div class="flex items-center gap-2 ml-3">
                                         <button type="button" @click="testHook(hook)" :disabled="!isSaved(hook)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition disabled:opacity-50 disabled:cursor-not-allowed" title="Test hook">
-                                            <i class="fas fa-play mr-1"></i>Test
+                                            <i aria-hidden="true" class="fas fa-play mr-1"></i>Test
                                         </button>
                                         <button type="button" @click="config.global_hooks.splice(idx, 1)" class="inline-flex items-center justify-center p-2 rounded text-red-400 hover:text-red-600 hover:bg-hover transition" title="Remove hook" aria-label="Remove hook">
-                                            <i class="fas fa-trash-alt"></i>
+                                            <i aria-hidden="true" class="fas fa-trash-alt"></i>
                                         </button>
                                     </div>
                                 </div>
@@ -174,7 +174,7 @@
                         </template>
                         <button type="button" @click="addGlobalHook()"
                                 class="w-full py-2 border-2 border-dashed text-muted border-border rounded-lg text-sm hover:border-primary hover:text-primary transition">
-                            <i class="fas fa-plus mr-1"></i>Add Global Hook
+                            <i aria-hidden="true" class="fas fa-plus mr-1"></i>Add Global Hook
                         </button>
                     </div>
                 </div>
@@ -184,21 +184,21 @@
                     <button type="button" @click="showDomain = !showDomain"
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
-                            <i class="fas fa-sitemap mr-2 text-purple-500"></i>Domain-Specific Hooks
+                            <i aria-hidden="true" class="fas fa-sitemap mr-2 text-purple-500"></i>Domain-Specific Hooks
                             <span class="text-muted font-normal ml-1" x-text="'(' + domainNames.length + ' domains)'"></span>
                         </span>
-                        <i class="fas text-gray-400" :class="showDomain ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        <i aria-hidden="true" class="fas text-gray-400" :class="showDomain ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
                     <div x-show="showDomain" x-cloak class="p-4 space-y-3">
                         <p class="text-xs text-muted mb-2">These hooks only run for the specified domain.</p>
                         <template x-for="domain in domainNames" :key="domain">
                             <div class="border border-border rounded-lg p-3 mb-2">
                                 <div class="flex items-center justify-between mb-3">
-                                    <h4 class="font-medium text-sm text-foreground">
-                                        <i class="fas fa-globe text-gray-400 mr-1"></i><span x-text="domain"></span>
-                                    </h4>
+                                    <h3 class="font-medium text-sm text-foreground">
+                                        <i aria-hidden="true" class="fas fa-globe text-gray-400 mr-1"></i><span x-text="domain"></span>
+                                    </h3>
                                     <button type="button" @click="removeDomain(domain)" class="text-xs text-red-400 hover:text-red-600 transition" title="Remove domain">
-                                        <i class="fas fa-trash-alt mr-1"></i>Remove
+                                        <i aria-hidden="true" class="fas fa-trash-alt mr-1"></i>Remove
                                     </button>
                                 </div>
                                 <template x-for="(hook, idx) in config.domain_hooks[domain]" :key="hook.id">
@@ -214,10 +214,10 @@
                                             </div>
                                             <div class="flex items-center gap-2 ml-3">
                                                 <button type="button" @click="testHook(hook)" :disabled="!isSaved(hook)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition disabled:opacity-50 disabled:cursor-not-allowed" title="Test hook">
-                                                    <i class="fas fa-play mr-1"></i>Test
+                                                    <i aria-hidden="true" class="fas fa-play mr-1"></i>Test
                                                 </button>
                                                 <button type="button" @click="config.domain_hooks[domain].splice(idx, 1)" class="inline-flex items-center justify-center p-2 rounded text-red-400 hover:text-red-600 hover:bg-hover transition" title="Remove hook" aria-label="Remove hook">
-                                                    <i class="fas fa-trash-alt"></i>
+                                                    <i aria-hidden="true" class="fas fa-trash-alt"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -302,7 +302,7 @@
                                 </template>
                                 <button type="button" @click="addDomainHook(domain)"
                                         class="w-full py-1.5 border-2 border-dashed text-muted border-border rounded text-xs hover:border-primary hover:text-primary transition">
-                                    <i class="fas fa-plus mr-1"></i>Add Hook
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>Add Hook
                                 </button>
                             </div>
                         </template>
@@ -313,7 +313,7 @@
                                    @keydown.enter="addDomainSection()">
                             <button type="button" @click="addDomainSection()"
                                     class="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded text-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 transition">
-                                <i class="fas fa-plus mr-1"></i>Add Domain
+                                <i aria-hidden="true" class="fas fa-plus mr-1"></i>Add Domain
                             </button>
                         </div>
                     </div>
@@ -327,10 +327,10 @@
                     <button type="button" @click="open = !open" :aria-expanded="open"
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
-                            <i class="fas fa-paper-plane mr-2 text-green-500"></i>Deploy Targets
+                            <i aria-hidden="true" class="fas fa-paper-plane mr-2 text-green-500"></i>Deploy Targets
                             <span class="text-muted font-normal ml-1" x-text="'(' + targets.length + ')'"></span>
                         </span>
-                        <i class="fas text-gray-400" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        <i aria-hidden="true" class="fas text-gray-400" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
                     <div x-show="open" x-cloak class="p-4 space-y-3">
                         <p class="text-xs text-muted">
@@ -381,11 +381,11 @@
                                         </label>
                                         <button type="button" @click="edit(target)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
                                                 :aria-label="'Edit target ' + (target.name || target.id)">
-                                            <i class="fas fa-pen mr-1"></i>Edit
+                                            <i aria-hidden="true" class="fas fa-pen mr-1"></i>Edit
                                         </button>
                                         <button type="button" @click="remove(target)" class="inline-flex items-center justify-center p-2 rounded text-red-400 hover:text-red-600 hover:bg-hover transition"
                                                 :aria-label="'Delete target ' + (target.name || target.id)">
-                                            <i class="fas fa-trash-alt"></i>
+                                            <i aria-hidden="true" class="fas fa-trash-alt"></i>
                                         </button>
                                     </div>
                                 </template>
@@ -394,14 +394,14 @@
 
                         <button type="button" x-show="!draft" @click="startNew()"
                                 class="w-full py-1.5 border-2 border-dashed text-muted border-border rounded text-xs hover:border-primary hover:text-primary transition">
-                            <i class="fas fa-plus mr-1"></i>Add Webhook Target
+                            <i aria-hidden="true" class="fas fa-plus mr-1"></i>Add Webhook Target
                         </button>
 
                         <!-- The editor. x-if, not x-show: with no draft there is nothing to bind. -->
                         <template x-if="draft">
                             <div class="rounded-lg border border-primary p-4 space-y-4" id="webhook-target-editor" data-unsaved-scope="deploy target">
-                                <h4 class="text-sm font-semibold text-foreground"
-                                    x-text="draft.isNew ? 'New webhook target' : 'Edit webhook target'"></h4>
+                                <h3 class="text-sm font-semibold text-foreground"
+                                    x-text="draft.isNew ? 'New webhook target' : 'Edit webhook target'"></h3>
 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <label class="block text-xs text-muted">Name
@@ -553,7 +553,7 @@
                                 <template x-if="needsConfirmation()">
                                     <div class="p-3 rounded-lg border border-danger-line bg-danger-surface space-y-2" id="key-delivery-confirmation"
                                          role="group" aria-labelledby="key-delivery-title">
-                                        <p id="key-delivery-title" class="text-sm font-medium text-danger-strong"><i class="fas fa-key mr-1"></i>This target sends the private key</p>
+                                        <p id="key-delivery-title" class="text-sm font-medium text-danger-strong"><i aria-hidden="true" class="fas fa-key mr-1"></i>This target sends the private key</p>
                                         <p class="text-xs text-danger-fg">
                                             On every matching issuance, renewal or manual deploy, CertMate will send the <strong>private key</strong>
                                             of the domains listed above (<span x-text="draftKeyVariables().join(', ')"></span>) to
@@ -581,11 +581,11 @@
                                 <div class="flex flex-wrap items-center gap-2">
                                     <button type="button" @click="runPreview()" :disabled="previewing"
                                             class="btn btn-secondary">
-                                        <i class="fas fa-eye mr-1"></i>Preview what would be sent
+                                        <i aria-hidden="true" class="fas fa-eye mr-1"></i>Preview what would be sent
                                     </button>
                                     <button type="button" @click="save()" :disabled="!canSave()" data-saves
                                             class="btn btn-primary">
-                                        <i class="fas fa-save mr-1"></i>Save target
+                                        <i aria-hidden="true" class="fas fa-save mr-1"></i>Save target
                                     </button>
                                     <button type="button" @click="cancel()" data-discards class="btn btn-secondary">Cancel</button>
                                 </div>
@@ -629,13 +629,13 @@
                     <button type="button" @click="toggleHistory()"
                             class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                         <span class="font-medium text-foreground text-sm">
-                            <i class="fas fa-history mr-2 text-gray-500"></i>Recent Executions
+                            <i aria-hidden="true" class="fas fa-history mr-2 text-gray-500"></i>Recent Executions
                         </span>
-                        <i class="fas text-gray-400" :class="showHistory ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        <i aria-hidden="true" class="fas text-gray-400" :class="showHistory ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
                     <div x-show="showHistory" x-cloak class="p-4">
                         <div x-show="history.length === 0" class="text-center text-sm text-muted py-4">
-                            <i class="fas fa-inbox mr-1"></i>No executions yet
+                            <i aria-hidden="true" class="fas fa-inbox mr-1"></i>No executions yet
                         </div>
                         <div x-show="history.length > 0" class="max-h-64 overflow-y-auto">
                             <table class="w-full text-xs">

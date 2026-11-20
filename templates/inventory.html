@@ -16,10 +16,10 @@
                 <button type="button" id="scanNowBtn" data-click="InventoryPage.runScan"
                         class="{% if not inventory_admin %}hidden {% endif %}btn btn-primary btn-sm"
                         title="Run a discovery sweep and CT-log poll now">
-                    <i class="fas fa-magnifying-glass mr-1"></i>Scan now
+                    <i aria-hidden="true" class="fas fa-magnifying-glass mr-1"></i>Scan now
                 </button>
                 <button type="button" data-click="InventoryPage.load" class="btn btn-secondary btn-sm" title="Refresh" aria-label="Refresh inventory">
-                    <i class="fas fa-sync"></i>
+                    <i aria-hidden="true" class="fas fa-sync"></i>
                 </button>
             </div>
         {% endif %}{% endcall %}
@@ -47,11 +47,11 @@
     <!-- Crypto readiness summary (#473) -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4">
         <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
-            <span class="text-sm font-medium text-foreground"><i class="fas fa-shield mr-2 text-muted"></i>Cryptographic readiness</span>
+            <span class="text-sm font-medium text-foreground"><i aria-hidden="true" class="fas fa-shield mr-2 text-muted"></i>Cryptographic readiness</span>
             <div class="flex items-center gap-2">
-                <a href="/api/inventory/crypto-report?format=csv" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Download CSV"><i class="fas fa-file-csv mr-1"></i>CSV</a>
-                <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="View JSON"><i class="fas fa-file-code mr-1"></i>JSON</a>
-                <a href="/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-primary rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Open the printable readiness report"><i class="fas fa-file-pdf mr-1"></i>Report</a>
+                <a href="/api/inventory/crypto-report?format=csv" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Download CSV"><i aria-hidden="true" class="fas fa-file-csv mr-1"></i>CSV</a>
+                <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="View JSON"><i aria-hidden="true" class="fas fa-file-code mr-1"></i>JSON</a>
+                <a href="/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-primary rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Open the printable readiness report"><i aria-hidden="true" class="fas fa-file-pdf mr-1"></i>Report</a>
             </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
@@ -75,7 +75,7 @@
     <!-- Domain registrations: when the domain itself lapses (RDAP, WHOIS where a TLD has no RDAP) -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="registrationsPanel" data-check-on="{{ 'true' if registrations_on else 'false' }}">
         <div class="px-6 py-3 flex items-center justify-between flex-wrap gap-2">
-            <span class="text-sm font-medium text-foreground"><i class="fas fa-globe mr-2 text-muted"></i>Domain registrations</span>
+            <span class="text-sm font-medium text-foreground"><i aria-hidden="true" class="fas fa-globe mr-2 text-muted"></i>Domain registrations</span>
             <span class="text-xs text-muted{% if not registrations_on %} hidden{% endif %}" id="regCount" data-check-when="on"></span>
             <span class="text-xs text-muted{% if registrations_on %} hidden{% endif %}" data-check-when="off">Off{% if inventory_admin %} · <button type="button" data-click="InventoryPage.openConfig" data-args='["cfgRegEnabled"]' class="text-primary hover:underline">Turn on in Discovery configuration</button>{% endif %}</span>
         </div>
@@ -106,7 +106,7 @@
     <!-- Domain health: the checks that are about the name, not the certificate -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4" id="domainHealthPanel" data-check-on="{{ 'true' if health_on else 'false' }}">
         <div class="px-6 py-3 flex items-center justify-between flex-wrap gap-2">
-            <span class="text-sm font-medium text-foreground"><i class="fas fa-heart-pulse mr-2 text-muted"></i>Domain health</span>
+            <span class="text-sm font-medium text-foreground"><i aria-hidden="true" class="fas fa-heart-pulse mr-2 text-muted"></i>Domain health</span>
             <span class="text-xs text-muted{% if not health_on %} hidden{% endif %}" id="healthCount" data-check-when="on"></span>
             <span class="text-xs text-muted{% if health_on %} hidden{% endif %}" data-check-when="off">Off{% if inventory_admin %} · <button type="button" data-click="InventoryPage.openConfig" data-args='["cfgHealthEnabled"]' class="text-primary hover:underline">Turn on in Discovery configuration</button>{% endif %}</span>
         </div>
@@ -148,12 +148,12 @@
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4{% if not inventory_admin %} hidden{% endif %}" id="configPanel">
         <details class="group">
             <summary class="px-6 py-3 border-b border-gray-100 dark:border-white/5 cursor-pointer flex items-center justify-between">
-                <span class="text-sm font-medium text-foreground"><i class="fas fa-sliders mr-2 text-muted"></i>Discovery configuration</span>
-                <i class="fas fa-chevron-down text-xs text-muted group-open:rotate-180 transition"></i>
+                <span class="text-sm font-medium text-foreground"><i aria-hidden="true" class="fas fa-sliders mr-2 text-muted"></i>Discovery configuration</span>
+                <i aria-hidden="true" class="fas fa-chevron-down text-xs text-muted group-open:rotate-180 transition"></i>
             </summary>
             <div class="px-6 py-4 grid md:grid-cols-2 gap-6">
                 <div>
-                    <h3 class="text-sm font-semibold text-foreground mb-2">Endpoint probing</h3>
+                    <h2 class="text-sm font-semibold text-foreground mb-2">Endpoint probing</h2>
                     <label class="flex items-center gap-2 text-sm text-muted mb-2">
                         <input type="checkbox" id="cfgDiscEnabled" class="rounded border-border"> Enabled
                     </label>
@@ -170,7 +170,7 @@
                     <textarea id="cfgEndpoints" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;api.example.com:8443"></textarea>
                 </div>
                 <div>
-                    <h3 class="text-sm font-semibold text-foreground mb-2">CT-log monitoring (crt.sh)</h3>
+                    <h2 class="text-sm font-semibold text-foreground mb-2">CT-log monitoring (crt.sh)</h2>
                     <label class="flex items-center gap-2 text-sm text-muted mb-2">
                         <input type="checkbox" id="cfgCtEnabled" class="rounded border-border"> Enabled
                     </label>
@@ -181,7 +181,7 @@
                     <textarea id="cfgCtDomains" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;example.org"></textarea>
                 </div>
                 <div>
-                    <h3 class="text-sm font-semibold text-foreground mb-2">Domain registration expiry</h3>
+                    <h2 class="text-sm font-semibold text-foreground mb-2">Domain registration expiry</h2>
                     <label class="flex items-center gap-2 text-sm text-muted mb-2" title="Asks each registry once a day at most: RDAP, or WHOIS where the TLD has no RDAP">
                         <input type="checkbox" id="cfgRegEnabled" class="rounded border-border"> Enabled
                     </label>
@@ -193,7 +193,7 @@
                     <p class="mt-1 text-xs text-muted">Managed domains are always included.</p>
                 </div>
                 <div>
-                    <h3 class="text-sm font-semibold text-foreground mb-2">Domain health</h3>
+                    <h2 class="text-sm font-semibold text-foreground mb-2">Domain health</h2>
                     <label class="flex items-center gap-2 text-sm text-muted mb-2" title="SPF, DMARC, MX, blocklists, the response headers and what they disclose — once a day at most">
                         <input type="checkbox" id="cfgHealthEnabled" class="rounded border-border"> Enabled
                     </label>

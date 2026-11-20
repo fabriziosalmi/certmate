@@ -122,7 +122,7 @@
                 if (btn) {
                     originalHTML = btn.innerHTML;
                     btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Saving...';
+                    btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Saving...';
                 }
                 // _preview is editor state, not configuration.
                 (self.config.channels.webhooks || []).forEach(function (wh) { if (wh && wh._preview) delete wh._preview; });
@@ -166,7 +166,7 @@
                 if (btn) {
                     originalHTML = btn.innerHTML;
                     btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+                    btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Testing...';
                 }
                 fetch('/api/notifications/test', {
                     method: 'POST',
@@ -190,7 +190,7 @@
                 if (btn) {
                     originalHTML = btn.innerHTML;
                     btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Sending...';
+                    btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Sending...';
                 }
                 fetch('/api/digest/send', {
                     method: 'POST',
@@ -216,7 +216,7 @@
                 if (btn) {
                     originalHTML = btn.innerHTML;
                     btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+                    btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Testing...';
                 }
                 fetch('/api/notifications/test', {
                     method: 'POST',

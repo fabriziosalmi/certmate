@@ -51,7 +51,7 @@
                 <!-- Username -->
                 <div>
                     <label for="username" class="block text-sm font-medium text-label mb-2">
-                        <i class="fas fa-user mr-1"></i> Username
+                        <i aria-hidden="true" class="fas fa-user mr-1"></i> Username
                     </label>
                     <input type="text" id="username" name="username" required
                            autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"
@@ -62,7 +62,7 @@
                 <!-- Password -->
                 <div>
                     <label for="password" class="block text-sm font-medium text-label mb-2">
-                        <i class="fas fa-lock mr-1"></i> Password
+                        <i aria-hidden="true" class="fas fa-lock mr-1"></i> Password
                     </label>
                     <div class="relative">
                         <input type="password" id="password" name="password" required
@@ -80,7 +80,7 @@
                 <!-- Submit Button -->
                 <button type="submit" id="loginBtn"
                         class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 btn-press transition-all duration-150">
-                    <i class="fas fa-sign-in-alt mr-2"></i> Sign In
+                    <i aria-hidden="true" class="fas fa-sign-in-alt mr-2"></i> Sign In
                 </button>
 
                 <!-- Reset-password hint. CertMate doesn't ship a self-
@@ -106,7 +106,7 @@
                 </div>
                 <a id="ssoButton" href="/api/auth/oidc/login"
                    class="w-full inline-flex justify-center items-center py-3 px-4 bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 btn-press transition-all duration-150">
-                    <i class="fas fa-id-badge mr-2"></i>
+                    <i aria-hidden="true" class="fas fa-id-badge mr-2"></i>
                     Sign in with <span id="ssoProviderName" class="ml-1">SSO</span>
                 </a>
             </div>
@@ -216,7 +216,7 @@
             }
 
             loginBtn.disabled = true;
-            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Signing in...';
+            loginBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i> Signing in...';
 
             try {
                 const response = await fetch('/api/auth/login', {
@@ -241,7 +241,7 @@
                 console.error('Login error:', error);
             } finally {
                 loginBtn.disabled = false;
-                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i> Sign In';
+                loginBtn.innerHTML = '<i aria-hidden="true" class="fas fa-sign-in-alt mr-2"></i> Sign In';
             }
         });
 

@@ -165,7 +165,7 @@
         var title = 'Report this issue — manual paste';
         box.innerHTML =
             '<div class="px-6 py-4 border-b border-border">' +
-                '<h3 class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h3>' +
+                '<h2 class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h2>' +
                 '<p class="text-sm text-muted mt-1">Your browser blocked the clipboard or new-tab automation. Copy the markdown below and open the issue manually.</p>' +
             '</div>' +
             '<div class="px-6 py-4">' +

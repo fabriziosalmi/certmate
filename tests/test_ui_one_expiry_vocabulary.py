@@ -170,7 +170,7 @@ def test_an_overdue_renewal_is_red_overdue_and_a_due_one_amber_due_everywhere(pa
     # The notifications page: the same two words for its groups and its summary.
     page.goto(BASE_URL + '/notifications', wait_until='networkidle')
     page.wait_for_function("() => document.getElementById('notifContent').getAttribute('aria-busy') === 'false'")
-    groups = [t.strip() for t in page.locator('#notifContent h3').all_text_contents()]
+    groups = [t.strip() for t in page.locator('#notifContent h2').all_text_contents()]
     assert groups == ['Renewal overdue (1)', 'Renewal due (1)'], groups
     assert page.locator('#notifSummary').inner_text().strip() == '1 overdue · 1 due'
 

@@ -543,7 +543,7 @@ def test_help_s_section_icons_are_muted_and_the_current_one_primary(page):
     assert current[0]['primary'], current
     others = [i for i in nav if not i['current'] and not i['muted']]
     assert others == [], others
-    headings = page.evaluate(ICONS, ['[data-help-section] h3', None])
+    headings = page.evaluate(ICONS, ['[data-help-section] h2', None])
     hued = [i for i in headings if i['hue'] and not i['primary']]
     assert headings and hued == [], hued
     # Following another section link moves it.

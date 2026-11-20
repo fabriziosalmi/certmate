@@ -18,7 +18,7 @@
                             Show snoozed
                         </label>
                         <button type="button" data-click="loadNotifications" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh notifications">
-                            <i class="fas fa-sync"></i>
+                            <i aria-hidden="true" class="fas fa-sync"></i>
                         </button>
                     </div>
             {% endif %}{% endcall %}
@@ -35,7 +35,7 @@
         <!-- Invisible until the list or the failure is drawn: under an empty
              list it sat higher and was pushed down when the groups arrived. -->
         <p id="notifNote" class="invisible mt-3 text-xs text-muted text-center">
-            <i class="fas fa-circle-info mr-1"></i>Notifications are derived from certificate expiry. Snoozes are stored in this browser only.
+            <i aria-hidden="true" class="fas fa-circle-info mr-1"></i>Notifications are derived from certificate expiry. Snoozes are stored in this browser only.
         </p>
     </div>
 
@@ -92,11 +92,11 @@
                 '</div>' +
                 '<div class="flex-shrink-0 flex items-center gap-1.5">' +
                     '<a href="/?cert=' + encodeURIComponent(w.domain) + '" class="inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition" title="View certificate">' +
-                        '<i class="fas fa-arrow-up-right-from-square mr-1.5 text-[10px]"></i>View' +
+                        '<i aria-hidden="true" class="fas fa-arrow-up-right-from-square mr-1.5 text-[10px]"></i>View' +
                     '</a>' +
                     '<details class="relative">' +
                         '<summary class="list-none inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition cursor-pointer" title="Snooze this notification">' +
-                            '<i class="fas fa-clock mr-1.5 text-[10px]"></i>Snooze<i class="fas fa-chevron-down ml-1.5 text-[8px] opacity-60" aria-hidden="true"></i>' +
+                            '<i aria-hidden="true" class="fas fa-clock mr-1.5 text-[10px]"></i>Snooze<i class="fas fa-chevron-down ml-1.5 text-[8px] opacity-60" aria-hidden="true"></i>' +
                         '</summary>' +
                         '<div class="absolute right-0 mt-1 w-40 bg-surface border border-border rounded-lg shadow-xl z-10 py-1">' +
                             '<button type="button" data-snooze="' + escapeHtml(w.domain) + '" data-days="1" class="block w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-gray-50 dark:hover:bg-gray-700/50">For 1 day</button>' +
@@ -117,7 +117,7 @@
                     '<p class="text-xs text-muted mt-0.5">Snoozed until ' + escapeHtml(fmtDateTime(until)) + ' · ' + escapeHtml(daysText(w)) + '</p>' +
                 '</div>' +
                 '<button type="button" data-unsnooze="' + escapeHtml(w.domain) + '" class="flex-shrink-0 inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition" title="Remove snooze">' +
-                    '<i class="fas fa-bell mr-1.5 text-[10px]"></i>Unsnooze' +
+                    '<i aria-hidden="true" class="fas fa-bell mr-1.5 text-[10px]"></i>Unsnooze' +
                 '</button>' +
             '</li>';
         }
@@ -126,9 +126,9 @@
             if (warnings.length === 0) return '';
             var s = sev(warnings[0].type);
             return '<div>' +
-                '<h3 class="px-4 sm:px-6 py-2 text-[11px] font-semibold uppercase tracking-wide ' + s.fg + ' bg-gray-50 dark:bg-gray-700/30">' +
+                '<h2 class="px-4 sm:px-6 py-2 text-[11px] font-semibold uppercase tracking-wide ' + s.fg + ' bg-gray-50 dark:bg-gray-700/30">' +
                     escapeHtml(title) + ' <span class="text-muted font-normal">(' + warnings.length + ')</span>' +
-                '</h3>' +
+                '</h2>' +
                 '<ul class="divide-y divide-gray-100 dark:divide-gray-700/50 list-none m-0 p-0">' +
                     warnings.map(rowHtml).join('') +
                 '</ul>' +
@@ -147,7 +147,7 @@
 
             // Summary line
             if (all.length === 0) {
-                summary.innerHTML = '<i class="fas fa-circle-check text-green-500 mr-2"></i>All certificates are healthy.';
+                summary.innerHTML = '<i aria-hidden="true" class="fas fa-circle-check text-green-500 mr-2"></i>All certificates are healthy.';
             } else {
                 var nExpired = active.filter(function(w){ return w.type === 'expired'; }).length;
                 var nCrit = active.filter(function(w){ return w.type === 'critical'; }).length;
@@ -157,7 +157,7 @@
                 if (nCrit) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-danger-surface text-danger-fg font-semibold">' + nCrit + '</span> overdue</span>');
                 if (nWarn) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-warning-surface text-warning-fg font-semibold">' + nWarn + '</span> due</span>');
                 if (snoozed.length) parts.push('<span class="text-muted">' + snoozed.length + ' snoozed</span>');
-                summary.innerHTML = parts.length ? parts.join(' · ') : '<i class="fas fa-circle-check text-green-500 mr-2"></i>Nothing needs attention right now.';
+                summary.innerHTML = parts.length ? parts.join(' · ') : '<i aria-hidden="true" class="fas fa-circle-check text-green-500 mr-2"></i>Nothing needs attention right now.';
             }
 
             var html = '';
@@ -175,7 +175,7 @@
             var showSnoozed = document.getElementById('showSnoozed').checked;
             if (snoozed.length && showSnoozed) {
                 html += '<div class="border-t border-gray-100 dark:border-white/5">' +
-                    '<h3 class="px-4 sm:px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted bg-gray-50 dark:bg-gray-700/30">Snoozed <span class="font-normal">(' + snoozed.length + ')</span></h3>' +
+                    '<h2 class="px-4 sm:px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted bg-gray-50 dark:bg-gray-700/30">Snoozed <span class="font-normal">(' + snoozed.length + ')</span></h2>' +
                     '<ul class="divide-y divide-gray-100 dark:divide-gray-700/50 list-none m-0 p-0">' +
                         snoozed.map(snoozedRowHtml).join('') +
                     '</ul>' +
@@ -208,7 +208,7 @@
                     node.setAttribute('aria-busy', 'false');
                     document.getElementById('notifNote').classList.remove('invisible');
                     document.getElementById('notifSummary').innerHTML =
-                        '<i class="fas fa-triangle-exclamation text-gray-400 mr-2"></i>Could not load certificates.';
+                        '<i aria-hidden="true" class="fas fa-triangle-exclamation text-gray-400 mr-2"></i>Could not load certificates.';
                     node.innerHTML =
                         '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-triangle-exclamation text-2xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i><p>Could not load certificates.</p></div>';
                 });

@@ -17,7 +17,7 @@
 <form id="createClientCertForm" role="tabpanel" aria-labelledby="singleTabBtn" tabindex="0" class="space-y-6">
     <div>
         <label for="commonName" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-user mr-2 text-muted"></i>Common Name (Required)
+            <i aria-hidden="true" class="fas fa-user mr-2 text-muted"></i>Common Name (Required)
         </label>
         <input type="text" id="commonName" name="commonName" placeholder="e.g., john.doe@example.com"
                class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary"
@@ -26,21 +26,21 @@
     </div>
     <div>
         <label for="email" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-envelope mr-2 text-muted"></i>Email
+            <i aria-hidden="true" class="fas fa-envelope mr-2 text-muted"></i>Email
         </label>
         <input type="email" id="email" name="email" placeholder="user@example.com"
                class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
     </div>
     <div>
         <label for="organization" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-building mr-2 text-muted"></i>Organization
+            <i aria-hidden="true" class="fas fa-building mr-2 text-muted"></i>Organization
         </label>
         <input type="text" id="organization" name="organization" value="{{ client_cert_default_organization or 'CertMate' }}" placeholder="Your Organization"
                class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
     </div>
     <div>
         <label for="certUsage" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-tag mr-2 text-muted"></i>Usage Type
+            <i aria-hidden="true" class="fas fa-tag mr-2 text-muted"></i>Usage Type
         </label>
         <select id="certUsage" name="certUsage"
                 class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
@@ -53,14 +53,14 @@
     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>
             <label for="daysValid" class="block text-sm font-medium text-label mb-2">
-                <i class="fas fa-calendar mr-2 text-muted"></i>Valid For (Days)
+                <i aria-hidden="true" class="fas fa-calendar mr-2 text-muted"></i>Valid For (Days)
             </label>
             <input type="number" id="daysValid" name="daysValid" value="365" min="1" max="3650"
                    class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
         </div>
         <div>
             <label for="notes" class="block text-sm font-medium text-label mb-2">
-                <i class="fas fa-sticky-note mr-2 text-muted"></i>Notes
+                <i aria-hidden="true" class="fas fa-sticky-note mr-2 text-muted"></i>Notes
             </label>
             <input type="text" id="notes" name="notes" placeholder="Optional notes..."
                    class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
@@ -71,13 +71,13 @@
                data-change="ccToggleCsrBlock" data-pass="checked"
                class="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-2 focus:ring-primary">
         <label for="generateKey" class="text-sm text-label">
-            <i class="fas fa-lock mr-1"></i>Generate private key (recommended)
+            <i aria-hidden="true" class="fas fa-lock mr-1"></i>Generate private key (recommended)
         </label>
     </div>
     <!-- The key CertMate generates (#1421). Hidden with a CSR, whose key is the device's. -->
     <div id="keyShapeBlock">
         <label for="clientKeyShape" class="block text-sm font-medium text-label mb-2">
-            <i class="fas fa-key mr-2 text-muted"></i>Key
+            <i aria-hidden="true" class="fas fa-key mr-2 text-muted"></i>Key
         </label>
         <select id="clientKeyShape" name="clientKeyShape"
                 class="w-full px-4 py-2 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
@@ -106,7 +106,7 @@
         </p>
     </div>
     <button type="submit" class="btn btn-primary w-full">
-        <i class="fas fa-check-circle mr-2"></i> Create Certificate
+        <i aria-hidden="true" class="fas fa-check-circle mr-2"></i> Create Certificate
     </button>
 </form>
 
@@ -114,13 +114,13 @@
 <div id="batchForm" role="tabpanel" aria-labelledby="batchTabBtn" tabindex="0" class="hidden space-y-6">
     <div class="bg-info-surface border border-info-line rounded-lg p-4">
         <p class="text-sm text-info-strong">
-            <i class="fas fa-info-circle mr-2"></i>
+            <i aria-hidden="true" class="fas fa-info-circle mr-2"></i>
             Upload a CSV file of at most 100 rows with columns: common_name, email (optional), organization (optional), organizational_unit (optional), cert_usage (optional), days_valid (optional), notes (optional)
         </p>
     </div>
     <div class="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary transition"
          id="dropZone" tabindex="0" role="button" aria-label="Upload CSV file">
-        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 dark:text-gray-500 mb-3"></i>
+        <i aria-hidden="true" class="fas fa-cloud-upload-alt text-4xl text-gray-400 dark:text-gray-500 mb-3"></i>
         <p class="text-label font-medium mb-1">Drag and drop CSV file here</p>
         <p class="text-sm text-muted mb-4">or click to select</p>
         <input type="file" id="csvFile" name="csvFile" aria-label="CSV file" accept=".csv" class="hidden">
@@ -137,6 +137,6 @@
         </div>
     </div>
     <button type="button" id="submitBatchBtn" class="btn btn-primary w-full hidden">
-        <i class="fas fa-upload mr-2"></i> Upload <span id="certCountText"></span> Certificates
+        <i aria-hidden="true" class="fas fa-upload mr-2"></i> Upload <span id="certCountText"></span> Certificates
     </button>
 </div>

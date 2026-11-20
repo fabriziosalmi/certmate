@@ -53,9 +53,9 @@ def _dns_tab(page):
 def test_tapping_a_provider_scrolls_its_configuration_into_view(phone):
     tile = _dns_tab(phone)
     tile.scroll_into_view_if_needed()
-    assert not phone.evaluate(f"() => ({IN_VIEW})('#route53-config h4')")
+    assert not phone.evaluate(f"() => ({IN_VIEW})('#route53-config h3')")
     tile.tap()
-    phone.wait_for_function(f"() => ({IN_VIEW})('#route53-config h4')", timeout=3000)
+    phone.wait_for_function(f"() => ({IN_VIEW})('#route53-config h3')", timeout=3000)
 
 
 def test_arrow_keys_in_the_group_do_not_scroll_the_page(phone):

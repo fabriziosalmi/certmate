@@ -5,10 +5,10 @@
              class="bg-surface border-border rounded-lg shadow-sm border p-6">
 
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-lg font-semibold text-foreground flex items-center">
-                    <i class="fas fa-certificate mr-2 text-primary"></i>
+                <h2 class="text-lg font-semibold text-foreground flex items-center">
+                    <i aria-hidden="true" class="fas fa-certificate mr-2 text-primary"></i>
                     ACME server
-                </h3>
+                </h2>
                 <!-- The saved state, not the ticked box: until Save, /acme/ still
                      answers 404 (UX audit P27). -->
                 <span id="acmeState" class="text-xs px-2 py-1 rounded-full"
@@ -22,12 +22,12 @@
             </p>
 
             <template x-if="loading">
-                <div class="text-center py-4 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading...</div>
+                <div class="text-center py-4 text-muted text-sm"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i> Loading...</div>
             </template>
 
             <!-- Options -->
             <div class="mb-6 p-4 bg-surface-2 rounded-lg" x-show="!loading" data-unsaved-scope="ACME server">
-                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-sliders-h mr-1"></i> Options</h4>
+                <h3 class="text-sm font-semibold text-label mb-3"><i aria-hidden="true" class="fas fa-sliders-h mr-1"></i> Options</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-start gap-2 text-sm text-label cursor-pointer">
                         <input type="checkbox" x-model="server.enabled" id="acmeEnabled" class="mt-1 rounded border-border">
@@ -58,18 +58,18 @@
                 </div>
                 <div class="mt-4 flex justify-end">
                     <button type="button" @click="save()" :disabled="saving" class="btn btn-primary" id="acmeSave" data-saves>
-                        <i class="fas fa-save mr-1"></i> Save ACME Settings
+                        <i aria-hidden="true" class="fas fa-save mr-1"></i> Save ACME Settings
                     </button>
                 </div>
             </div>
 
             <!-- Where clients point -->
             <div class="mb-6 p-4 bg-info-surface border border-info-line rounded-lg" x-show="!loading && savedEnabled">
-                <h4 class="text-sm font-semibold text-info-fg mb-2"><i class="fas fa-link mr-1"></i> Give clients this directory URL</h4>
+                <h3 class="text-sm font-semibold text-info-fg mb-2"><i aria-hidden="true" class="fas fa-link mr-1"></i> Give clients this directory URL</h3>
                 <div class="flex items-center gap-2">
                     <code class="flex-1 px-3 py-2 bg-surface text-foreground border border-info-line rounded text-sm font-mono break-all"
                           id="acmeDirectoryUrl" x-text="server.directory_url"></code>
-                    <button type="button" @click="copyDirectory()" title="Copy the directory URL" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
+                    <button type="button" @click="copyDirectory()" title="Copy the directory URL" class="btn btn-secondary"><i aria-hidden="true" class="fas fa-copy"></i></button>
                 </div>
                 <p class="text-xs text-info-fg mt-2">
                     Clients must trust this server's TLS certificate, and the hosts that use the certificates must
@@ -79,7 +79,7 @@
 
             <!-- Create an EAB key -->
             <div class="mb-6 p-4 bg-surface-2 rounded-lg" x-show="!loading">
-                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-plus-circle mr-1"></i> New EAB key</h4>
+                <h3 class="text-sm font-semibold text-label mb-3"><i aria-hidden="true" class="fas fa-plus-circle mr-1"></i> New EAB key</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="md:col-span-2">
                         <label for="acmeKeyNames" class="block text-xs text-muted mb-1">Names and addresses it may order (required)</label>
@@ -96,7 +96,7 @@
                     <input type="text" id="acmeKeyNote" x-model="newKey.note" placeholder="What it is for (optional)" maxlength="200" title="Note"
                            class="flex-1 min-w-0 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                     <button type="button" @click="createKey()" class="btn btn-primary whitespace-nowrap" id="acmeCreateKey">
-                        <i class="fas fa-plus mr-1"></i> Create
+                        <i aria-hidden="true" class="fas fa-plus mr-1"></i> Create
                     </button>
                 </div>
                 <p class="mt-1 text-xs text-muted">
@@ -109,7 +109,7 @@
             <!-- The new key, shown once, with the commands to use it -->
             <div x-show="created" x-cloak class="mb-6 p-4 bg-success-surface border border-success-line rounded-lg" id="acmeCreated">
                 <div class="flex items-start justify-between">
-                    <h4 class="text-sm font-medium text-success-strong"><i class="fas fa-key mr-1"></i> EAB key created</h4>
+                    <h3 class="text-sm font-medium text-success-strong"><i aria-hidden="true" class="fas fa-key mr-1"></i> EAB key created</h3>
                     <button type="button" @click="forget()" class="text-xs text-success-fg underline">I have copied it</button>
                 </div>
                 <p class="text-xs text-success-fg mt-1 mb-2">Copy the HMAC key now. It is not shown again.</p>
@@ -122,7 +122,7 @@
                                 <div class="flex items-center gap-2">
                                     <code class="flex-1 px-2 py-1 bg-surface text-foreground border border-success-line rounded font-mono break-all"
                                           id="acmeCreatedHmac" x-text="created.hmac_key"></code>
-                                    <button type="button" @click="copyHmac()" title="Copy the HMAC key" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
+                                    <button type="button" @click="copyHmac()" title="Copy the HMAC key" class="btn btn-secondary"><i aria-hidden="true" class="fas fa-copy"></i></button>
                                 </div></div>
                         </div>
                         <div class="mt-4">
@@ -137,7 +137,7 @@
                             <div class="flex items-start gap-2">
                                 <pre class="flex-1 p-3 bg-surface text-foreground border border-success-line rounded text-xs font-mono overflow-x-auto"
                                      id="acmeSnippet" x-text="snippet"></pre>
-                                <button type="button" @click="copySnippet()" title="Copy the command" class="btn btn-secondary"><i class="fas fa-copy"></i></button>
+                                <button type="button" @click="copySnippet()" title="Copy the command" class="btn btn-secondary"><i aria-hidden="true" class="fas fa-copy"></i></button>
                             </div>
                             <p class="text-xs text-success-fg mt-2">
                                 Replace &lt;YOUR-EMAIL&gt; with the contact address for the ACME account.
@@ -152,7 +152,7 @@
 
             <!-- EAB keys -->
             <div class="mb-6" x-show="!loading">
-                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-list mr-1"></i> EAB keys</h4>
+                <h3 class="text-sm font-semibold text-label mb-3"><i aria-hidden="true" class="fas fa-list mr-1"></i> EAB keys</h3>
                 <template x-if="server.eab_keys.length === 0">
                     <div class="text-center py-4 text-muted text-sm">No EAB keys yet.</div>
                 </template>
@@ -178,7 +178,7 @@
                             </div>
                             <template x-if="!key.disabled">
                                 <button type="button" @click="disableKey(key.kid)" title="Disable this key"
-                                        class="p-2 text-danger-fg hover:text-danger-strong"><i class="fas fa-ban"></i></button>
+                                        class="p-2 text-danger-fg hover:text-danger-strong"><i aria-hidden="true" class="fas fa-ban"></i></button>
                             </template>
                         </div>
                     </template>
@@ -187,7 +187,7 @@
 
             <!-- Accounts -->
             <div x-show="!loading">
-                <h4 class="text-sm font-semibold text-label mb-3"><i class="fas fa-users mr-1"></i> Accounts</h4>
+                <h3 class="text-sm font-semibold text-label mb-3"><i aria-hidden="true" class="fas fa-users mr-1"></i> Accounts</h3>
                 <template x-if="accounts.length === 0">
                     <div class="text-center py-4 text-muted text-sm">No client has enrolled yet.</div>
                 </template>
@@ -206,7 +206,7 @@
                             </div>
                             <template x-if="account.status === 'valid'">
                                 <button type="button" @click="deactivateAccount(account)" title="Deactivate this account"
-                                        class="p-2 text-danger-fg hover:text-danger-strong"><i class="fas fa-user-slash"></i></button>
+                                        class="p-2 text-danger-fg hover:text-danger-strong"><i aria-hidden="true" class="fas fa-user-slash"></i></button>
                             </template>
                         </div>
                     </template>

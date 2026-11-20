@@ -110,10 +110,10 @@
                     <!-- TAB: Backup & Restore Section -->
                     <div x-show="tab === 'backup'" x-cloak id="settings-panel-backup" role="tabpanel" aria-labelledby="settings-tab-backup" tabindex="0" class="bg-surface border border-border rounded-lg shadow-sm p-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-foreground flex items-center">
-                    <i class="fas fa-database mr-2 text-blue-500"></i>
+                <h2 class="text-lg font-semibold text-foreground flex items-center">
+                    <i aria-hidden="true" class="fas fa-database mr-2 text-blue-500"></i>
                     Backup & Restore
-                </h3>
+                </h2>
                 <span class="text-xs bg-info-surface text-info-strong px-2 py-1 rounded-full whitespace-nowrap shrink-0">
                     Data Protection
                 </span>
@@ -125,20 +125,20 @@
 
             <!-- Create Backup Section -->
             <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
-                <h4 class="font-medium text-foreground mb-1 flex items-center">
-                    <i class="fas fa-plus-circle mr-2 text-green-500"></i>
+                <h3 class="font-medium text-foreground mb-1 flex items-center">
+                    <i aria-hidden="true" class="fas fa-plus-circle mr-2 text-green-500"></i>
                     Create Backup
-                </h4>
+                </h3>
                 <p class="text-sm text-muted mb-4">
                     Atomic backup of both settings and certificates, captured together so they can never drift out of sync.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-3">
                     <button type="button" data-click="createBackup" data-args='["unified"]' data-pass="el" class="btn btn-primary w-full sm:w-auto">
-                        <i class="fas fa-archive mr-2"></i>
+                        <i aria-hidden="true" class="fas fa-archive mr-2"></i>
                         Create Unified Backup
                     </button>
                     <button type="button" data-click="CertMate.copyDiagnosticsSnapshot" data-pass="el" class="btn btn-secondary w-full sm:w-auto">
-                        <i class="fas fa-clipboard mr-2"></i>
+                        <i aria-hidden="true" class="fas fa-clipboard mr-2"></i>
                         Copy Diagnostic Snapshot
                     </button>
                 </div>
@@ -162,10 +162,10 @@
                  lost volume needed filesystem access to a filesystem that was
                  gone: restore only ever read files already on disk. -->
             <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
-                <h4 class="font-medium text-foreground mb-1 flex items-center">
-                    <i class="fas fa-upload mr-2 text-info-fg"></i>
+                <h3 class="font-medium text-foreground mb-1 flex items-center">
+                    <i aria-hidden="true" class="fas fa-upload mr-2 text-info-fg"></i>
                     Restore From Elsewhere
-                </h4>
+                </h3>
                 <p class="text-sm text-muted mb-4">
                     Bring in an archive you keep off this machine — after losing the volume, this is
                     the only way back. Uploading only stores it; you restore it explicitly afterwards.
@@ -176,7 +176,7 @@
                            aria-label="Backup archive to upload"
                            class="max-w-full text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-surface-2 file:text-foreground hover:file:bg-hover">
                     <button type="button" data-click="uploadBackup" data-pass="el" class="btn btn-secondary w-full sm:w-auto">
-                        <i class="fas fa-upload mr-2"></i>
+                        <i aria-hidden="true" class="fas fa-upload mr-2"></i>
                         Upload Backup
                     </button>
                 </div>
@@ -185,13 +185,13 @@
             <!-- Existing Backups Section -->
             <div class="border-t border-border pt-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h4 class="font-medium text-foreground flex items-center">
-                        <i class="fas fa-history mr-2 text-orange-500"></i>
+                    <h3 class="font-medium text-foreground flex items-center">
+                        <i aria-hidden="true" class="fas fa-history mr-2 text-orange-500"></i>
                         Existing Backups
-                    </h4>
+                    </h3>
                     <button type="button" data-click="refreshBackupList" 
                             class="text-sm text-info-fg hover:text-blue-800 dark:hover:text-blue-300">
-                        <i class="fas fa-sync-alt mr-1"></i>
+                        <i aria-hidden="true" class="fas fa-sync-alt mr-1"></i>
                         Refresh
                     </button>
                 </div>
@@ -200,11 +200,11 @@
                 <div class="space-y-6">
                     <!-- Unified Backups (Recommended) -->
                     <div>
-                        <h5 class="text-sm font-medium text-label mb-3">
-                            <i class="fas fa-archive mr-1 text-green-500"></i>
+                        <h4 class="text-sm font-medium text-label mb-3">
+                            <i aria-hidden="true" class="fas fa-archive mr-1 text-green-500"></i>
                             Unified Backups (Recommended)
                             <span class="text-xs bg-success-surface text-success-strong px-2 py-1 rounded-full ml-2">Atomic</span>
-                        </h5>
+                        </h4>
                         <div id="unified-backup-list" class="space-y-2">
                             <div class="text-sm text-muted text-center py-4">
                                 Loading unified backups...
@@ -316,10 +316,10 @@
         <div class="flex justify-between items-center px-3 py-2 border-b border-gray-700">
             <span class="text-white font-semibold">Settings Debug Console</span>
             <button type="button" data-click="clearSettingsDebugConsole" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
-                <i class="fas fa-eraser"></i>
+                <i aria-hidden="true" class="fas fa-eraser"></i>
             </button>
             <button type="button" data-click="toggleSettingsDebugConsole" class="text-gray-400 hover:text-white ml-2" title="Close console" aria-label="Close debug console">
-                <i class="fas fa-times"></i>
+                <i aria-hidden="true" class="fas fa-times"></i>
             </button>
         </div>
         <div id="settingsDebugOutput" class="p-3 max-h-64 overflow-y-auto">
@@ -329,7 +329,7 @@
     <button type="button" data-debug-control data-click="toggleSettingsDebugConsole"
             class="hidden fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary"
             aria-label="Open settings debug console">
-        <i class="fas fa-bug"></i> Debug
+        <i aria-hidden="true" class="fas fa-bug"></i> Debug
     </button>
     <script src="/static/js/settings-unsaved.js"></script>
     <script src="/static/js/settings.js"></script>

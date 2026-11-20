@@ -282,7 +282,7 @@
                 if (btn) {
                     originalHTML = btn.innerHTML;
                     btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+                    btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Testing...';
                 }
                 addDebugLog('Testing hook: ' + hookLabel, 'info');
                 // The result takes the place of this toast (P34).

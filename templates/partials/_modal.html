@@ -39,10 +39,10 @@
         <div data-modal-panel class="bg-surface rounded-xl shadow-2xl w-full {{ size_class }} max-h-[90vh] flex flex-col overflow-hidden">
             {%- if title %}
             <div class="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
-                <h3 id="{{ id }}-title" class="text-lg font-medium text-foreground flex items-center">
-                    {%- if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif -%}
+                <h2 id="{{ id }}-title" class="text-lg font-medium text-foreground flex items-center">
+                    {%- if icon %}<i aria-hidden="true" class="fas {{ icon }} mr-2"></i>{% endif -%}
                     {{ title }}
-                </h3>
+                </h2>
                 {%- if dismissible %}
                 <button type="button" data-modal-close
                         class="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 text-muted hover:text-foreground rounded-lg hover:bg-hover transition-colors"

@@ -6,10 +6,10 @@
                          fields are as wide as they were without it. -->
                     <div x-show="tab === 'general'" x-cloak id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0"
                          class="bg-surface border-border rounded-lg sm:border sm:shadow-sm sm:p-6">
-                    <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
+                    <h2 class="text-lg font-semibold text-foreground flex items-center mb-4">
                         <i class="fas fa-cogs mr-2 text-primary" aria-hidden="true"></i>
                         General Settings
-                    </h3>
+                    </h2>
                     <p class="text-sm text-muted mb-6">The theme, the defaults for renewing and creating certificates, and the API Bearer Token.</p>
                     <!-- Appearance Section — client-side display preference (stored in
                          localStorage, not the server settings form). Auto follows the OS
@@ -17,10 +17,10 @@
                          global setTheme() defined in base.html; aria-pressed drives both
                          the active styling and the screen-reader announcement. -->
                     <div>
-                        <h4 class="text-sm font-semibold text-foreground mb-3">
-                            <i class="fas fa-palette mr-1 text-primary"></i>
+                        <h3 class="text-sm font-semibold text-foreground mb-3">
+                            <i aria-hidden="true" class="fas fa-palette mr-1 text-primary"></i>
                             Appearance
-                        </h4>
+                        </h3>
                         <label class="block text-xs font-medium text-muted mb-2">Theme</label>
                         <div class="inline-flex rounded-lg border border-border bg-surface-2 p-0.5" role="group" aria-label="Theme preference">
                             <button type="button" data-theme-option="auto" data-click="setTheme" data-args='["auto"]' aria-pressed="false"
@@ -40,10 +40,10 @@
                     </div>
                     <!-- General Certificate Settings Section -->
                     <div class="border-t border-border pt-6 mt-6">
-                        <h4 class="text-sm font-semibold text-foreground mb-3">
-                            <i class="fas fa-cogs mr-1 text-primary"></i>
+                        <h3 class="text-sm font-semibold text-foreground mb-3">
+                            <i aria-hidden="true" class="fas fa-cogs mr-1 text-primary"></i>
                             Certificate Management Settings
-                        </h4>
+                        </h3>
                         
                         <div class="space-y-4">
                             <!-- Auto Renewal Setting -->
@@ -135,7 +135,7 @@
                             <!-- Default Certificate Key Shape -->
                             <div class="border-t border-border pt-4">
                                 <label class="block text-sm font-medium text-label mb-2">
-                                    <i class="fas fa-key mr-1 text-purple-500"></i>
+                                    <i aria-hidden="true" class="fas fa-key mr-1 text-purple-500"></i>
                                     Default Certificate Key
                                 </label>
                                 <p class="mb-3 text-xs text-muted">
@@ -188,10 +188,10 @@
 
                     <!-- API Security Settings Section -->
                     <div class="border-t border-border pt-6 mt-6">
-                        <h4 class="text-sm font-semibold text-foreground mb-3">
-                            <i class="fas fa-key mr-1 text-primary"></i>
+                        <h3 class="text-sm font-semibold text-foreground mb-3">
+                            <i aria-hidden="true" class="fas fa-key mr-1 text-primary"></i>
                             API Security Settings
-                        </h4>
+                        </h3>
                         
                         <div class="space-y-4">
                             <!-- API Bearer Token Setting -->

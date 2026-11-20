@@ -103,7 +103,7 @@ def test_add_account_buttons_have_modal_field_schema():
 
 def test_cert_drawer_title_is_parameterizable():
     html = _read('templates/index.html')
-    m = re.search(r'<h3 id="drawerTitle"[^>]*>.*?</h3>', html, re.S)
+    m = re.search(r'<h2 id="drawerTitle"[^>]*>.*?</h2>', html, re.S)
     assert m, "index.html must expose the drawer title as #drawerTitle"
     assert 'Create New Certificate' in m.group(0), (
         "the default (create-mode) drawer title must remain the create title"

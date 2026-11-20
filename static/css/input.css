@@ -42,12 +42,16 @@
      hair of negative tracking; text-wrap: balance evens out multi-line
      titles so the last line is never a lonely word. Tag-scoped, so it
      reaches every heading with zero call-site churn. Both properties
-     no-op safely on browsers that don't support them. */
-  h1, h2, h3 {
+     no-op safely on browsers that don't support them.
+     Card titles are h2 and their sections h3 (#1511, P63): they were h3
+     and h4, so the tighter tracking moved from h1-h3 to h1-h2 with them,
+     and a title that stayed an h3 (an empty list's, a wizard step's) keeps its own
+     tracking-[-0.02em]. */
+  h1, h2 {
     letter-spacing: -0.02em;
     text-wrap: balance;
   }
-  h4, h5, h6 {
+  h3, h4, h5, h6 {
     letter-spacing: -0.01em;
     text-wrap: balance;
   }
@@ -121,7 +125,7 @@ html.dark {
 .dark ::selection { background: hsla(214, 80%, 52%, 0.35); }
 
 /* ── Keyboard focus floor for links & bare buttons ───────────────
-   Inputs carry their own focus rings, and .btn uses focus-visible.
+   Form fields have the rule below, and .btn uses focus-visible.
    Inline links, <summary>, and ICON-ONLY chrome buttons (the top-bar
    search / shortcuts / logout, which are bare <button>s, not .btn)
    did not — they fell back to the UA's default outline, inconsistent
@@ -137,6 +141,27 @@ button:not(.btn):focus-visible,
   outline: 2px solid hsl(var(--color-accent));
   outline-offset: 2px;
   border-radius: 3px;
+}
+
+/* ── One focus ring for form fields (#1511, P62) ─────────────────
+   Most fields carried `focus:outline-none focus:ring-primary` with no
+   ring width, which draws no ring without the forms plugin: on focus
+   only their 1 px border turned blue, about 2:1 in the dark theme. A
+   few had `focus:ring-2` in the brand blue, under 3:1 on a dark card.
+   Every text field, select and textarea now gets the same 2 px ring
+   in the accent colour, which flips with the theme. Its specificity
+   (0,3,1) is above a `focus:ring-*` utility's (0,2,0), so it replaces
+   a field's own ring rather than adding a second one, and the
+   transparent outline replaces the browser's. A field with
+   `focus:ring-0` is drawn inside a box that shows the focus itself
+   (the SAN chip editor). Checkboxes, radios, switches and buttons
+   keep their own styles. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"],
+               [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+    select, textarea):not(.focus\:ring-0):focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px hsl(var(--color-accent)), var(--tw-shadow, 0 0 #0000);
 }
 
 /* ── Horizontal scroll affordance ────────────────────────────────

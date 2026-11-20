@@ -198,7 +198,7 @@
                 + 'data-click="InventoryPage.adoptFromEl" data-pass="el" '
                 + 'class="px-2 py-1 text-xs bg-surface-2 text-primary rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
                 + 'title="Take over issuance/renewal of this certificate">'
-                + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
+                + '<i aria-hidden="true" class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
         }
         // Forget removes the inventory row (#634). A managed row whose domain
         // CertMate still holds a certificate for has none: that record comes
@@ -214,7 +214,7 @@
             + 'data-click="InventoryPage.forgetFromEl" data-pass="el" '
             + 'class="ml-1 px-2 py-1 text-xs bg-surface-2 text-muted rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
             + 'title="Remove this certificate from the inventory">'
-            + '<i class="fas fa-eraser mr-1"></i>Forget</button>';
+            + '<i aria-hidden="true" class="fas fa-eraser mr-1"></i>Forget</button>';
         return html;
     }
 
@@ -779,7 +779,7 @@
         var msg = el('scanMsg');
         var original = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning…';
+        btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Scanning…';
         if (msg) { msg.textContent = ''; msg.className = 'text-xs text-muted'; }
         fetch('/api/inventory/scan', { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) {

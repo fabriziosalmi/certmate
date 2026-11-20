@@ -182,7 +182,7 @@
 
         if (saveBtn) {
             saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            saveBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Saving...';
         }
 
         addDebugLog('Saving main settings...', 'info');
@@ -392,7 +392,7 @@
                     isLoading = false;
                     if (saveBtn) {
                         saveBtn.disabled = false;
-                        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save DNS, General and Storage';
+                        saveBtn.innerHTML = '<i aria-hidden="true" class="fas fa-save mr-2"></i>Save DNS, General and Storage';
                     }
                 });
         } catch (error) {
@@ -401,7 +401,7 @@
             isLoading = false;
             if (saveBtn) {
                 saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save DNS, General and Storage';
+                saveBtn.innerHTML = '<i aria-hidden="true" class="fas fa-save mr-2"></i>Save DNS, General and Storage';
             }
         }
     }
@@ -1111,9 +1111,9 @@
         _addAccountTriggerEl = document.activeElement;
 
         var modal = document.getElementById('addAccountModal');
-        // R-2: macro emits `<h3 id="<modalId>-title">` for aria-labelledby
+        // R-2: macro emits `<h2 id="<modalId>-title">` for aria-labelledby
         // wiring; the dynamic per-provider title still lands in the same
-        // <h3>, just renamed from the legacy "modal-title" id.
+        // <h2>, just renamed from the legacy "modal-title" id.
         var modalTitle = document.getElementById('addAccountModal-title');
         var providerFields = document.getElementById('modal-provider-fields');
         var accountNameField = document.getElementById('account-name');
@@ -1737,7 +1737,7 @@
         var safeProvider = escapeHtml(provider);
 
         var descHtml = account.description ? '<p class="text-xs text-muted mt-1">' + safeDesc + '</p>' : '';
-        var defaultBadge = isDefault ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-info-surface text-blue-800 dark:text-blue-400"><i class="fas fa-star mr-1"></i>Default</span>' : '';
+        var defaultBadge = isDefault ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-info-surface text-blue-800 dark:text-blue-400"><i aria-hidden="true" class="fas fa-star mr-1"></i>Default</span>' : '';
 
         // An account the server says cannot issue (#1469): the empty "default"
         // a fresh instance carries, or one missing a required field.
@@ -1752,7 +1752,7 @@
             '<div class="flex-1 min-w-40">' +
             // Wraps: with both badges the row was 3 px wider than a 360 px phone.
             '<div class="flex flex-wrap items-center gap-2">' +
-            '<h5 class="text-sm font-medium text-foreground">' + safeName + '</h5>' +
+            '<h4 class="text-sm font-medium text-foreground">' + safeName + '</h4>' +
             defaultBadge + noCredentialsBadge +
             '</div>' +
             descHtml +
@@ -1820,7 +1820,7 @@
 
         if (button) {
             button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating...';
+            button.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Creating...';
         }
 
         // Map legacy backup types to new unified format
@@ -1916,7 +1916,7 @@
         var originalText = button ? button.innerHTML : '';
         if (button) {
             button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
+            button.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
         }
 
         var payload = new FormData();
@@ -1983,7 +1983,7 @@
                 if (backupList) {
                     backupList.innerHTML =
                         '<div class="p-4 text-center text-red-500 dark:text-red-400">' +
-                        '<i class="fas fa-exclamation-triangle mr-2"></i>' +
+                        '<i aria-hidden="true" class="fas fa-exclamation-triangle mr-2"></i>' +
                         'Error loading backups: ' + CertMate.escapeHtml(error.message) +
                         '</div>';
                 }
@@ -2003,7 +2003,7 @@
         if (backups.unified && backups.unified.length === 0) {
             unifiedBackupList.innerHTML =
                 '<div class="p-4 text-center text-muted">' +
-                '<i class="fas fa-archive mr-2"></i>' +
+                '<i aria-hidden="true" class="fas fa-archive mr-2"></i>' +
                 'No backups yet' +
                 '<div class="text-xs mt-1">Create your first backup above!</div>' +
                 '</div>';
@@ -2074,11 +2074,11 @@
                         '</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-0.5 shrink-0">' +
-                        '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-info-fg hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Download backup" aria-label="Download ' + safeFilename + '"><i class="fas fa-download text-sm"></i></button>' +
+                        '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-info-fg hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Download backup" aria-label="Download ' + safeFilename + '"><i aria-hidden="true" class="fas fa-download text-sm"></i></button>' +
                         (canRestore
-                            ? '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-success-fg hover:bg-green-50 dark:hover:bg-green-900/30" title="Restore backup" aria-label="Restore ' + safeFilename + '"><i class="fas fa-rotate-left text-sm"></i></button>'
-                            : '<button disabled data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-muted opacity-40 cursor-not-allowed" title="Cannot restore: ' + blockedReason + '" aria-label="Cannot restore ' + safeFilename + ': ' + blockedReason + '"><i class="fas fa-rotate-left text-sm"></i></button>') +
-                        '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30" title="Delete backup" aria-label="Delete ' + safeFilename + '"><i class="fas fa-trash text-sm"></i></button>' +
+                            ? '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-success-fg hover:bg-green-50 dark:hover:bg-green-900/30" title="Restore backup" aria-label="Restore ' + safeFilename + '"><i aria-hidden="true" class="fas fa-rotate-left text-sm"></i></button>'
+                            : '<button disabled data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-muted opacity-40 cursor-not-allowed" title="Cannot restore: ' + blockedReason + '" aria-label="Cannot restore ' + safeFilename + ': ' + blockedReason + '"><i aria-hidden="true" class="fas fa-rotate-left text-sm"></i></button>') +
+                        '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30" title="Delete backup" aria-label="Delete ' + safeFilename + '"><i aria-hidden="true" class="fas fa-trash text-sm"></i></button>' +
                     '</div>' +
                 '</div>';
             }
@@ -2102,7 +2102,7 @@
                 var remaining = all.length - visible;
                 if (remaining > 0) {
                     html += '<button type="button" id="backup-show-more" class="w-full mt-1 px-3 py-2 text-xs font-medium text-info-fg border border-border rounded-lg hover:bg-hover transition-colors">' +
-                        '<i class="fas fa-chevron-down mr-1.5"></i>Show ' + Math.min(8, remaining) + ' more (' + remaining + ' hidden)' +
+                        '<i aria-hidden="true" class="fas fa-chevron-down mr-1.5"></i>Show ' + Math.min(8, remaining) + ' more (' + remaining + ' hidden)' +
                     '</button>';
                 }
                 unifiedBackupList.innerHTML = html;
@@ -2828,7 +2828,7 @@
         var testButton = document.querySelector('button[data-click="testCAProvider"]');
         if (!testButton) return;
         var originalText = testButton.innerHTML;
-        testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+        testButton.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Testing...';
         testButton.disabled = true;
         showCATestResult(null);
 
@@ -3394,11 +3394,11 @@
             '<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-surface">' +
             '<div class="mt-3">' +
             '<div class="flex items-center justify-between mb-4">' +
-            '<h3 id="storageMigrationModal-title" class="text-lg font-medium text-foreground">' +
-            '<i class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
-            '</h3>' +
+            '<h2 id="storageMigrationModal-title" class="text-lg font-medium text-foreground">' +
+            '<i aria-hidden="true" class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
+            '</h2>' +
             '<button type="button" id="storageMigCloseBtn" class="text-muted hover:text-gray-600 dark:hover:text-gray-300">' +
-            '<i class="fas fa-times"></i>' +
+            '<i aria-hidden="true" class="fas fa-times"></i>' +
             '</button>' +
             '</div>' +
             '<div class="mb-4">' +
@@ -3438,7 +3438,7 @@
             '</button>' +
             // Amber, like the button that opened this: it is the risky step.
             '<button type="button" id="storageMigStartBtn" class="btn btn-warning">' +
-            '<i class="fas fa-play mr-1"></i>Start Migration' +
+            '<i aria-hidden="true" class="fas fa-play mr-1"></i>Start Migration' +
             '</button>' +
             '</div>' +
             '</div>' +
@@ -3687,7 +3687,7 @@
 
     function refreshUserList() {
         var userListDiv = document.getElementById('userList');
-        userListDiv.innerHTML = '<div class="text-center py-4 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading users...</div>';
+        userListDiv.innerHTML = '<div class="text-center py-4 text-muted text-sm"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i> Loading users...</div>';
 
         // Timeout after 15 seconds to prevent infinite loading
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -3708,7 +3708,7 @@
                 var users = data.users || {};
 
                 if (Object.keys(users).length === 0) {
-                    userListDiv.innerHTML = '<div class="text-center py-4 text-muted text-sm"><i class="fas fa-users mr-2"></i> No users configured. Add a user above to enable local authentication.</div>';
+                    userListDiv.innerHTML = '<div class="text-center py-4 text-muted text-sm"><i aria-hidden="true" class="fas fa-users mr-2"></i> No users configured. Add a user above to enable local authentication.</div>';
                     return;
                 }
 
@@ -3747,14 +3747,14 @@
                             ' title="Change role" aria-label="Role of ' + escapeHtml(username) + '">' + roleOptions + '</select>';
                     }
 
-                    var emailHtml = userInfo.email ? '<span class="mr-3"><i class="fas fa-envelope mr-1"></i>' + escapeHtml(userInfo.email) + '</span>' : '';
+                    var emailHtml = userInfo.email ? '<span class="mr-3"><i aria-hidden="true" class="fas fa-envelope mr-1"></i>' + escapeHtml(userInfo.email) + '</span>' : '';
 
                     // SSO accounts are managed by the external IdP — badge them
                     // so admins can tell them apart from local credentials.
                     var ssoBadge = isSso
                         ? '<span class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"' +
                           ' title="Single sign-on account' + (userInfo.oidc_issuer ? ' (' + escapeHtml(userInfo.oidc_issuer) + ')' : '') + '">' +
-                          '<i class="fas fa-id-badge mr-1"></i>SSO</span>'
+                          '<i aria-hidden="true" class="fas fa-id-badge mr-1"></i>SSO</span>'
                         : '';
 
                     // Each button is named for what it does and to whom: the
@@ -3855,7 +3855,7 @@
                 var msg = error.name === 'AbortError'
                     ? 'User list request timed out. Click Refresh to retry.'
                     : 'Failed to load users. Click Refresh to retry.';
-                userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> ' + msg + '</div>';
+                userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i aria-hidden="true" class="fas fa-exclamation-triangle mr-2"></i> ' + msg + '</div>';
             });
     }
 

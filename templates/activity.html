@@ -30,7 +30,7 @@
                             <option value="api_request">API requests only</option>
                         </select>
                         <button type="button" data-click="loadActivity" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
-                            <i class="fas fa-sync"></i>
+                            <i aria-hidden="true" class="fas fa-sync"></i>
                         </button>
                     </div>
             {% endif %}{% endcall %}
@@ -48,7 +48,7 @@
         <div class="bg-surface text-foreground border border-border rounded-xl shadow-2xl w-full max-w-2xl" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;">
             <div class="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div class="flex items-center gap-3 min-w-0">
-                    <div id="activityDetailIcon" class="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center flex-shrink-0"><i class="fas fa-circle text-muted text-sm"></i></div>
+                    <div id="activityDetailIcon" class="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center flex-shrink-0"><i aria-hidden="true" class="fas fa-circle text-muted text-sm"></i></div>
                     <div class="min-w-0">
                         <h2 id="activityDetailTitle" class="text-sm font-semibold truncate">Activity detail</h2>
                         <p id="activityDetailSub" class="text-xs text-muted truncate"></p>
@@ -269,7 +269,7 @@
             list.setAttribute('aria-busy', 'false');
             list.innerHTML =
                 '<li role="alert" class="px-6 py-10 text-center">' +
-                    '<i class="fas fa-exclamation-circle text-red-400 text-2xl mb-3 block"></i>' +
+                    '<i aria-hidden="true" class="fas fa-exclamation-circle text-red-400 text-2xl mb-3 block"></i>' +
                     '<div class="text-sm font-medium text-gray-700 dark:text-gray-200">' + escapeHtml(msg) + '</div>' +
                     '<p class="mt-2 text-xs text-muted">' + hint + '</p>' +
                 '</li>';
@@ -499,7 +499,7 @@
                         ' class="flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
                         '<div class="flex-shrink-0 mt-0.5">' +
                             '<div class="w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center">' +
-                                '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
+                                '<i aria-hidden="true" class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
                             '</div>' +
                         '</div>' +
                         '<div class="flex-1 min-w-0">' +
@@ -510,7 +510,7 @@
                             '<p class="text-sm text-muted line-clamp-2 [overflow-wrap:anywhere]" title="' + escapeHtml(resource.label + (resource.name ? ': ' + resource.name : '')) + '">' + resourceHtml + '</p>' +
                             '<p class="sm:hidden text-xs text-muted mt-0.5"><span>' + who + '</span><span aria-hidden="true"> · </span><span title="' + whenTitle + '">' + escapeHtml(when) + '</span></p>' +
                             (detailStr ? '<p class="text-xs text-muted mt-0.5 truncate">' + escapeHtml(detailStr) + '</p>' : '') +
-                            (entry.error ? '<p class="text-xs ' + (dryRun ? 'text-muted' : 'text-danger-fg') + ' mt-0.5 truncate"><i class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
+                            (entry.error ? '<p class="text-xs ' + (dryRun ? 'text-muted' : 'text-danger-fg') + ' mt-0.5 truncate"><i aria-hidden="true" class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
                         '</div>' +
                         '<div class="hidden sm:block flex-shrink-0 text-right">' +
                             '<div class="text-xs text-muted" title="' + whenTitle + '">' + escapeHtml(when) + '</div>' +
@@ -520,7 +520,7 @@
                         // The chevron is the row's last item, centred: inside the
                         // column above it took a line of its own and made every
                         // row 108 px tall instead of 84.
-                        '<span class="hidden sm:flex self-center" aria-hidden="true"><i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600"></i></span>' +
+                        '<span class="hidden sm:flex self-center" aria-hidden="true"><i aria-hidden="true" class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600"></i></span>' +
                     '</div>' +
                 '</li>';
             }).join('');
@@ -539,7 +539,7 @@
                 // feed article.
                 var btnHtml = '<li role="presentation" class="px-6 py-4 text-center border-t border-gray-100 dark:border-gray-700/50">' +
                     '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
-                        '<i class="fas fa-plus mr-2"></i>Load more' +
+                        '<i aria-hidden="true" class="fas fa-plus mr-2"></i>Load more' +
                     '</button>' +
                 '</li>';
                 list.insertAdjacentHTML('beforeend', btnHtml);
@@ -568,7 +568,7 @@
 
             var iconEl = document.getElementById('activityDetailIcon');
             iconEl.className = 'w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center flex-shrink-0';
-            iconEl.innerHTML = '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>';
+            iconEl.innerHTML = '<i aria-hidden="true" class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>';
             document.getElementById('activityDetailTitle').textContent = opLabel(entry) +
                 (isDryRun(entry) ? ' (dry run, ' + dryRunOutcome(entry) + ')' : (entry.status === 'failure' ? ' (failed)' : ''));
             document.getElementById('activityDetailSub').textContent = (entry.resource_type || '') + (entry.resource_id ? ' · ' + entry.resource_id : '');
@@ -628,18 +628,18 @@
             var actions = '';
             // Not for a hook test: test.example.com is not a certificate here.
             if (entry.resource_type === 'certificate' && entry.resource_id && !isDryRun(entry)) {
-                actions += '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + btnCls + '"><i class="fas fa-arrow-up-right-from-square mr-1.5 text-[10px]"></i>View certificate</a>';
+                actions += '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + btnCls + '"><i aria-hidden="true" class="fas fa-arrow-up-right-from-square mr-1.5 text-[10px]"></i>View certificate</a>';
             }
             if (entry.user) {
-                actions += '<button type="button" data-detail-filter="user" data-value="' + escapeHtml(entry.user) + '" class="' + btnCls + '"><i class="fas fa-user mr-1.5 text-[10px]"></i>Filter by user</button>';
+                actions += '<button type="button" data-detail-filter="user" data-value="' + escapeHtml(entry.user) + '" class="' + btnCls + '"><i aria-hidden="true" class="fas fa-user mr-1.5 text-[10px]"></i>Filter by user</button>';
             }
             if (entry.operation) {
                 // A refusal's own list is "Refused": the operation's leaves it out.
                 actions += isRefusal(entry)
-                    ? '<button type="button" data-detail-filter="op" data-value="denied" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Show refusals</button>'
-                    : '<button type="button" data-detail-filter="op" data-value="' + escapeHtml(entry.operation) + '" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Filter by operation</button>';
+                    ? '<button type="button" data-detail-filter="op" data-value="denied" class="' + btnCls + '"><i aria-hidden="true" class="fas fa-filter mr-1.5 text-[10px]"></i>Show refusals</button>'
+                    : '<button type="button" data-detail-filter="op" data-value="' + escapeHtml(entry.operation) + '" class="' + btnCls + '"><i aria-hidden="true" class="fas fa-filter mr-1.5 text-[10px]"></i>Filter by operation</button>';
             }
-            actions += '<button type="button" data-detail-copy class="' + btnCls + '"><i class="fas fa-copy mr-1.5 text-[10px]"></i>Copy JSON</button>';
+            actions += '<button type="button" data-detail-copy class="' + btnCls + '"><i aria-hidden="true" class="fas fa-copy mr-1.5 text-[10px]"></i>Copy JSON</button>';
             var actionsEl = document.getElementById('activityDetailActions');
             actionsEl.innerHTML = actions;
             actionsEl.querySelectorAll('[data-detail-filter]').forEach(function(b) {

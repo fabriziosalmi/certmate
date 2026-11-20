@@ -9,10 +9,10 @@
                          class="bg-surface border-border rounded-lg sm:border sm:shadow-sm sm:p-6">
                     <!-- Certificate Storage Backend Section -->
                     <div>
-                        <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
+                        <h2 class="text-lg font-semibold text-foreground flex items-center mb-4">
                             <i class="fas fa-database mr-2 text-primary" aria-hidden="true"></i>
                             Certificate Storage Backend
-                        </h3>
+                        </h2>
                         <p class="text-sm text-muted mb-6">Where CertMate stores certificates: this server's filesystem, a secrets manager or S3-compatible object storage.</p>
 
                         <div class="space-y-4">
@@ -39,9 +39,9 @@
                             <!-- Local Filesystem Configuration -->
                             <div id="storage-local-config" class="storage-config">
                                 <div class="bg-info-surface p-3 rounded-md border border-info-line">
-                                    <h5 class="text-sm font-semibold text-info-strong mb-2">
-                                        <i class="fas fa-folder mr-1"></i> Local Filesystem Storage
-                                    </h5>
+                                    <h3 class="text-sm font-semibold text-info-strong mb-2">
+                                        <i aria-hidden="true" class="fas fa-folder mr-1"></i> Local Filesystem Storage
+                                    </h3>
                                     <div class="space-y-2">
                                         <div>
                                             <label for="storage-cert-dir" class="block text-xs text-info-strong mb-1">Certificate Directory</label>
@@ -59,9 +59,9 @@
                             <!-- Azure Key Vault Configuration -->
                             <div id="storage-azure-config" class="storage-config" style="display: none;">
                                 <div class="bg-info-surface p-3 rounded-md border border-info-line">
-                                    <h5 class="text-sm font-semibold text-info-strong mb-2">
-                                        <i class="fab fa-microsoft mr-1"></i> Azure Key Vault Configuration
-                                    </h5>
+                                    <h3 class="text-sm font-semibold text-info-strong mb-2">
+                                        <i aria-hidden="true" class="fab fa-microsoft mr-1"></i> Azure Key Vault Configuration
+                                    </h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
                                             <label for="azure-vault-url" class="block text-xs text-info-strong mb-1">Vault URL</label>
@@ -109,7 +109,7 @@
                                                     id="azure-backfill-btn"
                                                     data-click="backfillAzureCertificateObjects"
                                                     class="btn btn-secondary">
-                                                <i class="fas fa-cloud-upload-alt mr-1"></i> Backfill Certificate objects
+                                                <i aria-hidden="true" class="fas fa-cloud-upload-alt mr-1"></i> Backfill Certificate objects
                                             </button>
                                             <p class="text-xs text-info-fg mt-1">
                                                 Imports a Certificate object for every domain that already lives in this vault as Secrets but does not yet have one. Skips entries already imported.
@@ -126,9 +126,9 @@
                             <!-- AWS Secrets Manager Configuration -->
                             <div id="storage-aws-config" class="storage-config" style="display: none;">
                                 <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-md border border-orange-200 dark:border-orange-700">
-                                    <h5 class="text-sm font-semibold text-orange-900 dark:text-orange-100 mb-2">
-                                        <i class="fab fa-aws mr-1"></i> AWS Secrets Manager Configuration
-                                    </h5>
+                                    <h3 class="text-sm font-semibold text-orange-900 dark:text-orange-100 mb-2">
+                                        <i aria-hidden="true" class="fab fa-aws mr-1"></i> AWS Secrets Manager Configuration
+                                    </h3>
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <div class="md:col-span-3">
                                             <label for="aws-auth-mode" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Authentication</label>
@@ -174,9 +174,9 @@
                             <!-- HashiCorp Vault Configuration -->
                             <div id="storage-vault-config" class="storage-config" style="display: none;">
                                 <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-700">
-                                    <h5 class="text-sm font-semibold text-purple-900 dark:text-purple-100 mb-2">
-                                        <i class="fas fa-vault mr-1"></i> HashiCorp Vault Configuration
-                                    </h5>
+                                    <h3 class="text-sm font-semibold text-purple-900 dark:text-purple-100 mb-2">
+                                        <i aria-hidden="true" class="fas fa-vault mr-1"></i> HashiCorp Vault Configuration
+                                    </h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
                                             <label for="vault-url" class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault URL</label>
@@ -217,9 +217,9 @@
                             <!-- Infisical Configuration -->
                             <div id="storage-infisical-config" class="storage-config" style="display: none;">
                                 <div class="bg-success-surface p-3 rounded-md border border-success-line">
-                                    <h5 class="text-sm font-semibold text-success-strong mb-2">
-                                        <i class="fas fa-shield-alt mr-1"></i> Infisical Configuration
-                                    </h5>
+                                    <h3 class="text-sm font-semibold text-success-strong mb-2">
+                                        <i aria-hidden="true" class="fas fa-shield-alt mr-1"></i> Infisical Configuration
+                                    </h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
                                             <label for="infisical-site-url" class="block text-xs text-success-strong mb-1">Site URL</label>
@@ -263,9 +263,9 @@
 
                             <div id="storage-s3-config" class="storage-config" style="display: none;">
                                 <div class="bg-success-surface p-3 rounded-md border border-success-line">
-                                    <h5 class="text-sm font-semibold text-success-strong mb-2">
-                                        <i class="fas fa-database mr-1"></i> S3-Compatible Object Storage
-                                    </h5>
+                                    <h3 class="text-sm font-semibold text-success-strong mb-2">
+                                        <i aria-hidden="true" class="fas fa-database mr-1"></i> S3-Compatible Object Storage
+                                    </h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div class="md:col-span-2">
                                             <label for="s3-auth-mode" class="block text-xs text-success-strong mb-1">Authentication</label>
@@ -330,14 +330,14 @@
                             <div class="flex flex-wrap gap-3 pt-2 border-t border-border">
                                 <button type="button" data-click="testStorageBackend" 
                                         class="btn btn-secondary">
-                                    <i class="fas fa-plug mr-1"></i> Test Connection
+                                    <i aria-hidden="true" class="fas fa-plug mr-1"></i> Test Connection
                                 </button>
                                 <button type="button" data-click="showStorageMigrationModal" 
                                         class="btn btn-warning">
-                                    <i class="fas fa-exchange-alt mr-1"></i> Migrate Certificates
+                                    <i aria-hidden="true" class="fas fa-exchange-alt mr-1"></i> Migrate Certificates
                                 </button>
                                 <div class="text-xs text-muted flex items-center">
-                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-info-circle mr-1"></i>
                                     Test connection before saving settings
                                 </div>
                             </div>
@@ -372,7 +372,7 @@
                             <!-- One form holds the DNS, General and Storage tabs, so
                                  this one button saves all three and says so (UX audit P28). -->
                             <button type="submit" id="saveBtn" data-saves class="btn btn-primary">
-                                <i class="fas fa-save mr-2"></i>
+                                <i aria-hidden="true" class="fas fa-save mr-2"></i>
                                 Save DNS, General and Storage
                             </button>
                         </div>

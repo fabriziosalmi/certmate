@@ -86,15 +86,15 @@
                         <!-- Title is parameterized by mode: setReissueFormMode
                              (dashboard.js) swaps it to "Edit Certificate" when
                              the drawer is opened for an existing cert (#382). -->
-                        <h3 id="drawerTitle" class="text-xl font-bold text-foreground flex items-center">
-                            <i class="fas fa-plus-circle mr-2 text-primary"></i>
+                        <h2 id="drawerTitle" class="text-xl font-bold text-foreground flex items-center">
+                            <i aria-hidden="true" class="fas fa-plus-circle mr-2 text-primary"></i>
                             Create New Certificate
-                        </h3>
+                        </h2>
                         <p id="drawerSubtitle" class="text-sm text-muted mt-1">TLS certificate from your CA, validated over DNS or HTTP</p>
                     </div>
                     <div class="flex items-center space-x-2">
                         <button type="button" data-click="closeCertDrawer" class="ml-3 inline-flex items-center justify-center text-muted hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded hover:bg-hover" title="Close form" aria-label="Close create certificate form">
-                            <i class="fas fa-times text-lg"></i>
+                            <i aria-hidden="true" class="fas fa-times text-lg"></i>
                         </button>
                     </div>
                 </div>
@@ -169,7 +169,7 @@
                         <div class="flex flex-col gap-4">
                             <div data-issuance-only>
                                 <label for="domain" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-globe mr-2 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-globe mr-2 text-muted"></i>
                                     Domain or IP Address
                                 </label>
                                 <input type="text" id="domain" name="domain"
@@ -181,14 +181,14 @@
                                      field's aria-describedby while shown. -->
                                 <p id="domain_error" class="mt-1 text-xs text-danger-fg hidden" role="alert"></p>
                                 <p id="domain_help" class="mt-1 text-xs text-muted">
-                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-info-circle mr-1"></i>
                                     Supports wildcard domains (*.example.com), single domains and public IPv4 addresses
                                 </p>
                                 <!-- An IPv4 address (#1130): Let's Encrypt issues for one only
                                      over HTTP-01 in its shortlived profile, with no other name.
                                      Shown, with those two fields locked, while the field holds one. -->
                                 <p id="ip_address_note" class="mt-2 p-2 text-xs rounded-md bg-info-surface border border-info-line text-info-fg hidden" role="status" aria-live="polite">
-                                    <i class="fas fa-network-wired mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-network-wired mr-1"></i>
                                     An IP address: Let's Encrypt validates it over HTTP-01, so port 80 of this address must reach CertMate, and issues it in the shortlived profile (160 hours). It takes no other names, and CertMate renews it automatically.
                                 </p>
                             </div>
@@ -196,7 +196,7 @@
                             <!-- SAN Domains (optional) -->
                             <div data-issuance-only data-ip-hidden>
                                 <label for="san_entry" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-plus-circle mr-2 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-plus-circle mr-2 text-muted"></i>
                                     Additional Domains (SAN)
                                     <span class="font-normal text-xs text-muted ml-1">Optional</span>
                                 </label>
@@ -215,7 +215,7 @@
                                 </div>
                                 <input type="hidden" id="san_domains" name="san_domains">
                                 <p id="san_help" class="mt-1 text-xs text-muted">
-                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-info-circle mr-1"></i>
                                     Press <kbd class="px-1 border border-border rounded">Enter</kbd> or type a comma to add each name. Paste a whole list — commas, spaces and line breaks all work.
                                 </p>
                             </div>
@@ -233,11 +233,11 @@
                                         aria-expanded="false" aria-controls="csr_panel"
                                         class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
                                     <span class="font-medium text-foreground text-sm">
-                                        <i class="fas fa-file-signature mr-2 text-muted"></i>
+                                        <i aria-hidden="true" class="fas fa-file-signature mr-2 text-muted"></i>
                                         The private key stays on the device
                                         <span class="font-normal text-xs text-muted ml-1">Optional</span>
                                     </span>
-                                    <i id="csr_chevron" class="fas fa-chevron-down text-gray-400"></i>
+                                    <i aria-hidden="true" id="csr_chevron" class="fas fa-chevron-down text-gray-400"></i>
                                 </button>
                                 <div id="csr_panel" class="hidden p-4">
                                     <p class="text-xs text-muted mb-2">
@@ -260,7 +260,7 @@
 
                             <div data-renewal-source>
                                 <label for="ca_provider_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-shield-alt mr-2 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-shield-alt mr-2 text-muted"></i>
                                     Certificate Authority
                                 </label>
                                 <select id="ca_provider_select" name="ca_provider" 
@@ -286,7 +286,7 @@
                         <div class="space-y-4">
                             <div data-renewal-source>
                                 <label for="challenge_type_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-flag-checkered mr-2 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-flag-checkered mr-2 text-muted"></i>
                                     Challenge Type
                                 </label>
                                 <select id="challenge_type_select" name="challenge_type"
@@ -298,7 +298,7 @@
                                     <option value="prevalidated" hidden disabled>Sectigo (already authorized in SCM)</option>
                                 </select>
                                 <p class="mt-1 text-xs text-muted">
-                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-info-circle mr-1"></i>
                                     HTTP-01 does not require DNS credentials but cannot issue wildcard certificates. Sectigo prevalidated requires all names to already be authorized in SCM, including wildcards.
                                 </p>
                             </div>
@@ -306,7 +306,7 @@
                             <div id="dns-provider-container" data-renewal-source>
                             <div>
                                 <label for="dns_provider_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-server mr-2 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-server mr-2 text-muted"></i>
                                     DNS Provider
                                 </label>
                                 <select id="dns_provider_select" name="dns_provider"
@@ -344,14 +344,14 @@
                                     <option value="custom-script">Custom Script (your own DNS hooks)</option>
                                 </select>
                                 <p class="mt-1 text-xs text-muted">
-                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-info-circle mr-1"></i>
                                     DNS provider for domain validation challenge
                                 </p>
                             </div>
                             
                             <div id="account-selection-container" style="display: none;">
                                 <label for="account_select" class="block text-sm font-semibold text-label mb-2">
-                                    <i class="fas fa-user mr-2 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-user mr-2 text-muted"></i>
                                     Account
                                 </label>
                                 <select id="account_select" name="account_id"
@@ -359,7 +359,7 @@
                                     <option value="">Use default account</option>
                                 </select>
                                 <p class="mt-1 text-xs text-muted">
-                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-info-circle mr-1"></i>
                                     For multi-account DNS provider setups
                                 </p>
                             </div>
@@ -374,9 +374,9 @@
                         <button type="button" data-click="toggleAdvancedOptions" id="advancedOptionsToggle"
                                 aria-expanded="false" aria-controls="advanced-options"
                                 class="flex items-center min-h-11 md:min-h-6 text-sm font-medium text-label hover:text-primary transition-colors duration-200">
-                            <i class="fas fa-cog mr-2"></i>
+                            <i aria-hidden="true" class="fas fa-cog mr-2"></i>
                             Advanced Options
-                            <i id="advanced-chevron" class="fas fa-chevron-down ml-2 transform transition-transform duration-200"></i>
+                            <i aria-hidden="true" id="advanced-chevron" class="fas fa-chevron-down ml-2 transform transition-transform duration-200"></i>
                         </button>
                         
                         <div id="advanced-options" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -385,7 +385,7 @@
                                     <label class="flex items-center text-sm text-label">
                                         <input type="checkbox" id="wildcard-cert" class="rounded border-border text-primary focus:ring-primary dark:bg-gray-700">
                                         <span class="ml-2">
-                                            <i class="fas fa-asterisk mr-1 text-muted"></i>
+                                            <i aria-hidden="true" class="fas fa-asterisk mr-1 text-muted"></i>
                                             Generate wildcard certificate
                                         </span>
                                     </label>
@@ -398,7 +398,7 @@
                                      an import take none. -->
                                 <div data-issuance-only data-ip-hidden>
                                     <label for="cert_name" class="block text-sm font-medium text-label mb-1">
-                                        <i class="fas fa-signature mr-1 text-muted"></i>
+                                        <i aria-hidden="true" class="fas fa-signature mr-1 text-muted"></i>
                                         Name <span class="text-xs font-normal text-muted">(optional)</span>
                                     </label>
                                     <input type="text" id="cert_name" name="name"
@@ -415,7 +415,7 @@
                             <!-- DNS-01 Alias Mode -->
                             <div class="mt-4" data-renewal-source data-ip-hidden>
                                 <label for="dns_alias_domain" class="block text-sm font-medium text-label mb-1">
-                                    <i class="fas fa-random mr-1 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-random mr-1 text-muted"></i>
                                     DNS-01 Alias Domain <span class="text-xs font-normal text-muted">(optional)</span>
                                 </label>
                                 <input type="text" id="dns_alias_domain" name="dns_alias_domain"
@@ -429,7 +429,7 @@
                                 <div class="mt-2 flex items-center gap-2">
                                     <button type="button" id="check_dns_alias_button"
                                             class="inline-flex items-center px-3 py-1.5 border border-info-line text-xs font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50">
-                                        <i class="fas fa-search mr-1"></i>
+                                        <i aria-hidden="true" class="fas fa-search mr-1"></i>
                                         Check DNS-01 Alias
                                     </button>
                                 </div>
@@ -440,7 +440,7 @@
                             <div data-issuance-only class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="cert_key_type" class="block text-sm font-medium text-label mb-1">
-                                        <i class="fas fa-key mr-1 text-muted"></i>
+                                        <i aria-hidden="true" class="fas fa-key mr-1 text-muted"></i>
                                         Key Type <span class="text-xs font-normal text-muted">(optional)</span>
                                     </label>
                                     <select id="cert_key_type"
@@ -480,7 +480,7 @@
                             <!-- ACME profile (#395) -->
                             <div class="mt-4" data-renewal-source>
                                 <label for="cert_acme_profile" class="block text-sm font-medium text-label mb-1">
-                                    <i class="fas fa-hourglass-half mr-1 text-muted"></i>
+                                    <i aria-hidden="true" class="fas fa-hourglass-half mr-1 text-muted"></i>
                                     ACME Profile <span class="text-xs font-normal text-muted">(optional)</span>
                                 </label>
                                 <select id="cert_acme_profile"
@@ -501,12 +501,12 @@
                     <!-- Action Button -->
                     <div class="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
                         <div data-issuance-only class="text-sm text-muted">
-                            <i class="fas fa-shield-alt mr-1 text-muted"></i>
+                            <i aria-hidden="true" class="fas fa-shield-alt mr-1 text-muted"></i>
                             SSL certificates with automatic renewal
                         </div>
                         <button type="submit"
                                 class="btn btn-primary w-full sm:w-auto sm:ml-auto">
-                            <i class="fas fa-magic mr-2"></i>
+                            <i aria-hidden="true" class="fas fa-magic mr-2"></i>
                             Create Certificate
                         </button>
                     </div>
@@ -646,7 +646,7 @@
             <!-- The frame of every page (#1511, P67): the breadcrumb and the
                  list's tools in the card's header. This page is home, so the
                  breadcrumb is the view's title alone, with no Home crumb. -->
-            {% call(slot) page_header('Your Certificates', current_tag='h3', home=false, row='flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 lg:space-x-3') %}{% if slot == 'actions' %}
+            {% call(slot) page_header('Your Certificates', current_tag='h2', home=false, row='flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 lg:space-x-3') %}{% if slot == 'actions' %}
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
                         <!-- Search of the list (#1385): narrows the table in place, next to
                              the status chips and the tags, over the same things the global
@@ -832,7 +832,7 @@
                 <div class="flex items-center gap-2 min-w-0 flex-1">
                     <!-- Domain shown in full on one line (mono, horizontally
                          scrollable for very long names) and copyable. -->
-                    <h3 class="text-base font-semibold font-mono text-foreground whitespace-nowrap overflow-x-auto min-w-0" id="detailDomain">Certificate Details</h3>
+                    <h2 class="text-base font-semibold font-mono text-foreground whitespace-nowrap overflow-x-auto min-w-0" id="detailDomain">Certificate Details</h2>
                     <button type="button" data-click="copyDetailDomain" class="flex-shrink-0 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-8 md:min-h-8 text-muted hover:text-foreground rounded-lg hover:bg-hover transition-colors" title="Copy domain" aria-label="Copy domain">
                         <i class="fas fa-copy text-sm" aria-hidden="true"></i>
                     </button>
@@ -855,10 +855,10 @@
                 <div class="relative">
                     <div class="animate-spin rounded-full h-16 w-16 border-4 border-border border-t-primary mx-auto"></div>
                     <div class="absolute inset-0 flex items-center justify-center">
-                        <i class="fas fa-certificate text-primary text-lg"></i>
+                        <i aria-hidden="true" class="fas fa-certificate text-primary text-lg"></i>
                     </div>
                 </div>
-                <h3 class="mt-4 text-lg font-medium text-foreground" id="loadingTitle">Processing Certificate...</h3>
+                <h2 class="mt-4 text-lg font-medium text-foreground" id="loadingTitle">Processing Certificate...</h2>
                 <p class="mt-2 text-sm text-muted" id="loadingMessage">This may take a few minutes</p>
                 <div class="mt-4 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                     <div class="bg-primary h-2 rounded-full transition-all duration-1000" id="progressBar" style="width: 0%"></div>
@@ -877,7 +877,7 @@
                     <code id="curlCommandText"></code>
                 </div>
                 <button type="button" data-click="copyFromModal" class="mt-2 inline-flex items-center px-3 py-1 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-input hover:bg-gray-50 dark:hover:bg-gray-600">
-                    <i class="fas fa-copy mr-1"></i>
+                    <i aria-hidden="true" class="fas fa-copy mr-1"></i>
                     Copy Command
                 </button>
             </div>
@@ -900,22 +900,22 @@
     <div id="debugConsole" class="fixed bottom-4 left-4 right-4 bg-black text-green-400 font-mono text-xs rounded-lg shadow-lg border border-gray-600 hidden z-40">
         <div class="flex items-center justify-between p-3 border-b border-gray-600">
             <div class="flex items-center space-x-2">
-                <i class="fas fa-terminal text-green-400"></i>
+                <i aria-hidden="true" class="fas fa-terminal text-green-400"></i>
                 <span class="text-white font-semibold">Deployment Check Debug Console</span>
                 <span class="text-gray-400 text-xs">| Cache: <span id="debug-cache-info">Loading...</span></span>
             </div>
             <div class="flex items-center space-x-2">
                 <button data-click="showCacheStats" class="text-blue-400 hover:text-blue-300" title="Show cache stats" aria-label="Show cache stats">
-                    <i class="fas fa-database"></i>
+                    <i aria-hidden="true" class="fas fa-database"></i>
                 </button>
                 <button data-click="invalidateAllCache" class="text-orange-400 hover:text-orange-300" title="Clear cache" aria-label="Clear cache">
-                    <i class="fas fa-trash"></i>
+                    <i aria-hidden="true" class="fas fa-trash"></i>
                 </button>
                 <button data-click="clearDebugConsole" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
-                    <i class="fas fa-eraser"></i>
+                    <i aria-hidden="true" class="fas fa-eraser"></i>
                 </button>
                 <button data-click="toggleDebugConsole" class="text-gray-400 hover:text-white" title="Close console" aria-label="Close debug console">
-                    <i class="fas fa-times"></i>
+                    <i aria-hidden="true" class="fas fa-times"></i>
                 </button>
             </div>
         </div>

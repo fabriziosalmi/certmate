@@ -1,10 +1,10 @@
 <!-- TAB: User Management Section -->
         <div x-show="tab === 'users'" x-cloak id="settings-panel-users" role="tabpanel" aria-labelledby="settings-tab-users" tabindex="0" class="bg-surface border-border rounded-lg shadow-sm border p-6">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <h3 class="text-lg font-semibold text-foreground flex items-center">
-                    <i class="fas fa-users mr-2 text-primary"></i>
+                <h2 class="text-lg font-semibold text-foreground flex items-center">
+                    <i aria-hidden="true" class="fas fa-users mr-2 text-primary"></i>
                     User Management
-                </h3>
+                </h2>
                 <span class="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-1 rounded-full whitespace-nowrap shrink-0">
                     Local Authentication
                 </span>
@@ -17,9 +17,9 @@
             <!-- Security reminder (shown when auth is disabled) -->
             <div id="authSecurityBanner" class="mb-6 p-4 bg-warning-surface border border-warning-line rounded-lg" style="display: none;">
                 <div class="flex items-start">
-                    <i class="fas fa-exclamation-triangle text-amber-500 mt-0.5 mr-3 flex-shrink-0"></i>
+                    <i aria-hidden="true" class="fas fa-exclamation-triangle text-amber-500 mt-0.5 mr-3 flex-shrink-0"></i>
                     <div>
-                        <h4 class="text-sm font-medium text-warning-strong">Authentication is disabled</h4>
+                        <h3 class="text-sm font-medium text-warning-strong">Authentication is disabled</h3>
                         <p class="text-xs text-warning-fg mt-1">
                             Anyone with network access can manage certificates and settings. Enable Local Authentication below and create an admin user to secure your instance.
                         </p>
@@ -43,9 +43,9 @@
 
             <!-- Add User Form -->
             <div class="mb-6">
-                <h4 class="text-sm font-semibold text-label mb-3">
-                    <i class="fas fa-user-plus mr-1"></i> Add New User
-                </h4>
+                <h3 class="text-sm font-semibold text-label mb-3">
+                    <i aria-hidden="true" class="fas fa-user-plus mr-1"></i> Add New User
+                </h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label for="newUserUsername" class="block text-xs text-muted mb-1">Username</label>
@@ -76,7 +76,7 @@
                             </select>
                             <button type="button" data-click="createUser"
                                     class="btn btn-primary">
-                                <i class="fas fa-plus mr-1"></i> Add
+                                <i aria-hidden="true" class="fas fa-plus mr-1"></i> Add
                             </button>
                         </div>
                     </div>
@@ -86,17 +86,17 @@
             <!-- User List -->
             <div>
                 <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-semibold text-label">
-                        <i class="fas fa-list mr-1"></i> Existing Users
-                    </h4>
+                    <h3 class="text-sm font-semibold text-label">
+                        <i aria-hidden="true" class="fas fa-list mr-1"></i> Existing Users
+                    </h3>
                     <button type="button" data-click="refreshUserList" 
                             class="text-sm text-info-fg hover:underline">
-                        <i class="fas fa-sync-alt mr-1"></i> Refresh
+                        <i aria-hidden="true" class="fas fa-sync-alt mr-1"></i> Refresh
                     </button>
                 </div>
                 <div id="userList" class="space-y-2 max-h-64 overflow-y-auto overflow-x-hidden">
                     <div class="text-center py-4 text-muted text-sm">
-                        <i class="fas fa-spinner fa-spin mr-2"></i> Loading users...
+                        <i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i> Loading users...
                     </div>
                 </div>
             </div>
