@@ -1,27 +1,25 @@
 {% extends "base.html" %}
+{% from "partials/_page_header.html" import page_header %}
 {% block title %}Help - CertMate{% endblock %}
 {% block content %}
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
 
-        <!-- Breadcrumb + small inline links to the read-only references
-             (API docs + the live /health probe). The links sit at the
-             top-right of the breadcrumb row so they're discoverable
-             without taking real estate from the content below. -->
-        <div class="flex items-center justify-between mb-4 px-4 sm:px-0">
-            <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                <a href="/" aria-label="Home" title="Home" class="-m-2 md:m-0 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-6 md:min-h-6 text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
-                <i class="fas fa-chevron-right text-xs text-gray-300 dark:text-gray-600 mx-2"></i>
-                <span class="text-gray-700 dark:text-gray-200 font-medium">Help</span>
-            </nav>
+        <!-- The page's first card, as on every page (#1511, P67): the
+             breadcrumb, with small inline links to the read-only references
+             (API docs and the live /health probe) at its right, then the
+             search and the section navigation. -->
+        <div class="bg-surface shadow-card rounded-xl mb-6">
+        {% call(slot) page_header('Help') %}{% if slot == 'actions' %}
             <div class="flex items-center gap-3 text-xs">
                 <a href="/health" target="_blank" rel="noopener" class="text-muted hover:text-primary transition-colors" title="Live health endpoint: JSON status of scheduler, cert dir, disk"><i class="fas fa-heartbeat mr-1" aria-hidden="true"></i>Health</a>
                 <a href="/docs/" target="_blank" rel="noopener" class="text-muted hover:text-primary transition-colors" title="Swagger UI: try API requests live"><i class="fas fa-flask mr-1" aria-hidden="true"></i>Swagger</a>
                 <a href="/redoc" target="_blank" rel="noopener" class="text-muted hover:text-primary transition-colors" title="ReDoc: read-only API reference"><i class="fas fa-book mr-1" aria-hidden="true"></i>ReDoc</a>
             </div>
-        </div>
+        {% endif %}{% endcall %}
+        <div class="px-6 py-4">
 
         <!-- In-page substring search across [data-help-section] blocks. -->
-        <div class="px-4 sm:px-0 mb-4">
+        <div class="mb-3">
             <label for="helpSearch" class="sr-only">Search help</label>
             <div class="relative">
                 <input type="search" id="helpSearch"
@@ -38,7 +36,7 @@
              the section in the address (aria-current, set by the script at
              the end): they were seven hues, green and amber among them, the
              colours of a certificate's state (#1511, P69). -->
-        <nav class="flex items-center gap-1 mb-6 overflow-x-auto whitespace-nowrap text-sm px-4 sm:px-0 pb-1" aria-label="Help sections">
+        <nav class="flex items-center gap-1 overflow-x-auto whitespace-nowrap text-sm pb-1" aria-label="Help sections">
             <a href="#quick-start"    class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-rocket text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>Quick Start</a>
             <a href="#dns-providers"  class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-server text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>DNS</a>
             <a href="#ca-providers"   class="group px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover aria-[current=location]:text-primary"><i class="fas fa-shield-alt text-muted group-aria-[current=location]:text-primary mr-1.5" aria-hidden="true"></i>CA</a>
@@ -54,6 +52,8 @@
             <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
             <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-external-link-alt text-xs text-muted mr-1.5" aria-hidden="true"></i>Full changelog</a>
         </nav>
+        </div>
+        </div>
 
         <!-- Content sections. All cards use the compact px-4 py-4 padding
              to reduce vertical footprint while keeping content readable.

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/_page_header.html" import page_header %}
 {% block title %}CertMate - Inventory{% endblock %}
 {% block content %}
 {% set inventory_admin = (current_user or {}).get('role') == 'admin' %}
@@ -6,12 +7,7 @@
 
     <!-- Header -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4">
-        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
-            <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                <a href="/" aria-label="Home" class="-m-2 md:m-0 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-6 md:min-h-6 text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
-                <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
-                <span class="text-gray-700 dark:text-gray-200 font-medium">Inventory</span>
-            </nav>
+        {% call(slot) page_header('Inventory') %}{% if slot == 'actions' %}
             <div class="flex items-center gap-2 flex-wrap">
                 <!-- A scan that was declined because one is already running has
                      to say so here: the button finishes either way, and an
@@ -26,7 +22,7 @@
                     <i class="fas fa-sync"></i>
                 </button>
             </div>
-        </div>
+        {% endif %}{% endcall %}
 
         <!-- Summary cards. Each one is a button that sets the filters below to
              what it counts, and its number is counted with that same filter

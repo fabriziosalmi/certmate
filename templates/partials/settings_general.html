@@ -1,12 +1,21 @@
 <!-- TAB: General Settings -->
-                    <div x-show="tab === 'general'" x-cloak id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0">
+                    <!-- The shell of every settings tab (#1511, P66): a bordered card,
+                         an 18px/600 title with an icon, one description line, and
+                         the sections as 14px/600 subsections. -->
+                    <div x-show="tab === 'general'" x-cloak id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0"
+                         class="bg-surface border border-border rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
+                        <i class="fas fa-cogs mr-2 text-primary" aria-hidden="true"></i>
+                        General Settings
+                    </h3>
+                    <p class="text-sm text-muted mb-6">The theme, the defaults for renewing and creating certificates, and the API Bearer Token.</p>
                     <!-- Appearance Section — client-side display preference (stored in
                          localStorage, not the server settings form). Auto follows the OS
                          colour scheme; Light / Dark force an override. Buttons call the
                          global setTheme() defined in base.html; aria-pressed drives both
                          the active styling and the screen-reader announcement. -->
-                    <div class="pb-2">
-                        <h4 class="text-base font-semibold text-foreground mb-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-foreground mb-3">
                             <i class="fas fa-palette mr-1 text-primary"></i>
                             Appearance
                         </h4>
@@ -29,7 +38,7 @@
                     </div>
                     <!-- General Certificate Settings Section -->
                     <div class="border-t border-border pt-6 mt-6">
-                        <h4 class="text-base font-semibold text-foreground mb-3">
+                        <h4 class="text-sm font-semibold text-foreground mb-3">
                             <i class="fas fa-cogs mr-1 text-primary"></i>
                             Certificate Management Settings
                         </h4>
@@ -177,7 +186,7 @@
 
                     <!-- API Security Settings Section -->
                     <div class="border-t border-border pt-6 mt-6">
-                        <h4 class="text-base font-semibold text-foreground mb-3">
+                        <h4 class="text-sm font-semibold text-foreground mb-3">
                             <i class="fas fa-key mr-1 text-primary"></i>
                             API Security Settings
                         </h4>

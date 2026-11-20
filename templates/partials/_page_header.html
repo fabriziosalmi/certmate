@@ -1,0 +1,38 @@
+{# The header of a page's first card: the breadcrumb on the left, the page's
+   actions on the right, on every app page (#1511, P67). The pages had four
+   frames: no breadcrumb on the dashboard, one outside any card on Help, one in
+   a narrower container on Notifications and the crypto report.
+
+   The page around it is `max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8`, and
+   the header is the first child of a `bg-surface shadow-card rounded-xl` card.
+
+   {% from "partials/_page_header.html" import page_header %}
+   {% call(slot) page_header('Activity', row='...') %}
+       {% if slot == 'actions' %}...the page's controls...{% endif %}
+       {% if slot == 'below' %}...a line under the row, if any...{% endif %}
+   {% endcall %}
+
+   current      the last crumb, the page's name
+   current_tag  its element: a span, or the heading a page already had there
+                (the dashboard's "Your Certificates" is its h3)
+   parent       (label, href) of a crumb between Home and the page
+   row          the row's layout classes, where a page stacks its controls
+                differently on a phone (Activity, the dashboard)
+   extra        more classes on the header itself (no-print on the report) #}
+{% macro page_header(current, current_tag='span', parent=none, row='flex flex-wrap items-center justify-between gap-2', extra='') -%}
+<div class="px-6 py-3 border-b border-gray-100 dark:border-white/5{{ ' ' ~ extra if extra }}">
+    <div class="{{ row }}">
+        <nav class="flex items-center min-w-0 text-sm" aria-label="Breadcrumb">
+            <a href="/" aria-label="Home" class="-m-2 md:m-0 inline-flex shrink-0 items-center justify-center min-w-11 min-h-11 md:min-w-6 md:min-h-6 text-muted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
+            {% if parent %}
+            <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2" aria-hidden="true"></i>
+            <a href="{{ parent[1] }}" class="text-muted hover:text-foreground transition-colors">{{ parent[0] }}</a>
+            {% endif %}
+            <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2" aria-hidden="true"></i>
+            <{{ current_tag }} class="min-w-0 text-sm text-gray-700 dark:text-gray-200 font-medium">{{ current }}</{{ current_tag }}>
+        </nav>
+        {%- if caller %}{{ caller('actions') }}{% endif %}
+    </div>
+    {%- if caller %}{{ caller('below') }}{% endif %}
+</div>
+{%- endmacro %}

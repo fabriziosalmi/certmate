@@ -1,12 +1,24 @@
 <!-- TAB: DNS Providers -->
-                    <div x-show="tab === 'dns'" x-cloak id="settings-panel-dns" role="tabpanel" aria-labelledby="settings-tab-dns" tabindex="0">
+                    <!-- The shell of every settings tab (#1511, P66): a bordered card,
+                         an 18px/600 title with an icon, one description line, and
+                         the sections as 14px/600 subsections. They were grey panels. -->
+                    <div x-show="tab === 'dns'" x-cloak id="settings-panel-dns" role="tabpanel" aria-labelledby="settings-tab-dns" tabindex="0"
+                         class="bg-surface border border-border rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
+                        <i class="fas fa-server mr-2 text-primary" aria-hidden="true"></i>
+                        Domain Validation
+                    </h3>
+                    <p class="text-sm text-muted mb-6">How the certificate authority checks that you control a domain: the default challenge type, and the DNS providers that DNS-01 uses.</p>
                     <!-- Challenge Type Selection -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
-                        <label class="block text-sm font-medium text-label mb-3">
+                    <div class="mb-6">
+                        <label class="block text-sm font-semibold text-foreground mb-3">
                             <i class="fas fa-shield-alt mr-1"></i>
                             ACME Challenge Type
                         </label>
-                        <div class="grid grid-cols-2 gap-4">
+                        <!-- One card per line below sm: inside the tab's card a
+                             half-width card is 117 px at 390 px, and "HTTP-01"
+                             with its icon needs 88 px of the 81 inside it. -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label class="relative cursor-pointer">
                                 <input type="radio" name="challenge_type" value="dns-01" class="sr-only peer" checked>
                                 <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
@@ -35,8 +47,8 @@
                          the setup wizard sends an HTTP-01 user here to add one.
                          The note is the same under both, so nothing moves when
                          the saved challenge type arrives. -->
-                    <div id="dns-provider-section" class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <label class="block text-sm font-medium text-label mb-1" id="dns-provider-label">
+                    <div id="dns-provider-section" class="border-t border-border pt-6 mb-4">
+                        <label class="block text-sm font-semibold text-foreground mb-1" id="dns-provider-label">
                             <i class="fas fa-server mr-1"></i>
                             DNS Providers
                         </label>
@@ -420,7 +432,7 @@
                     <div id="cloudflare-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fab fa-cloudflare mr-2 text-orange-500"></i>
                                     Cloudflare Configuration
                                 </h4>
@@ -460,7 +472,7 @@
                     <div id="route53-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fab fa-aws mr-2 text-orange-400"></i>
                                     AWS Route53 Configuration
                                 </h4>
@@ -532,7 +544,7 @@
                     <div id="azure-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fab fa-microsoft mr-2 text-blue-600"></i>
                                     Azure DNS Configuration
                                 </h4>
@@ -606,7 +618,7 @@
                     <div id="google-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fab fa-google mr-2 text-blue-500"></i>
                                     Google Cloud DNS Configuration
                                 </h4>
@@ -653,7 +665,7 @@
                     <div id="powerdns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-server mr-2 text-gray-600"></i>
                                     PowerDNS Configuration
                                 </h4>
@@ -703,7 +715,7 @@
                     <div id="digitalocean-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fab fa-digital-ocean mr-2 text-blue-600"></i>
                                     DigitalOcean DNS Configuration
                                 </h4>
@@ -745,7 +757,7 @@
                     <div id="vultr-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-cloud mr-2 text-blue-600"></i>
                                     Vultr DNS Configuration
                                 </h4>
@@ -782,7 +794,7 @@
                     <div id="solidserver-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-server mr-2 text-blue-600"></i>
                                     EfficientIP SOLIDserver DNS Configuration
                                 </h4>
@@ -860,7 +872,7 @@
                     <!-- Linode Configuration -->
                     <div id="linode-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-cloud mr-2 text-green-600"></i>
                                 Akamai Connected Cloud (Linode) DNS Configuration
                             </h4>
@@ -883,7 +895,7 @@
                     <!-- Hetzner Cloud Configuration -->
                     <div id="hetzner-cloud-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-server mr-2 text-red-600"></i>
                                 Hetzner Cloud DNS Configuration
                             </h4>
@@ -906,7 +918,7 @@
                     <!-- ArvanCloud Configuration -->
                     <div id="arvancloud-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-cloud mr-2 text-blue-600"></i>
                                 ArvanCloud DNS Configuration
                             </h4>
@@ -929,7 +941,7 @@
                     <!-- Infomaniak Configuration -->
                     <div id="infomaniak-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-cloud mr-2 text-purple-600"></i>
                                 Infomaniak DNS Configuration
                             </h4>
@@ -952,7 +964,7 @@
                     <!-- ACME-DNS Configuration -->
                     <div id="acme-dns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-network-wired mr-2 text-green-600"></i>
                                 ACME-DNS Configuration
                             </h4>
@@ -999,7 +1011,7 @@
                     <!-- deSEC Configuration -->
                     <div id="desec-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-shield-alt mr-2 text-green-600"></i>
                                 deSEC DNS Configuration
                             </h4>
@@ -1022,7 +1034,7 @@
                     <!-- Scaleway Configuration -->
                     <div id="scaleway-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-cloud mr-2 text-purple-600"></i>
                                 Scaleway DNS Configuration
                             </h4>
@@ -1045,7 +1057,7 @@
                     <!-- Akamai Edge DNS Configuration -->
                     <div id="edgedns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-cloud mr-2 text-orange-600"></i>
                                 Akamai Edge DNS Configuration
                             </h4>
@@ -1095,7 +1107,7 @@
                     <!-- Gandi Configuration -->
                     <div id="gandi-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-globe mr-2 text-orange-600"></i>
                                 Gandi DNS Configuration
                             </h4>
@@ -1118,7 +1130,7 @@
                     <!-- OVH Configuration -->
                     <div id="ovh-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-server mr-2 text-purple-600"></i>
                                 OVH DNS Configuration
                             </h4>
@@ -1173,7 +1185,7 @@
                     <!-- Namecheap Configuration -->
                     <div id="namecheap-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-shopping-cart mr-2 text-red-600"></i>
                                 Namecheap DNS Configuration
                             </h4>
@@ -1205,7 +1217,7 @@
                     <div id="rfc2136-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-exchange-alt mr-2 text-gray-600"></i>
                                     RFC2136 DNS Configuration
                                 </h4>
@@ -1276,7 +1288,7 @@
                     <!-- Hetzner Configuration -->
                     <div id="hetzner-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-server mr-2 text-red-600"></i>
                                 Hetzner DNS Configuration
                             </h4>
@@ -1297,7 +1309,7 @@
                     <!-- Porkbun Configuration -->
                     <div id="porkbun-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-paw mr-2 text-pink-600"></i>
                                 Porkbun DNS Configuration
                             </h4>
@@ -1328,7 +1340,7 @@
                     <!-- GoDaddy Configuration -->
                     <div id="godaddy-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-globe mr-2 text-green-600"></i>
                                 GoDaddy DNS Configuration
                             </h4>
@@ -1359,7 +1371,7 @@
                     <!-- Hurricane Electric Configuration -->
                     <div id="he-ddns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-bolt mr-2 text-yellow-600"></i>
                                 Hurricane Electric DNS Configuration
                             </h4>
@@ -1390,7 +1402,7 @@
                     <!-- Dynu Configuration -->
                     <div id="dynudns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-foreground mb-4">
+                            <h4 class="text-sm font-semibold text-foreground mb-4">
                                 <i class="fas fa-sync-alt mr-2 text-purple-600"></i>
                                 Dynu DNS Configuration
                             </h4>
@@ -1412,7 +1424,7 @@
                     <div id="duckdns-config" class="dns-config hidden">
                         <div class="border border-warning-line rounded-lg p-4 bg-warning-surface">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-feather mr-2 text-yellow-500"></i>
                                     DuckDNS Configuration
                                 </h4>
@@ -1450,7 +1462,7 @@
                     <div id="custom-script-config" class="dns-config hidden">
                         <div class="border border-border rounded-lg p-4 bg-input">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-terminal mr-2 text-gray-600"></i>
                                     Custom Script Configuration
                                 </h4>
@@ -1496,7 +1508,7 @@
                     <div id="nsone-config" class="dns-config hidden">
                         <div class="border border-border rounded-lg p-4 bg-input">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-network-wired mr-2 text-indigo-600"></i>
                                     NS1 Configuration
                                 </h4>
@@ -1533,7 +1545,7 @@
                     <div id="dnsmadeeasy-config" class="dns-config hidden">
                         <div class="border border-border rounded-lg p-4 bg-input">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-lg font-medium text-foreground">
+                                <h4 class="text-sm font-semibold text-foreground">
                                     <i class="fas fa-cogs mr-2 text-green-600"></i>
                                     DNS Made Easy Configuration
                                 </h4>

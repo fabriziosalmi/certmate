@@ -1,12 +1,18 @@
 <!-- TAB: Storage -->
-                    <div x-show="tab === 'storage'" x-cloak id="settings-panel-storage" role="tabpanel" aria-labelledby="settings-tab-storage" tabindex="0">
+                    <!-- The shell of every settings tab (#1511, P66): a bordered card,
+                         an 18px/600 title with an icon, one description line, and
+                         the sections as 14px/600 subsections. The title was a
+                         14px/500 label in a grey panel. -->
+                    <div x-show="tab === 'storage'" x-cloak id="settings-panel-storage" role="tabpanel" aria-labelledby="settings-tab-storage" tabindex="0"
+                         class="bg-surface border border-border rounded-lg shadow-sm p-6">
                     <!-- Certificate Storage Backend Section -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <label class="block text-sm font-medium text-label mb-3">
-                            <i class="fas fa-database mr-1"></i>
+                    <div>
+                        <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
+                            <i class="fas fa-database mr-2 text-primary" aria-hidden="true"></i>
                             Certificate Storage Backend
-                        </label>
-                        
+                        </h3>
+                        <p class="text-sm text-muted mb-6">Where CertMate stores certificates: this server's filesystem, a secrets manager or S3-compatible object storage.</p>
+
                         <div class="space-y-4">
                             <!-- Backend Selection -->
                             <div>
@@ -31,7 +37,7 @@
                             <!-- Local Filesystem Configuration -->
                             <div id="storage-local-config" class="storage-config">
                                 <div class="bg-info-surface p-3 rounded-md border border-info-line">
-                                    <h5 class="text-sm font-medium text-info-strong mb-2">
+                                    <h5 class="text-sm font-semibold text-info-strong mb-2">
                                         <i class="fas fa-folder mr-1"></i> Local Filesystem Storage
                                     </h5>
                                     <div class="space-y-2">
@@ -51,7 +57,7 @@
                             <!-- Azure Key Vault Configuration -->
                             <div id="storage-azure-config" class="storage-config" style="display: none;">
                                 <div class="bg-info-surface p-3 rounded-md border border-info-line">
-                                    <h5 class="text-sm font-medium text-info-strong mb-2">
+                                    <h5 class="text-sm font-semibold text-info-strong mb-2">
                                         <i class="fab fa-microsoft mr-1"></i> Azure Key Vault Configuration
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -118,7 +124,7 @@
                             <!-- AWS Secrets Manager Configuration -->
                             <div id="storage-aws-config" class="storage-config" style="display: none;">
                                 <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-md border border-orange-200 dark:border-orange-700">
-                                    <h5 class="text-sm font-medium text-orange-900 dark:text-orange-100 mb-2">
+                                    <h5 class="text-sm font-semibold text-orange-900 dark:text-orange-100 mb-2">
                                         <i class="fab fa-aws mr-1"></i> AWS Secrets Manager Configuration
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -166,7 +172,7 @@
                             <!-- HashiCorp Vault Configuration -->
                             <div id="storage-vault-config" class="storage-config" style="display: none;">
                                 <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-700">
-                                    <h5 class="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">
+                                    <h5 class="text-sm font-semibold text-purple-900 dark:text-purple-100 mb-2">
                                         <i class="fas fa-vault mr-1"></i> HashiCorp Vault Configuration
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -209,7 +215,7 @@
                             <!-- Infisical Configuration -->
                             <div id="storage-infisical-config" class="storage-config" style="display: none;">
                                 <div class="bg-success-surface p-3 rounded-md border border-success-line">
-                                    <h5 class="text-sm font-medium text-success-strong mb-2">
+                                    <h5 class="text-sm font-semibold text-success-strong mb-2">
                                         <i class="fas fa-shield-alt mr-1"></i> Infisical Configuration
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -255,7 +261,7 @@
 
                             <div id="storage-s3-config" class="storage-config" style="display: none;">
                                 <div class="bg-success-surface p-3 rounded-md border border-success-line">
-                                    <h5 class="text-sm font-medium text-success-strong mb-2">
+                                    <h5 class="text-sm font-semibold text-success-strong mb-2">
                                         <i class="fas fa-database mr-1"></i> S3-Compatible Object Storage
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
