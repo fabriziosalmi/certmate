@@ -37,8 +37,9 @@ TITLE = """(id) => {
         if (parseFloat(cs.borderTopWidth) > 0 && cs.boxShadow !== 'none') { card = e; break; }
         if (e === panel) break;
     }
-    // A provider account's name in its list is an h5 too, and not a section.
-    const subsections = [...panel.querySelectorAll('h4, h5, h6')]
+    // The title is the tab's h2 and its sections are h3 (#1511, P63). A
+    // provider account's name in its list is an h4, and not a section.
+    const subsections = [...panel.querySelectorAll('h3, h4, h5, h6')]
         .filter(h => shown(h) && !h.closest('[id$="-accounts-list"]'))
         .map(h => [h.innerText.trim().slice(0, 30), getComputedStyle(h).fontSize, getComputedStyle(h).fontWeight])
         .filter(([, size, weight]) => size !== '14px' || weight !== '600');

@@ -9,7 +9,7 @@
 <!-- Certificates List -->
 <div class="bg-surface shadow-card rounded-xl overflow-hidden">
     <!-- The frame of every page (#1511, P67), as on the server view. -->
-    {% call(slot) page_header('Client Certificates', current_tag='h3', home=false, row='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3') %}{% if slot == 'actions' %}
+    {% call(slot) page_header('Client Certificates', current_tag='h2', home=false, row='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3') %}{% if slot == 'actions' %}
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Status + usage as chips (CN/email search lives in the ⌘K
                      palette) and an actions icon group — same vocabulary as the
@@ -104,7 +104,7 @@
      role="dialog" aria-modal="true" aria-labelledby="certModalTitle" data-click="closeCertModal" data-self data-focus-trap>
     <div class="bg-surface rounded-2xl shadow-elevated w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <div class="flex-shrink-0 flex justify-between items-center gap-2 px-6 py-4 border-b border-gray-100 dark:border-white/5">
-            <h3 id="certModalTitle" class="text-base font-semibold font-mono text-foreground whitespace-nowrap overflow-x-auto min-w-0">Certificate Details</h3>
+            <h2 id="certModalTitle" class="text-base font-semibold font-mono text-foreground whitespace-nowrap overflow-x-auto min-w-0">Certificate Details</h2>
             <button type="button" data-click="closeCertModal" class="flex-shrink-0 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-8 md:min-h-8 text-muted hover:text-foreground rounded-lg hover:bg-hover transition-colors" aria-label="Close dialog">
                 <i class="fas fa-times text-lg" aria-hidden="true"></i>
             </button>
@@ -123,13 +123,13 @@
         </div>
         <div class="flex-shrink-0 flex flex-wrap gap-2 px-6 py-3">
             <button type="button" data-click="downloadCertFile" data-args='["crt"]' aria-label="Download certificate file" class="btn btn-primary flex-1 min-w-[6rem]">
-                <i class="fas fa-download mr-1.5"></i> .crt
+                <i aria-hidden="true" class="fas fa-download mr-1.5"></i> .crt
             </button>
             <button type="button" data-click="downloadCertFile" data-args='["key"]' aria-label="Download private key file (keep secret)" title="Private key — keep it secret" class="btn btn-secondary flex-1 min-w-[6rem] text-warning-fg">
-                <i class="fas fa-key mr-1.5"></i> .key
+                <i aria-hidden="true" class="fas fa-key mr-1.5"></i> .key
             </button>
             <button type="button" data-click="downloadCertFile" data-args='["csr"]' aria-label="Download CSR file" class="btn btn-secondary flex-1 min-w-[6rem]">
-                <i class="fas fa-download mr-1.5"></i> .csr
+                <i aria-hidden="true" class="fas fa-download mr-1.5"></i> .csr
             </button>
             <!-- The .pfx is encrypted with the PFX password in Settings, and
                  refused without one. The button looked available and said so
@@ -137,7 +137,7 @@
                  is drawn unavailable, with the reason and where to set it. -->
             {% if pfx_password_set %}
             <button type="button" data-click="downloadCertFile" data-args='["pfx"]' aria-label="Download PKCS#12 bundle (certificate and private key, encrypted with the PFX password from Settings)" title="PKCS#12 bundle for Windows / browsers — encrypted with the PFX password set in Settings → General" class="btn btn-secondary flex-1 min-w-[6rem] text-warning-fg">
-                <i class="fas fa-file-archive mr-1.5"></i> .pfx
+                <i aria-hidden="true" class="fas fa-file-archive mr-1.5"></i> .pfx
             </button>
             {% else %}
             <button type="button" aria-disabled="true" aria-label="Download PKCS#12 bundle: needs a PFX password" aria-describedby="ccPfxNeedsPassword" class="btn btn-secondary flex-1 min-w-[6rem] opacity-50 cursor-not-allowed">

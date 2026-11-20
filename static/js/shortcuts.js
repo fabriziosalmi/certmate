@@ -62,7 +62,7 @@
             '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm" id="shortcutOverlayBg"></div>' +
             '<div class="fixed inset-x-4 top-[12vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md ' + 'bg-surface rounded-xl shadow-2xl border border-border overflow-hidden">' +
                 '<div class="px-5 py-3 border-b border-border flex items-center justify-between">' +
-                    '<h3 id="shortcutOverlayTitle" class="text-sm font-semibold text-foreground"><i class="fas fa-keyboard mr-2 text-gray-400" aria-hidden="true"></i>Keyboard Shortcuts</h3>' +
+                    '<h2 id="shortcutOverlayTitle" class="text-sm font-semibold text-foreground"><i class="fas fa-keyboard mr-2 text-gray-400" aria-hidden="true"></i>Keyboard Shortcuts</h2>' +
                     '<button type="button" id="shortcutOverlayClose" class="-mr-2 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-8 md:min-h-8 rounded-lg text-muted hover:text-gray-600 dark:hover:text-gray-200" title="Close" aria-label="Close keyboard shortcuts">' +
                         '<i class="fas fa-times" aria-hidden="true"></i>' +
                     '</button>' +

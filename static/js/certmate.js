@@ -220,7 +220,7 @@
 
         var headerHtml =
             '<div class="flex items-start gap-3">' +
-                '<i class="fas ' + (TOAST_ICONS[type] || TOAST_ICONS.info) + ' text-lg mt-0.5 flex-shrink-0"></i>' +
+                '<i aria-hidden="true" class="fas ' + (TOAST_ICONS[type] || TOAST_ICONS.info) + ' text-lg mt-0.5 flex-shrink-0"></i>' +
                 '<div class="flex-1 text-sm font-medium">' + CM.escapeHtml(message) + '</div>' +
                 '<button type="button" class="flex-shrink-0 -m-1 inline-flex items-center justify-center min-w-6 min-h-6 rounded text-current opacity-50 hover:opacity-100" data-action="dismiss" aria-label="Dismiss notification">' +
                 '<i class="fas fa-times" aria-hidden="true"></i></button>' +
@@ -230,7 +230,7 @@
         // the CRL after a revoke (P45). Same-origin only, decided by the URL
         // the browser would follow ('/\\host' and '//host' leave the origin).
         var link = null;
-        if (opts.link && typeof opts.link.href === 'string') {
+        if (opts.link && typeof opts.link.href === 'string' && opts.link.href) {
             try {
                 if (new URL(opts.link.href, window.location.href).origin === window.location.origin) link = opts.link;
             } catch (e) { link = null; }
@@ -243,7 +243,7 @@
         var reportRowHtml = canReport
             ? '<div class="pl-7 flex justify-start">' +
                   '<button data-action="report" class="text-xs font-medium underline opacity-80 hover:opacity-100 disabled:opacity-40 disabled:no-underline disabled:cursor-wait">' +
-                      '<i class="fas fa-bug mr-1"></i>Report this issue' +
+                      '<i aria-hidden="true" class="fas fa-bug mr-1"></i>Report this issue' +
                   '</button>' +
               '</div>'
             : '';
@@ -264,10 +264,10 @@
             var reportBtn = toast.querySelector('[data-action="report"]');
             reportBtn.addEventListener('click', function () {
                 reportBtn.disabled = true;
-                reportBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Preparing…';
+                reportBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Preparing…';
                 CM.reportIssue(opts.errorContext)['finally'](function () {
                     reportBtn.disabled = false;
-                    reportBtn.innerHTML = '<i class="fas fa-bug mr-1"></i>Report this issue';
+                    reportBtn.innerHTML = '<i aria-hidden="true" class="fas fa-bug mr-1"></i>Report this issue';
                 });
             });
         }
@@ -382,7 +382,7 @@
         box.className = 'relative bg-surface rounded-xl shadow-2xl w-full max-w-md border border-border transform scale-95 opacity-0 transition-all duration-200';
         box.innerHTML =
             '<div class="px-6 py-4 border-b border-border">' +
-                '<h3 id="' + titleId + '" class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h3>' +
+                '<h2 id="' + titleId + '" class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h2>' +
             '</div>' +
             '<div class="px-6 py-4">' + bodyHtml + '</div>';
         return box;
@@ -922,7 +922,7 @@
         var originalText = buttonEl ? buttonEl.innerHTML : '';
         if (buttonEl) {
             buttonEl.disabled = true;
-            buttonEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Copying…';
+            buttonEl.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Copying…';
         }
         return CM.api('GET', '/api/diagnostics/snapshot')
             .then(function(data) {

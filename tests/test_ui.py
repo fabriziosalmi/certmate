@@ -61,7 +61,7 @@ class TestNavigation:
         # replaced with "Quick Start" as the first section. Match the current
         # nav strip + section heading so the test reflects the shipping UI.
         expect(browser_page.locator("nav[aria-label='Help sections']")).to_be_visible()
-        expect(browser_page.locator("h3:has-text('Quick Start')")).to_be_visible()
+        expect(browser_page.locator("h2:has-text('Quick Start')")).to_be_visible()
 
     @pytest.mark.xfail(reason="Alpine.js defer timing in headless Chromium", strict=False)
     def test_client_certs_navigation(self, browser_page):
@@ -346,7 +346,7 @@ class TestHelpPageUI:
         browser_page.goto(f"{BASE_URL}/help")
         browser_page.wait_for_load_state("networkidle")
         expect(browser_page.locator("section#quick-start")).to_be_visible()
-        expect(browser_page.locator("section#quick-start h3")).to_contain_text("Quick Start")
+        expect(browser_page.locator("section#quick-start h2")).to_contain_text("Quick Start")
 
     def test_troubleshooting_section_visible(self, browser_page):
         """The Troubleshooting section is the diagnostic anchor users hit when

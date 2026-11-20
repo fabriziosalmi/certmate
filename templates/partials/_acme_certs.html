@@ -15,7 +15,7 @@
     {% endif %}{% endcall %}
 
     <template x-if="loading && !loaded">
-        <div class="text-center py-10 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading...</div>
+        <div class="text-center py-10 text-muted text-sm"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i> Loading...</div>
     </template>
     <template x-if="empty">
         <div class="text-center py-10 px-6 text-muted text-sm" id="acmeEmpty">
@@ -71,7 +71,7 @@
                         <td class="px-6 py-3 text-right">
                             <template x-if="isAdmin && certificate.status === 'valid'">
                                 <button type="button" @click="revoke(certificate)" title="Revoke"
-                                        class="p-2 text-danger-fg hover:text-danger-strong"><i class="fas fa-ban"></i></button>
+                                        class="p-2 text-danger-fg hover:text-danger-strong"><i aria-hidden="true" class="fas fa-ban"></i></button>
                             </template>
                         </td>
                     </tr>

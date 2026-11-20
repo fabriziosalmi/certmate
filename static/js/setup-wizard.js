@@ -196,7 +196,7 @@
         overlay.innerHTML =
             '<div class="bg-surface rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center">' +
                 '<div class="w-16 h-16 bg-warning-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-exclamation-triangle text-warning-fg text-2xl"></i>' +
+                    '<i aria-hidden="true" class="fas fa-exclamation-triangle text-warning-fg text-2xl"></i>' +
                 '</div>' +
                 '<h2 id="recoveryPromptTitle" class="text-xl font-bold text-foreground mb-2">Existing Data Detected</h2>' +
                 '<p class="text-sm text-muted mb-6">' +
@@ -205,7 +205,7 @@
                 '</p>' +
                 '<div class="space-y-3">' +
                     '<button id="recoveryRestore" class="btn btn-primary w-full">' +
-                        '<i class="fas fa-archive mr-2"></i>Restore from Backup' +
+                        '<i aria-hidden="true" class="fas fa-archive mr-2"></i>Restore from Backup' +
                     '</button>' +
                     '<button id="recoveryFresh" class="btn btn-secondary w-full">' +
                         'Start Fresh Setup' +
@@ -319,7 +319,7 @@
                 : i < state.step
                     ? 'w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm'
                     : 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-muted flex items-center justify-center text-sm';
-            html += '<div class="' + cls + '">' + (i < state.step ? '<i class="fas fa-check text-xs"></i>' : i) + '</div>';
+            html += '<div class="' + cls + '">' + (i < state.step ? '<i aria-hidden="true" class="fas fa-check text-xs"></i>' : i) + '</div>';
             if (i < 3) html += '<div class="w-6 h-0.5 ' + (i < state.step ? 'bg-primary/40' : 'bg-gray-200 dark:bg-gray-600') + '"></div>';
         }
         el.innerHTML = html;
@@ -330,22 +330,22 @@
         body.innerHTML =
             '<div class="text-center mb-6">' +
                 '<div class="w-16 h-16 bg-info-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-envelope text-info-fg text-2xl"></i>' +
+                    '<i aria-hidden="true" class="fas fa-envelope text-info-fg text-2xl"></i>' +
                 '</div>' +
-                '<h3 class="text-lg font-semibold text-foreground">Contact Email</h3>' +
+                '<h3 class="tracking-[-0.02em] text-lg font-semibold text-foreground">Contact Email</h3>' +
                 '<p class="text-sm text-muted mt-1">Required by certificate authorities for important notifications</p>' +
             '</div>' +
             '<div>' +
                 '<label for="wizEmail" class="block text-sm font-medium text-label mb-2">Email Address</label>' +
                 '<input type="email" id="wizEmail" value="' + escapeHtml(state.email) + '" placeholder="admin@example.com" ' +
                        'class="w-full px-4 py-3 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary text-sm" required>' +
-                '<p class="mt-2 text-xs text-muted"><i class="fas fa-info-circle mr-1"></i>Used by Let\'s Encrypt for expiry warnings and account recovery</p>' +
+                '<p class="mt-2 text-xs text-muted"><i aria-hidden="true" class="fas fa-info-circle mr-1"></i>Used by Let\'s Encrypt for expiry warnings and account recovery</p>' +
             '</div>';
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<button type="button" id="wizSkip" class="text-sm text-muted hover:text-gray-600 dark:hover:text-gray-300">Skip wizard</button>' +
-            '<button type="button" id="wizNext1" class="btn btn-primary">Next <i class="fas fa-arrow-right ml-1"></i></button>';
+            '<button type="button" id="wizNext1" class="btn btn-primary">Next <i aria-hidden="true" class="fas fa-arrow-right ml-1"></i></button>';
 
         document.getElementById('wizNext1').addEventListener('click', function() {
             var email = document.getElementById('wizEmail').value.trim();
@@ -411,9 +411,9 @@
         var html =
             '<div class="text-center mb-6">' +
                 '<div class="w-16 h-16 bg-success-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-server text-success-fg text-2xl"></i>' +
+                    '<i aria-hidden="true" class="fas fa-server text-success-fg text-2xl"></i>' +
                 '</div>' +
-                '<h3 class="text-lg font-semibold text-foreground">How names are validated</h3>' +
+                '<h3 class="tracking-[-0.02em] text-lg font-semibold text-foreground">How names are validated</h3>' +
                 '<p class="text-sm text-muted mt-1">The CA checks that you control each name before it issues</p>' +
             '</div>' +
             '<div class="grid grid-cols-2 gap-2 mb-4" id="challengeChoice" role="radiogroup" aria-label="Challenge type">' +
@@ -440,7 +440,7 @@
                 ' class="wiz-provider flex flex-col items-center p-3 rounded-lg border-2 transition text-sm ' +
                 (selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted hover:border-gray-400') +
                 (missing ? ' opacity-50' : '') + '">' +
-                '<i class="fas ' + escapeHtml(p.icon) + ' text-lg mb-1"></i>' +
+                '<i aria-hidden="true" class="fas ' + escapeHtml(p.icon) + ' text-lg mb-1"></i>' +
                 '<span class="text-xs font-medium">' + escapeHtml(p.label) + '</span>' +
             '</button>';
         });
@@ -486,8 +486,8 @@
         var ready = state.challenge === 'http-01' || !!state.provider;
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
-            '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-muted hover:text-foreground"><i class="fas fa-arrow-left mr-1"></i> Back</button>' +
-            '<button type="button" id="wizNext2" class="btn btn-primary ' + (!ready ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!ready ? 'disabled' : '') + '>Save & Finish <i class="fas fa-check ml-1"></i></button>';
+            '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-muted hover:text-foreground"><i aria-hidden="true" class="fas fa-arrow-left mr-1"></i> Back</button>' +
+            '<button type="button" id="wizNext2" class="btn btn-primary ' + (!ready ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!ready ? 'disabled' : '') + '>Save & Finish <i aria-hidden="true" class="fas fa-check ml-1"></i></button>';
 
         document.getElementById('wizBack2').addEventListener('click', function() {
             state.step = 1;
@@ -580,12 +580,12 @@
         var pDef = PROVIDERS[provider];
         if (!pDef) return '';
         var html = '<div class="border-t border-border pt-4">' +
-            '<h4 class="text-sm font-medium text-label mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
+            '<h4 class="text-sm font-medium text-label mb-3"><i aria-hidden="true" class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
         var guide = GUIDES[provider] || {};
         var notice = availabilityNotice(provider);
         if (notice) {
             html += '<div class="wiz-availability mb-3 p-2.5 rounded-lg border border-warning-line bg-warning-surface text-xs text-warning-strong">' +
-                '<i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(notice) + '</div>';
+                '<i aria-hidden="true" class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(notice) + '</div>';
         }
 
         pDef.fields.forEach(function(f) {
@@ -609,7 +609,7 @@
             }
         });
         if (guide.text || guide.docs) {
-            html += '<p class="wiz-guide text-xs text-muted mt-1"><i class="fas fa-info-circle mr-1"></i>' +
+            html += '<p class="wiz-guide text-xs text-muted mt-1"><i aria-hidden="true" class="fas fa-info-circle mr-1"></i>' +
                 (guide.text ? escapeHtml(guide.text) + ' ' : '') +
                 (guide.docs ? '<a href="' + escapeHtml(DOCS_URL + guide.docs) + '" target="_blank" rel="noopener noreferrer" class="underline">How to set it up</a>' : '') +
                 '</p>';
@@ -622,7 +622,7 @@
         var btn = document.getElementById('wizNext2');
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Saving...';
+            btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i> Saving...';
         }
 
         var payload = {
@@ -666,7 +666,7 @@
             console.error('Setup wizard save error:', err);
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = 'Save & Finish <i class="fas fa-check ml-1"></i>';
+                btn.innerHTML = 'Save & Finish <i aria-hidden="true" class="fas fa-check ml-1"></i>';
             }
             CertMate.toast('Failed to save settings. Please try again.', 'error');
         });
@@ -817,7 +817,7 @@
                 '<div class="w-20 h-20 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-save text-muted text-4xl" aria-hidden="true"></i>' +
                 '</div>' +
-                '<h3 class="text-xl font-bold text-foreground mb-2">' +
+                '<h3 class="tracking-[-0.02em] text-xl font-bold text-foreground mb-2">' +
                     (onlyUnchecked ? 'Settings saved, not all checked'
                         : exceptions ? 'Settings saved, not all in effect' : 'Settings saved') + '</h3>' +
                 '<p class="text-sm text-muted mb-4">' + unchecked + '</p>' +
@@ -828,7 +828,7 @@
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
             '<a href="/settings" class="text-sm text-muted hover:text-gray-700 dark:hover:text-gray-200">Advanced Settings</a>' +
-            '<button type="button" id="wizFinish" class="btn btn-primary"><i class="fas fa-certificate mr-1"></i> Create a Certificate</button>';
+            '<button type="button" id="wizFinish" class="btn btn-primary"><i aria-hidden="true" class="fas fa-certificate mr-1"></i> Create a Certificate</button>';
 
         document.getElementById('wizFinish').addEventListener('click', function() {
             closeWizard();

@@ -179,8 +179,8 @@ def test_the_domains_with_hooks_are_counted_listed_in_order_and_the_history_open
     assert '(2 domains)' in ' '.join(toggle.inner_text().split())
 
     toggle.click()
-    panel.locator('h4 span', has_text='alpha.example.test').wait_for()
-    assert panel.locator('h4 span').all_inner_texts() == ['alpha.example.test', 'zeta.example.test']
+    panel.locator('h3 span', has_text='alpha.example.test').wait_for()
+    assert panel.locator('h3 span').all_inner_texts() == ['alpha.example.test', 'zeta.example.test']
 
     history = panel.get_by_role('button', name='Recent Executions')
     row = panel.locator('[aria-label="View execution detail for reload alpha on alpha.example.test"]')

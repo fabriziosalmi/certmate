@@ -194,14 +194,14 @@
                 tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
                     '<div class="mx-auto max-w-sm text-center">' +
                     '<div class="mx-auto h-14 w-14 flex items-center justify-center bg-surface-2 rounded-full mb-3"><i class="fas fa-filter text-gray-400 text-xl" aria-hidden="true"></i></div>' +
-                    '<h3 class="text-base font-medium text-foreground mb-1">No matching client certificates</h3>' +
+                    '<h3 class="tracking-[-0.02em] text-base font-medium text-foreground mb-1">No matching client certificates</h3>' +
                     '<p class="text-sm text-muted">Try a different usage or status filter.</p>' +
                     '</div></td></tr>';
             } else {
                 tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
                     '<div class="mx-auto max-w-sm text-center">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-id-card text-blue-500 text-2xl" aria-hidden="true"></i></div>' +
-                    '<h3 class="text-lg font-medium text-foreground mb-2">No client certificates yet</h3>' +
+                    '<h3 class="tracking-[-0.02em] text-lg font-medium text-foreground mb-2">No client certificates yet</h3>' +
                     '<p class="text-muted mb-6">Issue mTLS / client identity certificates for VPN access, API authentication, or user login.</p>' +
                     '<button type="button"' + CertMate.does('click', 'openCertDrawer', ['client']) + 'class="btn btn-primary"><i class="fas fa-plus mr-2" aria-hidden="true"></i>New Client Certificate</button>' +
                     '</div></td></tr>';
@@ -388,7 +388,7 @@
         var submitBtnHtml = submitBtn ? submitBtn.innerHTML : null;
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+            submitBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Creating...';
         }
 
         fetch('/api/client-certs/create', {
@@ -585,7 +585,7 @@
         document.getElementById('modalContent').innerHTML =
             // Status banner — status + expiry date integrated (mirrors the server modal)
             '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + ' mb-4">' +
-                '<i class="fas ' + bannerIcon + ' text-2xl ' + bannerFg + ' flex-shrink-0"></i>' +
+                '<i aria-hidden="true" class="fas ' + bannerIcon + ' text-2xl ' + bannerFg + ' flex-shrink-0"></i>' +
                 '<div class="min-w-0">' +
                     '<div class="text-lg font-semibold ' + bannerFg + '">' + statusLabel + '</div>' +
                     '<div class="text-sm ' + bannerFg + ' opacity-80">' + (expired ? 'Expired ' : 'Expires ') + CertMate.formatDate(expiresDate) + '</div>' +

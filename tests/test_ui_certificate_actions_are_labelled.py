@@ -136,7 +136,7 @@ def _open_detail(page, domain=DOMAIN):
 
 
 SECTION_CONTROLS = """name => {
-    const heading = [...document.querySelectorAll('#certDetailPanel h4')]
+    const heading = [...document.querySelectorAll('#certDetailPanel h3')]
         .find(h => h.textContent.trim().toLowerCase() === name);
     if (!heading) return null;
     return [...heading.parentElement.querySelectorAll('button, a')]
@@ -270,8 +270,8 @@ def test_one_icon_means_ca_and_another_means_acme(open_page):
     acme_nav = page.evaluate("""() => getComputedStyle(
         [...document.querySelectorAll('[role=tab]')].find(t => t.textContent.trim() === 'ACME').querySelector('i'),
         '::before').content""")
-    ca_heading = _icon(page, '#settings-panel-ca h3 i')
-    acme_heading = page.evaluate("""() => getComputedStyle([...document.querySelectorAll('h3')]
+    ca_heading = _icon(page, '#settings-panel-ca h2 i')
+    acme_heading = page.evaluate("""() => getComputedStyle([...document.querySelectorAll('h2')]
         .find(h => h.textContent.trim() === 'ACME server').querySelector('i'), '::before').content""")
 
     page.goto(BASE_URL + '/', wait_until='networkidle')

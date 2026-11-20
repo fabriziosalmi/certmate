@@ -68,9 +68,9 @@
             <!-- Quick Start -->
             <section id="quick-start" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-rocket text-muted mr-2" aria-hidden="true"></i>Quick Start
-                    </h3>
+                    </h2>
                     <ol class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5 list-decimal ml-5">
                         <li>Until sign-in is on with a first user, an <code class="text-xs bg-surface-2 px-1 rounded">API_BEARER_TOKEN</code> is set or single sign-on is configured, a fresh instance is in setup mode: anyone who reaches it can read everything but private keys and backups, and create the first admin, so finish setup before exposing it. The setup page creates the first admin and turns sign-in on with it. Add more people, each a Viewer, an Operator or an Admin, in <a href="/settings#users" class="text-primary hover:underline">Settings → Users</a>.</li>
                         <li>After the first sign-in a short wizard asks for the contact email your certificate authority uses and how names are validated: DNS-01 through your DNS provider, or HTTP-01 over port 80. If you closed it, the same choices are in <a href="/settings#dns" class="text-primary hover:underline">Settings → DNS</a> and <a href="/settings#ca" class="text-primary hover:underline">Settings → CA</a>.</li>
@@ -86,9 +86,9 @@
             <!-- Validation and DNS providers -->
             <section id="dns-providers" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-server text-muted mr-2" aria-hidden="true"></i>Validation and DNS Providers
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         The CA checks that you control each name before it issues. A certificate picks one of two ways under <span class="font-medium" data-ui-label>Challenge Type</span>, and <a href="/settings#dns" class="text-primary hover:underline">Settings → DNS</a> sets the default:
                     </p>
@@ -127,9 +127,9 @@
             <!-- CA Providers -->
             <section id="ca-providers" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-shield-alt text-muted mr-2" aria-hidden="true"></i>Certificate Authorities
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
                         Add accounts in <a href="/settings#ca" class="text-primary hover:underline">Settings → CA</a> with <span class="font-medium" data-ui-label>Add CA Account</span>; each authority has a default account. A certificate can pick another CA and account when it is created.
                     </p>
@@ -159,9 +159,9 @@
             <!-- API Usage -->
             <section id="api-usage" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-code text-muted mr-2" aria-hidden="true"></i>API
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
                         Create a key in <a href="/settings#apikeys" class="text-primary hover:underline">Settings → API Keys</a> and send it as a Bearer token. Each key has a role (Viewer reads, Operator also creates and renews, Admin also changes settings), an optional expiry and an optional list of the domains it may touch. The token is shown once, when the key is created.
                     </p>
@@ -171,7 +171,7 @@
                     </p>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
                         <div>
-                            <h4 class="text-sm font-medium text-foreground mb-2">Common endpoints</h4>
+                            <h3 class="text-sm font-medium text-foreground mb-2">Common endpoints</h3>
                             <ul class="text-xs text-gray-700 dark:text-gray-200 space-y-1 font-mono overflow-x-auto whitespace-nowrap">
                                 <li><span class="text-info-fg">GET</span> /api/certificates</li>
                                 <li><span class="text-success-fg">POST</span> /api/certificates/create</li>
@@ -183,7 +183,7 @@
                             </ul>
                         </div>
                         <div>
-                            <h4 class="text-sm font-medium text-foreground mb-2">curl examples</h4>
+                            <h3 class="text-sm font-medium text-foreground mb-2">curl examples</h3>
                             <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto border border-border"><code># Create a certificate (an Operator or Admin key)
 curl -X POST http://localhost:8000/api/certificates/create \
   -H "Authorization: Bearer $TOKEN" \
@@ -205,9 +205,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- Multi-account -->
             <section id="multi-account" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-users text-muted mr-2" aria-hidden="true"></i>Multi-account DNS
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         Useful when you manage zones under different cloud accounts (for example one Cloudflare tenant per customer, or separate Route 53 accounts for production and staging).
                     </p>
@@ -223,9 +223,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- Client certificates -->
             <section id="client-certificates" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-id-card text-muted mr-2" aria-hidden="true"></i>Client Certificates
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         A client certificate identifies a person, a device or a service to a server that asks for one: API mTLS, VPN access, user login. CertMate signs them with a CA of its own, separate from the authorities in Settings → CA.
                     </p>
@@ -249,9 +249,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- ACME server -->
             <section id="acme-server" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-certificate text-muted mr-2" aria-hidden="true"></i>ACME Server
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         CertMate can answer ACME (RFC 8555) itself, from a root of its own, so that certbot, lego, acme.sh and cert-manager on your network get certificates for internal names. It is off until you turn it on.
                     </p>
@@ -274,9 +274,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- Inventory -->
             <section id="inventory" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-boxes-stacked text-muted mr-2" aria-hidden="true"></i>Inventory
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         <a href="/inventory" class="text-primary hover:underline">Inventory</a> lists the server certificates CertMate knows of: the ones it holds (Managed) and the ones it found elsewhere (Discovered). Client certificates are not in it.
                     </p>
@@ -292,9 +292,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- Crypto readiness -->
             <section id="crypto-readiness" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-shield text-muted mr-2" aria-hidden="true"></i>Crypto Readiness Report
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         The <span class="font-medium" data-ui-label>Cryptographic readiness</span> band on Inventory classifies every certificate in the inventory by key and signature algorithm, to plan the move to post-quantum algorithms. Client certificates are not in it. It is a report only: issuance does not change.
                     </p>
@@ -315,9 +315,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- Backup -->
             <section id="backup-recovery" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-archive text-muted mr-2" aria-hidden="true"></i>Backup &amp; Restore
-                    </h3>
+                    </h2>
                     <ul class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5">
                         <li><span class="font-medium">What's in a backup:</span> the settings and every certificate, in one archive. Credentials and private keys are in it only when <code class="text-xs bg-surface-2 px-1 rounded">CERTMATE_BACKUP_PASSPHRASE</code> is set, and the archive is then encrypted with it. Without it, a backup is a snapshot of the configuration and the certificates that cannot restore the instance on its own.</li>
                         <li><span class="font-medium">Automatic:</span> before each settings change, and before a restore.</li>
@@ -331,9 +331,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- Troubleshooting -->
             <section id="troubleshooting" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-tools text-muted mr-2" aria-hidden="true"></i>Troubleshooting
-                    </h3>
+                    </h2>
                     <dl class="text-sm text-gray-700 dark:text-gray-200 space-y-3">
                         <div>
                             <dt class="font-medium text-foreground">DNS provider authentication failed</dt>
@@ -365,9 +365,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             <!-- Report an issue -->
             <section id="report-issue" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                    <h2 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fab fa-github text-muted mr-2" aria-hidden="true"></i>Report an issue
-                    </h3>
+                    </h2>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         When something goes wrong, including the items below makes the fix faster: most reports stall on missing context, not on hard root causes.
                     </p>

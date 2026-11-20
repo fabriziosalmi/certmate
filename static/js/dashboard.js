@@ -1202,12 +1202,12 @@
                     '<div class="px-6 py-12 text-center">' +
                     '<div class="mx-auto max-w-sm border-2 border-dashed border-border rounded-xl p-8">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-surface-2 rounded-full mb-4">' +
-                    '<i class="fas fa-search text-gray-400 text-2xl"></i>' +
+                    '<i aria-hidden="true" class="fas fa-search text-gray-400 text-2xl"></i>' +
                     '</div>' +
-                    '<h3 class="text-lg font-medium text-foreground mb-2">No matching certificates</h3>' +
+                    '<h3 class="tracking-[-0.02em] text-lg font-medium text-foreground mb-2">No matching certificates</h3>' +
                     '<p class="text-muted mb-6">Try adjusting your search criteria or filters.</p>' +
                     '<button data-click="clearFilters" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600">' +
-                    '<i class="fas fa-times mr-2"></i>Clear Filters</button>' +
+                    '<i aria-hidden="true" class="fas fa-times mr-2"></i>Clear Filters</button>' +
                     '</div>' +
                     '</div>' +
                     '</td></tr>';
@@ -1215,12 +1215,12 @@
                 container.innerHTML = '<tr data-empty-state><td colspan="7">' +
                     '<div class="px-6 py-8"><div class="mx-auto max-w-lg">' +
                     '<div class="text-center mb-6">' +
-                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
-                    '<h3 class="text-lg font-medium text-foreground mb-2">Welcome to CertMate</h3>' +
+                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i aria-hidden="true" class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
+                    '<h3 class="tracking-[-0.02em] text-lg font-medium text-foreground mb-2">Welcome to CertMate</h3>' +
                     '<p class="text-muted">Follow these steps to get started:</p>' +
                     '</div>' +
                     '<ol id="welcomeSteps" class="space-y-3 mb-6 text-sm">' + welcomeStepsHtml() + '</ol>' +
-                    '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="btn btn-primary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
+                    '<div class="text-center"><button type="button" data-click="openCreateCertForm" class="btn btn-primary"><i aria-hidden="true" class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
             }
@@ -1662,7 +1662,7 @@
               (notes ? '<p class="text-sm text-foreground whitespace-pre-wrap break-words">' + escapeHtml(notes) + '</p>' : '')
             : empty;
         return '<div class="flex items-center justify-between mb-3">' +
-            '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Notes &amp; tags</h4>' +
+            '<h3 class="text-xs font-semibold text-muted uppercase tracking-wider">Notes &amp; tags</h3>' +
             (canEdit ? '<button type="button" data-labels-edit="' + escapeHtml(cert.domain) + '" aria-label="Edit notes and tags" class="-my-2 -mr-2 inline-flex items-center justify-center min-w-11 min-h-11 md:min-w-8 md:min-h-8 px-2 rounded-lg text-xs text-info-fg hover:underline">Edit</button>' : '') +
             '</div>' + body;
     }
@@ -1684,7 +1684,7 @@
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
         var section = document.getElementById('certLabelsSection');
         if (!cert || !section) return;
-        section.innerHTML = '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Notes &amp; tags</h4>' +
+        section.innerHTML = '<h3 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Notes &amp; tags</h3>' +
             '<label for="certLabelTags" class="block text-xs font-medium text-muted mb-1">Tags</label>' +
             '<input id="certLabelTags" type="text" maxlength="700" autocomplete="off" class="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm" ' +
             'placeholder="production, customer-x, load-balancer" value="' + escapeHtml((cert.tags || []).join(', ')) + '">' +
@@ -1777,10 +1777,10 @@
         var aliasProviderCell = providerCellHtml(cert.alias_dns_provider, aliasProviderLabel, 'justify-end');
 
         if (!cert.exists) {
-            content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
+            content.innerHTML = '<div class="text-center py-8"><i aria-hidden="true" class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
                 '<p class="text-muted mb-6">Certificate not found on disk.</p>' +
                 (roleAtLeast('admin')
-                    ? '<button type="button"' + CertMate.does('click', 'deleteCertificate', [cert.domain]) + 'class="inline-flex items-center px-4 py-2 border border-danger-line shadow-sm text-sm font-medium rounded-md text-danger-fg bg-danger-surface hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>'
+                    ? '<button type="button"' + CertMate.does('click', 'deleteCertificate', [cert.domain]) + 'class="inline-flex items-center px-4 py-2 border border-danger-line shadow-sm text-sm font-medium rounded-md text-danger-fg bg-danger-surface hover:bg-red-100 dark:hover:bg-red-900/40"><i aria-hidden="true" class="fas fa-trash-alt mr-2"></i>Remove from List</button>'
                     : '<p class="text-xs text-muted">Ask an admin to remove this entry.</p>') +
                 '</div>';
         } else {
@@ -1853,7 +1853,7 @@
                 // was some 90 px wide and the cause ran to twenty lines.
                 '<div class="p-4 rounded-lg ' + bannerBg + '">' +
                 '<div class="flex items-center gap-3">' +
-                '<i class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
+                '<i aria-hidden="true" class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
                 '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
@@ -1904,18 +1904,18 @@
                 // moves none of the buttons.
                 '<div class="grid grid-cols-1 gap-y-4 pt-4 border-t border-border">' +
                 '<div>' +
-                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Deployment</h4>' +
+                '<h3 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Deployment</h3>' +
                 '<div class="flex flex-wrap items-center gap-2 mb-2">' + deploymentBadgesHtml(cert, true) + '</div>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 actIcon('checkDeploymentStatusNow', [cert.domain], 'fa-tower-broadcast', 'Check deployment now', 'Check', 'el') +
                 actLink('/settings#deploy', 'fa-rocket', 'View / edit deploy hooks', 'Deploy hooks') +
                 (roleAtLeast('admin') ? runDeployHooksButtonHtml(cert.domain) : '') +
                 '</div>' +
-                (safeDomainAlias ? '<button type="button"' + CertMate.does('click', 'checkDnsAliasForCertificate', [cert.domain]) + 'class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
+                (safeDomainAlias ? '<button type="button"' + CertMate.does('click', 'checkDnsAliasForCertificate', [cert.domain]) + 'class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i aria-hidden="true" class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden mt-2"></div>' +
                 '</div>' +
                 '<div>' +
-                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
+                '<h3 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h3>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 (roleAtLeast('operator') && external
                     ? actIcon('openReplaceCertificate', [cert.domain], 'fa-file-arrow-up', 'Replace certificate', 'Replace')
@@ -2296,7 +2296,7 @@
             // keeps its width while the check runs.
             var busyIcon = triggerButton.querySelector('i');
             if (busyIcon) busyIcon.className = 'fas fa-fw fa-spinner fa-spin';
-            else triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+            else triggerButton.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Checking...';
         }
 
         var statusElements = Array.prototype.filter.call(
@@ -2509,7 +2509,7 @@
             : '<span class="shrink-0 text-xs">An operator can reissue them.</span>';
         banner.innerHTML =
             '<div class="flex items-center justify-between gap-4 p-3 rounded-md bg-warning-surface border border-warning-line text-sm text-warning-fg">' +
-            '<span><i class="fas fa-key mr-2"></i><strong>' + keyless.length + ' certificate' + (keyless.length === 1 ? '' : 's') +
+            '<span><i aria-hidden="true" class="fas fa-key mr-2"></i><strong>' + keyless.length + ' certificate' + (keyless.length === 1 ? '' : 's') +
             ' ha' + (keyless.length === 1 ? 's' : 've') + ' no private key</strong> (' + names + '), ' +
             'as a share-safe backup restores them. They cannot be renewed, only reissued, and a reissue creates a new key that deploy hooks will ship.</span>' +
             action + '</div>';
@@ -2653,7 +2653,7 @@
         document.querySelector('#certificatesTable thead').style.display = 'none';
         container.innerHTML = '<tr data-empty-state data-listing-failed><td colspan="7">' +
             '<div class="px-6 py-12 text-center">' +
-            '<h3 class="text-lg font-medium text-foreground mb-2">The certificate list could not be loaded</h3>' +
+            '<h3 class="tracking-[-0.02em] text-lg font-medium text-foreground mb-2">The certificate list could not be loaded</h3>' +
             '<p class="text-muted mb-6">' + escapeHtml(error.message) + '</p>' +
             '<button type="button" data-click="loadCertificates" class="inline-flex items-center px-4 py-2 border border-border ' +
             'shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-hover">' +
@@ -2933,37 +2933,37 @@
             var infoText = '';
             switch (selectedCA) {
                 case 'letsencrypt':
-                    infoText = '<i class="fas fa-leaf mr-1 text-green-500"></i> Free certificates with 90-day validity and automatic renewal';
+                    infoText = '<i aria-hidden="true" class="fas fa-leaf mr-1 text-green-500"></i> Free certificates with 90-day validity and automatic renewal';
                     break;
                 case 'letsencrypt_staging':
-                    infoText = '<i class="fas fa-flask mr-1 text-yellow-500"></i> Staging environment for testing - certificates are NOT trusted by browsers, but rate limits are generous';
+                    infoText = '<i aria-hidden="true" class="fas fa-flask mr-1 text-yellow-500"></i> Staging environment for testing - certificates are NOT trusted by browsers, but rate limits are generous';
                     break;
                 case 'zerossl':
-                    infoText = '<i class="fas fa-certificate mr-1 text-yellow-500"></i> Free certificates with 90-day validity via ZeroSSL (requires EAB)';
+                    infoText = '<i aria-hidden="true" class="fas fa-certificate mr-1 text-yellow-500"></i> Free certificates with 90-day validity via ZeroSSL (requires EAB)';
                     break;
                 case 'google':
-                    infoText = '<i class="fab fa-google mr-1 text-blue-500"></i> Free certificates from Google Trust Services (requires EAB)';
+                    infoText = '<i aria-hidden="true" class="fab fa-google mr-1 text-blue-500"></i> Free certificates from Google Trust Services (requires EAB)';
                     break;
                 case 'actalis':
-                    infoText = '<i class="fas fa-certificate mr-1 text-blue-500"></i> Free 90-day DV certificates from Actalis, European CA (requires EAB, single domain only)';
+                    infoText = '<i aria-hidden="true" class="fas fa-certificate mr-1 text-blue-500"></i> Free 90-day DV certificates from Actalis, European CA (requires EAB, single domain only)';
                     break;
                 case 'digicert':
-                    infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Enterprise certificates (requires EAB credentials configured in Settings)';
+                    infoText = '<i aria-hidden="true" class="fas fa-shield-alt mr-1 text-blue-500"></i> Enterprise certificates (requires EAB credentials configured in Settings)';
                     break;
                 case 'sectigo':
-                    infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Sectigo SCM ACME (requires account directory URL and EAB credentials; prevalidated mode is available for already-authorized names)';
+                    infoText = '<i aria-hidden="true" class="fas fa-shield-alt mr-1 text-blue-500"></i> Sectigo SCM ACME (requires account directory URL and EAB credentials; prevalidated mode is available for already-authorized names)';
                     break;
                 case 'sslcom':
-                    infoText = '<i class="fas fa-shield-alt mr-1 text-indigo-500"></i> Enterprise certificates from SSL.com (requires EAB)';
+                    infoText = '<i aria-hidden="true" class="fas fa-shield-alt mr-1 text-indigo-500"></i> Enterprise certificates from SSL.com (requires EAB)';
                     break;
                 case 'private_ca':
-                    infoText = '<i class="fas fa-building mr-1 text-purple-500"></i> Internal CA certificates (requires ACME URL configured in Settings)';
+                    infoText = '<i aria-hidden="true" class="fas fa-building mr-1 text-purple-500"></i> Internal CA certificates (requires ACME URL configured in Settings)';
                     break;
                 default:
                     // A certificate may still carry a removed/unknown CA in its
                     // metadata (e.g. the discontinued BuyPass). Show a clear note
                     // instead of a blank line.
-                    infoText = '<i class="fas fa-exclamation-triangle mr-1 text-yellow-500"></i> This certificate authority is no longer available; reissue with a supported CA';
+                    infoText = '<i aria-hidden="true" class="fas fa-exclamation-triangle mr-1 text-yellow-500"></i> This certificate authority is no longer available; reissue with a supported CA';
                     break;
             }
             infoDiv.innerHTML = infoText;
@@ -3373,7 +3373,7 @@
                 found = check.error;
             }
             return '<div class="mt-2 text-xs ' + rowClass + '">' +
-                '<div><i class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
+                '<div><i aria-hidden="true" class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
                 '<code class="font-mono bg-surface-2 px-1 rounded">' + escapeHtml(check.source) + '</code>' +
                 aliasCopyButtonHtml(check.source) + '</div>' +
                 '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-surface-2 px-1 rounded">' + escapeHtml(check.expected_target) + '</code>' +
@@ -3387,7 +3387,7 @@
         }
 
         target.className = 'mt-2 rounded-md border p-3 ' + headerClass;
-        target.innerHTML = '<div class="text-xs font-semibold"><i class="fas ' + icon + ' mr-1"></i>' + title + '</div>' + rows;
+        target.innerHTML = '<div class="text-xs font-semibold"><i aria-hidden="true" class="fas ' + icon + ' mr-1"></i>' + title + '</div>' + rows;
         target.classList.remove('hidden');
     }
 
@@ -3405,7 +3405,7 @@
 
         if (resultTarget) {
             resultTarget.className = 'mt-2 rounded-md border border-info-line bg-info-surface p-3 text-xs text-info-fg';
-            resultTarget.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
+            resultTarget.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
             resultTarget.classList.remove('hidden');
         }
 
@@ -3488,7 +3488,7 @@
                         + escapeHtml(d.reason || '') + '</li>';
                 }).join('');
                 target.className = 'mt-2 rounded-md border border-warning-line bg-warning-surface p-3 text-xs text-warning-fg';
-                target.innerHTML = '<div class="font-semibold"><i class="fas fa-triangle-exclamation mr-1"></i>'
+                target.innerHTML = '<div class="font-semibold"><i aria-hidden="true" class="fas fa-triangle-exclamation mr-1"></i>'
                     + 'A CAA record will make this CA refuse</div>'
                     + '<div class="mt-1">' + escapeHtml(result.message || '') + '</div>'
                     + (result.suggested_record
@@ -3510,7 +3510,7 @@
         var resultTarget = document.getElementById(targetId);
         if (resultTarget) {
             resultTarget.className = 'mt-3 rounded-md border border-info-line bg-info-surface p-3 text-xs text-info-fg';
-            resultTarget.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
+            resultTarget.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
             resultTarget.classList.remove('hidden');
         }
 
@@ -3648,7 +3648,7 @@
                 if (!title.dataset.createHtml) {
                     title.dataset.createHtml = title.innerHTML;
                 }
-                title.innerHTML = '<i class="fas fa-pen mr-2 text-primary"></i>Edit Certificate';
+                title.innerHTML = '<i aria-hidden="true" class="fas fa-pen mr-2 text-primary"></i>Edit Certificate';
             } else if (title.dataset.createHtml) {
                 title.innerHTML = title.dataset.createHtml;
             }
@@ -3663,13 +3663,13 @@
                 banner.className = 'mb-4 p-3 rounded-md bg-warning-surface border border-warning-line text-sm text-warning-fg flex items-center justify-between gap-4';
                 form.insertBefore(banner, form.firstChild);
             }
-            banner.innerHTML = '<span><i class="fas fa-pen mr-2"></i>Editing <strong>' + escapeHtml(domain) + '</strong>: submitting reissues the certificate in place. The current certificate keeps serving until the reissue succeeds; the key shape is preserved unless explicitly changed.</span>' +
+            banner.innerHTML = '<span><i aria-hidden="true" class="fas fa-pen mr-2"></i>Editing <strong>' + escapeHtml(domain) + '</strong>: submitting reissues the certificate in place. The current certificate keeps serving until the reissue succeeds; the key shape is preserved unless explicitly changed.</span>' +
                 '<button type="button" data-click="cancelEditReissue" class="shrink-0 px-3 py-1 border border-warning-line rounded-md text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40">Cancel edit</button>';
             if (submitBtn) {
                 if (!submitBtn.dataset.createHtml) {
                     submitBtn.dataset.createHtml = submitBtn.innerHTML;
                 }
-                submitBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Reissue Certificate';
+                submitBtn.innerHTML = '<i aria-hidden="true" class="fas fa-sync-alt mr-2"></i>Reissue Certificate';
             }
         } else {
             if (banner) banner.remove();
@@ -3736,7 +3736,7 @@
 
     function replaceSectionHtml(cert) {
         return '<div id="certReplaceSection" class="hidden space-y-3 pt-4 border-t border-border">' +
-            '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Replace certificate</h4>' +
+            '<h3 class="text-xs font-semibold text-muted uppercase tracking-wider">Replace certificate</h3>' +
             '<p class="text-sm text-muted">Upload the certificate that replaces this one, with its chain and private key. ' +
             'It must name ' + escapeHtml(cert.domain) + '; its other names may change. Deploy hooks run as for a renewal.</p>' +
             bundleTilesHtml('replace', 'data-replace-dropzone') +
@@ -4230,7 +4230,7 @@
         var submitBtn = form.querySelector('button[type="submit"]');
         var submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : null;
         if (submitBtn) {
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+            submitBtn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Creating...';
         }
 
         var progressInterval = showLoadingModal(
@@ -5130,7 +5130,7 @@
             ' data-copy="' + escapeHtml(value) + '"' +
             ' data-click="copyAliasValueToClipboard" data-pass="el"' +
             ' title="Copy to clipboard" aria-label="Copy to clipboard">' +
-            '<i class="fas fa-clipboard text-xs"></i></button>';
+            '<i aria-hidden="true" class="fas fa-clipboard text-xs"></i></button>';
     }
 
     function copyAliasValueToClipboard(button) {

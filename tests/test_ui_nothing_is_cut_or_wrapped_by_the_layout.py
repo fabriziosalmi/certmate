@@ -75,11 +75,11 @@ def test_settings_section_badges_stay_on_one_line_on_a_phone(at_width, tab):
         const lines = el => {{ const r = document.createRange(); r.selectNodeContents(el);
                                return new Set([...r.getClientRects()].map(b => Math.round(b.top))).size; }};
         const panel = document.getElementById('settings-panel-{tab}');
-        return [...panel.querySelectorAll('h3 + span.rounded-full')]
+        return [...panel.querySelectorAll('h2 + span.rounded-full')]
             .filter(el => el.offsetParent && lines(el) !== 1)
             .map(el => [el.innerText.trim(), lines(el)]);
     }}""")
-    badges = page.evaluate(f"() => document.querySelectorAll('#settings-panel-{tab} h3 + span.rounded-full').length")
+    badges = page.evaluate(f"() => document.querySelectorAll('#settings-panel-{tab} h2 + span.rounded-full').length")
     assert badges, f'{tab}: no section badge found, nothing measured'
     assert wrapped == [], f'{tab} at 390px: badges on more than one line: {wrapped}'
 
@@ -104,7 +104,7 @@ def test_the_list_title_and_the_search_box_do_not_touch(at_width):
     gap = page.evaluate("""() => {
         // The title is the dashboard's breadcrumb (#1511, P67): the
         // breadcrumb is what sits beside the search box.
-        const title = [...document.querySelectorAll('h3')].find(h => h.innerText.trim() === 'Your Certificates')
+        const title = [...document.querySelectorAll('h2')].find(h => h.innerText.trim() === 'Your Certificates')
             .closest('nav[aria-label="Breadcrumb"]');
         const tools = title.nextElementSibling;
         return tools.getBoundingClientRect().left - title.getBoundingClientRect().right;

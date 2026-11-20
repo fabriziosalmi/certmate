@@ -7,15 +7,15 @@
                          placeholders of 21 more provider fields at 360 px. -->
                     <div x-show="tab === 'dns'" x-cloak id="settings-panel-dns" role="tabpanel" aria-labelledby="settings-tab-dns" tabindex="0"
                          class="bg-surface border-border rounded-lg sm:border sm:shadow-sm sm:p-6">
-                    <h3 class="text-lg font-semibold text-foreground flex items-center mb-4">
+                    <h2 class="text-lg font-semibold text-foreground flex items-center mb-4">
                         <i class="fas fa-server mr-2 text-primary" aria-hidden="true"></i>
                         Domain Validation
-                    </h3>
+                    </h2>
                     <p class="text-sm text-muted mb-6">How the certificate authority checks that you control a domain: the default challenge type, and the DNS providers that DNS-01 uses.</p>
                     <!-- Challenge Type Selection -->
                     <div class="mb-6">
                         <label class="block text-sm font-semibold text-foreground mb-3">
-                            <i class="fas fa-shield-alt mr-1"></i>
+                            <i aria-hidden="true" class="fas fa-shield-alt mr-1"></i>
                             ACME Challenge Type
                         </label>
                         <div class="grid grid-cols-2 gap-4">
@@ -23,7 +23,7 @@
                                 <input type="radio" name="challenge_type" value="dns-01" class="sr-only peer" checked>
                                 <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                     <div class="flex items-center gap-2">
-                                        <i class="fas fa-globe-americas text-blue-500"></i>
+                                        <i aria-hidden="true" class="fas fa-globe-americas text-blue-500"></i>
                                         <span class="text-sm font-medium text-foreground">DNS-01</span>
                                     </div>
                                     <p class="text-xs text-muted mt-1">Requires DNS provider credentials. Supports wildcards.</p>
@@ -33,7 +33,7 @@
                                 <input type="radio" name="challenge_type" value="http-01" class="sr-only peer">
                                 <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                     <div class="flex items-center gap-2">
-                                        <i class="fas fa-globe text-green-500"></i>
+                                        <i aria-hidden="true" class="fas fa-globe text-green-500"></i>
                                         <span class="text-sm font-medium text-foreground">HTTP-01</span>
                                     </div>
                                     <p class="text-xs text-muted mt-1">Domain must point to this server. No wildcards.</p>
@@ -49,7 +49,7 @@
                          the saved challenge type arrives. -->
                     <div id="dns-provider-section" class="border-t border-border pt-6 mb-4">
                         <label class="block text-sm font-semibold text-foreground mb-1" id="dns-provider-label">
-                            <i class="fas fa-server mr-1"></i>
+                            <i aria-hidden="true" class="fas fa-server mr-1"></i>
                             DNS Providers
                         </label>
                         <p class="text-xs text-muted mb-3" id="dns-provider-note">Used only by certificates that choose DNS-01, such as wildcards. The provider selected here is the one they use unless they name another.</p>
@@ -65,22 +65,22 @@
                              settings arrive, a hidden line that appeared made the whole
                              first row 20 px taller and pushed every row under it down. -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-semibold text-label mb-2 flex items-center">
-                                <i class="fas fa-users mr-2 text-blue-500"></i>
+                            <h3 class="text-sm font-semibold text-label mb-2 flex items-center">
+                                <i aria-hidden="true" class="fas fa-users mr-2 text-blue-500"></i>
                                 Multi-Account Support
                                 <span class="ml-2 text-xs bg-info-surface text-info-strong px-2 py-0.5 rounded-full">Advanced</span>
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2 mb-4" role="radiogroup" aria-labelledby="dns-provider-label">
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="cloudflare" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
+                                            <i aria-hidden="true" class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Cloudflare</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="cloudflare-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="cloudflare-accounts">
-                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <i aria-hidden="true" class="fas fa-users text-xs mr-1"></i>
                                                 <span id="cloudflare-account-count">0</span> accounts
                                             </div>
                                         </div>
@@ -90,12 +90,12 @@
                                     <input type="radio" name="dns_provider" value="route53" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fab fa-aws text-lg text-orange-400 mb-1"></i>
+                                            <i aria-hidden="true" class="fab fa-aws text-lg text-orange-400 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Route53</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="route53-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="route53-accounts">
-                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <i aria-hidden="true" class="fas fa-users text-xs mr-1"></i>
                                                 <span id="route53-account-count">0</span> accounts
                                             </div>
                                         </div>
@@ -105,12 +105,12 @@
                                     <input type="radio" name="dns_provider" value="digitalocean" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">DigitalOcean</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="digitalocean-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="digitalocean-accounts">
-                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <i aria-hidden="true" class="fas fa-users text-xs mr-1"></i>
                                                 <span id="digitalocean-account-count">0</span> accounts
                                             </div>
                                         </div>
@@ -120,12 +120,12 @@
                                     <input type="radio" name="dns_provider" value="azure" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Azure DNS</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="azure-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="azure-accounts">
-                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <i aria-hidden="true" class="fas fa-users text-xs mr-1"></i>
                                                 <span id="azure-account-count">0</span> accounts
                                             </div>
                                         </div>
@@ -135,12 +135,12 @@
                                     <input type="radio" name="dns_provider" value="google" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fab fa-google text-lg text-blue-500 mb-1"></i>
+                                            <i aria-hidden="true" class="fab fa-google text-lg text-blue-500 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Google DNS</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="google-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="google-accounts">
-                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <i aria-hidden="true" class="fas fa-users text-xs mr-1"></i>
                                                 <span id="google-account-count">0</span> accounts
                                             </div>
                                         </div>
@@ -150,12 +150,12 @@
                                     <input type="radio" name="dns_provider" value="powerdns" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-server text-lg text-muted mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-server text-lg text-muted mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">PowerDNS</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="powerdns-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="powerdns-accounts">
-                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <i aria-hidden="true" class="fas fa-users text-xs mr-1"></i>
                                                 <span id="powerdns-account-count">0</span> accounts
                                             </div>
                                         </div>
@@ -165,12 +165,12 @@
                                     <input type="radio" name="dns_provider" value="rfc2136" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-exchange-alt text-lg text-muted mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-exchange-alt text-lg text-muted mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">RFC2136</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="rfc2136-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 invisible whitespace-nowrap" id="rfc2136-accounts">
-                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <i aria-hidden="true" class="fas fa-users text-xs mr-1"></i>
                                                 <span id="rfc2136-account-count">0</span> accounts
                                             </div>
                                         </div>
@@ -181,17 +181,17 @@
                         
                         <!-- Single-Account Providers -->
                         <div>
-                            <h4 class="text-sm font-semibold text-label mb-2 flex items-center">
-                                <i class="fas fa-user mr-2 text-gray-500"></i>
+                            <h3 class="text-sm font-semibold text-label mb-2 flex items-center">
+                                <i aria-hidden="true" class="fas fa-user mr-2 text-gray-500"></i>
                                 Single Account Providers
                                 <span class="ml-2 text-xs bg-surface-2 text-label px-2 py-0.5 rounded-full">Standard</span>
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2" role="radiogroup" aria-labelledby="dns-provider-label">
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="linode" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-cloud text-lg text-green-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-cloud text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Akamai Connected Cloud (Linode)</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="linode-status">Not configured</div>
                                         </div>
@@ -201,7 +201,7 @@
                                     <input type="radio" name="dns_provider" value="edgedns" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-cloud text-lg text-orange-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-cloud text-lg text-orange-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Akamai Edge DNS</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="edgedns-status">Not configured</div>
                                         </div>
@@ -211,7 +211,7 @@
                                     <input type="radio" name="dns_provider" value="vultr" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Vultr</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="vultr-status">Not configured</div>
                                         </div>
@@ -221,7 +221,7 @@
                                     <input type="radio" name="dns_provider" value="solidserver" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-server text-lg text-blue-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-server text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">SOLIDserver</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="solidserver-status">Not configured</div>
                                         </div>
@@ -231,7 +231,7 @@
                                     <input type="radio" name="dns_provider" value="hetzner" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-server text-lg text-red-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-server text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Hetzner</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="hetzner-status">Not configured</div>
                                         </div>
@@ -241,7 +241,7 @@
                                     <input type="radio" name="dns_provider" value="hetzner-cloud" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-server text-lg text-red-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-server text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Hetzner Cloud</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="hetzner-cloud-status">Not configured</div>
                                         </div>
@@ -251,7 +251,7 @@
                                     <input type="radio" name="dns_provider" value="arvancloud" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">ArvanCloud</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="arvancloud-status">Not configured</div>
                                         </div>
@@ -261,7 +261,7 @@
                                     <input type="radio" name="dns_provider" value="infomaniak" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Infomaniak</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="infomaniak-status">Not configured</div>
                                         </div>
@@ -271,7 +271,7 @@
                                     <input type="radio" name="dns_provider" value="acme-dns" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-network-wired text-lg text-green-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-network-wired text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">ACME-DNS</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="acme-dns-status">Not configured</div>
                                         </div>
@@ -281,7 +281,7 @@
                                     <input type="radio" name="dns_provider" value="desec" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-shield-alt text-lg text-green-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-shield-alt text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">deSEC</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="desec-status">Not configured</div>
                                         </div>
@@ -291,7 +291,7 @@
                                     <input type="radio" name="dns_provider" value="scaleway" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Scaleway</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="scaleway-status">Not configured</div>
                                         </div>
@@ -301,7 +301,7 @@
                                     <input type="radio" name="dns_provider" value="gandi" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-globe text-lg text-orange-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-globe text-lg text-orange-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Gandi</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="gandi-status">Not configured</div>
                                         </div>
@@ -311,7 +311,7 @@
                                     <input type="radio" name="dns_provider" value="ovh" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-server text-lg text-purple-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-server text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">OVH</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="ovh-status">Not configured</div>
                                         </div>
@@ -321,7 +321,7 @@
                                     <input type="radio" name="dns_provider" value="namecheap" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Namecheap</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="namecheap-status">Not configured</div>
                                         </div>
@@ -331,7 +331,7 @@
                                     <input type="radio" name="dns_provider" value="porkbun" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-paw text-lg text-pink-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-paw text-lg text-pink-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Porkbun</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="porkbun-status">Not configured</div>
                                         </div>
@@ -341,7 +341,7 @@
                                     <input type="radio" name="dns_provider" value="godaddy" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-globe text-lg text-green-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-globe text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">GoDaddy</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="godaddy-status">Not configured</div>
                                         </div>
@@ -351,7 +351,7 @@
                                     <input type="radio" name="dns_provider" value="dnsmadeeasy" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-cogs text-lg text-green-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-cogs text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">DNS Made Easy</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="dnsmadeeasy-status">Not configured</div>
                                         </div>
@@ -361,7 +361,7 @@
                                     <input type="radio" name="dns_provider" value="nsone" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">NS1</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="nsone-status">Not configured</div>
                                         </div>
@@ -371,7 +371,7 @@
                                     <input type="radio" name="dns_provider" value="he-ddns" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Hurricane Electric</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="he-ddns-status">Not configured</div>
                                         </div>
@@ -381,7 +381,7 @@
                                     <input type="radio" name="dns_provider" value="dynudns" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Dynu</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="dynudns-status">Not configured</div>
                                         </div>
@@ -391,7 +391,7 @@
                                     <input type="radio" name="dns_provider" value="duckdns" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-feather text-lg text-yellow-500 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-feather text-lg text-yellow-500 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">DuckDNS</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="duckdns-status">Not configured</div>
                                         </div>
@@ -401,7 +401,7 @@
                                     <input type="radio" name="dns_provider" value="custom-script" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
-                                            <i class="fas fa-terminal text-lg text-gray-600 mb-1"></i>
+                                            <i aria-hidden="true" class="fas fa-terminal text-lg text-gray-600 mb-1"></i>
                                             <div class="text-xs font-medium text-foreground">Custom Script</div>
                                             <div class="text-xs text-muted mt-1 whitespace-nowrap" id="custom-script-status">Not configured</div>
                                         </div>
@@ -432,13 +432,13 @@
                     <div id="cloudflare-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fab fa-cloudflare mr-2 text-orange-500"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fab fa-cloudflare mr-2 text-orange-500"></i>
                                     Cloudflare Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="cloudflare-add-account" data-click="showAddAccountModal" data-args='["cloudflare"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -472,13 +472,13 @@
                     <div id="route53-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fab fa-aws mr-2 text-orange-400"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fab fa-aws mr-2 text-orange-400"></i>
                                     AWS Route53 Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="route53-add-account" data-click="showAddAccountModal" data-args='["route53"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -544,13 +544,13 @@
                     <div id="azure-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fab fa-microsoft mr-2 text-blue-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fab fa-microsoft mr-2 text-blue-600"></i>
                                     Azure DNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="azure-add-account" data-click="showAddAccountModal" data-args='["azure"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -618,13 +618,13 @@
                     <div id="google-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fab fa-google mr-2 text-blue-500"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fab fa-google mr-2 text-blue-500"></i>
                                     Google Cloud DNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="google-add-account" data-click="showAddAccountModal" data-args='["google"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -665,13 +665,13 @@
                     <div id="powerdns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-server mr-2 text-gray-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-server mr-2 text-gray-600"></i>
                                     PowerDNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="powerdns-add-account" data-click="showAddAccountModal" data-args='["powerdns"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -715,13 +715,13 @@
                     <div id="digitalocean-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fab fa-digital-ocean mr-2 text-blue-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fab fa-digital-ocean mr-2 text-blue-600"></i>
                                     DigitalOcean DNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="digitalocean-add-account" data-click="showAddAccountModal" data-args='["digitalocean"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -757,13 +757,13 @@
                     <div id="vultr-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-cloud mr-2 text-blue-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-cloud mr-2 text-blue-600"></i>
                                     Vultr DNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="vultr-add-account" data-click="showAddAccountModal" data-args='["vultr"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -794,13 +794,13 @@
                     <div id="solidserver-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-server mr-2 text-blue-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-server mr-2 text-blue-600"></i>
                                     EfficientIP SOLIDserver DNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="solidserver-add-account" data-click="showAddAccountModal" data-args='["solidserver"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -872,10 +872,10 @@
                     <!-- Linode Configuration -->
                     <div id="linode-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-cloud mr-2 text-green-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-cloud mr-2 text-green-600"></i>
                                 Akamai Connected Cloud (Linode) DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="linode_api_key" class="block text-sm font-medium text-label">
@@ -895,10 +895,10 @@
                     <!-- Hetzner Cloud Configuration -->
                     <div id="hetzner-cloud-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-server mr-2 text-red-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-server mr-2 text-red-600"></i>
                                 Hetzner Cloud DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="hetzner-cloud_api_token" class="block text-sm font-medium text-label">
@@ -918,10 +918,10 @@
                     <!-- ArvanCloud Configuration -->
                     <div id="arvancloud-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-cloud mr-2 text-blue-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-cloud mr-2 text-blue-600"></i>
                                 ArvanCloud DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="arvancloud_api_key" class="block text-sm font-medium text-label">
@@ -941,10 +941,10 @@
                     <!-- Infomaniak Configuration -->
                     <div id="infomaniak-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-cloud mr-2 text-purple-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-cloud mr-2 text-purple-600"></i>
                                 Infomaniak DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="infomaniak_api_token" class="block text-sm font-medium text-label">
@@ -964,10 +964,10 @@
                     <!-- ACME-DNS Configuration -->
                     <div id="acme-dns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-network-wired mr-2 text-green-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-network-wired mr-2 text-green-600"></i>
                                 ACME-DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="acme-dns_api_url" class="block text-sm font-medium text-label">
@@ -1011,10 +1011,10 @@
                     <!-- deSEC Configuration -->
                     <div id="desec-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-shield-alt mr-2 text-green-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-shield-alt mr-2 text-green-600"></i>
                                 deSEC DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="desec_api_token" class="block text-sm font-medium text-label">
@@ -1034,10 +1034,10 @@
                     <!-- Scaleway Configuration -->
                     <div id="scaleway-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-cloud mr-2 text-purple-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-cloud mr-2 text-purple-600"></i>
                                 Scaleway DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="scaleway_application_token" class="block text-sm font-medium text-label">
@@ -1057,10 +1057,10 @@
                     <!-- Akamai Edge DNS Configuration -->
                     <div id="edgedns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-cloud mr-2 text-orange-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-cloud mr-2 text-orange-600"></i>
                                 Akamai Edge DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="edgedns_client_token" class="block text-sm font-medium text-label">
@@ -1107,10 +1107,10 @@
                     <!-- Gandi Configuration -->
                     <div id="gandi-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-globe mr-2 text-orange-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-globe mr-2 text-orange-600"></i>
                                 Gandi DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="gandi_api_token" class="block text-sm font-medium text-label">
@@ -1130,10 +1130,10 @@
                     <!-- OVH Configuration -->
                     <div id="ovh-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-server mr-2 text-purple-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-server mr-2 text-purple-600"></i>
                                 OVH DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="ovh_endpoint" class="block text-sm font-medium text-label">
@@ -1185,10 +1185,10 @@
                     <!-- Namecheap Configuration -->
                     <div id="namecheap-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-shopping-cart mr-2 text-red-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-shopping-cart mr-2 text-red-600"></i>
                                 Namecheap DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="namecheap_username" class="block text-sm font-medium text-label">
@@ -1217,13 +1217,13 @@
                     <div id="rfc2136-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-exchange-alt mr-2 text-gray-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-exchange-alt mr-2 text-gray-600"></i>
                                     RFC2136 DNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="rfc2136-add-account" data-click="showAddAccountModal" data-args='["rfc2136"]' 
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Server
                                 </button>
                             </div>
@@ -1288,10 +1288,10 @@
                     <!-- Hetzner Configuration -->
                     <div id="hetzner-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-server mr-2 text-red-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-server mr-2 text-red-600"></i>
                                 Hetzner DNS Configuration
-                            </h4>
+                            </h3>
                             <div>
                                 <label for="hetzner_api_token" class="block text-sm font-medium text-label">
                                     API Token
@@ -1309,10 +1309,10 @@
                     <!-- Porkbun Configuration -->
                     <div id="porkbun-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-paw mr-2 text-pink-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-paw mr-2 text-pink-600"></i>
                                 Porkbun DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="porkbun_api_key" class="block text-sm font-medium text-label">
@@ -1340,10 +1340,10 @@
                     <!-- GoDaddy Configuration -->
                     <div id="godaddy-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-globe mr-2 text-green-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-globe mr-2 text-green-600"></i>
                                 GoDaddy DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="godaddy_api_key" class="block text-sm font-medium text-label">
@@ -1371,10 +1371,10 @@
                     <!-- Hurricane Electric Configuration -->
                     <div id="he-ddns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-bolt mr-2 text-yellow-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-bolt mr-2 text-yellow-600"></i>
                                 Hurricane Electric DNS Configuration
-                            </h4>
+                            </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label for="he_ddns_username" class="block text-sm font-medium text-label">
@@ -1402,10 +1402,10 @@
                     <!-- Dynu Configuration -->
                     <div id="dynudns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-sm font-semibold text-foreground mb-4">
-                                <i class="fas fa-sync-alt mr-2 text-purple-600"></i>
+                            <h3 class="text-sm font-semibold text-foreground mb-4">
+                                <i aria-hidden="true" class="fas fa-sync-alt mr-2 text-purple-600"></i>
                                 Dynu DNS Configuration
-                            </h4>
+                            </h3>
                             <div>
                                 <label for="dynudns_token" class="block text-sm font-medium text-label">
                                     API Token
@@ -1424,13 +1424,13 @@
                     <div id="duckdns-config" class="dns-config hidden">
                         <div class="border border-warning-line rounded-lg p-4 bg-warning-surface">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-feather mr-2 text-yellow-500"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-feather mr-2 text-yellow-500"></i>
                                     DuckDNS Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="duckdns-add-account" data-click="showAddAccountModal" data-args='["duckdns"]'
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -1452,7 +1452,7 @@
                             </div>
 
                             <div class="mt-3 p-3 rounded-md bg-warning-surface border border-warning-line text-sm text-gray-700 dark:text-gray-200">
-                                <p class="font-medium mb-1"><i class="fas fa-info-circle mr-1"></i> No domain? No problem.</p>
+                                <p class="font-medium mb-1"><i aria-hidden="true" class="fas fa-info-circle mr-1"></i> No domain? No problem.</p>
                                 <p>DuckDNS gives you a free <code class="text-xs bg-yellow-200 dark:bg-yellow-800 px-1 rounded">&lt;name&gt;.duckdns.org</code> subdomain — ideal for homelabs, self-hosted services, and IoT devices. Sign in at <a href="https://www.duckdns.org/" target="_blank" rel="noopener" class="text-primary hover:underline">duckdns.org</a>, pick a name, and copy the account token from the top of the page. The same token grants access to every subdomain owned by your account, including wildcards (<code class="text-xs bg-yellow-200 dark:bg-yellow-800 px-1 rounded">*.mybox.duckdns.org</code>).</p>
                             </div>
                         </div>
@@ -1462,13 +1462,13 @@
                     <div id="custom-script-config" class="dns-config hidden">
                         <div class="border border-border rounded-lg p-4 bg-input">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-terminal mr-2 text-gray-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-terminal mr-2 text-gray-600"></i>
                                     Custom Script Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="custom-script-add-account" data-click="showAddAccountModal" data-args='["custom-script"]'
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -1498,7 +1498,7 @@
                             </div>
 
                             <div class="mt-3 p-3 rounded-md bg-input border border-border text-sm text-gray-700 dark:text-gray-200">
-                                <p class="font-medium mb-1"><i class="fas fa-info-circle mr-1"></i> Bring your own DNS provider.</p>
+                                <p class="font-medium mb-1"><i aria-hidden="true" class="fas fa-info-circle mr-1"></i> Bring your own DNS provider.</p>
                                 <p>For providers without a certbot plugin (OCI, in-house DNS, ...). certbot runs your auth script with <code class="text-xs bg-gray-200 dark:bg-gray-800 px-1 rounded">CERTBOT_DOMAIN</code> and <code class="text-xs bg-gray-200 dark:bg-gray-800 px-1 rounded">CERTBOT_VALIDATION</code> in the environment; the script must create the <code class="text-xs bg-gray-200 dark:bg-gray-800 px-1 rounded">_acme-challenge</code> TXT record and wait until it has propagated. Scripts must be absolute paths, executable, and not world-writable; they run with CertMate's privileges (same trust model as deploy hooks). See the DNS providers documentation for a worked example.</p>
                             </div>
                         </div>
@@ -1508,13 +1508,13 @@
                     <div id="nsone-config" class="dns-config hidden">
                         <div class="border border-border rounded-lg p-4 bg-input">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-network-wired mr-2 text-indigo-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-network-wired mr-2 text-indigo-600"></i>
                                     NS1 Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="nsone-add-account" data-click="showAddAccountModal" data-args='["nsone"]'
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>
@@ -1545,13 +1545,13 @@
                     <div id="dnsmadeeasy-config" class="dns-config hidden">
                         <div class="border border-border rounded-lg p-4 bg-input">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h4 class="text-sm font-semibold text-foreground">
-                                    <i class="fas fa-cogs mr-2 text-green-600"></i>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    <i aria-hidden="true" class="fas fa-cogs mr-2 text-green-600"></i>
                                     DNS Made Easy Configuration
-                                </h4>
+                                </h3>
                                 <button type="button" id="dnsmadeeasy-add-account" data-click="showAddAccountModal" data-args='["dnsmadeeasy"]'
                                         class="btn btn-primary shrink-0 whitespace-nowrap">
-                                    <i class="fas fa-plus mr-1"></i>
+                                    <i aria-hidden="true" class="fas fa-plus mr-1"></i>
                                     Add Account
                                 </button>
                             </div>

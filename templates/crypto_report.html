@@ -25,9 +25,9 @@
     <div class="report-card bg-surface shadow-card rounded-xl">
     {% call(slot) page_header('Crypto readiness report', parent=('Inventory', '/inventory'), extra='no-print') %}{% if slot == 'actions' %}
         <div class="flex flex-wrap items-center gap-2">
-            <a href="/api/inventory/crypto-report?format=csv" class="btn btn-secondary btn-sm"><i class="fas fa-file-csv mr-1"></i>CSV</a>
-            <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><i class="fas fa-file-code mr-1"></i>JSON</a>
-            <button type="button" data-click="print" class="btn btn-primary btn-sm"><i class="fas fa-print mr-1"></i>Print / Save as PDF</button>
+            <a href="/api/inventory/crypto-report?format=csv" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-file-csv mr-1"></i>CSV</a>
+            <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-file-code mr-1"></i>JSON</a>
+            <button type="button" data-click="print" class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-print mr-1"></i>Print / Save as PDF</button>
         </div>
     {% endif %}{% endcall %}
     <div class="report-sheet px-6 py-6">
