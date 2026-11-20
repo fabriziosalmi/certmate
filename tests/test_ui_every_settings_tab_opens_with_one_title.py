@@ -250,6 +250,31 @@ def _visit(page, tab):
     return seen
 
 
+def _why_not_seen(page, fields):
+    """A field of main the test did not see is accepted for one reason only,
+    read from the server: it is a provider's single-credential field (in
+    #<provider>-legacy-config), and that provider has accounts, so the page
+    lists the accounts in its place. That is what an earlier test leaves
+    behind (a Cloudflare account): the provider's box then holds account cards
+    and no text field, and its token is edited in the account dialog, which is
+    not in the tab. Returns (accepted with their reason, unexplained)."""
+    accepted, unexplained = {}, []
+    for field in fields:
+        holder = page.evaluate(
+            "(id) => { const f = document.getElementById(id); const c = f && f.closest('[id$=\"-legacy-config\"]');"
+            " return c ? c.id.slice(0, -'-legacy-config'.length) : null; }", field)
+        if not holder:
+            unexplained.append(f'{field} (not a provider credential field)')
+            continue
+        answer = page.request.get(f'{BASE_URL}/api/dns/{holder}/accounts')
+        accounts = answer.json() if answer.ok else None
+        if isinstance(accounts, list) and accounts:
+            accepted[field] = f'{holder} has {len(accounts)} account(s)'
+        else:
+            unexplained.append(f'{field} ({holder} accounts: HTTP {answer.status}, {accounts!r})')
+    return accepted, unexplained
+
+
 @pytest.mark.parametrize('width', [360, 390])
 def test_on_a_phone_the_tab_card_takes_no_room_from_the_fields(browser_page, ui_session_cookie, width):
     """With its border and padding at every width, the card took 50 px from
@@ -262,14 +287,19 @@ def test_on_a_phone_the_tab_card_takes_no_room_from_the_fields(browser_page, ui_
         for tab in ('general', 'dns', 'storage'):
             seen.update(_visit(page, tab))
         baseline = FIELD_ROOM_ON_MAIN[width]
-        missing = sorted(set(baseline) - set(seen))
+        absent, missing = _why_not_seen(page, sorted(set(baseline) - set(seen)))
         narrower = {field: (seen[field][0], room) for field, room in baseline.items()
                     if field in seen and seen[field][0] < room - 0.5}
         # Information only: whether a placeholder fits depends on the fonts.
         cut = sorted(field for field, (_, is_cut) in seen.items() if is_cut)
         assert not missing and not narrower, (
             f'at {width} px, fields narrower than on main (now, main): {narrower}; '
-            f'fields of main not seen: {missing}; placeholders cut here ({len(cut)}, for information): {cut}')
+            f'fields of main not seen, with no reason the server confirms: {missing}; '
+            f'not seen because the server says their provider has accounts: {absent}; '
+            f'placeholders cut here ({len(cut)}, for information): {cut}')
+        # Measured in the other state, so a skip there is not silent.
+        print(f'at {width} px: {len(baseline) - len(absent)} fields compared with main, '
+              f'{len(absent)} hidden by accounts: {absent}')
     finally:
         context.close()
 
