@@ -3412,8 +3412,8 @@
             '<option value="local_filesystem">Local filesystem</option>' +
             '</select>' +
             '<p id="storageMigSame" class="hidden mt-2 text-sm text-label" role="status">' +
-            'If this source is the same location as the backend in use, there is nothing to copy: ' +
-            'each certificate would be written onto itself and counted as migrated.' +
+            'This source is the backend in use, as saved. If Settings still shows that same location, ' +
+            'there is nothing to copy: each certificate would be written onto itself and counted as migrated.' +
             '</p>' +
             // What POST /api/storage/migrate does: migrate_certificates reads
             // each certificate the source lists and gives it to the target's
@@ -3459,10 +3459,12 @@
         document.getElementById('storageMigCloseBtn').addEventListener('click', closeStorageMigrationModal);
         document.getElementById('storageMigCancelBtn').addEventListener('click', closeStorageMigrationModal);
         document.getElementById('storageMigStartBtn').addEventListener('click', performStorageMigration);
-        // A source of the type in use may be the very location the form
-        // shows: the server does not refuse that, it writes each certificate
-        // onto itself and counts it migrated. The page cannot always tell (a
-        // retyped secret, a directory written another way), so it says so.
+        // Only the source's type is sent, and the server reads a source of
+        // the type in use from the saved settings: it is the saved location.
+        // The target is the form. If the form still shows that location, the
+        // server writes each certificate onto itself and counts it migrated;
+        // it does not refuse. The page cannot always tell (a retyped secret,
+        // a directory written another way), so the note says what decides.
         sourceSelect.addEventListener('change', function () {
             var inUse = savedStorageConfig.backend || 'local_filesystem';
             document.getElementById('storageMigSame').classList.toggle('hidden', sourceSelect.value !== inUse);

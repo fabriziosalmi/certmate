@@ -314,15 +314,17 @@ def test_migrate_certificates_says_what_it_writes_into_the_backend_settings_show
     assert sent == [], sent
 
 
-SAME = ('If this source is the same location as the backend in use, there is nothing to copy: '
-        'each certificate would be written onto itself and counted as migrated.')
+SAME = ('This source is the backend in use, as saved. If Settings still shows that same location, '
+        'there is nothing to copy: each certificate would be written onto itself and counted as migrated.')
 
 
 def test_a_source_of_the_backend_in_use_says_it_may_be_a_copy_onto_itself(page):
-    """The server does not refuse a migration onto the same location: it writes
-    each certificate onto itself and counts it migrated. The page cannot always
-    tell the same location from another one of the same type (another bucket,
-    a directory written another way), so it says so and leaves Start on."""
+    """The page sends only the source's type; the server reads a source of the
+    type in use from the saved settings (resources_storage.py), so that source IS
+    the saved location. What decides is the target, the form: the same location
+    is a copy onto itself, which the server does not refuse (it counts each
+    certificate migrated); another one is a real migration. The note says that,
+    and Start stays on."""
     def settings(route):
         if route.request.method != 'GET':
             return route.continue_()
@@ -334,6 +336,17 @@ def test_a_source_of_the_backend_in_use_says_it_may_be_a_copy_onto_itself(page):
     page.route('**/api/web/settings', settings)
     _open(page, '/settings#storage')
     page.wait_for_function("() => document.getElementById('storage-backend').value === 'local_filesystem'")
+    dialog = _migration_dialog(page, 'local_filesystem')
+    same = dialog.locator('#storageMigSame')
+    start = dialog.locator('#storageMigStartBtn')
+    assert same.is_visible() and ' '.join(same.inner_text().split()) == SAME, same.inner_text()
+    assert start.is_enabled()
+    # A form showing another directory: still the saved backend as the source,
+    # and the note still true (it says what decides).
+    page.select_option('#storageMigSource', '')
+    dialog.locator('button:has-text("Cancel")').click()
+    dialog.wait_for(state='detached')
+    page.fill('#storage-cert-dir', '/tmp/another-place-b18')
     dialog = _migration_dialog(page, 'local_filesystem')
     same = dialog.locator('#storageMigSame')
     start = dialog.locator('#storageMigStartBtn')
