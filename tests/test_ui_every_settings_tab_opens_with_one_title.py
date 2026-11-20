@@ -139,96 +139,137 @@ def test_on_a_phone_every_control_of_general_dns_and_storage_stays_inside_its_ca
         context.close()
 
 
-# A field as wide as the panel, per tab, and its text room on main before the
-# shell (#1511 review): the card's border and padding are left out below sm,
-# so on a phone the fields are no narrower than they were. Linode's key and the
-# local directory are shown whatever the instance holds once their provider or
-# backend is chosen (Cloudflare's token hides when it has accounts).
-ROOM_ON_MAIN = {
-    360: {'general': ('api_bearer_token', 193), 'dns': ('linode_api_key', 209),
-          'storage': ('storage-cert-dir', 193)},
-    390: {'general': ('api_bearer_token', 223), 'dns': ('linode_api_key', 239),
-          'storage': ('storage-cert-dir', 223)},
-}
-
-# Placeholders already wider than their field on main, measured for every DNS
-# provider and storage backend before the shell. They are a follow-up of their
-# own; what this test refuses is one more.
-CUT_ON_MAIN = {
+# The text room (content width) of every text field of General, of every DNS
+# provider and of every storage backend at 360 and 390 px, measured on main
+# (179b474) before the shell with the probe below (#1511 review). The card's
+# border and padding are left out below sm, so on a phone no field may be
+# narrower than it was. Widths, not placeholders: a field's width comes from
+# the layout (none of these shares a row with text at these widths, checked on
+# main), while whether a placeholder fits depends on the fonts of the platform.
+# One exception: on main the .pfx password field was a fixed 288 px and ran
+# 19 px past its panel at 360 px (room 262); its baseline is its room at the
+# panel's width.
+FIELD_ROOM_ON_MAIN = {
     360: {
-        'azure_client_id', 'azure_subscription_id', 'azure_tenant_id', 'cloudflare_api_token',
-        'custom-script_auth_hook', 'custom-script_cleanup_hook', 'desec_api_token', 'digitalocean_api_token',
-        'dnsmadeeasy_api_key', 'dnsmadeeasy_secret_key', 'duckdns_api_token', 'edgedns_access_token',
-        'edgedns_client_token', 'edgedns_host', 'gandi_api_token', 'google_service_account_key',
-        'he_ddns_password', 'he_ddns_username', 'hetzner-cloud_api_token', 'hetzner_api_token',
-        'powerdns_api_url', 'route53_assume_role_arn', 'route53_secret_access_key',
-        'scaleway_application_token', 'solidserver_dns_name',
-        'aws-assume-role-arn', 'azure-client-id', 'azure-tenant-id', 'azure-vault-url', 's3-assume-role-arn',
-        's3-endpoint-url', 'vault-url',
+        'acme-dns_api_url': 209, 'acme-dns_password': 209, 'acme-dns_subdomain': 209, 'acme-dns_username': 209,
+        'api_bearer_token': 193, 'arvancloud_api_key': 209, 'aws-access-key-id': 193, 'aws-assume-role-arn': 193,
+        'aws-region': 193, 'aws-secret-access-key': 193, 'azure-client-id': 193, 'azure-client-secret': 193,
+        'azure-tenant-id': 193, 'azure-vault-url': 193, 'azure_client_id': 209, 'azure_client_secret': 209,
+        'azure_resource_group': 209, 'azure_subscription_id': 209, 'azure_tenant_id': 209, 'cache_ttl': 102,
+        'cloudflare_api_token': 209, 'custom-script_auth_hook': 209, 'custom-script_cleanup_hook': 209,
+        'desec_api_token': 209, 'digitalocean_api_token': 209, 'dns_propagation_current': 102,
+        'dnsmadeeasy_api_key': 209, 'dnsmadeeasy_secret_key': 209, 'duckdns_api_token': 209, 'dynudns_token': 209,
+        'edgedns_access_token': 209, 'edgedns_client_secret': 209, 'edgedns_client_token': 209, 'edgedns_host': 209,
+        'gandi_api_token': 209, 'godaddy_api_key': 209, 'godaddy_secret': 209, 'google_project_id': 209,
+        'google_service_account_key': 209, 'he_ddns_password': 209, 'he_ddns_username': 209,
+        'hetzner-cloud_api_token': 209, 'hetzner_api_token': 209, 'infisical-client-id': 193,
+        'infisical-client-secret': 193, 'infisical-environment': 193, 'infisical-project-id': 193,
+        'infisical-site-url': 193, 'infomaniak_api_token': 209, 'linode_api_key': 209, 'namecheap_api_key': 209,
+        'namecheap_username': 209, 'nsone_api_key': 209, 'ovh_application_key': 209, 'ovh_application_secret': 209,
+        'ovh_consumer_key': 209, 'pfx_password': 243, 'porkbun_api_key': 209, 'porkbun_secret_key': 209,
+        'powerdns_api_key': 209, 'powerdns_api_url': 209, 'renewal_threshold_days': 102, 'rfc2136_nameserver': 209,
+        'rfc2136_tsig_key': 209, 'rfc2136_tsig_secret': 209, 'route53_access_key_id': 209,
+        'route53_assume_role_arn': 209, 'route53_region': 209, 'route53_secret_access_key': 209,
+        's3-access-key-id': 193, 's3-assume-role-arn': 193, 's3-bucket': 193, 's3-endpoint-url': 193,
+        's3-prefix': 193, 's3-region': 193, 's3-secret-access-key': 193, 'scaleway_application_token': 209,
+        'solidserver_dns_name': 209, 'solidserver_dnsview_name': 209, 'solidserver_host': 209,
+        'solidserver_password': 209, 'solidserver_propagation_seconds': 209, 'solidserver_username': 209,
+        'storage-cert-dir': 193, 'vault-mount-point': 193, 'vault-token': 193, 'vault-url': 193,
+        'vultr_api_key': 209,
     },
     390: {
-        'azure_client_id', 'azure_subscription_id', 'azure_tenant_id', 'custom-script_auth_hook',
-        'custom-script_cleanup_hook', 'desec_api_token', 'dnsmadeeasy_secret_key', 'duckdns_api_token',
-        'edgedns_access_token', 'edgedns_client_token', 'google_service_account_key', 'he_ddns_password',
-        'he_ddns_username', 'hetzner-cloud_api_token', 'powerdns_api_url', 'route53_assume_role_arn',
-        'solidserver_dns_name',
-        'aws-assume-role-arn', 'azure-client-id', 'azure-tenant-id', 's3-assume-role-arn', 's3-endpoint-url',
+        'acme-dns_api_url': 239, 'acme-dns_password': 239, 'acme-dns_subdomain': 239, 'acme-dns_username': 239,
+        'api_bearer_token': 223, 'arvancloud_api_key': 239, 'aws-access-key-id': 223, 'aws-assume-role-arn': 223,
+        'aws-region': 223, 'aws-secret-access-key': 223, 'azure-client-id': 223, 'azure-client-secret': 223,
+        'azure-tenant-id': 223, 'azure-vault-url': 223, 'azure_client_id': 239, 'azure_client_secret': 239,
+        'azure_resource_group': 239, 'azure_subscription_id': 239, 'azure_tenant_id': 239, 'cache_ttl': 102,
+        'cloudflare_api_token': 239, 'custom-script_auth_hook': 239, 'custom-script_cleanup_hook': 239,
+        'desec_api_token': 239, 'digitalocean_api_token': 239, 'dns_propagation_current': 102,
+        'dnsmadeeasy_api_key': 239, 'dnsmadeeasy_secret_key': 239, 'duckdns_api_token': 239, 'dynudns_token': 239,
+        'edgedns_access_token': 239, 'edgedns_client_secret': 239, 'edgedns_client_token': 239, 'edgedns_host': 239,
+        'gandi_api_token': 239, 'godaddy_api_key': 239, 'godaddy_secret': 239, 'google_project_id': 239,
+        'google_service_account_key': 239, 'he_ddns_password': 239, 'he_ddns_username': 239,
+        'hetzner-cloud_api_token': 239, 'hetzner_api_token': 239, 'infisical-client-id': 223,
+        'infisical-client-secret': 223, 'infisical-environment': 223, 'infisical-project-id': 223,
+        'infisical-site-url': 223, 'infomaniak_api_token': 239, 'linode_api_key': 239, 'namecheap_api_key': 239,
+        'namecheap_username': 239, 'nsone_api_key': 239, 'ovh_application_key': 239, 'ovh_application_secret': 239,
+        'ovh_consumer_key': 239, 'pfx_password': 262, 'porkbun_api_key': 239, 'porkbun_secret_key': 239,
+        'powerdns_api_key': 239, 'powerdns_api_url': 239, 'renewal_threshold_days': 102, 'rfc2136_nameserver': 239,
+        'rfc2136_tsig_key': 239, 'rfc2136_tsig_secret': 239, 'route53_access_key_id': 239,
+        'route53_assume_role_arn': 239, 'route53_region': 239, 'route53_secret_access_key': 239,
+        's3-access-key-id': 223, 's3-assume-role-arn': 223, 's3-bucket': 223, 's3-endpoint-url': 223,
+        's3-prefix': 223, 's3-region': 223, 's3-secret-access-key': 223, 'scaleway_application_token': 239,
+        'solidserver_dns_name': 239, 'solidserver_dnsview_name': 239, 'solidserver_host': 239,
+        'solidserver_password': 239, 'solidserver_propagation_seconds': 239, 'solidserver_username': 239,
+        'storage-cert-dir': 223, 'vault-mount-point': 223, 'vault-token': 223, 'vault-url': 223,
+        'vultr_api_key': 239,
     },
 }
-
-CUT_PLACEHOLDERS = """(id) => {
+TEXT_FIELDS = """(id) => {
+    const out = {};
+    const sel = 'input[type=text], input[type=password], input[type=url], input[type=email], input[type=number], '
+        + 'input[type=search], input:not([type]), textarea';
     const ctx = document.createElement('canvas').getContext('2d');
-    const panel = document.getElementById('settings-panel-' + id);
-    return [...panel.querySelectorAll('input[placeholder], textarea[placeholder]')]
-        .filter(f => f.checkVisibility() && f.placeholder).filter(f => {
-            const st = getComputedStyle(f);
-            ctx.font = `${st.fontStyle} ${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
-            return ctx.measureText(f.placeholder).width > f.clientWidth - parseFloat(st.paddingLeft)
-                - parseFloat(st.paddingRight) + 0.5;
-        }).map(f => f.id || f.name);
+    for (const f of document.getElementById('settings-panel-' + id).querySelectorAll(sel)) {
+        if (!f.checkVisibility() || !f.id) continue;
+        const st = getComputedStyle(f);
+        const room = f.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+        ctx.font = `${st.fontStyle} ${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
+        const cut = !!f.placeholder && ctx.measureText(f.placeholder).width > room + 0.5;
+        out[f.id] = [Math.round(room * 100) / 100, cut];
+    }
+    return out;
 }"""
 
-ROOM = """(id) => { const e = document.getElementById(id); const st = getComputedStyle(e);
-    return Math.round(e.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight)); }"""
+
+def _visit(page, tab):
+    """Every state of the tab that shows other fields: each DNS provider, each
+    storage backend. The smallest room a field has in any of them counts."""
+    page.goto('about:blank')
+    page.goto(f'{BASE_URL}/settings#{tab}', wait_until='networkidle')
+    page.wait_for_function(f"() => document.getElementById('settings-panel-{tab}').checkVisibility()")
+    seen = {}
+
+    def take():
+        for field, (room, cut) in page.evaluate(TEXT_FIELDS, tab).items():
+            if field not in seen or room < seen[field][0]:
+                seen[field] = (room, cut)
+
+    if tab == 'dns':
+        for provider in page.evaluate(
+                "() => [...document.querySelectorAll('input[name=\"dns_provider\"]')].map(i => i.value)"):
+            page.click(f'label:has(input[name="dns_provider"][value="{provider}"])')
+            take()
+    elif tab == 'storage':
+        for backend in page.evaluate(
+                "() => [...document.querySelectorAll('#storage-backend option')].map(o => o.value)"):
+            page.select_option('#storage-backend', backend)
+            take()
+    else:
+        take()
+    return seen
 
 
 @pytest.mark.parametrize('width', [360, 390])
 def test_on_a_phone_the_tab_card_takes_no_room_from_the_fields(browser_page, ui_session_cookie, width):
     """With its border and padding at every width, the card took 50 px from
-    the General and DNS fields on a phone and 18 from the Storage ones: 22
-    more placeholders were cut at 360 px and 19 more at 390."""
+    the General and DNS fields on a phone and 18 from the Storage ones."""
     context = browser_page.context.browser.new_context(viewport={'width': width, 'height': 900})
     context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
     try:
         page = context.new_page()
-        narrower, cut = {}, set()
-        for tab, (field, room) in ROOM_ON_MAIN[width].items():
-            page.goto('about:blank')
-            page.goto(f'{BASE_URL}/settings#{tab}', wait_until='networkidle')
-            page.wait_for_function(f"() => document.getElementById('settings-panel-{tab}').checkVisibility()")
-            if tab == 'dns':
-                page.click('label:has(input[name="dns_provider"][value="linode"])')
-            elif tab == 'storage':
-                page.select_option('#storage-backend', 'local_filesystem')
-            now = page.evaluate(ROOM, field)
-            if now < room:
-                narrower[field] = (now, room)
-            if tab == 'dns':
-                for provider in page.evaluate(
-                        "() => [...document.querySelectorAll('input[name=\"dns_provider\"]')].map(i => i.value)"):
-                    page.click(f'label:has(input[name="dns_provider"][value="{provider}"])')
-                    cut.update(page.evaluate(CUT_PLACEHOLDERS, tab))
-            elif tab == 'storage':
-                for backend in page.evaluate(
-                        "() => [...document.querySelectorAll('#storage-backend option')].map(o => o.value)"):
-                    page.select_option('#storage-backend', backend)
-                    cut.update(page.evaluate(CUT_PLACEHOLDERS, tab))
-            else:
-                cut.update(page.evaluate(CUT_PLACEHOLDERS, tab))
-        new = sorted(cut - CUT_ON_MAIN[width])
-        assert not narrower and not new, (
+        seen = {}
+        for tab in ('general', 'dns', 'storage'):
+            seen.update(_visit(page, tab))
+        baseline = FIELD_ROOM_ON_MAIN[width]
+        missing = sorted(set(baseline) - set(seen))
+        narrower = {field: (seen[field][0], room) for field, room in baseline.items()
+                    if field in seen and seen[field][0] < room - 0.5}
+        # Information only: whether a placeholder fits depends on the fonts.
+        cut = sorted(field for field, (_, is_cut) in seen.items() if is_cut)
+        assert not missing and not narrower, (
             f'at {width} px, fields narrower than on main (now, main): {narrower}; '
-            f'placeholders cut that were whole on main ({len(new)}): {new}')
+            f'fields of main not seen: {missing}; placeholders cut here ({len(cut)}, for information): {cut}')
     finally:
         context.close()
 
