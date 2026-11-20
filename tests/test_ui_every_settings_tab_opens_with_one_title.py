@@ -97,6 +97,19 @@ OUTSIDE = """(id) => {
 }"""
 
 
+PLACEHOLDERS = """(id) => {
+    const ctx = document.createElement('canvas').getContext('2d');
+    return [...document.getElementById('settings-panel-' + id).querySelectorAll('input[placeholder]')]
+        .filter(f => f.getClientRects().length && f.placeholder).map(f => {
+            const st = getComputedStyle(f);
+            ctx.font = `${st.fontStyle} ${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
+            const text = ctx.measureText(f.placeholder).width;
+            const room = f.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+            return [f.id, Math.ceil(text), Math.floor(room)];
+        }).filter(([, text, room]) => text > room);
+}"""
+
+
 @pytest.mark.parametrize('width', [360, 390])
 def test_on_a_phone_every_control_of_general_dns_and_storage_stays_inside_its_card(
         browser_page, ui_session_cookie, width):
@@ -115,6 +128,13 @@ def test_on_a_phone_every_control_of_general_dns_and_storage_stays_inside_its_ca
             if found:
                 outside[tab] = found
         assert not outside, f'at {width} px, controls past their card (name, left, right, card left, right): {outside}'
+        # A placeholder cut by its field reads as another sentence: "Leave
+        # blank to keep the current password" showed as "Leave blank to keep
+        # the curre" at 360 px. Measured in the field's own font.
+        page.evaluate("location.hash = '#general'")
+        page.wait_for_function("() => document.getElementById('settings-panel-general').checkVisibility()")
+        cut = page.evaluate(PLACEHOLDERS, 'general')
+        assert not cut, f'at {width} px, placeholders wider than their field (id, text px, room px): {cut}'
     finally:
         context.close()
 
