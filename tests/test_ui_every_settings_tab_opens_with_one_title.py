@@ -84,6 +84,41 @@ def test_every_settings_tab_title_has_an_icon_and_sits_in_a_bordered_card(settin
     assert not bare, f'title without a bordered card or an icon (card, icon): {bare}'
 
 
+OUTSIDE = """(id) => {
+    const panel = document.getElementById('settings-panel-' + id);
+    const box = panel.getBoundingClientRect();
+    return [...panel.querySelectorAll('input, select, textarea, button, a')].filter(c => {
+        const r = c.getBoundingClientRect();
+        // A radio drawn as a card is sr-only: a 1 px box, not a control on screen.
+        return c.getClientRects().length && r.width > 1 && r.height > 1
+            && (r.left < box.left - 0.5 || r.right > box.right + 0.5);
+    }).map(c => [c.id || c.name || c.innerText.trim().slice(0, 20), Math.round(c.getBoundingClientRect().left),
+                 Math.round(c.getBoundingClientRect().right), Math.round(box.left), Math.round(box.right)]);
+}"""
+
+
+@pytest.mark.parametrize('width', [360, 390])
+def test_on_a_phone_every_control_of_general_dns_and_storage_stays_inside_its_card(
+        browser_page, ui_session_cookie, width):
+    """In its new card the Windows .pfx password field (a fixed 288 px)
+    crossed the General card at 390 px, and the Settings card too at 360."""
+    context = browser_page.context.browser.new_context(viewport={'width': width, 'height': 900})
+    context.add_cookies([{'name': 'certmate_session', 'value': ui_session_cookie, 'url': BASE_URL}])
+    try:
+        page = context.new_page()
+        page.goto(f'{BASE_URL}/settings#general', wait_until='networkidle')
+        outside = {}
+        for tab in ('general', 'dns', 'storage'):
+            page.evaluate(f"location.hash = '#{tab}'")
+            page.wait_for_function(f"() => document.getElementById('settings-panel-{tab}').checkVisibility()")
+            found = page.evaluate(OUTSIDE, tab)
+            if found:
+                outside[tab] = found
+        assert not outside, f'at {width} px, controls past their card (name, left, right, card left, right): {outside}'
+    finally:
+        context.close()
+
+
 def test_the_sections_of_general_dns_and_storage_are_14px_semibold(settings_page):
     seen = _titles(settings_page)
     odd = {tab: seen[tab]['subsections'] for tab in ('general', 'dns', 'storage')

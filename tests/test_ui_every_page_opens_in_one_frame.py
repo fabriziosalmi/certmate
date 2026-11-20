@@ -150,6 +150,34 @@ def test_on_a_phone_no_page_header_is_cut(frames):
     assert not faults, f'at 390 px: {faults}'
 
 
+CRUMBS = """() => {
+    const nav = [...document.querySelectorAll('main nav[aria-label="Breadcrumb"]')]
+        .find(n => n.getClientRects().length);
+    if (!nav) return null;
+    const current = nav.querySelector('[aria-current="page"]');
+    return {home: !!nav.querySelector('a[href="/"]'), current: current ? current.innerText.trim() : null,
+            text: nav.innerText.replace(/\\s+/g, ' ').trim()};
+}"""
+
+
+def test_the_dashboard_is_home_so_its_breadcrumb_is_only_the_view_it_shows(browser_page):
+    """A Home crumb on the dashboard led to "/", the Server view, from the
+    Client or ACME view, and dropped the list's search and filters. The
+    other pages keep theirs."""
+    page = browser_page
+    seen = {}
+    for path in ('/', '/#client', '/#acme', '/activity', '/help', '/inventory/crypto-report'):
+        page.goto('about:blank')
+        page.goto(f'{BASE_URL}{path}', wait_until='networkidle')
+        seen[path] = page.evaluate(CRUMBS)
+    assert seen['/'] == {'home': False, 'current': 'Your Certificates', 'text': 'Your Certificates'}, seen
+    assert seen['/#client'] == {'home': False, 'current': 'Client Certificates', 'text': 'Client Certificates'}, seen
+    assert seen['/#acme'] == {'home': False, 'current': 'ACME certificates', 'text': 'ACME certificates'}, seen
+    away = {path: crumbs for path, crumbs in seen.items() if not path.startswith('/#') and path != '/'
+            and not (crumbs and crumbs['home'])}
+    assert not away, f'a page away from the dashboard lost its Home crumb: {away}'
+
+
 def test_the_crypto_report_prints_as_a_plain_sheet_without_its_header(browser_page):
     """The report is printed. In its card it must still print as it did
     before it had one: no breadcrumb or buttons, no card shadow, and the

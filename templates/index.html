@@ -644,8 +644,9 @@
         <!-- Certificates List -->
         <div class="bg-surface shadow-card rounded-xl overflow-hidden">
             <!-- The frame of every page (#1511, P67): the breadcrumb and the
-                 list's tools in the card's header, the title the last crumb. -->
-            {% call(slot) page_header('Your Certificates', current_tag='h3', row='flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 lg:space-x-3') %}{% if slot == 'actions' %}
+                 list's tools in the card's header. This page is home, so the
+                 breadcrumb is the view's title alone, with no Home crumb. -->
+            {% call(slot) page_header('Your Certificates', current_tag='h3', home=false, row='flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 lg:space-x-3') %}{% if slot == 'actions' %}
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
                         <!-- Search of the list (#1385): narrows the table in place, next to
                              the status chips and the tags, over the same things the global

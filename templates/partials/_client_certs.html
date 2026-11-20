@@ -9,7 +9,7 @@
 <!-- Certificates List -->
 <div class="bg-surface shadow-card rounded-xl overflow-hidden">
     <!-- The frame of every page (#1511, P67), as on the server view. -->
-    {% call(slot) page_header('Client Certificates', current_tag='h3', row='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3') %}{% if slot == 'actions' %}
+    {% call(slot) page_header('Client Certificates', current_tag='h3', home=false, row='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3') %}{% if slot == 'actions' %}
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Status + usage as chips (CN/email search lives in the ⌘K
                      palette) and an actions icon group — same vocabulary as the
