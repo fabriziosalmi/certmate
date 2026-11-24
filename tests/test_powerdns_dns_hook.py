@@ -36,13 +36,14 @@ class FakePowerDNS:
     """Zones in memory, the API PowerDNS 4.x speaks, and every request it was sent."""
 
     def __init__(self, zones, *, missing=404, statuses=None, write_status=None, notify_status=None,
-                 server_id='localhost'):
+                 server_id='localhost', redirect_to=None):
         self.zones = {name: {'name': name + '.', 'kind': kind, 'rrsets': []}
                       for name, kind in zones.items()}
         self.missing = missing
         self.statuses = dict(statuses or {})
         self.write_status, self.notify_status = write_status, notify_status
         self.server_id = server_id
+        self.redirect_to = redirect_to
         self.requests = []
         fake = self
 
@@ -60,6 +61,12 @@ class FakePowerDNS:
                 length = int(self.headers.get('Content-Length') or 0)
                 body = json.loads(self.rfile.read(length) or b'null') if length else None
                 fake.requests.append((self.command, unquote(self.path), self.headers.get('X-API-Key'), body))
+                if fake.redirect_to:
+                    self.send_response(302)
+                    self.send_header('Location', fake.redirect_to + self.path)
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
+                    return None
                 prefix = f'/api/v1/servers/{fake.server_id}/zones/'
                 path = unquote(self.path)
                 if not path.startswith(prefix):
@@ -431,3 +438,47 @@ def test_cleanup_without_a_challenge_does_nothing():
 def test_auth_without_a_challenge_is_refused():
     with pytest.raises(hook.PowerDNSHookError, match='CERTBOT_DOMAIN and CERTBOT_VALIDATION'):
         hook.run({'api_url': 'http://127.0.0.1:9', 'api_key': API_KEY}, 'auth', {})
+
+
+# --------------------------------------------------------------------------
+# Run as a script, against the fake, from another working directory
+# --------------------------------------------------------------------------
+
+def _run_as_certbot_does(tmp_path, api_url):
+    """``python <hook> --config <file> --action auth`` from a directory that is
+    not the repository, so only the hook's own directory is importable."""
+    import subprocess
+    import sys
+    config = tmp_path / 'powerdns.json'
+    config.write_text(json.dumps({'api_url': api_url, 'api_key': API_KEY}))
+    os.chmod(config, stat.S_IRUSR | stat.S_IWUSR)
+    elsewhere = tmp_path / 'cwd'
+    elsewhere.mkdir()
+    env = {key: value for key, value in os.environ.items() if key != 'PYTHONPATH'}
+    env.update(CERTBOT_DOMAIN='sub.example.com', CERTBOT_VALIDATION='token-1',
+               CERTMATE_DNS_PROPAGATION_SECONDS='0')
+    return subprocess.run(
+        [sys.executable, hook.__file__, '--config', str(config), '--action', 'auth'],
+        capture_output=True, text=True, timeout=60, cwd=elsewhere, env=env)
+
+
+def test_the_hook_run_as_a_script_writes_the_record(pdns, tmp_path):
+    server = pdns({'example.com': 'Native'})
+    result = _run_as_certbot_does(tmp_path, server.url)
+    assert 'relative import' not in result.stderr, result.stderr
+    assert result.returncode == 0, result.stderr
+    assert server.values('example.com', f'{CHALLENGE}.sub.example.com') == ['token-1']
+
+
+def test_the_hook_does_not_follow_a_redirect_with_its_key(pdns, tmp_path):
+    """urllib follows a 302 on GET and sends X-API-Key again to the new host,
+    while refuse_metadata_endpoint only ever saw the configured URL. The hook
+    must fail on the first answer, and the second server must see nothing."""
+    elsewhere = pdns({'example.com': 'Native'})
+    first = pdns({'example.com': 'Native'}, redirect_to=elsewhere.url)
+    result = _run_as_certbot_does(tmp_path, first.url)
+    assert elsewhere.requests == [], f'the API key followed the redirect: {elsewhere.requests}'
+    assert len(first.requests) == 1, first.requests
+    assert result.returncode == 1, 'a redirected challenge was reported as a success'
+    assert 'PowerDNS challenge failed' in result.stderr
+    assert 'redirect (302)' in result.stderr and f'127.0.0.1:{elsewhere.server.server_port}' in result.stderr

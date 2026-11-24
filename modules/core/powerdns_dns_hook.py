@@ -35,6 +35,8 @@ be visible comes from ``CERTMATE_DNS_PROPAGATION_SECONDS``, as for Azure.
 * One name can carry several values (a wildcard and its apex are validated on
   the same ``_acme-challenge`` name), so a value is added to the record set,
   never written over it, and cleanup removes only its own value.
+* A redirect is never followed: urllib would send the API key again to a host
+  the metadata check never saw. A 3xx fails the request and names the target.
 * Cleanup never fails the issuance: a record left behind is a warning.
 """
 
@@ -136,6 +138,21 @@ def _zone_url(base, zone):
     return f"{base}/zones/{urllib.parse.quote(zone + '.', safe='.')}"
 
 
+class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an error, as ``pinned_https.send`` treats it.
+
+    urllib would follow it and send ``X-API-Key`` again to the new location,
+    which ``refuse_metadata_endpoint`` never saw: only the configured URL was
+    checked. The key stays with the configured URL.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urlsplit(newurl).netloc or 'another location'
+        raise PowerDNSHookError(
+            f'PowerDNS API answered with a redirect ({code}) to {target[:64]}; '
+            'CertMate does not follow it, so the API key stays with the configured URL')
+
+
 class _HTTPStatus(Exception):
     def __init__(self, status, body):
         super().__init__(status)
@@ -149,8 +166,10 @@ def _request(method, url, api_key, payload=None):
         url, data=data, method=method,
         headers={'X-API-Key': api_key, 'Accept': 'application/json',
                  'Content-Type': 'application/json'})
+    # A redirect is not followed: see _RefuseRedirect.
+    opener = urllib.request.build_opener(_RefuseRedirect)
     try:
-        with urllib.request.urlopen(  # noqa: S310  # nosec B310 - http(s) only, checked in api_base
+        with opener.open(  # nosec B310 - http(s) only, checked in api_base
                 request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
             raw = response.read().decode('utf-8')
             return response.status, (json.loads(raw) if raw.strip() else None)
