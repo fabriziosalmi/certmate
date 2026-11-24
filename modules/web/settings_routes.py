@@ -5,7 +5,7 @@ from pathlib import Path
 
 from flask import abort, make_response, request, jsonify
 
-from modules.core.auth import not_for_domain_restricted_keys
+from modules.core.auth import EMAIL_TAKEN, not_for_domain_restricted_keys
 from modules.core.request_fields import json_booleans
 from modules.core.constants import iter_cert_domain_dirs
 from modules.core.utils import validate_email
@@ -257,6 +257,18 @@ def _delete_ca_account(managers, settings_manager, audit_logger, settings,
     _audit_ca_account(audit_logger, 'delete_ca_account', provider, account_id, 'success')
     account_checks.forget_account(settings_manager, 'ca', provider, account_id)
     return jsonify({'message': 'CA account deleted'})
+
+
+def _user_write_refusal(msg, otherwise):
+    """The answer to a refused user create or update: 409 for a name or an
+    address another user holds (#1466), 404 for a user that is not there, and
+    *otherwise* for the rest. A helper so the two user routes do not grow the
+    budgeted complexity of register_settings_routes."""
+    if 'already exists' in msg.lower() or msg == EMAIL_TAKEN:
+        return jsonify({'error': msg}), 409
+    if 'not found' in msg.lower():
+        return jsonify({'error': msg}), 404
+    return jsonify({'error': msg}), otherwise
 
 
 def _email_or_refuse(email):
@@ -694,9 +706,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             _close_setup_with(auth_manager, audit_logger, username, body,
                               bootstrap_admin)
             return jsonify(body), 201
-        if 'already exists' in msg.lower():
-            return jsonify({'error': msg}), 409
-        return jsonify({'error': msg}), 500
+        return _user_write_refusal(msg, 500)
 
     @app.route('/api/users/<string:username>', methods=['DELETE', 'PUT'])
     @app.route('/api/web/settings/users/<string:username>',
@@ -773,9 +783,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                     ip_address=request.remote_addr,
                 )
             return jsonify({'message': msg})
-        if 'not found' in msg.lower():
-            return jsonify({'error': msg}), 404
-        return jsonify({'error': msg}), 400
+        return _user_write_refusal(msg, 400)
 
     @app.route('/api/dns/<string:provider>/accounts', methods=['GET', 'POST'])
     # Its own endpoint name, not a shared one. This function serves three
