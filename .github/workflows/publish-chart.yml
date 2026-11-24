@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
+        uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e  # v5.1.0
         with:
           version: v3.19.0
 
@@ -113,7 +113,7 @@ jobs:
 
       - name: Set up oras
         if: steps.ahub.outputs.push == 'true' && (github.event_name == 'release' || inputs.dry_run == false)
-        uses: oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63  # v2.0.3
+        uses: oras-project/setup-oras@ac735097e22fe643015b0d19645f7c9a69942128  # v2.0.4
 
       - name: Push Artifact Hub metadata
         # The layout Artifact Hub documents for an OCI chart: the metadata
