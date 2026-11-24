@@ -72,6 +72,15 @@ def _require(config, *keys):
         raise DNSAliasError(f"Missing DNS alias credential fields: {', '.join(missing)}")
 
 
+class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urlsplit(newurl).netloc or 'another location'
+        raise DNSAliasError(
+            f'DNS provider API answered with a redirect ({code}) to {target[:64]}; '
+            'CertMate does not follow it, so the credentials stay with the configured URL'
+        )
+
+
 def _json_request(method, url, headers, data=None):
     body = None
     if data is not None:
@@ -89,14 +98,23 @@ def _json_request(method, url, headers, data=None):
     # The api_url is admin-set, but never a cloud-metadata or link-local
     # address: refuse those so a mistyped or hostile provider URL cannot turn
     # this request into a pull from the instance's metadata service.
-    from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
+    # Certbot runs this file as a script, where it has no parent package and
+    # a relative import fails (#1534); pinned_https imports only the standard
+    # library, so it also loads from this file's own directory.
+    try:
+        from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
+    except ImportError:
+        from pinned_https import UnsafeDestination, refuse_metadata_endpoint
     try:
         refuse_metadata_endpoint(url)
     except UnsafeDestination as exc:
         raise DNSAliasError(str(exc)) from exc
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    # A redirect is not followed: urllib would send the same credential
+    # headers to the new host, which the check above never saw.
+    opener = urllib.request.build_opener(_RefuseRedirect)
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:  # nosec B310 - scheme validated above
+        with opener.open(req, timeout=30) as response:  # nosec B310 - scheme validated above
             raw = response.read().decode('utf-8')
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
