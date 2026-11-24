@@ -63,7 +63,8 @@ class FakePowerDNS:
                 fake.requests.append((self.command, unquote(self.path), self.headers.get('X-API-Key'), body))
                 if fake.redirect_to:
                     self.send_response(302)
-                    self.send_header('Location', fake.redirect_to + self.path)
+                    # A fixed path: no header is built from the request.
+                    self.send_header('Location', fake.redirect_to + '/api/v1/servers')
                     self.send_header('Content-Length', '0')
                     self.end_headers()
                     return None
