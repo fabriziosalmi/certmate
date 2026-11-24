@@ -104,7 +104,7 @@ def _json_request(method, url, headers, data=None):
     try:
         from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
     except ImportError:
-        from pinned_https import UnsafeDestination, refuse_metadata_endpoint
+        from pinned_https import UnsafeDestination, refuse_metadata_endpoint  # type: ignore[import-not-found,no-redef]  # script mode, see above
     try:
         refuse_metadata_endpoint(url)
     except UnsafeDestination as exc:
