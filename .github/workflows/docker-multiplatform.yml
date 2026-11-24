@@ -285,7 +285,7 @@ jobs:
         exit-code: '1'
 
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       # Push/tag only. On a pull request the SARIF lands on the PR ref, so the
       # image's long tail of unfixable base-image CVEs (tracked in #403) shows
       # up as new code-scanning alerts and blocks the merge — the
