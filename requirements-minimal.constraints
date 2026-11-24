@@ -55,7 +55,7 @@ pyopenssl==26.4.0
 pyotp==2.10.0
 pyrfc3339==2.1.0
 python-dotenv==1.2.4
-pyyaml==6.0.3
+pyyaml==6.0.4
 referencing==0.37.0
 requests==2.34.2
 requests-file==3.0.1
