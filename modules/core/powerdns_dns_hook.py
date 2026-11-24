@@ -52,7 +52,7 @@ import urllib.request
 try:
     from .pinned_https import UnsafeDestination, refuse_metadata_endpoint
 except ImportError:  # run by certbot as a script: this directory is on sys.path, the package is not
-    from pinned_https import UnsafeDestination, refuse_metadata_endpoint
+    from pinned_https import UnsafeDestination, refuse_metadata_endpoint  # type: ignore[import-not-found,no-redef]
 
 CHALLENGE_LABEL = '_acme-challenge'
 TXT_TTL_SECONDS = 60
