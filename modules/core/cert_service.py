@@ -1213,7 +1213,8 @@ class CertificateService:
                         domain_alias=None, alias_dns_provider=None,
                         key_type=None, key_size=None,
                         elliptic_curve=None, user=None, ip_address=None,
-                        audit_ctx=None, csr_pem=None, acme_profile=None):
+                        audit_ctx=None, csr_pem=None, acme_profile=None,
+                        ca_account_id=None):
         """Validate and resolve an edit-and-reissue request (#267) without
         side effects, returning kwargs for :meth:`issue_reissue`.
 
@@ -1224,7 +1225,10 @@ class CertificateService:
         ``[]`` drops every SAN. Key options are intentionally NOT inherited:
         metadata does not record the key shape, and omitting the flags makes
         certbot keep the lineage's existing key (an explicit option here is
-        a deliberate re-key).
+        a deliberate re-key). ``ca_account_id=None`` keeps the recorded CA
+        account while the CA stays the same (another CA starts from its
+        default account), ``''`` is the CA's default account, and an id is
+        that account (#1465).
 
         Raises ``FileNotFoundError`` when no certificate exists for *domain*
         (a reissue edits something; creation is the create endpoint's job),
@@ -1335,8 +1339,20 @@ class CertificateService:
                 ca_provider=ca_provider, challenge_type=challenge_type,
                 san_domains=san_domains, domain_alias=domain_alias,
                 alias_dns_provider=alias_dns_provider, acme_profile=acme_profile)
-        ca_account_id = metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None
+        ca_account_was_named = ca_account_id is not None
+        if not ca_account_was_named:
+            ca_account_id = metadata.get('ca_account_id') if ca_provider == metadata.get('ca_provider') else None
+        elif not isinstance(ca_account_id, str):
+            raise ValueError('ca_account_id must be a string')
+        else:
+            # Named by the caller (#1465): '' is the CA's default account.
+            ca_account_id = ca_account_id.strip() or None
         email = self.resolve_ca_email(settings, ca_provider, ca_account_id)
+        if ca_account_was_named and ca_account_id:
+            _, used_ca_account = resolve_ca_account(self._certs.ca_manager, ca_provider, ca_account_id,
+                                                    settings=settings)
+            if used_ca_account != ca_account_id:
+                raise ValueError('Selected CA account is not configured')
         if not challenge_type:
             challenge_type = settings.get('challenge_type', 'dns-01')
         if challenge_type == 'prevalidated':

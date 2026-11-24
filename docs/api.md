@@ -1924,8 +1924,13 @@ explicitly changed (no key flags are sent and certbot keeps the lineage key).
   SCM account must already authorize every name, and no DNS provider, account
   or alias may be given; see [CA providers](ca-providers.md)). Since API
   contract **2.29**.
-- the CA account the certificate was issued under is kept when `ca_provider`
-  does not change; before 2.29 a reissue used the CA's default account.
+- `ca_account_id`: the CA account to reissue under. Omit it to keep the account
+  the certificate was issued under while `ca_provider` does not change (another
+  CA starts from its default account; before 2.29 a reissue always used the
+  CA's default account). `""` is the CA's default account, and an id is that
+  account; an account the CA does not have is refused with 400. certbot writes
+  the account's directory into `renewal/<domain>.conf`, so later renewals use
+  it too. Since API contract **2.76**; before, the field was ignored.
 - `key_type`/`key_size`/`elliptic_curve`: omit to keep the existing key shape
 - `acme_profile`: omit to keep the profile the certificate was issued with, `""`
   for the CA's default, or a profile name; see [ACME profiles](#acme-profiles).

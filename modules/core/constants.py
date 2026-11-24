@@ -885,6 +885,14 @@ METADATA_SCHEMA_VERSION = 1
 #                                   save answers with last_check. Without check
 #                                   a save is unchanged. A new endpoint, a new
 #                                   field, new optional parameters.
+#                                   2.76, MINOR: POST /api/certificates/
+#                                   <domain>/reissue takes ca_account_id
+#                                   (#1465): an id is that CA account, '' the
+#                                   CA's default account, and omitted keeps the
+#                                   recorded account while the CA is unchanged.
+#                                   An account the CA does not have answers
+#                                   400. Before, the field was ignored. A new
+#                                   optional request field.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -910,7 +918,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.75'
+API_CONTRACT_VERSION = '2.76'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

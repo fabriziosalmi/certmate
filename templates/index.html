@@ -277,6 +277,9 @@
                                         <option value="">Loading CA accounts...</option>
                                     </select>
                                 </div>
+                                <p id="ca-account-unloaded" class="hidden mt-2 text-xs text-muted" role="status">
+                                    The CA accounts could not be loaded, so this reissue keeps the certificate's current account.
+                                </p>
                                 <!-- CAA advice (never a gate): filled by checkCaaFromForm when a
                                      CAA record would make the chosen CA refuse these names. -->
                                 <div id="caa_warning" class="mt-2 hidden" role="status" aria-live="polite"></div>
