@@ -43,7 +43,9 @@ class _Recorder(BaseHTTPRequestHandler):
         })
         if self.server.redirect_to:
             self.send_response(302)
-            self.send_header('Location', self.server.redirect_to + self.path)
+            # A fixed path, not the request's: a header is never built from
+            # what the client sent.
+            self.send_header('Location', self.server.redirect_to + '/update')
             self.send_header('Content-Length', '0')
             self.end_headers()
             return
