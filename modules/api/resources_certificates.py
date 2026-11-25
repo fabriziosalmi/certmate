@@ -5,7 +5,13 @@ unchanged; what used to be captured from the enclosing scope now arrives as
 an explicit `ApiContext`, which is what makes them importable — and
 therefore testable — without constructing the whole manager graph.
 """
+import copy
+import hashlib
+import json
 import logging
+import sys
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from flask import current_app, request
 from flask_restx import Resource
@@ -18,6 +24,7 @@ from ..core.inventory_sources import (
     auto_renew_for,
     collect_domain_sources,
 )
+from ..core.utils import utc_now
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import (
     ApiContext,
@@ -57,10 +64,94 @@ def _gather(fetch, items):
     if len(items) < LISTING_CONCURRENCY_THRESHOLD:
         return [_guarded(fetch, item) for item in items]
 
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=LISTING_CONCURRENCY,
-                            thread_name_prefix='cert-list') as pool:
-        return list(pool.map(lambda item: _guarded(fetch, item), items))
+    # One pool for the process, not one per request (#1463): four listings
+    # with a pool each ran 32 threads that parsed certificates against one
+    # interpreter lock, and took 168 s each where one took 15 s. A fetch must
+    # never call _gather itself, or it would wait on a pool it is holding.
+    return list(_reader_pool().map(lambda item: _guarded(fetch, item), items))
+
+
+_POOL = None
+_POOL_LOCK = threading.Lock()
+
+
+def _reader_pool():
+    global _POOL
+    with _POOL_LOCK:
+        if _POOL is None:
+            _POOL = ThreadPoolExecutor(max_workers=LISTING_CONCURRENCY,
+                                       thread_name_prefix='cert-list')
+        return _POOL
+
+
+def listing_key(scope, generation, settings):
+    """What a listing's answer depends on, as one comparable value.
+
+    The caller's scope (a set: order and case do not change it), the number
+    of certificate writes so far, the settings (auto-renew, the renewal
+    threshold and the registered domains all come from them), and the UTC day,
+    since expiry fields count days. Two listings share a read only when every
+    part is equal. The settings are hashed, not kept: they hold credentials.
+    """
+    scope_key = None if scope is None else tuple(sorted({str(p).strip().lower() for p in scope}))
+    digest = hashlib.sha256(
+        json.dumps(settings, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+    return scope_key, generation, digest, utc_now().date().isoformat()
+
+
+class _Listings:
+    """Listings in progress, by `listing_key`: a listing that starts while an
+    equal one runs waits for it instead of reading every certificate again."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._running = {}
+        self._waiting = 0
+
+    def run(self, key, compute):
+        with self._lock:
+            future = self._running.get(key)
+            leader = future is None
+            if leader:
+                future = Future()
+                self._running[key] = future
+            else:
+                self._waiting += 1
+        if not leader:
+            try:
+                return copy.deepcopy(future.result())
+            finally:
+                with self._lock:
+                    self._waiting -= 1
+        answered = False
+        try:
+            result = compute()
+            future.set_result(result)
+            answered = True
+            # Each caller gets its own copy: the answer is marshalled per
+            # request, and no request may change what another one returns.
+            return copy.deepcopy(result)
+        finally:
+            if not answered:
+                # Whatever stopped the read reaches every listing waiting on
+                # it, as it reaches this one; none of them is left waiting.
+                # Read here rather than caught, so nothing is swallowed.
+                future.set_exception(sys.exc_info()[1] or RuntimeError('the listing did not finish'))
+            # Taken down whatever happened, so a failure is not served again.
+            with self._lock:
+                if self._running.get(key) is future:
+                    del self._running[key]
+
+    def running(self, key):
+        with self._lock:
+            return key in self._running
+
+    def waiting(self):
+        with self._lock:
+            return self._waiting
+
+
+LISTINGS = _Listings()
 
 
 def _guarded(fetch, item):
@@ -140,6 +231,54 @@ def _audit_labels(ctx, domain, sent, tags_before, metadata):
     )
 
 
+def _list_certificates(ctx, scope, settings):
+    """Every certificate *scope* may see, read from storage."""
+    certificates = []
+
+    # One implementation of "what certificates exist" (#670).
+    # Both this and the discovery scan rebuilt the union inline,
+    # with the same tolerance for a domain entry being a string or
+    # a dict, and could disagree about ordering because both
+    # iterated a set.
+    sources = collect_domain_sources(
+        settings, ctx.certificates.cert_dir)
+    auto_renew_by_domain = {
+        name: s.auto_renew for name, s in sources.items()}
+    all_domains = list(sources)
+
+    # Get certificate info for all domains, filtered by the
+    # caller's API-key scope. domain_matches_scope(d, None) is
+    # always True so unrestricted callers see everything.
+    visible = [d for d in all_domains
+               if d and ctx.auth.domain_matches_scope(d, scope)]
+    # The same rule as every operation on one of them: a
+    # certificate is the caller's only when each of its names is,
+    # so the list does not offer what the detail refuses.
+    visible = [d for d in visible
+               if certificate_in_scope(ctx, d, scope)]
+
+    # Reuse the once-loaded settings dict so each per-domain call
+    # skips its own settings deepcopy — and, with the concurrency
+    # below, so that no worker thread calls load_settings at all:
+    # that function caches on flask.g behind has_request_context(),
+    # and a worker has no request context, so each one would fall
+    # back to reading settings.json from disk.
+    #
+    # use_cache stays at its default True so the storage-backend
+    # cert-info cache is still consulted and populated.
+    def _info(domain):
+        return ctx.certificates.get_certificate_info(
+            domain, settings=settings)
+
+    for domain, cert_info in zip(visible,
+                                 _gather(_info, visible)):
+        if cert_info:
+            cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
+            certificates.append(cert_info)
+
+    return certificates
+
+
 def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
     """Build the certificates resources against *ctx*."""
 
@@ -161,50 +300,11 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                 user = getattr(request, 'current_user', None) or {}
                 scope = user.get('allowed_domains')
                 settings = ctx.settings.load_settings()
-                certificates = []
-
-                # One implementation of "what certificates exist" (#670).
-                # Both this and the discovery scan rebuilt the union inline,
-                # with the same tolerance for a domain entry being a string or
-                # a dict, and could disagree about ordering because both
-                # iterated a set.
-                sources = collect_domain_sources(
-                    settings, ctx.certificates.cert_dir)
-                auto_renew_by_domain = {
-                    name: s.auto_renew for name, s in sources.items()}
-                all_domains = list(sources)
-
-                # Get certificate info for all domains, filtered by the
-                # caller's API-key scope. domain_matches_scope(d, None) is
-                # always True so unrestricted callers see everything.
-                visible = [d for d in all_domains
-                           if d and ctx.auth.domain_matches_scope(d, scope)]
-                # The same rule as every operation on one of them: a
-                # certificate is the caller's only when each of its names is,
-                # so the list does not offer what the detail refuses.
-                visible = [d for d in visible
-                           if certificate_in_scope(ctx, d, scope)]
-
-                # Reuse the once-loaded settings dict so each per-domain call
-                # skips its own settings deepcopy — and, with the concurrency
-                # below, so that no worker thread calls load_settings at all:
-                # that function caches on flask.g behind has_request_context(),
-                # and a worker has no request context, so each one would fall
-                # back to reading settings.json from disk.
-                #
-                # use_cache stays at its default True so the storage-backend
-                # cert-info cache is still consulted and populated.
-                def _info(domain):
-                    return ctx.certificates.get_certificate_info(
-                        domain, settings=settings)
-
-                for domain, cert_info in zip(visible,
-                                             _gather(_info, visible)):
-                    if cert_info:
-                        cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
-                        certificates.append(cert_info)
-
-                return certificates
+                # The generation is read before anything is listed: a write
+                # that lands while this listing runs moves it, so a caller
+                # who arrives after that write starts a listing of its own.
+                key = listing_key(scope, ctx.certificates.listing_generation, settings)
+                return LISTINGS.run(key, lambda: _list_certificates(ctx, scope, settings))
             except Exception as e:
                 logger.error(f"Error listing certificates: {e}")
                 return {'error': 'Failed to list certificates'}, 500

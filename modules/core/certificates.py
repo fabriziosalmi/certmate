@@ -621,7 +621,15 @@ class MetadataWriteFailed(RuntimeError):
 
 class CertificateManager:
     """Class to handle certificate operations"""
-    
+
+    # Moves on every write that clears the certificate-info cache (#1463). A
+    # listing in progress is shared only with listings that see the same
+    # number, so none is answered with what a write it began before has
+    # changed. Kept on the class, not set in __init__, so every instance has
+    # it however it was made; one process holds one manager, so one counter.
+    _listing_generation = 0
+    _listing_generation_lock = threading.Lock()
+
     def __init__(self, cert_dir, settings_manager, dns_manager, storage_manager=None, ca_manager=None, shell_executor=None):
         self.cert_dir = Path(cert_dir)
         self.settings_manager = settings_manager
@@ -858,6 +866,14 @@ class CertificateManager:
         # "example.com" vs "example.com.evil"). A single-domain mutation must
         # not invalidate every other domain's cached info.
         self._certificate_info_cache.clear_prefix(f"{domain}|")
+        with CertificateManager._listing_generation_lock:
+            CertificateManager._listing_generation += 1
+
+    @property
+    def listing_generation(self) -> int:
+        """How many certificate writes this process has seen: a listing that
+        began at one value is stale for a caller who arrives at another."""
+        return CertificateManager._listing_generation
 
     def _seed_acme_account(self, domain, cert_dir, ca_provider, ca_account_id):
         """Give a new domain the ACME account a sibling already registered.
