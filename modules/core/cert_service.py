@@ -15,6 +15,7 @@ pass the resolved auth context (``user`` dict + ``ip_address``) so a scope
 denial can be audited here and raised as :class:`DomainOutOfScope`, which the
 adapters map to HTTP 403.
 """
+import ipaddress
 import logging
 import threading
 import time
@@ -28,8 +29,9 @@ from .ca_manager import resolve_ca_account
 from .cert_labels import normalize_notes, normalize_tags
 from .constants import PROBE_PROTOCOLS
 from .csr_issuance import CSRError, csr_domains, read_csr
-from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError, validate_external_identity,
-                          validate_import_bundle, validate_import_renewability)
+from .cert_import import (INVALID_IMPORT_BUNDLE, CertificateImportError, external_filing_name,
+                          validate_external_identity, validate_import_bundle,
+                          validate_import_renewability)
 from .utils import (cert_name_for_ip, ip_for_cert_name, is_ip_identifier, utc_now_iso,
                     validate_certificate_name, validate_domain, validate_ip_identifier,
                     validate_key_options)
@@ -679,12 +681,14 @@ class CertificateService:
             raise
         except (ValueError, x509.DuplicateExtension, UnsupportedAlgorithm):
             raise CertificateImportError(INVALID_IMPORT_BUNDLE) from None
-        normalized = _primary_name(bundle['names'], domain)
+        normalized, primary = _external_primary_name(bundle['names'], domain)
         self._enforce_scope(normalized, 'import', user, ip_address)
         for name in bundle['names']:
             if name != normalized:
                 self._enforce_scope(name, 'import_san', user, ip_address)
-        san_domains = [n for n in bundle['names'] if n != normalized]
+        # The primary is the host: for an IPv4 certificate filed as
+        # ip-a-b-c-d, the address, which certificate_host reads off the name.
+        san_domains = [n for n in bundle['names'] if n != primary]
         metadata = _external_metadata(normalized, san_domains)
         metadata.update(bundle['key_options'], created_at=bundle['created_at'],
                         imported_at=utc_now_iso())
@@ -1570,9 +1574,46 @@ def _primary_name(names, requested):
     return normalized
 
 
+def _external_primary_name(names, requested):
+    """An external import's primary: ``(the name it is filed under, the
+    certificate's name it stands for)``.
+
+    The one requested, which must be one of the certificate's names, or by
+    default its first DNS name it can be filed under, and its first IPv4
+    address only when it has none (`external_filing_name`): a single
+    label or an IPv6 address is never the primary (#1538). An IPv4 address may
+    be asked for as the address or as its ``ip-a-b-c-d`` name.
+    """
+    if requested is None or requested == '':
+        # A DNS name first, wherever it stands: a certificate is looked for by
+        # its host name, and the dashboard never asks for a primary, so an
+        # address listed before the name must not become the directory.
+        filable = [name for name in names if external_filing_name(name)]
+        primary = next((name for name in filable if not is_ip_identifier(name)), filable[0])
+        return external_filing_name(primary), primary
+    if not isinstance(requested, str):
+        raise ValueError('Domain is required')
+    wanted = _name_key(requested)
+    primary = next((name for name in names if _name_key(name) == wanted), None)
+    if primary is None:
+        raise ValueError('Primary domain must be one of the certificate names')
+    filed = external_filing_name(primary)
+    if filed is None:
+        raise ValueError('The primary name must be one CertMate can file the certificate under: '
+                         'a DNS name with a domain, or an IPv4 address')
+    return filed, primary
+
+
 def _name_key(name):
-    """A DNS name as compared for a collision: no case, no trailing dot."""
-    return name.strip().rstrip('.').casefold()
+    """A name as compared for a collision: no case, no trailing dot, and an
+    address in one spelling. An IP certificate's ``ip-a-b-c-d`` name is its
+    address (#1538), so an address another certificate names is taken by it
+    whether it is recorded as the name or as the address."""
+    text = name.strip().rstrip('.')
+    try:
+        return str(ipaddress.ip_address(ip_for_cert_name(text) or text))
+    except ValueError:
+        return text.casefold()
 
 
 def _external_metadata(domain, san_domains):

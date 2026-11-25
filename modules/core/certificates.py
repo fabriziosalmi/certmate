@@ -2334,6 +2334,14 @@ class CertificateManager:
             names.extend(n for n in recorded if isinstance(n, str))
         if certificate is not None:
             names.extend(csr_domains(certificate))
+            # Its addresses too: an external certificate may name its host by
+            # address (#1538), and with its metadata lost the certificate is
+            # the only record of them.
+            try:
+                names.extend(str(address) for address in certificate.extensions.get_extension_for_class(
+                    x509.SubjectAlternativeName).value.get_values_for_type(x509.IPAddress))
+            except x509.ExtensionNotFound:
+                pass
         seen, ordered = set(), []
         for name in names:
             key = name.strip().lower()

@@ -4,6 +4,7 @@ Checks the supplied chain, not public trust or revocation: private CAs and
 chains that omit the root are supported.
 """
 import datetime
+import ipaddress
 import re
 
 from cryptography import x509
@@ -12,7 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
-from .utils import validate_domain, validate_key_options
+from .utils import cert_name_for_ip, validate_domain, validate_key_options
 
 MAX_IMPORT_PEM_BYTES = 64 * 1024
 INVALID_IMPORT_BUNDLE = ('Invalid certificate bundle. Check PEM format, validity dates, '
@@ -220,8 +221,9 @@ def validate_external_identity(bundle):
     """Check that an external certificate can be identified and served.
 
     No CA renews it, so nothing here asks whether CertMate could issue the same
-    shape. What remains is what the rest of CertMate needs to hold it: DNS names
-    to file it under and to check scope against, and a key the key-state check,
+    shape. What remains is what the rest of CertMate needs to hold it: names to
+    check scope against, one of which it can be filed under
+    (`external_filing_name`), and a key the key-state check,
     the downloads and the storage backends can handle. RSA from 2048 bits, of
     any length a vendor issues, and the three NIST curves.
     """
@@ -236,10 +238,82 @@ def validate_external_identity(bundle):
         shape = {'key_type': 'ecdsa', 'elliptic_curve': key.curve.name}
     else:
         raise CertificateImportError('Only RSA and ECDSA keys are supported')
-    names = _dns_names(bundle['certificate'],
-                       non_dns='Only DNS names are supported for an external certificate',
-                       unusable='Certificate contains a DNS name CertMate cannot use')
+    names = _external_names(bundle['certificate'])
+    if not any(external_filing_name(name) for name in names):
+        raise CertificateImportError(EXTERNAL_NEEDS_A_FILING_NAME)
     return {'names': names, 'key_options': shape}
+
+
+EXTERNAL_NEEDS_A_FILING_NAME = ('An external certificate needs one name CertMate can file it under: '
+                                'a DNS name with a domain, or an IPv4 address')
+_SINGLE_LABEL = re.compile(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?')
+_NUMERIC_LABEL = re.compile(r'[0-9]+|0x[0-9a-f]*')
+
+
+def external_filing_name(name):
+    """The name an external certificate whose primary is *name* is filed under,
+    or None when it cannot be filed under it.
+
+    A certificate is filed under one name: its directory, its settings entry,
+    the routes about it. That is a DNS name with a domain, or an IPv4 address as
+    ``ip-a-b-c-d`` (utils.cert_name_for_ip), as for every other certificate. A
+    single label could be taken for a top-level domain and an IPv6 address has
+    no name on disk yet (#854), so they are additional names only. *name* is one
+    of the normalised names `validate_external_identity` returns.
+    """
+    try:
+        address = ipaddress.ip_address(name)
+    except ValueError:
+        ok, domain = validate_domain(name)
+        return domain if ok and domain == name else None
+    return cert_name_for_ip(str(address)) if address.version == 4 else None
+
+
+def _external_names(cert):
+    """An external certificate's names, normalised, in the certificate's order.
+
+    Wider than what CertMate issues (#1538): a certificate from a private CA
+    may name its host by a single label (``my-host-name``) and by its IPv4 or
+    IPv6 address beside its domain. Each must still be well formed: a DNS name
+    is a domain as validate_domain reads it, or one LDH label, never a wildcard
+    of one; an address is written as the ipaddress module writes it, so two
+    spellings of one address compare equal. Anything else (an e-mail address,
+    a URI) is refused.
+    """
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        if any(not isinstance(name, (x509.DNSName, x509.IPAddress)) for name in san):
+            raise CertificateImportError('Only DNS names and IP addresses are supported for an external certificate')
+        values = list(san)
+    except x509.ExtensionNotFound:
+        values = [x509.DNSName(a.value) for a in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
+    if not values or len(values) > 100:
+        raise CertificateImportError('Certificate must cover between 1 and 100 names')
+    normalized = []
+    for value in values:
+        if isinstance(value, x509.IPAddress):
+            # A SAN address is an address; a network belongs in name constraints.
+            if not isinstance(value.value, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+                raise CertificateImportError('Certificate contains an IP address CertMate cannot use')
+            name = str(value.value)
+        else:
+            name = _external_dns_name(value.value)
+        if name not in normalized:
+            normalized.append(name)
+    return normalized
+
+
+def _external_dns_name(value):
+    ok, domain = validate_domain(value)
+    if ok and domain == value.lower().rstrip('.'):
+        return domain
+    label = value.lower().removesuffix('.')
+    # A label inet_aton reads as an address (``167772165``, ``0x0a000005`` are
+    # 10.0.0.5) is refused: a client may connect to it as that address, and the
+    # name would slip past the check that keeps each address to one certificate.
+    if _SINGLE_LABEL.fullmatch(label) and not _NUMERIC_LABEL.fullmatch(label):
+        return label
+    raise CertificateImportError('Certificate contains a DNS name CertMate cannot use')
 
 
 def _dns_names(cert, *, non_dns, unusable):
