@@ -89,7 +89,7 @@ def test_sso_refuses_to_link_by_email_when_two_users_hold_the_address(
     # A name with a line break, as a row written before names were checked
     # can hold: the warning must not carry it into a second log record.
     users['bob\nforged'] = {**users['alice'], 'role': 'viewer', 'email': ' Shared@Example.com '}
-    assert auth_manager._save_users(users)
+    assert auth_manager.settings_manager.update(lambda s: s.__setitem__('users', users), 'test')
 
     claims = {'iss': 'https://idp.example.com', 'sub': 'idp-subject-1466', 'preferred_username': 'mallory',
               'email': 'shared@example.com', 'email_verified': True, 'groups': []}
@@ -115,7 +115,7 @@ def test_sso_does_not_create_a_second_holder_of_an_address(
     auth_manager.create_user('alice', PASSWORD, role='admin', email='alice@example.com')
     users = auth_manager._get_users()
     users['dave\rforged'] = {**users['alice'], 'role': 'viewer', 'email': 'shared@example.com'}
-    assert auth_manager._save_users(users)
+    assert auth_manager.settings_manager.update(lambda s: s.__setitem__('users', users), 'test')
     claims = {'iss': 'https://idp.example.com', 'sub': 'idp-subject-jit', 'preferred_username': 'mallory',
               'email': ' Shared@Example.com ', 'email_verified': True, 'groups': []}
     with caplog.at_level(logging.WARNING, logger='modules.core.oidc'):
@@ -138,7 +138,7 @@ def test_a_user_sharing_an_address_from_before_can_still_save_its_own(api):
     client, headers, auth = api
     users = auth._get_users()
     users['bob'] = {**users['alice'], 'role': 'viewer', 'email': 'shared@example.com'}
-    assert auth._save_users(users)
+    assert auth.settings_manager.update(lambda s: s.__setitem__('users', users), 'test')
     for email in ('shared@example.com', ' SHARED@example.com '):
         kept = client.put('/api/users/bob', headers=headers, json={'email': email})
         assert kept.status_code == 200, kept.get_json()

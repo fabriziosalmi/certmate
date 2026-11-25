@@ -236,6 +236,15 @@ def not_for_domain_restricted_keys(audit_logger, resource_type, what):
     return decorator
 
 
+class _UsersUnchanged(Exception):
+    """Raised inside a users update to refuse it: the write is not made, and
+    *message* is the caller's answer."""
+
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
+
+
 class AuthManager:
     """Class to handle authentication and authorization"""
     
@@ -378,16 +387,30 @@ class AuthManager:
         settings = self.settings_manager.load_settings()
         return settings.get('users', {})
     
-    def _save_users(self, users):
-        """Save users to settings.
+    def _change_users(self, change):
+        """Read, check and write the users in one locked settings update (#1544).
 
-        Uses settings_manager.update so the read-modify-write happens
-        under the settings lock — two concurrent admin requests creating
-        different users no longer race and lose one of them.
+        *change* receives the users as they are on disk, under the settings
+        lock, and either changes them in place and returns None, or returns
+        the reason it refuses, in which case nothing is written. Reading
+        outside the lock and writing the whole map back inside it, as
+        _save_users did, let two requests that read before either wrote each
+        write their own snapshot: two creates both answered success and one
+        user was gone, and the checks done before the write (a name taken, an
+        address in use, the last admin) saw a state that was no longer true.
+
+        Returns ``(saved, refusal)``.
         """
         def _mutate(settings):
+            users = settings.get('users') or {}
+            refusal = change(users)
+            if refusal:
+                raise _UsersUnchanged(refusal)
             settings['users'] = users
-        return self.settings_manager.update(_mutate, "user_management")
+        try:
+            return self.settings_manager.update(_mutate, "user_management"), None
+        except _UsersUnchanged as refused:
+            return False, refused.message
 
     # --- Scoped API Key management ---
 
@@ -956,78 +979,90 @@ class AuthManager:
             if err:
                 return False, err
 
-            users = self._get_users()
-
-            if username in users:
-                return False, "User already exists"
-            if self._email_taken(users, email, username):
-                return False, EMAIL_TAKEN
-
-            normalized = self._normalize_role(role)
-            users[username] = {
+            # Hashed before the lock: it is slow on purpose and does not
+            # depend on the users, so no other write waits for it.
+            record = {
                 'password_hash': self._hash_password(password),
-                'role': normalized,
+                'role': self._normalize_role(role),
                 'email': email,
                 'created_at': utc_now().isoformat(),
                 'last_login': None,
                 'enabled': True
             }
-            
-            if self._save_users(users):
+
+            def change(users):
+                if username in users:
+                    return "User already exists"
+                if self._email_taken(users, email, username):
+                    return EMAIL_TAKEN
+                users[username] = record
+                return None
+
+            saved, refusal = self._change_users(change)
+            if refusal:
+                return False, refusal
+            if saved:
                 logger.info(f"User '{username}' created successfully")
                 return True, "User created successfully"
             return False, "Failed to save user"
         except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error creating user: {e}")
             return False, "An internal error occurred"
-    
+
     def update_user(self, username, password=None, role=None, email=None, enabled=None,
                     keep_session=None):
         """Update an existing user"""
         try:
-            users = self._get_users()
-            
-            if username not in users:
-                return False, "User not found"
+            # Hashed before the lock, as in create_user.
+            password_hash = self._hash_password(password) if password else None
+            before = {}
 
-            user = users[username]
-            original_role = self._normalize_role(user.get('role', 'operator'))
-            # Only a change of address is checked: a user re-saving the one it
-            # has, re-cased or not, keeps it even if another user shares it.
-            if (email is not None and not self._same_email(email, user.get('email'))
-                    and self._email_taken(users, email, username)):
-                return False, EMAIL_TAKEN
+            def change(users):
+                if username not in users:
+                    return "User not found"
 
-            # SSO-managed accounts authenticate against the IdP and carry an
-            # empty password_hash on purpose. Refuse to set a local password so
-            # the row can never silently fall back to password login.
-            if password and user.get('oidc_subject'):
-                return False, "Cannot set a password for an SSO-managed user"
+                user = users[username]
+                before['role'] = self._normalize_role(user.get('role', 'operator'))
+                # Only a change of address is checked: a user re-saving the one it
+                # has, re-cased or not, keeps it even if another user shares it.
+                if (email is not None and not self._same_email(email, user.get('email'))
+                        and self._email_taken(users, email, username)):
+                    return EMAIL_TAKEN
 
-            # Never let the last *active* admin be disabled — that would lock
-            # everyone out of admin-gated endpoints. delete_user carries the
-            # parallel guard for removal.
-            if enabled is False and user.get('role') == 'admin':
-                if active_admin_count(users) <= 1:
-                    return False, "Cannot disable the last active admin user"
+                # SSO-managed accounts authenticate against the IdP and carry an
+                # empty password_hash on purpose. Refuse to set a local password so
+                # the row can never silently fall back to password login.
+                if password and user.get('oidc_subject'):
+                    return "Cannot set a password for an SSO-managed user"
 
-            # Demoting the last active admin out of the admin role is the same
-            # lockout in a different shape, so it carries the same guard as the
-            # disable/delete paths above.
-            if role is not None and user.get('role') == 'admin' and self._normalize_role(role) != 'admin':
-                if active_admin_count(users) <= 1:
-                    return False, "Cannot change the role of the last active admin user"
+                # Never let the last *active* admin be disabled — that would lock
+                # everyone out of admin-gated endpoints. delete_user carries the
+                # parallel guard for removal.
+                if enabled is False and user.get('role') == 'admin':
+                    if active_admin_count(users) <= 1:
+                        return "Cannot disable the last active admin user"
 
-            if password:
-                user['password_hash'] = self._hash_password(password)
-            if role is not None:
-                user['role'] = self._normalize_role(role)
-            if email is not None:
-                user['email'] = email
-            if enabled is not None:
-                user['enabled'] = enabled
-            
-            if self._save_users(users):
+                # Demoting the last active admin out of the admin role is the same
+                # lockout in a different shape, so it carries the same guard as the
+                # disable/delete paths above.
+                if role is not None and user.get('role') == 'admin' and self._normalize_role(role) != 'admin':
+                    if active_admin_count(users) <= 1:
+                        return "Cannot change the role of the last active admin user"
+
+                if password_hash:
+                    user['password_hash'] = password_hash
+                if role is not None:
+                    user['role'] = self._normalize_role(role)
+                if email is not None:
+                    user['email'] = email
+                if enabled is not None:
+                    user['enabled'] = enabled
+                return None
+
+            saved, refusal = self._change_users(change)
+            if refusal:
+                return False, refusal
+            if saved:
                 logger.info(f"User '{username}' updated successfully")
                 # A privilege change must not be outlived by a live session:
                 # disabling the account or changing its role revokes any
@@ -1037,7 +1072,7 @@ class AuthManager:
                 # an account may be compromised, and a session opened with the
                 # old one would otherwise last its full lifetime. The session
                 # the change was made from, if it is the user's own, stays.
-                role_changed = role is not None and self._normalize_role(role) != original_role
+                role_changed = role is not None and self._normalize_role(role) != before['role']
                 if enabled is False or role_changed:
                     self._invalidate_sessions_for_user(username)
                 elif password:
@@ -1051,20 +1086,23 @@ class AuthManager:
     def delete_user(self, username):
         """Delete a user"""
         try:
-            users = self._get_users()
-            
-            if username not in users:
-                return False, "User not found"
-            
-            # Prevent deleting the last admin
-            # Count ALL admins (enabled or not) to prevent locking out by disabling the last one
-            admin_count = sum(1 for u in users.values() if u.get('role') == 'admin')
-            if users[username].get('role') == 'admin' and admin_count <= 1:
-                return False, "Cannot delete the last admin user"
-            
-            del users[username]
-            
-            if self._save_users(users):
+            def change(users):
+                if username not in users:
+                    return "User not found"
+
+                # Prevent deleting the last admin
+                # Count ALL admins (enabled or not) to prevent locking out by disabling the last one
+                admin_count = sum(1 for u in users.values() if u.get('role') == 'admin')
+                if users[username].get('role') == 'admin' and admin_count <= 1:
+                    return "Cannot delete the last admin user"
+
+                del users[username]
+                return None
+
+            saved, refusal = self._change_users(change)
+            if refusal:
+                return False, refusal
+            if saved:
                 logger.info(f"User '{username}' deleted successfully")
                 # Kill any live sessions so a deleted account can't keep acting.
                 self._invalidate_sessions_for_user(username)

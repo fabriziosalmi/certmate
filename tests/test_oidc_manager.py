@@ -431,7 +431,7 @@ def test_subject_lookup_wins_over_email_match(oidc, settings_manager, auth_manag
         'oidc_issuer': 'https://idp.example.com',
         'created_at': '2026-01-01T00:00:00',
     }
-    auth_manager._save_users(users)
+    auth_manager.settings_manager.update(lambda s: s.__setitem__('users', users), 'test')
 
     claims = {
         'iss': 'https://idp.example.com',
