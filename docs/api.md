@@ -1688,6 +1688,12 @@ curl http://localhost:8000/api/crl/download/info \
 `openssl` and the inventory's `issuer` also use). Before API contract **2.39** it was the
 Python representation of the name, `<Name(CN=CertMate CA,...)>`.
 
+The list itself carries the two extensions RFC 5280 section 5.2 requires, both
+non-critical: the Authority Key Identifier, copied from the CA certificate's Subject Key
+Identifier (or derived from its key when the certificate has none), and a CRL Number that
+grows with every rebuild. The last number is kept beside the CA, in `crl_number`, and a
+rebuild never goes below the number of the `crl.pem` already published.
+
 ---
 
 #### 12. Download Domain Certificate Files
