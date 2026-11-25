@@ -263,6 +263,13 @@ def test_docs_use_the_port_the_app_actually_listens_on():
     test_port = re.search(r'CERTMATE_TEST_PORT", "(\d+)"', conftest)
     allowed = {port} | ({test_port.group(1)} if test_port else set())
 
+    # The health port (#1463): the image declares it, and the monitoring page
+    # tells you to curl it from inside the container.
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    health_port = re.search(r"^ENV HEALTH_PORT=(\d+)$", dockerfile, re.M)
+    assert health_port, "the Dockerfile no longer declares HEALTH_PORT"
+    allowed.add(health_port.group(1))
+
     # Ports belonging to something that is not CertMate. Each needs a reason,
     # and each is checked below against the file that actually declares it —
     # an allow-list nobody can verify is just a way to silence the gate.

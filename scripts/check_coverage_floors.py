@@ -145,6 +145,12 @@ FLOORS = {
     'modules/core/audit_verify.py': 75,
     'modules/core/auth.py': 85,
     'modules/core/ca_manager.py': 70,
+    # 100 from a measured 100% (#1463): the health port, served by a real
+    # server on a free port in the tests, idle client included.
+    'modules/core/health_server.py': 100,
+    # 95 from a measured 96% (#1463): the request count and the stall rule,
+    # on a fake clock; the two lines left are a malformed environment value.
+    'modules/core/request_progress.py': 95,
     # 90 from a measured 91% (#1461): the masking pass over certbot's logs,
     # run against logs the real certbot wrote.
     'modules/core/certbot_logs.py': 90,

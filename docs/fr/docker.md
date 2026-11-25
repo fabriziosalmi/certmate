@@ -1,6 +1,6 @@
 # Construction et déploiement Docker
 
-<!-- CERTMATE-TRANSLATED-FROM 1d0fb81230b2d424 -->
+<!-- CERTMATE-TRANSLATED-FROM b11c77dc2516d44e -->
 
 Ce guide couvre la construction, le déploiement et l'exécution de CertMate dans Docker — incluant le support multi-plateforme pour ARM et AMD64.
 
@@ -156,6 +156,11 @@ docker run -d --name certmate \
 | `CERTMATE_LOG_LEVEL` | Non | `INFO` (défaut), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **À définir si vous voulez des sauvegardes automatiques à partir desquelles restaurer** | Chiffre au repos les sauvegardes unifiées (`.zip.enc`, PBKDF2-SHA256 + Fernet), et c'est elle qui rend les sauvegardes automatiques *complètes* — avec elle, elles peuvent restaurer cette instance ; sans elle, elles gardent leurs identifiants masqués et ne le peuvent pas. La même phrase secrète est requise pour les restaurer, et CertMate ne la stocke jamais à votre place. Conservez-la ailleurs que sur la machine qui contient les sauvegardes |
 | `CERTMATE_RESTORE_MAX_BYTES` | Non | Le maximum qu'une restauration de sauvegarde peut écrire au total, en octets (2 Gio par défaut). Une restauration qui écrirait davantage s'arrête et signale qu'elle n'est pas terminée ; voir [Backup](../backup.md#restoring) |
+| `HEALTH_PORT` | Non, `8001` dans l'image | Le port où `/health` est aussi servi par un thread qu'aucune requête ne peut prendre. Le `HEALTHCHECK` de l'image l'interroge. Non défini, aucun second port n'est ouvert. Voir [Supervision](../monitoring.md#the-health-port) |
+| `HEALTH_HOST` | Non, `0.0.0.0` | L'adresse sur laquelle écoute le port de santé |
+| `GUNICORN_THREADS` | Non, `8` | Les threads des requêtes. `/health` répond `503` quand tous ont été occupés sans que rien ne se termine pendant `CERTMATE_HEALTH_STALL_SECONDS` |
+| `GUNICORN_TIMEOUT` | Non, `300` | Les secondes qu'une requête peut durer, assez pour la propagation DNS-01 |
+| `CERTMATE_HEALTH_STALL_SECONDS` | Non, `GUNICORN_TIMEOUT` + 60 | Combien de temps tous les threads des requêtes peuvent rester occupés sans que rien ne se termine avant que `/health` dise `unhealthy` |
 | `CLOUDFLARE_TOKEN` | Non | Token API du compte DNS Cloudflare par défaut. Route53 utilise normalement les identifiants configurés dans Paramètres → Fournisseurs DNS, mais quand son compte choisit explicitement `auth_mode: iam_role`, Certbot utilise la chaîne d'identification AWS du conteneur (y compris les rôles IAM). |
 
 Voir le [Guide d'installation](./installation.md#variables-denvironnement) pour la liste complète.

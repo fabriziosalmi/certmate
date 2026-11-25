@@ -397,6 +397,132 @@ def _metrics_scope(managers, auth_manager):
     return in_scope
 
 
+def _current_issuance_status(managers):
+    """Whether certbot can run, re-checked when the last answer has aged.
+
+    The probe ran once per process and its answer was then frozen for the
+    life of that process, and both routes read that frozen dict. It was
+    wrong in both directions. A transient failure at boot — a filesystem
+    still settling, a fork refused under memory pressure — made the
+    instance permanently unready, and under an orchestrator that is a
+    restart loop rolling the same dice. And a certbot that broke AFTER boot
+    never turned readiness red, so the endpoint used to decide rotation
+    went on saying yes while nothing could be issued.
+
+    `probe` is TTL-throttled, so a readiness scrape every few seconds runs
+    certbot at most once per TTL. The refreshed answer is written back to
+    `managers['issuance_status']` so anything else reading that key sees
+    the same thing these two do.
+    """
+    from modules.core import issuance_readiness
+    shell_executor = managers.get('shell_executor')
+    if shell_executor is None:
+        return managers.get('issuance_status') or {}
+    status = issuance_readiness.probe(shell_executor)
+    managers['issuance_status'] = status
+    return status
+
+
+def health_report(managers, app, reason_for):
+    """The /health answer, as ``(body, status)``: one report for the request
+    port and for the health port (#1463), which has no request and so passes
+    a *reason_for* that withholds every reason.
+
+    200 for healthy and degraded alike, as before, so a degraded check does
+    not take the only replica out of service. 503 only for "unhealthy": every
+    request thread busy and none finished for the stall time, which a restart
+    is the remedy for.
+    """
+    import shutil
+    checks = {}
+    overall = 'healthy'
+
+    # Scheduler
+    scheduler = managers.get('scheduler')
+    scheduler_status = managers.get('scheduler_status') or {}
+    if scheduler and scheduler.running:
+        checks['scheduler'] = 'running'
+    elif scheduler_status.get('state') == 'failed':
+        # Setup raised an exception. Surface the reason so operators can
+        # diagnose without grepping logs; without this the /health response
+        # collapsed to a bare 'not_running' that hid the actual cause.
+        checks['scheduler'] = 'failed'
+        checks['scheduler_error'] = reason_for(scheduler_status.get('error'))
+        checks['scheduler_failed_at'] = scheduler_status.get('timestamp')
+        overall = 'degraded'
+    else:
+        checks['scheduler'] = 'not_running'
+        overall = 'degraded'
+
+    # certbot. The one dependency without which nothing works, and a
+    # broken one is invisible until the first renewal — hours later, on a
+    # certificate closer to expiry. Re-checked rather than read from the
+    # startup snapshot: see _current_issuance_status.
+    issuance = _current_issuance_status(managers)
+    issuance_state = issuance.get('state')
+    if issuance_state:
+        checks['certbot'] = issuance_state
+        if issuance.get('version'):
+            checks['certbot_version'] = issuance['version']
+        if issuance_state == 'failed':
+            checks['certbot_error'] = reason_for(issuance.get('error'))
+            overall = 'degraded'
+
+    # Cert directory
+    file_ops = managers.get('file_ops')
+    if file_ops:
+        cert_dir_ok = file_ops.cert_dir.exists()
+        checks['cert_dir'] = 'ok' if cert_dir_ok else 'missing'
+        if not cert_dir_ok:
+            overall = 'degraded'
+
+        # Disk space (warn if less than 100 MB free)
+        try:
+            usage = shutil.disk_usage(str(file_ops.cert_dir.parent))
+            free_mb = usage.free // (1024 * 1024)
+            checks['disk_free_mb'] = free_mb
+            if free_mb < 100:
+                checks['disk_space'] = 'low'
+                overall = 'degraded'
+            else:
+                checks['disk_space'] = 'ok'
+        except Exception:
+            # 'unknown' is a first-class answer here, and the reason this
+            # is broad: a health check that cannot look must not report
+            # 'ok', and must not fail the whole health response either.
+            checks['disk_space'] = 'unknown'
+
+    # Whether requests still finish (#1463). 200 for healthy and degraded
+    # alike: load balancers and the conftest health-wait check for 200, and a
+    # degraded instance still serves the UI and the API. 503 only when every
+    # request thread has been busy with nothing finishing for the stall time,
+    # which a restart is the remedy for.
+    status = 200
+    progress = managers.get('request_progress')
+    if progress is not None:
+        moving = progress.state()
+        checks['requests'] = 'stalled' if moving['stalled'] else 'progressing'
+        checks['requests_in_flight'] = moving['in_flight']
+        if moving['stalled']:
+            overall = 'unhealthy'
+            status = 503
+
+    # VERSION was never set in app.config, so /health always reported
+    # "unknown"; fall back to the canonical package version (same source
+    # Swagger and the Prometheus build_info use).
+    from modules import __version__
+    from modules.core.constants import API_CONTRACT_VERSION
+    return {
+        'status': overall,
+        'version': app.config.get('VERSION') or __version__,
+        # The release number above moves on every patch. This one moves
+        # only when the interface does, so it is the field a client can
+        # actually decide compatibility on.
+        'api_contract_version': API_CONTRACT_VERSION,
+        'checks': checks
+    }, status
+
+
 def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
     _register_update_check(app, managers, auth_manager)
@@ -588,110 +714,12 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             logger.error(f"Metrics error: {e}")
             return jsonify({'error': 'Internal Server Error'}), 500
 
-    def _current_issuance_status(managers):
-        """Whether certbot can run, re-checked when the last answer has aged.
-
-        The probe ran once per process and its answer was then frozen for the
-        life of that process, and both routes read that frozen dict. It was
-        wrong in both directions. A transient failure at boot — a filesystem
-        still settling, a fork refused under memory pressure — made the
-        instance permanently unready, and under an orchestrator that is a
-        restart loop rolling the same dice. And a certbot that broke AFTER boot
-        never turned readiness red, so the endpoint used to decide rotation
-        went on saying yes while nothing could be issued.
-
-        `probe` is TTL-throttled, so a readiness scrape every few seconds runs
-        certbot at most once per TTL. The refreshed answer is written back to
-        `managers['issuance_status']` so anything else reading that key sees
-        the same thing these two do.
-        """
-        from modules.core import issuance_readiness
-        shell_executor = managers.get('shell_executor')
-        if shell_executor is None:
-            return managers.get('issuance_status') or {}
-        status = issuance_readiness.probe(shell_executor)
-        managers['issuance_status'] = status
-        return status
-
     @app.route('/health')
     def health_check():
         """Health check endpoint — intentionally public for load balancers"""
-        import shutil
-        checks = {}
-        overall = 'healthy'
-
-        # Scheduler
-        scheduler = managers.get('scheduler')
-        scheduler_status = managers.get('scheduler_status') or {}
-        if scheduler and scheduler.running:
-            checks['scheduler'] = 'running'
-        elif scheduler_status.get('state') == 'failed':
-            # Setup raised an exception. Surface the reason so operators can
-            # diagnose without grepping logs; without this the /health response
-            # collapsed to a bare 'not_running' that hid the actual cause.
-            checks['scheduler'] = 'failed'
-            checks['scheduler_error'] = _reason_for_caller(auth_manager, scheduler_status.get('error'))
-            checks['scheduler_failed_at'] = scheduler_status.get('timestamp')
-            overall = 'degraded'
-        else:
-            checks['scheduler'] = 'not_running'
-            overall = 'degraded'
-
-        # certbot. The one dependency without which nothing works, and a
-        # broken one is invisible until the first renewal — hours later, on a
-        # certificate closer to expiry. Re-checked rather than read from the
-        # startup snapshot: see _current_issuance_status.
-        issuance = _current_issuance_status(managers)
-        issuance_state = issuance.get('state')
-        if issuance_state:
-            checks['certbot'] = issuance_state
-            if issuance.get('version'):
-                checks['certbot_version'] = issuance['version']
-            if issuance_state == 'failed':
-                checks['certbot_error'] = _reason_for_caller(auth_manager, issuance.get('error'))
-                overall = 'degraded'
-
-        # Cert directory
-        file_ops = managers.get('file_ops')
-        if file_ops:
-            cert_dir_ok = file_ops.cert_dir.exists()
-            checks['cert_dir'] = 'ok' if cert_dir_ok else 'missing'
-            if not cert_dir_ok:
-                overall = 'degraded'
-
-            # Disk space (warn if less than 100 MB free)
-            try:
-                usage = shutil.disk_usage(str(file_ops.cert_dir.parent))
-                free_mb = usage.free // (1024 * 1024)
-                checks['disk_free_mb'] = free_mb
-                if free_mb < 100:
-                    checks['disk_space'] = 'low'
-                    overall = 'degraded'
-                else:
-                    checks['disk_space'] = 'ok'
-            except Exception:
-                # 'unknown' is a first-class answer here, and the reason this
-                # is broad: a health check that cannot look must not report
-                # 'ok', and must not fail the whole health response either.
-                checks['disk_space'] = 'unknown'
-
-        # Always return 200 — Flask is serving requests.
-        # Load balancers and the conftest health-wait both check for 200.
-        # The 'status' field ('healthy'/'degraded') is for monitoring systems.
-        # VERSION was never set in app.config, so /health always reported
-        # "unknown"; fall back to the canonical package version (same source
-        # Swagger and the Prometheus build_info use).
-        from modules import __version__
-        from modules.core.constants import API_CONTRACT_VERSION
-        return jsonify({
-            'status': overall,
-            'version': app.config.get('VERSION') or __version__,
-            # The release number above moves on every patch. This one moves
-            # only when the interface does, so it is the field a client can
-            # actually decide compatibility on.
-            'api_contract_version': API_CONTRACT_VERSION,
-            'checks': checks
-        })
+        body, status = health_report(
+            managers, app, lambda reason: _reason_for_caller(auth_manager, reason))
+        return jsonify(body), status
 
     @app.route('/health/ready')
     def readiness_check():

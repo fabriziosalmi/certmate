@@ -180,11 +180,15 @@ def test_the_routes_ask_for_a_current_answer():
 
     from modules.web import misc_routes
 
-    source = inspect.getsource(misc_routes.register_misc_routes)
-    assert source.count('_current_issuance_status(managers)') >= 2, (
+    # /health builds its answer in health_report, which the health port serves
+    # too (#1463); /health/ready is still in the routes.
+    health = inspect.getsource(misc_routes.health_report)
+    routes = inspect.getsource(misc_routes.register_misc_routes)
+    assert '_current_issuance_status(managers)' in health and \
+        '_current_issuance_status(managers)' in routes, (
         'the health and readiness routes are not both asking for a current '
         'answer')
-    helper = source[source.index('def _current_issuance_status'):]
+    helper = inspect.getsource(misc_routes._current_issuance_status)
     assert 'issuance_readiness.probe(' in helper
     assert "managers['issuance_status'] = status" in helper, (
         'the refreshed answer is not written back, so anything else reading '

@@ -170,6 +170,14 @@ securityContext:
 
 # Startup runs migrations and directory setup, so give it room before the
 # liveness probe starts counting failures.
+# /health is also served on this port by a thread no request can take
+# (#1463), and both probes below ask it: on the service port, slow requests
+# that held every request thread made the probes time out. It answers 503
+# only when every request thread has been busy with nothing finishing for
+# CERTMATE_HEALTH_STALL_SECONDS (by default a minute past GUNICORN_TIMEOUT,
+# 360 s), which a restart is for.
+healthPort: 8001
+
 probes:
   liveness:
     initialDelaySeconds: 30
