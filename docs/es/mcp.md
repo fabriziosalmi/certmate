@@ -1,6 +1,6 @@
 # Servidor MCP (Model Context Protocol) de CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 58ca0a53ff2c8362 -->
+<!-- CERTMATE-TRANSLATED-FROM 039a641d5a574f97 -->
 
 CertMate incluye un servidor MCP (Model Context Protocol) integrado escrito en Node.js. Esto permite a los asistentes de IA agentivos (como Claude o Gemini) inspeccionar el estado de los certificados, disparar renovaciones, solicitar diagnósticos e interactuar directamente con la API de CertMate.
 
@@ -28,7 +28,7 @@ El servidor MCP de CertMate expone las siguientes herramientas a los asistentes 
 13. **`certmate_list_dns_accounts`** — Cuentas de proveedores DNS configuradas (credenciales enmascaradas); usa el ID de una cuenta devuelta como `account_id` al crear un certificado. **Requiere `admin`.**
 
 **Edición y eliminación**
-14. **`certmate_update_certificate`** — Cambia en el sitio la cobertura de un certificado existente reemitiéndolo: sustituye el conjunto de SAN y/o el alias DNS-01. El dominio principal es la identidad del certificado y no se puede cambiar aquí. Devuelve un `job_id`.
+14. **`certmate_update_certificate`** — Cambia en el sitio la cobertura de un certificado existente reemitiéndolo: sustituye el conjunto de SAN y/o el alias DNS-01, o lo reemite bajo otra cuenta de la CA con `ca_account_id`: un id es esa cuenta, `""` es la cuenta predeterminada de la CA, y sin el campo se mantiene la cuenta con la que se emitió. Una cuenta requiere el contrato de API 2.76, que la herramienta pide primero al servidor. El dominio principal es la identidad del certificado y no se puede cambiar aquí. Devuelve un `job_id`.
 15. **`certmate_delete_certificate`** — **Destructivo e irreversible.** Elimina los archivos del certificado del disco y el dominio de los ajustes. **Requiere `admin`.**
 16. **`certmate_get_certificate_file`** — Devuelve un único archivo de certificado como PEM sin procesar, listo para pegar, en lugar de envuelto en JSON. `cert.pem`, `chain.pem` y `fullchain.pem` los puede leer un `viewer`; `privkey.pem`, `combined.pem` y `cert.pfx` contienen material de clave y requieren `operator`.
 

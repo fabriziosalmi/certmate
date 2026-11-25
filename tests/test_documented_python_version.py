@@ -30,13 +30,13 @@ import re
 import pytest
 
 from tests.historical_documents import is_historical
+from tests.repository_documents import is_skipped
 
 
 pytestmark = [pytest.mark.unit]
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-_SKIP_DIRS = (".venv", "node_modules", ".git", "scratch", ".claude", "backups")
 # History records what was true then, including a version we have moved off.
 # Release notes record what was true once; see tests/historical_documents.py.
 
@@ -65,7 +65,7 @@ def _documented():
     for path in targets:
         if not path.exists() or is_historical(path):
             continue
-        if any(part in path.parts for part in _SKIP_DIRS):
+        if is_skipped(path, REPO_ROOT):
             continue
         for number, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), 1):

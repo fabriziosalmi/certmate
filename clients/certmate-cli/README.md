@@ -23,6 +23,19 @@ is issued for `app.example.com`, and every later command takes
 older one would ignore the name, so the CLI asks first and refuses, and
 `--dry-run` says whether the server takes it.
 
+`cert reissue` reissues a certificate in place, with `--san` for a new SAN list
+and `--ca-account` for the CA account to reissue under:
+
+```bash
+certmate cert reissue app.example.com --ca-account acct-2   # that account
+certmate cert reissue app.example.com --ca-account ''       # the CA's default account
+certmate cert reissue app.example.com --san www.example.com # account kept
+```
+
+Without `--ca-account` the certificate keeps the account it was issued under.
+The server must be on API contract 2.76 or later; an older one would ignore the
+account and keep the recorded one, so the CLI asks first and refuses.
+
 ## Pulling certificates onto a host
 
 `cert download` fetches one file at a time, so a target server can pull

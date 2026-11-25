@@ -164,7 +164,7 @@ def test_no_document_names_a_make_target_that_does_not_exist():
     targets = _make_targets()
     named = {}
     for path in ['README.md', 'CONTRIBUTING.md', *sorted(str(p.relative_to(REPO)) for p in (REPO / 'docs').rglob('*.md')
-                                                           if 'releases' not in p.parts)]:
+                                                           if 'releases' not in p.relative_to(REPO).parts)]:
         text = (REPO / path).read_text(encoding='utf-8')
         for target in re.findall(r'^\s*make ([a-z][a-z0-9-]*)', text, flags=re.MULTILINE) + \
                 re.findall(r'`make ([a-z][a-z0-9-]*)`', text):
