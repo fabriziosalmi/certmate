@@ -1053,3 +1053,31 @@ def test_preview_does_not_validate_mismatched_or_incomplete_bundle(instance, inv
     assert 'PRIVATE KEY' not in response.get_data(as_text=True)
     assert not instance.directory.exists()
     instance.shell.run.assert_not_called()
+
+
+def test_the_preview_of_an_external_bundle_asks_only_what_its_import_asks(instance):
+    # #1538: a P-521 key is accepted for an external certificate, which
+    # CertMate never renews, and refused for one CertMate would renew.
+    data = make_bundle(names=('ext.example.com',), key=ec.generate_private_key(ec.SECP521R1()))
+    url = '/api/web/certificates/import/preview'
+    preview = instance.client.post(url, json={**data, 'external': True}, headers=instance.headers)
+    assert preview.status_code == 200, preview.get_json()
+    assert preview.get_json()['validated'] is True
+    assert instance.client.post(url, json=data, headers=instance.headers).status_code == 400
+    assert instance.post({**data, 'external': True}).status_code == 201
+    instance.shell.run.assert_not_called()
+
+
+def test_the_external_preview_and_the_external_import_refuse_a_name_with_the_same_words(instance):
+    data = make_bundle(names=('intranet',))
+    preview = instance.client.post('/api/web/certificates/import/preview',
+                                   json={**data, 'external': True}, headers=instance.headers)
+    imported = instance.post({**data, 'external': True})
+    assert preview.status_code == imported.status_code == 400
+    assert preview.get_json()['error'] == imported.get_json()['error']
+
+
+def test_the_preview_refuses_an_external_flag_that_is_not_a_boolean(instance, bundle):
+    response = instance.client.post('/api/web/certificates/import/preview',
+                                    json={**bundle, 'external': 'true'}, headers=instance.headers)
+    assert response.status_code == 400

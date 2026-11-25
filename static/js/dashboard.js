@@ -1941,9 +1941,7 @@
 
         if (cert.exists) wireLabelsSection(cert.domain);
         if (cert.exists && roleAtLeast('admin')) loadDeployHooksState().then(applyDeployHooksState);
-        if (cert.exists && external && roleAtLeast('operator')) {
-            bundlePicker('replace', content.querySelectorAll('[data-replace-dropzone]'), 'replace');
-        }
+        if (cert.exists && external && roleAtLeast('operator')) replacePicker(content);
 
         // Reveal the backdrop and modal, then animate the card in (scale +
         // fade) on the next frame so the transition actually plays. Focus moves
@@ -2703,6 +2701,9 @@
     var caAccounts = {};
     var caAccountSelectProvider = '';
     var configuredCAs = [];
+    // Whether /api/web/settings answered, so the CA account picker lists the
+    // accounts there are (#1465). Without them a reissue keeps its account.
+    var caAccountsLoaded = false;
     var defaultCAProvider = 'letsencrypt';
     var defaultChallengeType = 'dns-01';
     // What the empty dashboard's steps are built from (UX audit P17): read
@@ -2760,12 +2761,23 @@
             (missing.length === 1 ? 'it' : 'them') + ' in Settings > CA';
     }
 
+    // Whether "Global default" is the option chosen, not a select reading ''
+    // because no option matches the certificate's CA, and names a CA that is
+    // configured (#1465).
+    function globalDefaultChosen() {
+        var select = document.getElementById('ca_provider_select');
+        var chosen = select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+        return !!chosen && chosen.value === '' && !chosen.disabled &&
+            configuredCAs.indexOf(defaultCAProvider) !== -1;
+    }
+
     function loadCAProviders() {
         return fetch('/api/web/settings', { headers: API_HEADERS })
             .then(function (response) { if (!response.ok) throw new Error('CA settings unavailable'); return response.json(); })
             .then(function (settings) {
                 configuredCAs = CertMate.configuredCAProviders(settings, true);
                 caAccounts = settings.ca_providers || {};
+                caAccountsLoaded = true;
                 defaultCAAccounts = settings.default_ca_accounts || {};
                 globalCAEmail = settings.email || '';
                 var select = document.getElementById('ca_provider_select');
@@ -2782,6 +2794,12 @@
                         (ids.indexOf('default') !== -1 ? 'default' : (ids[0] || 'default'));
                     select.add(new Option('Global default: ' + (CA_NAMES[defaultCA] || defaultCA) + ' — ' +
                         caAccountLabel(defaultCA, id, config), ''));
+                } else if (configuredCAs.length) {
+                    // Shown, never chosen: the default CA cannot issue here.
+                    var unusable = new Option('Global default: ' + (CA_NAMES[defaultCA] || defaultCA) +
+                        ' (not configured in Settings)', '');
+                    unusable.disabled = true;
+                    select.add(unusable);
                 }
                 configuredCAs.forEach(function (id) {
                     select.add(new Option(CA_NAMES[id] || id, id));
@@ -3551,6 +3569,9 @@
     // prefilled so what the user sees is what gets submitted.
     // =============================================
     var reissueEditingDomain = null;
+    // Read once, when the edit starts: the picker was prefilled from the
+    // accounts loaded then, so only then does it show the certificate's.
+    var reissueKnowsAccounts = false;
 
     function startEditReissue(domain) {
         if (isCreatingCert) {
@@ -3564,6 +3585,7 @@
         }
         resetCertificateImport();
         reissueEditingDomain = domain;
+        reissueKnowsAccounts = caAccountsLoaded;
         closeCertDetail();
         openCreateCertForm();
 
@@ -3634,6 +3656,8 @@
     function setReissueFormMode(editing, domain) {
         var form = document.getElementById('createCertForm');
         if (!form) return;
+        var accountsNote = document.getElementById('ca-account-unloaded');
+        if (accountsNote) accountsNote.classList.toggle('hidden', !(editing && !reissueKnowsAccounts));
         document.getElementById('certificateImportMode').classList.toggle('hidden', editing);
         var submitBtn = form.querySelector('button[type="submit"]');
         var banner = document.getElementById('reissue-edit-banner');
@@ -3850,7 +3874,7 @@
                 private_key: prefix + 'PrivateKeyFile'};
     }
 
-    function bundlePicker(prefix, zones, verb) {
+    function bundlePicker(prefix, zones, verb, isExternal) {
         var version = 0;
         var fields = bundleFields(prefix);
         function setStates(valid) {
@@ -3897,6 +3921,8 @@
                 var contents = await Promise.all(selectedFiles.map(function (item) { return item.text(); }));
                 if (current !== version) return;
                 selectedFiles.forEach(function (item, index) { payload[keys[index]] = contents[index]; });
+                // An external bundle is checked as its import checks it (#1538).
+                if (isExternal()) payload.external = true;
                 var response = await fetch('/api/web/certificates/import/preview', {
                     method: 'POST', headers: API_HEADERS, body: JSON.stringify(payload)
                 });
@@ -3948,11 +3974,20 @@
                 updateName(input);
             });
         });
-        return {fields: fields, updateName: updateName};
+        return {fields: fields, updateName: updateName, preview: preview};
+    }
+
+    // A replacement is always of an external certificate, so its preview is
+    // always asked as one (#1538).
+    function replacePicker(content) {
+        return bundlePicker('replace', content.querySelectorAll('[data-replace-dropzone]'), 'replace',
+            function () { return true; });
     }
 
     var importFileFields = bundleFields('import');
-    var importPicker = bundlePicker('import', document.querySelectorAll('[data-import-dropzone]'), 'import');
+    var importPicker = bundlePicker('import', document.querySelectorAll('[data-import-dropzone]'), 'import', function () {
+        return document.getElementById('importRenewalExternal').checked;
+    });
 
     // Hide the sections *selector* names while *off*, with their controls
     // disabled so nothing in them is sent, and give each control back the state
@@ -4006,6 +4041,8 @@
             setSectionsOff(form, '[data-renewal-source]', false, 'externalDisabled');
             setSectionsOff(form, '[data-issuance-only]', importing, 'importDisabled');
         }
+        // The answer depends on the renewal choice: ask again when it changes.
+        if (importing) importPicker.preview();
         form.querySelectorAll('[data-external-hidden]').forEach(function (section) {
             section.classList.toggle('hidden', external);
         });
@@ -4137,7 +4174,10 @@
             certName = '';
         }
 
-        if (!configuredCAs.length) {
+        // A reissue whose CA settings did not load keeps the certificate's
+        // CA and account (#1465), so it does not need the list.
+        var reissueWithoutCAList = !!reissueEditingDomain && !reissueKnowsAccounts;
+        if (!configuredCAs.length && !reissueWithoutCAList) {
             showMessage(caNotUsableReason() || 'Configure a certificate authority in Settings before issuing', 'error');
             return;
         }
@@ -4267,9 +4307,17 @@
         }
         if (caProvider) {
             requestBody.ca_provider = caProvider;
+        } else if (editingDomain && reissueKnowsAccounts && globalDefaultChosen()) {
+            // "Global default" on a reissue is the instance's default CA
+            // (#1465): sending nothing would keep the certificate's own CA.
+            requestBody.ca_provider = defaultCAProvider;
         }
         var caAccountId = document.getElementById('ca_account_id').value;
-        if (caAccountId) requestBody.ca_account_id = caAccountId;
+        // A reissue says which account (#1465): the form was prefilled with
+        // the certificate's, and '' ("Default for ...") is the CA's default
+        // account, not "unchanged". When the accounts did not load, the picker
+        // shows none of them, so nothing is sent and the account is kept.
+        if (caAccountId || (editingDomain && reissueKnowsAccounts)) requestBody.ca_account_id = caAccountId;
 
         // A CSR generated on the device that will serve the certificate
         // (#599). When one is given the key never reaches this instance, and
@@ -5246,7 +5294,10 @@
         // the steps setup still needs, built from them, and is drawn once
         // with them rather than drawn and then rewritten under the reader.
         var setupRead = Promise.all([loadProviderAccounts(), loadCAProviders()]);
-        Promise.all([refreshCurrentRole(), setupRead]).then(function () {
+        // Every drawing of the list waits for this, the one ordering an edit
+        // relies on (#1465): its CA and account choices are read when it starts.
+        var initialRead = Promise.all([refreshCurrentRole(), setupRead]);
+        initialRead.then(function () {
             loadCertificates().then(function () {
                 maybeOpenCertFromQuery();
                 maybeFlashCertFromQuery();
@@ -5294,7 +5345,7 @@
                     if (event.data && event.data.type === 'certificates_restored') {
                         addDebugLog('Certificates updated from another page - refreshing list...', 'info');
                         setTimeout(function () {
-                            loadCertificates();
+                            initialRead.then(loadCertificates);
                             showMessage('Certificate list refreshed - certificates have been restored!', 'success');
                         }, 1000);
                     }
@@ -5305,7 +5356,7 @@
                 if (event.key === 'certificates_updated') {
                     addDebugLog('Certificates updated detected - refreshing list...', 'info');
                     setTimeout(function () {
-                        loadCertificates();
+                        initialRead.then(loadCertificates);
                         showMessage('Certificate list refreshed - certificates have been updated!', 'success');
                     }, 1000);
                     localStorage.removeItem('certificates_updated');

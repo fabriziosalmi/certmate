@@ -89,6 +89,7 @@ loadCertificates = () => { reloaded++; };
 clearCreateFormAfterSubmit = () => {};
 closeCertDetail = () => { closed++; };
 toggleDnsProviderVisibility = () => {};
+/*EXPOSE*/
 })();`);
 eval(source);
 function check(ok, message) { if (!ok) throw Error(message); }
@@ -107,8 +108,11 @@ async function settle() { for (let i = 0; i < 12; i++) await Promise.resolve(); 
 """
 
 
-def _run(node, body):
-    result = subprocess.run([node, '-e', HARNESS + body, str(JS / 'certmate.js'), str(JS / 'dashboard.js')],
+def _run(node, body, expose=''):
+    # *expose*: statements run inside the dashboard's closure, to hand a
+    # private function to the test.
+    harness = HARNESS.replace('/*EXPOSE*/', expose)
+    result = subprocess.run([node, '-e', harness + body, str(JS / 'certmate.js'), str(JS / 'dashboard.js')],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
 
@@ -247,3 +251,92 @@ async function run() {
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
 """)
+
+
+def test_the_preview_of_an_external_bundle_says_it_is_external_and_is_asked_again_when_the_choice_changes(node):
+    # #1538: the preview asked whether CertMate could renew an external certificate.
+    _run(node, r"""
+async function run() {
+  const previews = [];
+  global.fetch = (url, options) => {
+    previews.push({url, payload: JSON.parse(options.body)});
+    return Promise.resolve({ok: true, json: async () => ({common_names: [], sans: [], validated: true})});
+  };
+  elements.importExistingCertificate.checked = true;
+  window.toggleCertificateImport();
+  ['importCertificateFile', 'importChainFile', 'importPrivateKeyFile'].forEach((id, i) => {
+    elements[id].files = pem(id, i);
+  });
+  window.toggleCertificateImport();
+  await settle();
+  const renewed = previews.filter(p => p.payload.private_key);
+  check(renewed.length, 'Choosing to import did not preview the selected bundle');
+  check(renewed.every(p => !('external' in p.payload)), 'A CA-renewed preview said external');
+  previews.length = 0;
+  elements.importRenewalCa.checked = false;
+  elements.importRenewalExternal.checked = true;
+  window.toggleCertificateImport();
+  await settle();
+  check(previews.length && previews.every(p => p.payload.external === true),
+    'The renewal choice changed and the preview was not asked again as external');
+}
+run().catch(error => { console.error(error); process.exit(1); });
+""")
+
+
+def test_the_preview_of_a_replacement_says_it_is_external(node):
+    # #1538: a replacement is always of an external certificate.
+    _run(node, r"""
+async function run() {
+  const previews = [];
+  global.fetch = (url, options) => {
+    previews.push({url, payload: JSON.parse(options.body)});
+    return Promise.resolve({ok: true, json: async () => ({common_names: [], sans: [], validated: true})});
+  };
+  ['Preview', 'PreviewStatus', 'PreviewNames', 'PreviewCN', 'PreviewSAN'].forEach(part => {
+    elements['replaceCertificate' + part] = make();
+  });
+  ['replaceCertificateFile', 'replaceChainFile', 'replacePrivateKeyFile'].forEach((id, i) => {
+    elements[id].files = pem(id, i);
+  });
+  const zones = ['replaceCertificateFile', 'replaceChainFile', 'replacePrivateKeyFile'].map(id => ({
+    dataset: {}, classList: classes(), querySelector() { return elements[id]; }, addEventListener() {}}));
+  const picker = window.__replacePicker({querySelectorAll: () => zones});
+  await picker.preview();
+  await settle();
+  check(previews.length === 1 && previews[0].url === '/api/web/certificates/import/preview',
+    'The replacement was not previewed');
+  check(previews[0].payload.private_key && previews[0].payload.external === true,
+    'The preview of a replacement did not say external');
+}
+run().catch(error => { console.error(error); process.exit(1); });
+""", expose='window.__replacePicker = replacePicker;')
+
+
+def test_the_detail_panel_of_an_external_certificate_wires_its_replacement_as_external(node):
+    # #1538: the detail panel must build the replace picker that says external.
+    _run(node, r"""
+['certDetailPanel', 'certDetailOverlay', 'certDetailContent', 'certDetailCard'].forEach(id => {
+  elements[id] = make(); elements[id].id = id;
+});
+elements.certDetailContent.querySelectorAll = () => [];
+elements.certDetailContent.querySelector = () => null;
+elements.certDetailPanel.querySelector = () => null;
+elements.certDetailPanel.removeAttribute = () => {};
+global.requestAnimationFrame = () => 0;
+CertMate.lockScroll = () => {};
+const cert = {domain: 'ext.example.com', exists: true, external: true, days_until_expiry: 60,
+  expiry_date: '2027-01-01 00:00:00', expires_at: '2027-01-01T00:00:00Z', san_domains: [], tags: [],
+  private_key_present: true, private_key_state: 'present', reissue_required: false};
+window.wired = [];
+window.__detail(cert);
+check(window.wired.length === 1 && window.wired[0] === elements.certDetailContent,
+  'The detail panel of an external certificate did not wire the replacement with replacePicker');
+""", expose="""
+currentRole = 'admin';
+wireLabelsSection = () => {};
+loadDeployHooksState = () => ({then() {}});
+window.__detail = cert => { allCertificates = [cert]; openCertDetail(cert.domain); };
+var __replacePicker = replacePicker;
+replacePicker = function (content) { wired.push(content); return __replacePicker(content); };
+""".replace('wired.push', 'window.wired.push'))

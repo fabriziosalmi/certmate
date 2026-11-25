@@ -1924,8 +1924,13 @@ explicitly changed (no key flags are sent and certbot keeps the lineage key).
   SCM account must already authorize every name, and no DNS provider, account
   or alias may be given; see [CA providers](ca-providers.md)). Since API
   contract **2.29**.
-- the CA account the certificate was issued under is kept when `ca_provider`
-  does not change; before 2.29 a reissue used the CA's default account.
+- `ca_account_id`: the CA account to reissue under. Omit it to keep the account
+  the certificate was issued under while `ca_provider` does not change (another
+  CA starts from its default account; before 2.29 a reissue always used the
+  CA's default account). `""` is the CA's default account, and an id is that
+  account; an account the CA does not have is refused with 400. certbot writes
+  the account's directory into `renewal/<domain>.conf`, so later renewals use
+  it too. Since API contract **2.76**; before, the field was ignored.
 - `key_type`/`key_size`/`elliptic_curve`: omit to keep the existing key shape
 - `acme_profile`: omit to keep the profile the certificate was issued with, `""`
   for the CA's default, or a profile name; see [ACME profiles](#acme-profiles).
@@ -3275,6 +3280,18 @@ Audited, like any other administrative action.
 
 **Endpoint**: `PUT /api/users/<username>` — admin
 **Endpoint**: `DELETE /api/users/<username>` — admin
+
+An email address belongs to one user. `POST /api/users` answers `409` "Email
+address already in use by another user" when another user holds the address,
+compared without case and surrounding spaces, the way SSO links by email. `PUT
+/api/users/<username>` answers the same `409` when the address changes to one
+another user holds. Re-saving the user's current address, re-cased or not, is
+not a change, even where an install from before this rule has two users on one
+address, and neither is clearing it with `""`. SSO does not link by email when
+more than one user holds the address: the sign-in is refused with
+`oidc_email_ambiguous`. It does not create a user for an address another user
+holds either: the sign-in is refused with `oidc_email_taken`. Both name the
+users in the log and the audit log. Since API contract **2.77**.
 
 #### Create an API key
 

@@ -2,6 +2,8 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "weekly"
@@ -12,6 +14,8 @@ updates:
           - "*"
 
   - package-ecosystem: "pip"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "weekly"
@@ -75,6 +79,8 @@ updates:
       - dependency-name: "infisical-python"
 
   - package-ecosystem: "npm"
+    cooldown:
+      default-days: 7
     directories:
       - "/"
       - "/mcp"
@@ -98,6 +104,8 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "weekly"

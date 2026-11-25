@@ -27,6 +27,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# The refusal of an address another user holds (#1466); the routes answer 409.
+EMAIL_TAKEN = 'Email address already in use by another user'
+
 ROLE_HIERARCHY = {'viewer': 0, 'operator': 1, 'admin': 2}
 
 # Whether the `last_used_at` write has already complained this process.
@@ -924,6 +927,23 @@ class AuthManager:
             logger.error(f"Error authenticating API token: {e}")
             return None
 
+    @staticmethod
+    def _same_email(a, b):
+        """Whether two addresses are one, compared as SSO compares them."""
+        def norm(value):
+            return value.strip().lower() if isinstance(value, str) else ''
+        return norm(a) == norm(b)
+
+    @staticmethod
+    def _email_taken(users, email, username):
+        """True when another user than *username* holds *email*, compared the
+        way SSO links by email (OIDCManager._find_by_email): without case and
+        surrounding spaces (#1466)."""
+        target = (email or '').strip().lower() if isinstance(email, str) else ''
+        return bool(target) and any(
+            name != username and (data.get('email') or '').strip().lower() == target
+            for name, data in users.items())
+
     def create_user(self, username, password, role='operator', email=None):
         """Create a new user"""
         try:
@@ -935,6 +955,8 @@ class AuthManager:
 
             if username in users:
                 return False, "User already exists"
+            if self._email_taken(users, email, username):
+                return False, EMAIL_TAKEN
 
             normalized = self._normalize_role(role)
             users[username] = {
@@ -965,6 +987,11 @@ class AuthManager:
 
             user = users[username]
             original_role = self._normalize_role(user.get('role', 'operator'))
+            # Only a change of address is checked: a user re-saving the one it
+            # has, re-cased or not, keeps it even if another user shares it.
+            if (email is not None and not self._same_email(email, user.get('email'))
+                    and self._email_taken(users, email, username)):
+                return False, EMAIL_TAKEN
 
             # SSO-managed accounts authenticate against the IdP and carry an
             # empty password_hash on purpose. Refuse to set a local password so

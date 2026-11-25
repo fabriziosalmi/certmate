@@ -36,6 +36,7 @@ from flask import session as flask_session
 from .auth import active_admin_count, validate_username
 from .secret_refs import SecretReferenceError, resolve_field
 from .settings import _strip_masked_values
+from .structured_logging import scrub_log_value
 from .utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -653,7 +654,20 @@ class OIDCManager:
             #    falls through to JIT, where there's no row to take over
             #    so the verification status is irrelevant for safety.
             if cfg.get('link_by_email') and email:
-                existing_by_email = self._find_by_email(users, email)
+                holders = self._users_with_email(users, email)
+                if len(holders) > 1:
+                    # Users from before #1466 can share an address: linking
+                    # one of them would be a guess, and creating another
+                    # user for it a third holder.
+                    outcome['error'] = 'email_ambiguous'
+                    outcome['ambiguous'] = holders
+                    outcome['audit'] = (
+                        'oidc_user_link_refused', holders[0], 'failure',
+                        {'email': email, 'issuer': iss, 'users': holders,
+                         'reason': 'more than one user holds the address'},
+                    )
+                    return
+                existing_by_email = holders[0] if holders else None
                 if existing_by_email:
                     if cfg.get('require_verified_email', True) and not email_is_verified:
                         outcome['error'] = 'email_not_verified'
@@ -692,6 +706,19 @@ class OIDCManager:
                 outcome['error'] = 'provisioning_disabled'
                 return
 
+            holders = self._users_with_email(users, email)
+            if holders:
+                # One address, one user (#1466): a new user for an address
+                # another user holds would be a second holder of it.
+                outcome['error'] = 'email_taken'
+                outcome['taken'] = holders
+                outcome['audit'] = (
+                    'oidc_user_provision_refused', holders[0], 'failure',
+                    {'email': email, 'issuer': iss, 'users': holders,
+                     'reason': 'another user holds the address'},
+                )
+                return
+
             username = self._unique_username(users, username_value)
             users[username] = {
                 'password_hash': '',  # blocks local password login on this row
@@ -721,6 +748,17 @@ class OIDCManager:
         if outcome.get('invalidate_sessions'):
             self.auth_manager.invalidate_sessions_for_user(
                 outcome['invalidate_sessions'])
+
+        if outcome.get('ambiguous'):
+            logger.warning(
+                'SSO sign-in not linked by email: more than one user holds the address (%s). '
+                'Give each user its own address.',
+                ', '.join(scrub_log_value(name) for name in outcome['ambiguous']))
+        if outcome.get('taken'):
+            logger.warning(
+                'SSO sign-in did not create a user: another user holds the address (%s). '
+                'Link that user or give it another address.',
+                ', '.join(scrub_log_value(name) for name in outcome['taken']))
 
         if outcome['audit']:
             op, who, status, details = outcome['audit']
@@ -765,15 +803,18 @@ class OIDCManager:
         return None
 
     @staticmethod
-    def _find_by_email(users: dict, email: str) -> Optional[str]:
+    def _users_with_email(users: dict, email: str) -> list:
+        """Every user holding *email*, compared without case and surrounding spaces."""
         target = (email or '').strip().lower()
         if not target:
-            return None
-        for username, data in users.items():
-            existing = (data.get('email') or '').strip().lower()
-            if existing and existing == target:
-                return username
-        return None
+            return []
+        return [username for username, data in users.items()
+                if (data.get('email') or '').strip().lower() == target]
+
+    @staticmethod
+    def _find_by_email(users: dict, email: str) -> Optional[str]:
+        holders = OIDCManager._users_with_email(users, email)
+        return holders[0] if holders else None
 
     @staticmethod
     def _unique_username(users: dict, candidate: str) -> str:
