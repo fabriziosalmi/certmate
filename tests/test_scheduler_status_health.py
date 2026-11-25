@@ -175,6 +175,10 @@ def test_readiness_returns_200_when_scheduler_running():
     managers = {
         'scheduler': mock_scheduler,
         'scheduler_status': {'state': 'running', 'error': None, 'timestamp': 't'},
+        # Its own answer about certbot (#1563): without one, readiness falls
+        # back to the module's last probe, which another test may have left
+        # at "failed".
+        'issuance_status': {'state': 'ok', 'version': 'certbot 5.8.0', 'error': None},
     }
     resp = _build_app(managers).test_client().get('/health/ready')
     assert resp.status_code == 200
@@ -189,6 +193,18 @@ def test_readiness_returns_503_when_status_absent():
     resp = _build_app({'scheduler': None}).test_client().get('/health/ready')
     assert resp.status_code == 503
     assert resp.get_json()['ready'] is False
+
+
+def test_the_readiness_tests_do_not_depend_on_what_ran_before(monkeypatch):
+    """#1563: a test that built the app where certbot is not at .venv/bin/certbot
+    (any git worktree) left the module's status at "failed", and the readiness
+    test after it answered 503. Poisoned here on purpose: the tests in this
+    file must answer from what they set up, not from that leftover."""
+    from modules.core import issuance_readiness
+    monkeypatch.setattr(issuance_readiness, '_status', {
+        'state': issuance_readiness.FAILED, 'version': None,
+        'error': 'left behind by another test', 'timestamp': 't'})
+    test_readiness_returns_200_when_scheduler_running()
 
 
 if __name__ == "__main__":  # pragma: no cover
