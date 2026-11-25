@@ -15,7 +15,7 @@ Every expected value below is pinned against the plugin source:
   (``certbot_dns_<x>/...``, the ``_configure_credentials`` /
   ``_add_provider_option`` calls);
 * plugins NOT importable here (he-ddns 0.1.0, dynudns 0.0.6, scaleway 0.0.7,
-  desec 1.3.2, powerdns 0.2.1, infomaniak, namecheap 1.0.0) were pinned from
+  desec 1.3.2, infomaniak, namecheap 1.0.0) were pinned from
   their sdist source / README, as noted per entry.
 
 This is the guard for the future certbot-5.x migration: bump a plugin, and a
@@ -38,7 +38,6 @@ from modules.core.utils import (
     create_linode_config,
     create_namecheap_config,
     create_ovh_config,
-    create_powerdns_config,
 )
 from modules.core import utils as utils_module
 
@@ -254,10 +253,6 @@ DEDICATED_CREATOR_CONTRACT = {
     create_edgedns_config: (('ct', 'cs', 'at', 'h'),
                             {'edgedns_client_token', 'edgedns_client_secret',
                              'edgedns_access_token', 'edgedns_host'}),
-    # certbot-dns-powerdns 0.2.1 (NOT importable here — pinned from its
-    # README): dns_powerdns_api_url / dns_powerdns_api_key.
-    create_powerdns_config: (('https://pdns', 'k'),
-                             {'dns_powerdns_api_url', 'dns_powerdns_api_key'}),
     # certbot-dns-infomaniak (NOT importable here — pinned from its README):
     # dns_infomaniak_token.
     create_infomaniak_config: (('tok',), {'dns_infomaniak_token'}),

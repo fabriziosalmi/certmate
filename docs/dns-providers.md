@@ -12,7 +12,7 @@ CertMate supports a wide range of DNS providers for Let's Encrypt DNS-01 challen
 | **AWS Route53** | `certbot-dns-route53` | Access keys or AWS credential chain / IAM role | Major Cloud | **Stable** |
 | **Azure DNS** | CertMate's own hook (`azure-mgmt-dns`) | Service Principal | Major Cloud | **Stable** |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Major Cloud | **Stable** |
-| **PowerDNS** | `certbot-dns-powerdns` | API URL, API Key | Enterprise | **Separate install** |
+| **PowerDNS** | CertMate's own hook (PowerDNS API) | API URL, API Key | Enterprise | **Stable** |
 | **EfficientIP SOLIDserver** | custom REST API script | Host, API Credentials | Enterprise | **Stable** |
 | **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | API Key, Secret Key | Enterprise | **Stable** |
 | **NS1** | `certbot-dns-nsone` | API Key | Enterprise | **Stable** |
@@ -46,12 +46,12 @@ The last column says whether the Docker image can use the provider as it is:
 | --- | --- |
 | **Stable** | The plugin is pinned in `requirements.txt`, so it is in the default image. |
 | **Extended image** | Pinned in `requirements-extended.txt`. Build with `--build-arg EXTRA_REQUIREMENTS=requirements-extended.txt`. |
-| **Separate install** | In no image. Build a derived image that installs it (below), in its own environment where noted. |
+| **Separate install** | In no image. Build a derived image that installs it (below). |
 | **Unavailable** | No usable plugin exists for the supported stack. CertMate can be configured for it, but issuance fails. |
 
 `Namecheap` is the unavailable one: the only release of `certbot-dns-namecheap` on PyPI is 1.0.0, an alpha for Python 2.7-3.8 that does not work with certbot 2 on Python 3.12. Use ACME-DNS or the custom script for Namecheap domains.
 
-`Scaleway` is an alpha (0.0.7, which declares Python 2.7 support), and `PowerDNS` needs `dns-lexicon<=3.5.6`, which conflicts with the rest of the extended set, hence its own environment.
+`Scaleway` is an alpha (0.0.7, which declares Python 2.7 support).
 
 The image has no pip, so a plugin installed separately goes into a derived image, which puts pip back for its own build only:
 

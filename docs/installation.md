@@ -536,10 +536,6 @@ pip install -r requirements-aws.txt        # Route53, on top of either
 > one pin lands outside that window; the file CertMate ships is the set that is
 > resolved, built and booted in CI. See SECURITY.md, "Known dependency
 > constraint".
->
-> `certbot-dns-powerdns` needs its own environment: it requires
-> `dns-lexicon<=3.5.6` while the Linode, OVH, RFC2136, DNSMadeEasy and NS1
-> plugins require `>=3.14.1`, and pip cannot satisfy both.
 
 ### Manual Dependency Installation
 
