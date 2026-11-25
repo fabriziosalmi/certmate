@@ -1941,9 +1941,7 @@
 
         if (cert.exists) wireLabelsSection(cert.domain);
         if (cert.exists && roleAtLeast('admin')) loadDeployHooksState().then(applyDeployHooksState);
-        if (cert.exists && external && roleAtLeast('operator')) {
-            bundlePicker('replace', content.querySelectorAll('[data-replace-dropzone]'), 'replace');
-        }
+        if (cert.exists && external && roleAtLeast('operator')) replacePicker(content);
 
         // Reveal the backdrop and modal, then animate the card in (scale +
         // fade) on the next frame so the transition actually plays. Focus moves
@@ -3850,7 +3848,7 @@
                 private_key: prefix + 'PrivateKeyFile'};
     }
 
-    function bundlePicker(prefix, zones, verb) {
+    function bundlePicker(prefix, zones, verb, isExternal) {
         var version = 0;
         var fields = bundleFields(prefix);
         function setStates(valid) {
@@ -3897,6 +3895,8 @@
                 var contents = await Promise.all(selectedFiles.map(function (item) { return item.text(); }));
                 if (current !== version) return;
                 selectedFiles.forEach(function (item, index) { payload[keys[index]] = contents[index]; });
+                // An external bundle is checked as its import checks it (#1538).
+                if (isExternal()) payload.external = true;
                 var response = await fetch('/api/web/certificates/import/preview', {
                     method: 'POST', headers: API_HEADERS, body: JSON.stringify(payload)
                 });
@@ -3948,11 +3948,20 @@
                 updateName(input);
             });
         });
-        return {fields: fields, updateName: updateName};
+        return {fields: fields, updateName: updateName, preview: preview};
+    }
+
+    // A replacement is always of an external certificate, so its preview is
+    // always asked as one (#1538).
+    function replacePicker(content) {
+        return bundlePicker('replace', content.querySelectorAll('[data-replace-dropzone]'), 'replace',
+            function () { return true; });
     }
 
     var importFileFields = bundleFields('import');
-    var importPicker = bundlePicker('import', document.querySelectorAll('[data-import-dropzone]'), 'import');
+    var importPicker = bundlePicker('import', document.querySelectorAll('[data-import-dropzone]'), 'import', function () {
+        return document.getElementById('importRenewalExternal').checked;
+    });
 
     // Hide the sections *selector* names while *off*, with their controls
     // disabled so nothing in them is sent, and give each control back the state
@@ -4006,6 +4015,8 @@
             setSectionsOff(form, '[data-renewal-source]', false, 'externalDisabled');
             setSectionsOff(form, '[data-issuance-only]', importing, 'importDisabled');
         }
+        // The answer depends on the renewal choice: ask again when it changes.
+        if (importing) importPicker.preview();
         form.querySelectorAll('[data-external-hidden]').forEach(function (section) {
             section.classList.toggle('hidden', external);
         });

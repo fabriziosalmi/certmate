@@ -11,10 +11,10 @@ from ..core.cert_service import CertificateNamesTaken, CertificateService, Domai
 from ..core.audit_context import audit_context_from_request
 from ..core.cert_import import (
     INVALID_IMPORT_BUNDLE, MAX_IMPORT_PEM_BYTES, CertificateImportError, preview_import_certificate,
-    validate_import_bundle, validate_import_renewability,
+    validate_external_identity, validate_import_bundle, validate_import_renewability,
 )
 from modules.core.auth import not_for_domain_restricted_keys
-from modules.core.request_fields import json_booleans
+from modules.core.request_fields import json_bool, json_booleans
 from modules.core.structured_logging import scrub_log_value
 
 
@@ -42,11 +42,16 @@ def preview_certificate_import_web():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({'error': 'A JSON object is required'}), 400
+    # An external certificate is checked as its import checks it (#1538):
+    # whether CertMate could renew it is not asked of one it never renews.
+    external, error = json_bool(data, 'external', default=False)
+    if error:
+        return jsonify({'error': error}), 400
     try:
         result = preview_import_certificate(data.get('certificate'))
         if data.get('chain') is not None or data.get('private_key') is not None:
             bundle = validate_import_bundle(data.get('certificate'), data.get('chain'), data.get('private_key'))
-            validate_import_renewability(bundle)
+            (validate_external_identity if external else validate_import_renewability)(bundle)
             result['validated'] = True
         return jsonify(result)
     except CertificateImportError as error:
