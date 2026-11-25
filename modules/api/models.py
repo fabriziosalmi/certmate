@@ -697,6 +697,12 @@ def create_api_models(api):
         'dns_provider': fields.String(description='Omit to keep the value the certificate was issued with'),
         'account_id': fields.String(description='Omit to keep the value the certificate was issued with'),
         'ca_provider': fields.String(description='Omit to keep the value the certificate was issued with'),
+        'ca_account_id': fields.String(
+            description=("CA account to reissue under (#1465). Omit to keep the "
+                         "certificate's account while the CA stays the same (another "
+                         "CA starts from its default account); pass '' for the CA's "
+                         "default account. An account the CA does not have is refused "
+                         "with 400. Since API contract 2.76.")),
         'challenge_type': fields.String(
             description='Omit to keep the issued challenge (prevalidated is Sectigo-only)',
             enum=['dns-01', 'http-01', 'prevalidated']),

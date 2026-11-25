@@ -410,6 +410,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     dns_provider=data.get('dns_provider'),
                     account_id=data.get('account_id'),
                     ca_provider=data.get('ca_provider'),
+                    ca_account_id=data.get('ca_account_id'),
                     challenge_type=data.get('challenge_type'),
                     domain_alias=data.get('domain_alias'),
                     alias_dns_provider=data.get('alias_dns_provider'),
