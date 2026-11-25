@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.59.0 (acme-dns issues and renews again, and the interface says what each control does and what it found)
+
+[Read the notes](docs/releases/v2.59.0.md)
+
 ## v2.58.0 (certbot gets certificates from CertMate's ACME server, the inventory counts the certificates CertMate manages, and a failed issuance says what to check)
 
 [Read the notes](docs/releases/v2.58.0.md)
