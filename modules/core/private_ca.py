@@ -11,12 +11,13 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast
 
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtensionOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPublicKeyTypes
 from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,8 @@ class PrivateCAGenerator:
         self.ca_cert_path = self.ca_dir / "ca.crt"
         self.ca_metadata_path = self.ca_dir / "ca_metadata.json"
         self.crl_path = self.ca_dir / "crl.pem"
+        # The last CRL Number used, kept beside the CA so it outlives a restart.
+        self.crl_number_path = self.ca_dir / "crl_number"
 
         self._ca_key = None
         self._ca_cert = None
@@ -176,19 +179,25 @@ class PrivateCAGenerator:
         # second instance for the same ca_dir in the same process, and a per-
         # instance lock would let those two race the same crl.pem. Sharing by
         # path makes the guarantee actually process-wide for a given CA.
+        #
+        # Reentrant because generate_crl takes it as well (#1545): the CRL
+        # Number is read, raised and stored there, and the ACME CA rebuilds its
+        # CRL (after a revocation, and hourly) without going through the
+        # callers above. Taking it inside generate_crl makes every rebuild of a
+        # CA's CRL hand out its own number, whichever path reaches it.
         self._crl_lock = self._crl_lock_for(self.ca_dir)
 
     # ca_dir (resolved, as str) -> the shared CRL lock for that CA.
-    _crl_locks: Dict[str, "threading.Lock"] = {}
+    _crl_locks: Dict[str, "threading.RLock"] = {}
     _crl_locks_mutex = threading.Lock()
 
     @classmethod
-    def _crl_lock_for(cls, ca_dir: Path) -> "threading.Lock":
+    def _crl_lock_for(cls, ca_dir: Path) -> "threading.RLock":
         key = str(Path(ca_dir).resolve())
         with cls._crl_locks_mutex:
             lock = cls._crl_locks.get(key)
             if lock is None:
-                lock = threading.Lock()
+                lock = threading.RLock()
                 cls._crl_locks[key] = lock
             return lock
 
@@ -829,6 +838,71 @@ class PrivateCAGenerator:
             logger.error(f"Error signing certificate: {e}")
             return None
 
+    # RFC 5280 5.2.3: a CRL Number is at most 20 octets, and DER encodes the
+    # integer signed, so the largest one that fits is 2**159 - 1.
+    _MAX_CRL_NUMBER = 2 ** 159 - 1
+
+    def _authority_key_identifier(self) -> x509.AuthorityKeyIdentifier:
+        """The Authority Key Identifier of the CA that signs the CRL.
+
+        Copied from the CA certificate's Subject Key Identifier when it has
+        one: relying parties find the CA for a CRL by matching this value
+        against the SKI of the certificates they hold, and a CA made elsewhere
+        (an imported intermediate) may have computed its SKI by another method
+        than ours, so deriving it again from the key could name nothing they
+        know. Only a CA certificate without an SKI gets one derived from its
+        public key, the RFC 5280 4.2.1.2 method CertMate's own roots use."""
+        ca_cert = self.get_ca_certificate()
+        if ca_cert is None:
+            raise ValueError("CA not loaded")
+        try:
+            ski = ca_cert.extensions.get_extension_for_class(x509.SubjectKeyIdentifier)
+        except x509.ExtensionNotFound:
+            # A certificate's key may be of a type that cannot sign (X25519, say);
+            # this one signed the CRL, so it is an issuer key.
+            issuer_key = cast(CertificateIssuerPublicKeyTypes, ca_cert.public_key())
+            return x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key)
+        return x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(ski.value)
+
+    def _read_crl_number_file(self) -> int:
+        """The last CRL Number stored beside the CA, or 0 when none is readable."""
+        try:
+            value = int(self.crl_number_path.read_text(encoding="ascii").strip())
+        except FileNotFoundError:
+            return 0
+        except (OSError, ValueError) as e:
+            logger.warning("Ignoring unreadable CRL number file %s: %s", self.crl_number_path, e)
+            return 0
+        return value if 0 <= value <= self._MAX_CRL_NUMBER else 0
+
+    def _read_published_crl_number(self) -> int:
+        """The CRL Number of the crl.pem on disk, or 0 when it has none.
+
+        Its signature is not checked: the number only keeps the next one from
+        going backwards, and a CRL written by an older CertMate has none."""
+        try:
+            crl = x509.load_pem_x509_crl(self.crl_path.read_bytes())
+            value = crl.extensions.get_extension_for_class(x509.CRLNumber).value.crl_number
+        except FileNotFoundError:
+            return 0
+        except (OSError, ValueError, x509.ExtensionNotFound):
+            return 0
+        return value if 0 <= value <= self._MAX_CRL_NUMBER else 0
+
+    def _next_crl_number(self) -> int:
+        """Allocate the number of the CRL about to be signed. Caller holds crl_lock.
+
+        One more than the larger of the stored counter and the published CRL's
+        number, so a lost or stale counter file (a restored backup, a CA
+        directory made by hand) cannot hand out a number a relying party has
+        already seen. Stored before the CRL is signed: a crash between the two
+        leaves a gap, which RFC 5280 allows, never a number used twice."""
+        number = max(self._read_crl_number_file(), self._read_published_crl_number()) + 1
+        if number > self._MAX_CRL_NUMBER:
+            raise ValueError("CRL Number would exceed the 20 octets RFC 5280 allows")
+        self._atomic_write_bytes(self.crl_number_path, f"{number}\n".encode("ascii"), 0o600)
+        return number
+
     def generate_crl(self, revoked_serials: list = None) -> Optional[bytes]:
         """
         Generate a Certificate Revocation List (CRL).
@@ -850,6 +924,12 @@ class PrivateCAGenerator:
         Returns:
             CRL as PEM bytes or None if error
         """
+        # Held around the number's allocation and the write of crl.pem, so two
+        # rebuilds of one CA cannot take the same number or publish out of order.
+        with self._crl_lock:
+            return self._generate_crl_locked(revoked_serials)
+
+    def _generate_crl_locked(self, revoked_serials: list | None) -> bytes | None:
         try:
             if not self.is_ca_loaded():
                 logger.error("CA not loaded")
@@ -862,6 +942,11 @@ class PrivateCAGenerator:
             crl_builder = crl_builder.issuer_name(self._ca_cert.subject)
             crl_builder = crl_builder.last_update(datetime.now(timezone.utc))
             crl_builder = crl_builder.next_update(datetime.now(timezone.utc) + timedelta(days=7))
+            # RFC 5280 5.2.1 and 5.2.3: a conforming CRL names the key that
+            # signed it and carries a number that only grows, both non-critical.
+            crl_builder = crl_builder.add_extension(self._authority_key_identifier(), critical=False)
+            crl_builder = crl_builder.add_extension(
+                x509.CRLNumber(self._next_crl_number()), critical=False)
 
             # Add revoked certificates, preserving each entry's persisted
             # revocation date and reason.
