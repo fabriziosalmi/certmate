@@ -1692,7 +1692,9 @@ The list itself carries the two extensions RFC 5280 section 5.2 requires, both
 non-critical: the Authority Key Identifier, copied from the CA certificate's Subject Key
 Identifier (or derived from its key when the certificate has none), and a CRL Number that
 grows with every rebuild. The last number is kept beside the CA, in `crl_number`, and a
-rebuild never goes below the number of the `crl.pem` already published.
+rebuild never goes below the number of the `crl.pem` already published. The client
+certificates the CA signs carry the same Authority Key Identifier, so a relying party
+finds their CA as it finds the list's.
 
 ---
 
