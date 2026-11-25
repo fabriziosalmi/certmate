@@ -1,6 +1,6 @@
 # Documentación de CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 400d05a1e190139f -->
+<!-- CERTMATE-TRANSLATED-FROM 338f5fc74763c5bc -->
 
 Bienvenido a la documentación de CertMate. Esta carpeta contiene guías completas para todas las funcionalidades.
 
@@ -263,7 +263,7 @@ CertMate está publicado bajo la licencia MIT. Ver el archivo LICENSE en el repo
 
 ---
 
-**Versión actual**: 2.58.0
+**Versión actual**: 2.59.0
 
 <div align="center">
 
