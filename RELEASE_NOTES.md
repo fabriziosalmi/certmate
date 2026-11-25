@@ -4,6 +4,10 @@ One file per release, in [docs/releases/](docs/releases/). This page is
 generated from them by `scripts/build_release_index.py`; edit the release file,
 not this list.
 
+## v2.60.0 (overlapping listings no longer take the server down, and /health answers on a port no request can take)
+
+[Read the notes](docs/releases/v2.60.0.md)
+
 ## v2.59.0 (acme-dns issues and renews again, and the interface says what each control does and what it found)
 
 [Read the notes](docs/releases/v2.59.0.md)
