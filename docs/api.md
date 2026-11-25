@@ -3281,6 +3281,18 @@ Audited, like any other administrative action.
 **Endpoint**: `PUT /api/users/<username>` — admin
 **Endpoint**: `DELETE /api/users/<username>` — admin
 
+An email address belongs to one user. `POST /api/users` answers `409` "Email
+address already in use by another user" when another user holds the address,
+compared without case and surrounding spaces, the way SSO links by email. `PUT
+/api/users/<username>` answers the same `409` when the address changes to one
+another user holds. Re-saving the user's current address, re-cased or not, is
+not a change, even where an install from before this rule has two users on one
+address, and neither is clearing it with `""`. SSO does not link by email when
+more than one user holds the address: the sign-in is refused with
+`oidc_email_ambiguous`. It does not create a user for an address another user
+holds either: the sign-in is refused with `oidc_email_taken`. Both name the
+users in the log and the audit log. Since API contract **2.77**.
+
 #### Create an API key
 
 **Endpoint**: `POST /api/keys` — admin
