@@ -240,6 +240,24 @@ def test_a_server_whose_threads_are_stuck_is_reported_unhealthy(instance, monkey
     assert status == 200 and body['checks']['requests'] == 'progressing'
 
 
+def test_the_health_port_never_shows_a_reason(instance):
+    """The health port has no request, so no credentials: like an anonymous
+    caller of /health (#1150), it gets the pointer to the log, never the
+    certbot or scheduler error itself."""
+    from modules.web.misc_routes import REASON_WITHHELD
+    _app, container = instance
+    reason = '/opt/venv/bin/certbot: exited 1: ImportError in /opt/venv/lib/python3.12'
+    container.managers['issuance_status'] = {'state': 'failed', 'error': reason}
+    container.managers['shell_executor'] = None
+    container.managers['scheduler'] = None
+    container.managers['scheduler_status'] = {'state': 'failed', 'error': reason, 'timestamp': 't'}
+    status, body = _get(container.managers['health_server'].server_address[1])
+    assert status == 200
+    assert body['checks']['certbot_error'] == REASON_WITHHELD
+    assert body['checks']['scheduler_error'] == REASON_WITHHELD
+    assert reason not in json.dumps(body)
+
+
 def test_the_request_port_health_says_the_same(instance, monkeypatch):
     app, container = instance
     progress = container.managers['request_progress']
