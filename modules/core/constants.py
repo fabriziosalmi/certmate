@@ -923,6 +923,18 @@ METADATA_SCHEMA_VERSION = 1
 #                                   ip-a-b-c-d; a certificate with neither is
 #                                   400. A request accepted that was refused,
 #                                   and values a caller can ignore.
+#                                   2.79, MINOR: GET /health carries
+#                                   checks.requests ("progressing" or "stalled")
+#                                   and checks.requests_in_flight (#1463), and
+#                                   answers 503 with status "unhealthy" when
+#                                   every request thread has been busy and none
+#                                   has finished for
+#                                   CERTMATE_HEALTH_STALL_SECONDS. Counted MINOR
+#                                   by decision, as 2.37: the 503 is for a
+#                                   condition no answer existed for (a stuck
+#                                   server did not answer at all), and every
+#                                   condition that answered 200 still does. The
+#                                   same report is served on HEALTH_PORT.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -948,7 +960,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.78'
+API_CONTRACT_VERSION = '2.79'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it

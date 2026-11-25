@@ -53,9 +53,14 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
+            - name: health
+              containerPort: {{ .Values.healthPort }}
+              protocol: TCP
           env:
             - name: PORT
               value: {{ .Values.service.port | quote }}
+            - name: HEALTH_PORT
+              value: {{ .Values.healthPort | quote }}
             - name: FLASK_ENV
               value: production
             - name: BEHIND_PROXY
@@ -81,7 +86,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: http
+              port: health
             {{- toYaml .Values.probes.liveness | nindent 12 }}
           # Readiness polls /health, not /health/ready, on purpose. This
           # workload has one replica: /health/ready answers 503 when the
@@ -92,7 +97,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: http
+              port: health
             {{- toYaml .Values.probes.readiness | nindent 12 }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
