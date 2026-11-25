@@ -718,7 +718,9 @@ class PrivateCAGenerator:
             # Create certificate from CSR
             cert_builder = x509.CertificateBuilder()
             cert_builder = cert_builder.subject_name(csr.subject)
-            cert_builder = cert_builder.issuer_name(self._ca_cert.issuer)
+            # The issuer of the certificate is the CA that signs it: its
+            # subject, as for the CRL below (#1537).
+            cert_builder = cert_builder.issuer_name(self._ca_cert.subject)
             cert_builder = cert_builder.public_key(csr.public_key())
             cert_builder = cert_builder.serial_number(x509.random_serial_number())
 
@@ -855,7 +857,9 @@ class PrivateCAGenerator:
 
             # Build CRL
             crl_builder = x509.CertificateRevocationListBuilder()
-            crl_builder = crl_builder.issuer_name(self._ca_cert.issuer)
+            # The CA that signs the CRL is its issuer (RFC 5280, 5.1.2.3): its
+            # subject, which differs from its issuer once it is an intermediate.
+            crl_builder = crl_builder.issuer_name(self._ca_cert.subject)
             crl_builder = crl_builder.last_update(datetime.now(timezone.utc))
             crl_builder = crl_builder.next_update(datetime.now(timezone.utc) + timedelta(days=7))
 
