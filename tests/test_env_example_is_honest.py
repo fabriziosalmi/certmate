@@ -27,6 +27,8 @@ import re
 
 import pytest
 
+from tests.repository_documents import markdown_files
+
 
 pytestmark = [pytest.mark.unit]
 
@@ -134,10 +136,8 @@ def test_the_second_template_stays_deleted():
 def test_the_docs_point_at_the_template_that_exists():
     """Five installation guides tell you to copy a file. It must be there."""
     referencing = [
-        p for p in REPO_ROOT.rglob("*.md")
-        if not any(part in p.parts for part in
-                   (".venv", "node_modules", ".git", "scratch", ".claude", "backups"))
-        and ".env.example" in p.read_text(encoding="utf-8", errors="replace")
+        p for p in markdown_files(REPO_ROOT)
+        if ".env.example" in p.read_text(encoding="utf-8", errors="replace")
     ]
     assert referencing, "no documentation points at .env.example any more"
     assert ENV_EXAMPLE.exists(), (

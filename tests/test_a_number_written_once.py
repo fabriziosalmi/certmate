@@ -44,7 +44,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 #: list, it went on saying "23 DNS Providers" while the code had 29.
 PROSE = ['README.md', 'README.dockerhub.md'] + [
     str(path.relative_to(REPO)) for path in sorted((REPO / 'docs').rglob('*.md'))
-    if 'releases' not in path.parts
+    if 'releases' not in path.relative_to(REPO).parts
 ]
 
 #: A quantity attached to "provider(s)". Matched by shape, not by banning a

@@ -31,13 +31,13 @@ import re
 import pytest
 
 from tests.historical_documents import is_historical
+from tests.repository_documents import markdown_files
 
 pytestmark = [pytest.mark.unit]
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-_SKIP_DIRS = (".venv", "node_modules", ".git", "scratch", ".claude", "backups")
 # History is allowed to quote what it corrected.
 # Release notes record what was true once; see tests/historical_documents.py.
 
@@ -56,9 +56,7 @@ def _requirement_pins():
 def _documented_pins():
     """(file, line, package, version) for every pin inside a code fence."""
     found = []
-    for path in sorted(REPO_ROOT.rglob("*.md")):
-        if any(part in path.parts for part in _SKIP_DIRS):
-            continue
+    for path in markdown_files(REPO_ROOT):
         if is_historical(path):
             continue
         fenced = False
@@ -81,8 +79,7 @@ def test_the_scan_sees_the_documentation():
     pins = _requirement_pins()
     assert len(pins) >= 20, f"parsed only {len(pins)} requirement pins"
     assert "certbot" in pins, "certbot is not pinned in any requirements file"
-    markdown = [p for p in REPO_ROOT.rglob("*.md")
-                if not any(part in p.parts for part in _SKIP_DIRS)]
+    markdown = markdown_files(REPO_ROOT)
     assert len(markdown) >= 20, f"only found {len(markdown)} markdown files"
 
 

@@ -202,7 +202,10 @@ The reasons accepted are the RFC 5280 codes 0 (unspecified), 1
 The certificates carry no CRL distribution point and no OCSP address. A relying
 party that must check revocation fetches `/acme/crl` itself: DER, signed by the
 root, made again after each revocation and at least hourly, with a next update
-seven days on.
+seven days on. As RFC 5280 section 5.2 asks, it carries the Authority Key
+Identifier of the root (its Subject Key Identifier) and a CRL Number that grows
+with every rebuild. The last number is kept in `data/acme/ca/crl_number`, and a
+rebuild never goes below the number of the CRL already in `data/acme/ca/crl.pem`.
 
 ## What it issued, and to whom
 

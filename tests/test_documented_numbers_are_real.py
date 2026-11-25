@@ -20,42 +20,26 @@ with the thing it describes.
 Each check reads the source of truth rather than a second copy of the claim.
 """
 import functools
-import os
 import pathlib
 import re
 
 import pytest
 
 from tests.historical_documents import is_historical
+from tests.repository_documents import markdown_files
 
 
 pytestmark = [pytest.mark.unit]
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-_SKIP_DIRS = (".venv", "node_modules", ".git", "scratch", ".claude", "backups")
 # Release notes record what was true once; see tests/historical_documents.py.
 
 
 @functools.lru_cache(maxsize=1)
 def _markdown():
-    """Every markdown file, pruning the heavy trees instead of walking them.
-
-    `rglob` descends into `.git`, `node_modules` and `.venv` in full and only
-    then discards what it found — tens of thousands of stats for a set that is
-    static within a run (Copilot, #537). `os.walk` with in-place pruning of
-    `dirs` never enters them.
-    """
-    found = []
-    for root, dirs, files in os.walk(REPO_ROOT):
-        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
-        for name in files:
-            if not name.endswith(".md"):
-                continue
-            path = pathlib.Path(root) / name
-            if not is_historical(path):
-                found.append(path)
-    return tuple(sorted(found))
+    """Every current markdown file, cached: the set is static within a run."""
+    return tuple(p for p in markdown_files(REPO_ROOT) if not is_historical(p))
 
 
 def _enforced_coverage_floor():
