@@ -17,7 +17,7 @@ from functools import wraps
 from flask import jsonify, request
 from datetime import datetime, timezone
 from .structured_logging import scrub_log_value
-from .utils import utc_now
+from .utils import is_ip_identifier, utc_now
 
 try:
     import bcrypt
@@ -464,7 +464,12 @@ class AuthManager:
         # `lstrip('*.')` stripped a character SET, collapsing "*.example.com"
         # to "example.com", so an apex-scoped key could mint the wildcard
         # cert — a scope-boundary privilege escalation.)
-        if d.startswith('*.'):
+        # An address is no subdomain of anything: "*.0.0.5" must not take
+        # 10.0.0.5 for one. A stored pattern is a DNS name with a letter TLD,
+        # so none matches an address today; this keeps that true for a
+        # settings file edited by hand, now that an external certificate
+        # can carry addresses as names (#1538).
+        if d.startswith('*.') or is_ip_identifier(d):
             return any(pattern.strip().lower() == d for pattern in allowed_domains)
         for pattern in allowed_domains:
             p = pattern.strip().lower()

@@ -170,10 +170,12 @@ def test_auto_renew_on_is_refused_with_external_and_off_is_accepted(instance):
 
 
 @pytest.mark.parametrize('case,accepted', [
-    ('rsa-1024', False), ('ed25519', False), ('ip-san', False),
+    ('rsa-1024', False), ('ed25519', False), ('ip-san', True),
     ('rsa-4096', True), ('p-521', True), ('wildcard', True),
 ])
 def test_what_an_external_certificate_may_be(instance, case, accepted):
+    # An IP address beside a DNS name is accepted since #1538; see
+    # test_an_external_certificate_takes_any_additional_name.py.
     import ipaddress
     options = {
         'rsa-1024': {'key': rsa.generate_private_key(65537, 1024)},

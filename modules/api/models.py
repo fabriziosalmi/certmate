@@ -583,7 +583,10 @@ def create_api_models(api):
         'auto_renew': fields.Boolean(default=True, description=(
             'Enable automatic renewal; false keeps the imported certificate until manual action. '
             'Defaults to false, and must stay false, for an external certificate')),
-        'domain': fields.String(description='Optional primary identity; defaults to the first DNS name in the certificate'),
+        'domain': fields.String(description=(
+            'Optional primary identity; defaults to the first DNS name in the certificate. For an external '
+            'certificate, its first DNS name with a domain, or, when it has none, its first IPv4 address, '
+            'filed as ip-a-b-c-d. Its single-label names and IPv6 addresses are additional names only')),
         'certificate': fields.String(required=True, description='One leaf certificate in PEM format (max 64 KiB)'),
         'chain': fields.String(required=True, description=(
             'PEM issuers in order, intermediate first (max 64 KiB; root optional)')),

@@ -505,7 +505,7 @@ Send a JSON object with:
 
 | Field | Purpose |
 | --- | --- |
-| `domain` | Optional primary identity, one of the certificate's DNS names. Defaults to its first DNS name. |
+| `domain` | Optional primary identity, one of the certificate's DNS names. Defaults to its first DNS name. For an external certificate, see below. |
 | `auto_renew` | Optional JSON boolean, default `true`. Saved with the domain registration. `false` prevents automatic renewal from the first sweep. |
 | `certificate` | Exactly one leaf certificate, in PEM format. |
 | `chain` | PEM CA certificates in issuer order (intermediate first). The root is optional. |
@@ -583,13 +583,30 @@ The request carries no renewal configuration. Sending any of `ca_provider`,
 `ca_account_id`, `challenge_type`, `dns_provider`, `account_id`, `domain_alias`,
 `alias_dns_provider` or `acme_profile` with `external` is **400**, and so is
 `auto_renew: true`; omitted, `auto_renew` is `false`. The bundle is validated as
-for any import, and the certificate must also name at least one DNS name and
-nothing but DNS names (no IP addresses or e-mail addresses), with an RSA key of
-at least 2048 bits or an ECDSA key on P-256, P-384 or P-521. `domain` and the
-scope rule are the same as above.
+for any import, and the certificate must name nothing but DNS names and IP
+addresses (no e-mail addresses or URIs), with an RSA key of at least 2048 bits
+or an ECDSA key on P-256, P-384 or P-521.
 
-A name may belong to one certificate only. If any DNS name of the import is
-already covered by a certificate CertMate manages, as its domain or as a SAN,
+Since API contract **2.78**, a certificate from a private CA may name its host
+by a single label (`my-host-name`) and by its IPv4 or IPv6 address beside its
+domain. Each name must be well formed: a domain, one LDH label (not one that
+reads as an address, such as `167772165`), or an address, which is stored in
+canonical text (`2001:db8::1`). The certificate is filed under one name, its
+primary: a DNS name with a domain, or an IPv4 address, filed as `ip-a-b-c-d`
+as for an IP certificate. `domain` picks it, as a name or an address; omitted,
+it is the certificate's first DNS name with a domain, and its first IPv4
+address only when it has no such name. Single labels and IPv6 addresses
+are additional names only, so a certificate with nothing else is **400**: "An
+external certificate needs one name CertMate can file it under: a DNS name
+with a domain, or an IPv4 address". Every name must be in the caller's scope,
+and a scope entry is a DNS name, so a key restricted to domains cannot import a
+certificate that carries a single label or an address. The preview with
+`external: true` and the replacement below check the same way. A certificate
+renewed through a CA still takes DNS names with a domain only.
+
+A name may belong to one certificate only. If any name of the import is
+already covered by a certificate CertMate manages, as its domain or as a SAN
+(an address as the address an IP certificate is served at, too),
 including a domain registered with no certificate yet, the import is
 **409** `NAMES_ALREADY_MANAGED`. Names are compared exactly, without case: a
 wildcard conflicts with the same wildcard, not with the names it matches. The
@@ -3562,7 +3579,7 @@ and may be reworded.
 | `METADATA_SCHEMA_DOWNGRADE` | 409 | `metadata.json` was written by a newer build; the write was refused |
 | `DOMAIN_NOT_IN_SETTINGS` | 409 | The certificate exists on disk but no settings entry names it |
 | `EXTERNAL_CERTIFICATE` | 409 | The certificate was imported as external: CertMate does not issue, renew or reissue it |
-| `NAMES_ALREADY_MANAGED` | 409 | An external import or replacement names a DNS name another managed certificate already covers, or a create, reissue or import through a CA names one an external certificate covers |
+| `NAMES_ALREADY_MANAGED` | 409 | An external import or replacement names a DNS name or an address another managed certificate already covers, or a create, reissue or import through a CA names one an external certificate covers |
 | `CERTIFICATE_NOT_EXTERNAL` | 409 | A replacement by upload for a certificate CertMate renews through a CA |
 | `REPLACEMENT_UNCHANGED` / `REPLACEMENT_EXPIRES_EARLIER` | 409 | A replacement uploads the certificate in place, or one that expires earlier without `allow_earlier_expiry` |
 | `CERTIFICATE_HAS_LINEAGE` | 409 | A replacement for a certificate whose directory holds a certbot lineage |

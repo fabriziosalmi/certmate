@@ -911,6 +911,18 @@ METADATA_SCHEMA_VERSION = 1
 #                                   MINOR: a second user on one address was the
 #                                   bug, and no field or status changes for a
 #                                   request that was valid.
+#                                   2.78, MINOR: POST /api/certificates/import
+#                                   with external true, its preview and POST
+#                                   /api/certificates/<domain>/replace accept a
+#                                   certificate whose additional names are
+#                                   single-label DNS names and IPv4 or IPv6
+#                                   addresses (#1538), refused with 400 before;
+#                                   its san_domains then carry them, an address
+#                                   in canonical text. The primary is a DNS name
+#                                   with a domain or an IPv4 address, filed as
+#                                   ip-a-b-c-d; a certificate with neither is
+#                                   400. A request accepted that was refused,
+#                                   and values a caller can ignore.
 #
 # Bump the MINOR when the surface grows in a way a caller can ignore: a new
 # endpoint, a new field on a response, a new optional request field. Bump the
@@ -936,7 +948,7 @@ METADATA_SCHEMA_VERSION = 1
 # snapshot lists these), a route with no 2xx answer (listed with its reason), the
 # dashboard's /api/web/ calls, or a change of MEANING with the structure
 # unchanged: for those, read the rule and move the number yourself.
-API_CONTRACT_VERSION = '2.77'
+API_CONTRACT_VERSION = '2.78'
 
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
