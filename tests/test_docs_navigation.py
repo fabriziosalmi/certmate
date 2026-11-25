@@ -18,6 +18,7 @@ import re
 import pytest
 
 from tests.historical_documents import is_historical
+from tests.repository_documents import markdown_files
 
 
 pytestmark = [pytest.mark.unit]
@@ -131,11 +132,7 @@ def test_mcp_readme_tool_count_matches_the_server():
 
 # --- claims that go stale --------------------------------------------------- #
 
-ALL_MARKDOWN = [
-    p for p in REPO_ROOT.rglob("*.md")
-    if not any(part in p.parts for part in
-               (".venv", "node_modules", ".git", "scratch", ".claude", "backups"))
-]
+ALL_MARKDOWN = list(markdown_files(REPO_ROOT))
 
 
 # Ports documented on a localhost URL that belong to something other than the

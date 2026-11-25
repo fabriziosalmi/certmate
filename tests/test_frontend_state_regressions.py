@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from tests.historical_documents import is_historical
+from tests.repository_documents import markdown_files
 
 
 pytestmark = [pytest.mark.unit]
@@ -196,10 +197,7 @@ def test_no_doc_presents_host_or_flask_debug_as_working_env_vars():
     import re
     offenders = []
     pattern = re.compile(r"\b(HOST|FLASK_DEBUG)\s*=")
-    for path in sorted(ROOT.rglob("*.md")):
-        if any(part in path.parts for part in
-               (".venv", "node_modules", ".git", "scratch", ".claude", "backups")):
-            continue
+    for path in markdown_files(ROOT):
         # The changelog quotes the removed variables while explaining that they
         # were removed. A record of history is allowed to name what it records.
         if is_historical(path):
