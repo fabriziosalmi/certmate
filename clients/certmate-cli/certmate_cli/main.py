@@ -430,12 +430,29 @@ def cert_download(
 
 @cert_app.command("reissue")
 def cert_reissue(ctx: typer.Context, domain: str,
-                 san: Optional[str] = typer.Option(None, "--san", help="Comma-separated SAN domains.")):
-    """Reissue a certificate (e.g. to change its SAN list)."""
+                 san: Optional[str] = typer.Option(None, "--san", help="Comma-separated SAN domains."),
+                 # Optional with a None default, unlike --name: the field has
+                 # three meanings, and an explicit '' (`--ca-account ''` or
+                 # `--ca-account=`) must stay apart from not giving the option.
+                 # Optional and not `str | None`, which ruff asks for: typer
+                 # reads the annotation at runtime, and the CLI runs on 3.9.
+                 ca_account: Optional[str] = typer.Option(  # noqa: UP045
+                     None, "--ca-account",
+                     help="The CA account to reissue under: an account id, or '' for the CA's "
+                          "default account. Leave it out to keep the account the certificate "
+                          "was issued under (server API contract 2.76 or later).")):
+    """Reissue a certificate (e.g. to change its SAN list or its CA account)."""
     body = {}
     if san is not None:
         body["san_domains"] = [s.strip() for s in san.split(",") if s.strip()]
-    _run(lambda: _client(ctx).reissue_certificate(domain, **body))
+    client = _client(ctx)
+    if ca_account is not None:
+        # A server before 2.76 does not refuse the field, it ignores it and
+        # keeps the recorded account: the reissue would run under the account
+        # this option was given to change. Ask first, and send nothing if so.
+        _run(lambda: client.require_contract("2.76", "ca_account_id"))
+        body["ca_account_id"] = ca_account
+    _run(lambda: client.reissue_certificate(domain, **body))
     out.print(f"[green]reissued[/] {domain}.")
 
 

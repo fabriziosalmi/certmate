@@ -1,6 +1,6 @@
 # Server MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 58ca0a53ff2c8362 -->
+<!-- CERTMATE-TRANSLATED-FROM 039a641d5a574f97 -->
 
 CertMate include un server MCP (Model Context Protocol) integrato scritto in Node.js. Questo consente agli assistenti IA agentici (come Claude o Gemini) di ispezionare lo stato dei certificati, attivare rinnovi, richiedere diagnostiche e interagire direttamente con l'API CertMate.
 
@@ -28,7 +28,7 @@ Il server MCP CertMate espone i seguenti strumenti agli assistenti IA:
 13. **`certmate_list_dns_accounts`** — Account provider DNS configurati (credenziali mascherate); usa un id account restituito come `account_id` durante la creazione di un certificato. **Richiede `admin`.**
 
 **Modifica e rimozione**
-14. **`certmate_update_certificate`** — Modifica sul posto la copertura di un certificato esistente riemettendolo: sostituisce l'insieme dei SAN e/o l'alias DNS-01. Il dominio principale è l'identità del certificato e qui non si può cambiare. Restituisce un `job_id`.
+14. **`certmate_update_certificate`** — Modifica sul posto la copertura di un certificato esistente riemettendolo: sostituisce l'insieme dei SAN e/o l'alias DNS-01, oppure lo riemette sotto un altro account della CA con `ca_account_id`: un id è quell'account, `""` è l'account predefinito della CA, e senza il campo resta l'account con cui era stato emesso. Un account richiede il contratto API 2.76, che lo strumento chiede prima al server. Il dominio principale è l'identità del certificato e qui non si può cambiare. Restituisce un `job_id`.
 15. **`certmate_delete_certificate`** — **Distruttivo e irreversibile.** Rimuove i file del certificato dal disco e il dominio dalle impostazioni. **Richiede `admin`.**
 16. **`certmate_get_certificate_file`** — Restituisce un singolo file del certificato come PEM grezzo, pronto da incollare, anziché incapsulato in JSON. `cert.pem`, `chain.pem` e `fullchain.pem` sono leggibili da un `viewer`; `privkey.pem`, `combined.pem` e `cert.pfx` contengono materiale di chiave e richiedono `operator`.
 

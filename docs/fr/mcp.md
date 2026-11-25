@@ -1,6 +1,6 @@
 # Serveur MCP (Model Context Protocol) CertMate
 
-<!-- CERTMATE-TRANSLATED-FROM 58ca0a53ff2c8362 -->
+<!-- CERTMATE-TRANSLATED-FROM 039a641d5a574f97 -->
 
 CertMate inclut un serveur MCP (Model Context Protocol) intégré écrit en Node.js. Cela permet aux assistants IA agentiques (tels que Claude ou Gemini) d'inspecter les statuts des certificats, de déclencher des renouvellements, de demander des diagnostics et d'interagir directement avec l'API CertMate.
 
@@ -28,7 +28,7 @@ Le serveur MCP CertMate expose les outils suivants aux assistants IA :
 13. **`certmate_list_dns_accounts`** — Comptes fournisseurs DNS configurés (identifiants masqués) ; utilisez un ID de compte retourné comme `account_id` lors de la création d'un certificat. **Nécessite `admin`.**
 
 **Modification et suppression**
-14. **`certmate_update_certificate`** — Modifie sur place la couverture d'un certificat existant en le réémettant : remplace l'ensemble des SAN et/ou l'alias DNS-01. Le domaine principal est l'identité du certificat et ne peut pas être modifié ici. Retourne un `job_id`.
+14. **`certmate_update_certificate`** — Modifie sur place la couverture d'un certificat existant en le réémettant : remplace l'ensemble des SAN et/ou l'alias DNS-01, ou le réémet sous un autre compte de la CA avec `ca_account_id` : un identifiant désigne ce compte, `""` le compte par défaut de la CA, et sans ce champ le certificat garde le compte sous lequel il a été émis. Un compte exige le contrat d'API 2.76, que l'outil demande d'abord au serveur. Le domaine principal est l'identité du certificat et ne peut pas être modifié ici. Retourne un `job_id`.
 15. **`certmate_delete_certificate`** — **Destructif et irréversible.** Supprime les fichiers du certificat du disque et le domaine des paramètres. **Nécessite `admin`.**
 16. **`certmate_get_certificate_file`** — Retourne un fichier de certificat en PEM brut, prêt à coller, plutôt qu'enveloppé dans du JSON. `cert.pem`, `chain.pem` et `fullchain.pem` sont lisibles par un `viewer` ; `privkey.pem`, `combined.pem` et `cert.pfx` contiennent du matériel de clé et nécessitent `operator`.
 
