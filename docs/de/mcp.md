@@ -1,6 +1,6 @@
 # CertMate Model Context Protocol (MCP) Server
 
-<!-- CERTMATE-TRANSLATED-FROM 58ca0a53ff2c8362 -->
+<!-- CERTMATE-TRANSLATED-FROM 039a641d5a574f97 -->
 
 CertMate enthält einen integrierten Model Context Protocol (MCP) Server, der in Node.js geschrieben ist. Dadurch können agentische KI-Assistenten (wie Claude oder Gemini) Zertifikatsstatus prüfen, Erneuerungen auslösen, Diagnosen anfordern und direkt mit der CertMate API interagieren.
 
@@ -28,7 +28,7 @@ Der CertMate MCP Server stellt KI-Assistenten folgende Tools zur Verfügung:
 13. **`certmate_list_dns_accounts`** — Konfigurierte DNS-Anbieter-Accounts (Zugangsdaten maskiert); verwenden Sie eine zurückgegebene Account-ID als `account_id` beim Erstellen eines Zertifikats. **Erfordert `admin`.**
 
 **Bearbeiten und Entfernen**
-14. **`certmate_update_certificate`** — Ändert die Abdeckung eines bestehenden Zertifikats an Ort und Stelle, indem es neu ausgestellt wird: ersetzt die SAN-Menge und/oder den DNS-01-Alias. Die primäre Domain ist die Identität des Zertifikats und kann hier nicht geändert werden. Gibt eine `job_id` zurück.
+14. **`certmate_update_certificate`** — Ändert die Abdeckung eines bestehenden Zertifikats an Ort und Stelle, indem es neu ausgestellt wird: ersetzt die SAN-Menge und/oder den DNS-01-Alias, oder stellt es mit `ca_account_id` unter einem anderen Konto der CA neu aus: eine Konto-ID ist dieses Konto, `""` ist das Standardkonto der CA, und ohne das Feld bleibt das Konto, unter dem es ausgestellt wurde. Ein Konto erfordert API-Vertrag 2.76, den das Werkzeug zuerst beim Server erfragt. Die primäre Domain ist die Identität des Zertifikats und kann hier nicht geändert werden. Gibt eine `job_id` zurück.
 15. **`certmate_delete_certificate`** — **Destruktiv und nicht umkehrbar.** Entfernt die Zertifikatsdateien von der Festplatte und die Domain aus den Einstellungen. **Erfordert `admin`.**
 16. **`certmate_get_certificate_file`** — Gibt eine einzelne Zertifikatsdatei als rohes, direkt einfügbares PEM zurück statt in JSON verpackt. `cert.pem`, `chain.pem` und `fullchain.pem` sind für einen `viewer` lesbar; `privkey.pem`, `combined.pem` und `cert.pfx` enthalten Schlüsselmaterial und erfordern `operator`.
 

@@ -26,7 +26,7 @@ The CertMate MCP server exposes the following tools to AI assistants:
 13. **`certmate_list_dns_accounts`** — Configured DNS provider accounts (credentials masked); use a returned account id as `account_id` when creating a certificate. **Requires `admin`.**
 
 **Editing and removing**
-14. **`certmate_update_certificate`** — Changes an existing certificate's coverage in place by reissuing it: replace the SAN set and/or the DNS-01 alias. The primary domain is the certificate's identity and cannot be changed here. Returns a `job_id`.
+14. **`certmate_update_certificate`** — Changes an existing certificate's coverage in place by reissuing it: replace the SAN set and/or the DNS-01 alias, or reissue it under another CA account with `ca_account_id`: an account id is that account, `""` is the CA's default account, and leaving it out keeps the account it was issued under. An account needs API contract 2.76, which the tool asks the server for first. The primary domain is the certificate's identity and cannot be changed here. Returns a `job_id`.
 15. **`certmate_delete_certificate`** — **Destructive and not reversible.** Removes the certificate files from disk and the domain from settings. **Requires `admin`.**
 16. **`certmate_get_certificate_file`** — Returns one certificate file as raw, pasteable PEM rather than JSON-wrapped. `cert.pem`, `chain.pem` and `fullchain.pem` are readable by a `viewer`; `privkey.pem`, `combined.pem` and `cert.pfx` carry key material and need `operator`.
 

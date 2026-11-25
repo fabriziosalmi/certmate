@@ -176,13 +176,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "certmate_update_certificate",
-        description: "Edit an existing certificate's coverage in place by reissuing it (no delete-and-recreate): replace its SAN domains and/or change its DNS-01 alias. Omit sans to keep the current SAN set; pass an empty array to drop all SANs. The primary domain is the certificate's identity and cannot be changed here. Returns a job_id (HTTP 202) to poll with certmate_get_job.",
+        description: "Edit an existing certificate's coverage in place by reissuing it (no delete-and-recreate): replace its SAN domains, change its DNS-01 alias, and/or move it to another CA account. Omit sans to keep the current SAN set; pass an empty array to drop all SANs. The primary domain is the certificate's identity and cannot be changed here. Returns a job_id (HTTP 202) to poll with certmate_get_job.",
         inputSchema: {
           type: "object",
           properties: {
             domain: { type: "string", description: "The primary domain of the certificate to update" },
             sans: { type: "array", items: { type: "string" }, description: "The full replacement set of SAN domains (omit to keep the current set; [] drops all SANs)" },
-            domain_alias: { type: "string", description: "The DNS-01 alias FQDN (\"\" clears it)" }
+            domain_alias: { type: "string", description: "The DNS-01 alias FQDN (\"\" clears it)" },
+            ca_account_id: { type: "string", description: "Optional. The CA account to reissue under: an account id is that account, \"\" is the CA's default account, and omitting it keeps the account the certificate was issued under. An account the CA does not have is refused with 400. Needs API contract 2.76; an older server is refused before anything is sent, since it would ignore the account." }
           },
           required: ["domain"]
         }
@@ -355,6 +356,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // current SAN set ([] is a deliberate "drop all").
         if (Array.isArray(args.sans)) body.san_domains = args.sans;
         if (args.domain_alias !== undefined) body.domain_alias = args.domain_alias;
+        // Three states, as the API has them: absent keeps the recorded account,
+        // "" is the CA's default account, an id is that account. So the test is
+        // for undefined, never for truthiness, which would drop the "".
+        if (args.ca_account_id !== undefined) {
+          if (typeof args.ca_account_id !== "string") {
+            throw new Error(`ca_account_id must be a string (an account id, or "" for the CA's default account), not ${JSON.stringify(args.ca_account_id)}`);
+          }
+          // A server before 2.76 ignores the field and keeps the recorded
+          // account, the one this parameter was given to change (#1546).
+          await requireContract("2.76", "ca_account_id");
+          body.ca_account_id = args.ca_account_id;
+        }
         result = await makeRequest("POST", `/api/certificates/${encodeURIComponent(args.domain)}/reissue`, body);
         break;
       }
