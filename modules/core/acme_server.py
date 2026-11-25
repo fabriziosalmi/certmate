@@ -508,7 +508,7 @@ class AcmeServer:
         record = self.store.certificate_by_serial(format(serial, 'x')) if self.db_path.exists() else None
         if record is None:
             return None
-        ours = x509.AuthorityKeyIdentifier.from_issuer_public_key(self.ca.root().public_key()).key_identifier
+        ours = _ca_key_identifier(self.ca.root())
         return record if _hmac.compare_digest(key_identifier, ours) else None
 
     def renewal_info(self, cert_id):
@@ -901,9 +901,17 @@ def _csr_for(value, identifiers):
     return csr
 
 
+def _ca_key_identifier(root):
+    """The key identifier a client puts in an ARI identifier: it reads it from
+    the leaf's Authority Key Identifier, which carries the root's SKI (#1562).
+    Derived from the key, as before, it named nothing for a root made
+    elsewhere, and the server stopped finding its own certificates."""
+    return acme_ca.authority_key_identifier_for(root).key_identifier
+
+
 def _ari_id(record, root):
     """The RFC 9773 identifier of a stored certificate, as a client computes it."""
-    key_identifier = x509.AuthorityKeyIdentifier.from_issuer_public_key(root.public_key()).key_identifier
+    key_identifier = _ca_key_identifier(root)
     serial = int(record['serial'], 16)
     serial_bytes = serial.to_bytes((serial.bit_length() + 8) // 8, 'big', signed=True)
     return f'{b64.b64encode(key_identifier).decode()}.{b64.b64encode(serial_bytes).decode()}'

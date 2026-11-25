@@ -206,6 +206,9 @@ seven days on. As RFC 5280 section 5.2 asks, it carries the Authority Key
 Identifier of the root (its Subject Key Identifier) and a CRL Number that grows
 with every rebuild. The last number is kept in `data/acme/ca/crl_number`, and a
 rebuild never goes below the number of the CRL already in `data/acme/ca/crl.pem`.
+The certificates it issues carry the same Authority Key Identifier, and the
+renewal information (ARI) identifiers a client computes from it find them, also
+for a root whose Subject Key Identifier was made elsewhere.
 
 ## What it issued, and to whom
 

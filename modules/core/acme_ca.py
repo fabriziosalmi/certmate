@@ -29,7 +29,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
-from .private_ca import PrivateCAGenerator
+from .private_ca import PrivateCAGenerator, authority_key_identifier_for
 
 CLOCK_SKEW = timedelta(minutes=5)
 # 45 days (decision D3 on #476): inside the 47 days public certificates are
@@ -99,8 +99,9 @@ class AcmeCA:
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
             .add_extension(x509.SubjectAlternativeName(san), critical=not names)
             .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
-                           critical=False)
+            # The root's own SKI, as its CRL carries it (#1562); ARI computes
+            # its identifiers from the same value (acme_server._ca_key_identifier).
+            .add_extension(authority_key_identifier_for(ca_cert), critical=False)
         )
         return builder.sign(ca_key, hashes.SHA256())
 

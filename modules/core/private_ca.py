@@ -99,6 +99,28 @@ def _key_algorithm_of(key):
     return type(key).__name__
 
 
+def authority_key_identifier_for(ca_cert: x509.Certificate) -> x509.AuthorityKeyIdentifier:
+    """The Authority Key Identifier for anything *ca_cert* signs: leaves, CRLs,
+    and the renewal identifiers that are computed from a leaf's AKI.
+
+    Copied from the CA certificate's Subject Key Identifier when it has
+    one: relying parties find the CA of a certificate or a CRL by matching
+    this value against the SKI of the certificates they hold, and a CA made
+    elsewhere (an imported intermediate) may have computed its SKI by another
+    method than ours, so deriving it again from the key could name nothing
+    they know. Only a CA certificate without an SKI gets one derived from its
+    public key, the RFC 5280 4.2.1.2 method CertMate's own roots use, so for
+    those nothing changes (#1554, #1562)."""
+    try:
+        ski = ca_cert.extensions.get_extension_for_class(x509.SubjectKeyIdentifier)
+    except x509.ExtensionNotFound:
+        # A certificate's key may be of a type that cannot sign (X25519, say);
+        # this one signs, so it is an issuer key.
+        issuer_key = cast(CertificateIssuerPublicKeyTypes, ca_cert.public_key())
+        return x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key)
+    return x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(ski.value)
+
+
 class PrivateCAGenerator:
     """
     Generates and manages a self-signed Certificate Authority for CertMate.
@@ -818,9 +840,10 @@ class PrivateCAGenerator:
                 critical=False
             )
 
-            # Add authority key identifier
+            # Add authority key identifier: the CA's own SKI, as the CRL carries
+            # it, so a leaf from a CA made elsewhere names a CA one holds (#1562).
             cert_builder = cert_builder.add_extension(
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(self._ca_cert.public_key()),
+                authority_key_identifier_for(self._ca_cert),
                 critical=False
             )
 
@@ -843,26 +866,11 @@ class PrivateCAGenerator:
     _MAX_CRL_NUMBER = 2 ** 159 - 1
 
     def _authority_key_identifier(self) -> x509.AuthorityKeyIdentifier:
-        """The Authority Key Identifier of the CA that signs the CRL.
-
-        Copied from the CA certificate's Subject Key Identifier when it has
-        one: relying parties find the CA for a CRL by matching this value
-        against the SKI of the certificates they hold, and a CA made elsewhere
-        (an imported intermediate) may have computed its SKI by another method
-        than ours, so deriving it again from the key could name nothing they
-        know. Only a CA certificate without an SKI gets one derived from its
-        public key, the RFC 5280 4.2.1.2 method CertMate's own roots use."""
+        """The Authority Key Identifier of this CA: see authority_key_identifier_for."""
         ca_cert = self.get_ca_certificate()
         if ca_cert is None:
             raise ValueError("CA not loaded")
-        try:
-            ski = ca_cert.extensions.get_extension_for_class(x509.SubjectKeyIdentifier)
-        except x509.ExtensionNotFound:
-            # A certificate's key may be of a type that cannot sign (X25519, say);
-            # this one signed the CRL, so it is an issuer key.
-            issuer_key = cast(CertificateIssuerPublicKeyTypes, ca_cert.public_key())
-            return x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key)
-        return x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(ski.value)
+        return authority_key_identifier_for(ca_cert)
 
     def _read_crl_number_file(self) -> int:
         """The last CRL Number stored beside the CA, or 0 when none is readable."""
