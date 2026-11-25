@@ -81,7 +81,7 @@ services:
         limits:
           memory: 512M
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3

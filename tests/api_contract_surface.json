@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.78",
+  "contract_version": "2.79",
   "surface": [
     "DELETE /api/acme/eab-keys/<X>",
     "DELETE /api/backups/delete/<X>/<X>",

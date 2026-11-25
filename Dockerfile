@@ -274,6 +274,14 @@ ENV PORT=8000
 # Gunicorn worker timeout in seconds. ACME DNS-01 challenges can take up to
 # 5 minutes on slow providers (Namecheap, Infomaniak). Default: 300s.
 ENV GUNICORN_TIMEOUT=300
+# Request threads (default 8, see CMD). The app reads the same variable to
+# know when every thread is busy (#1463).
+ENV GUNICORN_THREADS=8
+# /health on a thread of its own (#1463): it answers while slow requests hold
+# every request thread, and says 503 when none of them has finished for
+# CERTMATE_HEALTH_STALL_SECONDS (by default a minute past GUNICORN_TIMEOUT,
+# 360 s). /health on $PORT stays.
+ENV HEALTH_PORT=8001
 
 # Switch to non-root user
 USER certmate
@@ -281,7 +289,9 @@ USER certmate
 # Expose port (documents the default; actual port is controlled by $PORT)
 EXPOSE 8000
 
-# Health check uses $PORT so it works when the port is overridden.
+# Health check asks $HEALTH_PORT, whose server no request can take: on $PORT
+# a few slow listings made the check time out and Docker mark the container
+# unhealthy while every check was fine (#1463).
 #
 # start-period is 40s to match docker-compose.yml, which has said 40s since it
 # was written while this said 5s. Measured: a container reaches its first
@@ -291,7 +301,7 @@ EXPOSE 8000
 # the runs that are not warm: a cold image, a settings migration, a slow
 # volume.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+    CMD curl -f http://localhost:${HEALTH_PORT}/health || exit 1
 
 # Use tini as init process for proper signal handling and zombie reaping
 ENTRYPOINT ["tini", "--"]
@@ -299,6 +309,7 @@ ENTRYPOINT ["tini", "--"]
 # Run the application
 # Single worker + threads: avoids duplicate APScheduler jobs and session
 # sharing issues. CertMate is I/O-bound, not CPU-bound.
-# 8 threads: SSE holds 1 thread per browser tab; 4 was too few.
+# 8 threads by default (GUNICORN_THREADS): SSE holds 1 thread per browser
+# tab; 4 was too few.
 # $PORT defaults to 8000 and can be overridden via environment variable.
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} --access-logfile - --error-logfile - --log-level info app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads ${GUNICORN_THREADS} --timeout ${GUNICORN_TIMEOUT} --access-logfile - --error-logfile - --log-level info app:app"]

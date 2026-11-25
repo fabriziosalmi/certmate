@@ -90,6 +90,46 @@ def _format_thread_stack(thread_id: int) -> str:
     return ''.join(traceback.format_stack(frame))
 
 
+def setup_health_port(app: Flask, container: AppContainer):
+    """Count requests, and serve /health on HEALTH_PORT from its own thread (#1463).
+
+    The count is always on, so /health on the request port can say when
+    requests stop moving. The second server starts only when HEALTH_PORT is
+    set, as the image, the compose files and the chart do: a bare-metal
+    install gets no port it did not ask for. A port that cannot be bound is
+    logged and the app runs without it, since /health on the request port
+    still answers.
+    """
+    from .core.request_progress import RequestProgress
+    progress = RequestProgress()
+    app.wsgi_app = progress.wrap(app.wsgi_app)  # type: ignore[method-assign]  # the WSGI middleware pattern Flask documents
+    container.managers['request_progress'] = progress
+
+    port = os.getenv('HEALTH_PORT', '').strip()
+    if not port:
+        return
+    try:
+        port_number = int(port)
+    except ValueError:
+        logger.error(f"HEALTH_PORT is not a port number: {port!r}; /health is served on the request port only")
+        return
+    # Every interface by default, as gunicorn binds: the kubelet probes the
+    # pod address, not the loopback. HEALTH_HOST narrows it.
+    host = os.getenv('HEALTH_HOST', '').strip() or '0.0.0.0'  # noqa: S104  # nosec B104
+    from .core.health_server import start_health_server
+    from .web.misc_routes import REASON_WITHHELD, health_report
+
+    def report():
+        return health_report(container.managers, app, lambda reason: REASON_WITHHELD if reason else reason)
+
+    try:
+        container.managers['health_server'] = start_health_server(report, host, port_number)
+    except OSError as e:
+        logger.error(f"Could not serve /health on {host}:{port_number}: {e}; it is served on the request port only")
+        return
+    logger.info(f"/health is also served on {host}:{port_number}, on its own thread")
+
+
 def setup_slow_request_logging(app: Flask, container: AppContainer):
     """Track long-running requests and log thread stacks when they linger."""
     enabled = os.getenv('CERTMATE_SLOW_REQUEST_LOGGING', 'true').lower() in ('1', 'true', 'yes', 'on')
@@ -2034,6 +2074,7 @@ def create_app(test_config=None):
     # After the rate limit, so a flood of unauthenticated requests is still counted.
     setup_authorization_before_validation(app, container)
     setup_slow_request_logging(app, container)
+    setup_health_port(app, container)
 
     # Make the app instance available to background APScheduler jobs before
     # starting the scheduler so recovered misfired jobs can push an app context.
@@ -2082,6 +2123,13 @@ def stop_background_work(container: AppContainer) -> dict:
     if container.shutdown_complete:
         return summary
     container.shutdown_complete = True
+
+    # The health port goes first: by here nothing it reports will stay true.
+    # Partial containers (most of the test suite) have no managers at all.
+    health_server = (container.managers or {}).get('health_server')
+    if health_server is not None:
+        health_server.shutdown()
+        health_server.server_close()
 
     if container.scheduler is not None:
         if not getattr(container.scheduler, 'running', True):

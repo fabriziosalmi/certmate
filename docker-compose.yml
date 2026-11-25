@@ -29,6 +29,7 @@ services:
       #- API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
       - BEHIND_PROXY=${BEHIND_PROXY:-false}  # Set true when CertMate runs behind nginx or another trusted reverse proxy
       - PORT=${PORT:-8000}                      # Internal listen port; also update ports: mapping if changed
+      - HEALTH_PORT=${HEALTH_PORT:-8001}        # /health on its own thread; the healthcheck below asks it
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-300}  # Worker timeout; increase for slow DNS providers
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}    # Overrides the email set via the web UI when set
       # Without this, automatic backups are masked and CANNOT restore the
@@ -84,7 +85,7 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test: ["CMD", "sh", "-c", "curl -f http://localhost:${PORT:-8000}/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:${HEALTH_PORT:-8001}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
