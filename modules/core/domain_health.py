@@ -882,7 +882,9 @@ class DomainHealthManager:
                 # IP literal (RFC 6797 section 8.1), and the rest are about names.
                 continue
             hosts.add(host)
-            hosts.update(others)
+            # The same for an address among its other names, which an
+            # external certificate may carry (#1538).
+            hosts.update(name for name in others if not is_ip_identifier(name))
         if config.get('include_inventory', True):
             for record in self.inventory.list_all():
                 if record.get('subject_cn'):
