@@ -16,6 +16,7 @@ checked is the request body that leaves the process, not a call on a mock. The
 MCP server's reissue tool does the same; its test is `mcp/test-ca-account.js`.
 """
 import json
+import re
 from unittest.mock import patch
 
 import httpx
@@ -113,9 +114,11 @@ def test_the_help_says_what_each_value_means():
     result = CliRunner().invoke(app, ['cert', 'reissue', '--help'], terminal_width=200)
 
     assert result.exit_code == 0, result.output
-    # Rich draws the options in a box: drop its edges so a wrapped sentence
-    # reads as one.
-    text = ' '.join(result.output.replace('│', ' ').split())
+    # Rich colours the help where it sees a CI (GITHUB_ACTIONS) and splits
+    # '--ca-account' with escape codes, so they go first; then the box edges,
+    # so a wrapped sentence reads as one.
+    plain = re.sub(r'\x1b\[[0-9;]*m', '', result.output)
+    text = ' '.join(plain.replace('│', ' ').split())
     assert '--ca-account' in text
     assert "CA's default account" in text
     assert 'keep' in text
