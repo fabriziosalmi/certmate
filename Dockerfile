@@ -6,7 +6,7 @@
 # Nothing moves the pin by itself, so `scripts/release.sh prepare` refuses a
 # release whose pin is behind the tag and older than two weeks
 # (scripts/check_base_image.py; `--update` writes the current digest).
-FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS builder
+FROM python:3.12-slim-trixie@sha256:191083cdf6c7bda8c76158983163ead5d5cf7b77cf3033e805bb0f5296f51b4b AS builder
 
 # Set working directory for build stage
 WORKDIR /build
@@ -114,7 +114,7 @@ RUN pip install --no-cache-dir --require-hashes -r requirements-build.lock && \
     pip uninstall -y pip
 
 # Production stage — same digest pin as the builder stage above.
-FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+FROM python:3.12-slim-trixie@sha256:191083cdf6c7bda8c76158983163ead5d5cf7b77cf3033e805bb0f5296f51b4b
 
 # Set working directory
 WORKDIR /app
