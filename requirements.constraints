@@ -71,7 +71,7 @@ google-auth-httplib2==0.4.3
 google-cloud-core==2.8.0
 google-cloud-dns==0.37.2
 googleapis-common-protos==1.75.5
-gunicorn==26.2.0
+gunicorn==27.0.1
 h11==0.16.0
 hcloud==2.25.1
 httpcore==1.0.9
